@@ -171,26 +171,56 @@ export async function POST(req: NextRequest) {
       // fallback strings instead of actual business information.
       if (crawledContext && validTenantId) {
         try {
-          // Build a rich text from the crawl results so the KB has structured info
+          // 1. Ingest [Verified Facts] JSON document for 100% deterministic lookup in searchKnowledgeBaseHybrid
+          if (crawledContext.structuredFacts) {
+            await ingestKnowledgeDocument({
+              tenantId: validTenantId,
+              title: `[Verified Facts] - ${crawledContext.businessName}`,
+              text: JSON.stringify(crawledContext.structuredFacts),
+              sourceType: 'manual',
+              userId: user?.id,
+            }).catch((err) => console.warn('[ai-agent-wizard-generate] Verified facts ingestion warning:', err));
+          }
+
+          // 2. Build and ingest rich overview document
           const kbText = [
-            `Business: ${crawledContext.businessName}`,
+            `Official Business Knowledge for: ${crawledContext.businessName}`,
+            `Website: ${targetUrl || crawledContext.url}`,
             crawledContext.industry ? `Industry: ${crawledContext.industry}` : '',
             crawledContext.phone ? `Phone: ${crawledContext.phone}` : '',
             crawledContext.email ? `Email: ${crawledContext.email}` : '',
             crawledContext.address ? `Address: ${crawledContext.address}` : '',
-            crawledContext.services?.length ? `Services: ${crawledContext.services.join(', ')}` : '',
-            crawledContext.document?.snippet ? `\nWebsite Content:\n${crawledContext.document.snippet}` : '',
-          ].filter(Boolean).join('\n');
+            crawledContext.serviceAreas?.length ? `Service Areas & Locations: ${crawledContext.serviceAreas.join(', ')}` : '',
+            crawledContext.services?.length ? `Services Offered:\n${crawledContext.services.map((s) => `• ${s}`).join('\n')}` : '',
+            crawledContext.emergencyAvailable ? 'Emergency Availability: 24/7 Emergency dispatch available' : '',
+            crawledContext.document?.snippet ? `\nOverview & Policies:\n${crawledContext.document.snippet}` : '',
+          ].filter(Boolean).join('\n\n');
 
           await ingestKnowledgeDocument({
             tenantId: validTenantId,
-            title: `${crawledContext.businessName} Website`,
+            title: `${crawledContext.businessName} Website Knowledge`,
             text: kbText,
             sourceType: 'file',
             userId: user?.id,
-          });
+          }).catch((err) => console.warn('[ai-agent-wizard-generate] Overview doc ingestion warning:', err));
 
-          // Also keep the old KnowledgeSource record for backwards compat
+          // 3. Ingest individual crawled subpages (services, service-areas, about, pricing, etc.)
+          if (Array.isArray(crawledContext.crawledPages) && crawledContext.crawledPages.length > 0) {
+            for (const page of crawledContext.crawledPages.slice(0, 10)) {
+              if (page.content && page.content.length > 60) {
+                const pageDocText = `Page URL: ${page.url}\nPage Title: ${page.title}\nPage Type: ${page.pageType}\n\nContent:\n${page.content}`;
+                await ingestKnowledgeDocument({
+                  tenantId: validTenantId,
+                  title: `${crawledContext.businessName} - ${page.title || page.pageType}`,
+                  text: pageDocText,
+                  sourceType: 'file',
+                  userId: user?.id,
+                }).catch(() => {});
+              }
+            }
+          }
+
+          // Legacy KnowledgeSource record for backwards compat
           await db.knowledgeSource.create({
             data: {
               tenantId: validTenantId,
@@ -204,6 +234,7 @@ export async function POST(req: NextRequest) {
                 industry: crawledContext.industry,
                 phone: crawledContext.phone,
                 services: crawledContext.services,
+                serviceAreas: crawledContext.serviceAreas,
               }),
             },
           }).catch(() => {});

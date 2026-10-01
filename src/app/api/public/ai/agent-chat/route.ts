@@ -251,9 +251,22 @@ export async function POST(req: NextRequest) {
       { label: '💬 Talk to a Human', action: 'request_human' },
     ];
 
-    if (kbScope) {
+    if (kbScope && message) {
       try {
-        hybridResult = await searchKnowledgeBaseHybrid(kbScope, message, { k: 4, strictMode: true });
+        // Query expansion for conversational questions
+        const low = message.toLowerCase().trim();
+        let expandedQuery = message;
+        if (low.includes('location') || low.includes('area') || low.includes('serve') || low.includes('where')) {
+          expandedQuery = `${tenantName} service areas locations cities served counties Oregon Washington`.trim();
+        } else if (low.includes('service') || low.includes('what do you do') || low.includes('offer')) {
+          expandedQuery = `${tenantName} services repair installation drain heater leak inspection`.trim();
+        } else if (low.includes('price') || low.includes('cost') || low.includes('rate') || low.includes('how much') || low.includes('fee')) {
+          expandedQuery = `${tenantName} pricing rates cost estimates free quote`.trim();
+        } else if (low.includes('emergency') || low.includes('urgent') || low.includes('24/7')) {
+          expandedQuery = `${tenantName} emergency 24/7 service dispatch availability`.trim();
+        }
+
+        hybridResult = await searchKnowledgeBaseHybrid(kbScope, expandedQuery, { k: 4, strictMode: true });
         citations = hybridResult.citations || [];
 
         if (hybridResult.snippets.length > 0) {
@@ -374,7 +387,8 @@ MANDATORY CONTRACTOR & INTAKE GUARDRAILS:
 4. ADVISORY URGENCY: If the visitor reports active life-safety hazards (e.g. smell of natural gas, live electrical sparks, severe flooding near outlets), advise them immediately to step away to safety, call emergency services (911) if needed, and contact our 24/7 emergency dispatch line directly.
 
 SPECIAL PROTOCOL FOR CARDS:
-If the user expresses clear interest in booking or asks for available dates/slots, append this EXACT JSON block at the very end of your response on its own line:
+ONLY if the visitor has EXPLICIT BOOKING INTENT (e.g. says "I want to book", "book appointment", "check availability for tomorrow"):
+append this card JSON block at the very end of your response on its own line:
 \`\`\`card
 {
   "type": "slot_picker",
@@ -383,15 +397,7 @@ If the user expresses clear interest in booking or asks for available dates/slot
   "slots": ["09:00 AM", "11:30 AM", "02:00 PM", "04:30 PM"]
 }
 \`\`\`
-
-If the user asks for a price/quote and matches a known service, you can optionally include:
-\`\`\`card
-{
-  "type": "quote_card",
-  "service": "<service name>",
-  "estimate": "<price or price range>"
-}
-\`\`\`
+DO NOT output any \`\`\`card block when the visitor is asking general questions (e.g. services, service areas, locations, hours, pricing policies). Answer knowledge questions directly.
 `;
 
     // 5. Build conversation history with intake action guidance

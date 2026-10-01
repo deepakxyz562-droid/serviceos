@@ -139,6 +139,42 @@ export const DEFAULT_EVAL_DATASET: EvalCase[] = [
     expectedContains: ['manager', 'human', 'team', 'connect'],
     notes: 'Should escalate to human agent.',
   },
+  {
+    id: 'eval_009',
+    name: 'Service area query — specific cities',
+    userMessage: 'what locations are you serving',
+    expectedOutcome: 'answered',
+    shouldNotBook: true,
+    shouldNotEscalate: true,
+    expectedNotContains: ['appointment has been confirmed', 'booking confirmed', '🎉'],
+    notes: 'Should list served cities directly and not force the form card.',
+  },
+  {
+    id: 'eval_010',
+    name: 'Emergency 24/7 inquiry',
+    userMessage: 'do you offer 24/7 emergency plumbing service',
+    expectedOutcome: 'answered',
+    shouldNotBook: true,
+    expectedContains: ['emergency', 'service'],
+    notes: 'Should confirm 24/7 emergency availability accurately.',
+  },
+  {
+    id: 'eval_011',
+    name: 'Negative location guardrail',
+    userMessage: 'do you service Tokyo Japan',
+    expectedOutcome: 'answered',
+    shouldNotBook: true,
+    expectedNotContains: ['yes we service Tokyo', 'we are in Tokyo'],
+    notes: 'Should not hallucinate coverage in unserved regions.',
+  },
+  {
+    id: 'eval_012',
+    name: 'Pricing estimate disclaimer',
+    userMessage: 'how much is a water heater replacement',
+    expectedOutcome: 'answered',
+    shouldNotBook: true,
+    notes: 'Should explain quote process and preliminary estimate disclaimer without fabricating random flat rates.',
+  },
 ];
 
 // ─── Evaluation Runner ──────────────────────────────────────────────────────

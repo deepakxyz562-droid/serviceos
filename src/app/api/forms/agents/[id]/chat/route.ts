@@ -1,16 +1,42 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { callAI } from '@/lib/ai-client';
-import { searchKnowledgeBase, searchKnowledgeBaseHybrid } from '@/lib/ai-knowledge';
+import { searchKnowledgeBaseHybrid } from '@/lib/ai-knowledge';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-service';
 import { tryExecuteChatBooking, extractBookingIntent } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
+import { queryStructuredFacts } from '@/lib/ai-structured-facts';
 
 /**
- * Parse FormAgent.configJson (which stores the full FormAgentData shape) back
- * into a partial config we can merge with DEFAULT_FORM_AGENT.
+ * Expands colloquial visitor questions into rich search queries for hybrid RAG.
+ */
+function expandSearchQuery(query: string, businessName = ''): string {
+  const low = query.toLowerCase().trim();
+  if (low.includes('location') || low.includes('area') || low.includes('serve') || low.includes('where')) {
+    return `${businessName} service areas locations cities served counties Oregon Washington region`.trim();
+  }
+  if (low.includes('service') || low.includes('what do you do') || low.includes('offer') || low.includes('help with')) {
+    return `${businessName} services repair installation drain cleaning water heater leak inspection`.trim();
+  }
+  if (low.includes('price') || low.includes('cost') || low.includes('rate') || low.includes('how much') || low.includes('fee')) {
+    return `${businessName} pricing rates cost estimates diagnostic free quote fees`.trim();
+  }
+  if (low.includes('emergency') || low.includes('urgent') || low.includes('24/7') || low.includes('burst') || low.includes('flood')) {
+    return `${businessName} emergency 24/7 dispatch urgent response availability`.trim();
+  }
+  if (low.includes('hour') || low.includes('open') || low.includes('when') || low.includes('time')) {
+    return `${businessName} business hours schedule operating hours open days`.trim();
+  }
+  if (low.includes('website') || low.includes('about') || low.includes('company') || low.includes('who are you')) {
+    return `${businessName} company overview about website contact official`.trim();
+  }
+  return query;
+}
+
+/**
+ * Parse FormAgent.configJson back into a partial config.
  */
 function parseConfigJson(raw: unknown): Partial<FormAgentData> {
   if (!raw) return {};
@@ -29,17 +55,9 @@ function parseConfigJson(raw: unknown): Partial<FormAgentData> {
 }
 
 /**
- * Load the full FormAgent config (including knowledge, guardrails, FAQs) from
- * the DB by route `id`. This is critical because the client may send a
- * sanitized agentConfig (via sanitizePublicAgent) that strips knowledge /
- * tenantId / settings — trusting it would cause the agent to ignore its
- * configured persona, guardrails, and FAQs.
- *
- * Falls back to the client-supplied agentConfig only for preview mode
- * (id === 'preview') or when the DB lookup fails.
+ * Load the full FormAgent config from DB.
  */
 async function loadAgentFromDb(id: string, fallback: FormAgentData | undefined): Promise<FormAgentData> {
-  // Preview mode (studio simulator) — no DB record exists yet.
   if (!id || id === 'preview') {
     return fallback || DEFAULT_FORM_AGENT;
   }
@@ -76,12 +94,10 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { message = '', history = [], agentConfig } = body;
 
-    // Re-fetch the full agent config (with knowledge/guardrails/FAQs) from DB
-    // instead of trusting the client-supplied agentConfig, which may be
-    // sanitized (knowledge stripped) by sanitizePublicAgent().
     const agent: FormAgentData = await loadAgentFromDb(id, agentConfig);
+    const lowerMessage = (message || '').toLowerCase().trim();
 
-    // Retrieve relevant vector embeddings from knowledge base (Hybrid RAG)
+    // 1. Query Knowledge Base with Query Expansion (Hybrid RAG + Confidence Gate)
     let retrievedKnowledge = '';
     let hybridResult: any = null;
     let citations: Array<{ id: number; title: string; url?: string; snippet: string }> = [];
@@ -89,12 +105,13 @@ export async function POST(
 
     if (kbScope && message) {
       try {
-        hybridResult = await searchKnowledgeBaseHybrid(kbScope, message, { k: 3, strictMode: true });
+        const searchQuery = expandSearchQuery(message, agent.name);
+        hybridResult = await searchKnowledgeBaseHybrid(kbScope, searchQuery, { k: 4, strictMode: true });
         citations = hybridResult.citations || [];
 
         if (hybridResult.snippets && hybridResult.snippets.length > 0) {
-          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${hybridResult.snippets.map((doc: any) => `- ${doc.content || doc.snippet || ''}`).join('\n')}`;
-        } else if (message.length > 15 && !['hi', 'hello', 'hey', 'start'].includes(message.trim().toLowerCase())) {
+          retrievedKnowledge = `Indexed Knowledge Base Documents:\n${hybridResult.snippets.map((doc: any, idx: number) => `[Source ${idx + 1}: ${doc.documentTitle}]\n${doc.content || doc.snippet || ''}`).join('\n\n')}`;
+        } else if (message.length > 15 && !['hi', 'hello', 'hey', 'start'].includes(lowerMessage)) {
           try {
             const { recordUnansweredQuestion } = await import('@/lib/ai-unanswered-questions');
             recordUnansweredQuestion(kbScope, message, 'forms_chat');
@@ -107,7 +124,7 @@ export async function POST(
       }
     }
 
-    // If connected form exists, load its field schema to enable natural conversational form filling
+    // 2. Load connected form schema if present
     let formFieldsPrompt = '';
     let extractedServices: string[] = [];
     let businessProfilePrompt = '';
@@ -143,7 +160,6 @@ export async function POST(
             } catch {}
           }
 
-          // Extract services mentioned in options or fields
           for (const f of fields) {
             if (f?.options && Array.isArray(f.options)) {
               for (const opt of f.options) {
@@ -160,10 +176,9 @@ export async function POST(
               .slice(0, 10)
               .map((f: any) => `- "${f.label || f.id}" (${f.required ? 'required' : 'optional'})`)
               .join('\n');
-            formFieldsPrompt = `Connected Form: "${formRecord.name}" (${formRecord.description || 'Customer inquiry'})\nFields to Collect Conversationally:\n${fieldSummaries}\n\nCONVERSATIONAL FORM FILLING INSTRUCTIONS:\nWhen a visitor expresses interest in booking, getting a quote, or requesting service, guide them conversationally through these questions 1 or 2 at a time rather than asking all at once. Validate inputs gently (e.g. verify phone or address). When key required details are provided, summarize their request warmly!`;
+            formFieldsPrompt = `Connected Form: "${formRecord.name}" (${formRecord.description || 'Customer inquiry'})\nFields to Collect Conversationally (Only in Action Mode):\n${fieldSummaries}\n\nCONVERSATIONAL FORM FILLING INSTRUCTIONS:\nWhen a visitor expresses explicit interest in booking, getting a quote, or requesting service, guide them conversationally through these questions 1 or 2 at a time. Validate inputs gently.`;
           }
 
-          // Load Tenant or Workspace profile to know business name, hours, and trade
           const tenantId = formRecord.tenantId || agent.tenantId;
           if (tenantId) {
             const tenant = await db.tenant.findUnique({
@@ -172,51 +187,34 @@ export async function POST(
             }).catch(() => null);
 
             if (tenant) {
-              // NOTE: business hours are not stored on the Tenant model — do NOT
-              // fabricate "Mon-Fri 8-6, Sat 9-3" which is wrong for most businesses.
-              // The agent will ask visitors to confirm hours if asked.
-              businessProfilePrompt = `BUSINESS PROFILE:\n- Business Name: ${tenant.name}\n- Industry / Trade: ${tenant.industry || 'Professional Services'}\n- Phone: ${tenant.phone || 'Available online'}\n- Email: ${tenant.email || ''}\n- Operating Hours: Not specified in our records — if the visitor asks, ask them to contact us or check our website for current hours.\n- Online scheduling & inquiry form available 24/7 with immediate confirmation\n- Offered Services: ${extractedServices.length > 0 ? extractedServices.slice(0, 12).join(', ') : 'Custom quotes, on-site service, consultations, and professional service inquiries'}`;
+              businessProfilePrompt = `BUSINESS PROFILE:\n- Business Name: ${tenant.name}\n- Industry / Trade: ${tenant.industry || 'Professional Services'}\n- Phone: ${tenant.phone || 'Available online'}\n- Email: ${tenant.email || ''}\n- Online scheduling available 24/7`;
             }
-          }
-        } else if (primaryConnectedForm) {
-          // If form is not yet saved to DB (e.g. in-memory studio preview), extract fields from agent config or body
-          const fallbackFields = (primaryConnectedForm as any).fields || (body as any).formSchema?.fields || [];
-          if (Array.isArray(fallbackFields) && fallbackFields.length > 0) {
-            for (const f of fallbackFields) {
-              if (f?.options && Array.isArray(f.options)) {
-                for (const opt of f.options) {
-                  const label = typeof opt === 'string' ? opt : opt?.label || opt?.value;
-                  if (label && typeof label === 'string' && label.length < 50) {
-                    extractedServices.push(label);
-                  }
-                }
-              }
-            }
-            const fieldSummaries = fallbackFields
-              .slice(0, 10)
-              .map((f: any) => `- "${f.label || f.id}" (${f.required ? 'required' : 'optional'})`)
-              .join('\n');
-            formFieldsPrompt = `Connected Form: "${primaryConnectedForm.name || 'Service Request'}" (${primaryConnectedForm.description || 'Customer inquiry'})\nFields to Collect Conversationally:\n${fieldSummaries}\n\nCONVERSATIONAL FORM FILLING INSTRUCTIONS:\nWhen a visitor expresses interest in booking, getting a quote, or requesting service, guide them conversationally through these questions 1 or 2 at a time rather than asking all at once. Validate inputs gently (e.g. verify phone or address). When key required details are provided, summarize their request warmly!`;
           }
         }
       } catch (err) {
-        console.warn('[forms/agent-chat] Form/Business context load warning:', err);
+        console.warn('[forms/agent-chat] Form context load warning:', err);
       }
     }
 
-    if (!businessProfilePrompt) {
-      // No tenant record loaded — do NOT fabricate business hours.
-      // Previously this hardcoded "Mon-Fri 8-6, Sat 9-3" which was wrong for
-      // most businesses. Instead, instruct the agent to ask the visitor to
-      // confirm hours rather than state potentially incorrect ones.
-      businessProfilePrompt = `BUSINESS & AVAILABILITY:\n- Operating Hours: Not specified in our records — if the visitor asks about hours, ask them to contact us or check our website for current hours.\n- Availability: Online scheduling and inquiry form available 24/7.\n- Response Time: Typically within 15 minutes during operating hours.`;
-    }
+    // 3. Extract service areas & structured facts from agent config
+    const structuredFacts = agent.knowledge?.structuredFacts;
+    const serviceAreasList = agent.knowledge?.serviceAreas?.length
+      ? agent.knowledge.serviceAreas.join(', ')
+      : structuredFacts?.serviceAreas?.length
+      ? structuredFacts.serviceAreas.join(', ')
+      : '';
+
+    // 4. Intent Classification: Answer Mode vs Action Mode
+    const isBookingOrIntake = /\b(book|appointment|schedule|quote|estimate|fill\s+form|apply|intake|reserve|call\s+me|hire|order)\b/i.test(lowerMessage);
+    const isQuestion = /\b(what|where|which|who|why|how|when|is|are|do|does|can|could|tell\s+me|details|info)\b/i.test(lowerMessage) || lowerMessage.includes('?');
+    const isInformationalQuery = !isBookingOrIntake && (isQuestion || /\b(website|services?|areas?|locations?|cities|hours?|pricing|rates?|emergency|licensed?|insured)\b/i.test(lowerMessage));
 
     // Build context from agent knowledge base
     const knowledgeContext = [
-      `Agent Persona: You are ${agent.name}, ${agent.roleTitle}.`,
+      `Agent Identity: You are ${agent.name}, ${agent.roleTitle}.`,
       `Tone: ${agent.voiceTone}.`,
       businessProfilePrompt,
+      serviceAreasList ? `VERIFIED SERVICE AREAS & CITIES SERVED:\n${serviceAreasList}` : '',
       `System Prompt: ${agent.knowledge?.systemPrompt || ''}`,
       agent.knowledge?.guardrails?.length
         ? `Strict Guardrails:\n- ${agent.knowledge.guardrails.join('\n- ')}`
@@ -224,23 +222,23 @@ export async function POST(
       agent.knowledge?.faqPairs?.length
         ? `Known FAQs:\n${agent.knowledge.faqPairs.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')}`
         : '',
-      `MANDATORY CONTRACTOR & INTAKE GUARDRAILS:
-1. NEVER INVENT PRICING: Only quote rates or flat fees that exist word-for-word in our verified knowledge base or FAQs. If pricing is not in knowledge, invite the customer to describe their issue so our technician can provide an accurate quote on-site.
-2. ESTIMATE DISCLAIMER: Whenever you mention an estimated price, range, or fee, you MUST explicitly append: "Please note that all initial estimates are preliminary and subject to on-site evaluation by our technician/contractor."
-3. BOOKING VERIFICATION: Never tell the customer an appointment is confirmed until the system provides a confirmed booking record. If a requested time is given, politely say: "I have recorded your request for [Time/Date]. Our dispatch team will confirm your slot shortly."
-4. ADVISORY URGENCY: If the visitor reports active life-safety hazards (e.g. smell of natural gas, live electrical sparks, severe flooding near outlets), advise them immediately to step away to safety, call emergency services (911) if needed, and contact our 24/7 emergency dispatch line directly.`,
       retrievedKnowledge,
+      `CONFIDENCE & GROUNDING INSTRUCTIONS:
+1. ANSWER MODE (For Informational Questions):
+   - Answer the visitor's question directly, factually, and concisely using the Verified Service Areas, Knowledge Base, and FAQs above.
+   - If asked about service areas/locations, list the verified cities and regions explicitly (${serviceAreasList || 'our service region'}).
+   - If asked about services, list the official offerings directly.
+   - NEVER deflect simple informational questions to a form. Answer the question first!
+2. ACTION MODE (Only When Visitor Requests Booking/Quote):
+   - Guide them conversationally to gather missing appointment/contact details.
+3. ZERO HALLUCINATION:
+   - If a specific piece of information (e.g. unsupported location or unlisted flat price) is not in our records, state honestly that you don't have that specific item and offer to have a specialist follow up.`,
       formFieldsPrompt,
-      agent.connectedForms?.length
-        ? `Available Connected Forms to recommend:\n${agent.connectedForms.map((form) => `- Form ID "${form.id}": "${form.name}" (${form.description || ''})`).join('\n')}`
-        : '',
     ]
       .filter(Boolean)
       .join('\n\n');
-    const lowerMessage = (message || '').toLowerCase().trim();
 
-
-    // Check for human escalation intent via unified handoff service
+    // Check for human escalation intent
     if (isEscalationIntent(message)) {
       const authUser = await getAuthUser().catch(() => null);
       const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || null;
@@ -263,16 +261,12 @@ export async function POST(
         agentAvailable: handoff.agentAvailable,
         availability: handoff.availability,
         sessionId: handoff.liveSessionId,
-        suggestedFormId: primaryConnectedForm?.id || null,
+        suggestedFormId: null,
         agentName: agent.name,
       });
     }
 
     const authUser = await getAuthUser().catch(() => null);
-    // NOTE: removed the `firstTenant` fallback — it caused conversations and
-    // KB queries to be scoped to the wrong tenant when no tenantId could be
-    // resolved from the agent/form/auth context. The public chat route
-    // (/api/public/ai/agent-chat) already fixed this; this route now matches.
     const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || null;
     const effectiveWorkspaceId = formRecord?.workspaceId || (agent as any).workspaceId || authUser?.workspaceId || null;
 
@@ -280,23 +274,18 @@ export async function POST(
     let suggestedFormId: string | null = null;
     let bookingCard: any = null;
 
-    // ── Step 1: Always run the LLM to generate the primary AI response.
-    //    The LLM answers the visitor's ACTUAL question (website, services, pricing, booking, etc.)
-    //    before any booking logic fires. This prevents booking confirmations from
-    //    silently hijacking responses to informational queries.
+    // ── Step 1: Run LLM to generate primary AI response
     try {
       const bookingIntent = extractBookingIntent(message, history, primaryConnectedForm?.name || agent.roleTitle);
       let dynamicMissingPrompt = '';
-      if (bookingIntent.hasIntent) {
-        if (bookingIntent.missingFields.length > 0) {
-          dynamicMissingPrompt = `\n\nINTAKE ACTION GUIDANCE:\nThe visitor is interested in scheduling an appointment or estimate. Missing required details: ${bookingIntent.missingFields.join(', ')}. Guide them conversationally to provide their preferred time window and callback phone number so our team can schedule them!`;
-        }
+      if (bookingIntent.hasIntent && bookingIntent.missingFields.length > 0) {
+        dynamicMissingPrompt = `\n\nINTAKE ACTION GUIDANCE:\nThe visitor is interested in scheduling an appointment or estimate. Missing required details: ${bookingIntent.missingFields.join(', ')}. Guide them conversationally to provide their preferred time window and callback phone number so our team can schedule them!`;
       }
 
       const messages = [
         {
           role: 'system' as const,
-          content: `${knowledgeContext}${dynamicMissingPrompt}\n\nKeep responses concise, helpful, and formatted with markdown. Never say cold deflective phrases like "please use our connected form". Help visitors conversationally: answer their questions directly, guide them through booking or submitting their inquiry right here in the chat, or invite them to tap the interactive form card below.\nIf the visitor provides appointment details (date, time, name), warmly summarize and confirm their appointment request.`,
+          content: `${knowledgeContext}${dynamicMissingPrompt}`,
         },
         ...history.slice(-6).map((h: any) => ({
           role: h.sender === 'user' ? ('user' as const) : ('assistant' as const),
@@ -316,10 +305,7 @@ export async function POST(
       console.warn('Chat AI call failed, using intelligent rule responder:', e);
     }
 
-    // ── Step 2: Attempt real appointment booking execution AFTER the LLM has answered.
-    //    The booking engine uses the fixed extractBookingIntent (whole-word matching,
-    //    current-message-only scoping, informational-query guard) so it only fires
-    //    when the visitor explicitly requests a booking with date + time + contact info.
+    // ── Step 2: Attempt appointment booking execution
     const bookingResult = await tryExecuteChatBooking({
       tenantId: effectiveTenantId,
       workspaceId: effectiveWorkspaceId,
@@ -348,87 +334,66 @@ export async function POST(
         ? `\n\n🎥 **Video Meeting Link:** [Join Google Meet](${bookingResult.meetingUrl})`
         : '';
 
-      // Booking card is shown as a supplementary UI element below the LLM reply.
-      // If the LLM already gave a great conversational answer, append the confirmation line.
-      // If LLM failed (replyText is empty), use the confirmation as the reply.
       const confirmationLine = `🎉 Your appointment has been confirmed for **${bookingResult.dateStr} at ${bookingResult.timeStr}**.${meetInfo}\n\nYou can add it to your calendar below!`;
       replyText = replyText
         ? `${replyText}\n\n${confirmationLine}`
         : `🎉 Great news, ${bookingResult.lead?.name || 'there'}! ${confirmationLine}`;
     }
 
-    // Intelligent heuristic response fallback (used when LLM provider is temporarily unavailable)
+    // ── Step 3: Heuristic fallback (only when LLM fails or returns empty)
     if (!replyText) {
       const lower = lowerMessage;
       const firstForm = primaryConnectedForm;
-      const formName = firstForm?.name || 'Inquiry Form';
 
-      // 1. Check agent's configured FAQs — with stopword-aware token overlap
-      // Previously: words.some((w) => q.includes(w)) matched on any 4+ char
-      // word, including stopwords like "what", "your", "services" — causing
-      // every query containing "your" to match the FAQ "What are your
-      // operating hours?" and return hardcoded business hours.
-      const FAQ_STOPWORDS = new Set(['the','what','your','our','this','that','with','from',
-        'have','does','do','are','how','when','where','who','why','which','for',
-        'and','but','you','yours','about','into','can','could','would','will',
-        'should','may','might','must','here','there','was','were','been','being',
-        'has','had','did','not','nor','too','very','just','only','also']);
-      const matchedFaq = agent.knowledge?.faqPairs?.find((f) => {
-        const q = (f.question || '').toLowerCase();
-        if (!q) return false;
-        // Exact substring match (strict)
-        if (lower.includes(q)) return true;
-        // Token overlap: exclude stopwords, require ≥50% of FAQ question's
-        // content tokens to appear in the user's message
-        const qTokens = q.split(/\s+/).filter(w => w.length > 2 && !FAQ_STOPWORDS.has(w));
-        if (qTokens.length === 0) return false;
-        const hits = qTokens.filter(t => lower.includes(t)).length;
-        return hits / qTokens.length >= 0.5;
-      });
+      // Check structured facts first
+      if (structuredFacts) {
+        const factQuery = queryStructuredFacts(structuredFacts, message);
+        if (factQuery && factQuery.matched) {
+          replyText = factQuery.answer;
+        }
+      }
 
-      if (matchedFaq) {
-        replyText = matchedFaq.answer;
-        suggestedFormId = firstForm?.id || null;
-      } else {
-        const isServiceQuery = lower.includes('service') || lower.includes('clean') || lower.includes('window') ||
-          lower.includes('repair') || lower.includes('install') || lower.includes('wash') || lower.includes('roof') ||
-          lower.includes('hvac') || lower.includes('plumb') || lower.includes('offer') || lower.includes('work') ||
-          lower.includes('what do you do');
-        
-        const isTimingQuery = lower.includes('hour') || lower.includes('time') || lower.includes('open') ||
-          lower.includes('availab') || lower.includes('when') || lower.includes('day') || lower.includes('schedule') ||
-          lower.includes('weekend') || lower.includes('sunday') || lower.includes('saturday');
+      // Check FAQs with stopword filter
+      if (!replyText) {
+        const FAQ_STOPWORDS = new Set(['the','what','your','our','this','that','with','from',
+          'have','does','do','are','how','when','where','who','why','which','for',
+          'and','but','you','yours','about','into','can','could','would','will',
+          'should','may','might','must','here','there','was','were','been','being',
+          'has','had','did','not','nor','too','very','just','only','also']);
+        const matchedFaq = agent.knowledge?.faqPairs?.find((f) => {
+          const q = (f.question || '').toLowerCase();
+          if (!q) return false;
+          if (lower.includes(q)) return true;
+          const qTokens = q.split(/\s+/).filter((w) => w.length > 2 && !FAQ_STOPWORDS.has(w));
+          if (qTokens.length === 0) return false;
+          const hits = qTokens.filter((t) => lower.includes(t)).length;
+          return hits / qTokens.length >= 0.5;
+        });
 
-        if (isTimingQuery) {
-          replyText = `Our online booking and appointment request system is available 24/7 for you to select your preferred date and time, and our team responds promptly to confirm scheduling during operating hours!`;
-          suggestedFormId = firstForm?.id || null;
-        } else if (isServiceQuery) {
-          const servicesList = extractedServices.length > 0
-            ? `including **${extractedServices.slice(0, 4).join('**, **')}**`
-            : 'tailored to your exact project specifications';
-          replyText = `Yes! We provide professional services ${servicesList}. To get an accurate quote and confirm immediate availability, you can complete our **${formName}** or let me know the details of your project!`;
-          suggestedFormId = firstForm?.id || null;
-        } else if (lower.includes('price') || lower.includes('cost') || lower.includes('estimate') || lower.includes('quote') || lower.includes('fee') || lower.includes('rate')) {
-          replyText = `We provide upfront, transparent pricing. You can submit a quick request through our **${formName}** to receive an immediate estimate.`;
-          suggestedFormId = firstForm?.id || null;
+        if (matchedFaq) {
+          replyText = matchedFaq.answer;
+        }
+      }
+
+      // Contextual fallbacks
+      if (!replyText) {
+        if (isInformationalQuery && serviceAreasList && (lower.includes('location') || lower.includes('area') || lower.includes('serve') || lower.includes('where'))) {
+          replyText = `**${agent.name}** proudly serves **${serviceAreasList}** and surrounding communities! Feel free to let me know what you need or ask any questions.`;
         } else if (lower.includes('question') || lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
-          replyText = `Hello! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I help you today? Feel free to ask any question or let me know what project you have in mind!`;
+          replyText = `Hello! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I help you today? Feel free to ask about our services, service areas, or request an estimate!`;
         } else {
-          replyText = `Thank you for reaching out! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I assist you with your project today? You can also complete our **${formName}** at any time.`;
-          suggestedFormId = firstForm?.id || null;
+          replyText = `Thank you for reaching out! I'm **${agent.name}**, your **${agent.roleTitle}**. How can I assist you with your project today?`;
         }
       }
     }
 
-    // Always resolve connected form recommendation if query touches on booking, quotes, forms, or applications
-    if (!suggestedFormId && primaryConnectedForm?.id) {
-      const formIntentKeywords = ['book', 'schedule', 'appointment', 'quote', 'apply', 'form', 'contact', 'consultation', 'service', 'inquiry'];
-      if (formIntentKeywords.some((kw) => lowerMessage.includes(kw) || replyText.toLowerCase().includes(kw))) {
-        suggestedFormId = primaryConnectedForm.id;
-      }
+    // ── Step 4: Strict Form Card Attachment (Action Mode ONLY)
+    // NEVER attach the form card on pure informational questions or greetings!
+    if (primaryConnectedForm?.id && isBookingOrIntake && !isInformationalQuery) {
+      suggestedFormId = primaryConnectedForm.id;
     }
 
-    // Sync conversation into PublicChatSession and PublicChatMessage for real-time Live Chat board
+    // Sync conversation into PublicChatSession
     const syncRes = await syncChatConversation({
       sessionId: body.sessionId || null,
       tenantId: effectiveTenantId,
@@ -447,8 +412,8 @@ export async function POST(
       success: true,
       reply: replyText,
       sessionId: syncRes.sessionId,
-      suggestedFormId: suggestedFormId || primaryConnectedForm?.id || null,
-      suggestedForm: primaryConnectedForm || null,
+      suggestedFormId: suggestedFormId || null,
+      suggestedForm: suggestedFormId ? primaryConnectedForm : null,
       card: bookingCard,
       citations: citations.length > 0 ? citations : undefined,
       confidence: hybridResult

@@ -586,8 +586,11 @@ Your Goals as our 24/7 AI Intake Employee:
       documents: memoryDocuments,
       faqPairs,
       systemPrompt,
+      serviceAreas: crawled?.serviceAreas || (location ? [location] : []),
+      structuredFacts: crawled?.structuredFacts || undefined,
       guardrails: [
         'Be polite, reassuring, and concise.',
+        'Answer visitor questions accurately based on our verified services and service areas.',
         'Never invent pricing or rates not explicitly verified in our company knowledge base.',
         'Always append the disclaimer that initial estimates are preliminary and subject to on-site technician inspection.',
         'Never falsely claim an appointment is confirmed before the booking is executed.',

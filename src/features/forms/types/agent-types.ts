@@ -133,6 +133,8 @@ export interface FormAgentData {
     faqPairs: FaqPair[];
     systemPrompt: string;
     guardrails: string[];
+    serviceAreas?: string[];
+    structuredFacts?: any;
   };
 
   // 11 Multichannel Configurations
