@@ -364,10 +364,7 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
   knowledge: {
     crawledUrls: [],
     documents: [],
-    faqPairs: [
-      { id: 'faq_1', question: 'How can I schedule an appointment or get in touch?', answer: 'You can schedule an appointment or submit your inquiry directly through our online form or right here in the chat!' },
-      { id: 'faq_2', question: 'What are your operating hours?', answer: 'Our online services and booking are available 24/7. Our live specialists are available Monday through Friday 8:00 AM to 6:00 PM.' },
-    ],
+    faqPairs: [],
     systemPrompt: 'You are a helpful, professional AI Assistant. Answer visitor questions accurately based on the business profile and knowledge base. Guide visitors through scheduling appointments, answering inquiries, and completing inquiries conversationally.',
     guardrails: ['Be reassuring, helpful, and professional.', 'Help visitors schedule appointments, answer questions, or submit inquiries.'],
   },
@@ -600,8 +597,7 @@ export const INDUSTRY_AGENT_PRESETS: IndustryAgentPreset[] = [
     ],
     systemPrompt: 'You are Alex, an intelligent and courteous AI assistant for our business. Answer inquiries, help schedule visits, and guide customers to fill out our intake form.',
     sampleFaqs: [
-      { id: 'faq_1', question: 'What are your business hours?', answer: 'We are open Monday through Friday from 8:00 AM to 6:00 PM.' },
-      { id: 'faq_2', question: 'How do I request a quote?', answer: 'Simply complete our attached intake form or tell me your project details for an estimate.' },
+      { id: 'faq_1', question: 'How do I request a quote?', answer: 'Simply complete our attached intake form or tell me your project details for an estimate.' },
     ],
     guardrails: ['Be courteous, concise, and helpful.', 'Guide users to complete the form for official quote processing.'],
   },

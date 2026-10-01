@@ -363,12 +363,27 @@ export async function POST(
       const firstForm = primaryConnectedForm;
       const formName = firstForm?.name || 'Inquiry Form';
 
-      // 1. Check agent's configured FAQs first
+      // 1. Check agent's configured FAQs — with stopword-aware token overlap
+      // Previously: words.some((w) => q.includes(w)) matched on any 4+ char
+      // word, including stopwords like "what", "your", "services" — causing
+      // every query containing "your" to match the FAQ "What are your
+      // operating hours?" and return hardcoded business hours.
+      const FAQ_STOPWORDS = new Set(['the','what','your','our','this','that','with','from',
+        'have','does','do','are','how','when','where','who','why','which','for',
+        'and','but','you','yours','about','into','can','could','would','will',
+        'should','may','might','must','here','there','was','were','been','being',
+        'has','had','did','not','nor','too','very','just','only','also']);
       const matchedFaq = agent.knowledge?.faqPairs?.find((f) => {
         const q = (f.question || '').toLowerCase();
         if (!q) return false;
-        const words = lower.split(/\s+/).filter((w) => w.length > 3);
-        return lower.includes(q) || q.includes(lower) || (words.length > 0 && words.some((w) => q.includes(w)));
+        // Exact substring match (strict)
+        if (lower.includes(q)) return true;
+        // Token overlap: exclude stopwords, require ≥50% of FAQ question's
+        // content tokens to appear in the user's message
+        const qTokens = q.split(/\s+/).filter(w => w.length > 2 && !FAQ_STOPWORDS.has(w));
+        if (qTokens.length === 0) return false;
+        const hits = qTokens.filter(t => lower.includes(t)).length;
+        return hits / qTokens.length >= 0.5;
       });
 
       if (matchedFaq) {

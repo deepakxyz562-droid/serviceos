@@ -310,7 +310,7 @@ export function generateAgentAndFormFromWizard(input: WizardGenerationInput): Wi
     : 'Standard appointment duration: 30-45 minutes.';
   const hoursText = input.bookingConfig?.businessHours
     ? `Operating hours: ${input.bookingConfig.businessHours}.`
-    : 'Operating hours: Monday to Friday 8:00 AM – 6:00 PM, Saturday 9:00 AM – 3:00 PM.';
+    : 'Operating hours: Not specified — if the visitor asks about hours, ask them to contact us or check our website for current hours.';
   const autoConfirmText = input.bookingConfig?.autoConfirmMessage
     ? `When an appointment is confirmed, tell the customer: "${input.bookingConfig.autoConfirmMessage}"`
     : '';

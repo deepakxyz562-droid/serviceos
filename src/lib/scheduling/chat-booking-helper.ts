@@ -68,10 +68,17 @@ export function extractBookingIntent(
   history: Array<{ role?: string; sender?: string; content?: string; text?: string }> = [],
   fallbackServiceName = 'Appointment Inquiry'
 ): ExtractedBookingIntent {
-  const combinedText = [
-    ...history.slice(-5).map((h) => h.content || h.text || ''),
-    message,
-  ].join(' ');
+  // combinedText: USER-AUTHORED messages only — NOT the AI's responses.
+  // Previously included ALL history (including the AI's responses), which
+  // leaked dates/times from the AI's FAQ answers into the booking intent
+  // extraction. E.g. the AI says "Monday through Friday 8:00 AM to 6:00 PM"
+  // → the booking helper extracted "Monday" as the requested date and
+  // "8:00 AM" as the requested time, then auto-booked an appointment.
+  const userHistory = history
+    .slice(-5)
+    .filter((h) => h.role === 'user' || h.sender === 'user' || h.senderType === 'visitor')
+    .map((h) => h.content || h.text || '');
+  const combinedText = [...userHistory, message].join(' ');
 
   const lower = message.toLowerCase();
   const lowerCombined = combinedText.toLowerCase();
@@ -238,20 +245,27 @@ export function extractBookingIntent(
     customerAddress = addressMatch[1].trim();
   }
 
-  // 8. Name extraction
+  // 8. Name extraction — CURRENT MESSAGE ONLY (not combinedText)
+  // Previously ran against combinedText which includes the AI's greeting
+  // "I'm your AI assistant" → captured "your" as the customer name.
   let customerName: string | undefined;
   const namePatterns = [
-    /(?:my name is|i am|i'm|name:)\s+([A-Za-z]{2,20})/i,
-    /(?:for|with)\s+([A-Z][a-z]{2,20})(?:\s+at|\s+tomorrow|\s+on|$)/,
+    /(?:my name is|name:)\s+([A-Z][a-z]{2,20})/,
+    /(?:i am|i'm)\s+([A-Z][a-z]{2,20})\b/,
   ];
 
   for (const pat of namePatterns) {
-    const match = combinedText.match(pat);
+    const match = lower.match(pat);
     if (match && match[1]) {
       const candidate = match[1].trim();
-      const forbidden = ['Tomorrow', 'Today', 'Monday', 'Friday', 'Saturday', 'Sunday', 'Call', 'Confirmation', 'Appointment', 'Emergency'];
-      if (!forbidden.includes(candidate)) {
-        customerName = candidate;
+      // Expanded forbidden list — includes pronouns/articles that follow
+      // "I'm" in AI greetings (e.g. "I'm your AI assistant" → "your")
+      const forbidden = ['tomorrow', 'today', 'monday', 'friday', 'saturday',
+        'sunday', 'call', 'confirmation', 'appointment', 'emergency',
+        'your', 'our', 'the', 'this', 'that', 'here', 'there',
+        'welcome', 'hello', 'hi', 'glad', 'happy', 'sorry', 'ready'];
+      if (!forbidden.includes(candidate.toLowerCase())) {
+        customerName = candidate.charAt(0).toUpperCase() + candidate.slice(1);
         break;
       }
     }
@@ -441,14 +455,23 @@ export async function tryExecuteChatBooking(params: {
     }).catch(() => {});
   }
 
-  // Only execute booking if ready with date and time
-  if (!intent.isBookingReady && !(intent.hasIntent && intent.dateStr && intent.timeStr)) {
+  // GATE: Require isBookingReady — which gates on contact info (phone OR email).
+  // Previously had a bypass: (hasIntent && dateStr && timeStr) which allowed
+  // bookings WITHOUT contact info, creating "Valued Visitor / N/A / N/A"
+  // bookings on every message where the AI's prior turn mentioned "book" +
+  // "today" + "8 AM".
+  if (!intent.isBookingReady) {
+    return null;
+  }
+
+  // Also require explicit date AND time — no more defaulting to "today at 10am"
+  if (!intent.dateStr || !intent.timeStr) {
     return null;
   }
 
   try {
-    const effectiveDate = intent.dateStr || new Date().toISOString().split('T')[0];
-    const effectiveTime = intent.timeStr || '10:00 AM';
+    const effectiveDate = intent.dateStr;
+    const effectiveTime = intent.timeStr;
 
     const result = await createAppointmentBooking({
       tenantId: params.tenantId || null,

@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
 
     let primaryConnectedForm: any = null;
 
+    // Agent knowledge extracted from configJson (systemPrompt, faqPairs, guardrails)
+    let agentKnowledge: {
+      systemPrompt: string;
+      faqPairs: { question: string; answer: string }[];
+      guardrails: string[];
+    } | null = null;
+
     if (agentId && !tenantId) {
       // Check if agentId is a Tenant id or Form id or AiAgent id
       const tenant = await db.tenant.findUnique({
@@ -76,6 +83,19 @@ export async function POST(req: NextRequest) {
           const agentConfig = (formAgent.configJson as any) || {};
           if (Array.isArray(agentConfig.connectedForms) && agentConfig.connectedForms.length > 0) {
             primaryConnectedForm = agentConfig.connectedForms[0];
+          }
+
+          // Extract the agent's configured knowledge (systemPrompt, faqPairs,
+          // guardrails) from configJson — previously the public chat route
+          // ignored these entirely, building its own system prompt from scratch.
+          // This meant the wizard-generated systemPrompt (with crawled business
+          // context) was never used by the public widget.
+          if (agentConfig.knowledge) {
+            agentKnowledge = {
+              systemPrompt: agentConfig.knowledge.systemPrompt || '',
+              faqPairs: agentConfig.knowledge.faqPairs || [],
+              guardrails: agentConfig.knowledge.guardrails || [],
+            };
           }
 
           if (formAgent.tenant) {
@@ -303,18 +323,30 @@ export async function POST(req: NextRequest) {
 
     const servicesList = services.length > 0
       ? services.map((s) => `- ${s.name} ($${s.defaultPrice || 'Custom Quote'}): ${s.description || ''}`).join('\n')
-      : '- General Service & Repair\n- Consultation & Estimate';
+      : 'Services: Not yet configured — check our website or knowledge base for details.';
 
     // 4. Construct AI Prompt with Zero-Hallucination Guardrails
+    // Include the agent's configured knowledge (systemPrompt, faqPairs, guardrails)
+    // from the wizard-generated configJson — previously ignored entirely.
+    const agentSystemPrompt = agentKnowledge?.systemPrompt || '';
+    const agentFaqs = agentKnowledge?.faqPairs?.length
+      ? agentKnowledge.faqPairs.map(f => `Q: ${f.question}\nA: ${f.answer}`).join('\n\n')
+      : '';
+    const agentGuardrails = agentKnowledge?.guardrails?.length
+      ? agentKnowledge.guardrails.map(g => `- ${g}`).join('\n')
+      : '';
+
     const systemPrompt = `You are the friendly, professional 24/7 AI Website Employee & Booking Assistant for "${tenantName}".
 Business Contact: Phone: ${tenantPhone || 'Available upon booking'}, Email: ${tenantEmail || 'support@' + tenantName.toLowerCase().replace(/\s+/g, '') + '.com'}
 
+${agentSystemPrompt ? `AGENT INSTRUCTIONS:\n${agentSystemPrompt}\n` : ''}
 BUSINESS SERVICES & PRICING:
 ${servicesList}
 
 KNOWLEDGE BASE & FAQS:
 ${kbContext || 'We provide top-tier professional field services with guaranteed customer satisfaction.'}
-
+${agentFaqs ? `\nCONFIGURED FAQs:\n${agentFaqs}\n` : ''}
+${agentGuardrails ? `\nAGENT GUARDRAILS:\n${agentGuardrails}\n` : ''}
 CONFIDENCE & ZERO-HALLUCINATION GUARDRAIL:
 Confidence Level: ${hybridResult?.confidenceTier || 'NORMAL'}
 ${

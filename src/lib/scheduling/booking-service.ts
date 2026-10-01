@@ -207,7 +207,7 @@ export async function createAppointmentBooking(
   // 1. Generate 1-Click Calendar Links
   const googleCalendarUrl = generateGoogleCalendarUrl({
     title: displayTitle,
-    description: `Appointment scheduled via ${source.toUpperCase()}.\n\nClient: ${customer.name || 'N/A'}\nEmail: ${customer.email || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nNotes: ${notes || 'None'}`,
+    description: `Appointment scheduled via ${source.toUpperCase()}.\n\nClient: ${customer.name || 'Visitor'}\nEmail: ${customer.email || 'Not provided'}\nPhone: ${customer.phone || 'Not provided'}\nNotes: ${notes || 'None'}`,
     location: customer.address || 'Online Video Meeting',
     scheduledAt,
     scheduledEndTime,
@@ -215,7 +215,7 @@ export async function createAppointmentBooking(
 
   const outlookCalendarUrl = generateOutlookCalendarUrl({
     title: displayTitle,
-    description: `Appointment scheduled via ${source.toUpperCase()}.\n\nClient: ${customer.name || 'N/A'}\nEmail: ${customer.email || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nNotes: ${notes || 'None'}`,
+    description: `Appointment scheduled via ${source.toUpperCase()}.\n\nClient: ${customer.name || 'Visitor'}\nEmail: ${customer.email || 'Not provided'}\nPhone: ${customer.phone || 'Not provided'}\nNotes: ${notes || 'None'}`,
     location: customer.address || 'Online Video Meeting',
     scheduledAt,
     scheduledEndTime,
@@ -264,7 +264,7 @@ export async function createAppointmentBooking(
             tenantId: tenantId || null,
             name: customer.name || 'Appointment Client',
             email: customer.email || '',
-            phone: customer.phone || 'N/A',
+            phone: customer.phone || null,
             serviceType: serviceName,
             status: 'new',
             source: source === 'form' ? 'form_submission' : 'ai_chat_widget',
@@ -358,7 +358,7 @@ export async function createAppointmentBooking(
       if (tenant?.googleCalendarSyncEnabled) {
         const gcalResult = await pushBookingToGoogleCalendar(tenantId, {
           title: displayTitle,
-          description: `Appointment with ${customer.name || 'Client'}\nEmail: ${customer.email || 'N/A'}\nPhone: ${customer.phone || 'N/A'}\nNotes: ${notes || ''}`,
+          description: `Appointment with ${customer.name || 'Client'}\nEmail: ${customer.email || 'Not provided'}\nPhone: ${customer.phone || 'Not provided'}\nNotes: ${notes || ''}`,
           startTime: scheduledAt,
           endTime: scheduledEndTime,
           location: customer.address || undefined,

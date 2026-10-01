@@ -6,6 +6,7 @@ import {
   WizardGenerationInput,
 } from '@/lib/forms/generators/ai-agent-wizard-service';
 import { crawlWebsiteForAgent } from '@/lib/forms/generators/website-crawler-service';
+import { ingestKnowledgeDocument } from '@/lib/ai-knowledge';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,10 +164,34 @@ export async function POST(req: NextRequest) {
         },
       }).catch((err) => console.warn('[ai-agent-wizard-generate] Form agentConfig update notice:', err));
 
-      // Also persist to KnowledgeSource & KnowledgeDocument if crawled
+      // Persist crawled website content to AiKnowledgeDocument (the table that
+      // searchKnowledgeBaseHybrid reads from). Previously wrote to KnowledgeDocument
+      // (lowercase K) which is a completely different table — the chat route never
+      // found the crawled content, causing the AI to always respond with hardcoded
+      // fallback strings instead of actual business information.
       if (crawledContext && validTenantId) {
         try {
-          const kSource = await db.knowledgeSource.create({
+          // Build a rich text from the crawl results so the KB has structured info
+          const kbText = [
+            `Business: ${crawledContext.businessName}`,
+            crawledContext.industry ? `Industry: ${crawledContext.industry}` : '',
+            crawledContext.phone ? `Phone: ${crawledContext.phone}` : '',
+            crawledContext.email ? `Email: ${crawledContext.email}` : '',
+            crawledContext.address ? `Address: ${crawledContext.address}` : '',
+            crawledContext.services?.length ? `Services: ${crawledContext.services.join(', ')}` : '',
+            crawledContext.document?.snippet ? `\nWebsite Content:\n${crawledContext.document.snippet}` : '',
+          ].filter(Boolean).join('\n');
+
+          await ingestKnowledgeDocument({
+            tenantId: validTenantId,
+            title: `${crawledContext.businessName} Website`,
+            text: kbText,
+            sourceType: 'file',
+            userId: user?.id,
+          });
+
+          // Also keep the old KnowledgeSource record for backwards compat
+          await db.knowledgeSource.create({
             data: {
               tenantId: validTenantId,
               workspaceId: user?.workspaceId || null,
@@ -181,21 +206,9 @@ export async function POST(req: NextRequest) {
                 services: crawledContext.services,
               }),
             },
-          });
-          await db.knowledgeDocument.create({
-            data: {
-              sourceId: kSource.id,
-              tenantId: validTenantId,
-              workspaceId: user?.workspaceId || null,
-              title: `${crawledContext.businessName} Knowledge`,
-              url: targetUrl,
-              content: crawledContext.document.snippet,
-              status: 'ready',
-              chunksCount: 1,
-            },
-          });
+          }).catch(() => {});
         } catch (kErr) {
-          console.warn('[ai-agent-wizard-generate] KnowledgeSource persistence note:', kErr);
+          console.warn('[ai-agent-wizard-generate] Knowledge ingestion note:', kErr);
         }
       }
 
