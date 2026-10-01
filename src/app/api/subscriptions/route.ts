@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminUser } from '@/lib/admin-auth';
 import { seedPlans, getActivePlans, getPlanByCode } from '@/lib/billing-seed';
 import { cache } from '@/lib/cache';
 import { cachedJson } from '@/lib/cache-headers';
@@ -48,6 +49,55 @@ export async function GET() {
 
     const tenantId = authUser.tenantId;
     if (!tenantId) {
+      if (isSuperAdminUser(authUser)) {
+        const plans = await getActivePlans().catch(() => []);
+        const responsePayload = {
+          plan: 'enterprise',
+          billingCycle: 'yearly',
+          status: 'active',
+          isSuperAdmin: true,
+          price: 0,
+          currency: 'USD',
+          trialEndsAt: null,
+          isTrialExpired: false,
+          daysRemainingInTrial: null,
+          usage: {
+            jobs: { used: 0, limit: 999999 },
+            workflows: { used: 0, limit: 999999 },
+            users: { used: 0, limit: 999999 },
+            sms: { used: 0, limit: 999999 },
+            email: { used: 0, limit: 999999 },
+          },
+          paymentMethod: 'platform_admin',
+          paymentProvider: null,
+          paypalPayerEmail: null,
+          billingHistory: [],
+          pendingDowngrade: null,
+          billingEvents: [],
+          plans: plans.map((p) => ({
+            id: p.code,
+            code: p.code,
+            name: p.name,
+            description: p.description,
+            monthlyPrice: p.monthlyPrice,
+            yearlyPrice: p.yearlyPrice,
+            currency: p.currency,
+            originalMonthlyPrice: p.originalMonthlyPrice ?? 0,
+            originalYearlyPrice: p.originalYearlyPrice ?? 0,
+            discountBadge: p.discountBadge ?? null,
+            maxUsers: p.maxUsers,
+            maxJobs: p.maxJobs,
+            maxWorkflows: p.maxWorkflows,
+            features: safeParseFeatures(p.featuresJson),
+            popular: p.popular,
+            isAddon: p.isAddon ?? false,
+            sortOrder: p.sortOrder,
+          })),
+          isStandalone: false,
+          tenantSignupMode: 'standard',
+        };
+        return NextResponse.json(responsePayload);
+      }
       return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireAuth } from '@/lib/api-auth';
+import { isSuperAdminUser } from '@/lib/admin-auth';
 
 /**
  * GET /api/forms/dashboard-stats
@@ -17,6 +18,7 @@ export async function GET(_request: NextRequest) {
   const auth = await requireAuth();
   if (!auth.ok) return auth.response;
   const user = auth.user;
+  const isSuperAdmin = isSuperAdminUser(user);
 
   const workspaceId = user.workspaceId;
   const tenantId = user.tenantId;
@@ -26,10 +28,10 @@ export async function GET(_request: NextRequest) {
     ...(workspaceId ? [{ workspaceId }] : []),
     ...(tenantId ? [{ tenantId }] : []),
   ] as const;
-  if (!scopeOR.length) {
+  if (!scopeOR.length && !isSuperAdmin) {
     return NextResponse.json({ error: 'No workspace access' }, { status: 403 });
   }
-  const formWhere = { OR: [...scopeOR] };
+  const formWhere = scopeOR.length ? { OR: [...scopeOR] } : {};
 
   // Total forms + active forms
   const [totalForms, activeForms] = await Promise.all([
@@ -78,12 +80,14 @@ export async function GET(_request: NextRequest) {
 
   // AI agent status — check AiReceptionist for the workspace/tenant
   const aiReceptionist = await db.aiReceptionist.findFirst({
-    where: {
-      OR: [
-        ...(workspaceId ? [{ workspaceId }] : []),
-        ...(tenantId ? [{ tenantId }] : []),
-      ],
-    },
+    where: scopeOR.length
+      ? {
+          OR: [
+            ...(workspaceId ? [{ workspaceId }] : []),
+            ...(tenantId ? [{ tenantId }] : []),
+          ],
+        }
+      : undefined,
     select: { status: true },
   });
 
@@ -96,12 +100,14 @@ export async function GET(_request: NextRequest) {
 
   // KB document count
   const kbDocuments = await db.aiKnowledgeDocument.count({
-    where: {
-      OR: [
-        ...(workspaceId ? [{ workspaceId }] : []),
-        ...(tenantId ? [{ tenantId }] : []),
-      ],
-    },
+    where: scopeOR.length
+      ? {
+          OR: [
+            ...(workspaceId ? [{ workspaceId }] : []),
+            ...(tenantId ? [{ tenantId }] : []),
+          ],
+        }
+      : undefined,
   });
 
   // Appointments / Bookings stats (Calendly Engine)

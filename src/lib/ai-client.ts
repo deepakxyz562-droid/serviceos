@@ -873,10 +873,21 @@ export async function callAI(options: {
   const chain = await loadAiKeyChain()
   let lastErrorMsg = ''
 
-  for (const provider of PROVIDER_ORDER) {
-    const keys = chain[provider]
-    if (keys.length === 0) continue
-    const adapter = ADAPTERS[provider]
+  // Dynamically order providers by their highest-priority (lowest priority number) active key,
+  // falling back to PROVIDER_ORDER for ties.
+  const activeProviders = (Object.keys(chain) as ProviderName[])
+    .filter((p) => chain[p].length > 0)
+    .sort((a, b) => {
+      const minPriA = Math.min(...chain[a].map((k) => k.priority));
+      const minPriB = Math.min(...chain[b].map((k) => k.priority));
+      if (minPriA !== minPriB) return minPriA - minPriB;
+      return PROVIDER_ORDER.indexOf(a) - PROVIDER_ORDER.indexOf(b);
+    });
+
+  for (const provider of activeProviders) {
+    const keys = chain[provider].slice().sort((a, b) => a.priority - b.priority);
+    if (keys.length === 0) continue;
+    const adapter = ADAPTERS[provider];
 
     // Build the model list: preferred first (if set), then defaults (deduped).
     const defaults = DEFAULT_MODELS[provider]

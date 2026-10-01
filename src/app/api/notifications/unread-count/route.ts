@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminUser } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
 import { cachedJson } from '@/lib/cache-headers';
 
@@ -26,7 +27,8 @@ export async function GET(_request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
-    if (!user.tenantId) {
+    const isSuperAdmin = isSuperAdminUser(user);
+    if (!user.tenantId && !isSuperAdmin) {
       return NextResponse.json({ error: 'Tenant context required' }, { status: 400 });
     }
 
@@ -36,14 +38,16 @@ export async function GET(_request: NextRequest) {
       return cachedJson({ unreadCount: cached });
     }
 
-    const unreadCount = await db.appNotification.count({
-      where: {
-        tenantId: user.tenantId,
-        recipientId: user.id,
-        isRead: false,
-        isArchived: false,
-      },
-    });
+    const where: { recipientId: string; isRead: boolean; isArchived: boolean; tenantId?: string } = {
+      recipientId: user.id,
+      isRead: false,
+      isArchived: false,
+    };
+    if (user.tenantId) {
+      where.tenantId = user.tenantId;
+    }
+
+    const unreadCount = await db.appNotification.count({ where });
 
     cache.set(cacheKey, unreadCount, UNREAD_TTL);
     return cachedJson({ unreadCount });

@@ -98,10 +98,11 @@ export async function isSuperAdminRequest(): Promise<boolean> {
       select: { isSuperAdmin: true, role: true },
     });
 
+    const role = user?.role?.toLowerCase();
     const isSuperAdmin =
       user?.isSuperAdmin === true ||
-      user?.role === 'superadmin' ||
-      user?.role === 'super_admin';
+      role === 'superadmin' ||
+      role === 'super_admin';
 
     // 3. Cache the result for 60 seconds
     superAdminCache.set(authUser.id, {
@@ -131,8 +132,9 @@ export async function isSuperAdminRequest(): Promise<boolean> {
 export function isSuperAdminUser(user: AuthUser | null): boolean {
   if (!user) return false;
   if (user.isSuperAdmin) return true;
-  if (user.role === 'superadmin' || user.role === 'super_admin') return true;
+  const role = user.role?.toLowerCase();
+  if (role === 'superadmin' || role === 'super_admin') return true;
   // Legacy fallback: admin with no tenantId is likely superadmin
-  if (user.role === 'admin' && !user.tenantId) return true;
+  if (role === 'admin' && !user.tenantId) return true;
   return false;
 }

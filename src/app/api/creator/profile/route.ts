@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminUser } from '@/lib/admin-auth';
 import { buildDefaultCreatorProfile, CreatorProfileData } from '@/lib/creator-profile';
 
 export const dynamic = 'force-dynamic';
@@ -21,8 +22,31 @@ function safeParse(json: string | null | undefined, fallback: any = {}): any {
 export async function GET() {
   try {
     const user = await getAuthUser();
-    if (!user?.tenantId) {
+    if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    if (!user.tenantId) {
+      if (isSuperAdminUser(user)) {
+        const defaultProfile: CreatorProfileData = {
+          isEnabled: false,
+          handle: user.email ? user.email.split('@')[0] : 'admin',
+          displayName: user.name || 'Platform Administrator',
+          headline: 'ServiceOS / Fieseros Platform Administrator',
+          bio: 'Platform administration & system oversight.',
+          themeColor: '#2563EB',
+          verified: true,
+          rating: 5.0,
+          reviewCount: 0,
+          sessionsCompleted: 0,
+          socialLinks: {},
+          aiAgentEnabled: true,
+          aiWelcomeMessage: 'Hello! How can I assist you today?',
+          offers: [],
+        };
+        return NextResponse.json({ success: true, profile: defaultProfile });
+      }
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 400 });
     }
 
     const tenant = await db.tenant.findUnique({
