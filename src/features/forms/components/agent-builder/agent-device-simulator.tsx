@@ -59,6 +59,7 @@ interface ChatMsg {
   senderName?: string;
   isLiveAgent?: boolean;
   card?: any;
+  suggestedQuestions?: string[];
 }
 
 function isColorDark(colorStr?: string): boolean {
@@ -478,15 +479,20 @@ export function AgentDeviceSimulator({
 
   // Initialize greeting on load
   useEffect(() => {
+    const starterSuggestions = agent.quickActions?.length
+      ? agent.quickActions.filter(qa => qa.actionType === 'message').map(qa => qa.payload || qa.label)
+      : ['What services do you offer?', 'What areas do you serve?', 'Can I get an instant estimate?'];
+
     setMessages([
       {
         id: 'msg_greet',
         sender: 'ai',
-        text: agent.welcomeGreeting || `Hi! 👋 I'm **${agent.name}**, your **${agent.roleTitle || '24/7 AI Service Specialist'}**. How can I help you today?`,
+        text: agent.welcomeGreeting || `Hi! 👋 Welcome to **${agent.name}**. I'm your **${agent.roleTitle || '24/7 AI Service Specialist'}**. How can I help you today?`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedQuestions: (agent.channels?.chatbot?.showButtons ?? true) && starterSuggestions.length > 0 ? starterSuggestions : undefined,
       },
     ]);
-  }, [agent.welcomeGreeting, agent.name, agent.roleTitle]);
+  }, [agent.welcomeGreeting, agent.name, agent.roleTitle, agent.quickActions, agent.channels?.chatbot?.showButtons]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -652,6 +658,7 @@ export function AgentDeviceSimulator({
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           suggestedForm: matchedForm,
           card: data.card,
+          suggestedQuestions: Array.isArray(data.suggestedQuestions) ? data.suggestedQuestions : undefined,
         };
 
         setMessages((prev) => [...prev, aiMsg]);
@@ -672,6 +679,7 @@ export function AgentDeviceSimulator({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         suggestedForm: matchedForm,
         card: data.card,
+        suggestedQuestions: Array.isArray(data.suggestedQuestions) ? data.suggestedQuestions : undefined,
       };
       setMessages((prev) => [...prev, aiMsg]);
       if (isCalling) {
@@ -1316,6 +1324,38 @@ export function AgentDeviceSimulator({
                         </Button>
                       </div>
                     )}
+
+                    {/* Dynamic Contextual Quick-Reply Pills (Text.com / LiveChat Parity) */}
+                    {isAi && msg.suggestedQuestions && msg.suggestedQuestions.length > 0 && (() => {
+                      let questionsToDisplay = msg.suggestedQuestions;
+                      if (index === 0 && agent.quickActions?.length) {
+                        const qaLabels = new Set(agent.quickActions.map(qa => (qa.label || '').trim().toLowerCase()));
+                        questionsToDisplay = questionsToDisplay.filter(q => !qaLabels.has(q.trim().toLowerCase()));
+                      }
+                      if (questionsToDisplay.length === 0) return null;
+
+                      return (
+                        <div className="flex flex-wrap gap-1.5 pt-1 animate-in fade-in slide-in-from-bottom-1 duration-200">
+                          {questionsToDisplay.map((qText, qIdx) => (
+                            <button
+                              key={qIdx}
+                              type="button"
+                              disabled={sending}
+                              onClick={() => handleSendMessage(qText)}
+                              className={cn(
+                                'py-1.5 px-3 rounded-xl border text-xs font-semibold transition-all shadow-2xs flex items-center gap-1.5 text-left cursor-pointer active:scale-95 group',
+                                isDark
+                                  ? 'bg-slate-800/90 border-slate-700/80 text-blue-300 hover:bg-slate-700 hover:border-blue-400'
+                                  : 'bg-white border-slate-200/90 text-slate-800 hover:bg-blue-50/80 hover:border-blue-300 hover:text-blue-900'
+                              )}
+                            >
+                              <Sparkles className="size-3 text-blue-500 shrink-0 group-hover:rotate-12 transition-transform" />
+                              <span>{qText}</span>
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
 
                     <span className={cn('text-[9px] block px-1', isDark ? 'text-slate-400' : 'text-slate-500')}>
                       {msg.timestamp}

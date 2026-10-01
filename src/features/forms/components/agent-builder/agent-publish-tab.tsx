@@ -66,11 +66,12 @@ export function AgentPublishTab({
         : 'https://fieseros.com'
       : rawOrigin;
 
-  const [embedFormat, setEmbedFormat] = useState<'script' | 'iframe'>('script');
+  type EmbedFormat = 'script' | 'react' | 'wordpress' | 'shopify' | 'gtm' | 'iframe';
+  const [embedFormat, setEmbedFormat] = useState<EmbedFormat>('script');
 
   const slugOrId = agent.slug || agent.id;
   const standaloneUrl = `${cleanOrigin}/chat/${slugOrId}`;
-  const embedScript = `<script src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
+  const embedScript = `<!-- ServiceOS AI Chatbot Widget -->\n<script src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
 
   const posCss =
     widgetPosition === 'bottom-left'
@@ -81,7 +82,43 @@ export function AgentPublishTab({
 
   const embedIframe = `<iframe \n  id="fieseros-agent-frame"\n  src="${cleanOrigin}/agent/${slugOrId}?embed=1" \n  title="${agent.name || 'AI Assistant'}" \n  allow="microphone; camera; clipboard-write" \n  loading="lazy" \n  style="position: fixed; z-index: 999999; border: none; background: transparent; overflow: hidden; bottom: 16px; ${posCss} width: 84px; height: 84px; border-radius: 50%; pointer-events: auto;">\n</iframe>`;
 
-  const activeSnippet = embedFormat === 'script' ? embedScript : embedIframe;
+  const embedReact = `// Next.js (App Router or Pages Router)\nimport Script from 'next/script';\n\nexport default function ChatbotWidget() {\n  return (\n    <Script\n      src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js"\n      strategy="lazyOnload"\n    />\n  );\n}`;
+
+  const embedWordpress = `// Paste into your theme's functions.php or use Code Snippets plugin:\nadd_action('wp_footer', function () {\n    ?>\n    <script src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>\n    <?php\n});`;
+
+  const embedShopify = `<!-- In Shopify Admin: Online Store -> Themes -> Actions -> Edit code -->\n<!-- Open layout/theme.liquid and paste right above the closing </body> tag: -->\n<script src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
+
+  const embedGtm = `<!-- In Google Tag Manager: -->\n<!-- 1. Add New Tag -> Custom HTML -->\n<!-- 2. Set Triggering to: All Pages (Page View) -->\n<script src="${cleanOrigin}/api/public/agents/${slugOrId}/embed.js" async></script>`;
+
+  const snippetMap: Record<EmbedFormat, { code: string; tip: string }> = {
+    script: {
+      code: embedScript,
+      tip: 'Paste this snippet before the closing </body> tag on any HTML, Webflow, Squarespace, or Wix page.',
+    },
+    react: {
+      code: embedReact,
+      tip: 'Add this component to your Next.js layout or root app file. Next.js will optimize script loading automatically.',
+    },
+    wordpress: {
+      code: embedWordpress,
+      tip: 'Requires no plugin installation. Runs automatically in the footer of every WordPress page.',
+    },
+    shopify: {
+      code: embedShopify,
+      tip: 'Injects the floating chatbot onto all product pages, cart, and collections seamlessly.',
+    },
+    gtm: {
+      code: embedGtm,
+      tip: 'Deploy across multiple websites or domains instantly via Google Tag Manager without editing source code.',
+    },
+    iframe: {
+      code: embedIframe,
+      tip: 'Zero-JavaScript sandboxed iframe for security-restricted environments or intranet portals.',
+    },
+  };
+
+  const activeSnippet = snippetMap[embedFormat].code;
+  const activeTip = snippetMap[embedFormat].tip;
 
   const copyToClipboard = async (text: string, type: 'code' | 'link') => {
     if (onSave) {
@@ -181,28 +218,40 @@ export function AgentPublishTab({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-            <div className="flex items-center gap-1 p-0.5 bg-muted/60 rounded-lg border border-border/60">
-              <button
-                type="button"
-                onClick={() => setEmbedFormat('script')}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
-                  embedFormat === 'script' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                1-Line Script (Auto-expanding)
-              </button>
-              <button
-                type="button"
-                onClick={() => setEmbedFormat('iframe')}
-                className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all cursor-pointer ${
-                  embedFormat === 'iframe' ? 'bg-blue-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Direct HTML iFrame
-              </button>
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center gap-1 overflow-x-auto p-1 bg-muted/60 rounded-lg border border-border/60">
+              {[
+                { id: 'script', label: 'HTML / JS Script' },
+                { id: 'react', label: 'React / Next.js' },
+                { id: 'wordpress', label: 'WordPress' },
+                { id: 'shopify', label: 'Shopify' },
+                { id: 'gtm', label: 'Google Tag Manager' },
+                { id: 'iframe', label: 'Direct iFrame' },
+              ].map((fmt) => (
+                <button
+                  key={fmt.id}
+                  type="button"
+                  onClick={() => setEmbedFormat(fmt.id as EmbedFormat)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md whitespace-nowrap transition-all cursor-pointer ${
+                    embedFormat === fmt.id
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {fmt.label}
+                </button>
+              ))}
             </div>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">● Universal Embed (WordPress, Shopify, Webflow, HTML)</span>
+
+            <div className="flex items-center justify-between text-[11px] px-1 text-muted-foreground">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Sparkles className="size-3 text-blue-500" />
+                {activeTip}
+              </span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold shrink-0 ml-2 hidden sm:inline">
+                ● Live Active Production Endpoint
+              </span>
+            </div>
           </div>
 
           <div className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-[11px] relative">

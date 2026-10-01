@@ -10,6 +10,7 @@ import {
 import { AgentDeviceSimulator } from './agent-device-simulator';
 import { AgentBuildTab } from './agent-build-tab';
 import { AgentTrainTab } from './agent-train-tab';
+import { AgentSkillsTab } from './agent-skills-tab';
 import { AgentPublishTab } from './agent-publish-tab';
 import { AgentTestLab } from './agent-test-tab';
 import { AgentSettingsDialog } from './agent-settings-dialog';
@@ -100,7 +101,7 @@ export function FormAgentStudio({
   siteOrigin,
 }: FormAgentStudioProps) {
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
-  const [studioTab, setStudioTab] = useState<'build' | 'train' | 'test' | 'publish'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'skills' | 'train' | 'test' | 'publish'>('build');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
   const [rightDrawerMode, setRightDrawerMode] = useState<'channel_settings' | 'designer'>('channel_settings');
   const [rightDrawerOpen, setRightDrawerOpen] = useState<boolean>(true);
@@ -113,6 +114,7 @@ export function FormAgentStudio({
   const [titleInput, setTitleInput] = useState(agent.name);
   const [activeConnectedFormModal, setActiveConnectedFormModal] = useState<ConnectedFormRef | null>(null);
   const [accountForms, setAccountForms] = useState<Array<{ id: string; name: string; description?: string }>>([]);
+  const [showSideSimulator, setShowSideSimulator] = useState<boolean>(true);
 
   useEffect(() => {
     fetch('/api/forms')
@@ -296,6 +298,18 @@ export function FormAgentStudio({
             </button>
             <button
               type="button"
+              onClick={() => setStudioTab('skills')}
+              className={cn(
+                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
+                studioTab === 'skills'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              )}
+            >
+              SKILLS
+            </button>
+            <button
+              type="button"
               onClick={() => setStudioTab('train')}
               className={cn(
                 'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
@@ -304,7 +318,7 @@ export function FormAgentStudio({
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
               )}
             >
-              TRAIN
+              KNOWLEDGE
             </button>
             <button
               type="button"
@@ -351,6 +365,22 @@ export function FormAgentStudio({
             <Settings className="size-3.5" />
             <span>Settings</span>
           </Button>
+
+          {(studioTab === 'skills' || studioTab === 'train') && (
+            <Button
+              type="button"
+              variant={showSideSimulator ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowSideSimulator(!showSideSimulator)}
+              className={cn(
+                'h-8 text-xs font-semibold gap-1.5 cursor-pointer',
+                showSideSimulator ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'text-slate-700 dark:text-slate-300'
+              )}
+            >
+              <Bot className="size-3.5" />
+              <span>{showSideSimulator ? 'Hide Simulator' : 'Live Simulator'}</span>
+            </Button>
+          )}
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Test Mode</span>
@@ -588,12 +618,75 @@ export function FormAgentStudio({
         </div>
       )}
 
-      {/* ── TRAIN TAB ── */}
-      {studioTab === 'train' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-4xl mx-auto">
-            <AgentTrainTab agent={agent} onChange={setAgent} />
+      {/* ── SKILLS TAB (TEXT.COM PARITY) ── */}
+      {studioTab === 'skills' && (
+        <div className="flex-1 min-h-0 flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-4xl mx-auto">
+              <AgentSkillsTab agent={agent} onChange={setAgent} />
+            </div>
           </div>
+          {showSideSimulator && (
+            <aside className="w-[390px] border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-lg">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+                <span className="text-xs font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                  <Bot className="size-3.5 text-blue-600" /> Live Skills Simulator
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSideSimulator(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs cursor-pointer p-1"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <AgentDeviceSimulator
+                  agent={agent}
+                  isTestMode={true}
+                  previewPage={previewPage}
+                  onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
+                  onSwitchPage={(page) => setPreviewPage(page)}
+                />
+              </div>
+            </aside>
+          )}
+        </div>
+      )}
+
+      {/* ── TRAIN (KNOWLEDGE) TAB ── */}
+      {studioTab === 'train' && (
+        <div className="flex-1 min-h-0 flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-4xl mx-auto">
+              <AgentTrainTab agent={agent} onChange={setAgent} />
+            </div>
+          </div>
+          {showSideSimulator && (
+            <aside className="w-[390px] border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-lg">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+                <span className="text-xs font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                  <Bot className="size-3.5 text-blue-600" /> Live RAG Simulator
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSideSimulator(false)}
+                  className="text-muted-foreground hover:text-foreground text-xs cursor-pointer p-1"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0">
+                <AgentDeviceSimulator
+                  agent={agent}
+                  isTestMode={true}
+                  previewPage={previewPage}
+                  onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
+                  onSwitchPage={(page) => setPreviewPage(page)}
+                />
+              </div>
+            </aside>
+          )}
         </div>
       )}
 

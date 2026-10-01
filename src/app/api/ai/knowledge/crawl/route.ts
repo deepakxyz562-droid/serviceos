@@ -60,6 +60,8 @@ export async function POST(req: NextRequest) {
             title: page.title,
             chunkCount: ingestRes.chunkCount,
             url: page.url,
+            charCount: page.charCount,
+            content: page.text.slice(0, 4000),
           });
         }
       }

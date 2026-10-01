@@ -39,6 +39,8 @@ export interface TrainingDocument {
   status: 'indexed' | 'indexing' | 'failed';
   snippet?: string;
   indexedAt: string;
+  url?: string;
+  content?: string;
 }
 
 export interface ConnectedFormRef {

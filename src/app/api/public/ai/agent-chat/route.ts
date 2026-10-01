@@ -32,18 +32,99 @@ interface ChatMessage {
   content: string;
 }
 
+/**
+ * Contextual suggestion chips generator (Text.com parity)
+ */
+function generateContextualSuggestions(message: string, tenantName: string): string[] {
+  const lower = (message || '').toLowerCase();
+  if (lower.includes('service') || lower.includes('what do you') || lower.includes('offer') || lower.includes('what can you do')) {
+    return [
+      'What areas do you serve?',
+      'Can I get an instant estimate?',
+      'Do you offer same-day service?',
+    ];
+  }
+  if (
+    lower.includes('area') ||
+    lower.includes('location') ||
+    lower.includes('city') ||
+    lower.includes('cities') ||
+    lower.includes('serve') ||
+    lower.includes('where')
+  ) {
+    return [
+      'What services do you offer?',
+      'Can I get an instant estimate?',
+      'Book a service visit',
+    ];
+  }
+  if (
+    lower.includes('price') ||
+    lower.includes('rate') ||
+    lower.includes('cost') ||
+    lower.includes('quote') ||
+    lower.includes('fee') ||
+    lower.includes('estimate')
+  ) {
+    return [
+      'Do you offer free estimates?',
+      'Book an appointment',
+      'What areas do you serve?',
+    ];
+  }
+  if (
+    lower.includes('book') ||
+    lower.includes('appointment') ||
+    lower.includes('schedule') ||
+    lower.includes('tomorrow') ||
+    lower.includes('today')
+  ) {
+    return [
+      'What are your service hours?',
+      'Do you offer emergency service?',
+      'What services do you provide?',
+    ];
+  }
+  if (
+    lower.includes('water heater') ||
+    lower.includes('drain') ||
+    lower.includes('leak') ||
+    lower.includes('pipe') ||
+    lower.includes('plumb') ||
+    lower.includes('roof') ||
+    lower.includes('hvac')
+  ) {
+    return [
+      'Can I get an instant estimate?',
+      'Book a technician visit',
+      'Do you offer warranties on labor?',
+    ];
+  }
+  return [
+    'What services do you offer?',
+    'Which areas do you serve?',
+    'Get an instant estimate',
+  ];
+}
+
 export async function POST(req: NextRequest) {
   const startTime = Date.now();
+  let body: any = {};
+  let tenantId: string | undefined;
+  let agentId: string | undefined;
+
   try {
-    const body = await req.json();
+    body = await req.json().catch(() => ({}));
     const {
-      agentId,
+      agentId: rawAgentId,
       tenantId: explicitTenantId,
       message,
       history = [],
       action,
       bookingData,
     } = body;
+    agentId = rawAgentId;
+    tenantId = explicitTenantId;
 
     // ── Phase A: Input Guardrail — block prompt injection BEFORE any processing ──
     const guardrailConfig: GuardrailConfig = {
@@ -62,7 +143,7 @@ export async function POST(req: NextRequest) {
     // 1. Resolve Workspace / Tenant context from the agentId or explicit IDs.
     //    NEVER fall back to "first active tenant" — that was a security hole
     //    (any anonymous visitor could bill AI calls to an unrelated tenant).
-    let tenantId: string | undefined = explicitTenantId;
+    tenantId = explicitTenantId;
     let workspaceId: string | undefined;
     let tenantName = 'Service Pro';
     let tenantPhone = '';
@@ -353,7 +434,7 @@ export async function POST(req: NextRequest) {
           where: { tenantId },
           select: { name: true, description: true, defaultPrice: true },
           take: 8,
-        })
+        }).catch(() => [])
       : [];
 
     const servicesList = services.length > 0
@@ -371,6 +452,85 @@ export async function POST(req: NextRequest) {
       ? agentKnowledge.guardrails.map(g => `- ${g}`).join('\n')
       : '';
 
+    // Extract verified official website pages for contextual hyperlinks (Text.com parity)
+    const verifiedPages: Array<{ title: string; url: string }> = [];
+    const seenPageUrls = new Set<string>();
+
+    const registerPage = (rawUrl: string, rawTitle?: string) => {
+      if (!rawUrl || typeof rawUrl !== 'string') return;
+      const trimmed = rawUrl.trim();
+      if (!trimmed.startsWith('http')) return;
+      const clean = trimmed.replace(/\/+$/, '');
+      if (seenPageUrls.has(clean.toLowerCase())) return;
+      seenPageUrls.add(clean.toLowerCase());
+
+      let title = rawTitle?.trim();
+      if (!title || title.startsWith('http')) {
+        try {
+          const u = new URL(trimmed);
+          const segments = u.pathname.split('/').filter(Boolean);
+          if (segments.length === 0) {
+            title = 'Official Website';
+          } else {
+            const last = segments[segments.length - 1];
+            title = last
+              .replace(/[-_]+/g, ' ')
+              .replace(/\.(html|php|aspx|htm)$/i, '')
+              .split(' ')
+              .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(' ');
+          }
+        } catch {
+          title = 'Website Page';
+        }
+      } else {
+        title = title
+          .replace(/\s*\|\s*.*$/i, '')
+          .replace(/\s*—\s*.*$/i, '')
+          .replace(/&amp;/g, '&')
+          .trim();
+      }
+      verifiedPages.push({ title, url: trimmed });
+    };
+
+    if (kbScope) {
+      try {
+        const dbDocs = await db.aiKnowledgeDocument.findMany({
+          where: { tenantId: kbScope },
+          select: { title: true, content: true },
+          take: 12,
+        });
+        for (const doc of dbDocs) {
+          const match = doc.content?.match(/^Source URL:\s*([^\s\n]+)/m);
+          if (match) {
+            registerPage(match[1], doc.title);
+          }
+        }
+      } catch (err) {
+        console.warn('[agent-chat] Failed to fetch dbDocs for verified pages:', err);
+      }
+    }
+
+    const verifiedPagesPrompt = verifiedPages.length > 0
+      ? `VERIFIED OFFICIAL WEBSITE PAGES (Hyperlink these naturally using markdown where relevant):
+${verifiedPages.slice(0, 10).map((p) => `- [${p.title}](${p.url})`).join('\n')}
+HYPERLINK RULE: When mentioning specific services, service areas, or contact information, naturally include relevant markdown links from above. NEVER invent fake or non-existent URLs!`
+      : '';
+
+    const enterpriseGuidelinesPrompt = `STYLE & ENTERPRISE QUALITY GUIDELINES (Text.com / LiveChat Standard):
+1. TONE & EXPERTISE:
+   - Provide warm, authoritative, highly professional responses. You represent "${tenantName}" with complete competence and care.
+   - Ground every statement strictly in the business profile and verified facts. Do not invent unlisted flat prices or fake warranties.
+2. STRUCTURE & SCANNABILITY:
+   - Use bold titles, concise bullet points for multiple items, and clean spacing.
+   - Format telephone numbers cleanly (e.g. ${tenantPhone || '(555) 123-4567'}).
+   - Mention key trust badges when relevant (licensed & bonded CCB, guarantees, same-day service, 24/7 emergency dispatch).
+   - Keep answers clear and focused (typically 2-3 concise paragraphs or bulleted list).
+3. DYNAMIC NEXT-STEP QUESTIONS (MANDATORY):
+   - At the VERY END of every response, you MUST output 2 to 3 logical, concise follow-up questions that anticipate what the customer would ask next.
+   - Format: <<<SUGGESTIONS: ["Question 1?", "Question 2?", "Question 3?"]>>>
+   - These suggestions must be short (under 8 words each) and actionable.`;
+
     const systemPrompt = `You are the friendly, professional 24/7 AI Website Employee & Booking Assistant for "${tenantName}".
 Business Contact: Phone: ${tenantPhone || 'Available upon booking'}, Email: ${tenantEmail || 'support@' + tenantName.toLowerCase().replace(/\s+/g, '') + '.com'}
 
@@ -379,10 +539,15 @@ ${sessionContext ? sessionContext + '\n' : ''}
 BUSINESS SERVICES & PRICING:
 ${servicesList}
 
+${verifiedPagesPrompt}
+
 KNOWLEDGE BASE & FAQS:
 ${kbContext || 'We provide top-tier professional field services with guaranteed customer satisfaction.'}
 ${agentFaqs ? `\nCONFIGURED FAQs:\n${agentFaqs}\n` : ''}
 ${agentGuardrails ? `\nAGENT GUARDRAILS:\n${agentGuardrails}\n` : ''}
+
+${enterpriseGuidelinesPrompt}
+
 CONFIDENCE & ZERO-HALLUCINATION GUARDRAIL:
 Confidence Level: ${hybridResult?.confidenceTier || 'NORMAL'}
 ${
@@ -460,6 +625,23 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
       rawReply = aiResponse?.content || '';
     } catch (err) {
       console.warn('[agent-chat] AI call failed, using intelligent rule responder:', err);
+    }
+
+    let suggestedQuestions: string[] = [];
+    if (rawReply) {
+      const suggestionsMatch = rawReply.match(/<<<SUGGESTIONS:\s*(\[[\s\S]*?\])\s*>>>/);
+      if (suggestionsMatch) {
+        try {
+          const parsed = JSON.parse(suggestionsMatch[1]);
+          if (Array.isArray(parsed)) {
+            suggestedQuestions = parsed
+              .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
+              .map((q: any) => q.trim())
+              .slice(0, 4);
+          }
+        } catch {}
+        rawReply = rawReply.replace(/<<<SUGGESTIONS:[\s\S]*?>>>/, '').trim();
+      }
     }
 
     if (!rawReply) {
@@ -668,9 +850,14 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
       intentClassification.isBookingOrIntake &&
       !intentClassification.isInformationalQuery;
 
+    if (suggestedQuestions.length === 0) {
+      suggestedQuestions = generateContextualSuggestions(message, tenantName);
+    }
+
     return NextResponse.json(
       {
         reply: rawReply,
+        suggestedQuestions,
         card: cardData,
         sessionId: syncRes.sessionId,
         suggestedForm: shouldAttachForm ? primaryConnectedForm : undefined,

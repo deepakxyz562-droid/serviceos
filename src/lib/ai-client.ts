@@ -111,9 +111,10 @@ const DEFAULT_MODELS: Record<ProviderName, string[]> = {
   openai: ['gpt-4o-mini'],
   anthropic: ['claude-3-5-haiku-20241022'],
   gemini: [
-    'gemini-3.8-flash',
+    'gemini-flash-lite-latest',
     'gemini-3.5-flash',
     'gemini-3.1-flash-lite',
+    'gemini-3.8-flash',
   ],
   zai: ['glm-4-plus'],
 }

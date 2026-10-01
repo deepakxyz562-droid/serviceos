@@ -33,6 +33,10 @@ import {
   AlertCircle,
   X,
   Building,
+  Folder,
+  FolderOpen,
+  Eye,
+  Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,6 +111,12 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [crawling, setCrawling] = useState(false);
   const [crawledPagesCount, setCrawledPagesCount] = useState<number | null>(null);
   const [extractedFacts, setExtractedFacts] = useState<any>(null);
+
+  // Multi-source and hierarchical folder state (Text.com parity)
+  const [activeSourceCategory, setActiveSourceCategory] = useState<'all' | 'website' | 'files' | 'faq' | 'facts' | 'unanswered'>('all');
+  const [selectedFolder, setSelectedFolder] = useState<string>('All Pages');
+  const [searchPageQuery, setSearchPageQuery] = useState('');
+  const [previewDoc, setPreviewDoc] = useState<{ title: string; content?: string; url?: string } | null>(null);
 
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
@@ -251,11 +261,13 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
         const newDocs: TrainingDocument[] = (data.ingestedDocs || []).map((d: any) => ({
           id: d.id || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           name: d.title || d.url,
-          size: 45000,
-          type: 'url',
-          status: 'indexed',
+          size: d.charCount || 45000,
+          type: 'url' as const,
+          status: 'indexed' as const,
           snippet: `Crawled from ${d.url}`,
           indexedAt: new Date().toISOString(),
+          url: d.url,
+          content: d.content || d.text || `Crawled and indexed from ${d.url}`,
         }));
 
         onChange({
@@ -517,156 +529,453 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
     toast.info('Service removed from catalog');
   };
 
+  const getDocUrl = (doc: TrainingDocument): string => {
+    if (doc.url) return doc.url;
+    if (doc.name && doc.name.startsWith('http')) return doc.name;
+    if (doc.snippet && doc.snippet.includes('http')) {
+      const match = doc.snippet.match(/https?:\/\/[^\s]+/);
+      if (match) return match[0];
+    }
+    return '';
+  };
+
+  const getDocFolder = (doc: TrainingDocument): string => {
+    if (doc.type === 'pdf' || doc.type === 'text') {
+      return 'Documents & Files';
+    }
+    if (doc.type === 'faq') {
+      return 'FAQ Pairs';
+    }
+    const urlStr = getDocUrl(doc);
+    if (!urlStr) return '/ (General Pages)';
+    try {
+      const parsed = new URL(urlStr);
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+      if (pathParts.length > 0) {
+        return `/${pathParts[0]}/`;
+      }
+      return '/ (Root / Home)';
+    } catch {
+      return '/ (General Pages)';
+    }
+  };
+
+  const allDocs = agent.knowledge?.documents || [];
+
+  const folderCounts = React.useMemo(() => {
+    const counts: Record<string, number> = { 'All Pages': allDocs.length };
+    allDocs.forEach((doc) => {
+      const folder = getDocFolder(doc);
+      counts[folder] = (counts[folder] || 0) + 1;
+    });
+    return counts;
+  }, [allDocs]);
+
+  const folderList = React.useMemo(() => {
+    const keys = Object.keys(folderCounts).filter((k) => k !== 'All Pages');
+    keys.sort();
+    return ['All Pages', ...keys];
+  }, [folderCounts]);
+
+  const filteredDocs = React.useMemo(() => {
+    return allDocs.filter((doc) => {
+      if (activeSourceCategory === 'website' && doc.type !== 'url') return false;
+      if (activeSourceCategory === 'files' && doc.type !== 'pdf' && doc.type !== 'text') return false;
+
+      if (selectedFolder !== 'All Pages') {
+        const folder = getDocFolder(doc);
+        if (folder !== selectedFolder) return false;
+      }
+
+      if (searchPageQuery.trim()) {
+        const q = searchPageQuery.toLowerCase();
+        const urlStr = getDocUrl(doc).toLowerCase();
+        const nameStr = (doc.name || '').toLowerCase();
+        const snippetStr = (doc.snippet || '').toLowerCase();
+        if (!nameStr.includes(q) && !urlStr.includes(q) && !snippetStr.includes(q)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [allDocs, activeSourceCategory, selectedFolder, searchPageQuery]);
+
   return (
     <div className="space-y-4">
-      {/* ── 1. AUTOMATED SITEMAP & WEBPAGE CRAWLER ── */}
-      <Card className="rounded-xl border-border/80 shadow-xs">
-        <CardHeader className="p-4 pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xs font-bold flex items-center gap-1.5">
-              <Globe className="size-3.5 text-blue-600" /> Automated Sitemap & URL Crawler (SiteGPT Parity)
-            </CardTitle>
-            <div className="flex items-center gap-1 text-[11px] bg-muted/60 p-0.5 rounded-lg">
-              <button
-                type="button"
-                onClick={() => setCrawlMode('sitemap')}
-                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
-                  crawlMode === 'sitemap' ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground' : 'text-muted-foreground'
-                }`}
-              >
-                🗺️ Full Sitemap.xml
-              </button>
-              <button
-                type="button"
-                onClick={() => setCrawlMode('single')}
-                className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
-                  crawlMode === 'single' ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground' : 'text-muted-foreground'
-                }`}
-              >
-                📄 Single URL
-              </button>
-            </div>
-          </div>
-          <CardDescription className="text-[11px]">
-            {crawlMode === 'sitemap'
-              ? 'Automatically discovers and indexes all subpages from your sitemap.xml into vector embeddings.'
-              : 'Crawls and indexes a specific landing page, service page, or pricing sheet.'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-4 pt-0 space-y-3">
-          <div className="flex gap-2">
-            <Input
-              value={crawlUrlInput}
-              onChange={(e) => setCrawlUrlInput(e.target.value)}
-              placeholder={crawlMode === 'sitemap' ? 'https://example.com/sitemap.xml' : 'https://example.com/pricing'}
-              className="text-xs h-8"
-              disabled={crawling}
-            />
-            <Button
+      {/* ── 0. SOURCE CATEGORY FILTER BAR (TEXT.COM PARITY) ── */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-border/60">
+        {[
+          { id: 'all', label: 'All Sources', count: allDocs.length + (agent.knowledge?.faqPairs?.length || 0), icon: Layers },
+          { id: 'website', label: 'Websites & Sitemaps', count: allDocs.filter(d => d.type === 'url').length || agent.knowledge?.crawledUrls?.length || 0, icon: Globe },
+          { id: 'files', label: 'Files & PDFs', count: allDocs.filter(d => d.type === 'pdf' || d.type === 'text').length, icon: FileText },
+          { id: 'faq', label: 'FAQ Pairs', count: agent.knowledge?.faqPairs?.length || 0, icon: HelpCircle },
+          { id: 'facts', label: 'Verified Facts', count: currentAreas.length + (Array.isArray(currentFacts.services) ? currentFacts.services.length : 0), icon: Database },
+          { id: 'unanswered', label: 'Unanswered Gaps', count: unansweredList.length, icon: MessageSquareWarning },
+        ].map((cat) => {
+          const Icon = cat.icon;
+          const isActive = activeSourceCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
               type="button"
-              size="sm"
-              onClick={handleCrawlUrl}
-              disabled={crawling || !crawlUrlInput.trim()}
-              className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white shrink-0 gap-1.5"
+              onClick={() => {
+                setActiveSourceCategory(cat.id as any);
+                setSelectedFolder('All Pages');
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer',
+                isActive
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground'
+              )}
             >
-              {crawling ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3" />}
-              <span>{crawling ? 'Crawling...' : 'Crawl & Index'}</span>
-            </Button>
-          </div>
-
-          {crawledPagesCount !== null && (
-            <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200">
-              <span className="flex items-center gap-1.5 font-semibold">
-                <CheckCircle2 className="size-3.5 text-emerald-500" />
-                Indexed {crawledPagesCount} pages into Agent RAG Knowledge Base
+              <Icon className="size-3.5" />
+              <span>{cat.label}</span>
+              <span className={cn(
+                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                isActive ? 'bg-white/20 text-white' : 'bg-muted-foreground/15 text-muted-foreground'
+              )}>
+                {cat.count}
               </span>
-            </div>
-          )}
+            </button>
+          );
+        })}
+      </div>
 
-          {/* Dual-Brain Verified Facts Panel */}
-          {extractedFacts && (
-            <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 rounded-xl space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5 text-xs">
-                  <Database className="size-3.5 text-blue-600" />
-                  Dual-Brain Verified Facts (100% Deterministic Grounding)
-                </span>
-                <Badge variant="outline" className="text-[10px] text-blue-700 dark:text-blue-300 border-blue-300">
-                  Zero Hallucination
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-                {extractedFacts.businessName && (
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Business Name</span>
-                    <span className="font-semibold text-foreground">{extractedFacts.businessName}</span>
-                  </div>
-                )}
-                {extractedFacts.phone && (
-                  <div>
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Phone Number</span>
-                    <span className="font-semibold text-foreground">{extractedFacts.phone}</span>
-                  </div>
-                )}
-                {extractedFacts.operatingHours && Object.keys(extractedFacts.operatingHours).length > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Hours</span>
-                    <div className="flex flex-wrap gap-1.5 mt-0.5">
-                      {Object.entries(extractedFacts.operatingHours).map(([k, v]: [string, any], idx: number) => (
-                        <span key={idx} className="px-1.5 py-0.5 rounded bg-muted/60 text-[10px]">
-                          <strong>{k}:</strong> {String(v)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {extractedFacts.services && extractedFacts.services.length > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-muted-foreground block text-[10px] uppercase font-bold">Services & Rates</span>
-                    <div className="flex flex-wrap gap-1 mt-0.5">
-                      {extractedFacts.services.slice(0, 6).map((s: any, idx: number) => (
-                        <span key={idx} className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-border/80 text-[10px] font-medium flex items-center gap-1">
-                          <span>{s.name}</span>
-                          {s.price && <strong className="text-emerald-600">{s.price}</strong>}
-                        </span>
-                      ))}
-                      {extractedFacts.services.length > 6 && (
-                        <span className="text-[10px] text-muted-foreground self-center">
-                          +{extractedFacts.services.length - 6} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* List of Crawled Sources */}
-          {agent.knowledge?.crawledUrls?.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Indexed Sources</p>
-              {agent.knowledge.crawledUrls.map((url, idx) => (
-                <div
-                  key={idx}
-                  className="p-2 bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between text-xs"
+      {/* ── 1. AUTOMATED SITEMAP & WEBPAGE CRAWLER ── */}
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'website') && (
+        <Card className="rounded-xl border-border/80 shadow-xs">
+          <CardHeader className="p-4 pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                <Globe className="size-3.5 text-blue-600" /> Automated Sitemap & URL Crawler (SiteGPT Parity)
+              </CardTitle>
+              <div className="flex items-center gap-1 text-[11px] bg-muted/60 p-0.5 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setCrawlMode('sitemap')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    crawlMode === 'sitemap' ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground' : 'text-muted-foreground'
+                  }`}
                 >
-                  <span className="font-mono text-[11px] text-foreground truncate max-w-[280px]">
-                    {url}
+                  🗺️ Full Sitemap.xml
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCrawlMode('single')}
+                  className={`px-2 py-0.5 rounded-md font-semibold transition-all ${
+                    crawlMode === 'single' ? 'bg-white dark:bg-slate-800 shadow-xs text-foreground' : 'text-muted-foreground'
+                  }`}
+                >
+                  📄 Single URL
+                </button>
+              </div>
+            </div>
+            <CardDescription className="text-[11px]">
+              {crawlMode === 'sitemap'
+                ? 'Automatically discovers and indexes all subpages from your sitemap.xml into vector embeddings.'
+                : 'Crawls and indexes a specific landing page, service page, or pricing sheet.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <div className="flex gap-2">
+              <Input
+                value={crawlUrlInput}
+                onChange={(e) => setCrawlUrlInput(e.target.value)}
+                placeholder={crawlMode === 'sitemap' ? 'https://example.com/sitemap.xml' : 'https://example.com/pricing'}
+                className="text-xs h-8"
+                disabled={crawling}
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleCrawlUrl}
+                disabled={crawling || !crawlUrlInput.trim()}
+                className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white shrink-0 gap-1.5"
+              >
+                {crawling ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3" />}
+                <span>{crawling ? 'Crawling...' : 'Crawl & Index'}</span>
+              </Button>
+            </div>
+
+            {crawledPagesCount !== null && (
+              <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-lg flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-200">
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                  Indexed {crawledPagesCount} pages into Agent RAG Knowledge Base
+                </span>
+              </div>
+            )}
+
+            {/* Dual-Brain Verified Facts Panel */}
+            {extractedFacts && (
+              <div className="p-3 bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 rounded-xl space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1.5 text-xs">
+                    <Database className="size-3.5 text-blue-600" />
+                    Dual-Brain Verified Facts (100% Deterministic Grounding)
                   </span>
-                  <Badge variant="secondary" className="text-[9px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950">
-                    ✓ Active Vector Sync
+                  <Badge variant="outline" className="text-[10px] text-blue-700 dark:text-blue-300 border-blue-300">
+                    Zero Hallucination
                   </Badge>
                 </div>
-              ))}
+
+                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                  {extractedFacts.businessName && (
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-bold">Business Name</span>
+                      <span className="font-semibold text-foreground">{extractedFacts.businessName}</span>
+                    </div>
+                  )}
+                  {extractedFacts.phone && (
+                    <div>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-bold">Phone Number</span>
+                      <span className="font-semibold text-foreground">{extractedFacts.phone}</span>
+                    </div>
+                  )}
+                  {extractedFacts.operatingHours && Object.keys(extractedFacts.operatingHours).length > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-bold">Hours</span>
+                      <div className="flex flex-wrap gap-1.5 mt-0.5">
+                        {Object.entries(extractedFacts.operatingHours).map(([k, v]: [string, any], idx: number) => (
+                          <span key={idx} className="px-1.5 py-0.5 rounded bg-muted/60 text-[10px]">
+                            <strong>{k}:</strong> {String(v)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {extractedFacts.services && extractedFacts.services.length > 0 && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground block text-[10px] uppercase font-bold">Services & Rates</span>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        {extractedFacts.services.slice(0, 6).map((s: any, idx: number) => (
+                          <span key={idx} className="px-2 py-0.5 rounded-full bg-white dark:bg-slate-900 border border-border/80 text-[10px] font-medium flex items-center gap-1">
+                            <span>{s.name}</span>
+                            {s.price && <strong className="text-emerald-600">{s.price}</strong>}
+                          </span>
+                        ))}
+                        {extractedFacts.services.length > 6 && (
+                          <span className="text-[10px] text-muted-foreground self-center">
+                            +{extractedFacts.services.length - 6} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* List of Crawled Sources */}
+            {agent.knowledge?.crawledUrls?.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Indexed Sources</p>
+                {agent.knowledge.crawledUrls.map((url, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between text-xs"
+                  >
+                    <span className="font-mono text-[11px] text-foreground truncate max-w-[280px]">
+                      {url}
+                    </span>
+                    <Badge variant="secondary" className="text-[9px] text-emerald-600 bg-emerald-50 dark:bg-emerald-950">
+                      ✓ Active Vector Sync
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── HIERARCHICAL FOLDER & CRAWLED PAGES DIRECTORY (TEXT.COM SCREENSHOT 1 & 2 PARITY) ── */}
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'website') && (
+        <Card className="rounded-xl border-border/80 shadow-xs overflow-hidden">
+          <CardHeader className="p-4 pb-3 bg-muted/20 border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-xs font-bold flex items-center gap-2">
+                  <BookOpen className="size-4 text-blue-600" />
+                  Hierarchical Knowledge &amp; Page Directory
+                  <Badge variant="secondary" className="text-[10px] font-mono">
+                    {filteredDocs.length} of {allDocs.length} indexed
+                  </Badge>
+                </CardTitle>
+                <CardDescription className="text-[11px] mt-0.5">
+                  Organized by site folder hierarchy. Every page is chunked and cited during live chat.
+                </CardDescription>
+              </div>
+
+              {/* Live search input */}
+              <div className="relative w-full sm:w-64">
+                <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchPageQuery}
+                  onChange={(e) => setSearchPageQuery(e.target.value)}
+                  placeholder="Search pages or URLs..."
+                  className="text-xs h-8 pl-8 pr-7"
+                />
+                {searchPageQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchPageQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    <X className="size-3" />
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            <div className="grid grid-cols-1 md:grid-cols-12 min-h-[300px]">
+              {/* Left Rail: Folder Hierarchy List */}
+              <div className="md:col-span-4 border-r border-border/60 bg-muted/10 p-3 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-2 py-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Filter className="size-3" /> Site Folders
+                  </span>
+                  <span>Pages</span>
+                </div>
+
+                <div className="space-y-0.5">
+                  {folderList.map((folder) => {
+                    const isSelected = selectedFolder === folder;
+                    const count = folderCounts[folder] || 0;
+                    return (
+                      <button
+                        key={folder}
+                        type="button"
+                        onClick={() => setSelectedFolder(folder)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-all cursor-pointer',
+                          isSelected
+                            ? 'bg-blue-50 text-blue-900 dark:bg-blue-950/50 dark:text-blue-200 font-semibold'
+                            : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        <span className="flex items-center gap-2 truncate">
+                          {isSelected ? (
+                            <FolderOpen className="size-3.5 text-blue-600 shrink-0" />
+                          ) : (
+                            <Folder className="size-3.5 text-muted-foreground shrink-0" />
+                          )}
+                          <span className="truncate">{folder}</span>
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            'text-[10px] px-1.5 py-0 h-4 font-mono shrink-0',
+                            isSelected
+                              ? 'bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-200'
+                              : 'bg-muted text-muted-foreground'
+                          )}
+                        >
+                          {count}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Rail: Pages Table */}
+              <div className="md:col-span-8 p-3 flex flex-col justify-between">
+                {filteredDocs.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center p-8 text-center text-muted-foreground space-y-2">
+                    <BookOpen className="size-8 text-muted-foreground/40 stroke-1" />
+                    <p className="text-xs font-semibold">No indexed pages found in this folder</p>
+                    <p className="text-[11px] max-w-sm">
+                      {searchPageQuery
+                        ? `No pages match "${searchPageQuery}". Try adjusting your search query.`
+                        : 'Use the Sitemap Crawler above or upload files to populate your knowledge base.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
+                    {filteredDocs.map((doc) => {
+                      const docUrl = getDocUrl(doc);
+                      return (
+                        <div
+                          key={doc.id}
+                          className="p-2.5 bg-background hover:bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between gap-2 transition-all group"
+                        >
+                          <div className="min-w-0 flex items-start gap-2 flex-1">
+                            {doc.type === 'pdf' ? (
+                              <FileText className="size-4 text-rose-500 shrink-0 mt-0.5" />
+                            ) : (
+                              <Globe className="size-4 text-blue-600 shrink-0 mt-0.5" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-foreground truncate">
+                                {doc.name || docUrl || 'Untitled Page'}
+                              </p>
+                              {docUrl && (
+                                <a
+                                  href={docUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate mt-0.5"
+                                >
+                                  <span className="truncate">{docUrl}</span>
+                                  <ExternalLink className="size-2.5 shrink-0 opacity-70 group-hover:opacity-100" />
+                                </a>
+                              )}
+                              <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+                                <span>{(doc.size / 1024).toFixed(0)} KB</span>
+                                <span>•</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Ready for Chat RAG</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setPreviewDoc({
+                                  title: doc.name || docUrl,
+                                  url: docUrl,
+                                  content: doc.snippet || doc.content || 'Indexed page content ready for vector search.',
+                                });
+                              }}
+                              className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                              title="Preview Content"
+                            >
+                              <Eye className="size-3 text-blue-500" />
+                              <span className="hidden sm:inline">Preview</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="size-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                              title="Delete Page"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── 2. DETERMINISTIC BUSINESS FACTS & SERVICE AREAS (ZERO-HALLUCINATION GUI) ── */}
-      <Card className="rounded-xl border-violet-200/80 dark:border-violet-900/60 bg-violet-50/20 dark:bg-violet-950/10 shadow-xs">
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'facts') && (
+        <Card className="rounded-xl border-violet-200/80 dark:border-violet-900/60 bg-violet-50/20 dark:bg-violet-950/10 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xs font-bold flex items-center gap-1.5 text-violet-900 dark:text-violet-200">
@@ -819,9 +1128,11 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
 
         </CardContent>
       </Card>
+      )}
 
       {/* ── 3. UNANSWERED QUESTIONS REVIEW INBOX ── */}
-      <Card className="rounded-xl border-amber-200 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 shadow-xs">
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'unanswered') && (
+        <Card className="rounded-xl border-amber-200 dark:border-amber-900/40 bg-amber-50/20 dark:bg-amber-950/10 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xs font-bold flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
@@ -910,9 +1221,11 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* ── 3. DOCUMENTS & PDF / NOTION / ZENDESK UPLOADER ── */}
-      <Card className="rounded-xl border-border/80 shadow-xs">
+      {/* ── 4. DOCUMENTS & PDF / NOTION / ZENDESK UPLOADER ── */}
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'files') && (
+        <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
             <FileText className="size-3.5 text-blue-600" /> Training Documents, PDFs &amp; Notion
@@ -984,9 +1297,11 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           </Button>
         </CardContent>
       </Card>
+      )}
 
-      {/* ── 4. FAQ BUILDER ── */}
-      <Card className="rounded-xl border-border/80 shadow-xs">
+      {/* ── 5. FAQ BUILDER ── */}
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'faq') && (
+        <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
             <HelpCircle className="size-3.5 text-blue-600" /> Q&amp;A FAQ Knowledge Pairs
@@ -1042,9 +1357,11 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {/* ── 5. SYSTEM PROMPT & STRICT GUARDRAILS ── */}
-      <Card className="rounded-xl border-border/80 shadow-xs">
+      {/* ── 6. SYSTEM PROMPT & STRICT GUARDRAILS ── */}
+      {activeSourceCategory === 'all' && (
+        <Card className="rounded-xl border-border/80 shadow-xs">
         <CardHeader className="p-4 pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-1.5">
             <ShieldAlert className="size-3.5 text-blue-600" /> System Instructions &amp; Guardrails
@@ -1146,6 +1463,7 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Answer & Train Dialog */}
       {selectedUnanswered && (
@@ -1198,6 +1516,45 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
               >
                 {resolving ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
                 <span>Add to Knowledge Base</span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Document / Page Preview Modal */}
+      {previewDoc && (
+        <Dialog open={Boolean(previewDoc)} onOpenChange={() => setPreviewDoc(null)}>
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                <BookOpen className="size-4 text-blue-600" />
+                {previewDoc.title}
+              </DialogTitle>
+              {previewDoc.url && (
+                <DialogDescription className="text-xs flex items-center gap-1.5 truncate">
+                  <span className="text-muted-foreground">Source URL:</span>
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 truncate"
+                  >
+                    <span className="truncate">{previewDoc.url}</span>
+                    <ExternalLink className="size-3 shrink-0" />
+                  </a>
+                </DialogDescription>
+              )}
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-3.5 bg-muted/30 rounded-lg border text-xs font-mono whitespace-pre-wrap leading-relaxed max-h-[50vh]">
+              {previewDoc.content || 'Content indexed and chunked for vector similarity search.'}
+            </div>
+            <DialogFooter className="flex items-center justify-between sm:justify-between">
+              <span className="text-[11px] text-muted-foreground">
+                {previewDoc.content ? `${previewDoc.content.length.toLocaleString()} characters indexed` : 'Active in dual-brain knowledge'}
+              </span>
+              <Button size="sm" variant="outline" onClick={() => setPreviewDoc(null)}>
+                Close
               </Button>
             </DialogFooter>
           </DialogContent>
