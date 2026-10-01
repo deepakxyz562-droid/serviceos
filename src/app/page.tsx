@@ -147,13 +147,10 @@ export default async function HomePage() {
           fetchPriority="high"
         />
       )}
-      {/* Server-rendered SEO content — visible to Googlebot's first HTML parse
-          (before JS execution). Contains H1, feature pillars, industry
-          pairings, comparison links, FAQ Q&A + FAQPage schema. Only shown to
-          non-authenticated visitors; logged-in users see the app dashboard. */}
-      {!hasAuthCookie && <HomeSeoContent />}
-      {/* Interactive client app — auth routing + landing page */}
+      {/* Interactive client app — auth routing + landing page (rendered at top) */}
       <HomePageClient />
+      {/* Server-rendered SEO content — visible to Googlebot's first HTML parse */}
+      {!hasAuthCookie && <HomeSeoContent />}
     </>
   );
 }
