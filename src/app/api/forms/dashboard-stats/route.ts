@@ -13,6 +13,7 @@ import { isSuperAdminUser } from '@/lib/admin-auth';
  * - 5 most recent submissions
  *
  * Scoped to the caller's workspaceId (primary) or tenantId (backward compat).
+ * SuperAdmins receive platform-wide aggregate stats without PostgREST URI length overflow.
  */
 export async function GET(_request: NextRequest) {
   const auth = await requireAuth();
@@ -28,9 +29,11 @@ export async function GET(_request: NextRequest) {
     ...(workspaceId ? [{ workspaceId }] : []),
     ...(tenantId ? [{ tenantId }] : []),
   ] as const;
+
   if (!scopeOR.length && !isSuperAdmin) {
     return NextResponse.json({ error: 'No workspace access' }, { status: 403 });
   }
+
   const formWhere = scopeOR.length ? { OR: [...scopeOR] } : {};
 
   // Total forms + active forms
@@ -39,19 +42,34 @@ export async function GET(_request: NextRequest) {
     db.form.count({ where: { ...formWhere, status: 'active' } }),
   ]);
 
-  // Total submissions across all forms in scope
+  // Fetch form IDs for mapping & localized scoping (capped at 500 to prevent PostgREST URL overflow)
   const forms = await db.form.findMany({
     where: formWhere,
     select: { id: true, name: true },
+    take: 500,
   });
   const formIds = forms.map((f) => f.id);
+  const formNameMap = new Map(forms.map((f) => [f.id, f.name]));
 
-  const totalSubmissions = formIds.length
-    ? await db.formResponse.count({ where: { formId: { in: formIds } } })
-    : 0;
+  // Total submissions across forms in scope
+  let totalSubmissions = 0;
+  if (!scopeOR.length && isSuperAdmin) {
+    totalSubmissions = await db.formResponse.count({ where: {} });
+  } else if (formIds.length > 0) {
+    if (formIds.length <= 100) {
+      totalSubmissions = await db.formResponse.count({ where: { formId: { in: formIds } } });
+    } else {
+      let sum = 0;
+      for (let i = 0; i < formIds.length; i += 100) {
+        const chunk = formIds.slice(i, i + 100);
+        sum += await db.formResponse.count({ where: { formId: { in: chunk } } });
+      }
+      totalSubmissions = sum;
+    }
+  }
 
   // Conversion rate (denormalized on Form.conversionRate — average across forms)
-  const conversionRates = formIds.length
+  const conversionRates = (isSuperAdmin || formIds.length > 0)
     ? await db.form.aggregate({
         where: formWhere,
         _avg: { conversionRate: true },
@@ -59,9 +77,15 @@ export async function GET(_request: NextRequest) {
     : { _avg: { conversionRate: 0 } };
 
   // Recent submissions (5)
-  const recentSubmissions = formIds.length
+  const submissionWhere = (!scopeOR.length && isSuperAdmin)
+    ? {}
+    : formIds.length > 0
+    ? { formId: { in: formIds.slice(0, 100) } }
+    : null;
+
+  const recentSubmissions = submissionWhere
     ? await db.formResponse.findMany({
-        where: { formId: { in: formIds } },
+        where: submissionWhere,
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -74,9 +98,6 @@ export async function GET(_request: NextRequest) {
         },
       })
     : [];
-
-  // Map formId → form name
-  const formNameMap = new Map(forms.map((f) => [f.id, f.name]));
 
   // AI agent status — check AiReceptionist for the workspace/tenant
   const aiReceptionist = await db.aiReceptionist.findFirst({
@@ -111,23 +132,24 @@ export async function GET(_request: NextRequest) {
   });
 
   // Appointments / Bookings stats (Calendly Engine)
-  const bookingScope = [
-    ...(tenantId ? [{ tenantId }] : []),
-    ...(formIds.length > 0 ? [{ formId: { in: formIds } }] : []),
-  ];
-
   let totalBookings = 0;
   let upcomingBookings: any[] = [];
 
-  if (bookingScope.length > 0) {
+  const bookingWhere = (!scopeOR.length && isSuperAdmin)
+    ? {}
+    : tenantId
+    ? { tenantId }
+    : formIds.length > 0
+    ? { formId: { in: formIds.slice(0, 100) } }
+    : null;
+
+  if (bookingWhere) {
     try {
       const [bCount, bList] = await Promise.all([
-        db.booking.count({
-          where: bookingScope.length > 1 ? { OR: bookingScope } : bookingScope[0],
-        }),
+        db.booking.count({ where: bookingWhere }),
         db.booking.findMany({
           where: {
-            ...(bookingScope.length > 1 ? { OR: bookingScope } : bookingScope[0]),
+            ...bookingWhere,
             scheduledAt: { gte: new Date() },
             status: { in: ['confirmed', 'pending', 'scheduled'] },
           },
@@ -154,26 +176,31 @@ export async function GET(_request: NextRequest) {
   }
 
   // Live Chat waiting and active count
-  const chatScope = [
-    ...(tenantId ? [{ tenantId }] : []),
-    ...(workspaceId ? [{ workspaceId }] : []),
-    ...(formIds.length > 0 ? [{ formId: { in: formIds } }] : []),
-  ];
-
   let waitingChatsCount = 0;
   let activeChatsCount = 0;
-  if (chatScope.length > 0) {
+
+  const chatWhere = (!scopeOR.length && isSuperAdmin)
+    ? {}
+    : tenantId
+    ? { tenantId }
+    : workspaceId
+    ? { workspaceId }
+    : formIds.length > 0
+    ? { formId: { in: formIds.slice(0, 100) } }
+    : null;
+
+  if (chatWhere) {
     try {
       const [waiting, active] = await Promise.all([
         db.publicChatSession.count({
           where: {
-            ...(chatScope.length > 1 ? { OR: chatScope } : chatScope[0]),
+            ...chatWhere,
             status: 'waiting_for_agent',
           },
         }),
         db.publicChatSession.count({
           where: {
-            ...(chatScope.length > 1 ? { OR: chatScope } : chatScope[0]),
+            ...chatWhere,
             status: { in: ['active', 'claimed', 'waiting_for_agent'] },
           },
         }),
@@ -184,6 +211,8 @@ export async function GET(_request: NextRequest) {
       // non-fatal
     }
   }
+
+  const rawAvg = conversionRates?._avg?.conversionRate ?? 0;
 
   return NextResponse.json({
     totalForms,
@@ -197,11 +226,15 @@ export async function GET(_request: NextRequest) {
       customerName: b.customerName || 'Customer',
       customerEmail: b.customerEmail || '',
       customerPhone: b.customerPhone || '',
-      scheduledAt: b.scheduledAt ? new Date(b.scheduledAt).toISOString() : null,
+      scheduledAt: b.scheduledAt
+        ? typeof b.scheduledAt === 'string'
+          ? b.scheduledAt
+          : (b.scheduledAt as any)?.toISOString?.() || new Date(b.scheduledAt).toISOString()
+        : null,
       status: b.status || 'confirmed',
       source: b.source || 'form',
     })),
-    conversionRate: (conversionRates._avg.conversionRate || 0) * 100,
+    conversionRate: rawAvg * 100,
     activeForms,
     aiAgentStatus,
     kbDocuments,
@@ -210,7 +243,9 @@ export async function GET(_request: NextRequest) {
       respondent: s.respondent,
       formName: formNameMap.get(s.formId) || 'Unknown',
       source: s.source,
-      createdAt: s.createdAt.toISOString(),
+      createdAt: typeof s.createdAt === 'string'
+        ? s.createdAt
+        : (s.createdAt as any)?.toISOString?.() || new Date(s.createdAt).toISOString(),
       hasLead: !!s.leadId,
     })),
   });
