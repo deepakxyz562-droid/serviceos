@@ -7,6 +7,10 @@ import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
 import { tryExecuteChatBooking, extractBookingIntent } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 import { traceChatTurn } from '@/lib/ai-chat-tracer';
+import { inputGuardrail, outputGuardrail, checkTenantRateLimit, type GuardrailConfig } from '@/lib/agent-guardrails';
+import { extractConversationFields, getSessionContext, updateSessionMemory } from '@/lib/agent-memory';
+import { classifyIntent } from '@/lib/agent/intent-router';
+import { rewriteQuery } from '@/lib/agent/query-rewriter';
 
 export const runtime = 'nodejs';
 
@@ -40,6 +44,20 @@ export async function POST(req: NextRequest) {
       action,
       bookingData,
     } = body;
+
+    // ── Phase A: Input Guardrail — block prompt injection BEFORE any processing ──
+    const guardrailConfig: GuardrailConfig = {
+      blockedTopics: [],
+      strictKnowledgeOnly: false,
+      piiRedaction: false,
+      zeroDataRetention: false,
+    };
+    const inputCheck = inputGuardrail(message || '', guardrailConfig);
+    if (!inputCheck.passed) {
+      return NextResponse.json({
+        reply: "I'm sorry, I can't help with that. Could you ask me about our services instead?",
+      }, { headers: CORS_HEADERS });
+    }
 
     // 1. Resolve Workspace / Tenant context from the agentId or explicit IDs.
     //    NEVER fall back to "first active tenant" — that was a security hole
@@ -239,6 +257,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Phase A: Per-tenant rate limiting ──
+    if (tenantId) {
+      const rateCheck = checkTenantRateLimit(tenantId);
+      if (!rateCheck.allowed) {
+        return NextResponse.json({
+          reply: "I'm receiving a lot of messages right now. Please try again in a moment.",
+        }, { headers: CORS_HEADERS });
+      }
+    }
+
+    // ── Phase A: Load session memory (customer context from prior turns) ──
+    let sessionContext = '';
+    if (body.sessionId) {
+      sessionContext = await getSessionContext(body.sessionId);
+    }
+
     // 2. Query Knowledge Base for Context & Citations (Hybrid RAG + Confidence Gate)
     //    Use workspaceId for standalone forms, tenantId for CRM-bound.
     const kbScope = workspaceId || tenantId;
@@ -253,19 +287,7 @@ export async function POST(req: NextRequest) {
 
     if (kbScope && message) {
       try {
-        // Query expansion for conversational questions
-        const low = message.toLowerCase().trim();
-        let expandedQuery = message;
-        if (low.includes('location') || low.includes('area') || low.includes('serve') || low.includes('where')) {
-          expandedQuery = `${tenantName} service areas locations cities served counties Oregon Washington`.trim();
-        } else if (low.includes('service') || low.includes('what do you do') || low.includes('offer')) {
-          expandedQuery = `${tenantName} services repair installation drain heater leak inspection`.trim();
-        } else if (low.includes('price') || low.includes('cost') || low.includes('rate') || low.includes('how much') || low.includes('fee')) {
-          expandedQuery = `${tenantName} pricing rates cost estimates free quote`.trim();
-        } else if (low.includes('emergency') || low.includes('urgent') || low.includes('24/7')) {
-          expandedQuery = `${tenantName} emergency 24/7 service dispatch availability`.trim();
-        }
-
+        const expandedQuery = rewriteQuery(message, { businessName: tenantName });
         hybridResult = await searchKnowledgeBaseHybrid(kbScope, expandedQuery, { k: 4, strictMode: true });
         citations = hybridResult.citations || [];
 
@@ -353,6 +375,7 @@ export async function POST(req: NextRequest) {
 Business Contact: Phone: ${tenantPhone || 'Available upon booking'}, Email: ${tenantEmail || 'support@' + tenantName.toLowerCase().replace(/\s+/g, '') + '.com'}
 
 ${agentSystemPrompt ? `AGENT INSTRUCTIONS:\n${agentSystemPrompt}\n` : ''}
+${sessionContext ? sessionContext + '\n' : ''}
 BUSINESS SERVICES & PRICING:
 ${servicesList}
 
@@ -434,6 +457,38 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
     });
 
     rawReply = aiResponse.content || "Hello! How can I assist you today?";
+
+    // ── Phase B: Tool Registry — check for tool_call JSON block and execute ──
+    // The LLM can propose a tool call by emitting:
+    //   {"tool_call": {"name": "get_business_info", "arguments": {...}}}
+    // The application validates + executes it via agent-tool-registry.ts.
+    // The model proposes; the application decides whether it's allowed.
+    const toolCallMatch = rawReply.match(/\{\s*"tool_call"\s*:\s*(\{[^}]+\})\s*\}/);
+    if (toolCallMatch) {
+      try {
+        const toolCall = JSON.parse(`{"tool_call":${toolCallMatch[1]}}`).tool_call;
+        const { executeTool } = await import('@/lib/agent-tool-registry');
+        const toolCtx = {
+          tenantId: tenantId || null,
+          workspaceId: workspaceId || null,
+          agentId: agentId || null,
+          formId: primaryConnectedForm?.id || null,
+          sessionId: body.sessionId || null,
+        };
+        const toolResult = await executeTool(toolCall.name, toolCtx, toolCall.arguments || {});
+        if (toolResult.success && toolResult.cardType && toolResult.cardData) {
+          cardData = { type: toolResult.cardType, ...toolResult.cardData } as Record<string, unknown>;
+        }
+        // Remove the tool_call block from the visible reply
+        rawReply = rawReply.replace(/\{\s*"tool_call"\s*:\s*\{[^}]+\}\s*\}/, '').trim();
+        // If the tool produced a card and no text reply remains, use a default
+        if (!rawReply && cardData) {
+          rawReply = 'Here you go:';
+        }
+      } catch (err) {
+        console.warn('[agent-chat] Tool execution failed:', err);
+      }
+    }
 
     // Check for ```card ... ```
     const cardMatch = rawReply.match(/```card\s*([\s\S]*?)\s*```/);
@@ -520,6 +575,25 @@ DO NOT output any \`\`\`card block when the visitor is asking general questions 
       latencyMs: Date.now() - startTime,
       outcome: bookingResult?.success ? 'booked' : isEscalationIntent(message) ? 'escalated' : 'answered',
     });
+
+    // ── Phase A: Output Guardrail — redact PII, detect system prompt leaks ──
+    const outputCheck = outputGuardrail(rawReply, guardrailConfig);
+    if (!outputCheck.passed) {
+      rawReply = "I apologize for the confusion. How can I help you with your service needs today?";
+    } else if (outputCheck.filteredMessage) {
+      rawReply = outputCheck.filteredMessage;
+    }
+
+    // ── Phase A: Update session memory (extract fields from this turn) ──
+    if (syncRes?.sessionId) {
+      const allMessages = [
+        ...(history || []).map((h: any) => ({ sender: h.sender || h.role, text: h.text || h.content })),
+        { sender: 'user', text: message },
+        { sender: 'ai', text: rawReply },
+      ];
+      const extractedFields = extractConversationFields(allMessages);
+      updateSessionMemory(syncRes.sessionId, extractedFields).catch(() => {});
+    }
 
     return NextResponse.json(
       {

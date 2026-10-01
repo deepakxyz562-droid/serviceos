@@ -11,7 +11,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { sendSms } from '@/lib/sms/sms-service';
+import { sendSms } from '@/lib/sms-send';
 
 export interface AbandonedSessionCandidate {
   sessionId: string;

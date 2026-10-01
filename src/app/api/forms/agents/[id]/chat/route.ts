@@ -8,32 +8,10 @@ import { isEscalationIntent, requestHumanHandoff } from '@/lib/chat/handoff-serv
 import { tryExecuteChatBooking, extractBookingIntent } from '@/lib/scheduling/chat-booking-helper';
 import { syncChatConversation } from '@/lib/chat/chat-session-sync';
 import { queryStructuredFacts } from '@/lib/ai-structured-facts';
-
-/**
- * Expands colloquial visitor questions into rich search queries for hybrid RAG.
- */
-function expandSearchQuery(query: string, businessName = ''): string {
-  const low = query.toLowerCase().trim();
-  if (low.includes('location') || low.includes('area') || low.includes('serve') || low.includes('where')) {
-    return `${businessName} service areas locations cities served counties Oregon Washington region`.trim();
-  }
-  if (low.includes('service') || low.includes('what do you do') || low.includes('offer') || low.includes('help with')) {
-    return `${businessName} services repair installation drain cleaning water heater leak inspection`.trim();
-  }
-  if (low.includes('price') || low.includes('cost') || low.includes('rate') || low.includes('how much') || low.includes('fee')) {
-    return `${businessName} pricing rates cost estimates diagnostic free quote fees`.trim();
-  }
-  if (low.includes('emergency') || low.includes('urgent') || low.includes('24/7') || low.includes('burst') || low.includes('flood')) {
-    return `${businessName} emergency 24/7 dispatch urgent response availability`.trim();
-  }
-  if (low.includes('hour') || low.includes('open') || low.includes('when') || low.includes('time')) {
-    return `${businessName} business hours schedule operating hours open days`.trim();
-  }
-  if (low.includes('website') || low.includes('about') || low.includes('company') || low.includes('who are you')) {
-    return `${businessName} company overview about website contact official`.trim();
-  }
-  return query;
-}
+import { inputGuardrail, outputGuardrail, checkTenantRateLimit, type GuardrailConfig } from '@/lib/agent-guardrails';
+import { extractConversationFields, getSessionContext, updateSessionMemory } from '@/lib/agent-memory';
+import { classifyIntent } from '@/lib/agent/intent-router';
+import { rewriteQuery } from '@/lib/agent/query-rewriter';
 
 /**
  * Parse FormAgent.configJson back into a partial config.
@@ -97,15 +75,53 @@ export async function POST(
     const agent: FormAgentData = await loadAgentFromDb(id, agentConfig);
     const lowerMessage = (message || '').toLowerCase().trim();
 
+    // ── Phase A: Input Guardrail — block prompt injection BEFORE LLM call ──
+    const guardrailConfig: GuardrailConfig = {
+      blockedTopics: agent.knowledge?.guardrails || [],
+      strictKnowledgeOnly: false,
+      piiRedaction: false,
+      zeroDataRetention: false,
+    };
+    const inputCheck = inputGuardrail(message, guardrailConfig);
+    if (!inputCheck.passed) {
+      return NextResponse.json({
+        success: true,
+        reply: "I'm sorry, I can't help with that. Could you ask me about our services instead?",
+        sessionId: body.sessionId || null,
+      });
+    }
+    const safeMessage = inputCheck.filteredMessage || message;
+
+    // ── Phase A: Per-tenant rate limiting ──
+    if (agent.tenantId) {
+      const rateCheck = checkTenantRateLimit(agent.tenantId);
+      if (!rateCheck.allowed) {
+        return NextResponse.json({
+          success: true,
+          reply: "I'm receiving a lot of messages right now. Please try again in a moment.",
+          sessionId: body.sessionId || null,
+        });
+      }
+    }
+
+    // ── Phase A: Load session memory (customer context from prior turns) ──
+    let sessionContext = '';
+    if (body.sessionId) {
+      sessionContext = await getSessionContext(body.sessionId);
+    }
+
     // 1. Query Knowledge Base with Query Expansion (Hybrid RAG + Confidence Gate)
     let retrievedKnowledge = '';
     let hybridResult: any = null;
     let citations: Array<{ id: number; title: string; url?: string; snippet: string }> = [];
     const kbScope = agent.tenantId || (id !== 'preview' ? id : undefined);
 
-    if (kbScope && message) {
+    if (kbScope && safeMessage) {
       try {
-        const searchQuery = expandSearchQuery(message, agent.name);
+        const searchQuery = rewriteQuery(safeMessage, {
+          businessName: agent.name,
+          serviceAreas: agent.knowledge?.serviceAreas,
+        });
         hybridResult = await searchKnowledgeBaseHybrid(kbScope, searchQuery, { k: 4, strictMode: true });
         citations = hybridResult.citations || [];
 
@@ -205,16 +221,17 @@ export async function POST(
       : '';
 
     // 4. Intent Classification: Answer Mode vs Action Mode
-    const isBookingOrIntake = /\b(book|appointment|schedule|quote|estimate|fill\s+form|apply|intake|reserve|call\s+me|hire|order)\b/i.test(lowerMessage);
-    const isQuestion = /\b(what|where|which|who|why|how|when|is|are|do|does|can|could|tell\s+me|details|info)\b/i.test(lowerMessage) || lowerMessage.includes('?');
-    const isInformationalQuery = !isBookingOrIntake && (isQuestion || /\b(website|services?|areas?|locations?|cities|hours?|pricing|rates?|emergency|licensed?|insured)\b/i.test(lowerMessage));
+    const intentResult = classifyIntent(safeMessage);
+    const isBookingOrIntake = intentResult.isBookingOrIntake;
+    const isInformationalQuery = intentResult.isInformationalQuery;
 
-    // Build context from agent knowledge base
+    // Build context from agent knowledge base + session memory
     const knowledgeContext = [
       `Agent Identity: You are ${agent.name}, ${agent.roleTitle}.`,
       `Tone: ${agent.voiceTone}.`,
       businessProfilePrompt,
       serviceAreasList ? `VERIFIED SERVICE AREAS & CITIES SERVED:\n${serviceAreasList}` : '',
+      sessionContext ? sessionContext : '',  // Phase A: inject conversation memory
       `System Prompt: ${agent.knowledge?.systemPrompt || ''}`,
       agent.knowledge?.guardrails?.length
         ? `Strict Guardrails:\n- ${agent.knowledge.guardrails.join('\n- ')}`
@@ -407,6 +424,25 @@ export async function POST(
       aiReply: replyText,
       agentName: agent.name,
     });
+
+    // ── Phase A: Output Guardrail — redact PII, detect system prompt leaks ──
+    const outputCheck = outputGuardrail(replyText, guardrailConfig);
+    if (!outputCheck.passed) {
+      replyText = "I apologize for the confusion. How can I help you with your service needs today?";
+    } else if (outputCheck.filteredMessage) {
+      replyText = outputCheck.filteredMessage;
+    }
+
+    // ── Phase A: Update session memory (extract fields from this turn) ──
+    if (syncRes?.sessionId) {
+      const allMessages = [
+        ...(history || []).map((h: any) => ({ sender: h.sender || h.role, text: h.text || h.content })),
+        { sender: 'user', text: message },
+        { sender: 'ai', text: replyText },
+      ];
+      const extractedFields = extractConversationFields(allMessages);
+      updateSessionMemory(syncRes.sessionId, extractedFields).catch(() => {});
+    }
 
     return NextResponse.json({
       success: true,

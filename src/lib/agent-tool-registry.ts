@@ -414,3 +414,48 @@ registerTool({
     };
   },
 });
+
+// 12. get_business_info — retrieve structured business facts (low risk)
+registerTool({
+  name: 'get_business_info',
+  description: 'Get structured business information: name, phone, email, address, service areas, operating hours, emergency availability, services and pricing. Use for direct factual questions like "What is your phone number?" or "What cities do you serve?"',
+  riskLevel: 'low',
+  requiresConfirmation: false,
+  argSchema: {
+    category: { type: 'string', description: 'Optional: "contact", "hours", "service_areas", "services", "emergency", "pricing", "all"' },
+  },
+  execute: async (ctx, args) => {
+    if (!ctx.tenantId) return { success: false, error: 'No tenant context' };
+    const { queryStructuredFacts } = await import('@/lib/ai-structured-facts');
+    const category = String(args.category || 'all');
+    const result = await queryStructuredFacts(ctx.tenantId, category);
+    if (!result) return { success: false, error: 'No structured facts found for this business.' };
+    return { success: true, data: result };
+  },
+});
+
+// 13. send_sms — send an SMS message (medium risk)
+registerTool({
+  name: 'send_sms',
+  description: 'Send an SMS message to a phone number. Use for appointment confirmations, follow-up reminders, or lead notifications.',
+  riskLevel: 'medium',
+  requiresConfirmation: false,
+  argSchema: {
+    to: { type: 'string', required: true, description: 'Phone number (E.164 format: +1XXXXXXXXXX)' },
+    message: { type: 'string', required: true, description: 'SMS message body' },
+  },
+  execute: async (ctx, args) => {
+    if (!ctx.tenantId) return { success: false, error: 'No tenant context' };
+    try {
+      const { sendSms } = await import('@/lib/sms-send');
+      const result = await sendSms({
+        to: String(args.to),
+        message: String(args.message),
+        tenantId: ctx.tenantId,
+      });
+      return { success: true, data: { messageId: result.messageId || 'sent' } };
+    } catch (err) {
+      return { success: false, error: `SMS failed: ${err}` };
+    }
+  },
+});

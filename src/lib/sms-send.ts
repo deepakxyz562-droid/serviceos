@@ -662,4 +662,5 @@ export async function sendSmsMessage(options: SendSmsOptions): Promise<SendSmsRe
 }
 
 // Re-export the phone normaliser for callers that want to validate input
-export { normalisePhone as normaliseSmsPhone }
+export { normalisePhone as normaliseSmsPhone };
+export const sendSms = sendSmsMessage;

@@ -11,6 +11,7 @@ import { AgentDeviceSimulator } from './agent-device-simulator';
 import { AgentBuildTab } from './agent-build-tab';
 import { AgentTrainTab } from './agent-train-tab';
 import { AgentPublishTab } from './agent-publish-tab';
+import { AgentTestLab } from './agent-test-tab';
 import { AgentSettingsDialog } from './agent-settings-dialog';
 import { AgentPresentationHub } from './agent-presentation-hub';
 import { AgentSetupWizard } from './agent-setup-wizard';
@@ -99,7 +100,7 @@ export function FormAgentStudio({
   siteOrigin,
 }: FormAgentStudioProps) {
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
-  const [studioTab, setStudioTab] = useState<'build' | 'train' | 'publish'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'train' | 'test' | 'publish'>('build');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
   const [rightDrawerMode, setRightDrawerMode] = useState<'channel_settings' | 'designer'>('channel_settings');
   const [rightDrawerOpen, setRightDrawerOpen] = useState<boolean>(true);
@@ -304,6 +305,18 @@ export function FormAgentStudio({
               )}
             >
               TRAIN
+            </button>
+            <button
+              type="button"
+              onClick={() => setStudioTab('test')}
+              className={cn(
+                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
+                studioTab === 'test'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              )}
+            >
+              TEST LAB
             </button>
             <button
               type="button"
@@ -580,6 +593,15 @@ export function FormAgentStudio({
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
           <div className="max-w-4xl mx-auto">
             <AgentTrainTab agent={agent} onChange={setAgent} />
+          </div>
+        </div>
+      )}
+
+      {/* ── TEST LAB TAB ── */}
+      {studioTab === 'test' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+          <div className="max-w-4xl mx-auto">
+            <AgentTestLab agentId={agent.id} />
           </div>
         </div>
       )}
