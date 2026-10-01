@@ -76,3 +76,6 @@ if (!useSupabase) {
   globalForPrisma.prisma = db as PrismaClient
   globalForPrisma.__prismaSchemaVersion = PRISMA_SCHEMA_VERSION
 }
+
+export const prisma = db;
+

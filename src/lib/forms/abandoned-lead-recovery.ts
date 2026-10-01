@@ -10,7 +10,7 @@
  *   2. triggerReengagementOutreach(sessionId, options)
  */
 
-import { prisma } from '@/lib/prisma';
+import { db } from '@/lib/db';
 import { sendSms } from '@/lib/sms-send';
 
 export interface AbandonedSessionCandidate {
@@ -41,7 +41,7 @@ export async function scanAbandonedSessions({
 
   try {
     // Find sessions that have had activity between maxAge and idleThreshold
-    const candidateSessions = await (prisma as any).publicChatSession.findMany({
+    const candidateSessions = await (db as any).publicChatSession.findMany({
       where: {
         ...(tenantId ? { tenantId } : {}),
         updatedAt: {
@@ -120,7 +120,7 @@ export async function triggerReengagementOutreach({
       });
 
       // Mark session as re-engaged
-      await (prisma as any).publicChatSession.update({
+      await (db as any).publicChatSession.update({
         where: { id: candidate.sessionId },
         data: {
           status: 'RE_ENGAGED',
