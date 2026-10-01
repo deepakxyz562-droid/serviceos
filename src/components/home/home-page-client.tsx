@@ -325,9 +325,11 @@ export default function HomePageClient() {
             tenant: data.tenant || null,
           });
           // Auto-redirect based on role (for admin/superadmin in AppLayout)
+          const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+          const urlView = params?.get('view') || params?.get('tab');
           if (data.user.role === 'customer') {
             // Customer portal layout handled by page.tsx based on role
-          } else if (isPlatformAdmin(data.user)) {
+          } else if (urlView === 'superadmin' || isPlatformAdmin(data.user)) {
             useAppStore.getState().setCurrentView('superadmin');
           }
 
