@@ -168,6 +168,13 @@ export default function InvoicesScreen() {
               <Text style={styles.emptyDocSign}>Signature</Text>
             </View>
             <Text style={styles.emptyText}>No Invoices</Text>
+            <TouchableOpacity
+              style={styles.emptyCtaBtn}
+              onPress={() => router.push("/invoice-create")}
+            >
+              <MaterialIcons name="add" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyCtaBtnText}>Create Your First Invoice</Text>
+            </TouchableOpacity>
           </View>
         }
         renderItem={({ item }) => (
@@ -365,7 +372,20 @@ const styles = StyleSheet.create({
   emptyDocGrid: { gap: 4 },
   emptyDocRow: { height: 8, backgroundColor: "#f1f5f9", borderRadius: 2 },
   emptyDocSign: { fontSize: 9, fontStyle: "italic", color: "#94a3b8", textAlign: "right" },
-  emptyText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
+  emptyText: { fontSize: 14, fontWeight: "600", color: "#64748b", marginBottom: 14 },
+  emptyCtaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2563eb",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  emptyCtaBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",

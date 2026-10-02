@@ -162,6 +162,13 @@ export default function QuotesScreen() {
               <Text style={styles.emptyDocSign}>Estimate</Text>
             </View>
             <Text style={styles.emptyText}>No Estimates</Text>
+            <TouchableOpacity
+              style={styles.emptyCtaBtn}
+              onPress={() => router.push("/quote-create")}
+            >
+              <MaterialIcons name="add" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyCtaBtnText}>Create Your First Estimate</Text>
+            </TouchableOpacity>
           </View>
         }
         renderItem={({ item }) => (
@@ -357,7 +364,20 @@ const styles = StyleSheet.create({
   emptyDocGrid: { gap: 4 },
   emptyDocRow: { height: 8, backgroundColor: "#f1f5f9", borderRadius: 2 },
   emptyDocSign: { fontSize: 9, fontStyle: "italic", color: "#94a3b8", textAlign: "right" },
-  emptyText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
+  emptyText: { fontSize: 14, fontWeight: "600", color: "#64748b", marginBottom: 14 },
+  emptyCtaBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#059669",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  emptyCtaBtnText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
   card: {
     flexDirection: "row",
     alignItems: "center",
