@@ -19,6 +19,7 @@ export type Modal =
   | { type: 'onboarding' }
   | { type: 'customer-form'; customerId?: string }
   | { type: 'customer-detail'; customerId: string }
+  | { type: 'item-form'; itemId?: string }
   | { type: 'quote-create'; initialDraft?: any }
   | { type: 'quote-detail'; quoteId: string }
   | { type: 'quote-edit'; quoteId: string }

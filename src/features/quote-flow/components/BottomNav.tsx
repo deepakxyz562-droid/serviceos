@@ -11,6 +11,7 @@ interface NavItem {
 const navTabs: NavItem[] = [
   { id: "invoices", label: "Invoices", Icon: Receipt },
   { id: "quotes", label: "Estimates", Icon: Calculator },
+  { id: "items", label: "Items", Icon: Package },
   { id: "customers", label: "Clients", Icon: Users },
   { id: "settings", label: "More", Icon: MoreHorizontal },
 ];

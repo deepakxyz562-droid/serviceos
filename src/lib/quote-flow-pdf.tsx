@@ -86,6 +86,7 @@ export interface QuotePdfData {
     address?: string | null;
     logoUrl?: string | null;
     currencySymbol: string;
+    currency?: string | null;
     // Bank + UPI payment details (Phase 3)
     paymentCountry?: string | null;
     paymentInstructions?: string | null;
@@ -148,8 +149,17 @@ export interface QuotePdfData {
   } | null;
 }
 
-function formatMoney(n: number, symbol: string) {
-  return `${symbol}${n.toFixed(2)}`;
+function formatMoney(n: number, symbol: string, currency?: string) {
+  const num = Number(n) || 0;
+  const curr = (currency || 'USD').toUpperCase();
+  // Use Intl.NumberFormat for proper locale-aware formatting
+  // (thousand separators, Indian lakh/crore grouping, EU comma decimal).
+  const locale = curr === 'INR' ? 'en-IN' : 'en-US';
+  const formatted = num.toLocaleString(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${symbol}${formatted}`;
 }
 
 function formatDate(d?: string | null) {
@@ -225,9 +235,16 @@ const modernStyles = StyleSheet.create({
 
 function ModernTemplate({ data }: { data: QuotePdfData }) {
   const { business, customer, doc } = data;
+  const isPaid = doc.kind === "INVOICE" && doc.status === "PAID";
   return (
     <Document>
       <Page size="A4" style={modernStyles.page}>
+        {/* PAID stamp watermark (Phase 2) */}
+        {isPaid ? (
+          <View style={{ position: "absolute", top: 200, left: 120, opacity: 0.15, transform: "rotate(-30deg)" }} render={() => true}>
+            <Text style={{ fontSize: 80, fontWeight: "bold", color: "#10b981" }}>PAID</Text>
+          </View>
+        ) : null}
         <View style={modernStyles.header}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {business.logoUrl ? (
@@ -283,12 +300,12 @@ function ModernTemplate({ data }: { data: QuotePdfData }) {
           <Text style={modernStyles.itemsHeaderAmount}>Amount</Text>
         </View>
         {doc.items.map((it, i) => (
-          <View key={i} style={modernStyles.itemRow}>
+          <View key={i} style={[modernStyles.itemRow, i % 2 === 1 && { backgroundColor: "#f9fafb" }]}>
             <Text style={modernStyles.itemDesc}>{it.description}</Text>
             <Text style={modernStyles.itemQty}>{it.qty}</Text>
-            <Text style={modernStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol)}</Text>
+            <Text style={modernStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol, business.currency)}</Text>
             <Text style={modernStyles.itemAmount}>
-              {formatMoney(it.qty * it.unitPrice, business.currencySymbol)}
+              {formatMoney(it.qty * it.unitPrice, business.currencySymbol, business.currency)}
             </Text>
           </View>
         ))}
@@ -297,35 +314,35 @@ function ModernTemplate({ data }: { data: QuotePdfData }) {
           <View style={modernStyles.totalsCol}>
             <View style={modernStyles.totalsRow}>
               <Text>Subtotal</Text>
-              <Text>{formatMoney(doc.subtotal, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.subtotal, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.discount > 0 ? (
               <View style={modernStyles.totalsRow}>
                 <Text>Discount{doc.discountType === "PERCENT" ? ` (${doc.discountValue}%)` : ""}</Text>
-                <Text>- {formatMoney(doc.discount, business.currencySymbol)}</Text>
+                <Text>- {formatMoney(doc.discount, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             {doc.tax > 0 ? (
               <View style={modernStyles.totalsRow}>
                 <Text>Tax ({doc.taxRate}%)</Text>
-                <Text>{formatMoney(doc.tax, business.currencySymbol)}</Text>
+                <Text>{formatMoney(doc.tax, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             <View style={modernStyles.totalRow}>
               <Text>TOTAL</Text>
-              <Text>{formatMoney(doc.total, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.total, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.kind === "INVOICE" && doc.paidAmount !== undefined && doc.balance !== undefined ? (
               <>
                 <View style={[modernStyles.totalsRow, { marginTop: 8 }]}>
                   <Text>Paid</Text>
-                  <Text style={{ color: "#10b981" }}>{formatMoney(doc.paidAmount, business.currencySymbol)}</Text>
+                  <Text style={{ color: "#10b981" }}>{formatMoney(doc.paidAmount, business.currencySymbol, business.currency)}</Text>
                 </View>
                 {doc.balance > 0 ? (
                   <View style={modernStyles.totalsRow}>
                     <Text style={modernStyles.totalsRowBold}>Balance due</Text>
                     <Text style={modernStyles.totalsRowBold}>
-                      {formatMoney(doc.balance, business.currencySymbol)}
+                      {formatMoney(doc.balance, business.currencySymbol, business.currency)}
                     </Text>
                   </View>
                 ) : null}
@@ -495,17 +512,29 @@ const simpleStyles = StyleSheet.create({
 
 function SimpleTemplate({ data }: { data: QuotePdfData }) {
   const { business, customer, doc } = data;
+  const isPaid = doc.kind === "INVOICE" && doc.status === "PAID";
   return (
     <Document>
       <Page size="A4" style={simpleStyles.page}>
+        {/* PAID stamp watermark (Phase 2) */}
+        {isPaid ? (
+          <View style={{ position: "absolute", top: 200, left: 120, opacity: 0.15, transform: "rotate(-30deg)" }} render={() => true}>
+            <Text style={{ fontSize: 80, fontWeight: "bold", color: "#10b981" }}>PAID</Text>
+          </View>
+        ) : null}
         <View style={simpleStyles.header}>
-          <View>
-            <Text style={simpleStyles.brand}>{business.name}</Text>
-            <Text style={simpleStyles.brandSub}>
-              {business.address || ""}
-              {business.phone ? `  ·  ${business.phone}` : ""}
-              {business.email ? `  ·  ${business.email}` : ""}
-            </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {business.logoUrl ? (
+              <Image style={{ width: 50, height: 50, objectFit: "contain" }} src={business.logoUrl} />
+            ) : null}
+            <View>
+              <Text style={simpleStyles.brand}>{business.name}</Text>
+              <Text style={simpleStyles.brandSub}>
+                {business.address || ""}
+                {business.phone ? `  ·  ${business.phone}` : ""}
+                {business.email ? `  ·  ${business.email}` : ""}
+              </Text>
+            </View>
           </View>
           <View>
             <Text style={simpleStyles.docTitle}>{doc.kind}</Text>
@@ -537,11 +566,11 @@ function SimpleTemplate({ data }: { data: QuotePdfData }) {
           <Text style={simpleStyles.itemsHeaderAmount}>Amount</Text>
         </View>
         {doc.items.map((it, i) => (
-          <View key={i} style={simpleStyles.itemRow}>
+          <View key={i} style={[simpleStyles.itemRow, i % 2 === 1 && { backgroundColor: "#f9f9f9" }]}>
             <Text style={simpleStyles.itemDesc}>{it.description}</Text>
             <Text style={simpleStyles.itemQty}>{it.qty}</Text>
-            <Text style={simpleStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol)}</Text>
-            <Text style={simpleStyles.itemAmount}>{formatMoney(it.qty * it.unitPrice, business.currencySymbol)}</Text>
+            <Text style={simpleStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol, business.currency)}</Text>
+            <Text style={simpleStyles.itemAmount}>{formatMoney(it.qty * it.unitPrice, business.currencySymbol, business.currency)}</Text>
           </View>
         ))}
 
@@ -549,34 +578,34 @@ function SimpleTemplate({ data }: { data: QuotePdfData }) {
           <View style={simpleStyles.totalsCol}>
             <View style={simpleStyles.totalsRow}>
               <Text>Subtotal</Text>
-              <Text>{formatMoney(doc.subtotal, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.subtotal, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.discount > 0 ? (
               <View style={simpleStyles.totalsRow}>
                 <Text>Discount</Text>
-                <Text>- {formatMoney(doc.discount, business.currencySymbol)}</Text>
+                <Text>- {formatMoney(doc.discount, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             {doc.tax > 0 ? (
               <View style={simpleStyles.totalsRow}>
                 <Text>Tax ({doc.taxRate}%)</Text>
-                <Text>{formatMoney(doc.tax, business.currencySymbol)}</Text>
+                <Text>{formatMoney(doc.tax, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             <View style={simpleStyles.totalRow}>
               <Text>TOTAL</Text>
-              <Text>{formatMoney(doc.total, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.total, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.kind === "INVOICE" && doc.paidAmount !== undefined && doc.balance !== undefined ? (
               <>
                 <View style={[simpleStyles.totalsRow, { marginTop: 8 }]}>
                   <Text>Paid</Text>
-                  <Text>{formatMoney(doc.paidAmount, business.currencySymbol)}</Text>
+                  <Text>{formatMoney(doc.paidAmount, business.currencySymbol, business.currency)}</Text>
                 </View>
                 {doc.balance > 0 ? (
                   <View style={simpleStyles.totalsRow}>
                     <Text style={{ fontWeight: "bold" }}>Balance due</Text>
-                    <Text style={{ fontWeight: "bold" }}>{formatMoney(doc.balance, business.currencySymbol)}</Text>
+                    <Text style={{ fontWeight: "bold" }}>{formatMoney(doc.balance, business.currencySymbol, business.currency)}</Text>
                   </View>
                 ) : null}
               </>
@@ -656,16 +685,28 @@ const profStyles = StyleSheet.create({
 
 function ProfessionalTemplate({ data }: { data: QuotePdfData }) {
   const { business, customer, doc } = data;
+  const isPaid = doc.kind === "INVOICE" && doc.status === "PAID";
   return (
     <Document>
       <Page size="A4" style={profStyles.page}>
+        {/* PAID stamp watermark (Phase 2) */}
+        {isPaid ? (
+          <View style={{ position: "absolute", top: 200, left: 120, opacity: 0.15, transform: "rotate(-30deg)" }} render={() => true}>
+            <Text style={{ fontSize: 80, fontWeight: "bold", color: "#10b981" }}>PAID</Text>
+          </View>
+        ) : null}
         <View style={profStyles.header}>
-          <View>
-            <Text style={profStyles.brand}>{business.name.toUpperCase()}</Text>
-            <Text style={profStyles.brandSub}>
-              {business.address || ""} {business.phone ? `· ${business.phone}` : ""}
-              {business.email ? `  ·  ${business.email}` : ""}
-            </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {business.logoUrl ? (
+              <Image style={{ width: 50, height: 50, objectFit: "contain" }} src={business.logoUrl} />
+            ) : null}
+            <View>
+              <Text style={profStyles.brand}>{business.name.toUpperCase()}</Text>
+              <Text style={profStyles.brandSub}>
+                {business.address || ""} {business.phone ? `· ${business.phone}` : ""}
+                {business.email ? `  ·  ${business.email}` : ""}
+              </Text>
+            </View>
           </View>
           <View>
             <Text style={profStyles.docTitle}>{doc.kind}</Text>
@@ -701,11 +742,11 @@ function ProfessionalTemplate({ data }: { data: QuotePdfData }) {
           <Text style={profStyles.itemsHeaderAmount}>Amount</Text>
         </View>
         {doc.items.map((it, i) => (
-          <View key={i} style={profStyles.itemRow}>
+          <View key={i} style={[profStyles.itemRow, i % 2 === 1 && { backgroundColor: "#f8fafc" }]}>
             <Text style={profStyles.itemDesc}>{it.description}</Text>
             <Text style={profStyles.itemQty}>{it.qty}</Text>
-            <Text style={profStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol)}</Text>
-            <Text style={profStyles.itemAmount}>{formatMoney(it.qty * it.unitPrice, business.currencySymbol)}</Text>
+            <Text style={profStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol, business.currency)}</Text>
+            <Text style={profStyles.itemAmount}>{formatMoney(it.qty * it.unitPrice, business.currencySymbol, business.currency)}</Text>
           </View>
         ))}
 
@@ -713,34 +754,34 @@ function ProfessionalTemplate({ data }: { data: QuotePdfData }) {
           <View style={profStyles.totalsCol}>
             <View style={profStyles.totalsRow}>
               <Text>Subtotal</Text>
-              <Text>{formatMoney(doc.subtotal, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.subtotal, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.discount > 0 ? (
               <View style={profStyles.totalsRow}>
                 <Text>Discount{doc.discountType === "PERCENT" ? ` (${doc.discountValue}%)` : ""}</Text>
-                <Text>- {formatMoney(doc.discount, business.currencySymbol)}</Text>
+                <Text>- {formatMoney(doc.discount, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             {doc.tax > 0 ? (
               <View style={profStyles.totalsRow}>
                 <Text>Tax ({doc.taxRate}%)</Text>
-                <Text>{formatMoney(doc.tax, business.currencySymbol)}</Text>
+                <Text>{formatMoney(doc.tax, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             <View style={profStyles.totalRow}>
               <Text>TOTAL</Text>
-              <Text>{formatMoney(doc.total, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.total, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.kind === "INVOICE" && doc.paidAmount !== undefined && doc.balance !== undefined ? (
               <>
                 <View style={[profStyles.totalsRow, { marginTop: 8 }]}>
                   <Text>Paid</Text>
-                  <Text style={{ color: "#10b981" }}>{formatMoney(doc.paidAmount, business.currencySymbol)}</Text>
+                  <Text style={{ color: "#10b981" }}>{formatMoney(doc.paidAmount, business.currencySymbol, business.currency)}</Text>
                 </View>
                 {doc.balance > 0 ? (
                   <View style={profStyles.totalsRow}>
                     <Text style={{ fontWeight: "bold" }}>Balance due</Text>
-                    <Text style={{ fontWeight: "bold" }}>{formatMoney(doc.balance, business.currencySymbol)}</Text>
+                    <Text style={{ fontWeight: "bold" }}>{formatMoney(doc.balance, business.currencySymbol, business.currency)}</Text>
                   </View>
                 ) : null}
               </>
@@ -799,11 +840,21 @@ const elegantStyles = StyleSheet.create({
 
 function ElegantTemplate({ data }: { data: QuotePdfData }) {
   const { business, customer, doc } = data;
+  const isPaid = doc.kind === "INVOICE" && doc.status === "PAID";
   return (
     <Document>
       <Page size="A4" style={elegantStyles.page}>
+        {/* PAID stamp watermark (Phase 2) */}
+        {isPaid ? (
+          <View style={{ position: "absolute", top: 200, left: 120, opacity: 0.15, transform: "rotate(-30deg)" }} render={() => true}>
+            <Text style={{ fontSize: 80, fontWeight: "bold", color: "#10b981" }}>PAID</Text>
+          </View>
+        ) : null}
         <View style={elegantStyles.header}>
           <View style={elegantStyles.brandWrap}>
+            {business.logoUrl ? (
+              <Image style={{ width: 50, height: 50, objectFit: "contain", marginBottom: 8 }} src={business.logoUrl} />
+            ) : null}
             <Text style={elegantStyles.brand}>{business.name}</Text>
             <Text style={elegantStyles.brandSub}>
               {business.ownerName || ""}
@@ -844,11 +895,11 @@ function ElegantTemplate({ data }: { data: QuotePdfData }) {
           <Text style={elegantStyles.itemsHeaderAmount}>Amount</Text>
         </View>
         {doc.items.map((it, i) => (
-          <View key={i} style={elegantStyles.itemRow}>
+          <View key={i} style={[elegantStyles.itemRow, i % 2 === 1 && { backgroundColor: "#faf8fc" }]}>
             <Text style={elegantStyles.itemDesc}>{it.description}</Text>
             <Text style={elegantStyles.itemQty}>{it.qty}</Text>
-            <Text style={elegantStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol)}</Text>
-            <Text style={elegantStyles.itemAmount}>{formatMoney(it.qty * it.unitPrice, business.currencySymbol)}</Text>
+            <Text style={elegantStyles.itemPrice}>{formatMoney(it.unitPrice, business.currencySymbol, business.currency)}</Text>
+            <Text style={elegantStyles.itemAmount}>{formatMoney(it.qty * it.unitPrice, business.currencySymbol, business.currency)}</Text>
           </View>
         ))}
 
@@ -856,34 +907,34 @@ function ElegantTemplate({ data }: { data: QuotePdfData }) {
           <View style={elegantStyles.totalsCol}>
             <View style={elegantStyles.totalsRow}>
               <Text>Subtotal</Text>
-              <Text>{formatMoney(doc.subtotal, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.subtotal, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.discount > 0 ? (
               <View style={elegantStyles.totalsRow}>
                 <Text>Discount{doc.discountType === "PERCENT" ? ` (${doc.discountValue}%)` : ""}</Text>
-                <Text>- {formatMoney(doc.discount, business.currencySymbol)}</Text>
+                <Text>- {formatMoney(doc.discount, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             {doc.tax > 0 ? (
               <View style={elegantStyles.totalsRow}>
                 <Text>Tax ({doc.taxRate}%)</Text>
-                <Text>{formatMoney(doc.tax, business.currencySymbol)}</Text>
+                <Text>{formatMoney(doc.tax, business.currencySymbol, business.currency)}</Text>
               </View>
             ) : null}
             <View style={elegantStyles.totalRow}>
               <Text>Total</Text>
-              <Text>{formatMoney(doc.total, business.currencySymbol)}</Text>
+              <Text>{formatMoney(doc.total, business.currencySymbol, business.currency)}</Text>
             </View>
             {doc.kind === "INVOICE" && doc.paidAmount !== undefined && doc.balance !== undefined ? (
               <>
                 <View style={[elegantStyles.totalsRow, { marginTop: 8 }]}>
                   <Text>Paid</Text>
-                  <Text style={{ color: "#10b981" }}>{formatMoney(doc.paidAmount, business.currencySymbol)}</Text>
+                  <Text style={{ color: "#10b981" }}>{formatMoney(doc.paidAmount, business.currencySymbol, business.currency)}</Text>
                 </View>
                 {doc.balance > 0 ? (
                   <View style={elegantStyles.totalsRow}>
                     <Text style={{ fontWeight: "bold" }}>Balance due</Text>
-                    <Text style={{ fontWeight: "bold" }}>{formatMoney(doc.balance, business.currencySymbol)}</Text>
+                    <Text style={{ fontWeight: "bold" }}>{formatMoney(doc.balance, business.currencySymbol, business.currency)}</Text>
                   </View>
                 ) : null}
               </>

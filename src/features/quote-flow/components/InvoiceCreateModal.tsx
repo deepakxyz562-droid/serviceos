@@ -203,7 +203,7 @@ export function InvoiceCreateModal() {
         taxRate: docType === "SIMPLE_BILL" ? globalTaxRate : 18,
         dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
         notes: notes || undefined,
-        pdfTemplate: `${docType}:${selectedTemplateId}`,
+        pdfTemplate: selectedTemplateId,
       });
 
       window.dispatchEvent(new CustomEvent("invoice-list-changed"));

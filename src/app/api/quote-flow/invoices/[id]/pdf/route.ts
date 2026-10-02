@@ -54,6 +54,7 @@ export async function GET(
         address: business.address,
         logoUrl: business.logoUrl,
         currencySymbol: business.currencySymbol,
+        currency: business.currency,
         // Bank + UPI payment details (Phase 3)
         paymentCountry: business.paymentCountry,
         paymentInstructions: business.paymentInstructions,
@@ -117,6 +118,24 @@ export async function GET(
         balance,
         createdAt: invoice.createdAt.toISOString(),
       },
+      // Parse signature from notes JSON (Phase 2 — same as quotes)
+      signature: (() => {
+        try {
+          if (invoice.notes && invoice.notes.startsWith('{') && invoice.notes.endsWith('}')) {
+            const parsed = JSON.parse(invoice.notes);
+            if (parsed.signatureDataUrl) {
+              return {
+                dataUrl: parsed.signatureDataUrl,
+                signedAt: parsed.signedAt || null,
+                signerName: parsed.signerName || null,
+              };
+            }
+          }
+        } catch {
+          /* not JSON */
+        }
+        return null;
+      })(),
     };
     const stream = await renderToStream(renderQuotePdf(data, resolveTemplateName(invoice.pdfTemplate as string)));
     // ?download=1 → Content-Disposition: attachment (forces browser Download).

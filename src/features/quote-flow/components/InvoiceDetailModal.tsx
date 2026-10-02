@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit } from "lucide-react";
+import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit, Printer, Palette } from "lucide-react";
 import { formatCurrency } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -121,8 +121,14 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <DropdownMenuItem onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}>
                 <Edit className="mr-2 h-4 w-4" /> Edit Invoice
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}>
+              <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
+                <Palette className="mr-2 h-4 w-4" /> Change Template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}>
+                <Printer className="mr-2 h-4 w-4" /> Print
               </DropdownMenuItem>
               <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">
                 Delete
@@ -231,14 +237,13 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               </Button>
             </>
           )}
-          {inv.status === "PAID" && (
-            <Button
-              onClick={() => openModal({ type: "send-invoice", invoiceId: inv.id })}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700"
-            >
-              <Send className="mr-1 h-4 w-4" /> Share
-            </Button>
-          )}
+          <Button
+            onClick={() => openModal({ type: "send-invoice", invoiceId: inv.id })}
+            variant="outline"
+            className="flex-1"
+          >
+            <Send className="mr-1 h-4 w-4" /> Share
+          </Button>
         </div>
 
         {busy && (

@@ -51,6 +51,7 @@ export async function GET(
         address: business.address,
         logoUrl: business.logoUrl,
         currencySymbol: business.currencySymbol,
+        currency: business.currency,
         // Bank + UPI payment details (Phase 3)
         paymentCountry: business.paymentCountry,
         paymentInstructions: business.paymentInstructions,

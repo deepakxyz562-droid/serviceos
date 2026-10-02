@@ -193,19 +193,19 @@ export function QuoteEditModal({ quoteId }: { quoteId: string }) {
           <div className="rounded-lg bg-white p-3 space-y-1 text-xs border border-stone-200">
             <div className="flex justify-between">
               <span className="text-stone-500">Subtotal</span>
-              <span>{formatCurrency(totals.subtotal, business?.currencySymbol || '$')}</span>
+              <span>{formatCurrency(totals.subtotal, business?.currency, business?.currencySymbol)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-stone-500">Discount</span>
-              <span>-{formatCurrency(totals.discount, business?.currencySymbol || '$')}</span>
+              <span>-{formatCurrency(totals.discount, business?.currency, business?.currencySymbol)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-stone-500">Tax ({taxRate}%)</span>
-              <span>{formatCurrency(totals.tax, business?.currencySymbol || '$')}</span>
+              <span>{formatCurrency(totals.tax, business?.currency, business?.currencySymbol)}</span>
             </div>
             <div className="flex justify-between font-bold pt-1 border-t border-stone-100">
               <span>Total</span>
-              <span>{formatCurrency(totals.total, business?.currencySymbol || '$')}</span>
+              <span>{formatCurrency(totals.total, business?.currency, business?.currencySymbol)}</span>
             </div>
           </div>
 

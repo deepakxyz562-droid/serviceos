@@ -16,6 +16,8 @@ import { QuoteCreateModal } from "./QuoteCreateModal";
 import { InvoiceCreateModal } from "./InvoiceCreateModal";
 import { QuoteEditModal } from "./QuoteEditModal";
 import { InvoiceEditModal } from "./InvoiceEditModal";
+import { ItemsScreen } from "./ItemsScreen";
+import { ItemFormModal } from "./ItemFormModal";
 import { SendQuoteModal } from "./SendQuoteModal";
 import { SendInvoiceModal } from "./SendInvoiceModal";
 
@@ -72,6 +74,7 @@ export function AppShell() {
         {(activeTab === "invoices" || activeTab === "home") && <InvoicesScreen />}
         {(activeTab === "quotes" || activeTab === "estimates") && <QuotesScreen />}
         {(activeTab === "customers" || activeTab === "clients") && <CustomersScreen />}
+        {activeTab === "items" && <ItemsScreen />}
         {(activeTab === "settings" || activeTab === "more") && <SettingsScreen />}
       </main>
       <BottomNav />
@@ -85,6 +88,7 @@ export function AppShell() {
       {modal.type === "customer-detail" && (
         <CustomerDetailModal customerId={modal.customerId} />
       )}
+      {modal.type === "item-form" && <ItemFormModal itemId={modal.itemId} />}
       {modal.type === "quote-create" && <QuoteCreateModal />}
       {modal.type === "quote-detail" && <QuoteDetailModal quoteId={modal.quoteId} />}
       {modal.type === "quote-edit" && <QuoteEditModal quoteId={modal.quoteId} />}

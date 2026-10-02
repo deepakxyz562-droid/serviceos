@@ -255,7 +255,7 @@ export function QuoteCreateModal() {
         discountType,
         taxRate: 18,
         notes: payloadNotes,
-        pdfTemplate: `${docType}:${selectedTemplateId}`,
+        pdfTemplate: selectedTemplateId,
       });
 
       window.dispatchEvent(new CustomEvent("quote-list-changed"));

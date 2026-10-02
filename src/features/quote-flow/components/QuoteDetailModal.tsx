@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit } from "lucide-react";
+import { Loader2, X, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit, Printer, Palette } from "lucide-react";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -227,11 +227,17 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
               <DropdownMenuItem onClick={() => openModal({ type: "quote-edit", quoteId: quote.id })}>
                 <Edit className="mr-2 h-4 w-4" /> Edit Quote
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
+                <Palette className="mr-2 h-4 w-4" /> Change Template
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={duplicateQuote}>
                 <Copy className="mr-2 h-4 w-4" /> Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf`, "_blank")}>
+              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf?download=1`, "_blank")}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf`, "_blank")}>
+                <Printer className="mr-2 h-4 w-4" /> Print
               </DropdownMenuItem>
               <DropdownMenuItem onClick={markAccepted}>
                 Mark accepted
@@ -389,7 +395,7 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
 
         <div className="mt-5 flex gap-2">
           <Button
-            onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf`, "_blank")}
+            onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf?download=1`, "_blank")}
             variant="outline"
             className="flex-1"
           >
