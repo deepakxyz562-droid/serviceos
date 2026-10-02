@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { FormAgentData } from '@/features/forms/types/agent-types';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1. INSTAGRAM 3-STEP SETUP MODAL (Screenshot 3)
