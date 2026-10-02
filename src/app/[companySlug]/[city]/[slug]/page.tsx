@@ -1563,16 +1563,29 @@ function buildOpeningHours(
 export async function generateStaticParams() {
   try {
     const urls = await listIndexableBusinessUrls({ limit: 200 })
-    return urls
-      .filter((u) => u.url && u.url.split('/').length >= 4)
-      .map((u) => {
-        const parts = u.url.split('/').filter(Boolean) // ['hvac', 'ottawa', 'francis-...']
-        return {
-          companySlug: parts[0],
-          city: parts[1],
-          slug: parts[2],
+    const params: Array<{ companySlug: string; city: string; slug: string }> = []
+
+    for (const u of urls) {
+      if (!u.url) continue
+      try {
+        const pathname =
+          u.url.startsWith('http://') || u.url.startsWith('https://')
+            ? new URL(u.url).pathname
+            : u.url
+        const parts = pathname.split('/').filter(Boolean)
+        if (parts.length >= 3) {
+          params.push({
+            companySlug: parts[0],
+            city: parts[1],
+            slug: parts[2],
+          })
         }
-      })
+      } catch {
+        // Skip malformed url
+      }
+    }
+
+    return params
   } catch (err) {
     console.error('[business-detail] generateStaticParams failed:', err)
     return []
