@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit, Printer, Palette } from "lucide-react";
+import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit, Printer, Palette, Copy, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -79,6 +79,60 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
     }
   }
 
+  async function duplicateInvoice() {
+    if (!inv) return;
+    setBusy(true);
+    try {
+      const items = (inv.items || []).map((it: any) => ({
+        description: it.description,
+        qty: it.qty,
+        unitPrice: it.unitPrice,
+      }));
+      const r = await apiPost<{ invoice: any }>("/api/invoices", {
+        customerId: inv.customerId,
+        items,
+        discountValue: inv.discountValue,
+        discountType: inv.discountType,
+        taxRate: inv.taxRate,
+        notes: inv.notes,
+        pdfTemplate: inv.pdfTemplate,
+      });
+      window.dispatchEvent(new CustomEvent("invoice-list-changed"));
+      openModal({ type: "invoice-detail", invoiceId: r.invoice.id });
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function convertToEstimate() {
+    if (!inv) return;
+    setBusy(true);
+    try {
+      const items = (inv.items || []).map((it: any) => ({
+        description: it.description,
+        qty: it.qty,
+        unitPrice: it.unitPrice,
+      }));
+      const r = await apiPost<{ quote: any }>("/api/quotes", {
+        customerId: inv.customerId,
+        items,
+        discountValue: inv.discountValue,
+        discountType: inv.discountType,
+        taxRate: inv.taxRate,
+        notes: inv.notes,
+        pdfTemplate: inv.pdfTemplate,
+      });
+      window.dispatchEvent(new CustomEvent("quote-list-changed"));
+      openModal({ type: "quote-detail", quoteId: r.quote.id });
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function remove() {
     if (!confirm("Delete this invoice?")) return;
     setBusy(true);
@@ -123,6 +177,12 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
                 <Palette className="mr-2 h-4 w-4" /> Change Template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={duplicateInvoice}>
+                <Copy className="mr-2 h-4 w-4" /> Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={convertToEstimate}>
+                <FileText className="mr-2 h-4 w-4" /> Convert to Estimate
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF

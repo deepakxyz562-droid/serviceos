@@ -25,6 +25,7 @@ export type PdfTemplateName =
  */
 export function resolveTemplateName(catalogId: string | null | undefined): PdfTemplateName {
   if (!catalogId) return "modern";
+  const cleanId = catalogId.includes(":") ? catalogId.split(":").pop()! : catalogId;
   const map: Record<string, PdfTemplateName> = {
     // Catalog ID → actual template
     "minimal-clean": "minimal",
@@ -47,7 +48,7 @@ export function resolveTemplateName(catalogId: string | null | undefined): PdfTe
     classic: "classic",
     international: "international",
   };
-  return map[catalogId] || "modern";
+  return map[cleanId] || "modern";
 }
 
 /**

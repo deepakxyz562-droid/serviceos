@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { renderToStream } from '@react-pdf/renderer';
+import { renderToBuffer } from '@react-pdf/renderer';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness, computeTotals } from '@/lib/quote-flow-session';
 import { renderQuotePdf, resolveTemplateName, type QuotePdfData } from '@/lib/quote-flow-pdf';
@@ -137,15 +137,17 @@ export async function GET(
         return null;
       })(),
     };
-    const stream = await renderToStream(renderQuotePdf(data, resolveTemplateName(invoice.pdfTemplate as string)));
+    const buffer = await renderToBuffer(renderQuotePdf(data, resolveTemplateName(invoice.pdfTemplate as string)));
     // ?download=1 → Content-Disposition: attachment (forces browser Download).
     // Default → inline (opens PDF in a new tab for preview).
     const url = new URL(req.url);
     const isDownload = url.searchParams.get('download') === '1';
-    return new NextResponse(stream as any, {
+    return new NextResponse(buffer as any, {
       headers: {
         'Content-Type': 'application/pdf',
+        'Content-Length': String(buffer.byteLength),
         'Content-Disposition': `${isDownload ? 'attachment' : 'inline'}; filename="${invoice.number}.pdf"`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     });
   } catch (e: any) {

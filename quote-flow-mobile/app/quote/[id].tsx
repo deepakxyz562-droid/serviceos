@@ -1,4 +1,13 @@
-import { useEffect, useState } from "react";
+/**
+ * Quote / Estimate preview screen — 1:1 match with Invoice Maker reference (preview.jpeg & preview-share.jpeg).
+ * Features:
+ * - A4 visual document sheet preview with template styling & zoom toggle
+ * - Floating bottom summary card (Valid until date, Amount, Client, Status & Delivery badges)
+ * - Large primary "Send Estimate" button (WhatsApp/Email/Native Share)
+ * - 4-Action quick bar: Download (via FileSystem), Print, Edit, More
+ * - Bottom action sheet modal (Customize, Share, Create Quote, Duplicate, Convert to Invoice, Feedback, Delete)
+ */
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,64 +17,215 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  Share,
+  Modal,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { useAppStore } from "@/store/app";
-import { api, apiPatch } from "@/api/client";
+import { api, apiPatch, apiPost, apiDelete, API_BASE_URL } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
-import { API_BASE_URL } from "@/api/client";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
 
-export default function QuoteDetailScreen() {
+// Helper to resolve template accent color
+function getTemplateAccent(templateId?: string | null): string {
+  if (!templateId) return "#059669"; // Emerald for quotes
+  const id = templateId.includes(":") ? templateId.split(":").pop()! : templateId;
+  const colors: Record<string, string> = {
+    modern: "#059669",
+    simple: "#374151",
+    professional: "#1e40af",
+    elegant: "#7c3aed",
+    minimal: "#171717",
+    bold: "#dc2626",
+    corporate: "#0284c7",
+    editorial: "#b45309",
+    creative: "#9333ea",
+    compact: "#475569",
+    classic: "#4b5563",
+    international: "#059669",
+  };
+  return colors[id] || "#059669";
+}
+
+export default function QuotePreviewScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
   const business = useAppStore((s) => s.business);
   const [quote, setQuote] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
+  const [moreModalVisible, setMoreModalVisible] = useState(false);
+  const [sendModalVisible, setSendModalVisible] = useState(false);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await api<{ quote: any }>(`/api/mobile/quotes/${params.id}`);
+      const r = await api<{ quote: any }>(`/api/quotes/${params.id}`);
       setQuote(r.quote);
     } catch {
+      Alert.alert("Error", "Could not load quote");
     } finally {
       setLoading(false);
     }
-  }
+  }, [params.id]);
 
   useEffect(() => {
     load();
-  }, [params.id]);
+  }, [load]);
 
-  async function markAccepted() {
+  // Download PDF locally via FileSystem and open native share/save sheet
+  async function downloadPDF() {
+    if (!quote) return;
     setBusy(true);
     try {
-      await apiPatch(`/api/mobile/quotes/${params.id}`, { status: "ACCEPTED" });
-      await load();
+      const pdfUrl = `${API_BASE_URL}/api/quote-flow/quotes/${quote.id}/pdf?download=1`;
+      if (Platform.OS === "web") {
+        Linking.openURL(pdfUrl);
+        return;
+      }
+      const localUri = `${FileSystem.documentDirectory}${quote.number}.pdf`;
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(downloadRes.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `Save Quote ${quote.number}`,
+          UTI: "com.adobe.pdf",
+        });
+      } else {
+        Alert.alert("Saved", `Quote saved to ${downloadRes.uri}`);
+      }
     } catch (e: any) {
-      Alert.alert("Failed", e.message);
+      Alert.alert("Download failed", e.message || "Could not download PDF");
     } finally {
       setBusy(false);
     }
   }
 
+  // Print PDF via native print / share
+  async function printPDF() {
+    if (!quote) return;
+    setBusy(true);
+    try {
+      const pdfUrl = `${API_BASE_URL}/api/quote-flow/quotes/${quote.id}/pdf`;
+      if (Platform.OS === "web") {
+        window.open(pdfUrl, "_blank");
+        return;
+      }
+      const localUri = `${FileSystem.documentDirectory}${quote.number}-print.pdf`;
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(downloadRes.uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `Print Quote ${quote.number}`,
+        });
+      } else {
+        Linking.openURL(pdfUrl);
+      }
+    } catch (e: any) {
+      Alert.alert("Print failed", e.message || "Could not print PDF");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Share quote (native share)
+  async function shareQuote() {
+    if (!quote) return;
+    const portalUrl = `${API_BASE_URL}/doc/${quote.id}`;
+    const pdfUrl = `${API_BASE_URL}/api/quote-flow/quotes/${quote.id}/pdf?download=1`;
+    const message = `Estimate ${quote.number} from ${business?.name || "our company"}\nTotal: ${formatCurrency(
+      quote.total || 0,
+      business?.currency,
+      business?.currencySymbol
+    )}\n\nView online: ${portalUrl}\nDownload PDF: ${pdfUrl}`;
+
+    try {
+      if (Platform.OS !== "web" && (await Sharing.isAvailableAsync())) {
+        const localUri = `${FileSystem.documentDirectory}${quote.number}.pdf`;
+        const res = await FileSystem.downloadAsync(pdfUrl, localUri).catch(() => null);
+        if (res?.uri) {
+          await Sharing.shareAsync(res.uri, {
+            mimeType: "application/pdf",
+            dialogTitle: `Share Estimate ${quote.number}`,
+          });
+          return;
+        }
+      }
+      await Share.share({ message, title: `Estimate ${quote.number}` });
+    } catch {
+      // User cancelled
+    }
+  }
+
+  // Send via WhatsApp
+  function sendWhatsApp() {
+    if (!quote) return;
+    const portalUrl = `${API_BASE_URL}/doc/${quote.id}`;
+    const phone = (quote.customer?.phone || "").replace(/[^0-9+]/g, "");
+    const text = encodeURIComponent(
+      `Hi ${quote.customer?.name || "Customer"},\n\nHere is Estimate ${quote.number} for ${formatCurrency(
+        quote.total || 0,
+        business?.currency,
+        business?.currencySymbol
+      )} from ${business?.name || "our company"}.\n\nView estimate: ${portalUrl}`
+    );
+    const url = phone ? `whatsapp://send?phone=${phone}&text=${text}` : `whatsapp://send?text=${text}`;
+    Linking.openURL(url).catch(() => {
+      Linking.openURL(`https://wa.me/${phone ? phone : ""}?text=${text}`).catch(() => {
+        Alert.alert("Error", "Could not open WhatsApp");
+      });
+    });
+  }
+
+  // Duplicate quote
+  async function duplicateQuote() {
+    if (!quote) return;
+    setMoreModalVisible(false);
+    setBusy(true);
+    try {
+      const items = (quote.items || []).map((it: any) => ({
+        description: it.description,
+        qty: it.qty,
+        unitPrice: it.unitPrice,
+      }));
+      const r = await apiPost<{ quote: any }>("/api/quotes", {
+        customerId: quote.customerId,
+        items,
+        discountValue: quote.discountValue,
+        discountType: quote.discountType,
+        taxRate: quote.taxRate,
+        notes: quote.notes,
+        pdfTemplate: quote.pdfTemplate,
+      });
+      router.replace(`/quote/${r.quote.id}`);
+      Alert.alert("Success", `Created duplicate estimate ${r.quote.number}`);
+    } catch (e: any) {
+      Alert.alert("Duplicate failed", e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Convert to Invoice
   async function convertToInvoice() {
+    if (!quote) return;
+    setMoreModalVisible(false);
     setBusy(true);
     try {
-      const r = await api<{ invoice: any; alreadyExists?: boolean }>(
-        `/api/mobile/invoices/create-from-quote/${params.id}`,
-        { method: "POST" }
+      const r = await apiPost<{ invoice: any; alreadyExists?: boolean }>(
+        `/api/quotes/${params.id}/convert-to-invoice`,
+        {}
       );
+      router.push(`/invoice/${r.invoice.id}`);
       Alert.alert(
-        r.alreadyExists ? "Already converted" : "Invoice created",
-        r.alreadyExists
-          ? "Opening the existing invoice."
-          : `Invoice ${r.invoice.number} created from this quote.`
+        r.alreadyExists ? "Already converted" : "Converted to Invoice",
+        `Invoice ${r.invoice.number} is ready`
       );
-      router.replace(`/invoice/${r.invoice.id}`);
     } catch (e: any) {
       Alert.alert("Failed", e.message);
     } finally {
@@ -73,170 +233,934 @@ export default function QuoteDetailScreen() {
     }
   }
 
-  async function openPdf() {
-    const token = (await import("@/api/client")).loadToken
-      ? await (await import("@/api/client")).loadToken()
-      : null;
-    // PDF endpoint accepts the token via header. On mobile, easiest path is to
-    // fetch the PDF blob and open via Linking — but that requires file save.
-    // For Phase 3, just open the URL in browser (works on web preview; on device
-    // user will need to add ?token=... which we add below).
-    if (!token) {
-      Alert.alert("Token missing");
-      return;
-    }
-    const url = `${API_BASE_URL}/api/quote-flow/quotes/${params.id}/pdf?token=${encodeURIComponent(token)}`;
-    Linking.openURL(url).catch(() => Alert.alert("Failed to open PDF"));
+  // Delete quote
+  async function remove() {
+    setMoreModalVisible(false);
+    Alert.alert("Delete Estimate", `Are you sure you want to delete ${quote?.number}?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          setBusy(true);
+          try {
+            await apiDelete(`/api/quotes/${params.id}`);
+            router.back();
+          } catch (e: any) {
+            Alert.alert("Failed", e.message);
+          } finally {
+            setBusy(false);
+          }
+        },
+      },
+    ]);
   }
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safe, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color="#10b981" />
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <ActivityIndicator size="large" color="#059669" />
       </SafeAreaView>
     );
   }
-  if (!quote) return null;
+
+  if (!quote) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <Text style={styles.errorText}>Estimate not found</Text>
+        <TouchableOpacity style={styles.btnOutline} onPress={() => router.back()}>
+          <Text style={styles.btnOutlineText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const items = quote.items || [];
+  const accentColor = getTemplateAccent(quote.pdfTemplate);
+  const isAccepted = quote.status === "ACCEPTED";
 
   return (
-    <SafeAreaView style={styles.safe} edges={["bottom"]}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backText}>‹ Back</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+          <MaterialIcons name="arrow-back-ios" size={20} color="#1e293b" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Quote {quote.number}</Text>
-        <View style={{ width: 60 }} />
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>{quote.number}</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <FontAwesome5 name="crown" size={18} color="#f59e0b" style={{ marginRight: 16 }} />
+          <TouchableOpacity onPress={shareQuote} style={styles.headerBtn}>
+            <Feather name="share-2" size={20} color="#1e293b" />
+          </TouchableOpacity>
+        </View>
       </View>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        <View style={styles.statusPill}>
-          <Text style={styles.statusText}>{quote.status}</Text>
-        </View>
-        {quote.validUntil ? (
-          <Text style={styles.metaText}>
-            Valid until: {new Date(quote.validUntil).toLocaleDateString()}
-          </Text>
-        ) : null}
 
-        <View style={styles.customerCard}>
-          <Text style={styles.customerLabel}>Customer</Text>
-          <Text style={styles.customerName}>{quote.customer?.name || "—"}</Text>
-          {quote.customer?.email ? <Text style={styles.customerInfo}>{quote.customer.email}</Text> : null}
-          {quote.customer?.phone ? <Text style={styles.customerInfo}>{quote.customer.phone}</Text> : null}
-        </View>
+      {/* Main A4 Document Sheet Viewport */}
+      <ScrollView
+        style={styles.previewContainer}
+        contentContainerStyle={[styles.previewContent, zoomed && styles.previewContentZoomed]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Floating Zoom Button */}
+        <TouchableOpacity
+          style={styles.zoomFab}
+          onPress={() => setZoomed(!zoomed)}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name={zoomed ? "zoom-out" : "zoom-in"} size={22} color="#1e293b" />
+        </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>Items</Text>
-        {quote.items?.map((it: any, i: number) => (
-          <View key={i} style={styles.itemRow}>
-            <Text style={styles.itemDesc}>
-              {it.description}
-              {it.qty !== 1 ? ` × ${it.qty}` : ""}
+        {/* The White Document Sheet (matches preview.jpeg) */}
+        <View style={[styles.documentSheet, zoomed && styles.documentSheetZoomed]}>
+          {/* Document Header */}
+          <View style={styles.docHeaderRow}>
+            <View style={styles.docBusinessCol}>
+              {business?.name ? <Text style={styles.docBusinessName}>{business.name}</Text> : null}
+              {business?.email ? <Text style={styles.docMetaText}>{business.email}</Text> : null}
+              {business?.phone ? <Text style={styles.docMetaText}>{business.phone}</Text> : null}
+            </View>
+            <View style={styles.docTitleCol}>
+              <Text style={[styles.docTitle, { color: accentColor }]}>ESTIMATE</Text>
+            </View>
+          </View>
+
+          {/* Two-Column Info Bar */}
+          <View style={styles.docInfoBar}>
+            <View style={styles.docBillToCol}>
+              <Text style={styles.docSectionLabel}>ESTIMATE FOR</Text>
+              <Text style={styles.docClientName}>{quote.customer?.name || "Unknown Client"}</Text>
+              {quote.customer?.address ? (
+                <Text style={styles.docMetaText}>{quote.customer.address}</Text>
+              ) : null}
+              {quote.customer?.phone ? (
+                <Text style={styles.docMetaText}>{quote.customer.phone}</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.docMetaCol}>
+              <View style={styles.docMetaRow}>
+                <Text style={styles.docMetaLabel}>QUOTE #</Text>
+                <Text style={styles.docMetaVal}>{quote.number}</Text>
+              </View>
+              <View style={styles.docMetaRow}>
+                <Text style={styles.docMetaLabel}>DATE</Text>
+                <Text style={styles.docMetaVal}>
+                  {new Date(quote.createdAt || Date.now()).toLocaleDateString("en-GB")}
+                </Text>
+              </View>
+              <View style={styles.docMetaRow}>
+                <Text style={styles.docMetaLabel}>VALID UNTIL</Text>
+                <Text style={styles.docMetaVal}>
+                  {quote.validUntil
+                    ? new Date(quote.validUntil).toLocaleDateString("en-GB")
+                    : "30 days"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Styled Items Table */}
+          <View style={styles.table}>
+            <View style={[styles.tableHeader, { backgroundColor: accentColor }]}>
+              <Text style={[styles.tableColHeader, { flex: 2 }]}>Description</Text>
+              <Text style={[styles.tableColHeader, { width: 45, textAlign: "center" }]}>QTY</Text>
+              <Text style={[styles.tableColHeader, { width: 70, textAlign: "right" }]}>Price</Text>
+              <Text style={[styles.tableColHeader, { width: 80, textAlign: "right" }]}>Amount</Text>
+            </View>
+
+            {items.length === 0 ? (
+              <View style={styles.emptyItemsRow}>
+                <Text style={styles.emptyItemsText}>No items added</Text>
+              </View>
+            ) : (
+              items.map((it: any, i: number) => (
+                <View
+                  key={i}
+                  style={[styles.tableRow, i % 2 === 1 && { backgroundColor: "#f8fafc" }]}
+                >
+                  <Text style={[styles.tableCell, { flex: 2, fontWeight: "500" }]}>
+                    {it.description}
+                  </Text>
+                  <Text style={[styles.tableCell, { width: 45, textAlign: "center" }]}>
+                    {it.qty}
+                  </Text>
+                  <Text style={[styles.tableCell, { width: 70, textAlign: "right" }]}>
+                    {formatCurrency(it.unitPrice, business?.currency, business?.currencySymbol)}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.tableCell,
+                      { width: 80, textAlign: "right", fontWeight: "600" },
+                    ]}
+                  >
+                    {formatCurrency(
+                      it.qty * it.unitPrice,
+                      business?.currency,
+                      business?.currencySymbol
+                    )}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Totals Summary */}
+          <View style={styles.docSummaryWrap}>
+            <View style={styles.docSummaryCol}>
+              <View style={styles.docSummaryRow}>
+                <Text style={styles.docSummaryLabel}>Subtotal</Text>
+                <Text style={styles.docSummaryVal}>
+                  {formatCurrency(quote.subtotal || 0, business?.currency, business?.currencySymbol)}
+                </Text>
+              </View>
+
+              {quote.discount > 0 && (
+                <View style={styles.docSummaryRow}>
+                  <Text style={styles.docSummaryLabel}>Discount</Text>
+                  <Text style={styles.docSummaryVal}>
+                    -
+                    {formatCurrency(
+                      quote.discount || 0,
+                      business?.currency,
+                      business?.currencySymbol
+                    )}
+                  </Text>
+                </View>
+              )}
+
+              {quote.tax > 0 && (
+                <View style={styles.docSummaryRow}>
+                  <Text style={styles.docSummaryLabel}>Tax ({quote.taxRate || 0}%)</Text>
+                  <Text style={styles.docSummaryVal}>
+                    {formatCurrency(quote.tax || 0, business?.currency, business?.currencySymbol)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Total Banner */}
+              <View style={[styles.balanceDueBanner, { backgroundColor: accentColor }]}>
+                <Text style={styles.balanceDueText}>ESTIMATE TOTAL</Text>
+                <Text style={styles.balanceDueAmount}>
+                  {formatCurrency(quote.total || 0, business?.currency, business?.currencySymbol)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* ACCEPTED Stamp Overlay (if accepted) */}
+          {isAccepted && (
+            <View style={styles.paidWatermarkStamp}>
+              <Text style={styles.paidWatermarkText}>ACCEPTED</Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Floating Bottom Summary & Action Sheet (matches preview.jpeg) */}
+      <View style={styles.bottomCardContainer}>
+        {/* Due date, total amount, client name, badges */}
+        <View style={styles.bottomSummaryRow}>
+          <View style={styles.bottomSummaryLeft}>
+            <Text style={styles.bottomDueDate}>
+              Valid until{" "}
+              {quote.validUntil
+                ? new Date(quote.validUntil).toLocaleDateString("en-GB")
+                : "30 days"}
             </Text>
-            <Text style={styles.itemAmount}>
-              {formatCurrency(it.qty * it.unitPrice, business?.currency, business?.currencySymbol)}
+            <Text style={styles.bottomTotalAmount}>
+              {formatCurrency(quote.total || 0, business?.currency, business?.currencySymbol)}
+            </Text>
+            <Text style={styles.bottomClientName}>
+              {quote.customer?.name || "Unknown Client"}
             </Text>
           </View>
-        ))}
 
-        <View style={styles.totalsBox}>
-          <Row label="Subtotal" value={formatCurrency(quote.subtotal, business?.currency, business?.currencySymbol)} />
-          {quote.discount > 0 && (
-            <Row label="Discount" value={`- ${formatCurrency(quote.discount, business?.currency, business?.currencySymbol)}`} />
-          )}
-          {quote.tax > 0 && (
-            <Row label={`Tax (${quote.taxRate}%)`} value={formatCurrency(quote.tax, business?.currency, business?.currencySymbol)} />
-          )}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>TOTAL</Text>
-            <Text style={styles.totalValue}>
-              {formatCurrency(quote.total, business?.currency, business?.currencySymbol)}
-            </Text>
+          <View style={styles.bottomSummaryRight}>
+            <View style={[styles.pillBadge, isAccepted ? styles.pillPaid : styles.pillUnpaid]}>
+              <Text
+                style={[
+                  styles.pillText,
+                  isAccepted ? styles.pillTextPaid : styles.pillTextUnpaid,
+                ]}
+              >
+                {isAccepted ? "Accepted" : quote.status?.toLowerCase() || "Draft"}
+              </Text>
+            </View>
+            <View style={[styles.pillBadge, styles.pillDelivery]}>
+              <Text style={styles.pillTextDelivery}>Not sent</Text>
+            </View>
           </View>
         </View>
 
-        <View style={styles.actionsRow}>
+        {/* Primary Send Button */}
+        <TouchableOpacity
+          style={[styles.primarySendBtn, { backgroundColor: "#059669" }]}
+          onPress={() => setSendModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Feather name="send" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+          <Text style={styles.primarySendBtnText}>Send Estimate</Text>
+        </TouchableOpacity>
+
+        {/* 4-Action Quick Bar */}
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity style={styles.quickActionItem} onPress={downloadPDF}>
+            <View style={styles.quickActionIconWrap}>
+              <Feather name="download" size={20} color="#1e293b" />
+            </View>
+            <Text style={styles.quickActionLabel}>Download</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickActionItem} onPress={printPDF}>
+            <View style={styles.quickActionIconWrap}>
+              <Feather name="printer" size={20} color="#1e293b" />
+            </View>
+            <Text style={styles.quickActionLabel}>Print</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
-            style={[styles.btn, styles.btnOutline]}
+            style={styles.quickActionItem}
             onPress={() => router.push(`/quote-edit?id=${params.id}`)}
           >
-            <MaterialIcons name="edit" size={18} color="#1c1917" />
-            <Text style={styles.btnOutlineText}>Edit</Text>
+            <View style={styles.quickActionIconWrap}>
+              <Feather name="edit-3" size={20} color="#1e293b" />
+            </View>
+            <Text style={styles.quickActionLabel}>Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, styles.btnOutline]} onPress={openPdf}>
-            <MaterialIcons name="download" size={18} color="#1c1917" />
-            <Text style={styles.btnOutlineText}>PDF</Text>
+
+          <TouchableOpacity
+            style={styles.quickActionItem}
+            onPress={() => setMoreModalVisible(true)}
+          >
+            <View style={styles.quickActionIconWrap}>
+              <Feather name="more-horizontal" size={20} color="#1e293b" />
+            </View>
+            <Text style={styles.quickActionLabel}>More</Text>
           </TouchableOpacity>
-          {quote.status !== "ACCEPTED" && (
-            <TouchableOpacity style={[styles.btn, styles.btnOutline]} onPress={markAccepted} disabled={busy}>
-              <MaterialIcons name="check" size={18} color="#10b981" />
-              <Text style={[styles.btnOutlineText, { color: "#10b981" }]}>Mark accepted</Text>
-            </TouchableOpacity>
-          )}
         </View>
+      </View>
 
-        {quote.status === "ACCEPTED" && !quote.convertedInvoiceId && (
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary, styles.fullBtn]}
-            onPress={convertToInvoice}
-            disabled={busy}
-          >
-            <MaterialIcons name="receipt-long" size={18} color="white" />
-            <Text style={styles.btnPrimaryText}>Convert to invoice →</Text>
-          </TouchableOpacity>
-        )}
+      {/* "⋯ More" Action Sheet Modal (1:1 match with preview-share.jpeg) */}
+      <Modal
+        visible={moreModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMoreModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setMoreModalVisible(false)}
+        >
+          <View style={styles.actionSheetContent} onStartShouldSetResponder={() => true}>
+            {/* Modal Header */}
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{quote.number}</Text>
+              <TouchableOpacity
+                onPress={() => setMoreModalVisible(false)}
+                style={styles.sheetCloseBtn}
+              >
+                <MaterialIcons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
 
-        {quote.convertedInvoiceId && (
-          <TouchableOpacity
-            style={[styles.btn, styles.btnOutline, styles.fullBtn]}
-            onPress={() => router.push(`/invoice/${quote.convertedInvoiceId}`)}
-          >
-            <MaterialIcons name="receipt-long" size={18} color="#10b981" />
-            <Text style={[styles.btnOutlineText, { color: "#10b981" }]}>View invoice →</Text>
-          </TouchableOpacity>
-        )}
+            {/* Actions list */}
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => {
+                setMoreModalVisible(false);
+                router.push(`/customize?id=${quote.id}&type=quote`);
+              }}
+            >
+              <MaterialIcons name="palette" size={22} color="#ec4899" style={styles.sheetIcon} />
+              <Text style={styles.sheetRowText}>Customize</Text>
+            </TouchableOpacity>
 
-        {busy && <ActivityIndicator size="small" color="#10b981" style={{ marginTop: 12 }} />}
-      </ScrollView>
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => {
+                setMoreModalVisible(false);
+                shareQuote();
+              }}
+            >
+              <Feather name="share-2" size={20} color="#3b82f6" style={styles.sheetIcon} />
+              <Text style={styles.sheetRowText}>Share</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => {
+                setMoreModalVisible(false);
+                router.push("/quote-create");
+              }}
+            >
+              <Feather name="plus-circle" size={20} color="#10b981" style={styles.sheetIcon} />
+              <Text style={styles.sheetRowText}>Create Estimate</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.sheetRow} onPress={duplicateQuote}>
+              <Feather name="copy" size={20} color="#6366f1" style={styles.sheetIcon} />
+              <Text style={styles.sheetRowText}>Duplicate</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.sheetRow} onPress={convertToInvoice}>
+              <Feather name="check-circle" size={20} color="#059669" style={styles.sheetIcon} />
+              <Text style={[styles.sheetRowText, { color: "#059669", fontWeight: "700" }]}>
+                Convert to Invoice
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => {
+                setMoreModalVisible(false);
+                Alert.alert("Feedback", "We would love to hear your feedback!", [
+                  { text: "OK" },
+                ]);
+              }}
+            >
+              <Feather name="message-square" size={20} color="#06b6d4" style={styles.sheetIcon} />
+              <Text style={styles.sheetRowText}>Feedback</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.sheetRow, { borderBottomWidth: 0 }]} onPress={remove}>
+              <Feather name="trash-2" size={20} color="#ef4444" style={styles.sheetIcon} />
+              <Text style={[styles.sheetRowText, { color: "#ef4444" }]}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* "Send Estimate" Modal */}
+      <Modal
+        visible={sendModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSendModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setSendModalVisible(false)}
+        >
+          <View style={styles.sendModalContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.sendModalTitle}>Send Estimate</Text>
+            <Text style={styles.sendModalSub}>Choose how to dispatch this estimate to the client</Text>
+
+            <TouchableOpacity
+              style={styles.sendOptionBtn}
+              onPress={() => {
+                setSendModalVisible(false);
+                sendWhatsApp();
+              }}
+            >
+              <FontAwesome5 name="whatsapp" size={22} color="#25D366" style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sendOptionTitle}>Send via WhatsApp</Text>
+                <Text style={styles.sendOptionDesc}>Direct 1-tap message with estimate link</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sendOptionBtn}
+              onPress={() => {
+                setSendModalVisible(false);
+                shareQuote();
+              }}
+            >
+              <Feather name="share-2" size={20} color="#059669" style={{ marginRight: 12 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sendOptionTitle}>Native Share Sheet</Text>
+                <Text style={styles.sendOptionDesc}>Share PDF via Email, Messages, AirDrop</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btnOutline, { marginTop: 16 }]}
+              onPress={() => setSendModalVisible(false)}
+            >
+              <Text style={styles.btnOutlineText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Busy overlay */}
+      {busy && (
+        <View style={styles.busyOverlay}>
+          <ActivityIndicator size="large" color="#ffffff" />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fafaf9" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#e7e5e4" },
-  backText: { color: "#10b981", fontSize: 16, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "600", color: "#1c1917" },
-  statusPill: { alignSelf: "flex-start", backgroundColor: "#f5f5f4", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, marginBottom: 8 },
-  statusText: { fontSize: 11, fontWeight: "600", color: "#44403c", textTransform: "capitalize" },
-  metaText: { fontSize: 12, color: "#78716c", marginBottom: 12 },
-  customerCard: { backgroundColor: "#f5f5f4", borderRadius: 12, padding: 14, marginBottom: 16 },
-  customerLabel: { fontSize: 11, color: "#78716c", textTransform: "uppercase" },
-  customerName: { fontSize: 16, fontWeight: "600", color: "#1c1917", marginTop: 2 },
-  customerInfo: { fontSize: 13, color: "#57534e", marginTop: 2 },
-  sectionTitle: { fontSize: 11, fontWeight: "600", color: "#78716c", textTransform: "uppercase", marginBottom: 8 },
-  itemRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
-  itemDesc: { fontSize: 14, color: "#1c1917", flex: 1 },
-  itemAmount: { fontSize: 14, fontWeight: "500", color: "#1c1917" },
-  totalsBox: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#e7e5e4" },
-  row: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
-  rowLabel: { fontSize: 14, color: "#57534e" },
-  rowValue: { fontSize: 14, color: "#1c1917" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#e7e5e4" },
-  totalLabel: { fontSize: 16, fontWeight: "bold", color: "#1c1917" },
-  totalValue: { fontSize: 16, fontWeight: "bold", color: "#1c1917" },
-  actionsRow: { flexDirection: "row", gap: 8, marginTop: 20 },
-  btn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 12, borderRadius: 8 },
-  btnOutline: { borderWidth: 1, borderColor: "#d6d3d1" },
-  btnOutlineText: { color: "#1c1917", fontWeight: "500", fontSize: 13 },
-  btnPrimary: { backgroundColor: "#10b981" },
-  btnPrimaryText: { color: "white", fontWeight: "600", fontSize: 13 },
-  fullBtn: { marginTop: 8 },
+  safe: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
+  },
+  center: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  headerBtn: {
+    padding: 6,
+  },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
+    letterSpacing: 0.3,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  previewContainer: {
+    flex: 1,
+    backgroundColor: "#eef2f6",
+  },
+  previewContent: {
+    padding: 16,
+    paddingBottom: 220,
+    alignItems: "center",
+  },
+  previewContentZoomed: {
+    padding: 8,
+  },
+  zoomFab: {
+    position: "absolute",
+    top: 24,
+    right: 24,
+    zIndex: 10,
+    backgroundColor: "#ffffff",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  documentSheet: {
+    width: "100%",
+    maxWidth: 420,
+    minHeight: 520,
+    backgroundColor: "#ffffff",
+    borderRadius: 6,
+    padding: 18,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  documentSheetZoomed: {
+    maxWidth: "100%",
+    transform: [{ scale: 1.05 }],
+  },
+  docHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  docBusinessCol: {
+    flex: 1,
+  },
+  docBusinessName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 2,
+  },
+  docTitleCol: {
+    alignItems: "flex-end",
+  },
+  docTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+  },
+  docInfoBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingBottom: 16,
+    marginBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  docBillToCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  docSectionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#64748b",
+    marginBottom: 4,
+  },
+  docClientName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 2,
+  },
+  docMetaText: {
+    fontSize: 11,
+    color: "#64748b",
+  },
+  docMetaCol: {
+    width: 140,
+    alignItems: "flex-end",
+  },
+  docMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 4,
+  },
+  docMetaLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#64748b",
+  },
+  docMetaVal: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  table: {
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 16,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  tableColHeader: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  tableCell: {
+    fontSize: 11,
+    color: "#1e293b",
+  },
+  emptyItemsRow: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  emptyItemsText: {
+    fontSize: 12,
+    color: "#94a3b8",
+  },
+  docSummaryWrap: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 10,
+  },
+  docSummaryCol: {
+    width: 200,
+  },
+  docSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  docSummaryLabel: {
+    fontSize: 11,
+    color: "#64748b",
+  },
+  docSummaryVal: {
+    fontSize: 11,
+    color: "#0f172a",
+    fontWeight: "500",
+  },
+  balanceDueBanner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginTop: 6,
+    borderRadius: 2,
+  },
+  balanceDueText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#ffffff",
+    letterSpacing: 0.5,
+  },
+  balanceDueAmount: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#ffffff",
+  },
+  paidWatermarkStamp: {
+    position: "absolute",
+    top: "40%",
+    left: "22%",
+    borderWidth: 4,
+    borderColor: "#059669",
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 8,
+    transform: [{ rotate: "-22deg" }],
+    opacity: 0.85,
+  },
+  paidWatermarkText: {
+    fontSize: 30,
+    fontWeight: "900",
+    color: "#059669",
+    letterSpacing: 3,
+  },
+  bottomCardContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  bottomSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+  bottomSummaryLeft: {
+    flex: 1,
+  },
+  bottomDueDate: {
+    fontSize: 12,
+    color: "#64748b",
+    marginBottom: 2,
+  },
+  bottomTotalAmount: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0f172a",
+    marginBottom: 2,
+  },
+  bottomClientName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  bottomSummaryRight: {
+    alignItems: "flex-end",
+    gap: 6,
+  },
+  pillBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pillPaid: {
+    backgroundColor: "#dcfce7",
+  },
+  pillUnpaid: {
+    backgroundColor: "#e0e7ff",
+  },
+  pillDelivery: {
+    backgroundColor: "#f1f5f9",
+  },
+  pillText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  pillTextPaid: {
+    color: "#15803d",
+  },
+  pillTextUnpaid: {
+    color: "#4338ca",
+  },
+  pillTextDelivery: {
+    fontSize: 11,
+    color: "#64748b",
+  },
+  primarySendBtn: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+  primarySendBtnText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#ffffff",
+  },
+  quickActionsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingTop: 4,
+  },
+  quickActionItem: {
+    alignItems: "center",
+    width: 68,
+  },
+  quickActionIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#f1f5f9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  quickActionLabel: {
+    fontSize: 11,
+    fontWeight: "500",
+    color: "#334155",
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  actionSheetContent: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    paddingBottom: 36,
+    paddingHorizontal: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+    position: "relative",
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  sheetCloseBtn: {
+    position: "absolute",
+    right: 0,
+    top: -2,
+    padding: 6,
+  },
+  sheetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f8fafc",
+  },
+  sheetIcon: {
+    width: 32,
+    marginRight: 12,
+  },
+  sheetRowText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#1e293b",
+  },
+  sendModalContent: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 20,
+    marginBottom: "auto",
+    marginTop: "auto",
+  },
+  sendModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  sendModalSub: {
+    fontSize: 13,
+    color: "#64748b",
+    marginBottom: 20,
+  },
+  sendOptionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    marginBottom: 10,
+  },
+  sendOptionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  sendOptionDesc: {
+    fontSize: 11,
+    color: "#64748b",
+  },
+  btnOutline: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+  },
+  btnOutlineText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#64748b",
+    marginBottom: 16,
+  },
+  busyOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
 });
