@@ -56,15 +56,12 @@ import { CornerstoneFooter } from '@/components/seo/cornerstone-footer';
 import type { ProviderListItem } from '@/components/marketplace/types';
 
 // ── Route config ────────────────────────────────────────────────────────────
-// The page itself stays force-dynamic so newly-onboarded providers appear on
-// the next request (matches the existing /marketplace browse page policy).
-// The expensive provider-query is NOT wrapped in unstable_cache here because
-// the (industry, city) pair makes the cache key 2-dimensional (50 cities ×
-// 30 industries = 1500 keys) — a 30s TTL per key would add cache-management
-// overhead without meaningful hit-rate on a low-traffic route. We rely on
-// Prisma's connection pool + the existing @@index([city]) +
-// @@index([latitude, longitude]) on Tenant for query speed.
-export const dynamic = 'force-dynamic';
+// ISR: cache city-listing pages for 5 minutes. This survives DB hiccups
+// and redeploys — Googlebot gets a cached 200 even if the DB is briefly
+// down. Previously force-dynamic (every request hit the DB), which caused
+// mass de-indexing during the Sep 24-25 deploy storm. Newly-onboarded
+// providers appear within 5 minutes (acceptable for SEO).
+export const revalidate = 300;
 
 // ── Plural display-name map ─────────────────────────────────────────────────
 // The Industry catalog stores the SINGULAR display name (e.g. 'Plumbing',

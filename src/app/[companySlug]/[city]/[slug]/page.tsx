@@ -50,6 +50,7 @@ import {
   getMarketplaceCertifications,
   getSimilarProviders,
   formatAddressForDisplay,
+  listIndexableBusinessUrls,
   type PublicBusinessData,
   type PublicServiceData,
   type PublicCertificationData,
@@ -95,11 +96,13 @@ import {
 // This page no longer reads cookies/headers at render time — the
 // `ClaimBusinessBanner` was refactored to fetch auth state on the client
 // (via the shared Zustand store hydrated by MarketplaceHeader). That lets
-// the page use ISR with a 60s revalidate window instead of
+// the page use ISR with a 5-minute revalidate window instead of
 // `dynamic = 'force-dynamic'`. Combined with the unstable_cache-tagged
 // data layer in src/lib/public-business.ts (120s TTL), the page is now
 // served from the data cache on repeat visits — zero DB queries.
-export const revalidate = 60
+// The 300s (was 60s) revalidate window gives Googlebot a much higher
+// chance of hitting a cached 200 even during a DB hiccup or redeploy.
+export const revalidate = 300
 export const dynamicParams = true
 
 // ── Metadata ────────────────────────────────────────────────────────────────
@@ -1545,14 +1548,35 @@ function buildOpeningHours(
   })
 }
 
-// ── generateStaticParams (empty — fully dynamic) ───────────────────────────
-// We deliberately don't pre-render any business pages at build time because
-// the set of businesses is dynamic and potentially huge. The page uses
-// `dynamic = 'force-dynamic'` (because it calls getAuthUser/cookies) so every
-// request is server-rendered on-demand.
-
+// ── generateStaticParams (top 200 business pages pre-rendered at build) ────
+// Pre-render the top 200 indexable business-detail pages at build time so
+// they're served as static HTML (sub-100ms, never 500). The remaining
+// ~8,800 pages are rendered on-demand with ISR (revalidate=300).
+//
+// The listIndexableBusinessUrls function returns Tier A/B businesses
+// (those with enough profile data to be worth indexing). The first 200
+// are a good proxy for "most likely to be crawled" since they have the
+// richest profiles.
+//
+// Wrapped in try/catch so a DB failure during build doesn't crash the
+// build — the route still works at runtime via ISR.
 export async function generateStaticParams() {
-  return []
+  try {
+    const urls = await listIndexableBusinessUrls({ limit: 200 })
+    return urls
+      .filter((u) => u.url && u.url.split('/').length >= 4)
+      .map((u) => {
+        const parts = u.url.split('/').filter(Boolean) // ['hvac', 'ottawa', 'francis-...']
+        return {
+          companySlug: parts[0],
+          city: parts[1],
+          slug: parts[2],
+        }
+      })
+  } catch (err) {
+    console.error('[business-detail] generateStaticParams failed:', err)
+    return []
+  }
 }
 
 // ── Small string helpers used by generateMetadata ───────────────────────────

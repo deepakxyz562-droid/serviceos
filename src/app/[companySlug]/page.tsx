@@ -36,8 +36,11 @@ import { computeCardType, fetchFeaturedListingsMap } from '@/lib/marketplace-fea
 import type { ProviderListItem } from '@/components/marketplace/types';
 
 // ── Route config ────────────────────────────────────────────────────────────
-// Same policy as /[companySlug]/[city] — force-dynamic for fresh data.
-export const dynamic = 'force-dynamic';
+// ISR: cache industry-hub pages for 5 minutes. This survives DB hiccups
+// and redeploys — Googlebot gets a cached 200 even if the DB is briefly
+// down. Previously force-dynamic (every request hit the DB), which caused
+// mass de-indexing during the Sep 24-25 deploy storm.
+export const revalidate = 300;
 
 // ── Plural display-name map (mirrors /[companySlug]/[city] for consistency) ──
 const INDUSTRY_PLURAL_DISPLAY: Record<string, string> = {
