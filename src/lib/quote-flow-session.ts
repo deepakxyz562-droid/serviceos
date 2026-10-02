@@ -125,6 +125,21 @@ const DEFAULT_SYSTEM_TEMPLATES = [
   },
 ];
 
+export async function seedSystemTemplates(businessId: string) {
+  for (const t of DEFAULT_SYSTEM_TEMPLATES) {
+    await db.aiTemplate.create({
+      data: {
+        businessId,
+        name: t.name,
+        category: t.category,
+        suggestedItems: JSON.stringify(t.suggestedItems),
+        defaultTaxRate: t.defaultTaxRate,
+        isSystem: true,
+      },
+    });
+  }
+}
+
 export async function getOrCreateBusinessForUser(userId: string, tenantId?: string, defaultName = 'My Business') {
   let business = await db.aiBusiness.findUnique({
     where: { ownerId: userId },
@@ -143,18 +158,7 @@ export async function getOrCreateBusinessForUser(userId: string, tenantId?: stri
     });
 
     // Seed default system templates
-    for (const t of DEFAULT_SYSTEM_TEMPLATES) {
-      await db.aiTemplate.create({
-        data: {
-          businessId: business.id,
-          name: t.name,
-          category: t.category,
-          suggestedItems: JSON.stringify(t.suggestedItems),
-          defaultTaxRate: t.defaultTaxRate,
-          isSystem: true,
-        },
-      });
-    }
+    await seedSystemTemplates(business.id);
   }
 
   return business;

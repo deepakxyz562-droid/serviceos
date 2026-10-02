@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -634,15 +635,17 @@ export default async function PluralBrowsePage({
         ) : (
           /* ── Provider grid (SPARSE / READY / STRONG) ─────────────────── */
           <section className="w-full px-4 sm:px-6 lg:px-8 py-6">
-            <MarketplaceBrowser
-              providers={providers}
-              initialFilters={{
-                vertical: parentVerticalId,
-                industry: industryId,
-                city: cityName,
-                search: null,
-              }}
-            />
+            <Suspense fallback={null}>
+              <MarketplaceBrowser
+                providers={providers}
+                initialFilters={{
+                  vertical: parentVerticalId,
+                  industry: industryId,
+                  city: cityName,
+                  search: null,
+                }}
+              />
+            </Suspense>
           </section>
         )}
 

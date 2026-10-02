@@ -292,7 +292,7 @@ registerTool({
   execute: async (_ctx, args) => {
     // Delegate to the existing email service
     try {
-      const { sendEmail } = await import('@/lib/email-service');
+      const { sendEmail } = await import('@/lib/email-send');
       await sendEmail({
         to: String(args.to),
         subject: String(args.subject),

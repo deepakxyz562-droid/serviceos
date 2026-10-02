@@ -52,7 +52,6 @@ import { slugifyCity } from '@/lib/seo/schemas';
 import { mapIndustryToPluralSlug } from '@/lib/seo/plural-industry-slugs';
 import { rankProviders, haversineKm } from '@/lib/marketplace-ranking';
 import { cn } from '@/lib/utils';
-import { useSearchParams } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { trackEvent } from '@/lib/analytics/consent';
 import { useMarketplaceFirstTouch } from '@/lib/marketplace/attribution-client';
@@ -100,8 +99,6 @@ export function MarketplaceBrowser({
   initialFilters,
   detectedCountry,
 }: MarketplaceBrowserProps) {
-  const searchParams = useSearchParams();
-
   // Phase 4B: capture marketplace first-touch context on mount (idempotent —
   // only writes to sessionStorage on the very first marketplace paint per
   // browser tab). This ensures firstTouchAt is accurate even if the user
