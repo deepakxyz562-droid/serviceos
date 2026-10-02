@@ -226,7 +226,7 @@ export default function QuoteCreateScreen() {
         discountValue: parseFloat(discountValue) || 0,
         discountType,
         taxRate: 18,
-        pdfTemplate: `${docType}:${selectedTemplateId}`,
+        pdfTemplate: selectedTemplateId,
       });
 
       router.replace(`/quote/${r.quote.id}`);

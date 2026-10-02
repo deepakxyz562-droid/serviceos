@@ -154,6 +154,13 @@ export default function QuoteDetailScreen() {
         </View>
 
         <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnOutline]}
+            onPress={() => router.push(`/quote-edit?id=${params.id}`)}
+          >
+            <MaterialIcons name="edit" size={18} color="#1c1917" />
+            <Text style={styles.btnOutlineText}>Edit</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.btn, styles.btnOutline]} onPress={openPdf}>
             <MaterialIcons name="download" size={18} color="#1c1917" />
             <Text style={styles.btnOutlineText}>PDF</Text>

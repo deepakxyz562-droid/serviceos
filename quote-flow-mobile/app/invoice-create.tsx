@@ -195,7 +195,7 @@ export default function InvoiceCreateScreen() {
         discountValue: parseFloat(discountValue) || 0,
         discountType,
         taxRate: docType === "SIMPLE_BILL" ? parseFloat(globalTaxRate) || 0 : 18,
-        pdfTemplate: `${docType}:${selectedTemplateId}`,
+        pdfTemplate: selectedTemplateId,
       });
 
       router.replace(`/invoice/${r.invoice.id}`);
