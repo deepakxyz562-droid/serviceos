@@ -25,6 +25,18 @@ export interface DetailedInvoiceTotals {
   total: number;
 }
 
+export interface ProposalTier {
+  id: string; // 'essential' | 'professional' | 'premium'
+  name: string; // e.g. "Essential Package", "Professional (Recommended)", "Premium Turnkey"
+  badge?: string;
+  isRecommended?: boolean;
+  description?: string;
+  items: CalcLineItem[];
+  discountValue?: number;
+  discountType?: 'AMOUNT' | 'PERCENT' | string;
+  totals?: DetailedInvoiceTotals;
+}
+
 /**
  * Pure arithmetic for quotes and invoices.
  * Supports Tax Invoice (GST itemized), Bill of Supply (tax-exempt), and Simple Bill.
@@ -142,6 +154,67 @@ export function computeInvoiceTotals(options: {
     tax: gstAmount,
     total,
   };
+}
+
+/**
+ * Computes totals for a single proposal tier (Good/Better/Best)
+ */
+export function computeTierTotals(
+  tier: ProposalTier,
+  docType: DocumentType | string = 'ESTIMATE',
+  currency = 'INR'
+): ProposalTier {
+  const totals = computeInvoiceTotals({
+    items: tier.items,
+    documentType: docType,
+    discountValue: tier.discountValue,
+    discountType: tier.discountType,
+    currency,
+  });
+  return { ...tier, totals };
+}
+
+/**
+ * Standard Good / Better / Best starter template
+ */
+export function generateDefaultTiers(baseItems: CalcLineItem[] = []): ProposalTier[] {
+  const validBase = baseItems.length > 0 ? baseItems : [{ description: 'Core Scope & Delivery', qty: 1, unitPrice: 1000, taxRate: 18 }];
+  
+  return [
+    {
+      id: 'essential',
+      name: 'Essential Package',
+      badge: 'Good',
+      description: 'Standard delivery covering core specifications with standard turnaround.',
+      isRecommended: false,
+      items: validBase,
+    },
+    {
+      id: 'professional',
+      name: 'Professional Package',
+      badge: 'Best Value',
+      description: 'Complete solution including priority turnaround, revisions & 30-day warranty.',
+      isRecommended: true,
+      items: [
+        ...validBase,
+        { description: 'Priority Support & Expedited Turnaround', qty: 1, unitPrice: Math.round(validBase[0].unitPrice * 0.4), taxRate: 18 },
+        { description: 'Extended 30-Day Revision Guarantee', qty: 1, unitPrice: Math.round(validBase[0].unitPrice * 0.2), taxRate: 18 },
+      ],
+    },
+    {
+      id: 'premium',
+      name: 'Premium Enterprise',
+      badge: 'All-Inclusive',
+      description: 'Turnkey enterprise package with 24/7 dedicated support & 6-month maintenance.',
+      isRecommended: false,
+      items: [
+        ...validBase,
+        { description: 'Priority Support & Expedited Turnaround', qty: 1, unitPrice: Math.round(validBase[0].unitPrice * 0.4), taxRate: 18 },
+        { description: 'Dedicated VIP Support & Training (1 Year)', qty: 1, unitPrice: Math.round(validBase[0].unitPrice * 0.7), taxRate: 18 },
+        { description: '6 Months Ongoing Maintenance & Updates', qty: 1, unitPrice: Math.round(validBase[0].unitPrice * 0.5), taxRate: 18 },
+      ],
+    },
+  ];
 }
 
 /**

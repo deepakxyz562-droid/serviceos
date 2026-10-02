@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useAppStore } from "@/store/app";
 import { api } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
+import { AiOmniInputModal } from "../../src/components/AiOmniInputModal";
 
 interface RecentItem {
   id: string;
@@ -26,6 +27,8 @@ interface RecentItem {
 export default function HomeScreen() {
   const router = useRouter();
   const business = useAppStore((s) => s.business);
+  const setPendingDraft = useAppStore((s) => s.setPendingDraft);
+  const [showAiModal, setShowAiModal] = useState(false);
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -106,6 +109,61 @@ export default function HomeScreen() {
           <Text style={styles.plus}>+</Text>
         </TouchableOpacity>
 
+        {/* 2026 CORE: 4 Omni-Input Quick Action Pills */}
+        <View style={styles.fastBox}>
+          <View style={styles.fastHeader}>
+            <Text style={styles.fastTitle}>Fast Creation Modes</Text>
+            <View style={styles.fastBadge}>
+              <Text style={styles.fastBadgeText}>AI POWERED</Text>
+            </View>
+          </View>
+          <View style={styles.fastGrid}>
+            <TouchableOpacity
+              style={styles.fastPill}
+              onPress={() => setShowAiModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.pillIcon, { backgroundColor: "#ecfdf5" }]}>
+                <Text style={{ fontSize: 16 }}>🎙️</Text>
+              </View>
+              <Text style={styles.pillLabel}>Speak</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.fastPill}
+              onPress={() => setShowAiModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.pillIcon, { backgroundColor: "#eff6ff" }]}>
+                <Text style={{ fontSize: 16 }}>📋</Text>
+              </View>
+              <Text style={styles.pillLabel}>Paste Chat</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.fastPill}
+              onPress={() => setShowAiModal(true)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.pillIcon, { backgroundColor: "#faf5ff" }]}>
+                <Text style={{ fontSize: 16 }}>⌨️</Text>
+              </View>
+              <Text style={styles.pillLabel}>Prompt</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.fastPill}
+              onPress={() => router.push("/quote-create")}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.pillIcon, { backgroundColor: "#f1f5f9" }]}>
+                <Text style={{ fontSize: 16 }}>✍️</Text>
+              </View>
+              <Text style={styles.pillLabel}>Manual</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         <Text style={styles.sectionTitle}>Recent</Text>
         {recent.length === 0 ? (
           <View style={styles.empty}>
@@ -145,6 +203,20 @@ export default function HomeScreen() {
           />
         )}
       </View>
+
+      {/* 2026 CORE: AI Omni-Input Modal */}
+      <AiOmniInputModal
+        visible={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        onParsed={(draft) => {
+          setPendingDraft(draft);
+          if (draft.docType === "INVOICE") {
+            router.push("/invoice-create");
+          } else {
+            router.push("/quote-create");
+          }
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -182,7 +254,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 18,
     borderRadius: 16,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: "#e7e5e4",
   },
@@ -196,6 +268,68 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   invoiceIconText: { color: "#44403c", fontSize: 22 },
+  fastBox: {
+    backgroundColor: "white",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  fastHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  fastTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  fastBadge: {
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  fastBadgeText: {
+    color: "#059669",
+    fontSize: 9,
+    fontWeight: "bold",
+  },
+  fastGrid: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  fastPill: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+  },
+  pillIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  pillLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#1e293b",
+  },
   cardBody: { flex: 1 },
   cardTitle: { fontSize: 16, fontWeight: "600", color: "#1c1917" },
   cardSub: { fontSize: 13, color: "#78716c", marginTop: 2 },

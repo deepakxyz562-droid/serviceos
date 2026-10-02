@@ -26,10 +26,12 @@ interface AppState {
   user: User | null;
   business: Business | null;
   activeTab: Tab;
+  pendingDraft: any | null;
   setToken: (t: string | null) => void;
   setUser: (u: User | null) => void;
   setBusiness: (b: Business | null) => void;
   setActiveTab: (t: Tab) => void;
+  setPendingDraft: (d: any | null) => void;
   reset: () => void;
 }
 
@@ -38,9 +40,11 @@ export const useAppStore = create<AppState>((set) => ({
   user: null,
   business: null,
   activeTab: "home",
+  pendingDraft: null,
   setToken: (t) => set({ token: t }),
   setUser: (u) => set({ user: u }),
   setBusiness: (b) => set({ business: b }),
   setActiveTab: (t) => set({ activeTab: t }),
-  reset: () => set({ token: null, user: null, business: null, activeTab: "home" }),
+  setPendingDraft: (d) => set({ pendingDraft: d }),
+  reset: () => set({ token: null, user: null, business: null, activeTab: "home", pendingDraft: null }),
 }));

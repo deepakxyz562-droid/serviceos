@@ -19,14 +19,15 @@ export type Modal =
   | { type: 'onboarding' }
   | { type: 'customer-form'; customerId?: string }
   | { type: 'customer-detail'; customerId: string }
-  | { type: 'quote-create' }
+  | { type: 'quote-create'; initialDraft?: any }
   | { type: 'quote-detail'; quoteId: string }
-  | { type: 'invoice-create' }
+  | { type: 'invoice-create'; initialDraft?: any }
   | { type: 'invoice-detail'; invoiceId: string }
   | { type: 'send-quote'; quoteId: string }
   | { type: 'send-invoice'; invoiceId: string }
   | { type: 'pro-upgrade' }
-  | { type: 'template-select' };
+  | { type: 'template-select' }
+  | { type: 'ai-omni-input'; defaultDocType?: 'QUOTE' | 'INVOICE' };
 
 interface AppState {
   activeTab: Tab;

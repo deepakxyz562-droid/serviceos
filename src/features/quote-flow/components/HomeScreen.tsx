@@ -92,7 +92,7 @@ export function HomeScreen() {
 
       <button
         onClick={() => openModal({ type: "invoice-create" })}
-        className="mb-6 w-full rounded-2xl bg-white p-5 text-left shadow-sm ring-1 ring-stone-200 transition active:scale-[0.98]"
+        className="mb-4 w-full rounded-2xl bg-white p-5 text-left shadow-sm ring-1 ring-stone-200 transition active:scale-[0.98]"
       >
         <div className="flex items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
@@ -105,6 +105,57 @@ export function HomeScreen() {
           <Plus className="h-5 w-5 text-stone-400" />
         </div>
       </button>
+
+      {/* 2026 CORE: 4 Omni-Input Quick Actions */}
+      <div className="mb-6 rounded-2xl border border-stone-200/80 bg-white p-3.5 shadow-2xs">
+        <div className="mb-2.5 flex items-center justify-between">
+          <span className="text-xs font-bold text-stone-600">Fast Creation Modes</span>
+          <span className="rounded bg-emerald-100 px-1.5 py-0.2 text-[9px] font-black text-emerald-800">
+            AI POWERED
+          </span>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          <button
+            onClick={() => openModal({ type: "ai-omni-input", defaultDocType: "QUOTE" })}
+            className="flex flex-col items-center justify-center rounded-xl bg-emerald-50/60 p-2.5 text-center transition hover:bg-emerald-100/60 active:scale-95 border border-emerald-200/50"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+              <span className="text-sm">🎙️</span>
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold text-stone-800">Speak</span>
+          </button>
+
+          <button
+            onClick={() => openModal({ type: "ai-omni-input", defaultDocType: "QUOTE" })}
+            className="flex flex-col items-center justify-center rounded-xl bg-blue-50/60 p-2.5 text-center transition hover:bg-blue-100/60 active:scale-95 border border-blue-200/50"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-xs">
+              <span className="text-sm">📋</span>
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold text-stone-800">Paste Chat</span>
+          </button>
+
+          <button
+            onClick={() => openModal({ type: "ai-omni-input", defaultDocType: "INVOICE" })}
+            className="flex flex-col items-center justify-center rounded-xl bg-purple-50/60 p-2.5 text-center transition hover:bg-purple-100/60 active:scale-95 border border-purple-200/50"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-600 text-white shadow-xs">
+              <span className="text-sm">⌨️</span>
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold text-stone-800">Prompt</span>
+          </button>
+
+          <button
+            onClick={() => openModal({ type: "quote-create" })}
+            className="flex flex-col items-center justify-center rounded-xl bg-stone-50 p-2.5 text-center transition hover:bg-stone-100 active:scale-95 border border-stone-200/70"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-700 text-white shadow-xs">
+              <span className="text-sm">✍️</span>
+            </div>
+            <span className="mt-1.5 text-[10px] font-bold text-stone-800">Manual</span>
+          </button>
+        </div>
+      </div>
 
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-stone-700">Recent</h2>

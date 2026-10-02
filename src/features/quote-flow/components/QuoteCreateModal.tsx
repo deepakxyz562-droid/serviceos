@@ -18,12 +18,20 @@ import {
   Calendar,
   DollarSign,
   Crown,
+  Sparkles,
+  Wand2,
+  Check,
+  ArrowRight,
+  Layers,
 } from "lucide-react";
 import {
   computeInvoiceTotals,
   formatCurrency,
   type DocumentType,
   type CalcLineItem,
+  type ProposalTier,
+  generateDefaultTiers,
+  computeTierTotals,
 } from "@/lib/quote-flow-calc";
 import { TemplateSelectModal } from "./TemplateSelectModal";
 
@@ -38,31 +46,55 @@ export function QuoteCreateModal() {
   const closeModal = useAppStore((s) => s.closeModal);
   const openModal = useAppStore((s) => s.openModal);
   const business = useAppStore((s) => s.business);
+  const modal = useAppStore((s) => s.modal);
+
+  const initialDraft = modal.type === "quote-create" ? modal.initialDraft : null;
 
   const [docType, setDocType] = useState<DocumentType>("ESTIMATE");
   const [customers, setCustomers] = useState<any[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
+    initialDraft?.matchedCustomer?.id || ""
+  );
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("classic-corporate-blue");
 
   // Items
-  const [items, setItems] = useState<Item[]>([
-    { description: "Service Estimate", qty: 1, unitPrice: 25000, taxRate: 18 },
-  ]);
+  const [items, setItems] = useState<Item[]>(
+    initialDraft?.items?.length
+      ? initialDraft.items
+      : [{ description: "Service Estimate", qty: 1, unitPrice: 25000, taxRate: 18 }]
+  );
+
+  // Multi-Tier Proposals (Good / Better / Best)
+  const [isMultiTier, setIsMultiTier] = useState<boolean>(!!initialDraft?.isMultiTier);
+  const [tiers, setTiers] = useState<ProposalTier[]>(
+    initialDraft?.tiers || generateDefaultTiers(items)
+  );
+  const [activeTierId, setActiveTierId] = useState<string>("professional");
+
+  // Conversational "Ask AI"
+  const [showAskAi, setShowAskAi] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(
+    initialDraft?.summary ? `AI Draft: ${initialDraft.summary}` : null
+  );
 
   // Adjustments
   const [showAdjustments, setShowAdjustments] = useState(false);
-  const [discountValue, setDiscountValue] = useState(0);
-  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
-  const [shippingFee, setShippingFee] = useState(0);
-  const [globalTaxRate, setGlobalTaxRate] = useState(0);
+  const [discountValue, setDiscountValue] = useState<number>(initialDraft?.discountValue ?? 0);
+  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">(
+    initialDraft?.discountType ?? "AMOUNT"
+  );
+  const [shippingFee, setShippingFee] = useState<number>(0);
+  const [globalTaxRate, setGlobalTaxRate] = useState<number>(0);
 
   // Details
   const [quoteNumber, setQuoteNumber] = useState("EST0001");
   const [validUntilText, setValidUntilText] = useState("Valid for 30 days");
-  const [currency, setCurrency] = useState(business?.currency || "INR");
-  const [notes, setNotes] = useState("");
+  const [currency, setCurrency] = useState(initialDraft?.currency || business?.currency || "INR");
+  const [notes, setNotes] = useState(initialDraft?.terms || initialDraft?.notes || "");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +104,16 @@ export function QuoteCreateModal() {
       const list = r.customers || [];
       setCustomers(list);
       if (list.length > 0 && !selectedCustomerId) {
+        // If initialDraft customer name matches, select it
+        if (initialDraft?.customer?.name) {
+          const match = list.find((c) =>
+            c.name.toLowerCase().includes(initialDraft.customer.name.toLowerCase())
+          );
+          if (match) {
+            setSelectedCustomerId(match.id);
+            return;
+          }
+        }
         setSelectedCustomerId(list[0].id);
       }
     });
@@ -89,18 +131,91 @@ export function QuoteCreateModal() {
 
   function updateItem(idx: number, patch: Partial<Item>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+    if (isMultiTier) {
+      setTiers((prev) =>
+        prev.map((t) =>
+          t.id === activeTierId
+            ? {
+                ...t,
+                items: t.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)),
+              }
+            : t
+        )
+      );
+    }
   }
 
   function addItem() {
-    setItems((arr) => [
-      ...arr,
-      { description: "", qty: 1, unitPrice: 0, taxRate: 18 },
-    ]);
+    const newItem = { description: "", qty: 1, unitPrice: 0, taxRate: 18 };
+    setItems((arr) => [...arr, newItem]);
+    if (isMultiTier) {
+      setTiers((prev) =>
+        prev.map((t) => (t.id === activeTierId ? { ...t, items: [...t.items, newItem] } : t))
+      );
+    }
   }
 
   function removeItem(idx: number) {
     if (items.length <= 1) return;
     setItems((arr) => arr.filter((_, i) => i !== idx));
+    if (isMultiTier) {
+      setTiers((prev) =>
+        prev.map((t) =>
+          t.id === activeTierId ? { ...t, items: t.items.filter((_, i) => i !== idx) } : t
+        )
+      );
+    }
+  }
+
+  // Conversational "Ask AI" document editor
+  async function handleAskAi(customPrompt?: string) {
+    const prompt = customPrompt || aiInstruction;
+    if (!prompt.trim()) return;
+
+    setAiLoading(true);
+    setAiFeedback(null);
+    try {
+      const res = await apiPost<{
+        updated: {
+          items: Item[];
+          discountValue: number;
+          discountType: "AMOUNT" | "PERCENT";
+          taxRate: number;
+          notes?: string;
+        };
+        summary: string;
+      }>("/api/quote-flow/ai/edit-quote", {
+        currentQuote: {
+          items,
+          discountValue,
+          discountType,
+          taxRate: 18,
+          notes,
+        },
+        instruction: prompt,
+      });
+
+      if (res?.updated) {
+        if (res.updated.items?.length) setItems(res.updated.items);
+        if (typeof res.updated.discountValue === "number") setDiscountValue(res.updated.discountValue);
+        if (res.updated.discountType) setDiscountType(res.updated.discountType);
+        if (res.updated.notes) setNotes(res.updated.notes);
+        setAiFeedback(res.summary || `Applied: "${prompt}"`);
+        setAiInstruction("");
+      }
+    } catch (e: any) {
+      setAiFeedback(e.message || "Failed to apply AI edit");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function switchTier(tierId: string) {
+    setActiveTierId(tierId);
+    const target = tiers.find((t) => t.id === tierId);
+    if (target && target.items.length > 0) {
+      setItems(target.items as Item[]);
+    }
   }
 
   async function handleSave() {
@@ -116,6 +231,19 @@ export function QuoteCreateModal() {
     setLoading(true);
     setError(null);
     try {
+      // If multi-tier, serialize tier details in metadata
+      const computedTiers = isMultiTier
+        ? tiers.map((t) => computeTierTotals(t, docType, currency))
+        : null;
+
+      const payloadNotes = isMultiTier
+        ? JSON.stringify({
+            clientNote: notes || "Review the 3 options and select your preferred package.",
+            isMultiTier: true,
+            tiers: computedTiers,
+          })
+        : notes || undefined;
+
       const res = await apiPost<{ quote: any }>("/api/quotes/create-with-items", {
         customerId: selectedCustomerId,
         items: items.map((i) => ({
@@ -126,7 +254,7 @@ export function QuoteCreateModal() {
         discountValue,
         discountType,
         taxRate: 18,
-        notes: notes || undefined,
+        notes: payloadNotes,
         pdfTemplate: `${docType}:${selectedTemplateId}`,
       });
 
@@ -195,6 +323,160 @@ export function QuoteCreateModal() {
               {error}
             </div>
           )}
+
+          {/* 2026 CORE: Conversational "Ask AI" Document Assistant */}
+          <div className="overflow-hidden rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-500/5 via-teal-500/5 to-white p-4 shadow-xs">
+            <div className="flex items-center justify-between pb-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white shadow-xs">
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-stone-900">Ask AI Assistant</span>
+                  <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.2 text-[9px] font-bold text-emerald-800">
+                    2026 Live
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAskAi(!showAskAi)}
+                className="text-[11px] font-bold text-emerald-700 hover:underline"
+              >
+                {showAskAi ? "Hide AI Controls" : "Open AI Chat"}
+              </button>
+            </div>
+
+            {aiFeedback && (
+              <div className="mb-2.5 flex items-center gap-2 rounded-xl bg-emerald-50/80 px-3 py-1.5 text-[11px] font-semibold text-emerald-800 border border-emerald-200/60">
+                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>{aiFeedback}</span>
+              </div>
+            )}
+
+            {/* AI Prompt Input Bar */}
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={aiInstruction}
+                onChange={(e) => setAiInstruction(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAskAi()}
+                placeholder="Ask AI: 'Give 10% discount', 'Add 3 hrs support for $150'..."
+                className="flex-1 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-800 placeholder:text-stone-400 focus:border-emerald-500 focus:outline-hidden focus:ring-1 focus:ring-emerald-500/30"
+              />
+              <Button
+                onClick={() => handleAskAi()}
+                disabled={aiLoading || !aiInstruction.trim()}
+                className="h-8 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700"
+              >
+                {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+
+            {/* Quick Action Chips */}
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {[
+                { label: "💡 10% Discount", action: "give 10% discount" },
+                { label: "💡 18% GST", action: "add 18% GST tax rate" },
+                { label: "💡 50% Deposit Terms", action: "add 50% upfront deposit terms" },
+                { label: "💡 Add 1 Year Support ($350)", action: "add 1 Year VIP Support for $350" },
+                { label: "💡 Professional Rewrite", action: "make all item descriptions more professional" },
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleAskAi(chip.action)}
+                  disabled={aiLoading}
+                  className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-stone-600 ring-1 ring-stone-200/80 transition hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-300"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 2026 CORE: Good / Better / Best Multi-Tier Proposal Switcher */}
+          <div className="rounded-2xl border border-stone-200/80 bg-white p-3.5 shadow-2xs">
+            <div className="flex items-center justify-between pb-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  <Layers className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-stone-900">Proposal Mode</span>
+                  <span className="ml-1.5 text-[10px] text-stone-500">
+                    {isMultiTier ? "3 Tier Packages" : "Single Estimate"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex rounded-lg bg-stone-100 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setIsMultiTier(false)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                    !isMultiTier ? "bg-white text-stone-900 shadow-xs" : "text-stone-500 hover:text-stone-700"
+                  }`}
+                >
+                  Single
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMultiTier(true);
+                    if (!tiers || tiers.length === 0) setTiers(generateDefaultTiers(items));
+                  }}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-bold transition ${
+                    isMultiTier ? "bg-white text-blue-600 shadow-xs" : "text-stone-500 hover:text-stone-700"
+                  }`}
+                >
+                  3-Tier (Good / Better / Best) ⭐
+                </button>
+              </div>
+            </div>
+
+            {isMultiTier && (
+              <div className="mt-2 border-t border-stone-100 pt-2.5">
+                <div className="flex gap-1.5">
+                  {tiers.map((tier) => {
+                    const isActive = activeTierId === tier.id;
+                    const tierTotals = computeTierTotals(tier, docType, currency).totals;
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => switchTier(tier.id)}
+                        className={`flex-1 rounded-xl p-2 text-left transition border ${
+                          isActive
+                            ? "border-blue-500 bg-blue-50/40 shadow-xs"
+                            : "border-stone-200/80 bg-stone-50/50 hover:bg-stone-50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[10px] font-black uppercase ${isActive ? "text-blue-700" : "text-stone-500"}`}>
+                            {tier.name.split(" ")[0]}
+                          </span>
+                          {tier.isRecommended && (
+                            <span className="rounded bg-amber-100 px-1 py-0.2 text-[8px] font-black text-amber-800">
+                              RECOMMENDED
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 text-xs font-black text-stone-900">
+                          {formatCurrency(tierTotals?.total || 0, currency)}
+                        </div>
+                        <div className="mt-0.5 text-[9px] text-stone-500 line-clamp-1">
+                          {tier.items.length} items included
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[10px] text-stone-400">
+                  Editing items below updates the currently selected tier. Clients can select their preferred package on the interactive link.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Card 1: Document Details */}
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-2xs">

@@ -18,6 +18,7 @@ import { SendQuoteModal } from "./SendQuoteModal";
 import { SendInvoiceModal } from "./SendInvoiceModal";
 
 import { ProUpgradeModal } from "./ProUpgradeModal";
+import { AiOmniInputModal } from "./AiOmniInputModal";
 
 export function AppShell() {
   const activeTab = useAppStore((s) => s.activeTab);
@@ -93,6 +94,20 @@ export function AppShell() {
         <SendInvoiceModal invoiceId={modal.invoiceId} />
       )}
       {modal.type === "pro-upgrade" && <ProUpgradeModal />}
+      {modal.type === "ai-omni-input" && (
+        <AiOmniInputModal
+          isOpen
+          defaultDocType={modal.defaultDocType || "QUOTE"}
+          onClose={() => useAppStore.getState().closeModal()}
+          onParsed={(draft) => {
+            if (draft.docType === "INVOICE") {
+              useAppStore.getState().openModal({ type: "invoice-create", initialDraft: draft });
+            } else {
+              useAppStore.getState().openModal({ type: "quote-create", initialDraft: draft });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

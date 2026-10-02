@@ -42,33 +42,50 @@ export function InvoiceCreateModal() {
   const closeModal = useAppStore((s) => s.closeModal);
   const openModal = useAppStore((s) => s.openModal);
   const business = useAppStore((s) => s.business);
+  const modal = useAppStore((s) => s.modal);
+
+  const initialDraft = modal.type === "invoice-create" ? modal.initialDraft : null;
 
   const [docType, setDocType] = useState<DocumentType>("TAX_INVOICE");
   const [customers, setCustomers] = useState<any[]>([]);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
+    initialDraft?.matchedCustomer?.id || ""
+  );
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState("classic-corporate-blue");
 
   // Items
-  const [items, setItems] = useState<Item[]>([
-    { description: "IT Consulting", qty: 1, unitPrice: 75000, taxRate: 18 },
-  ]);
+  const [items, setItems] = useState<Item[]>(
+    initialDraft?.items?.length
+      ? initialDraft.items
+      : [{ description: "IT Consulting", qty: 1, unitPrice: 75000, taxRate: 18 }]
+  );
+
+  // Conversational "Ask AI"
+  const [showAskAi, setShowAskAi] = useState(false);
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(
+    initialDraft?.summary ? `AI Draft: ${initialDraft.summary}` : null
+  );
 
   // Adjustments
   const [showAdjustments, setShowAdjustments] = useState(false);
-  const [discountValue, setDiscountValue] = useState(0);
-  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
-  const [shippingFee, setShippingFee] = useState(0);
-  const [globalTaxRate, setGlobalTaxRate] = useState(0);
+  const [discountValue, setDiscountValue] = useState<number>(initialDraft?.discountValue ?? 0);
+  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">(
+    initialDraft?.discountType ?? "AMOUNT"
+  );
+  const [shippingFee, setShippingFee] = useState<number>(0);
+  const [globalTaxRate, setGlobalTaxRate] = useState<number>(0);
 
   // Details
   const [invoiceNumber, setInvoiceNumber] = useState("INV0001");
   const [dueDateText, setDueDateText] = useState("Due on receipt");
   const [dueDate, setDueDate] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState("Bank Transfer & UPI");
-  const [currency, setCurrency] = useState(business?.currency || "INR");
-  const [notes, setNotes] = useState("");
+  const [currency, setCurrency] = useState(initialDraft?.currency || business?.currency || "INR");
+  const [notes, setNotes] = useState(initialDraft?.terms || initialDraft?.notes || "");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +95,15 @@ export function InvoiceCreateModal() {
       const list = r.customers || [];
       setCustomers(list);
       if (list.length > 0 && !selectedCustomerId) {
+        if (initialDraft?.customer?.name) {
+          const match = list.find((c) =>
+            c.name.toLowerCase().includes(initialDraft.customer.name.toLowerCase())
+          );
+          if (match) {
+            setSelectedCustomerId(match.id);
+            return;
+          }
+        }
         setSelectedCustomerId(list[0].id);
       }
     });
@@ -107,6 +133,49 @@ export function InvoiceCreateModal() {
   function removeItem(idx: number) {
     if (items.length <= 1) return;
     setItems((arr) => arr.filter((_, i) => i !== idx));
+  }
+
+  // Conversational "Ask AI" handler
+  async function handleAskAi(customPrompt?: string) {
+    const prompt = customPrompt || aiInstruction;
+    if (!prompt.trim()) return;
+
+    setAiLoading(true);
+    setAiFeedback(null);
+    try {
+      const res = await apiPost<{
+        updated: {
+          items: Item[];
+          discountValue: number;
+          discountType: "AMOUNT" | "PERCENT";
+          taxRate: number;
+          notes?: string;
+        };
+        summary: string;
+      }>("/api/quote-flow/ai/edit-quote", {
+        currentQuote: {
+          items,
+          discountValue,
+          discountType,
+          taxRate: docType === "TAX_INVOICE" ? 18 : 0,
+          notes,
+        },
+        instruction: prompt,
+      });
+
+      if (res?.updated) {
+        if (res.updated.items?.length) setItems(res.updated.items);
+        if (typeof res.updated.discountValue === "number") setDiscountValue(res.updated.discountValue);
+        if (res.updated.discountType) setDiscountType(res.updated.discountType);
+        if (res.updated.notes) setNotes(res.updated.notes);
+        setAiFeedback(res.summary || `Applied: "${prompt}"`);
+        setAiInstruction("");
+      }
+    } catch (e: any) {
+      setAiFeedback(e.message || "Failed to apply AI edit");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function handleSave() {
@@ -201,6 +270,77 @@ export function InvoiceCreateModal() {
               {error}
             </div>
           )}
+
+          {/* 2026 CORE: Conversational "Ask AI" Document Assistant */}
+          <div className="overflow-hidden rounded-2xl border border-blue-200/70 bg-gradient-to-br from-blue-500/5 via-indigo-500/5 to-white p-4 shadow-xs">
+            <div className="flex items-center justify-between pb-2">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-xs">
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                </div>
+                <div>
+                  <span className="text-xs font-black text-stone-900">Ask AI Assistant</span>
+                  <span className="ml-1.5 rounded-full bg-blue-100 px-1.5 py-0.2 text-[9px] font-bold text-blue-800">
+                    2026 Live
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAskAi(!showAskAi)}
+                className="text-[11px] font-bold text-blue-700 hover:underline"
+              >
+                {showAskAi ? "Hide AI Controls" : "Open AI Chat"}
+              </button>
+            </div>
+
+            {aiFeedback && (
+              <div className="mb-2.5 flex items-center gap-2 rounded-xl bg-blue-50/80 px-3 py-1.5 text-[11px] font-semibold text-blue-800 border border-blue-200/60">
+                <Sparkles className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                <span>{aiFeedback}</span>
+              </div>
+            )}
+
+            {/* AI Prompt Input Bar */}
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={aiInstruction}
+                onChange={(e) => setAiInstruction(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAskAi()}
+                placeholder="Ask AI: 'Apply 15% corporate discount', 'Add 5 hrs consulting'..."
+                className="flex-1 rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-800 placeholder:text-stone-400 focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500/30"
+              />
+              <Button
+                onClick={() => handleAskAi()}
+                disabled={aiLoading || !aiInstruction.trim()}
+                className="h-8 rounded-xl bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+
+            {/* Quick Action Chips */}
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {[
+                { label: "💡 10% Discount", action: "give 10% discount" },
+                { label: "💡 Add 18% GST", action: "add 18% GST tax rate" },
+                { label: "💡 Due in 15 Days", action: "set payment due date to 15 days" },
+                { label: "💡 Add Travel Expense ($120)", action: "add Onsite Travel Expense for $120" },
+                { label: "💡 Professional Rewrite", action: "make all item descriptions more professional" },
+              ].map((chip, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleAskAi(chip.action)}
+                  disabled={aiLoading}
+                  className="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-stone-600 ring-1 ring-stone-200/80 transition hover:bg-blue-50 hover:text-blue-700 hover:ring-blue-300"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Card 1: Document Number & Due date */}
           <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-2xs">

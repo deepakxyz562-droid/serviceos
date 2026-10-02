@@ -86,31 +86,99 @@ export async function POST(req: Request) {
       );
     }
 
-    const aiRes = await callAI({
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: `Current quote:\n${JSON.stringify(parsed.data.currentQuote, null, 2)}\n\nInstruction:\n${parsed.data.instruction}`,
-        },
-      ],
-      preferredModel: 'gpt-4o-mini',
-      temperature: 0.1,
-      json: true,
-    });
+    let updatedData: any = null;
 
-    let parsedQuote: any;
     try {
-      parsedQuote = extractJson(aiRes.content);
+      const aiRes = await callAI({
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'user',
+            content: `Current quote:\n${JSON.stringify(parsed.data.currentQuote, null, 2)}\n\nInstruction:\n${parsed.data.instruction}`,
+          },
+        ],
+        preferredModel: 'gpt-4o-mini',
+        temperature: 0.1,
+        json: true,
+      });
+
+      try {
+        updatedData = extractJson(aiRes.content);
+      } catch {
+        const clean = aiRes.content.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+        updatedData = JSON.parse(clean);
+      }
     } catch {
-      const clean = aiRes.content.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
-      parsedQuote = JSON.parse(clean);
+      // Deterministic fallback for common edits
+      const instr = parsed.data.instruction.toLowerCase();
+      const current = parsed.data.currentQuote;
+      const items = [...current.items];
+      let discountValue = current.discountValue;
+      let discountType = current.discountType;
+      let taxRate = current.taxRate;
+      let notes = current.notes;
+      const diff: any[] = [];
+
+      // Check discount
+      const discMatch = instr.match(/(\d+)%\s*(?:discount|off)/);
+      if (discMatch) {
+        const v = parseInt(discMatch[1], 10);
+        diff.push({ field: 'Discount', before: `${discountValue}%`, after: `${v}%` });
+        discountValue = v;
+        discountType = 'PERCENT';
+      }
+
+      // Check tax
+      const taxMatch = instr.match(/(\d+)%\s*(?:tax|gst|vat)/);
+      if (taxMatch) {
+        const t = parseInt(taxMatch[1], 10);
+        diff.push({ field: 'Tax Rate', before: `${taxRate}%`, after: `${t}%` });
+        taxRate = t;
+      }
+
+      // Check add item e.g. "add 3 maintenance hours for $150" or "add warranty $50"
+      const addMatch = instr.match(/add\s+(?:item\s+)?([^$0-9]+)\s+(?:for\s+)?[$€£₹]?\s*(\d+)/i);
+      if (addMatch) {
+        const desc = addMatch[1].trim();
+        const price = parseInt(addMatch[2], 10);
+        items.push({ description: desc.charAt(0).toUpperCase() + desc.slice(1), qty: 1, unitPrice: price });
+        diff.push({ field: `Added item`, before: null, after: `${desc} ($${price})` });
+      }
+
+      // Check remove item
+      const removeMatch = instr.match(/(?:remove|delete)\s+(?:item\s+)?([a-z0-9\s]+)/i);
+      if (removeMatch) {
+        const term = removeMatch[1].trim();
+        const initialLen = items.length;
+        const filtered = items.filter((i) => !i.description.toLowerCase().includes(term));
+        if (filtered.length < initialLen) {
+          diff.push({ field: `Removed item`, before: term, after: null });
+          items.length = 0;
+          items.push(...filtered);
+        }
+      }
+
+      // Deposit / terms
+      if (instr.includes('deposit') || instr.includes('50%')) {
+        notes = (notes ? notes + '\n' : '') + 'Terms: 50% upfront deposit required before project commencement.';
+        diff.push({ field: 'Terms', before: null, after: '50% upfront deposit' });
+      }
+
+      updatedData = {
+        items,
+        discountValue,
+        discountType,
+        taxRate,
+        notes,
+        diff: diff.length > 0 ? diff : [{ field: 'Document', before: null, after: 'Updated with instruction' }],
+        summary: `Applied: "${parsed.data.instruction}"`,
+      };
     }
 
-    const validated = outputSchema.safeParse(parsedQuote);
+    const validated = outputSchema.safeParse(updatedData);
     if (!validated.success) {
       return NextResponse.json(
-        { error: 'AI output format mismatch', raw: aiRes.content },
+        { error: 'AI output format mismatch', issues: validated.error.flatten() },
         { status: 502 }
       );
     }

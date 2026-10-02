@@ -44,6 +44,8 @@ const MOBILE_TEMPLATES = [
 export default function QuoteCreateScreen() {
   const router = useRouter();
   const business = useAppStore((s) => s.business);
+  const pendingDraft = useAppStore((s) => s.pendingDraft);
+  const setPendingDraft = useAppStore((s) => s.setPendingDraft);
 
   const [docType, setDocType] = useState<DocumentType>("ESTIMATE");
   const [selectedTemplateId, setSelectedTemplateId] = useState("soft-emerald-wave");
@@ -53,18 +55,60 @@ export default function QuoteCreateScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Line items
-  const [items, setItems] = useState<Item[]>([
-    { description: "Service Estimate", qty: 1, unitPrice: 25000, taxRate: 18 },
-  ]);
+  const [items, setItems] = useState<Item[]>(
+    pendingDraft?.items?.length
+      ? pendingDraft.items
+      : [{ description: "Service Estimate", qty: 1, unitPrice: 25000, taxRate: 18 }]
+  );
+
+  // Multi-Tier Proposals
+  const [isMultiTier, setIsMultiTier] = useState<boolean>(!!pendingDraft?.isMultiTier);
+  const [tiers, setTiers] = useState<any[]>(
+    pendingDraft?.tiers || [
+      {
+        id: "essential",
+        name: "Essential",
+        items: items,
+      },
+      {
+        id: "professional",
+        name: "Professional",
+        isRecommended: true,
+        items: [
+          ...items,
+          { description: "Priority Support & Expedited Turnaround", qty: 1, unitPrice: 5000, taxRate: 18 },
+        ],
+      },
+      {
+        id: "premium",
+        name: "Premium",
+        items: [
+          ...items,
+          { description: "Priority Support & Expedited Turnaround", qty: 1, unitPrice: 5000, taxRate: 18 },
+          { description: "1 Year Dedicated Maintenance Retainer", qty: 1, unitPrice: 12000, taxRate: 18 },
+        ],
+      },
+    ]
+  );
+  const [activeTierId, setActiveTierId] = useState<string>("professional");
+
+  // Conversational "Ask AI"
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(
+    pendingDraft?.summary ? `AI Draft: ${pendingDraft.summary}` : null
+  );
 
   // Adjustments
   const [showAdjustments, setShowAdjustments] = useState(false);
-  const [discountValue, setDiscountValue] = useState("0");
-  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
+  const [discountValue, setDiscountValue] = useState(String(pendingDraft?.discountValue ?? 0));
+  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">(
+    pendingDraft?.discountType ?? "AMOUNT"
+  );
   const [shippingFee, setShippingFee] = useState("0");
   const [globalTaxRate, setGlobalTaxRate] = useState("0");
 
-  const [validUntilText, setValidUntilText] = useState("Valid for 30 days");
+  const [validUntilText, setValidUntilText] = useState(pendingDraft?.terms || "Valid for 30 days");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -72,10 +116,67 @@ export default function QuoteCreateScreen() {
       const list = r.customers || [];
       setCustomers(list);
       if (list.length > 0 && !selectedCustomer) {
+        if (pendingDraft?.matchedCustomer?.id) {
+          const match = list.find((c) => c.id === pendingDraft.matchedCustomer.id);
+          if (match) {
+            setSelectedCustomer(match);
+            return;
+          }
+        }
         setSelectedCustomer(list[0]);
       }
     });
+
+    return () => {
+      // Clear pending draft after consuming
+      setPendingDraft(null);
+    };
   }, []);
+
+  // Conversational "Ask AI" handler
+  async function handleAskAi(customPrompt?: string) {
+    const prompt = customPrompt || aiInstruction;
+    if (!prompt.trim()) return;
+
+    setAiLoading(true);
+    setAiFeedback(null);
+    try {
+      const res = await api<{
+        updated: {
+          items: Item[];
+          discountValue: number;
+          discountType: "AMOUNT" | "PERCENT";
+          taxRate: number;
+          notes?: string;
+        };
+        summary: string;
+      }>("/api/quote-flow/ai/edit-quote", {
+        method: "POST",
+        body: JSON.stringify({
+          currentQuote: {
+            items,
+            discountValue: parseFloat(discountValue) || 0,
+            discountType,
+            taxRate: 18,
+            notes: validUntilText,
+          },
+          instruction: prompt,
+        }),
+      });
+
+      if (res?.updated) {
+        if (res.updated.items?.length) setItems(res.updated.items);
+        if (typeof res.updated.discountValue === "number") setDiscountValue(String(res.updated.discountValue));
+        if (res.updated.discountType) setDiscountType(res.updated.discountType);
+        setAiFeedback(res.summary || `Applied: "${prompt}"`);
+        setAiInstruction("");
+      }
+    } catch (e: any) {
+      Alert.alert("AI Assistant", e.message || "Failed to apply edit");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const totals = computeInvoiceTotals({
     items,
@@ -186,6 +287,122 @@ export default function QuoteCreateScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         >
+          {/* 2026 CORE: Conversational "Ask AI" Document Assistant */}
+          <View style={styles.aiCard}>
+            <View style={styles.aiCardHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <MaterialIcons name="auto-awesome" size={16} color="#059669" />
+                <Text style={styles.aiCardTitle}>Ask AI Assistant</Text>
+                <View style={styles.aiBadge}>
+                  <Text style={styles.aiBadgeText}>2026 CORE</Text>
+                </View>
+              </View>
+              {aiLoading && <ActivityIndicator size="small" color="#059669" />}
+            </View>
+
+            {aiFeedback ? (
+              <View style={styles.aiFeedbackBox}>
+                <MaterialIcons name="check-circle" size={14} color="#059669" />
+                <Text style={styles.aiFeedbackText}>{aiFeedback}</Text>
+              </View>
+            ) : null}
+
+            {/* AI Input Row */}
+            <View style={styles.aiInputRow}>
+              <TextInput
+                value={aiInstruction}
+                onChangeText={setAiInstruction}
+                placeholder="Ask AI: 'Give 10% discount', 'Add 3 hrs support'..."
+                style={styles.aiTextInput}
+                placeholderTextColor="#94a3b8"
+              />
+              <TouchableOpacity
+                style={styles.aiSubmitBtn}
+                onPress={() => handleAskAi()}
+                disabled={aiLoading || !aiInstruction.trim()}
+              >
+                <MaterialIcons name="arrow-upward" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Action Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {[
+                  { label: "💡 10% Discount", action: "give 10% discount" },
+                  { label: "💡 18% GST", action: "add 18% GST tax rate" },
+                  { label: "💡 50% Deposit Terms", action: "add 50% upfront deposit terms" },
+                  { label: "💡 More Professional", action: "make descriptions more professional" },
+                ].map((chip, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => handleAskAi(chip.action)}
+                    style={styles.aiChip}
+                  >
+                    <Text style={styles.aiChipText}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* 2026 CORE: Good / Better / Best Multi-Tier Proposals */}
+          <View style={styles.tierContainer}>
+            <View style={styles.tierHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <MaterialIcons name="layers" size={18} color="#2563eb" />
+                <Text style={styles.tierTitle}>Proposal Mode</Text>
+              </View>
+              <View style={styles.tierToggle}>
+                <TouchableOpacity
+                  onPress={() => setIsMultiTier(false)}
+                  style={[styles.tierToggleBtn, !isMultiTier && styles.tierToggleBtnActive]}
+                >
+                  <Text style={[styles.tierToggleText, !isMultiTier && styles.tierToggleTextActive]}>
+                    Single
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setIsMultiTier(true)}
+                  style={[styles.tierToggleBtn, isMultiTier && styles.tierToggleBtnActive]}
+                >
+                  <Text style={[styles.tierToggleText, isMultiTier && styles.tierToggleTextActive]}>
+                    3-Tier (Good / Better / Best) ⭐
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {isMultiTier && (
+              <View style={styles.tierPillsRow}>
+                {tiers.map((t) => {
+                  const isActive = activeTierId === t.id;
+                  const tTotal = computeInvoiceTotals({ items: t.items, documentType: docType, currency: business?.currency }).total;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      onPress={() => {
+                        setActiveTierId(t.id);
+                        if (t.items?.length) setItems(t.items);
+                      }}
+                      style={[styles.tierPill, isActive && styles.tierPillActive]}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                        <Text style={[styles.tierPillName, isActive && { color: "#2563eb" }]}>{t.name}</Text>
+                        {t.isRecommended && (
+                          <View style={styles.recBadge}>
+                            <Text style={styles.recBadgeText}>BEST</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.tierPillPrice}>{formatCurrency(tTotal, currency)}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
           {/* Card 1: Document Details */}
           <View style={styles.card}>
             <View style={styles.cardRowBetween}>
@@ -793,4 +1010,120 @@ const styles = StyleSheet.create({
   customerOptionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
   customerOptionName: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
   customerOptionMeta: { fontSize: 11, color: "#64748b", marginTop: 2 },
+  aiCard: {
+    backgroundColor: "#f0fdf4",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  aiCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  aiCardTitle: { fontSize: 13, fontWeight: "bold", color: "#065f46" },
+  aiBadge: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  aiBadgeText: { fontSize: 9, fontWeight: "bold", color: "#166534" },
+  aiFeedbackBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#dcfce7",
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  aiFeedbackText: { fontSize: 11, color: "#166534", fontWeight: "600", flex: 1 },
+  aiInputRow: { flexDirection: "row", gap: 6 },
+  aiTextInput: {
+    flex: 1,
+    backgroundColor: "white",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: "#0f172a",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+  },
+  aiSubmitBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#10b981",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiChip: {
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  aiChipText: { fontSize: 10, fontWeight: "600", color: "#065f46" },
+  tierContainer: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  tierHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  tierTitle: { fontSize: 13, fontWeight: "bold", color: "#0f172a" },
+  tierToggle: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f9",
+    borderRadius: 8,
+    padding: 2,
+  },
+  tierToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  tierToggleBtnActive: {
+    backgroundColor: "white",
+    elevation: 1,
+  },
+  tierToggleText: { fontSize: 10, color: "#64748b", fontWeight: "600" },
+  tierToggleTextActive: { color: "#2563eb", fontWeight: "bold" },
+  tierPillsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 10,
+  },
+  tierPill: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  tierPillActive: {
+    borderColor: "#2563eb",
+    backgroundColor: "#eff6ff",
+  },
+  tierPillName: { fontSize: 11, fontWeight: "bold", color: "#64748b" },
+  recBadge: { backgroundColor: "#fef3c7", paddingHorizontal: 4, borderRadius: 3 },
+  recBadgeText: { fontSize: 8, fontWeight: "bold", color: "#b45309" },
+  tierPillPrice: { fontSize: 12, fontWeight: "bold", color: "#0f172a", marginTop: 4 },
 });

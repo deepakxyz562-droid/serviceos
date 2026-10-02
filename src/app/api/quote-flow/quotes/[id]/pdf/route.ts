@@ -9,13 +9,29 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { business } = await requireQuoteFlowBusiness(req);
     const { id } = await params;
-    const quote = await db.aiQuote.findFirst({
-      where: { id, businessId: business.id },
-      include: { customer: true, items: true },
-    });
-    if (!quote) {
+    let business: any = null;
+    let quote: any = null;
+
+    try {
+      const authRes = await requireQuoteFlowBusiness(req);
+      business = authRes.business;
+      quote = await db.aiQuote.findFirst({
+        where: { id, businessId: business.id },
+        include: { customer: true, items: true },
+      });
+    } catch {
+      // Public fallback: allow recipient with the direct link to view their PDF
+      quote = await db.aiQuote.findUnique({
+        where: { id },
+        include: { customer: true, items: true, business: true },
+      });
+      if (quote) {
+        business = quote.business;
+      }
+    }
+
+    if (!quote || !business) {
       return NextResponse.json({ error: 'Quote not found' }, { status: 404 });
     }
     const t = computeTotals(

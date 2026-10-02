@@ -92,6 +92,14 @@ export function QuotesScreen() {
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => openModal({ type: "ai-omni-input", defaultDocType: "QUOTE" })}
+            title="Create with AI Voice / Chat / Paste"
+            className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-500/10 to-teal-500/15 px-3 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100/50 transition border border-emerald-200/60"
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600 animate-pulse" />
+            <span>AI Fast</span>
+          </button>
+          <button
             onClick={() => setShowSearch(!showSearch)}
             className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100"
           >

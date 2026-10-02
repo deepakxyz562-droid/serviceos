@@ -44,6 +44,8 @@ const MOBILE_TEMPLATES = [
 export default function InvoiceCreateScreen() {
   const router = useRouter();
   const business = useAppStore((s) => s.business);
+  const pendingDraft = useAppStore((s) => s.pendingDraft);
+  const setPendingDraft = useAppStore((s) => s.setPendingDraft);
 
   const [docType, setDocType] = useState<DocumentType>("TAX_INVOICE");
   const [selectedTemplateId, setSelectedTemplateId] = useState("classic-corporate-blue");
@@ -53,18 +55,29 @@ export default function InvoiceCreateScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Line Items
-  const [items, setItems] = useState<Item[]>([
-    { description: "IT Consulting", qty: 1, unitPrice: 75000, taxRate: 18 },
-  ]);
+  const [items, setItems] = useState<Item[]>(
+    pendingDraft?.items?.length
+      ? pendingDraft.items
+      : [{ description: "IT Consulting", qty: 1, unitPrice: 75000, taxRate: 18 }]
+  );
+
+  // Conversational "Ask AI"
+  const [aiInstruction, setAiInstruction] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(
+    pendingDraft?.summary ? `AI Draft: ${pendingDraft.summary}` : null
+  );
 
   // Adjustments
   const [showAdjustments, setShowAdjustments] = useState(false);
-  const [discountValue, setDiscountValue] = useState("0");
-  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
+  const [discountValue, setDiscountValue] = useState(String(pendingDraft?.discountValue ?? 0));
+  const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">(
+    pendingDraft?.discountType ?? "AMOUNT"
+  );
   const [shippingFee, setShippingFee] = useState("0");
   const [globalTaxRate, setGlobalTaxRate] = useState("0");
 
-  const [dueDateText, setDueDateText] = useState("Due on receipt");
+  const [dueDateText, setDueDateText] = useState(pendingDraft?.terms || "Due on receipt");
   const [paymentMethod, setPaymentMethod] = useState("Bank Transfer & UPI");
   const [loading, setLoading] = useState(false);
 
@@ -73,10 +86,66 @@ export default function InvoiceCreateScreen() {
       const list = r.customers || [];
       setCustomers(list);
       if (list.length > 0 && !selectedCustomer) {
+        if (pendingDraft?.matchedCustomer?.id) {
+          const match = list.find((c) => c.id === pendingDraft.matchedCustomer.id);
+          if (match) {
+            setSelectedCustomer(match);
+            return;
+          }
+        }
         setSelectedCustomer(list[0]);
       }
     });
+
+    return () => {
+      setPendingDraft(null);
+    };
   }, []);
+
+  // Conversational "Ask AI" handler
+  async function handleAskAi(customPrompt?: string) {
+    const prompt = customPrompt || aiInstruction;
+    if (!prompt.trim()) return;
+
+    setAiLoading(true);
+    setAiFeedback(null);
+    try {
+      const res = await api<{
+        updated: {
+          items: Item[];
+          discountValue: number;
+          discountType: "AMOUNT" | "PERCENT";
+          taxRate: number;
+          notes?: string;
+        };
+        summary: string;
+      }>("/api/quote-flow/ai/edit-quote", {
+        method: "POST",
+        body: JSON.stringify({
+          currentQuote: {
+            items,
+            discountValue: parseFloat(discountValue) || 0,
+            discountType,
+            taxRate: 18,
+            notes: dueDateText,
+          },
+          instruction: prompt,
+        }),
+      });
+
+      if (res?.updated) {
+        if (res.updated.items?.length) setItems(res.updated.items);
+        if (typeof res.updated.discountValue === "number") setDiscountValue(String(res.updated.discountValue));
+        if (res.updated.discountType) setDiscountType(res.updated.discountType);
+        setAiFeedback(res.summary || `Applied: "${prompt}"`);
+        setAiInstruction("");
+      }
+    } catch (e: any) {
+      Alert.alert("AI Assistant", e.message || "Failed to apply edit");
+    } finally {
+      setAiLoading(false);
+    }
+  }
 
   const totals = computeInvoiceTotals({
     items,
@@ -187,6 +256,65 @@ export default function InvoiceCreateScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
         >
+          {/* 2026 CORE: Conversational "Ask AI" Document Assistant */}
+          <View style={styles.aiCard}>
+            <View style={styles.aiCardHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <MaterialIcons name="auto-awesome" size={16} color="#059669" />
+                <Text style={styles.aiCardTitle}>Ask AI Assistant</Text>
+                <View style={styles.aiBadge}>
+                  <Text style={styles.aiBadgeText}>2026 CORE</Text>
+                </View>
+              </View>
+              {aiLoading && <ActivityIndicator size="small" color="#059669" />}
+            </View>
+
+            {aiFeedback ? (
+              <View style={styles.aiFeedbackBox}>
+                <MaterialIcons name="check-circle" size={14} color="#059669" />
+                <Text style={styles.aiFeedbackText}>{aiFeedback}</Text>
+              </View>
+            ) : null}
+
+            {/* AI Input Row */}
+            <View style={styles.aiInputRow}>
+              <TextInput
+                value={aiInstruction}
+                onChangeText={setAiInstruction}
+                placeholder="Ask AI: 'Give 10% discount', 'Add 18% GST'..."
+                style={styles.aiTextInput}
+                placeholderTextColor="#94a3b8"
+              />
+              <TouchableOpacity
+                style={styles.aiSubmitBtn}
+                onPress={() => handleAskAi()}
+                disabled={aiLoading || !aiInstruction.trim()}
+              >
+                <MaterialIcons name="arrow-upward" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Action Chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                {[
+                  { label: "💡 10% Discount", action: "give 10% discount" },
+                  { label: "💡 18% GST", action: "add 18% GST tax rate" },
+                  { label: "💡 Due Upon Receipt", action: "change payment terms to Due upon receipt" },
+                  { label: "💡 Round Totals", action: "round prices to neat even numbers" },
+                ].map((chip, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => handleAskAi(chip.action)}
+                    style={styles.aiChip}
+                  >
+                    <Text style={styles.aiChipText}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+
           {/* Card 1: Document Details */}
           <View style={styles.card}>
             <View style={styles.cardRowBetween}>
@@ -832,4 +960,65 @@ const styles = StyleSheet.create({
   customerOptionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
   customerOptionName: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
   customerOptionMeta: { fontSize: 11, color: "#64748b", marginTop: 2 },
+  aiCard: {
+    backgroundColor: "#f0fdf4",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  aiCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  aiCardTitle: { fontSize: 13, fontWeight: "bold", color: "#065f46" },
+  aiBadge: {
+    backgroundColor: "#dcfce7",
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  aiBadgeText: { fontSize: 9, fontWeight: "bold", color: "#166534" },
+  aiFeedbackBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#dcfce7",
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  aiFeedbackText: { fontSize: 11, color: "#166534", fontWeight: "600", flex: 1 },
+  aiInputRow: { flexDirection: "row", gap: 6 },
+  aiTextInput: {
+    flex: 1,
+    backgroundColor: "white",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: "#0f172a",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+  },
+  aiSubmitBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#10b981",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  aiChip: {
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  aiChipText: { fontSize: 10, fontWeight: "600", color: "#065f46" },
 });
