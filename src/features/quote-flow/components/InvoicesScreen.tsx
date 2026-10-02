@@ -10,6 +10,7 @@ import {
   Plus,
   FileText,
   ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/quote-flow-calc";
 import { LeftDrawer } from "./LeftDrawer";
