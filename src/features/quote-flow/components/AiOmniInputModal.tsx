@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Mic, Clipboard, Sparkles, X, Loader2, ArrowRight, CheckCircle2, MessageSquare, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiPost } from "@/features/quote-flow/lib/api";
@@ -55,48 +55,76 @@ export function AiOmniInputModal({
     }
   }
 
+  // ── Real voice recognition via the Web Speech API ──────────────────────
+  // Uses webkitSpeechRecognition (Chrome/Edge/Safari). Falls back to a
+  // clear error message on browsers without support (Firefox without flag).
+  const recognitionRef = useRef<any>(null);
+
   function toggleVoiceRecording() {
     if (isRecording) {
+      // Stop recording
       setIsRecording(false);
-      // If user stops recording without manual text, provide sample transcript
-      if (!textInput) {
-        const sample = "Invoice Sarah $1,200 for 3 days of design consulting, payment due in 15 days";
-        setTextInput(sample);
+      try {
+        recognitionRef.current?.stop();
+      } catch {
+        /* ignore */
       }
-    } else {
-      setIsRecording(true);
-      setError(null);
-      // Simulate live speech recognition streaming
-      setTextInput("");
-      const words = [
-        "Quote",
-        "Sarah",
-        "Johnson",
-        "for",
-        "website",
-        "redesign:",
-        "homepage",
-        "$800,",
-        "5",
-        "pages",
-        "$1,000,",
-        "SEO",
-        "setup",
-        "$300,",
-        "50%",
-        "deposit.",
-      ];
-      let i = 0;
-      const interval = setInterval(() => {
-        if (i < words.length) {
-          setTextInput((prev) => (prev ? prev + " " + words[i] : words[i]));
-          i++;
-        } else {
-          clearInterval(interval);
-          setIsRecording(false);
-        }
-      }, 250);
+      return;
     }
+
+    // Start recording
+    const SpeechRecognition =
+      (typeof window !== 'undefined' &&
+        ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition));
+
+    if (!SpeechRecognition) {
+      setError(
+        'Voice input is not supported in this browser. Use Chrome, Edge, or Safari — or type your request.'
+      );
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let finalTranscript = '';
+
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interim += transcript;
+        }
+      }
+      setTextInput((finalTranscript + interim).trim());
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('[voice] recognition error:', event.error);
+      if (event.error === 'not-allowed') {
+        setError('Microphone access denied. Please grant permission in your browser settings.');
+      } else if (event.error === 'no-speech') {
+        // Silent — user just hasn't spoken yet
+      } else {
+        setError(`Voice recognition error: ${event.error}`);
+      }
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    setTextInput('');
+    setError(null);
+    setIsRecording(true);
+    recognition.start();
   }
 
   async function handlePasteClipboard() {

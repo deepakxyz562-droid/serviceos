@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles } from "lucide-react";
+import { Loader2, X, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit } from "lucide-react";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -224,10 +224,13 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openModal({ type: "quote-edit", quoteId: quote.id })}>
+                <Edit className="mr-2 h-4 w-4" /> Edit Quote
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={duplicateQuote}>
                 <Copy className="mr-2 h-4 w-4" /> Duplicate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quotes/${quote.id}/pdf`, "_blank")}>
+              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf`, "_blank")}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={markAccepted}>
@@ -386,7 +389,7 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
 
         <div className="mt-5 flex gap-2">
           <Button
-            onClick={() => window.open(`/api/quotes/${quote.id}/pdf`, "_blank")}
+            onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf`, "_blank")}
             variant="outline"
             className="flex-1"
           >

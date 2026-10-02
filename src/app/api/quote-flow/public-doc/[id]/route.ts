@@ -89,6 +89,31 @@ export async function GET(
           logoUrl: quote.business.logoUrl,
           currency: quote.business.currency,
           currencySymbol: quote.business.currencySymbol,
+          // Bank + UPI payment details (Phase 3)
+          paymentCountry: quote.business.paymentCountry,
+          paymentInstructions: quote.business.paymentInstructions,
+          bankAccountName: quote.business.bankAccountName,
+          bankAccountNumber: quote.business.bankAccountNumber,
+          bankIfsc: quote.business.bankIfsc,
+          bankSwift: quote.business.bankSwift,
+          bankIban: quote.business.bankIban,
+          bankRoutingNumber: quote.business.bankRoutingNumber,
+          bankSortCode: quote.business.bankSortCode,
+          bankBsb: quote.business.bankBsb,
+          bankTransitNumber: quote.business.bankTransitNumber,
+          bankInstitutionNumber: quote.business.bankInstitutionNumber,
+          bankName: quote.business.bankName,
+          bankBranch: quote.business.bankBranch,
+          bankAddress: quote.business.bankAddress,
+          upiId: quote.business.upiId,
+          upiPayeeName: quote.business.upiPayeeName,
+          paypalHandle: quote.business.paypalHandle,
+          venmoHandle: quote.business.venmoHandle,
+          zelleIdentifier: quote.business.zelleIdentifier,
+          cashappCashtag: quote.business.cashappCashtag,
+          wiseIban: quote.business.wiseIban,
+          showBankOnInvoice: quote.business.showBankOnInvoice,
+          showUpiOnInvoice: quote.business.showUpiOnInvoice,
         },
       });
     }
@@ -170,6 +195,31 @@ export async function GET(
           logoUrl: invoice.business.logoUrl,
           currency: invoice.business.currency,
           currencySymbol: invoice.business.currencySymbol,
+          // Bank + UPI payment details (Phase 3)
+          paymentCountry: invoice.business.paymentCountry,
+          paymentInstructions: invoice.business.paymentInstructions,
+          bankAccountName: invoice.business.bankAccountName,
+          bankAccountNumber: invoice.business.bankAccountNumber,
+          bankIfsc: invoice.business.bankIfsc,
+          bankSwift: invoice.business.bankSwift,
+          bankIban: invoice.business.bankIban,
+          bankRoutingNumber: invoice.business.bankRoutingNumber,
+          bankSortCode: invoice.business.bankSortCode,
+          bankBsb: invoice.business.bankBsb,
+          bankTransitNumber: invoice.business.bankTransitNumber,
+          bankInstitutionNumber: invoice.business.bankInstitutionNumber,
+          bankName: invoice.business.bankName,
+          bankBranch: invoice.business.bankBranch,
+          bankAddress: invoice.business.bankAddress,
+          upiId: invoice.business.upiId,
+          upiPayeeName: invoice.business.upiPayeeName,
+          paypalHandle: invoice.business.paypalHandle,
+          venmoHandle: invoice.business.venmoHandle,
+          zelleIdentifier: invoice.business.zelleIdentifier,
+          cashappCashtag: invoice.business.cashappCashtag,
+          wiseIban: invoice.business.wiseIban,
+          showBankOnInvoice: invoice.business.showBankOnInvoice,
+          showUpiOnInvoice: invoice.business.showUpiOnInvoice,
         },
       });
     }
@@ -277,7 +327,9 @@ export async function POST(
 
     if (invoice) {
       if (action === 'RECORD_PAYMENT_SIMULATION') {
-        // Record a mock/instant payment for demonstration in 2026 client portal
+        // Record a payment (now with proper reference column from Phase 3).
+        // The customer portal submits a UTR/reference when paying via bank
+        // transfer or UPI. Method is recorded properly.
         const amount = Number(body.amount) || 100;
         await db.aiPayment.create({
           data: {
@@ -285,6 +337,8 @@ export async function POST(
             amount,
             method: body.method || 'ONLINE',
             reference: body.reference || `SIM-${Date.now()}`,
+            gateway: body.gateway || 'manual',
+            notes: body.notes || null,
           },
         });
 

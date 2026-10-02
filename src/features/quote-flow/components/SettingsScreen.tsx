@@ -42,6 +42,8 @@ export function SettingsScreen() {
   const [email, setEmail] = useState(business?.email ?? "");
   const [address, setAddress] = useState(business?.address ?? "");
   const [defaultTaxRate, setDefaultTaxRate] = useState(String(business?.defaultTaxRate ?? 0));
+  const [logoUrl, setLogoUrl] = useState(business?.logoUrl ?? "");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
@@ -55,6 +57,7 @@ export function SettingsScreen() {
         email: email || undefined,
         address,
         defaultTaxRate: parseFloat(defaultTaxRate) || 0,
+        logoUrl: logoUrl || null,
       });
       setBusiness(r.business);
       setSavedAt(Date.now());
@@ -255,6 +258,73 @@ export function SettingsScreen() {
         /* Subview: Edit Business Details / Tax Rate */
         <div className="mx-auto max-w-md px-5 pt-4 space-y-4">
           <div className="space-y-4 rounded-2xl bg-white p-4 shadow-2xs border border-stone-200/80">
+            {/* Logo upload (Phase 4) */}
+            <div>
+              <Label className="text-xs font-bold text-stone-700">Business Logo</Label>
+              <div className="mt-1 flex items-center gap-3">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Business logo"
+                    className="size-12 rounded-lg object-contain border border-stone-200"
+                  />
+                ) : (
+                  <div className="size-12 rounded-lg bg-stone-100 flex items-center justify-center text-stone-400">
+                    <User className="size-5" />
+                  </div>
+                )}
+                <label className="cursor-pointer text-xs font-semibold text-stone-700 hover:text-stone-900 px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50">
+                  {uploadingLogo ? "Uploading..." : "Upload Logo"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 2 * 1024 * 1024) {
+                        alert("Logo too large. Maximum size is 2MB.");
+                        return;
+                      }
+                      setUploadingLogo(true);
+                      try {
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        const res = await fetch("/api/quote-flow/business/logo", {
+                          method: "POST",
+                          body: formData,
+                          credentials: "include",
+                        });
+                        const data = await res.json();
+                        if (!res.ok) {
+                          alert(data.error || "Failed to upload logo");
+                          return;
+                        }
+                        setLogoUrl(data.logoUrl);
+                      } catch (err) {
+                        alert("Failed to upload logo");
+                      } finally {
+                        setUploadingLogo(false);
+                      }
+                    }}
+                  />
+                </label>
+                {logoUrl ? (
+                  <button
+                    type="button"
+                    className="text-xs text-red-600 hover:text-red-700"
+                    onClick={() => {
+                      setLogoUrl("");
+                      apiPatch("/api/business/onboarding", { logoUrl: null });
+                    }}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </div>
+              <p className="text-[10px] text-stone-500 mt-1">PNG, JPEG, SVG, or WebP. Max 2MB. Shown on PDF invoices + quotes.</p>
+            </div>
+
             <div>
               <Label htmlFor="s-name" className="text-xs font-bold text-stone-700">Business Name</Label>
               <Input

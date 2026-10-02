@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -9,9 +9,12 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
+  Linking,
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import { api } from "@/api/client";
+import ExpoSpeechRecognition from "expo-speech-recognition";
 
 interface AiOmniInputModalProps {
   visible: boolean;
@@ -57,42 +60,90 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
     }
   }
 
-  function toggleVoice() {
+  // ── Real voice recognition via expo-speech-recognition ─────────────────
+  const recognitionRef = useRef<any>(null);
+
+  async function toggleVoice() {
     if (isRecording) {
+      // Stop recording
       setIsRecording(false);
-      if (!textInput) {
-        setTextInput("Invoice Sarah $1,200 for 3 days of consulting, payment due in 15 days");
+      try {
+        ExpoSpeechRecognition.stop();
+      } catch {
+        /* ignore */
       }
-    } else {
-      setIsRecording(true);
-      setTextInput("");
-      const words = [
-        "Quote",
-        "Sarah",
-        "for",
-        "website",
-        "redesign:",
-        "homepage",
-        "$800,",
-        "5",
-        "pages",
-        "$1,000,",
-        "SEO",
-        "setup",
-        "$300,",
-        "50%",
-        "deposit.",
-      ];
-      let i = 0;
-      const interval = setInterval(() => {
-        if (i < words.length) {
-          setTextInput((prev) => (prev ? prev + " " + words[i] : words[i]));
-          i++;
+      return;
+    }
+
+    // Check permissions + start
+    try {
+      const available = await ExpoSpeechRecognition.getPermissionsAsync();
+      if (!available.granted) {
+        if (available.canAskAgain) {
+          const result = await ExpoSpeechRecognition.requestPermissionsAsync();
+          if (!result.granted) {
+            Alert.alert(
+              "Microphone Permission",
+              "Voice input needs microphone access. Please grant permission in Settings.",
+              [
+                { text: "Cancel", style: "cancel" },
+                { text: "Open Settings", onPress: () => Linking.openSettings() },
+              ]
+            );
+            return;
+          }
         } else {
-          clearInterval(interval);
-          setIsRecording(false);
+          Alert.alert(
+            "Microphone Permission",
+            "Please enable microphone access in Settings to use voice input.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => Linking.openSettings() },
+            ]
+          );
+          return;
         }
-      }, 250);
+      }
+
+      // Start recognition
+      setTextInput("");
+      setIsRecording(true);
+
+      ExpoSpeechRecognition.start({
+        lang: "en-US",
+        interimResults: true,
+        continuous: true,
+      });
+
+      // Set up result listener (only once)
+      if (!recognitionRef.current) {
+        recognitionRef.current = ExpoSpeechRecognition.addListener("result", (event: any) => {
+          let transcript = "";
+          if (event.results && event.results.length > 0) {
+            const last = event.results[event.results.length - 1];
+            transcript = last.transcript || "";
+          }
+          if (transcript) {
+            setTextInput(transcript);
+          }
+        });
+
+        ExpoSpeechRecognition.addListener("error", (event: any) => {
+          console.error("[voice] error:", event);
+          setIsRecording(false);
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            Alert.alert("Voice Error", "Microphone access denied.");
+          }
+        });
+
+        ExpoSpeechRecognition.addListener("end", () => {
+          setIsRecording(false);
+        });
+      }
+    } catch (err) {
+      console.error("[voice] failed to start:", err);
+      Alert.alert("Voice Error", "Could not start voice recognition. " + String(err));
+      setIsRecording(false);
     }
   }
 

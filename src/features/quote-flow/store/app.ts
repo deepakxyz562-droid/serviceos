@@ -21,8 +21,10 @@ export type Modal =
   | { type: 'customer-detail'; customerId: string }
   | { type: 'quote-create'; initialDraft?: any }
   | { type: 'quote-detail'; quoteId: string }
+  | { type: 'quote-edit'; quoteId: string }
   | { type: 'invoice-create'; initialDraft?: any }
   | { type: 'invoice-detail'; invoiceId: string }
+  | { type: 'invoice-edit'; invoiceId: string }
   | { type: 'send-quote'; quoteId: string }
   | { type: 'send-invoice'; invoiceId: string }
   | { type: 'pro-upgrade' }

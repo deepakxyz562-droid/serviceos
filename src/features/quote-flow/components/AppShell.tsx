@@ -14,6 +14,8 @@ import { QuoteDetailModal } from "./QuoteDetailModal";
 import { InvoiceDetailModal } from "./InvoiceDetailModal";
 import { QuoteCreateModal } from "./QuoteCreateModal";
 import { InvoiceCreateModal } from "./InvoiceCreateModal";
+import { QuoteEditModal } from "./QuoteEditModal";
+import { InvoiceEditModal } from "./InvoiceEditModal";
 import { SendQuoteModal } from "./SendQuoteModal";
 import { SendInvoiceModal } from "./SendInvoiceModal";
 
@@ -85,10 +87,12 @@ export function AppShell() {
       )}
       {modal.type === "quote-create" && <QuoteCreateModal />}
       {modal.type === "quote-detail" && <QuoteDetailModal quoteId={modal.quoteId} />}
+      {modal.type === "quote-edit" && <QuoteEditModal quoteId={modal.quoteId} />}
       {modal.type === "invoice-create" && <InvoiceCreateModal />}
       {modal.type === "invoice-detail" && (
         <InvoiceDetailModal invoiceId={modal.invoiceId} />
       )}
+      {modal.type === "invoice-edit" && <InvoiceEditModal invoiceId={modal.invoiceId} />}
       {modal.type === "send-quote" && <SendQuoteModal quoteId={modal.quoteId} />}
       {modal.type === "send-invoice" && (
         <SendInvoiceModal invoiceId={modal.invoiceId} />

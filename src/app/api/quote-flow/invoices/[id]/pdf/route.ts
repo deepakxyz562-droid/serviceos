@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { renderToStream } from '@react-pdf/renderer';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness, computeTotals } from '@/lib/quote-flow-session';
-import { renderQuotePdf, type QuotePdfData } from '@/lib/quote-flow-pdf';
+import { renderQuotePdf, resolveTemplateName, type QuotePdfData } from '@/lib/quote-flow-pdf';
+import { generateUpiQrDataUrl } from '@/lib/upi-qr';
 
 export async function GET(
   req: Request,
@@ -51,7 +52,42 @@ export async function GET(
         phone: business.phone,
         email: business.email,
         address: business.address,
+        logoUrl: business.logoUrl,
         currencySymbol: business.currencySymbol,
+        // Bank + UPI payment details (Phase 3)
+        paymentCountry: business.paymentCountry,
+        paymentInstructions: business.paymentInstructions,
+        bankAccountName: business.bankAccountName,
+        bankAccountNumber: business.bankAccountNumber,
+        bankIfsc: business.bankIfsc,
+        bankSwift: business.bankSwift,
+        bankIban: business.bankIban,
+        bankRoutingNumber: business.bankRoutingNumber,
+        bankSortCode: business.bankSortCode,
+        bankBsb: business.bankBsb,
+        bankTransitNumber: business.bankTransitNumber,
+        bankInstitutionNumber: business.bankInstitutionNumber,
+        bankName: business.bankName,
+        bankBranch: business.bankBranch,
+        bankAddress: business.bankAddress,
+        upiId: business.upiId,
+        upiPayeeName: business.upiPayeeName,
+        upiQrDataUrl: business.upiId
+          ? await generateUpiQrDataUrl({
+              upiId: business.upiId,
+              payeeName: business.upiPayeeName || business.name,
+              amount: balance > 0 ? balance : t.total,
+              currency: business.currency,
+              note: invoice.number,
+            }).catch(() => null)
+          : null,
+        paypalHandle: business.paypalHandle,
+        venmoHandle: business.venmoHandle,
+        zelleIdentifier: business.zelleIdentifier,
+        cashappCashtag: business.cashappCashtag,
+        wiseIban: business.wiseIban,
+        showBankOnInvoice: business.showBankOnInvoice,
+        showUpiOnInvoice: business.showUpiOnInvoice,
       },
       customer: {
         name: invoice.customer.name,
@@ -82,11 +118,15 @@ export async function GET(
         createdAt: invoice.createdAt.toISOString(),
       },
     };
-    const stream = await renderToStream(renderQuotePdf(data, (invoice.pdfTemplate as any) || 'modern'));
+    const stream = await renderToStream(renderQuotePdf(data, resolveTemplateName(invoice.pdfTemplate as string)));
+    // ?download=1 → Content-Disposition: attachment (forces browser Download).
+    // Default → inline (opens PDF in a new tab for preview).
+    const url = new URL(req.url);
+    const isDownload = url.searchParams.get('download') === '1';
     return new NextResponse(stream as any, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${invoice.number}.pdf"`,
+        'Content-Disposition': `${isDownload ? 'attachment' : 'inline'}; filename="${invoice.number}.pdf"`,
       },
     });
   } catch (e: any) {

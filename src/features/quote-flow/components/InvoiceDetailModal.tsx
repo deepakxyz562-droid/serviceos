@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2 } from "lucide-react";
+import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit } from "lucide-react";
 import { formatCurrency } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -118,7 +118,10 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => window.open(`/api/invoices/${inv.id}/pdf`, "_blank")}>
+              <DropdownMenuItem onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}>
+                <Edit className="mr-2 h-4 w-4" /> Edit Invoice
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF
               </DropdownMenuItem>
               <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">

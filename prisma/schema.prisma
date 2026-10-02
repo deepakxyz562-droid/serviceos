@@ -9007,6 +9007,43 @@ model AiBusiness {
   quoteSeq       Int          @default(1000)
   invoiceSeq     Int          @default(2000)
   plan           String       @default("FREE") // FREE | PRO
+
+  // ── Bank transfer details (country-aware) ──────────────────────────────
+  // Populated via SettingsScreen. Shown on PDF + customer portal when
+  // showBankOnInvoice = true. All fields nullable — only fill what applies.
+  paymentCountry        String? // IN, US, GB, EU, AU, CA, etc.
+  paymentInstructions   String? // free-text notes shown below bank details
+  bankAccountName       String?
+  bankAccountNumber     String?
+  bankIfsc              String? // India (NEFT/IMPS)
+  bankSwift             String? // International wire
+  bankIban              String? // EU/SEPA
+  bankRoutingNumber     String? // US ACH
+  bankSortCode          String? // UK
+  bankBsb               String? // Australia
+  bankTransitNumber     String? // Canada
+  bankInstitutionNumber String? // Canada
+  bankName              String?
+  bankBranch            String?
+  bankAddress           String?
+
+  // ── UPI + digital wallets ──────────────────────────────────────────────
+  upiId                 String? // India: yourname@upi
+  upiPayeeName          String?
+  paypalHandle          String? // International
+  venmoHandle           String? // US
+  zelleIdentifier       String? // US
+  cashappCashtag        String? // US
+  wiseIban              String? // International low-fee
+
+  // ── Visibility toggles ─────────────────────────────────────────────────
+  showBankOnInvoice     Boolean  @default(true)
+  showUpiOnInvoice      Boolean  @default(true)
+
+  // ── India GST fields (Phase 7) ────────────────────────────────────────
+  gstin                 String?  // 15-char GST Identification Number
+  stateCode            String?  // 2-digit state code (first 2 of GSTIN)
+
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -9014,6 +9051,7 @@ model AiBusiness {
   quotes         AiQuote[]
   invoices       AiInvoice[]
   templates      AiTemplate[]
+  items          AiItem[]
 
   @@index([ownerId])
   @@index([tenantId])
@@ -9070,6 +9108,7 @@ model AiQuoteItem {
   description String
   qty         Float    @default(1)
   unitPrice   Float    @default(0)
+  hsnCode     String?  // HSN/SAC code for India GST (Phase 7)
 
   @@index([quoteId])
 }
@@ -9107,6 +9146,7 @@ model AiInvoiceItem {
   description String
   qty         Float     @default(1)
   unitPrice   Float     @default(0)
+  hsnCode     String?   // HSN/SAC code for India GST (Phase 7)
 
   @@index([invoiceId])
 }
@@ -9116,10 +9156,40 @@ model AiPayment {
   invoiceId String
   invoice   AiInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   amount    Float
-  method    String    @default("MANUAL") // MANUAL | CARD | BANK | CASH
+  method    String    @default("MANUAL") // MANUAL | BANK_TRANSFER | UPI | CARD | CASH | CHEQUE | ZELLE | WISE | PAYPAL | VENMO | OTHER
   paidAt    DateTime  @default(now())
 
+  // ── Payment reference + metadata ───────────────────────────────────────
+  // Added in Phase 3 so the customer portal can submit a UTR/reference
+  // when paying via bank transfer or UPI.
+  reference   String? // UTR / transaction ID / cheque number
+  currency    String? // payment currency (defaults to invoice currency)
+  fee         Float?   @default(0) // processing fee, if any
+  gateway     String? // manual | stripe | razorpay | bank | upi
+  notes       String?
+  recordedBy  String?
+
   @@index([invoiceId])
+}
+
+// ── Item/Product Library (Phase 7) ────────────────────────────────────────
+// Reusable items that the business owner can save and quickly add to
+// quotes/invoices without re-typing the description + price each time.
+model AiItem {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    AiBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  description String
+  unitPrice   Float    @default(0)
+  unit        String?  // "hour", "day", "item", "sq ft", etc.
+  taxRate     Float?   @default(0)
+  category    String?  // "Service", "Product", "Consulting", etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId])
+  @@index([category])
 }
 
 model AiTemplate {

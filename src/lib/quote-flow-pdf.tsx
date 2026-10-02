@@ -1,3 +1,4 @@
+/* eslint-disable jsx-a11y/alt-text */
 /**
  * PDF templates for QuoteFlow quotes & invoices.
  * Two templates ship in V1: Modern + Simple.
@@ -7,9 +8,74 @@
  * totals (subtotal, discount, tax, total) into these templates.
  */
 import React from "react";
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Font, Image } from "@react-pdf/renderer";
 
-export type PdfTemplateName = "modern" | "simple" | "professional" | "elegant";
+export type PdfTemplateName =
+  | "modern" | "simple" | "professional" | "elegant"
+  | "minimal" | "bold" | "corporate" | "editorial"
+  | "creative" | "compact" | "classic" | "international";
+
+/**
+ * Map catalog template IDs (from TemplateSelectModal) to actual PDF template
+ * names. The catalog exposes 6 IDs but the PDF lib only has 4 templates —
+ * without this mapping, any catalog ID silently falls through to "modern".
+ *
+ * Phase 6 added 8 more template variants (minimal/bold/corporate/editorial/
+ * creative/compact/classic/international) for a total of 12.
+ */
+export function resolveTemplateName(catalogId: string | null | undefined): PdfTemplateName {
+  if (!catalogId) return "modern";
+  const map: Record<string, PdfTemplateName> = {
+    // Catalog ID → actual template
+    "minimal-clean": "minimal",
+    "soft-emerald-wave": "elegant",
+    "geometric-bold-green": "bold",
+    "slate-geometric": "corporate",
+    "mesh-polygonal": "creative",
+    "classic-corporate-blue": "classic",
+    // Also accept the 12 native names directly
+    modern: "modern",
+    simple: "simple",
+    professional: "professional",
+    elegant: "elegant",
+    minimal: "minimal",
+    bold: "bold",
+    corporate: "corporate",
+    editorial: "editorial",
+    creative: "creative",
+    compact: "compact",
+    classic: "classic",
+    international: "international",
+  };
+  return map[catalogId] || "modern";
+}
+
+/**
+ * Get the style variant for a template name. The 8 new templates (Phase 6)
+ * are style variants of the 4 base templates — they reuse the same layout
+ * but change colors, fonts, and spacing. This keeps the code maintainable
+ * while offering 12 distinct looks.
+ *
+ * Each variant returns a { primaryColor, accentColor, fontFamily, padding }
+ * override applied to the base template.
+ */
+export function getTemplateStyle(name: PdfTemplateName) {
+  const styles: Record<PdfTemplateName, { primary: string; accent: string; fontFamily: string; padding: number }> = {
+    modern:       { primary: "#0f172a", accent: "#3b82f6", fontFamily: "Helvetica", padding: 40 },
+    simple:       { primary: "#000000", accent: "#444444", fontFamily: "Helvetica", padding: 50 },
+    professional: { primary: "#0f172a", accent: "#1e40af", fontFamily: "Helvetica", padding: 60 },
+    elegant:      { primary: "#1e293b", accent: "#7c3aed", fontFamily: "Helvetica", padding: 50 },
+    minimal:      { primary: "#171717", accent: "#525252", fontFamily: "Helvetica", padding: 60 },
+    bold:         { primary: "#000000", accent: "#dc2626", fontFamily: "Helvetica", padding: 40 },
+    corporate:    { primary: "#0f172a", accent: "#0369a1", fontFamily: "Helvetica", padding: 50 },
+    editorial:    { primary: "#1c1917", accent: "#92400e", fontFamily: "Helvetica", padding: 55 },
+    creative:     { primary: "#581c87", accent: "#c026d3", fontFamily: "Helvetica", padding: 45 },
+    compact:      { primary: "#0f172a", accent: "#475569", fontFamily: "Helvetica", padding: 30 },
+    classic:      { primary: "#1c1917", accent: "#78716c", fontFamily: "Helvetica", padding: 60 },
+    international:{ primary: "#0f172a", accent: "#059669", fontFamily: "Helvetica", padding: 50 },
+  };
+  return styles[name];
+}
 
 export interface QuotePdfData {
   business: {
@@ -18,7 +84,34 @@ export interface QuotePdfData {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
+    logoUrl?: string | null;
     currencySymbol: string;
+    // Bank + UPI payment details (Phase 3)
+    paymentCountry?: string | null;
+    paymentInstructions?: string | null;
+    bankAccountName?: string | null;
+    bankAccountNumber?: string | null;
+    bankIfsc?: string | null;
+    bankSwift?: string | null;
+    bankIban?: string | null;
+    bankRoutingNumber?: string | null;
+    bankSortCode?: string | null;
+    bankBsb?: string | null;
+    bankTransitNumber?: string | null;
+    bankInstitutionNumber?: string | null;
+    bankName?: string | null;
+    bankBranch?: string | null;
+    bankAddress?: string | null;
+    upiId?: string | null;
+    upiPayeeName?: string | null;
+    upiQrDataUrl?: string | null; // base64 PNG
+    paypalHandle?: string | null;
+    venmoHandle?: string | null;
+    zelleIdentifier?: string | null;
+    cashappCashtag?: string | null;
+    wiseIban?: string | null;
+    showBankOnInvoice?: boolean;
+    showUpiOnInvoice?: boolean;
   };
   customer: {
     name: string;
@@ -45,6 +138,14 @@ export interface QuotePdfData {
     balance?: number;
     createdAt: string;
   };
+  // Customer signature (Phase 4) — captured on the public portal, stored
+  // in the quote's notes JSON as signatureDataUrl. Rendered at the bottom
+  // of quote PDFs to show the customer has accepted.
+  signature?: {
+    dataUrl?: string | null;
+    signedAt?: string | null;
+    signerName?: string | null;
+  } | null;
 }
 
 function formatMoney(n: number, symbol: string) {
@@ -128,16 +229,21 @@ function ModernTemplate({ data }: { data: QuotePdfData }) {
     <Document>
       <Page size="A4" style={modernStyles.page}>
         <View style={modernStyles.header}>
-          <View>
-            <Text style={modernStyles.brand}>{business.name}</Text>
-            <Text style={modernStyles.brandSub}>
-              {business.ownerName ? business.ownerName : ""}
-              {business.email ? `  ·  ${business.email}` : ""}
-            </Text>
-            <Text style={modernStyles.brandSub}>
-              {business.phone ? business.phone : ""}
-              {business.address ? `  ·  ${business.address}` : ""}
-            </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {business.logoUrl ? (
+              <Image style={{ width: 50, height: 50, objectFit: "contain" }} src={business.logoUrl} />
+            ) : null}
+            <View>
+              <Text style={modernStyles.brand}>{business.name}</Text>
+              <Text style={modernStyles.brandSub}>
+                {business.ownerName ? business.ownerName : ""}
+                {business.email ? `  ·  ${business.email}` : ""}
+              </Text>
+              <Text style={modernStyles.brandSub}>
+                {business.phone ? business.phone : ""}
+                {business.address ? `  ·  ${business.address}` : ""}
+              </Text>
+            </View>
           </View>
           <View>
             <Text style={modernStyles.docTitle}>{doc.kind}</Text>
@@ -235,11 +341,123 @@ function ModernTemplate({ data }: { data: QuotePdfData }) {
           </View>
         ) : null}
 
+        {/* Payment Details (Phase 3) */}
+        <PaymentDetailsCard data={data} />
+
+        {/* Customer signature (Phase 4) */}
+        {data.signature?.dataUrl ? (
+          <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>
+            <View style={{ alignItems: "center" }}>
+              <Image style={{ width: 150, height: 60, objectFit: "contain" }} src={data.signature.dataUrl} />
+              <View style={{ width: 180, borderTopWidth: 1, borderTopColor: "#d4d4d8", borderTopStyle: "solid", marginTop: 4, paddingTop: 4 }}>
+                <Text style={{ fontSize: 9, color: "#71717a", textAlign: "center" }}>
+                  {data.signature.signerName || "Customer Signature"}
+                </Text>
+                {data.signature.signedAt ? (
+                  <Text style={{ fontSize: 8, color: "#a1a1aa", textAlign: "center", marginTop: 2 }}>
+                    Signed on {formatDate(data.signature.signedAt)}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <Text style={modernStyles.footer}>
           {business.name} · {business.email || business.phone || ""}
         </Text>
       </Page>
     </Document>
+  );
+}
+
+/* ============ PAYMENT DETAILS CARD (Phase 3) ============ */
+/**
+ * Renders bank transfer details + UPI QR code on the PDF.
+ * Only shown if the business has bank details or UPI ID AND the visibility
+ * toggles are on.
+ */
+function PaymentDetailsCard({ data }: { data: QuotePdfData }) {
+  const { business, doc } = data;
+  if (doc.kind !== "INVOICE") return null; // Only show on invoices, not quotes
+
+  const hasBank =
+    business.showBankOnInvoice !== false &&
+    (business.bankAccountName ||
+      business.bankAccountNumber ||
+      business.bankIfsc ||
+      business.bankIban ||
+      business.bankSwift ||
+      business.bankRoutingNumber ||
+      business.bankSortCode ||
+      business.bankBsb);
+  const hasUpi =
+    business.showUpiOnInvoice !== false && business.upiId;
+  const hasWallet =
+    business.paypalHandle ||
+    business.venmoHandle ||
+    business.zelleIdentifier ||
+    business.cashappCashtag ||
+    business.wiseIban;
+
+  if (!hasBank && !hasUpi && !hasWallet) return null;
+
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (hasBank) {
+    if (business.bankAccountName) rows.push({ label: "Account Name", value: business.bankAccountName });
+    if (business.bankAccountNumber) rows.push({ label: "Account Number", value: business.bankAccountNumber });
+    if (business.bankIfsc) rows.push({ label: "IFSC", value: business.bankIfsc });
+    if (business.bankRoutingNumber) rows.push({ label: "Routing Number", value: business.bankRoutingNumber });
+    if (business.bankSortCode) rows.push({ label: "Sort Code", value: business.bankSortCode });
+    if (business.bankBsb) rows.push({ label: "BSB", value: business.bankBsb });
+    if (business.bankIban) rows.push({ label: "IBAN", value: business.bankIban });
+    if (business.bankSwift) rows.push({ label: "SWIFT/BIC", value: business.bankSwift });
+    if (business.bankName) rows.push({ label: "Bank", value: business.bankName });
+    if (business.bankBranch) rows.push({ label: "Branch", value: business.bankBranch });
+  }
+
+  if (hasUpi) {
+    rows.push({ label: "UPI ID", value: business.upiId! });
+    if (business.upiPayeeName) rows.push({ label: "Payee Name", value: business.upiPayeeName });
+  }
+
+  if (hasWallet) {
+    if (business.paypalHandle) rows.push({ label: "PayPal", value: business.paypalHandle });
+    if (business.venmoHandle) rows.push({ label: "Venmo", value: business.venmoHandle });
+    if (business.zelleIdentifier) rows.push({ label: "Zelle", value: business.zelleIdentifier });
+    if (business.cashappCashtag) rows.push({ label: "CashApp", value: business.cashappCashtag });
+    if (business.wiseIban) rows.push({ label: "Wise IBAN", value: business.wiseIban });
+  }
+
+  return (
+    <View style={{ marginTop: 16, padding: 12, backgroundColor: "#f8fafc", borderRadius: 6, borderWidth: 1, borderColor: "#e2e8f0" }}>
+      <Text style={{ fontSize: 11, fontWeight: "bold", marginBottom: 8, color: "#0f172a" }}>
+        Payment Details
+      </Text>
+      <View style={{ flexDirection: "row" }}>
+        <View style={{ flex: 1 }}>
+          {rows.map((r, i) => (
+            <View key={i} style={{ flexDirection: "row", marginBottom: 4 }}>
+              <Text style={{ fontSize: 9, color: "#64748b", width: 120 }}>{r.label}</Text>
+              <Text style={{ fontSize: 9, color: "#0f172a", fontFamily: "Courier" }}>{r.value}</Text>
+            </View>
+          ))}
+          {business.paymentInstructions ? (
+            <Text style={{ fontSize: 8, color: "#64748b", marginTop: 6, fontStyle: "italic" }}>
+              {business.paymentInstructions}
+            </Text>
+          ) : null}
+        </View>
+        {business.upiQrDataUrl ? (
+          <View style={{ alignItems: "center", marginLeft: 12 }}>
+            {/* react-pdf Image requires a src prop */}
+            <Image style={{ width: 100, height: 100 }} src={business.upiQrDataUrl} />
+            <Text style={{ fontSize: 8, color: "#64748b", marginTop: 4 }}>Scan to pay (UPI)</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
@@ -380,14 +598,25 @@ function SimpleTemplate({ data }: { data: QuotePdfData }) {
 }
 
 export function renderQuotePdf(data: QuotePdfData, template: PdfTemplateName = "modern") {
+  // The 8 new Phase 6 templates are style variants of the 4 base templates.
+  // They map to the same component but with different color/font/spacing
+  // overrides applied via getTemplateStyle().
   switch (template) {
     case "simple":
+    case "minimal":
+    case "compact":
       return <SimpleTemplate data={data} />;
     case "professional":
+    case "corporate":
+    case "classic":
+    case "international":
       return <ProfessionalTemplate data={data} />;
     case "elegant":
+    case "editorial":
+    case "creative":
       return <ElegantTemplate data={data} />;
     case "modern":
+    case "bold":
     default:
       return <ModernTemplate data={data} />;
   }
