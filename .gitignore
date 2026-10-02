@@ -71,6 +71,9 @@ db/*.db-journal
 # These un-ignore rules override the *.png rule for mobile-app assets.
 !mobile-app/assets/
 !mobile-app/assets/**
+!quote-flow-mobile/assets/
+!quote-flow-mobile/assets/**
+.expo/
 
 # Agent context files
 /agent-ctx/

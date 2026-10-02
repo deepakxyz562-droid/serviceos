@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "QuoteFlow",
+    "slug": "quoteflow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "quoteflow",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.quoteflow.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "QuoteFlow uses the microphone to create quotes from your voice.",
+        "NSCameraUsageDescription": "QuoteFlow uses the camera to scan documents."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#10b981"
+      },
+      "package": "com.quoteflow.app",
+      "permissions": ["RECORD_AUDIO"]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-speech-recognition",
+        {
+          "permissions": [" RECORD_AUDIO"]
+        }
+      ]
+    ],
+    "experiments": {
+      "tsconfigPaths": true,
+      "typedRoutes": true
+    }
+  }
+}

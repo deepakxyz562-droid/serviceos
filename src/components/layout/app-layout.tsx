@@ -69,6 +69,7 @@ const PurchaseOrdersView = lazy(() => import('@/components/views/purchase-orders
 
 // Finance
 const QuotesView = lazy(() => import('@/components/views/quotes-view').then(m => ({ default: m.QuotesView })));
+const QuoteFlowView = lazy(() => import('@/components/views/quote-flow-view').then(m => ({ default: m.QuoteFlowView })));
 const InvoicesView = lazy(() => import('@/components/views/invoices-view').then(m => ({ default: m.InvoicesView })));
 const BillingView = lazy(() => import('@/components/views/billing-view').then(m => ({ default: m.BillingView })));
 const ExpensesView = lazy(() => import('@/components/views/expenses-view').then(m => ({ default: m.ExpensesView })));
@@ -242,6 +243,7 @@ const viewComponents: Record<string, any> = {
   purchaseOrders: PurchaseOrdersView,
   // Finance
   quotes: QuotesView,
+  quoteFlow: QuoteFlowView,
   invoices: InvoicesView,
   billing: BillingView,
   expenses: ExpensesView,

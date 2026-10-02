@@ -854,6 +854,7 @@ model User {
   employeeAccount Employee?
   employeeStatusLogs EmployeeStatusLog[]
   sentInvitations  Invitation[] @relation("InvitationInvitedBy")
+  aiBusiness       AiBusiness?
 
   @@index([email])
   @@index([tenantId])
@@ -8984,3 +8985,163 @@ model SignField {
   
   @@index([documentId])
 }
+
+// ==========================================
+// AI QUOTE & INVOICE SUITE (QuoteFlow Parity)
+// ==========================================
+
+model AiBusiness {
+  id             String       @id @default(cuid())
+  ownerId        String       @unique
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tenantId       String?
+  name           String
+  ownerName      String?
+  phone          String?
+  email          String?
+  address        String?
+  logoUrl        String?
+  currency       String       @default("USD")
+  currencySymbol String       @default("$")
+  defaultTaxRate Float        @default(0)
+  quoteSeq       Int          @default(1000)
+  invoiceSeq     Int          @default(2000)
+  plan           String       @default("FREE") // FREE | PRO
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  customers      AiCustomer[]
+  quotes         AiQuote[]
+  invoices       AiInvoice[]
+  templates      AiTemplate[]
+
+  @@map("ai_businesses")
+  @@index([ownerId])
+  @@index([tenantId])
+}
+
+model AiCustomer {
+  id         String     @id @default(cuid())
+  businessId String
+  business   AiBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  email      String?
+  phone      String?
+  address    String?
+  notes      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  quotes     AiQuote[]
+  invoices   AiInvoice[]
+
+  @@map("ai_customers")
+  @@index([businessId])
+}
+
+model AiQuote {
+  id                 String        @id @default(cuid())
+  businessId         String
+  business           AiBusiness    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId         String
+  customer           AiCustomer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  number             String
+  status             String        @default("DRAFT") // DRAFT | SENT | ACCEPTED | DECLINED | EXPIRED
+  validUntil         DateTime?
+  notes              String?
+  aiRawInput         String?
+  aiEditHistory      String?       // JSON array of {instruction, before, after, at}
+  discountValue      Float         @default(0)
+  discountType       String        @default("AMOUNT") // AMOUNT | PERCENT
+  taxRate            Float         @default(0)
+  pdfTemplate        String        @default("modern") // modern | simple | professional | elegant
+  convertedInvoiceId String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  items              AiQuoteItem[]
+
+  @@map("ai_quotes")
+  @@index([businessId])
+  @@index([customerId])
+}
+
+model AiQuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  quote       AiQuote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  description String
+  qty         Float    @default(1)
+  unitPrice   Float    @default(0)
+
+  @@map("ai_quote_items")
+  @@index([quoteId])
+}
+
+model AiInvoice {
+  id            String          @id @default(cuid())
+  businessId    String
+  business      AiBusiness      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      AiCustomer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  number        String
+  status        String          @default("DRAFT") // DRAFT | SENT | PARTIALLY_PAID | PAID | OVERDUE
+  dueDate       DateTime?
+  notes         String?
+  aiRawInput    String?
+  discountValue Float           @default(0)
+  discountType  String          @default("AMOUNT")
+  taxRate       Float           @default(0)
+  pdfTemplate   String          @default("modern")
+  fromQuoteId   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  items         AiInvoiceItem[]
+  payments      AiPayment[]
+
+  @@map("ai_invoices")
+  @@index([businessId])
+  @@index([customerId])
+}
+
+model AiInvoiceItem {
+  id          String    @id @default(cuid())
+  invoiceId   String
+  invoice     AiInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  qty         Float     @default(1)
+  unitPrice   Float     @default(0)
+
+  @@map("ai_invoice_items")
+  @@index([invoiceId])
+}
+
+model AiPayment {
+  id        String    @id @default(cuid())
+  invoiceId String
+  invoice   AiInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Float
+  method    String    @default("MANUAL") // MANUAL | CARD | BANK | CASH
+  paidAt    DateTime  @default(now())
+
+  @@map("ai_payments")
+  @@index([invoiceId])
+}
+
+model AiTemplate {
+  id             String      @id @default(cuid())
+  businessId     String?     // null = system template
+  business       AiBusiness? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name           String
+  category       String      // e.g., "Consulting", "Plumbing", "Electrical", "Web Development"
+  suggestedItems String      // JSON array of {description, qty, unitPrice}
+  defaultTaxRate Float       @default(0)
+  isSystem       Boolean     @default(false)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@map("ai_templates")
+  @@index([businessId])
+}
+

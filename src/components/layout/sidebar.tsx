@@ -197,6 +197,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
+      { view: 'quoteFlow', label: 'AI Quotes & Invoices', icon: Sparkles, badge: 'AI' },
       { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],
@@ -391,6 +392,7 @@ const superadminNavSections: NavSection[] = [
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
+      { view: 'quoteFlow', label: 'AI Quotes & Invoices', icon: Sparkles, badge: 'AI' },
       { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],

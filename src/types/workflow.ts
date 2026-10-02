@@ -181,7 +181,7 @@ export type ViewType =
   | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'realtimeStatus' | 'employees' | 'employeePerformance' | 'timesheet' | 'recurringJobs'
   | 'inventory' | 'purchaseOrders'
   // Finance
-  | 'quotes' | 'invoices' | 'billing' | 'expenses'
+  | 'quotes' | 'quoteFlow' | 'invoices' | 'billing' | 'expenses'
   // System
   | 'credentials' | 'settings' | 'auditLogs' | 'activityLogs' | 'reports' | 'notifications' | 'brandBrain'
   // Portals
