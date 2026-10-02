@@ -210,6 +210,7 @@ const TABLE_MAP: Record<string, string> = {
   contactExport: 'ContactExport',
   // ── Integrations ──
   integrationConnection: 'IntegrationConnection',
+  socialAccount: 'SocialAccount',
   hubIntegrationConnection: 'HubIntegrationConnection',
   metaLeadConfig: 'MetaLeadConfig',
   metaLead: 'MetaLead',

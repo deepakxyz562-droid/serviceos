@@ -199,11 +199,63 @@ export async function GET(
       reason: igAccount ? null : 'not_connected',
     };
 
+    // ── 5. Messenger ───────────────────────────────────────────────────
+    // Source of truth: SocialAccount(platform='facebook', isActive=true).
+    // The Meta webhook routes Messenger DMs by recipient Page ID, which
+    // we store as SocialAccount.accountId.
+    const fbAccount = await db.socialAccount.findFirst({
+      where: {
+        tenantId,
+        platform: 'facebook',
+        isActive: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, accountId: true, accountName: true, metadata: true },
+    });
+
+    const messenger = {
+      connected: !!fbAccount,
+      pageName: fbAccount?.accountName ?? null,
+      pageId: fbAccount?.accountId ?? null,
+      reason: fbAccount ? null : 'not_connected',
+    };
+
+    // ── 6. Gmail ──────────────────────────────────────────────────────
+    // Source of truth: IntegrationConnection(provider='gmail', status='connected').
+    const gmailConn = await db.integrationConnection.findFirst({
+      where: {
+        tenantId,
+        provider: 'gmail',
+        status: 'connected',
+      },
+      orderBy: { lastSyncAt: 'desc' },
+      select: { id: true, name: true, configJson: true, lastSyncAt: true },
+    }).catch(() => null);
+
+    let gmailAddress: string | null = null;
+    if (gmailConn?.configJson) {
+      try {
+        const cfg = JSON.parse(gmailConn.configJson);
+        gmailAddress = cfg.gmailAddress || null;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const gmail = {
+      connected: !!gmailConn,
+      emailAddress: gmailAddress,
+      connectedAt: gmailConn?.lastSyncAt ?? null,
+      reason: gmailConn ? null : 'not_connected',
+    };
+
     return NextResponse.json({
       whatsapp,
       phone,
       sms,
       instagram,
+      messenger,
+      gmail,
     });
   } catch (error) {
     console.error('[GET /api/forms/agents/[id]/channel-status] error:', error);

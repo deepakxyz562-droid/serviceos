@@ -472,37 +472,21 @@ export function AgentBuildTab({
     }
   };
 
+  // Phone Agent is a PAID ADDON ($29/mo + 150 min). Real provisioning
+  // happens via the AI Receptionist onboarding flow: the publish-tab
+  // "Activate Addon" button calls /api/addons/checkout → Creem →
+  // /api/addons/phones/buy (real Twilio number + Vapi import).
+  // This button navigates to that onboarding view instead of faking
+  // a phone number with setTimeout + Math.random().
   const handleProvisionPhoneNumber = () => {
-    setIsProvisioningPhone(true);
-    setTimeout(() => {
-      const selectedC = PHONE_COUNTRIES.find((c) => c.code === phoneCountry) || PHONE_COUNTRIES[0];
-      const area = phoneAreaCode.trim() ? phoneAreaCode.trim() : selectedC.code === 'US' ? '601' : '555';
-      const randomPart = Math.floor(1000 + Math.random() * 9000);
-      const randomMid = Math.floor(200 + Math.random() * 700);
-      const generatedNumber = `${selectedC.prefix} (${area}) ${randomMid}-${randomPart}`;
-      updatePhoneConfig({
-        phoneNumber: generatedNumber,
-        country: phoneCountry,
-      });
-      setIsProvisioningPhone(false);
-      toast.success(`Dedicated AI phone number ${generatedNumber} provisioned!`);
-    }, 700);
+    useAppStore.getState().setCurrentView('aiReceptionist');
   };
 
+  // SMS requires a dedicated PhoneNumber (capabilities: ['sms']) purchased
+  // via /api/sms/numbers/buy. Navigate to the SMS numbers view where the
+  // real purchase flow lives.
   const handleProvisionSmsNumber = () => {
-    setIsProvisioningSms(true);
-    setTimeout(() => {
-      const selectedC = PHONE_COUNTRIES.find((c) => c.code === smsCountry) || PHONE_COUNTRIES[0];
-      const randomPart = Math.floor(1000 + Math.random() * 9000);
-      const randomMid = Math.floor(200 + Math.random() * 700);
-      const generatedNumber = `${selectedC.prefix} (601) ${randomMid}-${randomPart}`;
-      updateSmsConfig({
-        phoneNumber: generatedNumber,
-        country: smsCountry,
-      });
-      setIsProvisioningSms(false);
-      toast.success(`Dedicated AI SMS number ${generatedNumber} provisioned!`);
-    }, 700);
+    useAppStore.getState().setCurrentView('smsNumbers');
   };
 
   const [isSyncingShopify, setIsSyncingShopify] = useState(false);

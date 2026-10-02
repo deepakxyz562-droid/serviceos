@@ -68,6 +68,18 @@ interface ChannelStatus {
     accountId: string | null;
     reason: string | null;
   };
+  messenger: {
+    connected: boolean;
+    pageName: string | null;
+    pageId: string | null;
+    reason: string | null;
+  };
+  gmail: {
+    connected: boolean;
+    emailAddress: string | null;
+    connectedAt: string | null;
+    reason: string | null;
+  };
 }
 
 interface AgentPublishTabProps {
@@ -125,6 +137,8 @@ export function AgentPublishTab({
   const ph = channelStatus?.phone ?? null;
   const sm = channelStatus?.sms ?? null;
   const ig = channelStatus?.instagram ?? null;
+  const ms = channelStatus?.messenger ?? null;
+  const gm = channelStatus?.gmail ?? null;
 
   // ── Phone addon checkout ──
   // Calls POST /api/addons/checkout with the STARTER plan code, then
@@ -675,7 +689,7 @@ export function AgentPublishTab({
               checked={!!ig?.connected}
               disabled={!ig?.connected}
               onCheckedChange={() => {
-                toast.info('Instagram DM integration coming soon — connect via Integrations.');
+                useAppStore.getState().setCurrentView('integrations');
               }}
             />
           </CardHeader>
@@ -701,6 +715,102 @@ export function AgentPublishTab({
                   className="text-[11px] h-6 px-2 text-pink-600 dark:text-pink-400 border-pink-300 dark:border-pink-800 hover:bg-pink-50 dark:hover:bg-pink-950/40"
                 >
                   Connect Instagram &rarr;
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Messenger — source of truth: SocialAccount(platform=facebook, isActive=true) */}
+        <Card className="rounded-xl border-border/80 shadow-xs">
+          <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="size-7 rounded-lg bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
+                <MessageSquare className="size-4" />
+              </div>
+              <div>
+                <CardTitle className="text-xs font-bold">Messenger DM</CardTitle>
+                <p className="text-[10px] text-muted-foreground">Facebook Page messaging</p>
+              </div>
+            </div>
+            <Switch
+              checked={!!ms?.connected}
+              disabled={!ms?.connected}
+              onCheckedChange={() => {
+                useAppStore.getState().setCurrentView('integrations');
+              }}
+            />
+          </CardHeader>
+          <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
+            {ms?.connected ? (
+              <div className="space-y-1">
+                <div>
+                  Page: <span className="font-semibold text-foreground">{ms.pageName || 'Linked'}</span>
+                </div>
+                {ms.pageId && (
+                  <div className="text-[10px] text-muted-foreground/80">
+                    Page ID: {ms.pageId}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div>Status: <span className="font-semibold text-slate-500">Not connected</span></div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('integrations')}
+                  className="text-[11px] h-6 px-2 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                >
+                  Connect Facebook Page &rarr;
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Gmail — source of truth: IntegrationConnection(provider=gmail, status=connected) */}
+        <Card className="rounded-xl border-border/80 shadow-xs">
+          <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="size-7 rounded-lg bg-red-100 dark:bg-red-950 text-red-600 flex items-center justify-center">
+                <Mail className="size-4" />
+              </div>
+              <div>
+                <CardTitle className="text-xs font-bold">Gmail Agent</CardTitle>
+                <p className="text-[10px] text-muted-foreground">Email draft auto-reply</p>
+              </div>
+            </div>
+            <Switch
+              checked={!!gm?.connected}
+              disabled={!gm?.connected}
+              onCheckedChange={() => {
+                useAppStore.getState().setCurrentView('integrations');
+              }}
+            />
+          </CardHeader>
+          <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
+            {gm?.connected ? (
+              <div className="space-y-1">
+                <div>
+                  Email: <span className="font-semibold text-foreground">{gm.emailAddress || 'Connected'}</span>
+                </div>
+                {gm.connectedAt && (
+                  <div className="text-[10px] text-muted-foreground/80">
+                    Connected {new Date(gm.connectedAt).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div>Status: <span className="font-semibold text-slate-500">Not connected</span></div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { window.location.href = '/api/oauth/gmail'; }}
+                  className="text-[11px] h-6 px-2 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/40"
+                >
+                  Connect Gmail &rarr;
                 </Button>
               </div>
             )}

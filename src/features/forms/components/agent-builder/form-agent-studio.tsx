@@ -433,9 +433,7 @@ export function FormAgentStudio({
           {selectedChannel === 'gmail' && (
             <Button
               type="button"
-              onClick={() => {
-                toast.info('Google OAuth for Gmail active. Connect in Integrations.');
-              }}
+              onClick={() => { window.location.href = '/api/oauth/gmail'; }}
               className="h-8 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
             >
               <Mail className="size-3.5 text-red-500" />
@@ -457,9 +455,7 @@ export function FormAgentStudio({
           {selectedChannel === 'messenger' && (
             <Button
               type="button"
-              onClick={() => {
-                toast.info('Launching Meta Facebook Login for Business...');
-              }}
+              onClick={() => useAppStore.getState().setCurrentView('integrations')}
               className="h-8 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
             >
               <MessageSquare className="size-3.5" />

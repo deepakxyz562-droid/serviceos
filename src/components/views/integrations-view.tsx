@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -305,6 +306,7 @@ function GenericConnectDialog({
   const [saving, setSaving] = useState(false);
   const [connected, setConnected] = useState(connection?.status === 'connected');
   const [autoSync, setAutoSync] = useState(true);
+  const [manualCredentials, setManualCredentials] = useState('');
 
   useEffect(() => { setConnected(connection?.status === 'connected'); }, [connection?.status, open]);
 
@@ -324,14 +326,28 @@ function GenericConnectDialog({
           onSaved();
         } else { toast.error('Failed to disconnect'); }
       } else {
-        // Connect
+        // Connect — require real credentials (no empty '{}')
+        let credentialsJson = '{}';
+        try {
+          const parsed = manualCredentials.trim() ? JSON.parse(manualCredentials) : {};
+          if (Object.keys(parsed).length === 0) {
+            toast.error('Please paste your integration credentials (access token, store URL, etc.) before connecting.');
+            setSaving(false);
+            return;
+          }
+          credentialsJson = JSON.stringify(parsed);
+        } catch {
+          toast.error('Credentials JSON is invalid. Please paste a valid JSON object.');
+          setSaving(false);
+          return;
+        }
         const res = await fetch('/api/integrations/connections', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             integrationKey: integration.key,
             status: 'connected',
-            credentialsJson: '{}',
+            credentialsJson,
             configJson: JSON.stringify({ autoSync }),
           }),
         });
@@ -384,14 +400,30 @@ function GenericConnectDialog({
                 <Switch checked={autoSync} onCheckedChange={setAutoSync} />
               </div>
               <Separator />
+              <div className="space-y-1.5">
+                <Label className="text-sm">Credentials (JSON)</Label>
+                <Textarea
+                  placeholder={'{"accessToken":"shpat_xxx","shopDomain":"yourstore.myshopify.com"}'}
+                  value={manualCredentials}
+                  onChange={(e) => setManualCredentials(e.target.value)}
+                  className="text-xs font-mono min-h-[80px]"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Paste the credentials from {integration.provider} in JSON format.
+                  For Shopify: <code>{`{"accessToken":"shpat_...","shopDomain":"yourstore.myshopify.com"}`}</code>.
+                </p>
+              </div>
             </div>
           )}
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200 dark:border-amber-900 flex gap-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 text-xs text-slate-700 dark:bg-slate-900/30 dark:text-slate-300 dark:border-slate-700 flex gap-2">
             <KeyRound className="size-4 shrink-0 mt-0.5" />
             <div>
-              <p className="font-medium">OAuth Setup Required</p>
-              <p className="mt-0.5 text-amber-800 dark:text-amber-300">This integration uses OAuth2. Clicking connect will initiate the authorization flow with {integration.provider}.</p>
+              <p className="font-medium">Manual Setup Required</p>
+              <p className="mt-0.5 text-slate-600 dark:text-slate-400">
+                This integration uses manual credentials. Paste your {integration.provider}
+                API access token above before clicking Connect. OAuth flow is not yet available for this provider.
+              </p>
             </div>
           </div>
         </div>

@@ -32,6 +32,7 @@ import { FormAgentData } from '@/features/forms/types/agent-types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
+import { MetaOAuthButton } from '@/components/meta/meta-oauth-button';
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1. INSTAGRAM 3-STEP SETUP MODAL (Screenshot 3)
@@ -53,14 +54,14 @@ export function InstagramConnectModal({
   const [handle, setHandle] = useState(agent.channels?.instagram?.accountHandle || '');
   const [connecting, setConnecting] = useState(false);
 
-  const handleConnect = async () => {
-    setConnecting(true);
-    // Simulate Meta OAuth popup or redirect
-    setTimeout(() => {
-      setConnecting(false);
-      setStep(2);
-      toast.success('Instagram Account Authenticated!');
-    }, 1200);
+  // The real Meta OAuth flow is handled by <MetaOAuthButton> which loads
+  // the FB SDK, launches the OAuth popup, and POSTs the code to
+  // /api/meta/oauth/exchange. No fake setTimeout stub.
+  const handleInstagramConnected = () => {
+    setConnecting(false);
+    setStep(2);
+    toast.success('Instagram Account Authenticated!');
+    onSuccess?.();
   };
 
   return (
@@ -177,24 +178,12 @@ export function InstagramConnectModal({
               />
             </div>
 
-            <Button
-              type="button"
-              disabled={connecting}
-              onClick={handleConnect}
+            <MetaOAuthButton
+              provider="instagram"
+              label="Connect your Instagram"
               className="w-full h-10 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-md gap-2"
-            >
-              {connecting ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Connecting to Meta...</span>
-                </>
-              ) : (
-                <>
-                  <Instagram className="size-4" />
-                  <span>Connect your Instagram</span>
-                </>
-              )}
-            </Button>
+              onSuccess={handleInstagramConnected}
+            />
           </div>
         )}
 
