@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, X, Plus, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 
 interface Item {
@@ -100,18 +100,18 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+      <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
         <Loader2 className="h-8 w-8 animate-spin text-white" />
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[96vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-slate-50 shadow-2xl sm:rounded-3xl flex flex-col">
+    <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
+      <div className="mx-auto max-w-md px-5 py-4 pb-24 flex flex-col">
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-stone-100 bg-white/95 px-5 py-3.5 backdrop-blur">
           <button onClick={closeModal} className="text-stone-600 hover:text-stone-900">
-            <X className="h-6 w-6" />
+            <ArrowLeft className="h-6 w-6" />
           </button>
           <h2 className="text-base font-semibold text-stone-900">
             Edit Invoice {invoice?.number}
@@ -232,14 +232,23 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
             />
           </div>
 
-          {/* Save */}
-          <Button
-            onClick={save}
-            disabled={saving}
-            className="w-full h-10 text-xs font-bold bg-stone-900 hover:bg-stone-800 text-white"
-          >
-            {saving ? <><Loader2 className="size-4 mr-1 animate-spin" /> Saving...</> : 'Save Changes'}
-          </Button>
+          {/* Preview + Save footer */}
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/api/quote-flow/invoices/${invoiceId}/pdf`, "_blank")}
+              className="flex-1 h-10 text-xs font-bold border-blue-600 text-blue-600 hover:bg-blue-50"
+            >
+              Preview
+            </Button>
+            <Button
+              onClick={save}
+              disabled={saving}
+              className="flex-1 h-10 text-xs font-bold bg-stone-900 hover:bg-stone-800 text-white"
+            >
+              {saving ? <><Loader2 className="size-4 mr-1 animate-spin" /> Saving...</> : 'Save Changes'}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

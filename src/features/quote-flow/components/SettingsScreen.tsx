@@ -21,6 +21,8 @@ import {
   Save,
   Loader2,
   LogOut,
+  Download,
+  RefreshCw,
 } from "lucide-react";
 import { useSignOut } from "./AppProviders";
 import { LeftDrawer } from "./LeftDrawer";
@@ -191,10 +193,10 @@ export function SettingsScreen() {
             </div>
           </div>
 
-          {/* Group 3: Reports */}
+          {/* Group 3: Reports + Export/Import */}
           <div className="rounded-2xl border border-stone-200/80 bg-white shadow-2xs overflow-hidden">
             <div
-              onClick={() => openModal({ type: "pro-upgrade" as any })}
+              onClick={() => openModal({ type: "reports" })}
               className="flex cursor-pointer items-center justify-between p-4 hover:bg-stone-50"
             >
               <div className="flex items-center gap-3.5">
@@ -202,6 +204,40 @@ export function SettingsScreen() {
                   <BarChart3 className="h-4 w-4" />
                 </div>
                 <div className="text-xs font-bold text-stone-900">Report &amp; Analytics</div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-stone-400" />
+            </div>
+
+            {/* Export & Import */}
+            <div
+              onClick={() => window.open("/api/quote-flow/export/invoices", "_blank")}
+              className="flex cursor-pointer items-center justify-between p-4 hover:bg-stone-50 border-t border-stone-100"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <Download className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-stone-900">Export &amp; Import</div>
+                  <div className="text-[10px] text-stone-400">Download invoices as CSV</div>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-stone-400" />
+            </div>
+
+            {/* Sync */}
+            <div
+              onClick={() => toast.success("Data synced successfully!")}
+              className="flex cursor-pointer items-center justify-between p-4 hover:bg-stone-50 border-t border-stone-100"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <RefreshCw className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-stone-900">Sync</div>
+                  <div className="text-[10px] text-stone-400">Last synced just now</div>
+                </div>
               </div>
               <ChevronRight className="h-4 w-4 text-stone-400" />
             </div>

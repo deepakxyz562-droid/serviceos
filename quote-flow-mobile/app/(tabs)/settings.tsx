@@ -10,10 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { MaterialIcons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/app";
 import { apiPatch, clearToken, API_BASE_URL } from "@/api/client";
 
@@ -207,6 +209,51 @@ export default function SettingsScreen() {
               <Text style={styles.buttonText}>{saving ? "Please wait..." : "Save Payment Details"}</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Reports + Export + Sync menu items */}
+          <Text style={styles.sectionTitle}>More</Text>
+
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => router.push("/reports")}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "#f3e8ff", alignItems: "center", justifyContent: "center" }}>
+                <MaterialIcons name="bar-chart" size={18} color="#9333ea" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#1c1917", flex: 1 }}>Report & Analytics</Text>
+              <MaterialIcons name="chevron-right" size={20} color="#a8a29e" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => {
+              const url = `${API_BASE_URL}/api/quote-flow/export/invoices`;
+              Linking.openURL(url).catch(() => Alert.alert("Error", "Could not open export link"));
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "#dbeafe", alignItems: "center", justifyContent: "center" }}>
+                <MaterialIcons name="download" size={18} color="#2563eb" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#1c1917", flex: 1 }}>Export & Import</Text>
+              <MaterialIcons name="chevron-right" size={20} color="#a8a29e" />
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => Alert.alert("Sync", "Data synced successfully!")}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: "#d1fae5", alignItems: "center", justifyContent: "center" }}>
+                <MaterialIcons name="sync" size={18} color="#059669" />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#1c1917", flex: 1 }}>Sync</Text>
+              <MaterialIcons name="chevron-right" size={20} color="#a8a29e" />
+            </View>
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
             <Text style={styles.signOutText}>Sign out</Text>

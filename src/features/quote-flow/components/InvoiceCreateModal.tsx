@@ -21,6 +21,7 @@ import {
   DollarSign,
   Crown,
   Eye,
+  ArrowLeft,
 } from "lucide-react";
 import {
   computeInvoiceTotals,
@@ -29,6 +30,7 @@ import {
   type CalcLineItem,
 } from "@/lib/quote-flow-calc";
 import { TemplateSelectModal } from "./TemplateSelectModal";
+import { toast } from "sonner";
 
 interface Item extends CalcLineItem {
   description: string;
@@ -88,6 +90,7 @@ export function InvoiceCreateModal() {
   const [notes, setNotes] = useState(initialDraft?.terms || initialDraft?.notes || "");
 
   const [loading, setLoading] = useState(false);
+  const [lastSavedInvoiceId, setLastSavedInvoiceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -207,6 +210,7 @@ export function InvoiceCreateModal() {
       });
 
       window.dispatchEvent(new CustomEvent("invoice-list-changed"));
+      setLastSavedInvoiceId(res.invoice.id);
       closeModal();
       openModal({ type: "invoice-detail", invoiceId: res.invoice.id });
     } catch (e: any) {
@@ -219,12 +223,12 @@ export function InvoiceCreateModal() {
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[96vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-slate-50 shadow-2xl sm:rounded-3xl flex flex-col">
+    <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
+      <div className="mx-auto max-w-md px-5 py-4 pb-24 flex flex-col">
         {/* Top Navbar */}
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-stone-100 bg-white/95 px-5 py-3.5 backdrop-blur">
           <button onClick={closeModal} className="text-stone-600 hover:text-stone-900">
-            <X className="h-6 w-6" />
+            <ArrowLeft className="h-6 w-6" />
           </button>
           <h2 className="text-base font-bold text-stone-900">Create Invoice</h2>
           <div className="flex items-center gap-2">
@@ -703,7 +707,14 @@ export function InvoiceCreateModal() {
             <Button
               variant="outline"
               onClick={() => {
-                alert(`Previewing ${docType} with ${items.length} items. Total: ${formatCurrency(totals.total, currency)}`);
+                // Open the PDF preview in a new tab (before saving, we can't
+                // preview a non-existent invoice — so we show the last saved
+                // invoice's PDF, or instruct the user to save first).
+                if (lastSavedInvoiceId) {
+                  window.open(`/api/quote-flow/invoices/${lastSavedInvoiceId}/pdf`, "_blank");
+                } else {
+                  toast.info("Save the invoice first, then click it to preview the PDF.");
+                }
               }}
               className="flex-1 h-12 rounded-full border-blue-600 text-sm font-bold text-blue-600 hover:bg-blue-50"
             >

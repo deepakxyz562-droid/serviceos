@@ -18,6 +18,7 @@ import { QuoteEditModal } from "./QuoteEditModal";
 import { InvoiceEditModal } from "./InvoiceEditModal";
 import { ItemsScreen } from "./ItemsScreen";
 import { ItemFormModal } from "./ItemFormModal";
+import { ReportsScreen } from "./ReportsScreen";
 import { SendQuoteModal } from "./SendQuoteModal";
 import { SendInvoiceModal } from "./SendInvoiceModal";
 
@@ -102,6 +103,7 @@ export function AppShell() {
         <SendInvoiceModal invoiceId={modal.invoiceId} />
       )}
       {modal.type === "pro-upgrade" && <ProUpgradeModal />}
+      {modal.type === "reports" && <ReportsScreen />}
       {modal.type === "ai-omni-input" && (
         <AiOmniInputModal
           isOpen

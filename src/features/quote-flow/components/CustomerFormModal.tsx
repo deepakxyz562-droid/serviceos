@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ArrowLeft, ChevronDown, ChevronUp, UserPlus } from "lucide-react";
 
 interface Props {
   customerId?: string;
@@ -99,18 +99,26 @@ export function CustomerFormModal({ customerId }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-6 shadow-2xl sm:rounded-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-stone-900">
-            {customerId ? "Edit Client" : "Create Client"}
-          </h2>
-          <button onClick={closeModal} className="text-stone-400 hover:text-stone-700">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
+      {/* Full-page header with back button */}
+      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <button onClick={closeModal} className="flex items-center gap-1 text-stone-600 hover:text-stone-900">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <h2 className="text-base font-semibold text-stone-900">
+          {customerId ? "Edit Client" : "Create Client"}
+        </h2>
+        <Button
+          type="button"
+          onClick={() => document.getElementById('customer-submit-btn')?.click()}
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700 text-xs font-bold h-8 px-4"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+        </Button>
+      </div>
 
-        <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="mx-auto max-w-md space-y-4 px-5 py-4 pb-24">
           {/* Card: Basic Info */}
           <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/50 p-4">
             <div>
@@ -286,6 +294,7 @@ export function CustomerFormModal({ customerId }: Props) {
           )}
 
           <div className="flex gap-3 pt-2">
+            <button id="customer-submit-btn" type="submit" className="hidden" />
             <Button type="button" variant="outline" onClick={closeModal} className="flex-1">
               Cancel
             </Button>
@@ -300,6 +309,5 @@ export function CustomerFormModal({ customerId }: Props) {
           </div>
         </form>
       </div>
-    </div>
   );
 }

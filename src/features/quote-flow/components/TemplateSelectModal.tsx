@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
-import { ChevronLeft, Check, Crown } from "lucide-react";
+import { ChevronLeft, Check, Crown, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface TemplateDefinition {
@@ -80,7 +80,7 @@ export const TEMPLATES_CATALOG: TemplateDefinition[] = [
 
 interface TemplateSelectModalProps {
   currentTemplateId?: string;
-  onSelect: (templateId: string) => void;
+  onSelect: (templateId: string, accentColor?: string, fontSize?: string) => void;
   onClose: () => void;
 }
 
@@ -91,6 +91,8 @@ export function TemplateSelectModal({
 }: TemplateSelectModalProps) {
   const openModal = useAppStore((s) => s.openModal);
   const [selectedId, setSelectedId] = useState(currentTemplateId);
+  const [selectedColor, setSelectedColor] = useState("#3b82f6");
+  const [selectedFontSize, setSelectedFontSize] = useState("medium");
   const [activeCategory, setActiveCategory] = useState<
     "Recommend" | "Simple" | "Classic" | "Professional" | "Color"
   >("Recommend");
@@ -109,13 +111,14 @@ export function TemplateSelectModal({
       : TEMPLATES_CATALOG.filter((t) => t.category === activeCategory);
 
   function handleSave() {
-    onSelect(selectedId);
+    // Pass template ID + accent color + font size to the parent
+    onSelect(selectedId, selectedColor, selectedFontSize);
     onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
-      <div className="max-h-[95vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl flex flex-col">
+    <div className="fixed inset-0 z-50 bg-stone-50 overflow-y-auto">
+      <div className="mx-auto max-w-md px-5 py-4 pb-24">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white/95 px-5 py-3.5 backdrop-blur">
           <button
@@ -266,6 +269,47 @@ export function TemplateSelectModal({
               </div>
             );
           })}
+        </div>
+
+        {/* Color Picker (Phase 2) */}
+        <div className="px-4 py-3 border-t border-stone-100">
+          <h3 className="text-xs font-bold text-stone-700 mb-2">Accent Color</h3>
+          <div className="flex flex-wrap gap-2">
+            {["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899", "#6366f1", "#14b8a6", "#f97316", "#0f172a", "#78716c"].map((color) => (
+              <button
+                key={color}
+                onClick={() => setSelectedColor(color)}
+                className={`size-8 rounded-full border-2 transition ${
+                  selectedColor === color ? "border-stone-900 ring-2 ring-stone-400/30" : "border-stone-200"
+                }`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Font Size Presets (Phase 2) */}
+        <div className="px-4 py-3 border-t border-stone-100">
+          <h3 className="text-xs font-bold text-stone-700 mb-2">Font Size</h3>
+          <div className="flex gap-2">
+            {[
+              { label: "Small", value: "small" },
+              { label: "Medium", value: "medium" },
+              { label: "Large", value: "large" },
+            ].map((font) => (
+              <button
+                key={font.value}
+                onClick={() => setSelectedFontSize(font.value)}
+                className={`flex-1 rounded-lg border py-2 text-xs font-semibold transition ${
+                  selectedFontSize === font.value
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-stone-200 text-stone-500 hover:border-stone-300"
+                }`}
+              >
+                {font.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>

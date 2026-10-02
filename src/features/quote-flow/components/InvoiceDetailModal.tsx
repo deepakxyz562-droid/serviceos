@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit, Printer, Palette, Copy, FileText } from "lucide-react";
+import { Loader2, X, MoreHorizontal, Send, Download, CheckCircle2, Edit, Printer, Palette, Copy, FileText, ArrowLeft, Trash2, MessageSquare } from "lucide-react";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -149,53 +150,56 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
 
   if (loading)
     return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-50">
         <Loader2 className="h-6 w-6 animate-spin text-white" />
       </div>
     );
   if (!inv) return null;
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button onClick={closeModal} className="text-stone-400 hover:text-stone-700">
-              <X className="h-5 w-5" />
-            </button>
-            <h2 className="text-base font-semibold text-stone-900">Invoice {inv.number}</h2>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreHorizontal className="h-5 w-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}>
-                <Edit className="mr-2 h-4 w-4" /> Edit Invoice
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
-                <Palette className="mr-2 h-4 w-4" /> Change Template
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={duplicateInvoice}>
-                <Copy className="mr-2 h-4 w-4" /> Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={convertToEstimate}>
-                <FileText className="mr-2 h-4 w-4" /> Convert to Estimate
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}>
-                <Download className="mr-2 h-4 w-4" /> Download PDF
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}>
-                <Printer className="mr-2 h-4 w-4" /> Print
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+    <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
+      {/* Full-page header with back button + actions */}
+      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <button onClick={closeModal} className="text-stone-600 hover:text-stone-900">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <h2 className="text-base font-semibold text-stone-900">Invoice {inv.number}</h2>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="h-5 w-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}>
+              <Edit className="mr-2 h-4 w-4" /> Edit Invoice
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
+              <Palette className="mr-2 h-4 w-4" /> Customize
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openModal({ type: "send-invoice", invoiceId: inv.id })}>
+              <Send className="mr-2 h-4 w-4" /> Share
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={duplicateInvoice}>
+              <Copy className="mr-2 h-4 w-4" /> Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={convertToEstimate}>
+              <FileText className="mr-2 h-4 w-4" /> Convert to Estimate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}>
+              <Download className="mr-2 h-4 w-4" /> Download PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}>
+              <Printer className="mr-2 h-4 w-4" /> Print
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <div className="mx-auto max-w-md px-5 py-4 pb-24">
 
         <div className="mb-3 flex items-center gap-2">
           <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold capitalize text-stone-700">
@@ -311,6 +315,61 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
             <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Working...
           </div>
         )}
+      </div>
+
+      {/* Bottom action bar — Download, Print, Edit, More */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 flex items-center gap-2 border-t border-stone-200 bg-white px-4 py-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}
+          className="flex-1 text-xs gap-1.5"
+        >
+          <Edit className="size-4" /> Edit
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}
+          className="flex-1 text-xs gap-1.5"
+        >
+          <Download className="size-4" /> PDF
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}
+          className="flex-1 text-xs gap-1.5"
+        >
+          <Printer className="size-4" /> Print
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5">
+              <MoreHorizontal className="size-4" /> More
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
+              <Palette className="mr-2 h-4 w-4" /> Customize
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openModal({ type: "send-invoice", invoiceId: inv.id })}>
+              <Send className="mr-2 h-4 w-4" /> Share
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={duplicateInvoice}>
+              <Copy className="mr-2 h-4 w-4" /> Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={convertToEstimate}>
+              <FileText className="mr-2 h-4 w-4" /> Convert to Estimate
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => toast.info("Thank you for your feedback! We'll use it to improve.")}>
+              <MessageSquare className="mr-2 h-4 w-4" /> Feedback
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">
+              <Trash2 className="mr-2 h-4 w-4" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

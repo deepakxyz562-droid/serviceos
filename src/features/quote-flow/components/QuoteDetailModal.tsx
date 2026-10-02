@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, X, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit, Printer, Palette } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit, Printer, Palette } from "lucide-react";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
@@ -191,7 +191,7 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
 
   if (loading)
     return (
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50">
+      <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
         <Loader2 className="h-6 w-6 animate-spin text-white" />
       </div>
     );
@@ -205,15 +205,15 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/50 sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl">
+    <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
+      <div className="mx-auto max-w-md px-5 py-4 pb-24">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={closeModal}
               className="text-stone-400 hover:text-stone-700"
             >
-              <X className="h-5 w-5" />
+              <ArrowLeft className="h-5 w-5" />
             </button>
             <h2 className="text-base font-semibold text-stone-900">Quote {quote.number}</h2>
           </div>
