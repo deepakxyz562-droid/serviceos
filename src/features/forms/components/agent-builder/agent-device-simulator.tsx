@@ -340,6 +340,7 @@ export function AgentDeviceSimulator({
   const [voiceTranscript, setVoiceTranscript] = useState<string>('');
   const [agentSpeaking, setAgentSpeaking] = useState<boolean>(false);
   const recognitionRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [attachedImage, setAttachedImage] = useState<{ name: string; url: string } | null>(null);
@@ -361,11 +362,18 @@ export function AgentDeviceSimulator({
     e.target.value = '';
   };
 
-  // Text-to-speech engine matching agent voice tone
-  const speakAiResponse = useCallback((text: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window) || isMuted) return;
+  // Text-to-speech engine matching agent voice tone (backend TTS + browser fallback)
+  const speakAiResponse = useCallback(async (text: string) => {
+    if (typeof window === 'undefined' || isMuted) return;
 
-    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     const cleanText = text
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .replace(/[*_#`~]/g, '')
@@ -373,6 +381,55 @@ export function AgentDeviceSimulator({
       .trim();
 
     if (!cleanText) return;
+
+    setAgentSpeaking(true);
+
+    // 1. Try High-Quality Backend TTS (OpenAI or ElevenLabs)
+    try {
+      const voiceId = agent.settings?.voice?.voiceId || agent.channels?.phone?.voiceId || 'alloy';
+      const provider = agent.settings?.voice?.provider || 'openai';
+
+      const res = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: cleanText,
+          voice: voiceId,
+          provider,
+        }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+
+        audio.onended = () => {
+          setAgentSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+          if (isCalling && recognitionRef.current) {
+            try { recognitionRef.current.start(); } catch {}
+          }
+        };
+
+        audio.onerror = () => {
+          setAgentSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+
+        await audio.play();
+        return;
+      }
+    } catch {
+      // Fall through to browser speech synthesis
+    }
+
+    // 2. Resilient Fallback: Browser Web Speech API
+    if (!('speechSynthesis' in window)) {
+      setAgentSpeaking(false);
+      return;
+    }
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = agent.voiceTone === 'energetic' ? 1.1 : agent.voiceTone === 'calm' ? 0.95 : 1.0;
@@ -395,7 +452,7 @@ export function AgentDeviceSimulator({
     utterance.onerror = () => setAgentSpeaking(false);
 
     window.speechSynthesis.speak(utterance);
-  }, [agent.voiceTone, isCalling, isMuted]);
+  }, [agent.voiceTone, agent.settings?.voice, agent.channels?.phone?.voiceId, isCalling, isMuted]);
 
   // Two-way interactive voice call toggle
   const toggleVoiceCall = () => {
@@ -405,6 +462,10 @@ export function AgentDeviceSimulator({
       setVoiceTranscript('');
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch {}
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
       }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();

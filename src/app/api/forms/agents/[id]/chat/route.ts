@@ -443,6 +443,33 @@ HYPERLINK RULE: When mentioning specific services, service areas, or contact inf
       `- Online scheduling available 24/7`,
     ].filter(Boolean).join('\n');
 
+    // Fetch synced E-commerce products (Shopify / Store catalog)
+    let productCatalogPrompt = '';
+    const storeTenantId = tenantId || agent.tenantId;
+    if (storeTenantId) {
+      try {
+        const products = await db.ecommerceProduct.findMany({
+          where: { tenantId: storeTenantId, status: 'active' },
+          select: {
+            title: true,
+            description: true,
+            price: true,
+            currency: true,
+            inventoryQuantity: true,
+            productType: true,
+          },
+          take: 20,
+        });
+        if (products.length > 0) {
+          productCatalogPrompt = `STORE PRODUCTS & INVENTORY (Shopify / E-Commerce Catalog):\n${products
+            .map((p) => `- ${p.title} (${p.currency || 'USD'} $${p.price.toFixed(2)}${p.inventoryQuantity > 0 ? `, in stock: ${p.inventoryQuantity}` : ', out of stock'})${p.description ? `: ${p.description.slice(0, 100)}` : ''}`)
+            .join('\n')}\nYou can answer questions about product availability, features, and pricing.`;
+        }
+      } catch (err) {
+        console.warn('[forms/agent-chat] Product catalog load warning:', err);
+      }
+    }
+
     // 4. Intent Classification: Answer Mode vs Action Mode
     const intentResult = classifyIntent(safeMessage);
     const isBookingOrIntake = intentResult.isBookingOrIntake;
@@ -453,6 +480,7 @@ HYPERLINK RULE: When mentioning specific services, service areas, or contact inf
       `Agent Identity: You are ${agent.name}, ${agent.roleTitle}.`,
       `Tone: ${agent.voiceTone}.`,
       businessProfilePrompt,
+      productCatalogPrompt,
       serviceAreasList ? `VERIFIED SERVICE AREAS & CITIES SERVED:\n${serviceAreasList}` : '',
       verifiedPagesPrompt,
       sessionContext ? sessionContext : '',  // Phase A: inject conversation memory

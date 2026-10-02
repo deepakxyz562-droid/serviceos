@@ -205,13 +205,21 @@ export interface FormAgentData {
     voice: {
       enabled: boolean;
       realtimeStreaming: boolean;
-      voiceProvider: 'tongtong' | 'chuichui' | 'xiaochen' | 'jam' | 'kazi' | 'douji' | 'luodo';
+      voiceProvider: 'tongtong' | 'chuichui' | 'xiaochen' | 'jam' | 'kazi' | 'douji' | 'luodo' | 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer' | 'Rachel' | 'Adam' | 'Antoni' | 'Bella' | string;
       speed?: number; // 0.5–2.0, default 1.0
     };
     messenger: {
       enabled: boolean;
       facebookPageId?: string;
       greetingMessage?: string;
+    };
+    shopify?: {
+      enabled: boolean;
+      shopDomain?: string;
+      accessToken?: string;
+      syncProducts?: boolean;
+      lastSyncAt?: string;
+      productCount?: number;
     };
     sms: {
       enabled: boolean;
@@ -435,6 +443,10 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     },
     messenger: {
       enabled: false,
+    },
+    shopify: {
+      enabled: true,
+      syncProducts: true,
     },
     sms: {
       enabled: false,

@@ -45,6 +45,12 @@ import {
   Check,
   ExternalLink,
   QrCode,
+  Play,
+  Square,
+  Volume2,
+  ShoppingBag,
+  Store,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -280,6 +286,113 @@ export function AgentBuildTab({
         },
       },
     });
+  };
+
+  const updateShopifyConfig = (updates: Partial<NonNullable<typeof agent.channels.shopify>>) => {
+    onChange({
+      ...agent,
+      channels: {
+        ...agent.channels,
+        shopify: {
+          ...agent.channels?.shopify,
+          enabled: updates.enabled ?? agent.channels?.shopify?.enabled ?? true,
+          shopDomain: updates.shopDomain ?? agent.channels?.shopify?.shopDomain ?? '',
+          accessToken: updates.accessToken ?? agent.channels?.shopify?.accessToken ?? '',
+          syncProducts: updates.syncProducts ?? agent.channels?.shopify?.syncProducts ?? true,
+          lastSyncAt: updates.lastSyncAt ?? agent.channels?.shopify?.lastSyncAt,
+          productCount: updates.productCount ?? agent.channels?.shopify?.productCount ?? 0,
+        },
+      },
+    });
+  };
+
+  const [isAuditioning, setIsAuditioning] = useState(false);
+  const auditionAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleAuditionVoice = async () => {
+    if (isAuditioning) {
+      if (auditionAudioRef.current) {
+        auditionAudioRef.current.pause();
+        auditionAudioRef.current.currentTime = 0;
+      }
+      setIsAuditioning(false);
+      return;
+    }
+
+    try {
+      setIsAuditioning(true);
+      const voice = agent.channels?.voice?.voiceProvider || 'alloy';
+      const speed = agent.channels?.voice?.speed || 1.0;
+      const res = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: 'Hello! I am your AI assistant. How can I help your business today?',
+          voice,
+          speed,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || 'Failed to synthesize voice preview');
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (auditionAudioRef.current) {
+        auditionAudioRef.current.pause();
+      }
+      const audio = new Audio(url);
+      auditionAudioRef.current = audio;
+      audio.onended = () => {
+        setIsAuditioning(false);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setIsAuditioning(false);
+        URL.revokeObjectURL(url);
+      };
+      await audio.play();
+    } catch (err: any) {
+      setIsAuditioning(false);
+      toast.error(err.message || 'Audition preview unavailable');
+    }
+  };
+
+  const [isSyncingShopify, setIsSyncingShopify] = useState(false);
+  const handleSyncShopify = async () => {
+    const shopDomain = agent.channels?.shopify?.shopDomain;
+    const accessToken = agent.channels?.shopify?.accessToken;
+    if (!shopDomain) {
+      toast.error('Please enter your Shopify store domain (e.g. mystore.myshopify.com)');
+      return;
+    }
+    setIsSyncingShopify(true);
+    try {
+      const res = await fetch('/api/ecommerce/shopify/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: agent.id,
+          storeUrl: shopDomain,
+          accessToken,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to sync Shopify products');
+      }
+      updateShopifyConfig({
+        lastSyncAt: new Date().toISOString(),
+        productCount: data.count || 0,
+      });
+      toast.success(`Synced ${data.count || 0} products from Shopify!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to sync Shopify catalog');
+    } finally {
+      setIsSyncingShopify(false);
+    }
   };
 
   const selectAvatar = (av: AgentAvatarItem) => {
@@ -1848,26 +1961,51 @@ export function AgentBuildTab({
                   className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                 />
                 <p className="text-[10px] text-slate-400">
-                  POST JSON {`{ text, voice?, speed? }`} → returns audio/wav.
-                  The website voice widget should call this endpoint to speak agent
-                  replies instead of using the lower-quality browser speechSynthesis API.
-                  Powered by z-ai-web-dev-sdk (max 1024 chars per request).
+                  POST JSON {`{ text, voice?, speed? }`} → returns audio/mpeg.
+                  The website voice widget calls this endpoint to stream synthesized voice
+                  replies with sub-second latency. Powered by OpenAI &amp; ElevenLabs multi-provider engine.
                 </p>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Voice</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-slate-300">Voice Persona</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleAuditionVoice}
+                    className="h-6 px-2 text-[11px] text-sky-400 hover:text-sky-300 hover:bg-sky-950/40"
+                  >
+                    {isAuditioning ? (
+                      <>
+                        <Square className="size-3 mr-1 fill-sky-400" /> Stop Audition
+                      </>
+                    ) : (
+                      <>
+                        <Play className="size-3 mr-1 fill-sky-400" /> Audition Voice
+                      </>
+                    )}
+                  </Button>
+                </div>
                 <select
-                  value={agent.channels?.voice?.voiceProvider || 'tongtong'}
+                  value={agent.channels?.voice?.voiceProvider || 'alloy'}
                   onChange={(e) => updateVoiceConfig({ voiceProvider: e.target.value } as any)}
                   className="w-full text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 rounded-md px-2"
                 >
-                  <option value="tongtong">tongtong — warm & friendly</option>
-                  <option value="chuichui">chuichui — lively & cute</option>
-                  <option value="xiaochen">xiaochen — calm & professional</option>
-                  <option value="jam">jam — British gentleman</option>
-                  <option value="kazi">kazi — clear & standard</option>
-                  <option value="douji">douji — natural & fluent</option>
-                  <option value="luodo">luodo — expressive</option>
+                  <optgroup label="OpenAI High-Fidelity Voices">
+                    <option value="alloy">alloy — Neutral, balanced &amp; natural (Default)</option>
+                    <option value="echo">echo — Warm, conversational &amp; friendly</option>
+                    <option value="fable">fable — Expressive, British accent</option>
+                    <option value="onyx">onyx — Deep, authoritative &amp; professional</option>
+                    <option value="nova">nova — Energetic, bright &amp; engaging</option>
+                    <option value="shimmer">shimmer — Clear, crisp &amp; empathetic</option>
+                  </optgroup>
+                  <optgroup label="ElevenLabs Voices (Premium)">
+                    <option value="Rachel">Rachel — Calm, professional narrator</option>
+                    <option value="Adam">Adam — Deep, resonant American narrator</option>
+                    <option value="Antoni">Antoni — Confident, energetic executive</option>
+                    <option value="Bella">Bella — Warm, sweet &amp; friendly concierge</option>
+                  </optgroup>
                 </select>
               </div>
               <div className="space-y-1">
@@ -2064,6 +2202,89 @@ export function AgentBuildTab({
           {/* Shopify Channel Settings */}
           {activeChannel === 'shopify' && (
             <div className="space-y-3.5">
+              <div className="space-y-2.5 p-3 rounded-xl bg-slate-800/80 border border-slate-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="size-4 text-emerald-400" />
+                    <Label className="text-xs font-semibold text-white">Store Connection &amp; Product Sync</Label>
+                  </div>
+                  {agent.channels?.shopify?.productCount !== undefined && agent.channels.shopify.productCount > 0 ? (
+                    <Badge variant="outline" className="text-[10px] bg-emerald-950/60 text-emerald-300 border-emerald-800">
+                      ✓ {agent.channels.shopify.productCount} Products Synced
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-400 border-slate-700">
+                      Not Synced
+                    </Badge>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-medium text-slate-300">Shopify Store Domain</Label>
+                  <Input
+                    placeholder="mystore.myshopify.com"
+                    value={agent.channels?.shopify?.shopDomain || ''}
+                    onChange={(e) => updateShopifyConfig({ shopDomain: e.target.value })}
+                    className="text-xs h-8 bg-slate-900 border-slate-700 font-mono text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Your myshopify.com address or connected custom domain.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-medium text-slate-300">Admin API Access Token (Optional)</Label>
+                  <Input
+                    type="password"
+                    placeholder="shpat_xxxxxxxxxxxxxxxxxxxxx"
+                    value={agent.channels?.shopify?.accessToken || ''}
+                    onChange={(e) => updateShopifyConfig({ accessToken: e.target.value })}
+                    className="text-xs h-8 bg-slate-900 border-slate-700 font-mono text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    From your Shopify App &rarr; API credentials. If left blank, the agent syncs public products via Storefront catalog.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-[10px] text-slate-400">
+                    {agent.channels?.shopify?.lastSyncAt ? (
+                      <span>Last synced: {new Date(agent.channels.shopify.lastSyncAt).toLocaleDateString()} {new Date(agent.channels.shopify.lastSyncAt).toLocaleTimeString()}</span>
+                    ) : (
+                      <span>Sync your product catalog to enable AI product advice.</span>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={isSyncingShopify}
+                    onClick={handleSyncShopify}
+                    className="h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium"
+                  >
+                    {isSyncingShopify ? (
+                      <>
+                        <Loader2 className="size-3 mr-1 animate-spin" /> Syncing...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="size-3 mr-1" /> Sync Products
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-700/60">
+                  <div className="space-y-0.5">
+                    <span className="text-[11px] font-medium text-slate-200">AI Product &amp; Inventory Knowledge</span>
+                    <p className="text-[10px] text-slate-400">Allows agent to answer stock, pricing &amp; variant questions</p>
+                  </div>
+                  <Switch
+                    checked={agent.channels?.shopify?.syncProducts ?? true}
+                    onCheckedChange={(c) => updateShopifyConfig({ syncProducts: c })}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Shopify Liquid Code (theme.liquid)</Label>
                 <div className="relative">

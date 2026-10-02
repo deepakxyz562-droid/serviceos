@@ -32,9 +32,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { text, voice = 'tongtong', speed = 1.0 } = body as {
+    const {
+      text,
+      voice = 'alloy',
+      voiceId,
+      provider = 'openai',
+      speed = 1.0,
+    } = body as {
       text?: string;
       voice?: string;
+      voiceId?: string;
+      provider?: 'openai' | 'elevenlabs';
       speed?: number;
     };
 
@@ -49,6 +57,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 1. ElevenLabs TTS (if provider requested and key available)
+    const elevenLabsKey = process.env.ELEVENLABS_API_KEY;
+    if ((provider === 'elevenlabs' || elevenLabsKey) && elevenLabsKey) {
+      const selectedVoiceId = voiceId || (voice.length > 15 ? voice : '21m00Tcm4TlvDq8ikWAM');
+      try {
+        const elResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoiceId}`, {
+          method: 'POST',
+          headers: {
+            'xi-api-key': elevenLabsKey,
+            'Content-Type': 'application/json',
+            Accept: 'audio/mpeg',
+          },
+          body: JSON.stringify({
+            text: text.slice(0, 4000),
+            model_id: 'eleven_turbo_v2_5',
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+            },
+          }),
+        });
+
+        if (elResponse.ok) {
+          const arrayBuffer = await elResponse.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          return new NextResponse(buffer, {
+            status: 200,
+            headers: {
+              'Content-Type': 'audio/mpeg',
+              'Content-Length': buffer.length.toString(),
+              'Cache-Control': 'no-cache',
+            },
+          });
+        }
+      } catch (elErr) {
+        console.warn('[voice/tts] ElevenLabs call failed, trying OpenAI fallback:', elErr);
+      }
+    }
+
+    // 2. OpenAI TTS (tts-1)
     const openaiKey = process.env.OPENAI_API_KEY;
     if (openaiKey) {
       const openAiVoice = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].includes(voice.toLowerCase())
@@ -86,7 +134,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          'Text-to-Speech provider not configured. Please set OPENAI_API_KEY in your environment to enable AI voice generation.',
+          'Text-to-Speech provider not configured. Please set OPENAI_API_KEY or ELEVENLABS_API_KEY in your environment to enable AI voice generation.',
       },
       { status: 503 },
     );

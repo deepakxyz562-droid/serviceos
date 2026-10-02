@@ -441,6 +441,34 @@ export async function POST(req: NextRequest) {
       ? services.map((s) => `- ${s.name} ($${s.defaultPrice || 'Custom Quote'}): ${s.description || ''}`).join('\n')
       : 'Services: Not yet configured — check our website or knowledge base for details.';
 
+    // Fetch synced E-commerce products (Shopify / Store catalog)
+    const ecommerceProducts = (tenantId || workspaceId)
+      ? await db.ecommerceProduct.findMany({
+          where: {
+            OR: [
+              ...(tenantId ? [{ tenantId }] : []),
+              ...(workspaceId ? [{ workspaceId }] : []),
+            ],
+            status: 'active',
+          },
+          select: {
+            title: true,
+            description: true,
+            price: true,
+            currency: true,
+            inventoryQuantity: true,
+            productType: true,
+          },
+          take: 20,
+        }).catch(() => [])
+      : [];
+
+    const productCatalogPrompt = ecommerceProducts.length > 0
+      ? `STORE PRODUCTS & INVENTORY (Shopify / E-Commerce Catalog):\n${ecommerceProducts
+          .map((p) => `- ${p.title} (${p.currency || 'USD'} $${p.price.toFixed(2)}${p.inventoryQuantity > 0 ? `, in stock: ${p.inventoryQuantity}` : ', out of stock'})${p.description ? `: ${p.description.slice(0, 100)}` : ''}`)
+          .join('\n')}\nYou can answer questions about product availability, stock, and pricing.`
+      : '';
+
     // 4. Construct AI Prompt with Zero-Hallucination Guardrails
     // Include the agent's configured knowledge (systemPrompt, faqPairs, guardrails)
     // from the wizard-generated configJson — previously ignored entirely.
@@ -538,6 +566,7 @@ ${agentSystemPrompt ? `AGENT INSTRUCTIONS:\n${agentSystemPrompt}\n` : ''}
 ${sessionContext ? sessionContext + '\n' : ''}
 BUSINESS SERVICES & PRICING:
 ${servicesList}
+${productCatalogPrompt ? `\n${productCatalogPrompt}\n` : ''}
 
 ${verifiedPagesPrompt}
 
