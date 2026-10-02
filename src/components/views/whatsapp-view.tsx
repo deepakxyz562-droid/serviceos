@@ -29,6 +29,7 @@ import { WhatsAppWorkflowTemplates } from '@/components/whatsapp/whatsapp-workfl
 // WhatsAppCreditBanner import removed — component was deleted (Issue 5).
 import { WhatsAppSetupWizard } from '@/components/whatsapp/whatsapp-setup-wizard';
 import { WhatsAppTemplateCatalog } from '@/components/whatsapp/whatsapp-template-catalog';
+import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -195,6 +196,12 @@ export function WhatsAppView() {
   const demoPageSize = useDemoPageSize(50);
 
   const [activeTab, setActiveTab] = useState('conversations');
+  const [waStatus, setWaStatus] = useState<{
+    enabled: boolean;
+    connected: boolean;
+    phoneNumber?: string;
+    reason?: string;
+  } | null>(null);
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<ConversationData | null>(null);
   const [conversationMessages, setConversationMessages] = useState<ConversationMessage[]>([]);
@@ -315,7 +322,26 @@ export function WhatsAppView() {
     fetchNotificationLogs();
     fetchTemplates();
     fetchCredentials();
+    fetchWhatsAppStatus();
   }, [fetchConversations, fetchLeads, fetchNotificationLogs, fetchTemplates, fetchCredentials]);
+
+  // Fetch the real WhatsApp connection state (BYO check — only tenant-owned
+  // providers count, NOT the platform-managed fallback).
+  const fetchWhatsAppStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/whatsapp/status', { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      setWaStatus({
+        enabled: data.enabled,
+        connected: data.ownConnected ?? data.enabled,
+        phoneNumber: data.ownProvider?.phoneNumber ?? undefined,
+        reason: data.reason,
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
 
   // Auto-refresh every 30s
   useEffect(() => {
@@ -566,6 +592,49 @@ export function WhatsAppView() {
           WhatsApp is BYO (user connects own Meta API). Until the user connects
           their own Meta API, the WhatsApp view shows a connect-CTA instead of
           a credit banner. See Issue 5. */}
+
+      {/* ── Connection Status / Connect CTA ── */}
+      {waStatus && !waStatus.connected && (
+        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30">
+          <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="size-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                  WhatsApp Business not connected
+                </span>
+              </div>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Connect your own WhatsApp Business Account (WABA) via Meta Embedded Signup
+                to send and receive messages. Fieseros does not provide a platform WhatsApp number.
+              </p>
+            </div>
+            <WhatsAppEmbeddedSignupButton
+              label="Connect WhatsApp via Meta"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white shrink-0"
+              onSuccess={() => {
+                toast.success('WhatsApp connected! Reloading…');
+                fetchWhatsAppStatus();
+              }}
+            />
+          </CardContent>
+        </Card>
+      )}
+      {waStatus && waStatus.connected && (
+        <Card className="border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/30">
+          <CardContent className="p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                Connected{waStatus.phoneNumber ? ` (${waStatus.phoneNumber})` : ''}
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchWhatsAppStatus}>
+              <RefreshCw className="size-3.5 mr-1.5" /> Refresh status
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

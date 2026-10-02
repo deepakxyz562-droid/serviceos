@@ -157,40 +157,41 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         }
       }
 
-      // 2c. Legacy fallback: any active WhatsApp provider that is NOT a platform provider
-      if (!accessToken) {
-        const waProviders = await db.communicationProvider.findMany({
-          where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: false },
-          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-          include: { credential: true },
-        })
-        for (const prov of waProviders) {
-          const resolved = resolveWACreds(prov)
-          if (resolved) {
-            accessToken = resolved.accessToken
-            phoneNumberId = resolved.phoneNumberId
-            credentialSource = `communicationProvider:${prov.id}(${prov.name}/${prov.provider})`
-            break
-          }
-        }
-      }
+      // 2c. Legacy fallback: REMOVED — this findMany was NOT scoped by tenantId,
+      //      which is a cross-tenant credential leak risk. Steps 2a + 2b above
+      //      already cover all tenant-owned providers. If no credentials were
+      //      found there, the tenant has NOT connected their own WhatsApp.
+      //      Proceed to the platform fallback (2d) which is now guarded.
 
       // 2d. Platform provider fallback (SuperAdmin configured):
       // When a tenant does not have their own connected Meta account, use
       // the SuperAdmin platform provider to deliver notifications.
-      if (!accessToken) {
-        const platformProviders = await db.communicationProvider.findMany({
-          where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true },
-          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-          include: { credential: true },
+      //
+      // BYO GUARD (Phase C): if the tenant has ANY whatsapp provider row
+      // (even inactive), they have ATTEMPTED BYO — do NOT fall back to
+      // platform. This prevents silent platform-WABA sends.
+      if (!accessToken && tenantId) {
+        const anyTenantWaRow = await db.communicationProvider.findFirst({
+          where: { type: 'whatsapp', tenantId },
+          select: { id: true },
         })
-        for (const prov of platformProviders) {
-          const resolved = resolveWACreds(prov)
-          if (resolved) {
-            accessToken = resolved.accessToken
-            phoneNumberId = resolved.phoneNumberId
-            credentialSource = `communicationProvider:${prov.id}(${prov.name}/platform)`
-            break
+        if (anyTenantWaRow) {
+          // Tenant attempted BYO — don't silently use platform WABA.
+          console.warn(`[WhatsApp] tenant ${tenantId} has a whatsapp row but no valid tenant-owned credentials — NOT using platform fallback.`)
+        } else {
+          const platformProviders = await db.communicationProvider.findMany({
+            where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true },
+            orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+            include: { credential: true },
+          })
+          for (const prov of platformProviders) {
+            const resolved = resolveWACreds(prov)
+            if (resolved) {
+              accessToken = resolved.accessToken
+              phoneNumberId = resolved.phoneNumberId
+              credentialSource = `communicationProvider:${prov.id}(${prov.name}/platform)`
+              break
+            }
           }
         }
       }

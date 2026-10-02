@@ -17,12 +17,17 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
  * Resolve WhatsApp credentials from the database with fallback chain:
  *
  * 1. Tenant's own (non-platform) WhatsApp CommunicationProvider
- * 2. Platform (shared) WhatsApp CommunicationProvider (SuperAdmin-configured)
+ * 2. Platform (shared) WhatsApp CommunicationProvider — ONLY if the tenant
+ *    has NOT attempted BYO (i.e., has zero type='whatsapp' rows of any
+ *    kind). This prevents silent platform-WABA sends for tenants whose
+ *    BYO connection is broken/misconfigured.
  * 3. .env vars (legacy fallback)
  *
- * This ensures that if a user hasn't added their own Meta details,
- * the SuperAdmin-configured platform WhatsApp is used — giving 10 free
- * trial credits.
+ * GUARD (Phase C): if the tenant has ANY type='whatsapp' provider row
+ * (active or not), we NEVER fall back to the platform-managed provider.
+ * This stops the "silent connect" where a tenant clicks Connect, the BYO
+ * row fails to save, and subsequent sends go out via Fieseros' WABA
+ * without the tenant knowing.
  */
 export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsAppConfig> {
   try {
@@ -52,9 +57,27 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
           }
         }
       }
+
+      // ── BYO GUARD (Phase C) ──────────────────────────────────────────
+      // If the tenant has ANY whatsapp provider row (even inactive / not
+      // sendingEnabled), they have ATTEMPTED BYO. Do NOT fall back to the
+      // platform-managed WABA — return an empty config so the send fails
+      // with a clear "your WhatsApp connection is broken" error instead
+      // of silently sending via Fieseros' WABA.
+      const anyTenantWaRow = await db.communicationProvider.findFirst({
+        where: { type: 'whatsapp', tenantId },
+        select: { id: true, isPlatform: true, status: true, sendingEnabled: true },
+      })
+      if (anyTenantWaRow) {
+        // Tenant has attempted BYO. If the only row is platform-managed
+        // (from the seed), that's still an attempt — block the fallback.
+        console.warn(`[WhatsApp Config] tenant ${tenantId} has a whatsapp provider row (isPlatform=${anyTenantWaRow.isPlatform}, status=${anyTenantWaRow.status}) but no valid tenant-owned credentials — NOT falling back to platform WABA. Fix your BYO connection.`)
+        return { accessToken: '', phoneNumberId: '', verifyToken: '', source: 'none' }
+      }
     }
 
-    // 2. Platform (shared) WhatsApp provider — SuperAdmin-configured
+    // 2. Platform (shared) WhatsApp provider — ONLY for tenants who have
+    //    NOT attempted BYO (no whatsapp row at all). Used for trial mode.
     let platformProvider = null
     if (tenantId) {
       platformProvider = await db.communicationProvider.findFirst({
@@ -70,16 +93,22 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
       })
     }
     if (!platformProvider) {
-      platformProvider = await db.communicationProvider.findFirst({
-        where: {
-          type: 'whatsapp',
-          status: 'active',
-          sendingEnabled: true,
-          isPlatform: true,
-        },
-        orderBy: { updatedAt: 'desc' },
-        include: { credential: true },
-      })
+      // Only fall back to an unscoped platform provider (one attached to
+      // any tenant) if the caller has NO tenantId at all (e.g., a system-
+      // level send). This is the cross-tenant guard — previously this query
+      // was unscoped and could leak credentials across tenants.
+      if (!tenantId) {
+        platformProvider = await db.communicationProvider.findFirst({
+          where: {
+            type: 'whatsapp',
+            status: 'active',
+            sendingEnabled: true,
+            isPlatform: true,
+          },
+          orderBy: { updatedAt: 'desc' },
+          include: { credential: true },
+        })
+      }
     }
     if (platformProvider) {
       const resolved = resolveWACredsFromProvider(platformProvider)
@@ -93,34 +122,11 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
         }
       }
     }
-
-    // 3. Legacy fallback: any active WhatsApp provider without isPlatform filter
-    const anyProvider = await db.communicationProvider.findFirst({
-      where: {
-        type: 'whatsapp',
-        status: 'active',
-        sendingEnabled: true,
-      },
-      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-      include: { credential: true },
-    })
-    if (anyProvider) {
-      const resolved = resolveWACredsFromProvider(anyProvider)
-      if (resolved) {
-        return {
-          accessToken: resolved.accessToken,
-          phoneNumberId: resolved.phoneNumberId,
-          verifyToken: resolved.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN || 'fieseros_verify_token',
-          wabaId: resolved.wabaId,
-          source: anyProvider.isPlatform ? 'platform' : 'tenant-own',
-        }
-      }
-    }
   } catch (err) {
     console.error('[WhatsApp Config] DB lookup error:', err)
   }
 
-  // 4. Final fallback: .env vars (legacy)
+  // 3. Final fallback: .env vars (legacy)
   const envConfig = getWhatsAppConfigFromEnv()
   if (envConfig.accessToken && envConfig.phoneNumberId) {
     return { ...envConfig, source: 'env' }

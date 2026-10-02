@@ -21,6 +21,11 @@ import { db } from '@/lib/db';
  */
 
 const META_GRAPH_API = 'https://graph.facebook.com/v21.0';
+// NOTE: This route uses v21.0 to match the Facebook JS SDK version
+// (whatsapp-embedded-signup-button.tsx loads FB SDK with version: 'v21.0').
+// The send path (src/lib/whatsapp-send.ts) uses v25.0 — that's fine because
+// the Graph API is backward-compatible and the send path doesn't use the
+// FB SDK. The stored apiVersion in configJson is 'v21.0' for traceability.
 
 export async function POST(request: NextRequest) {
   try {
@@ -94,6 +99,7 @@ export async function POST(request: NextRequest) {
 
     let wabaId: string | null = null;
     let phoneNumberId: string | null = null;
+    let displayPhoneNumber: string | null = null;
 
     if (wabaRes.ok) {
       const debugData = await wabaRes.json();
@@ -114,6 +120,10 @@ export async function POST(request: NextRequest) {
         const phoneData = await phoneRes.json();
         if (phoneData.data?.length > 0) {
           phoneNumberId = phoneData.data[0].id;
+          // Capture the display phone number (E.164) so the Publish card
+          // can show the real number the tenant connected.
+          displayPhoneNumber = phoneData.data[0].display_phone_number ||
+            phoneData.data[0].verified_name || null;
         }
       }
 
@@ -154,31 +164,53 @@ export async function POST(request: NextRequest) {
       accessToken: longLivedToken,
       phoneNumberId: phoneNumberId || '',
       wabaId: wabaId || '',
+      displayPhoneNumber: displayPhoneNumber || '',
       apiVersion: 'v21.0',
       source: 'embedded_signup',
       connectedAt: new Date().toISOString(),
       connectedBy: user.id,
     });
 
-    // Upsert the CommunicationProvider record for this tenant
+    // Upsert the CommunicationProvider record for this tenant.
+    //
+    // BUG FIXES (Phase B):
+    //   1. findFirst now filters isPlatform: false — we must ONLY match
+    //      tenant-owned rows, never the platform-managed fallback.
+    //      Without this filter, tenant1's seeded platform provider would be
+    //      matched and its configJson overwritten with the tenant's tokens.
+    //   2. Removed the invalid `isActive: true` field — CommunicationProvider
+    //      has no `isActive` column (it has `status` + `isPlatform`).
+    //      Prisma mode throws; Supabase adapter silently strips it.
+    //   3. CREATE branch now includes the required `provider` field
+    //      (schema requires it, no default) + explicit `isPlatform: false`.
     const existing = await db.communicationProvider.findFirst({
-      where: { tenantId: user.tenantId, type: 'whatsapp' },
+      where: { tenantId: user.tenantId, type: 'whatsapp', isPlatform: false },
     });
 
     if (existing) {
       await db.communicationProvider.update({
         where: { id: existing.id },
-        data: { configJson, status: 'active', isActive: true },
+        data: {
+          configJson,
+          status: 'active',
+          sendingEnabled: true,
+          // Ensure a previously-platform row is converted to tenant-owned.
+          // (Safeguard — the findFirst filter above should prevent this, but
+          // if a row was mis-flagged in a prior version, this corrects it.)
+          isPlatform: false,
+        },
       });
     } else {
       await db.communicationProvider.create({
         data: {
           tenantId: user.tenantId,
           type: 'whatsapp',
+          provider: 'meta_cloud_api',
           name: 'WhatsApp Business (Embedded Signup)',
           configJson,
           status: 'active',
-          isActive: true,
+          sendingEnabled: true,
+          isPlatform: false,
         },
       });
     }
@@ -192,6 +224,7 @@ export async function POST(request: NextRequest) {
     console.log('[whatsapp/embedded-signup] WhatsApp connected successfully:', {
       wabaId,
       phoneNumberId,
+      displayPhoneNumber,
       tenantId: user.tenantId,
     });
 
@@ -199,6 +232,7 @@ export async function POST(request: NextRequest) {
       success: true,
       wabaId: wabaId || '',
       phoneNumberId: phoneNumberId || '',
+      displayPhoneNumber: displayPhoneNumber || '',
     });
   } catch (error) {
     console.error('[whatsapp/embedded-signup] Fatal error:', error);

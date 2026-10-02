@@ -945,12 +945,18 @@ export function FormAgentStudio({
         open={isWhatsAppModalOpen}
         onOpenChange={setIsWhatsAppModalOpen}
         agent={agent}
-        onSuccess={(phone) => {
+        onConnected={() => {
+          // The real connection state is read from the DB via
+          // /api/forms/agents/[id]/channel-status on the Publish tab.
+          // The modal's Embedded Signup button already created a
+          // tenant-owned CommunicationProvider row. We just need to
+          // mark the channel as enabled locally — the Publish card
+          // will re-fetch the real status on next render.
           setAgent((prev) => ({
             ...prev,
             channels: {
               ...prev.channels,
-              whatsapp: { ...prev.channels?.whatsapp, enabled: true, phoneNumber: phone, paired: true },
+              whatsapp: { ...prev.channels?.whatsapp, enabled: true, paired: true },
             },
           }));
         }}

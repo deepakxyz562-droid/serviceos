@@ -31,6 +31,7 @@ import {
 import { FormAgentData } from '@/features/forms/types/agent-types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { WhatsAppEmbeddedSignupButton } from '@/components/whatsapp/whatsapp-embedded-signup-button';
 
 // ══════════════════════════════════════════════════════════════════════════
 // 1. INSTAGRAM 3-STEP SETUP MODAL (Screenshot 3)
@@ -382,34 +383,63 @@ interface WhatsAppConnectModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   agent: FormAgentData;
-  onSuccess?: (phone: string) => void;
+  /**
+   * Called after a successful Embedded Signup (real Meta popup) OR manual
+   * token save. The caller should use this to refresh the channel status
+   * (re-fetch /api/forms/agents/[id]/channel-status) so the Publish card
+   * reads the real DB state instead of the free-text agent.channels JSON.
+   *
+   * NOTE: this no longer receives a `phone` string — the real phone number
+   * comes from the CommunicationProvider row via the channel-status endpoint.
+   * The old `(phone) => void` signature was a fake stub.
+   */
+  onConnected?: () => void;
 }
 
 export function WhatsAppConnectModal({
   open,
   onOpenChange,
   agent,
-  onSuccess,
+  onConnected,
 }: WhatsAppConnectModalProps) {
   const [mode, setMode] = useState<'embedded' | 'manual'>('embedded');
   const [phoneNumber, setPhoneNumber] = useState(agent.channels?.whatsapp?.phoneNumber || '');
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [accessToken, setAccessToken] = useState('');
+  const [wabaId, setWabaId] = useState('');
   const [connecting, setConnecting] = useState(false);
 
+  // Manual mode: POST the collected tokens to the backend which creates a
+  // tenant-owned CommunicationProvider row (isPlatform: false). This is the
+  // fallback path for users who can't use the Embedded Signup popup.
   const handleManualSave = async () => {
-    if (!phoneNumber.trim()) {
-      toast.error('Please enter a WhatsApp phone number');
+    if (!phoneNumber.trim() || !phoneNumberId.trim() || !accessToken.trim() || !wabaId.trim()) {
+      toast.error('Please fill in all four fields (phone, phone number ID, WABA ID, access token).');
       return;
     }
     setConnecting(true);
     try {
-      // Validate or save to provider
-      onSuccess?.(phoneNumber.trim());
+      const res = await fetch('/api/whatsapp/manual-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          phoneNumber: phoneNumber.trim(),
+          phoneNumberId: phoneNumberId.trim(),
+          wabaId: wabaId.trim(),
+          accessToken: accessToken.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        toast.error(data.error || `Failed to save WhatsApp config (${res.status})`);
+        return;
+      }
       toast.success('WhatsApp connected successfully!');
+      onConnected?.();
       onOpenChange(false);
-    } catch {
-      toast.error('Failed to connect WhatsApp');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to connect WhatsApp');
     } finally {
       setConnecting(false);
     }
@@ -473,31 +503,32 @@ export function WhatsAppConnectModal({
               <p className="text-xs text-slate-600 dark:text-slate-300">
                 Click below to launch Meta&apos;s official Embedded Signup popup to link your WhatsApp Business Account.
               </p>
-              <Button
-                type="button"
-                onClick={() => {
-                  toast.info('Launching Meta Facebook Login dialog...');
-                  // Simulate or launch
-                  setTimeout(() => {
-                    onSuccess?.('+1 (555) 019-2834');
-                    onOpenChange(false);
-                    toast.success('WhatsApp Business Account connected!');
-                  }, 1500);
-                }}
+              <WhatsAppEmbeddedSignupButton
+                label="Connect with Meta"
                 className="w-full h-10 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md gap-2"
-              >
-                <MessageCircle className="size-4" />
-                <span>Connect with Meta</span>
-              </Button>
+                onSuccess={() => {
+                  // The button internally POSTs to /api/whatsapp/embedded-signup
+                  // which creates a tenant-owned CommunicationProvider row.
+                  // After success, refresh the channel status so the Publish
+                  // card reads the real DB state (real phone number, provider name).
+                  onConnected?.();
+                  onOpenChange(false);
+                }}
+              />
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                A Meta popup will open. You&apos;ll select your Meta Business Manager,
+                WhatsApp Business Account (WABA), and phone number. Fieseros then
+                manages your WhatsApp messaging on your behalf.
+              </p>
             </div>
           ) : (
             <div className="space-y-3 pt-1">
               <div className="space-y-1">
                 <Label className="text-xs text-slate-700 dark:text-slate-300">
-                  WhatsApp Business Phone Number
+                  WhatsApp Business Phone Number (E.164)
                 </Label>
                 <Input
-                  placeholder="+1 (555) 019-2834"
+                  placeholder="+14155551234"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   className="text-xs h-8 bg-slate-50 dark:bg-slate-950 font-mono"
@@ -509,7 +540,7 @@ export function WhatsAppConnectModal({
                   Phone Number ID (From Meta Developer Dashboard)
                 </Label>
                 <Input
-                  placeholder="1092837465..."
+                  placeholder="1092837465"
                   value={phoneNumberId}
                   onChange={(e) => setPhoneNumberId(e.target.value)}
                   className="text-xs h-8 bg-slate-50 dark:bg-slate-950 font-mono"
@@ -527,6 +558,22 @@ export function WhatsAppConnectModal({
                   onChange={(e) => setAccessToken(e.target.value)}
                   className="text-xs h-8 bg-slate-50 dark:bg-slate-950 font-mono"
                 />
+                <p className="text-[10px] text-slate-400">
+                  Generate this in Meta Business Manager → System Users →
+                  Create Token (scope: whatsapp_business_messaging).
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-slate-700 dark:text-slate-300">
+                  WhatsApp Business Account ID (WABA ID)
+                </Label>
+                <Input
+                  placeholder="123456789012345"
+                  value={wabaId}
+                  onChange={(e) => setWabaId(e.target.value)}
+                  className="text-xs h-8 bg-slate-50 dark:bg-slate-950 font-mono"
+                />
               </div>
 
               <Button
@@ -535,7 +582,7 @@ export function WhatsAppConnectModal({
                 onClick={handleManualSave}
                 className="w-full h-9 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white mt-2"
               >
-                Save &amp; Connect WhatsApp
+                {connecting ? <><Loader2 className="size-3.5 mr-1 animate-spin" /> Saving…</> : 'Save & Connect WhatsApp'}
               </Button>
             </div>
           )}

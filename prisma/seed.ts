@@ -1213,9 +1213,13 @@ async function main() {
   console.log('  ✅ Platform email provider (AWS SES) created:', platformEmailProvider.id);
 
   // --- Platform WhatsApp CommunicationProvider ---
-  const whatsappAccessToken = process.env.WHATSAPP_ACCESS_TOKEN ?? 'EAAeZCCSIuiJMBRzwDZAAoqOao91PHidrTWqJ2QHMbxnu3wQDtfv7GhOdwFMW8LSgZAAK0mX6eptmS94nZCr1PUJzNpoqaL8C6NcinZClBMDbdGVe05RzNYZAL6CjTPiESYxdv0evV671MAenaAO99cAb7JZBKUPl6aEzcnY8v4YPNvsFIdUze4K4ZBRc06Q1rZCFVg83ZAZBaFxUZADx1ZBEAiwfZCaMkfKXaTEZALZBZBaZAd68eOBrKVIawn7Yc43zjM3qhwk8FLykErhKyPZCCbeLfa2Afqy';
-  const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID ?? '1117830511419208';
-  const whatsappWabaId = process.env.WHATSAPP_WABA_ID ?? '2076211023292638';
+  // Platform WhatsApp provider — configJson is EMPTY by default.
+  // The SuperAdmin populates these via the Integrations settings page
+  // (or via WHATSAPP_ACCESS_TOKEN env var). A hardcoded fallback token
+  // was removed for security (Phase C).
+  const whatsappAccessToken = process.env.WHATSAPP_ACCESS_TOKEN ?? '';
+  const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID ?? '';
+  const whatsappWabaId = process.env.WHATSAPP_WABA_ID ?? '';
 
   const platformWhatsAppProvider = await db.communicationProvider.upsert({
     where: {
