@@ -118,7 +118,7 @@ export function AgentPublishTab({
 
   useEffect(() => {
     fetchChannelStatus();
-  }, [fetchChannelStatus]);
+  }, [fetchChannelStatus, agent.channels?.whatsapp?.paired, agent.channels?.whatsapp?.enabled]);
 
   // Derive card display values from real DB state.
   const wa = channelStatus?.whatsapp ?? null;

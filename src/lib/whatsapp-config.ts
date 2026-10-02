@@ -59,19 +59,17 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
       }
 
       // ── BYO GUARD (Phase C) ──────────────────────────────────────────
-      // If the tenant has ANY whatsapp provider row (even inactive / not
+      // If the tenant has ANY tenant-owned whatsapp provider row (even inactive / not
       // sendingEnabled), they have ATTEMPTED BYO. Do NOT fall back to the
       // platform-managed WABA — return an empty config so the send fails
       // with a clear "your WhatsApp connection is broken" error instead
       // of silently sending via Fieseros' WABA.
       const anyTenantWaRow = await db.communicationProvider.findFirst({
-        where: { type: 'whatsapp', tenantId },
-        select: { id: true, isPlatform: true, status: true, sendingEnabled: true },
+        where: { type: 'whatsapp', tenantId, isPlatform: false },
+        select: { id: true, status: true, sendingEnabled: true },
       })
       if (anyTenantWaRow) {
-        // Tenant has attempted BYO. If the only row is platform-managed
-        // (from the seed), that's still an attempt — block the fallback.
-        console.warn(`[WhatsApp Config] tenant ${tenantId} has a whatsapp provider row (isPlatform=${anyTenantWaRow.isPlatform}, status=${anyTenantWaRow.status}) but no valid tenant-owned credentials — NOT falling back to platform WABA. Fix your BYO connection.`)
+        console.warn(`[WhatsApp Config] tenant ${tenantId} has a tenant-owned whatsapp provider row (status=${anyTenantWaRow.status}, sendingEnabled=${anyTenantWaRow.sendingEnabled}) but no valid credentials — NOT falling back to platform WABA. Fix your BYO connection.`)
         return { accessToken: '', phoneNumberId: '', verifyToken: '', source: 'none' }
       }
     }

@@ -172,12 +172,12 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
       // platform. This prevents silent platform-WABA sends.
       if (!accessToken && tenantId) {
         const anyTenantWaRow = await db.communicationProvider.findFirst({
-          where: { type: 'whatsapp', tenantId },
+          where: { type: 'whatsapp', tenantId, isPlatform: false },
           select: { id: true },
         })
         if (anyTenantWaRow) {
           // Tenant attempted BYO — don't silently use platform WABA.
-          console.warn(`[WhatsApp] tenant ${tenantId} has a whatsapp row but no valid tenant-owned credentials — NOT using platform fallback.`)
+          console.warn(`[WhatsApp] tenant ${tenantId} has a tenant-owned whatsapp row but no valid credentials — NOT using platform fallback.`)
         } else {
           const platformProviders = await db.communicationProvider.findMany({
             where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true },

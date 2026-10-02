@@ -49,10 +49,20 @@ export async function GET() {
         isPlatform: false,
       },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, name: true, provider: true },
+      select: { id: true, name: true, provider: true, configJson: true },
     });
 
     const ownConnected = !!ownProvider;
+
+    let ownPhoneNumber: string | null = null;
+    if (ownProvider?.configJson) {
+      try {
+        const cfg = JSON.parse(ownProvider.configJson);
+        ownPhoneNumber = cfg.displayPhoneNumber || cfg.phoneNumber || cfg.phone_number || null;
+      } catch {
+        /* ignore */
+      }
+    }
 
     // WhatsApp is enabled ONLY when paid AND own provider connected.
     const enabled = isPaid && ownConnected;
@@ -71,7 +81,12 @@ export async function GET() {
       isPaid,
       ownConnected,
       ownProvider: ownConnected
-        ? { id: ownProvider.id, name: ownProvider.name, provider: ownProvider.provider }
+        ? {
+            id: ownProvider.id,
+            name: ownProvider.name,
+            provider: ownProvider.provider,
+            phoneNumber: ownPhoneNumber,
+          }
         : null,
     });
   } catch (error) {
