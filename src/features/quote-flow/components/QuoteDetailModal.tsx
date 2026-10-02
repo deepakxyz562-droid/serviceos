@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit, Printer, Palette } from "lucide-react";
+import { Loader2, ArrowLeft, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit, Printer, Palette, ZoomIn, ZoomOut, CheckCircle2, FileText } from "lucide-react";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
+import { getTemplateTheme } from "@/features/quote-flow/lib/template-themes";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,7 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
   const [quote, setQuote] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
   // AI edit state
   const [aiInstruction, setAiInstruction] = useState("");
   const [aiProcessing, setAiProcessing] = useState(false);
@@ -197,26 +199,28 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
     );
   if (!quote) return null;
 
-  const totals = {
-    subtotal: quote.subtotal,
-    discount: quote.discount,
-    tax: quote.tax,
-    total: quote.total,
-  };
+  const theme = getTemplateTheme(quote.pdfTemplate, "soft-emerald-wave");
+  const isAccepted = quote.status === "ACCEPTED";
+  const items = quote.items || [];
 
   return (
-    <div className="fixed inset-0 z-40 bg-stone-50 overflow-y-auto">
-      <div className="mx-auto max-w-md px-5 py-4 pb-24">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={closeModal}
-              className="text-stone-400 hover:text-stone-700"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </button>
-            <h2 className="text-base font-semibold text-stone-900">Quote {quote.number}</h2>
-          </div>
+    <div className="fixed inset-0 z-40 bg-[#eef2f6] overflow-y-auto">
+      {/* Top sticky navbar */}
+      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur shadow-sm">
+        <button onClick={closeModal} className="text-stone-600 hover:text-stone-900 flex items-center gap-1.5 text-sm font-medium">
+          <ArrowLeft className="h-5 w-5" /> Back
+        </button>
+        <h2 className="text-base font-bold text-stone-900">{quote.number}</h2>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setZoomed(!zoomed)}
+            className="h-8 w-8 p-0 text-slate-600"
+            title={zoomed ? "Standard view" : "Zoom view"}
+          >
+            {zoomed ? <ZoomOut className="h-4 w-4" /> : <ZoomIn className="h-4 w-4" />}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -228,10 +232,16 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
                 <Edit className="mr-2 h-4 w-4" /> Edit Quote
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
-                <Palette className="mr-2 h-4 w-4" /> Change Template
+                <Palette className="mr-2 h-4 w-4" /> Customize Template
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openModal({ type: "send-quote", quoteId: quote.id })}>
+                <Send className="mr-2 h-4 w-4" /> Share
               </DropdownMenuItem>
               <DropdownMenuItem onClick={duplicateQuote}>
                 <Copy className="mr-2 h-4 w-4" /> Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={convertToInvoice}>
+                <FileText className="mr-2 h-4 w-4" /> Convert to Invoice
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf?download=1`, "_blank")}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF
@@ -240,84 +250,222 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
                 <Printer className="mr-2 h-4 w-4" /> Print
               </DropdownMenuItem>
               <DropdownMenuItem onClick={markAccepted}>
-                Mark accepted
+                <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" /> Mark accepted
               </DropdownMenuItem>
               <DropdownMenuItem onClick={markDeclined}>
                 Mark declined
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={convertToInvoice}>
-                Convert to invoice →
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={remove}
-                className="text-red-600 focus:text-red-700"
-              >
+              <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      </div>
 
-        <div className="mb-3 flex items-center gap-2">
-          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold capitalize text-stone-700">
-            {quote.status.toLowerCase()}
-          </span>
-          {quote.validUntil && (
-            <span className="text-xs text-stone-500">
-              Valid until {new Date(quote.validUntil).toLocaleDateString()}
-            </span>
-          )}
-        </div>
-
-        <div className="mb-4 rounded-xl bg-stone-50 p-3">
-          <div className="text-xs text-stone-400">Customer</div>
-          <div className="text-sm font-semibold text-stone-900">
-            {quote.customer?.name || "—"}
+      {/* Main Viewport */}
+      <div className="px-3 py-6 pb-48 md:px-6">
+        {/* The White A4 Document Sheet (1:1 with media_1790971011559.jpg) */}
+        <div
+          className={`relative mx-auto rounded bg-white p-6 shadow-md transition-all md:p-8 ${
+            zoomed ? "max-w-4xl" : "max-w-2xl"
+          }`}
+          style={{ minHeight: "520px" }}
+        >
+          {/* Document Header: Logo & BizName on left, ESTIMATE large text on right */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              {business?.logoUrl && (
+                <img
+                  src={business.logoUrl}
+                  alt={business?.name || "Logo"}
+                  className="mb-2 h-10 w-auto object-contain"
+                />
+              )}
+              <h1 className="text-base font-bold text-slate-900">
+                {business?.name || "Your Company"}
+              </h1>
+              {business?.email && (
+                <p className="text-xs text-slate-500">{business.email}</p>
+              )}
+              {business?.phone && (
+                <p className="text-xs text-slate-500">{business.phone}</p>
+              )}
+            </div>
+            <div className="text-right">
+              <h2
+                className="text-2xl font-black tracking-wider md:text-3xl"
+                style={{ color: theme.accent }}
+              >
+                ESTIMATE
+              </h2>
+            </div>
           </div>
-          {quote.customer?.email && (
-            <div className="text-xs text-stone-500">{quote.customer.email}</div>
-          )}
-          {quote.customer?.phone && (
-            <div className="text-xs text-stone-500">{quote.customer.phone}</div>
-          )}
-        </div>
 
-        <div className="mb-4">
-          <div className="mb-1 text-xs font-semibold uppercase text-stone-400">Items</div>
-          <div className="space-y-1">
-            {quote.items?.map((it: any) => (
-              <div key={it.id} className="flex justify-between text-sm">
-                <div className="text-stone-700">
-                  {it.description}
-                  {it.qty !== 1 && (
-                    <span className="ml-1 text-stone-400">× {it.qty}</span>
-                  )}
-                </div>
-                <div className="font-medium text-stone-900">
-                  {formatCurrency(it.qty * it.unitPrice, business?.currency, business?.currencySymbol)}
-                </div>
+          {/* Thin Horizontal Divider Rule */}
+          <div
+            className="my-4 h-px w-full"
+            style={{ backgroundColor: theme.accent, opacity: 0.3 }}
+          />
+
+          {/* Two-Column Info Bar: ESTIMATE FOR on left, Metadata Grid on right */}
+          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row">
+            {/* ESTIMATE FOR */}
+            <div className="flex-1">
+              <p className="mb-1 text-xs font-extrabold uppercase text-slate-900">
+                ESTIMATE FOR
+              </p>
+              <p className="text-sm font-bold text-slate-900">
+                {quote.customer?.name || "Unknown Client"}
+              </p>
+              {quote.customer?.address && (
+                <p className="text-xs text-slate-500">{quote.customer.address}</p>
+              )}
+              {quote.customer?.phone && (
+                <p className="text-xs text-slate-500">{quote.customer.phone}</p>
+              )}
+              {quote.customer?.email && (
+                <p className="text-xs text-slate-500">{quote.customer.email}</p>
+              )}
+            </div>
+
+            {/* Key-Value Metadata 2-Column Block */}
+            <div className="grid grid-cols-2 gap-x-3 text-xs sm:w-56">
+              <div className="space-y-1 font-bold text-slate-900">
+                <p>QUOTE #</p>
+                <p>DATE</p>
+                <p>VALID UNTIL</p>
               </div>
-            ))}
+              <div className="space-y-1 text-right text-slate-600">
+                <p>{quote.number}</p>
+                <p>
+                  {new Date(quote.createdAt || Date.now()).toLocaleDateString("en-GB")}
+                </p>
+                <p>
+                  {quote.validUntil
+                    ? new Date(quote.validUntil).toLocaleDateString("en-GB")
+                    : "30 days"}
+                </p>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="space-y-1 border-t border-stone-200 pt-3 text-sm">
-          <Row label="Subtotal" value={formatCurrency(totals.subtotal, business?.currency, business?.currencySymbol)} />
-          {totals.discount > 0 && (
-            <Row label="Discount" value={`- ${formatCurrency(totals.discount, business?.currency, business?.currencySymbol)}`} />
-          )}
-          {totals.tax > 0 && (
-            <Row label={`Tax (${quote.taxRate}%)`} value={formatCurrency(totals.tax, business?.currency, business?.currencySymbol)} />
-          )}
-          <div className="flex justify-between pt-2 text-base font-bold text-stone-900">
-            <span>TOTAL</span>
-            <span>{formatCurrency(totals.total, business?.currency, business?.currencySymbol)}</span>
+          {/* Bordered Table Grid with Vertical Column Dividers */}
+          <div
+            className="mb-6 overflow-hidden rounded border text-xs"
+            style={{ borderColor: theme.gridBorderColor }}
+          >
+            {/* Header Row */}
+            <div
+              className="flex items-center px-3 py-2 font-extrabold text-white"
+              style={{ backgroundColor: theme.accent }}
+            >
+              <div className="flex-1">Description</div>
+              <div className="w-14 text-center">QTY</div>
+              <div className="w-24 text-right">Price</div>
+              <div className="w-28 text-right">Amount</div>
+            </div>
+
+            {/* Items */}
+            {items.length === 0 ? (
+              <div
+                className="flex items-center border-b px-3 py-4 text-center text-slate-400"
+                style={{ borderColor: theme.gridBorderColor }}
+              >
+                No items added
+              </div>
+            ) : (
+              items.map((it: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex items-center border-b"
+                  style={{
+                    borderColor: theme.gridBorderColor,
+                    backgroundColor: idx % 2 === 1 ? theme.lightAccent : "#ffffff",
+                  }}
+                >
+                  <div
+                    className="flex-1 border-r px-3 py-2.5 font-bold text-slate-900"
+                    style={{ borderColor: theme.gridBorderColor }}
+                  >
+                    {it.description}
+                  </div>
+                  <div
+                    className="w-14 border-r px-2 py-2.5 text-center text-slate-700"
+                    style={{ borderColor: theme.gridBorderColor }}
+                  >
+                    {it.qty}
+                  </div>
+                  <div
+                    className="w-24 border-r px-2 py-2.5 text-right text-slate-700"
+                    style={{ borderColor: theme.gridBorderColor }}
+                  >
+                    {formatCurrency(it.unitPrice, business?.currency, business?.currencySymbol)}
+                  </div>
+                  <div className="w-28 px-3 py-2.5 text-right font-bold text-slate-900">
+                    {formatCurrency(
+                      it.qty * it.unitPrice,
+                      business?.currency,
+                      business?.currencySymbol
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+
+          {/* Totals Summary Wrap */}
+          <div className="flex justify-end">
+            <div className="w-64 space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-600">
+                <span className="font-medium">Subtotal</span>
+                <span className="font-bold text-slate-900">
+                  {formatCurrency(quote.subtotal || 0, business?.currency, business?.currencySymbol)}
+                </span>
+              </div>
+
+              {quote.discount > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span className="font-medium">Discount</span>
+                  <span className="font-bold text-slate-900">
+                    -{formatCurrency(quote.discount || 0, business?.currency, business?.currencySymbol)}
+                  </span>
+                </div>
+              )}
+
+              {quote.tax > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span className="font-medium">Tax ({quote.taxRate || 0}%)</span>
+                  <span className="font-bold text-slate-900">
+                    {formatCurrency(quote.tax || 0, business?.currency, business?.currencySymbol)}
+                  </span>
+                </div>
+              )}
+
+              {/* Solid Accent ESTIMATE TOTAL Banner */}
+              <div
+                className="mt-2 flex items-center justify-between px-3 py-2 text-xs font-black tracking-wide text-white"
+                style={{ backgroundColor: theme.accent }}
+              >
+                <span>ESTIMATE TOTAL</span>
+                <span className="text-sm">
+                  {formatCurrency(quote.total || 0, business?.currency, business?.currencySymbol)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Watermark stamp if accepted */}
+          {isAccepted && (
+            <div className="pointer-events-none absolute left-1/3 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-12 rounded-lg border-4 border-emerald-600 px-6 py-2 font-black tracking-widest text-emerald-600 opacity-80 text-3xl">
+              ACCEPTED
+            </div>
+          )}
         </div>
 
         {/* AI edit panel */}
-        <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-emerald-700">
+        <div className="mx-auto mt-6 max-w-2xl rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 shadow-sm">
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold text-emerald-800">
             <Sparkles className="h-4 w-4" />
             Edit with AI
           </div>
@@ -329,13 +477,13 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
             onChange={(e) => setAiInstruction(e.target.value)}
             placeholder="What would you like to change?"
             rows={2}
-            className="w-full rounded-md border border-stone-200 bg-white px-2 py-1.5 text-sm"
+            className="w-full rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
           <Button
             onClick={aiEdit}
             disabled={aiProcessing || !aiInstruction.trim()}
             size="sm"
-            className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700"
+            className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             {aiProcessing ? (
               <Loader2 className="mr-2 h-3 w-3 animate-spin" />
@@ -345,7 +493,7 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
             {aiProcessing ? "AI is thinking..." : "Update with AI"}
           </Button>
           {aiSummary && (
-            <div className="mt-2 rounded-md bg-white px-2 py-1.5 text-xs text-stone-700">
+            <div className="mt-2 rounded-md bg-white px-3 py-2 text-xs text-stone-700">
               <span className="font-semibold">Summary:</span> {aiSummary}
             </div>
           )}
@@ -378,7 +526,7 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
                   onClick={applyAiChanges}
                   disabled={busy}
                   size="sm"
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
                   {busy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
                   Apply changes
@@ -387,43 +535,108 @@ export function QuoteDetailModal({ quoteId }: { quoteId: string }) {
             </div>
           )}
           {aiDiff && aiDiff.length === 0 && aiPending && (
-            <div className="mt-2 rounded-md bg-white px-2 py-1.5 text-xs text-stone-700">
+            <div className="mt-2 rounded-md bg-white px-3 py-2 text-xs text-stone-700">
               No changes detected. Try rephrasing.
             </div>
           )}
         </div>
 
-        <div className="mt-5 flex gap-2">
-          <Button
-            onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf?download=1`, "_blank")}
-            variant="outline"
-            className="flex-1"
-          >
-            <Download className="mr-1 h-4 w-4" /> PDF
-          </Button>
+        {/* Floating Bottom Summary Card (1:1 with media_1790971011559.jpg) */}
+        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
+          {/* Row 1: Valid until on left, Status pill on right */}
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>
+              Valid until{" "}
+              {quote.validUntil
+                ? new Date(quote.validUntil).toLocaleDateString("en-GB")
+                : "30 days"}
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 font-semibold ${
+                isAccepted
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-indigo-100 text-indigo-700"
+              }`}
+            >
+              {isAccepted ? "Accepted" : quote.status?.toLowerCase() || "Draft"}
+            </span>
+          </div>
+
+          {/* Row 2: Large total amount */}
+          <div className="my-1 text-2xl font-black text-slate-900">
+            {formatCurrency(quote.total || 0, business?.currency, business?.currencySymbol)}
+          </div>
+
+          {/* Row 3: Client name on left, Not sent / Sent pill on right */}
+          <div className="mb-3 flex items-center justify-between text-xs font-medium text-slate-700">
+            <span>{quote.customer?.name || "Unknown Client"}</span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-500">
+              Not sent
+            </span>
+          </div>
+
+          {/* Primary Send Button */}
           <Button
             onClick={() => openModal({ type: "send-quote", quoteId: quote.id })}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+            className="w-full gap-2 py-2.5 font-semibold text-white shadow-sm"
+            style={{ backgroundColor: theme.accent }}
           >
-            <Send className="mr-1 h-4 w-4" /> Send
+            <Send className="h-4 w-4" /> Send Estimate
           </Button>
-        </div>
 
-        {busy && (
-          <div className="mt-3 flex items-center justify-center text-xs text-stone-400">
-            <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Working...
+          {/* Quick Actions Row */}
+          <div className="mt-3 flex items-center justify-around border-t border-slate-100 pt-3 text-xs">
+            <button
+              onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf?download=1`, "_blank")}
+              className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                <Download className="h-4 w-4" />
+              </div>
+              <span>Download</span>
+            </button>
+            <button
+              onClick={() => window.open(`/api/quote-flow/quotes/${quote.id}/pdf`, "_blank")}
+              className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                <Printer className="h-4 w-4" />
+              </div>
+              <span>Print</span>
+            </button>
+            <button
+              onClick={() => openModal({ type: "quote-edit", quoteId: quote.id })}
+              className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                <Edit className="h-4 w-4" />
+              </div>
+              <span>Edit</span>
+            </button>
+            {!isAccepted ? (
+              <button
+                onClick={markAccepted}
+                className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                </div>
+                <span>Accept</span>
+              </button>
+            ) : (
+              <button
+                onClick={convertToInvoice}
+                className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                  <FileText className="h-4 w-4 text-blue-600" />
+                </div>
+                <span>To Invoice</span>
+              </button>
+            )}
           </div>
-        )}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between text-stone-600">
-      <span>{label}</span>
-      <span>{value}</span>
     </div>
   );
 }

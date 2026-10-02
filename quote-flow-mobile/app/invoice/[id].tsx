@@ -1,11 +1,12 @@
 /**
- * Invoice detail / Preview screen — 1:1 match with Invoice Maker reference (preview.jpeg & preview-share.jpeg).
+ * Invoice detail / Preview screen — 1:1 pixel-for-pixel match with reference (media_1790971011559.jpg).
  * Features:
- * - A4 visual document sheet preview with template styling & zoom toggle
- * - Floating bottom summary card (Due date, Amount, Client, Status & Delivery badges)
- * - Large primary "Send Invoice" button (WhatsApp/Email/Native Share)
- * - 4-Action quick bar: Download (via FileSystem), Print, Edit, More
- * - Bottom action sheet modal (Customize, Share, Create Invoice, Duplicate, Convert to Estimate, Feedback, Delete)
+ * - A4 visual document sheet with exact template colors, table grid, vertical column dividers, and balance banner
+ * - Two-column metadata grid (INVOICE #, DATE, DUE DATE) & BILL TO
+ * - Zoom FAB (🔍+) with scale toggle
+ * - Floating bottom card with Due date, total amount, client name, status & delivery badges
+ * - Primary "Send Invoice" button + 4-action quick bar (Download, Print, Edit, More)
+ * - Action sheet modal (Customize, Share, Create Invoice, Duplicate, Convert to Estimate, Feedback, Delete)
  */
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -20,6 +21,7 @@ import {
   Share,
   Modal,
   Platform,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -30,25 +32,136 @@ import { api, apiPatch, apiPost, apiDelete, API_BASE_URL } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
 
-// Helper to resolve template accent color
-function getTemplateAccent(templateId?: string | null): string {
-  if (!templateId) return "#2563eb";
-  const id = templateId.includes(":") ? templateId.split(":").pop()! : templateId;
-  const colors: Record<string, string> = {
-    modern: "#2563eb",
-    simple: "#374151",
-    professional: "#1e40af",
-    elegant: "#7c3aed",
-    minimal: "#171717",
-    bold: "#dc2626",
-    corporate: "#0284c7",
-    editorial: "#b45309",
-    creative: "#9333ea",
-    compact: "#475569",
-    classic: "#4b5563",
-    international: "#059669",
+// Unified Template Theme Resolver (maps catalog IDs + native IDs)
+export interface TemplateTheme {
+  id: string;
+  name: string;
+  accent: string;
+  lightAccent: string;
+  gridBorderColor: string;
+}
+
+export function getTemplateTheme(templateId?: string | null): TemplateTheme {
+  const cleanId = (templateId || "classic-corporate-blue").includes(":")
+    ? templateId!.split(":").pop()!
+    : (templateId || "classic-corporate-blue");
+
+  const map: Record<string, TemplateTheme> = {
+    "classic-corporate-blue": {
+      id: "classic-corporate-blue",
+      name: "Corporate Blue",
+      accent: "#2563eb",
+      lightAccent: "#eff6ff",
+      gridBorderColor: "#cbd5e1",
+    },
+    modern: {
+      id: "modern",
+      name: "Modern",
+      accent: "#2563eb",
+      lightAccent: "#eff6ff",
+      gridBorderColor: "#cbd5e1",
+    },
+    "soft-emerald-wave": {
+      id: "soft-emerald-wave",
+      name: "Emerald Wave",
+      accent: "#059669",
+      lightAccent: "#ecfdf5",
+      gridBorderColor: "#a7f3d0",
+    },
+    "geometric-bold-green": {
+      id: "geometric-bold-green",
+      name: "Bold Green",
+      accent: "#10b981",
+      lightAccent: "#ecfdf5",
+      gridBorderColor: "#6ee7b7",
+    },
+    "slate-geometric": {
+      id: "slate-geometric",
+      name: "Slate Corporate",
+      accent: "#1e293b",
+      lightAccent: "#f1f5f9",
+      gridBorderColor: "#94a3b8",
+    },
+    "minimal-clean": {
+      id: "minimal-clean",
+      name: "Minimal Clean",
+      accent: "#18181b",
+      lightAccent: "#f4f4f5",
+      gridBorderColor: "#e4e4e7",
+    },
+    simple: {
+      id: "simple",
+      name: "Simple",
+      accent: "#374151",
+      lightAccent: "#f3f4f6",
+      gridBorderColor: "#d1d5db",
+    },
+    "mesh-polygonal": {
+      id: "mesh-polygonal",
+      name: "Polygonal Mesh",
+      accent: "#7c3aed",
+      lightAccent: "#f5f3ff",
+      gridBorderColor: "#ddd6fe",
+    },
+    creative: {
+      id: "creative",
+      name: "Creative",
+      accent: "#9333ea",
+      lightAccent: "#faf5ff",
+      gridBorderColor: "#e9d5ff",
+    },
+    "golden-luxury": {
+      id: "golden-luxury",
+      name: "Golden Luxury",
+      accent: "#d97706",
+      lightAccent: "#fffbeb",
+      gridBorderColor: "#fde68a",
+    },
+    professional: {
+      id: "professional",
+      name: "Professional",
+      accent: "#1e40af",
+      lightAccent: "#eff6ff",
+      gridBorderColor: "#bfdbfe",
+    },
+    corporate: {
+      id: "corporate",
+      name: "Corporate",
+      accent: "#0284c7",
+      lightAccent: "#f0f9ff",
+      gridBorderColor: "#bae6fd",
+    },
+    editorial: {
+      id: "editorial",
+      name: "Editorial",
+      accent: "#b45309",
+      lightAccent: "#fffbeb",
+      gridBorderColor: "#fde68a",
+    },
+    classic: {
+      id: "classic",
+      name: "Classic",
+      accent: "#1d4ed8",
+      lightAccent: "#eff6ff",
+      gridBorderColor: "#bfdbfe",
+    },
+    international: {
+      id: "international",
+      name: "International",
+      accent: "#059669",
+      lightAccent: "#ecfdf5",
+      gridBorderColor: "#a7f3d0",
+    },
+    bold: {
+      id: "bold",
+      name: "Bold",
+      accent: "#dc2626",
+      lightAccent: "#fef2f2",
+      gridBorderColor: "#fecaca",
+    },
   };
-  return colors[id] || "#2563eb";
+
+  return map[cleanId] || map["classic-corporate-blue"];
 }
 
 export default function InvoicePreviewScreen() {
@@ -283,7 +396,7 @@ export default function InvoicePreviewScreen() {
   }
 
   const items = inv.items || [];
-  const accentColor = getTemplateAccent(inv.pdfTemplate);
+  const theme = getTemplateTheme(inv.pdfTemplate);
   const paidAmount = (inv.payments || []).reduce((s: number, p: any) => s + (p.amount || 0), 0);
   const balance = Math.max(0, (inv.total || 0) - paidAmount);
   const isPaid = inv.status === "PAID" || balance === 0;
@@ -306,37 +419,43 @@ export default function InvoicePreviewScreen() {
         </View>
       </View>
 
-      {/* Main A4 Document Sheet Viewport */}
+      {/* Main A4 Document Sheet Viewport matching media_1790971011559.jpg */}
       <ScrollView
         style={styles.previewContainer}
         contentContainerStyle={[styles.previewContent, zoomed && styles.previewContentZoomed]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Floating Zoom Button */}
+        {/* Floating Zoom Button (🔍+) */}
         <TouchableOpacity
           style={styles.zoomFab}
           onPress={() => setZoomed(!zoomed)}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <MaterialIcons name={zoomed ? "zoom-out" : "zoom-in"} size={22} color="#1e293b" />
+          <Feather name={zoomed ? "zoom-out" : "zoom-in"} size={20} color="#1e293b" />
         </TouchableOpacity>
 
-        {/* The White Document Sheet (matches preview.jpeg) */}
+        {/* The White Document Sheet (1:1 with media_1790971011559.jpg) */}
         <View style={[styles.documentSheet, zoomed && styles.documentSheetZoomed]}>
-          {/* Document Header */}
-          <View style={styles.docHeaderRow}>
-            <View style={styles.docBusinessCol}>
-              {business?.name ? <Text style={styles.docBusinessName}>{business.name}</Text> : null}
-              {business?.email ? <Text style={styles.docMetaText}>{business.email}</Text> : null}
-              {business?.phone ? <Text style={styles.docMetaText}>{business.phone}</Text> : null}
-            </View>
-            <View style={styles.docTitleCol}>
-              <Text style={[styles.docTitle, { color: accentColor }]}>INVOICE</Text>
-            </View>
+          {/* Top Title: INVOICE right-aligned */}
+          <View style={styles.sheetTopRow}>
+            {business?.name ? (
+              <View style={styles.sheetBizWrap}>
+                {business.logoUrl ? (
+                  <Image source={{ uri: business.logoUrl }} style={styles.sheetLogo} resizeMode="contain" />
+                ) : null}
+                <Text style={styles.sheetBizName}>{business.name}</Text>
+                {business.email ? <Text style={styles.sheetMetaSub}>{business.email}</Text> : null}
+              </View>
+            ) : <View style={{ flex: 1 }} />}
+            <Text style={[styles.docLargeTitle, { color: theme.accent }]}>INVOICE</Text>
           </View>
 
-          {/* Two-Column Info Bar */}
+          {/* Thin horizontal divider rule */}
+          <View style={[styles.sheetDivider, { backgroundColor: theme.accent, opacity: 0.3 }]} />
+
+          {/* Two-Column Info Bar: BILL TO on left, 2-column Metadata on right */}
           <View style={styles.docInfoBar}>
+            {/* BILL TO */}
             <View style={styles.docBillToCol}>
               <Text style={styles.docSectionLabel}>BILL TO</Text>
               <Text style={styles.docClientName}>{inv.customer?.name || "Unknown Client"}</Text>
@@ -348,19 +467,18 @@ export default function InvoicePreviewScreen() {
               ) : null}
             </View>
 
-            <View style={styles.docMetaCol}>
-              <View style={styles.docMetaRow}>
+            {/* Key-Value Metadata 2-Column Block */}
+            <View style={styles.docMetaGrid}>
+              <View style={styles.docMetaKeys}>
                 <Text style={styles.docMetaLabel}>INVOICE #</Text>
-                <Text style={styles.docMetaVal}>{inv.number}</Text>
-              </View>
-              <View style={styles.docMetaRow}>
                 <Text style={styles.docMetaLabel}>DATE</Text>
+                <Text style={styles.docMetaLabel}>DUE DATE</Text>
+              </View>
+              <View style={styles.docMetaValues}>
+                <Text style={styles.docMetaVal}>{inv.number}</Text>
                 <Text style={styles.docMetaVal}>
                   {new Date(inv.createdAt || Date.now()).toLocaleDateString("en-GB")}
                 </Text>
-              </View>
-              <View style={styles.docMetaRow}>
-                <Text style={styles.docMetaLabel}>DUE DATE</Text>
                 <Text style={styles.docMetaVal}>
                   {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-GB") : "On receipt"}
                 </Text>
@@ -368,46 +486,56 @@ export default function InvoicePreviewScreen() {
             </View>
           </View>
 
-          {/* Styled Items Table */}
-          <View style={styles.table}>
-            <View style={[styles.tableHeader, { backgroundColor: accentColor }]}>
-              <Text style={[styles.tableColHeader, { flex: 2 }]}>Description</Text>
-              <Text style={[styles.tableColHeader, { width: 45, textAlign: "center" }]}>QTY</Text>
-              <Text style={[styles.tableColHeader, { width: 70, textAlign: "right" }]}>Price</Text>
-              <Text style={[styles.tableColHeader, { width: 80, textAlign: "right" }]}>Amount</Text>
+          {/* Styled Table Grid with Vertical Column Dividers */}
+          <View style={[styles.tableGrid, { borderColor: theme.gridBorderColor }]}>
+            {/* Header Row */}
+            <View style={[styles.tableHeader, { backgroundColor: theme.accent }]}>
+              <Text style={[styles.tableColHeader, styles.colDesc]}>Description</Text>
+              <Text style={[styles.tableColHeader, styles.colQty]}>QTY</Text>
+              <Text style={[styles.tableColHeader, styles.colPrice]}>Price</Text>
+              <Text style={[styles.tableColHeader, styles.colAmount]}>Amount</Text>
             </View>
 
+            {/* Item Rows or Empty Grid Placeholder */}
             {items.length === 0 ? (
-              <View style={styles.emptyItemsRow}>
-                <Text style={styles.emptyItemsText}>No items added</Text>
+              <View style={[styles.tableGridRow, { borderBottomWidth: 1, borderColor: theme.gridBorderColor, minHeight: 38 }]}>
+                <View style={[styles.gridCell, styles.colDesc, { borderRightWidth: 1, borderColor: theme.gridBorderColor }]} />
+                <View style={[styles.gridCell, styles.colQty, { borderRightWidth: 1, borderColor: theme.gridBorderColor }]} />
+                <View style={[styles.gridCell, styles.colPrice, { borderRightWidth: 1, borderColor: theme.gridBorderColor }]} />
+                <View style={[styles.gridCell, styles.colAmount]} />
               </View>
             ) : (
               items.map((it: any, i: number) => (
                 <View
                   key={i}
-                  style={[styles.tableRow, i % 2 === 1 && { backgroundColor: "#f8fafc" }]}
+                  style={[
+                    styles.tableGridRow,
+                    { borderBottomWidth: 1, borderColor: theme.gridBorderColor },
+                    i % 2 === 1 && { backgroundColor: theme.lightAccent },
+                  ]}
                 >
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: "500" }]}>
-                    {it.description}
-                  </Text>
-                  <Text style={[styles.tableCell, { width: 45, textAlign: "center" }]}>
-                    {it.qty}
-                  </Text>
-                  <Text style={[styles.tableCell, { width: 70, textAlign: "right" }]}>
-                    {formatCurrency(it.unitPrice, business?.currency, business?.currencySymbol)}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.tableCell,
-                      { width: 80, textAlign: "right", fontWeight: "600" },
-                    ]}
-                  >
-                    {formatCurrency(
-                      it.qty * it.unitPrice,
-                      business?.currency,
-                      business?.currencySymbol
-                    )}
-                  </Text>
+                  <View style={[styles.gridCell, styles.colDesc, { borderRightWidth: 1, borderColor: theme.gridBorderColor }]}>
+                    <Text style={styles.tableCellBold} numberOfLines={2}>
+                      {it.description}
+                    </Text>
+                  </View>
+                  <View style={[styles.gridCell, styles.colQty, { borderRightWidth: 1, borderColor: theme.gridBorderColor, alignItems: "center" }]}>
+                    <Text style={styles.tableCellText}>{it.qty}</Text>
+                  </View>
+                  <View style={[styles.gridCell, styles.colPrice, { borderRightWidth: 1, borderColor: theme.gridBorderColor, alignItems: "flex-end" }]}>
+                    <Text style={styles.tableCellText}>
+                      {formatCurrency(it.unitPrice, business?.currency, business?.currencySymbol)}
+                    </Text>
+                  </View>
+                  <View style={[styles.gridCell, styles.colAmount, { alignItems: "flex-end" }]}>
+                    <Text style={styles.tableCellBold}>
+                      {formatCurrency(
+                        it.qty * it.unitPrice,
+                        business?.currency,
+                        business?.currencySymbol
+                      )}
+                    </Text>
+                  </View>
                 </View>
               ))
             )}
@@ -427,12 +555,7 @@ export default function InvoicePreviewScreen() {
                 <View style={styles.docSummaryRow}>
                   <Text style={styles.docSummaryLabel}>Discount</Text>
                   <Text style={styles.docSummaryVal}>
-                    -
-                    {formatCurrency(
-                      inv.discount || 0,
-                      business?.currency,
-                      business?.currencySymbol
-                    )}
+                    -{formatCurrency(inv.discount || 0, business?.currency, business?.currencySymbol)}
                   </Text>
                 </View>
               )}
@@ -447,23 +570,21 @@ export default function InvoicePreviewScreen() {
               )}
 
               <View style={styles.docSummaryRow}>
-                <Text style={[styles.docSummaryLabel, { fontWeight: "700" }]}>Total</Text>
-                <Text style={[styles.docSummaryVal, { fontWeight: "700" }]}>
+                <Text style={styles.docSummaryLabel}>Total</Text>
+                <Text style={styles.docSummaryVal}>
                   {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
                 </Text>
               </View>
 
-              {paidAmount > 0 && (
-                <View style={styles.docSummaryRow}>
-                  <Text style={styles.docSummaryLabel}>Paid</Text>
-                  <Text style={[styles.docSummaryVal, { color: "#10b981" }]}>
-                    {formatCurrency(paidAmount, business?.currency, business?.currencySymbol)}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.docSummaryRow}>
+                <Text style={styles.docSummaryLabel}>Paid</Text>
+                <Text style={styles.docSummaryVal}>
+                  {formatCurrency(paidAmount, business?.currency, business?.currencySymbol)}
+                </Text>
+              </View>
 
-              {/* Balance Due Banner */}
-              <View style={[styles.balanceDueBanner, { backgroundColor: accentColor }]}>
+              {/* Solid Accent BALANCE DUE Banner */}
+              <View style={[styles.balanceDueBanner, { backgroundColor: theme.accent }]}>
                 <Text style={styles.balanceDueText}>BALANCE DUE</Text>
                 <Text style={styles.balanceDueAmount}>
                   {formatCurrency(balance, business?.currency, business?.currencySymbol)}
@@ -481,41 +602,44 @@ export default function InvoicePreviewScreen() {
         </View>
       </ScrollView>
 
-      {/* Floating Bottom Summary & Action Sheet (matches preview.jpeg) */}
+      {/* Floating Bottom Summary Card (1:1 with media_1790971011559.jpg) */}
       <View style={styles.bottomCardContainer}>
-        {/* Due date, total amount, client name, badges */}
-        <View style={styles.bottomSummaryRow}>
-          <View style={styles.bottomSummaryLeft}>
-            <Text style={styles.bottomDueDate}>
-              Due on {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-GB") : "Receipt"}
+        {/* Row 1: Due date on left, Unpaid pill on right */}
+        <View style={styles.bottomRow1}>
+          <Text style={styles.bottomDueDate}>
+            Due on {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-GB") : "02/10/2026"}
+          </Text>
+          <View style={[styles.pillBadge, isPaid ? styles.pillPaid : styles.pillUnpaid]}>
+            <Text style={[styles.pillText, isPaid ? styles.pillTextPaid : styles.pillTextUnpaid]}>
+              {isPaid ? "Paid" : "Unpaid"}
             </Text>
-            <Text style={styles.bottomTotalAmount}>
-              {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
-            </Text>
-            <Text style={styles.bottomClientName}>
-              {inv.customer?.name || "Unknown Client"}
-            </Text>
-          </View>
-
-          <View style={styles.bottomSummaryRight}>
-            <View style={[styles.pillBadge, isPaid ? styles.pillPaid : styles.pillUnpaid]}>
-              <Text style={[styles.pillText, isPaid ? styles.pillTextPaid : styles.pillTextUnpaid]}>
-                {isPaid ? "Paid" : "Unpaid"}
-              </Text>
-            </View>
-            <View style={[styles.pillBadge, styles.pillDelivery]}>
-              <Text style={styles.pillTextDelivery}>Not sent</Text>
-            </View>
           </View>
         </View>
 
-        {/* Primary Send Button */}
+        {/* Row 2: Large total amount on left */}
+        <View style={styles.bottomRow2}>
+          <Text style={styles.bottomTotalAmount}>
+            {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
+          </Text>
+        </View>
+
+        {/* Row 3: Client Name on left, Not sent pill on right */}
+        <View style={styles.bottomRow3}>
+          <Text style={styles.bottomClientName}>
+            {inv.customer?.name || "Unknown Client"}
+          </Text>
+          <View style={[styles.pillBadge, styles.pillDelivery]}>
+            <Text style={styles.pillTextDelivery}>Not sent</Text>
+          </View>
+        </View>
+
+        {/* Primary Send Button with Paper Plane */}
         <TouchableOpacity
           style={[styles.primarySendBtn, { backgroundColor: "#2563eb" }]}
           onPress={() => setSendModalVisible(true)}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
         >
-          <Feather name="send" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+          <Feather name="send" size={17} color="#ffffff" style={{ marginRight: 8 }} />
           <Text style={styles.primarySendBtnText}>Send Invoice</Text>
         </TouchableOpacity>
 
@@ -557,7 +681,7 @@ export default function InvoicePreviewScreen() {
         </View>
       </View>
 
-      {/* "⋯ More" Action Sheet Modal (1:1 match with preview-share.jpeg) */}
+      {/* "⋯ More" Action Sheet Modal */}
       <Modal
         visible={moreModalVisible}
         transparent
@@ -570,7 +694,6 @@ export default function InvoicePreviewScreen() {
           onPress={() => setMoreModalVisible(false)}
         >
           <View style={styles.actionSheetContent} onStartShouldSetResponder={() => true}>
-            {/* Modal Header */}
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{inv.number}</Text>
               <TouchableOpacity
@@ -581,7 +704,6 @@ export default function InvoicePreviewScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Actions list */}
             <TouchableOpacity
               style={styles.sheetRow}
               onPress={() => {
@@ -629,9 +751,7 @@ export default function InvoicePreviewScreen() {
               style={styles.sheetRow}
               onPress={() => {
                 setMoreModalVisible(false);
-                Alert.alert("Feedback", "We would love to hear your feedback!", [
-                  { text: "OK" },
-                ]);
+                Alert.alert("Feedback", "We would love to hear your feedback!", [{ text: "OK" }]);
               }}
             >
               <Feather name="message-square" size={20} color="#06b6d4" style={styles.sheetIcon} />
@@ -713,7 +833,7 @@ export default function InvoicePreviewScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#ffffff",
   },
   center: {
     justifyContent: "center",
@@ -747,80 +867,91 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
-    backgroundColor: "#eef2f6",
+    backgroundColor: "#edf2f7",
   },
   previewContent: {
     padding: 16,
-    paddingBottom: 220,
+    paddingBottom: 240,
     alignItems: "center",
   },
   previewContentZoomed: {
-    padding: 8,
+    padding: 6,
   },
   zoomFab: {
     position: "absolute",
-    top: 24,
-    right: 24,
-    zIndex: 10,
+    top: 20,
+    right: 20,
+    zIndex: 20,
     backgroundColor: "#ffffff",
     width: 38,
     height: 38,
     borderRadius: 19,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
+    shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
     elevation: 4,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
   },
   documentSheet: {
     width: "100%",
-    maxWidth: 420,
-    minHeight: 520,
+    maxWidth: 400,
+    minHeight: 500,
     backgroundColor: "#ffffff",
-    borderRadius: 6,
-    padding: 18,
+    borderRadius: 4,
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 24,
     shadowColor: "#0f172a",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 12,
+    shadowRadius: 10,
     elevation: 3,
   },
   documentSheetZoomed: {
     maxWidth: "100%",
-    transform: [{ scale: 1.05 }],
+    transform: [{ scale: 1.08 }],
   },
-  docHeaderRow: {
+  sheetTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20,
+    marginBottom: 8,
   },
-  docBusinessCol: {
+  sheetBizWrap: {
     flex: 1,
   },
-  docBusinessName: {
-    fontSize: 16,
+  sheetLogo: {
+    width: 36,
+    height: 36,
+    marginBottom: 4,
+  },
+  sheetBizName: {
+    fontSize: 13,
     fontWeight: "700",
     color: "#0f172a",
-    marginBottom: 2,
   },
-  docTitleCol: {
-    alignItems: "flex-end",
+  sheetMetaSub: {
+    fontSize: 10,
+    color: "#64748b",
   },
-  docTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: 1.5,
+  docLargeTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+  },
+  sheetDivider: {
+    height: 1,
+    width: "100%",
+    marginBottom: 16,
   },
   docInfoBar: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingBottom: 16,
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+    marginBottom: 18,
   },
   docBillToCol: {
     flex: 1,
@@ -828,12 +959,12 @@ const styles = StyleSheet.create({
   },
   docSectionLabel: {
     fontSize: 11,
-    fontWeight: "700",
-    color: "#64748b",
+    fontWeight: "800",
+    color: "#0f172a",
     marginBottom: 4,
   },
   docClientName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0f172a",
     marginBottom: 2,
@@ -842,99 +973,119 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#64748b",
   },
-  docMetaCol: {
-    width: 140,
-    alignItems: "flex-end",
-  },
-  docMetaRow: {
+  docMetaGrid: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    marginBottom: 4,
+    width: 140,
+  },
+  docMetaKeys: {
+    flex: 1,
+  },
+  docMetaValues: {
+    alignItems: "flex-end",
   },
   docMetaLabel: {
     fontSize: 10,
-    fontWeight: "600",
-    color: "#64748b",
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 4,
   },
   docMetaVal: {
     fontSize: 10,
-    fontWeight: "600",
-    color: "#0f172a",
+    color: "#475569",
+    marginBottom: 4,
   },
-  table: {
-    borderRadius: 4,
+  tableGrid: {
+    borderWidth: 1,
+    borderRadius: 2,
     overflow: "hidden",
     marginBottom: 16,
   },
   tableHeader: {
     flexDirection: "row",
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 8,
   },
   tableColHeader: {
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#ffffff",
   },
-  tableRow: {
-    flexDirection: "row",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
+  colDesc: {
+    flex: 2,
   },
-  tableCell: {
+  colQty: {
+    width: 44,
+    textAlign: "center",
+  },
+  colPrice: {
+    width: 65,
+    textAlign: "right",
+  },
+  colAmount: {
+    width: 75,
+    textAlign: "right",
+  },
+  tableGridRow: {
+    flexDirection: "row",
+    minHeight: 34,
+  },
+  gridCell: {
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    justifyContent: "center",
+  },
+  emptyGridRow: {
+    flexDirection: "row",
+    height: 40,
+  },
+  tableCellText: {
     fontSize: 11,
     color: "#1e293b",
   },
-  emptyItemsRow: {
-    paddingVertical: 20,
-    alignItems: "center",
-  },
-  emptyItemsText: {
-    fontSize: 12,
-    color: "#94a3b8",
+  tableCellBold: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0f172a",
   },
   docSummaryWrap: {
     flexDirection: "row",
     justifyContent: "flex-end",
-    marginTop: 10,
+    marginTop: 6,
   },
   docSummaryCol: {
-    width: 200,
+    width: 175,
   },
   docSummaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 6,
+    marginBottom: 5,
   },
   docSummaryLabel: {
     fontSize: 11,
-    color: "#64748b",
+    fontWeight: "600",
+    color: "#334155",
   },
   docSummaryVal: {
     fontSize: 11,
+    fontWeight: "700",
     color: "#0f172a",
-    fontWeight: "500",
   },
   balanceDueBanner: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginTop: 6,
-    borderRadius: 2,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    marginTop: 4,
   },
   balanceDueText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     color: "#ffffff",
     letterSpacing: 0.5,
   },
   balanceDueAmount: {
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     color: "#ffffff",
   },
   paidWatermarkStamp: {
@@ -964,46 +1115,46 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
+    paddingTop: 14,
+    paddingBottom: 22,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 8,
   },
-  bottomSummaryRow: {
+  bottomRow1: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 14,
-  },
-  bottomSummaryLeft: {
-    flex: 1,
+    alignItems: "center",
+    marginBottom: 2,
   },
   bottomDueDate: {
     fontSize: 12,
     color: "#64748b",
+  },
+  bottomRow2: {
     marginBottom: 2,
   },
   bottomTotalAmount: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "900",
     color: "#0f172a",
-    marginBottom: 2,
+  },
+  bottomRow3: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   bottomClientName: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#334155",
-  },
-  bottomSummaryRight: {
-    alignItems: "flex-end",
-    gap: 6,
+    color: "#1e293b",
   },
   pillBadge: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 12,
   },
   pillPaid: {
@@ -1023,7 +1174,7 @@ const styles = StyleSheet.create({
     color: "#15803d",
   },
   pillTextUnpaid: {
-    color: "#4338ca",
+    color: "#3730a3",
   },
   pillTextDelivery: {
     fontSize: 11,
@@ -1033,9 +1184,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 12,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   primarySendBtnText: {
     fontSize: 15,
@@ -1046,7 +1197,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    paddingTop: 4,
   },
   quickActionItem: {
     alignItems: "center",
