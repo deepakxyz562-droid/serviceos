@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, X, Plus, Trash2, Sparkles, Pencil, Search, FileText } from "lucide-react";
-import { computeTotals, formatCurrency } from "@/lib/quote-flow-session";
+import { computeTotals, formatCurrency } from "@/lib/quote-flow-calc";
 
 interface Item {
   description: string;

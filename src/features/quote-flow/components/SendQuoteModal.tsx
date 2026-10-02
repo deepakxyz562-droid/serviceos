@@ -4,7 +4,7 @@ import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, MessageCircle, Mail, Share2, Smartphone, Sparkles, Copy, Check } from "lucide-react";
-import { formatCurrency } from "@/lib/quote-flow-session";
+import { formatCurrency } from "@/lib/quote-flow-calc";
 
 type Channel = "whatsapp" | "email" | "text" | "share";
 

@@ -12,7 +12,7 @@ import {
   Plus,
   Home as HomeIcon,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/quote-flow-session";
+import { formatCurrency } from "@/lib/quote-flow-calc";
 
 interface RecentItem {
   id: string;

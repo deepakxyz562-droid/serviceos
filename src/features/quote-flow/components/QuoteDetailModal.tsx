@@ -4,7 +4,7 @@ import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch, apiDelete, apiPost } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles } from "lucide-react";
-import { formatCurrency, computeTotals } from "@/lib/quote-flow-session";
+import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import {
   DropdownMenu,
   DropdownMenuContent,

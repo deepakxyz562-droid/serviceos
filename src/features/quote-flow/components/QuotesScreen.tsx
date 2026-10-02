@@ -4,7 +4,7 @@ import { useAppStore } from "@/features/quote-flow/store/app";
 import { api } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
-import { formatCurrency } from "@/lib/quote-flow-session";
+import { formatCurrency } from "@/lib/quote-flow-calc";
 
 export function QuotesScreen() {
   const openModal = useAppStore((s) => s.openModal);

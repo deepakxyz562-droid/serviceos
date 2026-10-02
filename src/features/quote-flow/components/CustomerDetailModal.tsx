@@ -4,7 +4,7 @@ import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiDelete } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
 import { Loader2, X, Pencil, FileText, Receipt, Trash2 } from "lucide-react";
-import { formatCurrency } from "@/lib/quote-flow-session";
+import { formatCurrency } from "@/lib/quote-flow-calc";
 
 export function CustomerDetailModal({ customerId }: { customerId: string }) {
   const closeModal = useAppStore((s) => s.closeModal);

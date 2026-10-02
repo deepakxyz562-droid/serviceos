@@ -4,7 +4,7 @@ import { useAppStore } from "@/features/quote-flow/store/app";
 import { api } from "@/features/quote-flow/lib/api";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { formatCurrency } from "@/lib/quote-flow-session";
+import { formatCurrency } from "@/lib/quote-flow-calc";
 import { StatusPill } from "./QuotesScreen";
 
 export function InvoicesScreen() {
