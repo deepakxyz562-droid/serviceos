@@ -283,6 +283,15 @@ const TABLE_MAP: Record<string, string> = {
   // ── Verification & Claims ──
   claimRequest: 'ClaimRequest',
   verificationEvidence: 'VerificationEvidence',
+  // ── AI Quote & Invoice Suite (QuoteFlow) ──
+  aiBusiness: 'AiBusiness',
+  aiCustomer: 'AiCustomer',
+  aiQuote: 'AiQuote',
+  aiQuoteItem: 'AiQuoteItem',
+  aiInvoice: 'AiInvoice',
+  aiInvoiceItem: 'AiInvoiceItem',
+  aiPayment: 'AiPayment',
+  aiTemplate: 'AiTemplate',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -321,6 +330,9 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   'ActivityLog',
   'AdConversion',
   'AiCallTag',
+  'AiInvoiceItem',
+  'AiPayment',
+  'AiQuoteItem',
   'AnalyticsSnapshot',
   'ApiKey',
   'AppNotification',
@@ -560,6 +572,7 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
     employeeAccount: { targetTable: 'Employee', targetFkColumn: 'userId', isMany: false },
+    aiBusiness: { targetTable: 'AiBusiness', targetFkColumn: 'ownerId', isMany: false },
   },
   Workspace: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
@@ -684,6 +697,42 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   // ── Verification evidence ──
   VerificationEvidence: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
+  // ── AI Quote & Invoice Suite (QuoteFlow) ──
+  AiBusiness: {
+    owner: { targetTable: 'User', fkColumn: 'ownerId' },
+    customers: { targetTable: 'AiCustomer', targetFkColumn: 'businessId', isMany: true },
+    quotes: { targetTable: 'AiQuote', targetFkColumn: 'businessId', isMany: true },
+    invoices: { targetTable: 'AiInvoice', targetFkColumn: 'businessId', isMany: true },
+    templates: { targetTable: 'AiTemplate', targetFkColumn: 'businessId', isMany: true },
+  },
+  AiCustomer: {
+    business: { targetTable: 'AiBusiness', fkColumn: 'businessId' },
+    quotes: { targetTable: 'AiQuote', targetFkColumn: 'customerId', isMany: true },
+    invoices: { targetTable: 'AiInvoice', targetFkColumn: 'customerId', isMany: true },
+  },
+  AiQuote: {
+    business: { targetTable: 'AiBusiness', fkColumn: 'businessId' },
+    customer: { targetTable: 'AiCustomer', fkColumn: 'customerId' },
+    items: { targetTable: 'AiQuoteItem', targetFkColumn: 'quoteId', isMany: true },
+  },
+  AiQuoteItem: {
+    quote: { targetTable: 'AiQuote', fkColumn: 'quoteId' },
+  },
+  AiInvoice: {
+    business: { targetTable: 'AiBusiness', fkColumn: 'businessId' },
+    customer: { targetTable: 'AiCustomer', fkColumn: 'customerId' },
+    items: { targetTable: 'AiInvoiceItem', targetFkColumn: 'invoiceId', isMany: true },
+    payments: { targetTable: 'AiPayment', targetFkColumn: 'invoiceId', isMany: true },
+  },
+  AiInvoiceItem: {
+    invoice: { targetTable: 'AiInvoice', fkColumn: 'invoiceId' },
+  },
+  AiPayment: {
+    invoice: { targetTable: 'AiInvoice', fkColumn: 'invoiceId' },
+  },
+  AiTemplate: {
+    business: { targetTable: 'AiBusiness', fkColumn: 'businessId' },
   },
 };
 

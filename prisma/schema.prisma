@@ -9015,7 +9015,6 @@ model AiBusiness {
   invoices       AiInvoice[]
   templates      AiTemplate[]
 
-  @@map("ai_businesses")
   @@index([ownerId])
   @@index([tenantId])
 }
@@ -9035,7 +9034,6 @@ model AiCustomer {
   quotes     AiQuote[]
   invoices   AiInvoice[]
 
-  @@map("ai_customers")
   @@index([businessId])
 }
 
@@ -9061,7 +9059,6 @@ model AiQuote {
 
   items              AiQuoteItem[]
 
-  @@map("ai_quotes")
   @@index([businessId])
   @@index([customerId])
 }
@@ -9074,7 +9071,6 @@ model AiQuoteItem {
   qty         Float    @default(1)
   unitPrice   Float    @default(0)
 
-  @@map("ai_quote_items")
   @@index([quoteId])
 }
 
@@ -9100,7 +9096,6 @@ model AiInvoice {
   items         AiInvoiceItem[]
   payments      AiPayment[]
 
-  @@map("ai_invoices")
   @@index([businessId])
   @@index([customerId])
 }
@@ -9113,7 +9108,6 @@ model AiInvoiceItem {
   qty         Float     @default(1)
   unitPrice   Float     @default(0)
 
-  @@map("ai_invoice_items")
   @@index([invoiceId])
 }
 
@@ -9125,7 +9119,6 @@ model AiPayment {
   method    String    @default("MANUAL") // MANUAL | CARD | BANK | CASH
   paidAt    DateTime  @default(now())
 
-  @@map("ai_payments")
   @@index([invoiceId])
 }
 
@@ -9141,7 +9134,7 @@ model AiTemplate {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  @@map("ai_templates")
   @@index([businessId])
 }
+
 
