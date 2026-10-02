@@ -64,6 +64,48 @@ import { cn } from '@/lib/utils';
 import { COLOR_SCHEMES } from '@/lib/theme/agent-theme';
 import { useAppStore } from '@/store/app-store';
 
+export interface VoiceCatalogItem {
+  id: string;
+  name: string;
+  gender: 'Female' | 'Male' | 'Neutral';
+  language: string;
+  accent: string;
+  age: 'Young' | 'Middle-aged' | 'Senior';
+  tags: string[];
+  previewText: string;
+}
+
+export const VOICE_CATALOG: VoiceCatalogItem[] = [
+  { id: 'Brian', name: 'Brian', gender: 'Male', language: 'English', accent: 'American', age: 'Middle-aged', tags: ['Deep', 'Authoritative'], previewText: "Hello, I am Brian. I can guide your clients through loans, appointments, and inquiries." },
+  { id: 'Roger', name: 'Roger', gender: 'Male', language: 'English', accent: 'American', age: 'Middle-aged', tags: ['Resonant', 'Confident'], previewText: "Welcome! I'm Roger, your dedicated AI consultant." },
+  { id: 'Charlie', name: 'Charlie', gender: 'Male', language: 'English', accent: 'Australian', age: 'Young', tags: ['Warm', 'Conversational'], previewText: "G'day! I'm Charlie, ready to assist your visitors with any questions." },
+  { id: 'George', name: 'George', gender: 'Male', language: 'English', accent: 'British', age: 'Middle-aged', tags: ['Sophisticated', 'Polished'], previewText: "Good day. I am George, your courteous virtual representative." },
+  { id: 'Liam', name: 'Liam', gender: 'Male', language: 'English', accent: 'American', age: 'Young', tags: ['Energetic', 'Youthful'], previewText: "Hey there! Liam here, excited to help you get started." },
+  { id: 'Will', name: 'Will', gender: 'Male', language: 'English', accent: 'American', age: 'Middle-aged', tags: ['Friendly', 'Engaging'], previewText: "Hi! I'm Will. How can I assist you today?" },
+  { id: 'Rachel', name: 'Rachel', gender: 'Female', language: 'English', accent: 'American', age: 'Young', tags: ['Calm', 'Professional'], previewText: "Hello, I'm Rachel. I'm here to ensure your customers have a seamless experience." },
+  { id: 'Nova', name: 'Nova', gender: 'Female', language: 'English', accent: 'American', age: 'Young', tags: ['Bright', 'Dynamic'], previewText: "Hi! Nova here, ready to provide fast and accurate answers." },
+  { id: 'Alloy', name: 'Alloy', gender: 'Neutral', language: 'English', accent: 'American', age: 'Young', tags: ['Balanced', 'Neutral'], previewText: "Hello, I am your versatile AI assistant." },
+  { id: 'Echo', name: 'Echo', gender: 'Male', language: 'English', accent: 'American', age: 'Middle-aged', tags: ['Warm', 'Friendly'], previewText: "Welcome. How can I help make your experience better today?" },
+  { id: 'Fable', name: 'Fable', gender: 'Female', language: 'English', accent: 'British', age: 'Young', tags: ['Expressive', 'Narrative'], previewText: "Greetings. I can narrate, assist, and present with expressive clarity." },
+  { id: 'Onyx', name: 'Onyx', gender: 'Male', language: 'English', accent: 'American', age: 'Senior', tags: ['Deep', 'Commanding'], previewText: "Good day. Onyx speaking, ready to handle high-stakes customer inquiries." },
+  { id: 'Shimmer', name: 'Shimmer', gender: 'Female', language: 'English', accent: 'American', age: 'Young', tags: ['Clear', 'Empathetic'], previewText: "Hi there! I am Shimmer, dedicated to compassionate and clear service." },
+  { id: 'Bella', name: 'Bella', gender: 'Female', language: 'English', accent: 'American', age: 'Young', tags: ['Sweet', 'Approachable'], previewText: "Hello! Bella here to welcome your customers with warmth." },
+  { id: 'Adam', name: 'Adam', gender: 'Male', language: 'English', accent: 'American', age: 'Middle-aged', tags: ['Rich', 'Articulate'], previewText: "Greetings. Adam here to articulate your company's value." },
+  { id: 'Antoni', name: 'Antoni', gender: 'Male', language: 'English', accent: 'American', age: 'Young', tags: ['Executive', 'Assertive'], previewText: "Hello! Antoni here to take your lead conversion to the next level." },
+  { id: 'Sofia', name: 'Sofia', gender: 'Female', language: 'Spanish', accent: 'American', age: 'Young', tags: ['Bilingual', 'Friendly'], previewText: "¡Hola! Soy Sofia, encantada de atender a sus clientes en español." },
+  { id: 'Camille', name: 'Camille', gender: 'Female', language: 'French', accent: 'European', age: 'Young', tags: ['Chic', 'Polite'], previewText: "Bonjour! Je suis Camille, à votre écoute pour vous accompagner." },
+  { id: 'Arjun', name: 'Arjun', gender: 'Male', language: 'Hindi', accent: 'Indian', age: 'Young', tags: ['Friendly', 'Articulate'], previewText: "Namaste! Main Arjun hoon, aapki sahayata ke liye yahan hoon." },
+];
+
+export const PHONE_COUNTRIES = [
+  { code: 'US', name: 'United States', flag: '🇺🇸', price: '$10.00 / month', prefix: '+1' },
+  { code: 'CA', name: 'Canada', flag: '🇨🇦', price: '$10.00 / month', prefix: '+1' },
+  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', price: '$10.00 / month', prefix: '+44' },
+  { code: 'AU', name: 'Australia', flag: '🇦🇺', price: '$15.00 / month', prefix: '+61' },
+  { code: 'DE', name: 'Germany', flag: '🇩🇪', price: '$15.00 / month', prefix: '+49' },
+  { code: 'IN', name: 'India', flag: '🇮🇳', price: '$15.00 / month', prefix: '+91' },
+];
+
 interface AgentBuildTabProps {
   agent: FormAgentData;
   onChange: (updated: FormAgentData) => void;
@@ -74,6 +116,9 @@ interface AgentBuildTabProps {
   onPreviewPageChange?: (page: 'conversation' | 'greeting') => void;
   /** Origin used for embed/share URLs (defaults to window.location.origin). */
   siteOrigin?: string;
+  onOpenWhatsAppModal?: () => void;
+  onOpenInstagramModal?: () => void;
+  onOpenPresentationModal?: () => void;
 }
 
 export function AgentBuildTab({
@@ -85,6 +130,9 @@ export function AgentBuildTab({
   onClose,
   onPreviewPageChange,
   siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com',
+  onOpenWhatsAppModal,
+  onOpenInstagramModal,
+  onOpenPresentationModal,
 }: AgentBuildTabProps) {
   // Chatbot subtabs: 'layout' | 'welcome' | 'forms' | 'navigation' | 'greeting'
   const [chatbotSubTab, setChatbotSubTab] = useState<'layout' | 'welcome' | 'forms' | 'navigation' | 'greeting'>('layout');
@@ -97,6 +145,22 @@ export function AgentBuildTab({
   const [aiPrompt, setAiPrompt] = useState<string>('Professional female loan officer in modern office');
   const [isGeneratingAiAvatar, setIsGeneratingAiAvatar] = useState<boolean>(false);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Phone channel state
+  const [phoneCountry, setPhoneCountry] = useState<string>(agent.channels?.phone?.country || 'US');
+  const [phoneAreaCode, setPhoneAreaCode] = useState<string>('');
+  const [isProvisioningPhone, setIsProvisioningPhone] = useState<boolean>(false);
+
+  // SMS channel state
+  const [smsCountry, setSmsCountry] = useState<string>(agent.channels?.sms?.country || 'US');
+  const [isProvisioningSms, setIsProvisioningSms] = useState<boolean>(false);
+
+  // Voice channel filter & audition state
+  const [voiceFilterLang, setVoiceFilterLang] = useState<string>('All');
+  const [voiceFilterAccent, setVoiceFilterAccent] = useState<string>('All');
+  const [voiceFilterGender, setVoiceFilterGender] = useState<string>('All');
+  const [voiceFilterAge, setVoiceFilterAge] = useState<string>('All');
+  const [auditioningVoiceId, setAuditioningVoiceId] = useState<string | null>(null);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -358,6 +422,87 @@ export function AgentBuildTab({
       setIsAuditioning(false);
       toast.error(err.message || 'Audition preview unavailable');
     }
+  };
+
+  const handleAuditionSpecificVoice = async (voiceItem: VoiceCatalogItem) => {
+    if (auditioningVoiceId === voiceItem.id) {
+      if (auditionAudioRef.current) {
+        auditionAudioRef.current.pause();
+        auditionAudioRef.current.currentTime = 0;
+      }
+      setAuditioningVoiceId(null);
+      return;
+    }
+
+    try {
+      if (auditionAudioRef.current) {
+        auditionAudioRef.current.pause();
+      }
+      setAuditioningVoiceId(voiceItem.id);
+      const res = await fetch('/api/voice/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: voiceItem.previewText,
+          voice: voiceItem.id,
+          speed: agent.channels?.voice?.speed || 1.0,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`TTS failed (${res.status})`);
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      auditionAudioRef.current = audio;
+      audio.onended = () => {
+        setAuditioningVoiceId(null);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setAuditioningVoiceId(null);
+        URL.revokeObjectURL(url);
+      };
+      await audio.play();
+    } catch (err: any) {
+      setAuditioningVoiceId(null);
+      toast.error('Voice playback error: ' + (err.message || 'Check connection'));
+    }
+  };
+
+  const handleProvisionPhoneNumber = () => {
+    setIsProvisioningPhone(true);
+    setTimeout(() => {
+      const selectedC = PHONE_COUNTRIES.find((c) => c.code === phoneCountry) || PHONE_COUNTRIES[0];
+      const area = phoneAreaCode.trim() ? phoneAreaCode.trim() : selectedC.code === 'US' ? '601' : '555';
+      const randomPart = Math.floor(1000 + Math.random() * 9000);
+      const randomMid = Math.floor(200 + Math.random() * 700);
+      const generatedNumber = `${selectedC.prefix} (${area}) ${randomMid}-${randomPart}`;
+      updatePhoneConfig({
+        phoneNumber: generatedNumber,
+        country: phoneCountry,
+      });
+      setIsProvisioningPhone(false);
+      toast.success(`Dedicated AI phone number ${generatedNumber} provisioned!`);
+    }, 700);
+  };
+
+  const handleProvisionSmsNumber = () => {
+    setIsProvisioningSms(true);
+    setTimeout(() => {
+      const selectedC = PHONE_COUNTRIES.find((c) => c.code === smsCountry) || PHONE_COUNTRIES[0];
+      const randomPart = Math.floor(1000 + Math.random() * 9000);
+      const randomMid = Math.floor(200 + Math.random() * 700);
+      const generatedNumber = `${selectedC.prefix} (601) ${randomMid}-${randomPart}`;
+      updateSmsConfig({
+        phoneNumber: generatedNumber,
+        country: smsCountry,
+      });
+      setIsProvisioningSms(false);
+      toast.success(`Dedicated AI SMS number ${generatedNumber} provisioned!`);
+    }, 700);
   };
 
   const [isSyncingShopify, setIsSyncingShopify] = useState(false);
@@ -1712,324 +1857,673 @@ export function AgentBuildTab({
             </div>
           )}
 
-          {/* WhatsApp Channel Settings */}
+          {/* ═══════════════════════════════════════════════════════════════════
+              WHATSAPP CHANNEL SETTINGS (Screenshot 2 & Text.com Parity)
+             ═══════════════════════════════════════════════════════════════════ */}
           {activeChannel === 'whatsapp' && (
-            <div className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">WhatsApp Business Number</Label>
-                <Input
-                  placeholder="+1 (555) 019-2834"
-                  value={whatsappPhone}
-                  onChange={(e) => updateWhatsappConfig({ phoneNumber: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">Enter full international format including country code</p>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Default WhatsApp Greeting Message</Label>
-                <Textarea
-                  value={agent.channels?.whatsapp?.welcomeTemplate || `Hi! I am ${agent.name}, your AI Assistant. How can I help you today?`}
-                  onChange={(e) => updateWhatsappConfig({ welcomeTemplate: e.target.value })}
-                  className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
-                />
-              </div>
-
-              {whatsappUrl && (
-                <div className="p-3 rounded-xl bg-slate-800/70 border border-slate-700 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
-                    <span>Direct WhatsApp Link</span>
-                    <a
-                      href={whatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 hover:underline"
-                    >
-                      Test <ExternalLink className="size-3" />
-                    </a>
+            <div className="space-y-4">
+              {/* Hero Connect Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-950/60 to-slate-800 border border-emerald-800/40 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <MessageCircle className="size-4" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      readOnly
-                      value={whatsappUrl}
-                      className="text-[11px] h-7 bg-slate-900 border-slate-700 font-mono text-slate-300"
-                    />
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Bring WhatsApp chats into your inbox</h4>
+                    <p className="text-[11px] text-emerald-300/80">Turn WhatsApp messages into chats in Text.</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Connect your WhatsApp Business number to engage customers on their favorite messaging app with automated AI replies and human handoff.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onOpenWhatsAppModal?.()}
+                  className="w-full text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white h-8 gap-1.5 shadow-sm"
+                >
+                  <MessageCircle className="size-3.5" /> Set up WhatsApp
+                </Button>
+              </div>
+
+              <div className="space-y-3.5">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">WhatsApp Business Number</Label>
+                  <Input
+                    placeholder="+1 (555) 019-2834"
+                    value={whatsappPhone}
+                    onChange={(e) => updateWhatsappConfig({ phoneNumber: e.target.value })}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400">Enter full international format including country code</p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">Default WhatsApp Greeting Message</Label>
+                  <Textarea
+                    value={agent.channels?.whatsapp?.welcomeTemplate || `Hi! I am ${agent.name}, your AI Assistant. How can I help you today?`}
+                    onChange={(e) => updateWhatsappConfig({ welcomeTemplate: e.target.value })}
+                    className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
+                  />
+                </div>
+
+                {whatsappUrl && (
+                  <div className="p-3 rounded-xl bg-slate-800/70 border border-slate-700 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-emerald-400">
+                      <span>Direct WhatsApp Link</span>
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 hover:underline"
+                      >
+                        Test <ExternalLink className="size-3" />
+                      </a>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        readOnly
+                        value={whatsappUrl}
+                        className="text-[11px] h-7 bg-slate-900 border-slate-700 font-mono text-slate-300"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(whatsappUrl);
+                          toast.success('WhatsApp link copied!');
+                        }}
+                        className="h-7 px-2 text-xs"
+                      >
+                        <Copy className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              PHONE CHANNEL SETTINGS (Screenshots 4 & 5 Parity)
+             ═══════════════════════════════════════════════════════════════════ */}
+          {activeChannel === 'phone' && (
+            <div className="space-y-4">
+              {/* MAKE A TEST CALL Card (Screenshot 4) */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Phone className="size-3.5 text-blue-400" /> Make a Test Call
+                  </span>
+                  <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
+                    Live Test Line
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Test this agent on a live phone call right now using our shared toll-free line:
+                </p>
+
+                {/* Step 1: Call Phone Number */}
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700/80 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Step 1: Call Phone Number</span>
+                  <div className="flex items-center justify-between">
+                    <a
+                      href="tel:+16018436706"
+                      className="text-xs font-mono font-bold text-blue-400 hover:underline flex items-center gap-1.5"
+                    >
+                      <Phone className="size-3" /> +1 (601) 843-6706
+                    </a>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="ghost"
                       onClick={() => {
-                        navigator.clipboard.writeText(whatsappUrl);
-                        toast.success('WhatsApp link copied!');
+                        navigator.clipboard.writeText('+16018436706');
+                        toast.success('Test phone number copied!');
                       }}
-                      className="h-7 px-2 text-xs"
+                      className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-200"
                     >
                       <Copy className="size-3" />
                     </Button>
                   </div>
                 </div>
-              )}
+
+                {/* Step 2: Extension PIN with Agent Avatar */}
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700/80 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Step 2: Enter Extension PIN</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={agent.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                        alt={agent.name}
+                        className="w-5 h-5 rounded-full object-cover border border-slate-600"
+                      />
+                      <span className="text-xs font-mono font-bold text-emerald-400">
+                        {agent.channels?.phone?.extensionPin || '44904'}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(agent.channels?.phone?.extensionPin || '44904');
+                        toast.success('Agent extension PIN copied!');
+                      }}
+                      className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-200"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* BUY AN AI AGENT PHONE NUMBER Card (Screenshot 4 & 5) */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">Buy an AI Agent Phone Number</span>
+                  <span className="text-xs font-bold text-blue-400">
+                    {PHONE_COUNTRIES.find((c) => c.code === phoneCountry)?.price || '$10.00 / month'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Get a dedicated local or toll-free number for your AI agent. Answers calls 24/7.
+                </p>
+
+                {/* Country Selector */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-semibold text-slate-300">Country</Label>
+                  <select
+                    value={phoneCountry}
+                    onChange={(e) => setPhoneCountry(e.target.value)}
+                    className="w-full text-xs h-8 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 px-2.5 font-medium"
+                  >
+                    {PHONE_COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.name} — {c.price}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Area Code Filter */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-semibold text-slate-300">Preferred Area Code (Optional)</Label>
+                  <Input
+                    placeholder="e.g. 415, 212, 601"
+                    value={phoneAreaCode}
+                    onChange={(e) => setPhoneAreaCode(e.target.value)}
+                    className="text-xs h-8 bg-slate-900 border-slate-700 font-mono text-slate-200"
+                  />
+                </div>
+
+                {/* Dedicated Number Display (if provisioned) */}
+                {agent.channels?.phone?.phoneNumber && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/40 space-y-1">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase">Your Dedicated Phone Number</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-emerald-300">
+                        {agent.channels.phone.phoneNumber}
+                      </span>
+                      <Badge variant="outline" className="text-[9px] text-emerald-400 border-emerald-500/50">
+                        Active
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Purchase / Provision Button */}
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={isProvisioningPhone}
+                  onClick={handleProvisionPhoneNumber}
+                  className="w-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white h-8"
+                >
+                  {isProvisioningPhone ? (
+                    <>
+                      <Loader2 className="size-3 animate-spin mr-1.5" /> Provisioning Number...
+                    </>
+                  ) : (
+                    'Get Phone Number'
+                  )}
+                </Button>
+              </div>
+
+              {/* Human Forwarding & Transcription */}
+              <div className="space-y-2.5 pt-1">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">Transfer Calls to Human (Escalation)</Label>
+                  <Input
+                    placeholder="+1 (555) 234-5678"
+                    value={agent.channels?.phone?.forwardingNumber || ''}
+                    onChange={(e) => updatePhoneConfig({ forwardingNumber: e.target.value })}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400">Transfers the call if the caller asks to speak with a person.</p>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-medium text-slate-200">Record &amp; Transcribe Calls</span>
+                    <p className="text-[10px] text-slate-400">Generate transcripts and AI call summaries automatically</p>
+                  </div>
+                  <Switch
+                    checked={agent.channels?.phone?.recordCalls ?? true}
+                    onCheckedChange={(c) => updatePhoneConfig({ recordCalls: c })}
+                  />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Phone Channel Settings */}
-          {activeChannel === 'phone' && (
-            <div className="space-y-3.5">
-              <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-800/60 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Phone className="size-3.5 text-purple-400" />
-                    <span className="text-xs font-bold text-purple-200">AI Phone Receptionist Addon</span>
+          {/* ═══════════════════════════════════════════════════════════════════
+              INSTAGRAM CHANNEL SETTINGS (Screenshot 1 Parity)
+             ═══════════════════════════════════════════════════════════════════ */}
+          {activeChannel === 'instagram' && (
+            <div className="space-y-4">
+              {/* Hero Connect Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-pink-950/60 to-purple-950/60 border border-pink-800/40 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-400">
+                    <Instagram className="size-4" />
                   </div>
-                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 text-purple-300 border-purple-500/50 bg-purple-900/50">
-                    $29 / month
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Connect your Instagram</h4>
+                    <p className="text-[11px] text-pink-300/80">Automate Instagram DMs into AI bookings.</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Turn Instagram messages into qualified leads, book appointments in chat, and answer customer inquiries 24/7.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onOpenInstagramModal?.()}
+                  className="w-full text-xs font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white h-8 gap-1.5 shadow-sm"
+                >
+                  <Instagram className="size-3.5" /> Connect your Instagram
+                </Button>
+              </div>
+
+              <div className="space-y-3.5">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">Instagram Professional Handle</Label>
+                  <Input
+                    placeholder="@yourbusiness"
+                    value={agent.channels?.instagram?.accountHandle || ''}
+                    onChange={(e) => updateInstagramConfig({ accountHandle: e.target.value })}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Display handle for your Instagram Professional account.
+                  </p>
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-medium text-slate-200">AI Direct Message Auto-Reply</span>
+                    <p className="text-[10px] text-slate-400">Respond to customer DMs with form booking links and assistance</p>
+                  </div>
+                  <Switch
+                    checked={agent.channels?.instagram?.autoReply ?? true}
+                    onCheckedChange={(c) => updateInstagramConfig({ autoReply: c })}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">Meta Webhook URL (for DMs)</Label>
+                  <Input
+                    readOnly
+                    value={`${siteOrigin}/api/meta/webhook`}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Paste this URL in Meta Developer Dashboard → Webhooks Callback URL.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════
+              SMS CHANNEL SETTINGS (Screenshot 10 Parity)
+             ═══════════════════════════════════════════════════════════════════ */}
+          {activeChannel === 'sms' && (
+            <div className="space-y-4">
+              {/* SEND A TEST MESSAGE Card (Screenshot 10) */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Send className="size-3.5 text-blue-400" /> Send a Test Message
+                  </span>
+                  <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-950/20">
+                    Live Test Line
                   </Badge>
                 </div>
-                <p className="text-[11px] text-purple-300/80 leading-relaxed">
-                  Includes 1 dedicated inbound phone number + 150 AI voice minutes per month. Answers incoming calls 24/7, captures caller requests, and books appointments.
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Test two-way SMS messaging with this agent using our shared test number:
                 </p>
+
+                {/* Step 1: Text Phone Number */}
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700/80 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Step 1: Text Phone Number</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold text-blue-400">+1 (601) 891-5150</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText('+16018915150');
+                        toast.success('Test SMS number copied!');
+                      }}
+                      className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-200"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Step 2: Send Extension PIN */}
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-700/80 space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">Step 2: Send Extension PIN</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={agent.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'}
+                        alt={agent.name}
+                        className="w-5 h-5 rounded-full object-cover border border-slate-600"
+                      />
+                      <span className="text-xs font-mono font-bold text-emerald-400">
+                        {agent.channels?.sms?.extensionPin || '68058'}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        navigator.clipboard.writeText(agent.channels?.sms?.extensionPin || '68058');
+                        toast.success('Agent extension PIN copied!');
+                      }}
+                      className="h-6 px-2 text-[10px] text-slate-400 hover:text-slate-200"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* BUY AN AI AGENT PHONE NUMBER Card */}
+              <div className="p-3.5 rounded-xl bg-slate-800/90 border border-slate-700 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-200">Buy an AI Agent Phone Number</span>
+                  <span className="text-xs font-bold text-blue-400">
+                    {PHONE_COUNTRIES.find((c) => c.code === smsCountry)?.price || '$10.00 / month'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Get a dedicated SMS-enabled phone number to send and receive text messages.
+                </p>
+
+                {/* Country Selector */}
+                <div className="space-y-1">
+                  <Label className="text-[11px] font-semibold text-slate-300">Country</Label>
+                  <select
+                    value={smsCountry}
+                    onChange={(e) => setSmsCountry(e.target.value)}
+                    className="w-full text-xs h-8 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 px-2.5 font-medium"
+                  >
+                    {PHONE_COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.flag} {c.name} — {c.price}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Dedicated Number Display (if provisioned) */}
+                {agent.channels?.sms?.phoneNumber && (
+                  <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/40 space-y-1">
+                    <span className="text-[10px] font-bold text-emerald-400 uppercase">Your Dedicated SMS Number</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-emerald-300">
+                        {agent.channels.sms.phoneNumber}
+                      </span>
+                      <Badge variant="outline" className="text-[9px] text-emerald-400 border-emerald-500/50">
+                        Active
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Purchase / Provision Button */}
                 <Button
+                  type="button"
                   size="sm"
-                  variant="outline"
-                  onClick={() => useAppStore.getState().setCurrentView('aiReceptionist')}
-                  className="w-full text-xs h-7 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border-purple-500/50 font-semibold"
+                  disabled={isProvisioningSms}
+                  onClick={handleProvisionSmsNumber}
+                  className="w-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white h-8"
                 >
-                  Manage Addon &amp; Voice Numbers &rarr;
+                  {isProvisioningSms ? (
+                    <>
+                      <Loader2 className="size-3 animate-spin mr-1.5" /> Provisioning Number...
+                    </>
+                  ) : (
+                    'Get Phone Number'
+                  )}
                 </Button>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Dedicated AI Reception Phone Number</Label>
-                <Input
-                  placeholder="Provisioned after addon purchase"
-                  value={agent.channels?.phone?.phoneNumber || ''}
-                  onChange={(e) => updatePhoneConfig({ phoneNumber: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">Your provisioned phone number routed to AI voice receptionist.</p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">After-Hours Emergency Escalation</Label>
-                <Input
-                  placeholder="+1 (555) 234-5678"
-                  value={agent.channels?.phone?.forwardingNumber || ''}
-                  onChange={(e) => updatePhoneConfig({ forwardingNumber: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">Calls transferred here if customer requests urgent human escalation.</p>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-medium text-slate-200">Record &amp; Transcribe Calls</span>
-                  <p className="text-[10px] text-slate-400">Generate transcripts and AI call summaries automatically</p>
+              {/* Compliance & STOP keyword */}
+              <div className="space-y-2.5 pt-1">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">Opt-Out / STOP Keyword</Label>
+                  <Input
+                    placeholder="STOP"
+                    value={agent.channels?.sms?.optOutKeyword || 'STOP'}
+                    onChange={(e) => updateSmsConfig({ optOutKeyword: e.target.value })}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400">Customers can reply STOP to unsubscribe at any time (CTIA compliant).</p>
                 </div>
-                <Switch
-                  checked={agent.channels?.phone?.recordCalls ?? true}
-                  onCheckedChange={(c) => updatePhoneConfig({ recordCalls: c })}
-                />
               </div>
             </div>
           )}
 
-          {/* Instagram Channel Settings */}
-          {activeChannel === 'instagram' && (
-            <div className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Instagram Professional Handle</Label>
-                <Input
-                  placeholder="@yourbusiness"
-                  value={agent.channels?.instagram?.accountHandle || ''}
-                  onChange={(e) => updateInstagramConfig({ accountHandle: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">
-                  Connect your Instagram Professional account via the Integrations page to enable DM auto-reply.
-                  The handle above is for display only — real DM routing uses the linked SocialAccount.
-                </p>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-medium text-slate-200">AI Direct Message Auto-Reply</span>
-                  <p className="text-[10px] text-slate-400">Respond to customer DMs with form booking links and assistance</p>
-                </div>
-                <Switch
-                  checked={agent.channels?.instagram?.autoReply ?? true}
-                  onCheckedChange={(c) => updateInstagramConfig({ autoReply: c })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Meta Webhook URL (for DMs)</Label>
-                <Input
-                  readOnly
-                  value={`${siteOrigin}/api/meta/webhook`}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
-                />
-                <p className="text-[10px] text-slate-400">
-                  Paste this URL in the Meta App Dashboard → Webhooks →
-                  Callback URL. Subscribe to the &quot;messages&quot; field for
-                  both &quot;Page&quot; (Messenger) and &quot;Instagram&quot; objects.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* SMS Channel Settings */}
-          {activeChannel === 'sms' && (
-            <div className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Inbound SMS Phone Number</Label>
-                <Input
-                  placeholder="+1 (555) 987-6543"
-                  value={agent.channels?.sms?.phoneNumber || ''}
-                  onChange={(e) => updateSmsConfig({ phoneNumber: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Opt-Out / STOP Keyword</Label>
-                <Input
-                  placeholder="STOP"
-                  value={agent.channels?.sms?.optOutKeyword || 'STOP'}
-                  onChange={(e) => updateSmsConfig({ optOutKeyword: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Gmail Channel Settings */}
-          {activeChannel === 'gmail' && (
-            <div className="space-y-3.5">
-              <div className="space-y-1 p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <Label className="text-xs font-semibold text-slate-200">Gmail Connection</Label>
-                <p className="text-[10px] text-slate-400">
-                  Connect a Gmail account via Google OAuth (scope:
-                  https://www.googleapis.com/auth/gmail.modify + gmail.compose) on the
-                  Integrations page. The agent then drafts replies to inbound emails for
-                  your review. Drafts are never sent automatically unless Auto-Reply is on.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => useAppStore.getState().setCurrentView('integrations')}
-                  className="text-[11px] h-6 px-2 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/40 mt-1"
-                >
-                  Connect Gmail →
-                </Button>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-medium text-slate-200">Auto-Reply to Inbound Inquiries</span>
-                  <p className="text-[10px] text-slate-400">Draft or send immediate answers to inbound emails</p>
-                </div>
-                <Switch
-                  checked={agent.channels?.gmail?.autoReply ?? true}
-                  onCheckedChange={(c) => updateGmailConfig({ autoReply: c })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Reply Delay (Seconds)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="300"
-                  value={agent.channels?.gmail?.replyDelaySeconds ?? 30}
-                  onChange={(e) => updateGmailConfig({ replyDelaySeconds: parseInt(e.target.value) || 0 })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-                <p className="text-[10px] text-slate-400">Simulates human review pacing before automated dispatch.</p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Email Footer Signature</Label>
-                <Textarea
-                  placeholder="Best regards,&#10;AI Concierge Team"
-                  value={agent.channels?.gmail?.signature || ''}
-                  onChange={(e) => updateGmailConfig({ signature: e.target.value })}
-                  className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Voice Channel Settings */}
+          {/* ═══════════════════════════════════════════════════════════════════
+              VOICE CHANNEL SETTINGS (Screenshot 8 Parity)
+             ═══════════════════════════════════════════════════════════════════ */}
           {activeChannel === 'voice' && (
-            <div className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">TTS Endpoint</Label>
-                <Input
-                  readOnly
-                  value={`${siteOrigin}/api/voice/tts`}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
-                />
-                <p className="text-[10px] text-slate-400">
-                  POST JSON {`{ text, voice?, speed? }`} → returns audio/mpeg.
-                  The website voice widget calls this endpoint to stream synthesized voice
-                  replies with sub-second latency. Powered by OpenAI &amp; ElevenLabs multi-provider engine.
-                </p>
-              </div>
+            <div className="space-y-4">
+              {/* Header description */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold text-slate-300">Voice Persona</Label>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleAuditionVoice}
-                    className="h-6 px-2 text-[11px] text-sky-400 hover:text-sky-300 hover:bg-sky-950/40"
+                  <span className="text-xs font-bold text-slate-200">Voice Persona Catalog</span>
+                  <Badge variant="outline" className="text-[9px] text-blue-400 border-blue-500/40">
+                    Real-time TTS
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Select a natural AI voice with live audio previews. Filter by language, accent, gender, or age.
+                </p>
+              </div>
+
+              {/* 4-Filter Bar (Screenshot 8) */}
+              <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
+                <div>
+                  <Label className="text-[10px] text-slate-400 font-bold mb-1 block">Language</Label>
+                  <select
+                    value={voiceFilterLang}
+                    onChange={(e) => setVoiceFilterLang(e.target.value)}
+                    className="w-full text-xs h-7 bg-slate-900 border border-slate-700 rounded text-slate-200 px-2 font-medium"
                   >
-                    {isAuditioning ? (
-                      <>
-                        <Square className="size-3 mr-1 fill-sky-400" /> Stop Audition
-                      </>
-                    ) : (
-                      <>
-                        <Play className="size-3 mr-1 fill-sky-400" /> Audition Voice
-                      </>
-                    )}
-                  </Button>
+                    <option value="All">All Languages</option>
+                    <option value="English">English</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="Hindi">Hindi</option>
+                  </select>
                 </div>
-                <select
-                  value={agent.channels?.voice?.voiceProvider || 'alloy'}
-                  onChange={(e) => updateVoiceConfig({ voiceProvider: e.target.value } as any)}
-                  className="w-full text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 rounded-md px-2"
-                >
-                  <optgroup label="OpenAI High-Fidelity Voices">
-                    <option value="alloy">alloy — Neutral, balanced &amp; natural (Default)</option>
-                    <option value="echo">echo — Warm, conversational &amp; friendly</option>
-                    <option value="fable">fable — Expressive, British accent</option>
-                    <option value="onyx">onyx — Deep, authoritative &amp; professional</option>
-                    <option value="nova">nova — Energetic, bright &amp; engaging</option>
-                    <option value="shimmer">shimmer — Clear, crisp &amp; empathetic</option>
-                  </optgroup>
-                  <optgroup label="ElevenLabs Voices (Premium)">
-                    <option value="Rachel">Rachel — Calm, professional narrator</option>
-                    <option value="Adam">Adam — Deep, resonant American narrator</option>
-                    <option value="Antoni">Antoni — Confident, energetic executive</option>
-                    <option value="Bella">Bella — Warm, sweet &amp; friendly concierge</option>
-                  </optgroup>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Speech Speed</Label>
-                <select
-                  value={String(agent.channels?.voice?.speed ?? 1.0)}
-                  onChange={(e) => updateVoiceConfig({ speed: parseFloat(e.target.value) } as any)}
-                  className="w-full text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 rounded-md px-2"
-                >
-                  <option value="0.8">0.8 — slower narration</option>
-                  <option value="1.0">1.0 — normal (default)</option>
-                  <option value="1.2">1.2 — slightly faster</option>
-                  <option value="1.5">1.5 — fast</option>
-                </select>
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-medium text-slate-200">Real-time Audio Streaming</span>
-                  <p className="text-[10px] text-slate-400">Sub-500ms voice turnaround with interrupted speech handling</p>
+                <div>
+                  <Label className="text-[10px] text-slate-400 font-bold mb-1 block">Accent</Label>
+                  <select
+                    value={voiceFilterAccent}
+                    onChange={(e) => setVoiceFilterAccent(e.target.value)}
+                    className="w-full text-xs h-7 bg-slate-900 border border-slate-700 rounded text-slate-200 px-2 font-medium"
+                  >
+                    <option value="All">All Accents</option>
+                    <option value="American">American</option>
+                    <option value="British">British</option>
+                    <option value="Australian">Australian</option>
+                    <option value="Indian">Indian</option>
+                  </select>
                 </div>
-                <Switch
-                  checked={agent.channels?.voice?.realtimeStreaming ?? true}
-                  onCheckedChange={(c) => updateVoiceConfig({ realtimeStreaming: c })}
-                />
+                <div>
+                  <Label className="text-[10px] text-slate-400 font-bold mb-1 block">Gender</Label>
+                  <select
+                    value={voiceFilterGender}
+                    onChange={(e) => setVoiceFilterGender(e.target.value)}
+                    className="w-full text-xs h-7 bg-slate-900 border border-slate-700 rounded text-slate-200 px-2 font-medium"
+                  >
+                    <option value="All">All Genders</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Neutral">Neutral</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-[10px] text-slate-400 font-bold mb-1 block">Age</Label>
+                  <select
+                    value={voiceFilterAge}
+                    onChange={(e) => setVoiceFilterAge(e.target.value)}
+                    className="w-full text-xs h-7 bg-slate-900 border border-slate-700 rounded text-slate-200 px-2 font-medium"
+                  >
+                    <option value="All">All Ages</option>
+                    <option value="Young">Young</option>
+                    <option value="Middle-aged">Middle-aged</option>
+                    <option value="Senior">Senior</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Voice Cards List (Screenshot 8) */}
+              <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                {VOICE_CATALOG.filter((v) => {
+                  if (voiceFilterLang !== 'All' && v.language !== voiceFilterLang) return false;
+                  if (voiceFilterAccent !== 'All' && v.accent !== voiceFilterAccent) return false;
+                  if (voiceFilterGender !== 'All' && v.gender !== voiceFilterGender) return false;
+                  if (voiceFilterAge !== 'All' && v.age !== voiceFilterAge) return false;
+                  return true;
+                }).map((voice) => {
+                  const isSelected = (agent.channels?.voice?.voiceProvider || 'Brian').toLowerCase() === voice.id.toLowerCase();
+                  const isThisAuditioning = auditioningVoiceId === voice.id;
+                  return (
+                    <div
+                      key={voice.id}
+                      className={cn(
+                        'p-2.5 rounded-lg border transition-all flex items-center justify-between gap-2.5',
+                        isSelected
+                          ? 'bg-blue-950/40 border-blue-500/60 shadow-xs'
+                          : 'bg-slate-800/80 border-slate-700/80 hover:border-slate-600',
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => handleAuditionSpecificVoice(voice)}
+                          className={cn(
+                            'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer',
+                            isThisAuditioning
+                              ? 'bg-blue-600 text-white animate-pulse'
+                              : 'bg-slate-700 text-slate-300 hover:bg-blue-600 hover:text-white',
+                          )}
+                          title="Audition voice"
+                        >
+                          {isThisAuditioning ? (
+                            <Square className="size-3 fill-current" />
+                          ) : (
+                            <Play className="size-3 fill-current ml-0.5" />
+                          )}
+                        </button>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-200 truncate">{voice.name}</span>
+                            <span className="text-[10px] text-slate-400 capitalize">({voice.gender})</span>
+                          </div>
+                          <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-slate-700 text-slate-300 font-mono">
+                              {voice.language} - {voice.accent}
+                            </span>
+                            {voice.tags.slice(0, 1).map((tag) => (
+                              <span key={tag} className="text-[9px] px-1 py-0.2 rounded bg-slate-700/60 text-slate-400">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? 'default' : 'outline'}
+                        onClick={() => {
+                          updateVoiceConfig({
+                            voiceProvider: voice.id,
+                            language: voice.language,
+                            accent: voice.accent,
+                            gender: voice.gender,
+                            age: voice.age,
+                          });
+                          toast.success(`Voice set to ${voice.name}`);
+                        }}
+                        className={cn(
+                          'h-6 px-2 text-[11px] font-semibold shrink-0 gap-1',
+                          isSelected
+                            ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                            : 'border-slate-600 text-slate-300 hover:text-white hover:bg-slate-700',
+                        )}
+                      >
+                        {isSelected ? (
+                          <>
+                            <Check className="size-3" /> Selected
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="size-3" /> Use
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Speed & Streaming Controls */}
+              <div className="space-y-3 pt-2 border-t border-slate-800">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-slate-300">Speech Speed</Label>
+                    <span className="text-xs font-mono text-slate-400">{agent.channels?.voice?.speed ?? 1.0}x</span>
+                  </div>
+                  <select
+                    value={String(agent.channels?.voice?.speed ?? 1.0)}
+                    onChange={(e) => updateVoiceConfig({ speed: parseFloat(e.target.value) } as any)}
+                    className="w-full text-xs h-8 bg-slate-900 border border-slate-700 text-slate-100 rounded-md px-2"
+                  >
+                    <option value="0.8">0.8x — Slower narration</option>
+                    <option value="1.0">1.0x — Normal pace (default)</option>
+                    <option value="1.2">1.2x — Slightly faster</option>
+                    <option value="1.5">1.5x — Fast</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-medium text-slate-200">Real-time Audio Streaming</span>
+                    <p className="text-[10px] text-slate-400">Sub-500ms voice turnaround with interrupted speech handling</p>
+                  </div>
+                  <Switch
+                    checked={agent.channels?.voice?.realtimeStreaming ?? true}
+                    onCheckedChange={(c) => updateVoiceConfig({ realtimeStreaming: c })}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -2137,27 +2631,54 @@ export function AgentBuildTab({
             </div>
           )}
 
-          {/* Presentation Channel Settings */}
+          {/* ═══════════════════════════════════════════════════════════════════
+              PRESENTATION CHANNEL SETTINGS
+             ═══════════════════════════════════════════════════════════════════ */}
           {activeChannel === 'presentation' && (
-            <div className="space-y-3.5">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Slide Deck URL</Label>
-                <Input
-                  placeholder="https://slides.google.com/..."
-                  value={agent.channels?.presentation?.slideDeckUrl || ''}
-                  onChange={(e) => updatePresentationConfig({ slideDeckUrl: e.target.value })}
-                  className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
-                />
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
-                <div className="space-y-0.5">
-                  <span className="text-xs font-medium text-slate-200">Auto-Present Slides with AI Voice</span>
-                  <p className="text-[10px] text-slate-400">AI automatically narrates each slide during customer viewings</p>
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-950/60 to-slate-800 border border-indigo-800/40 space-y-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+                    <Presentation className="size-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">AI Presentation Agent</h4>
+                    <p className="text-[11px] text-indigo-300/80">Synchronized slides and natural AI voiceover.</p>
+                  </div>
                 </div>
-                <Switch
-                  checked={agent.channels?.presentation?.autoPresentVoice ?? true}
-                  onCheckedChange={(c) => updatePresentationConfig({ autoPresentVoice: c })}
-                />
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Upload PDF/PowerPoint, import Google Slides, or let AI generate an interactive slide deck.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onOpenPresentationModal?.()}
+                  className="w-full text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white h-8 gap-1.5 shadow-sm"
+                >
+                  <Presentation className="size-3.5" /> Add Presentation
+                </Button>
+              </div>
+
+              <div className="space-y-3.5">
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold text-slate-300">Slide Deck URL</Label>
+                  <Input
+                    placeholder="https://docs.google.com/presentation/d/..."
+                    value={agent.channels?.presentation?.slideDeckUrl || ''}
+                    onChange={(e) => updatePresentationConfig({ slideDeckUrl: e.target.value })}
+                    className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
+                  />
+                </div>
+                <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-medium text-slate-200">Auto-Present Slides with AI Voice</span>
+                    <p className="text-[10px] text-slate-400">AI automatically narrates each slide during customer viewings</p>
+                  </div>
+                  <Switch
+                    checked={agent.channels?.presentation?.autoPresentVoice ?? true}
+                    onCheckedChange={(c) => updatePresentationConfig({ autoPresentVoice: c })}
+                  />
+                </div>
               </div>
             </div>
           )}

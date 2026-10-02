@@ -17,6 +17,19 @@ import { AgentSettingsDialog } from './agent-settings-dialog';
 import { AgentPresentationHub } from './agent-presentation-hub';
 import { AgentSetupWizard } from './agent-setup-wizard';
 import {
+  InstagramSimulator,
+  WhatsAppSimulator,
+  PhoneSimulator,
+  GmailSimulator,
+  VoiceSimulator,
+  SmsSimulator,
+} from './agent-channel-simulators';
+import {
+  InstagramConnectModal,
+  PresentationAddModal,
+  WhatsAppConnectModal,
+} from './agent-channel-modals';
+import {
   ArrowLeft,
   Bot,
   MessageSquare,
@@ -115,6 +128,9 @@ export function FormAgentStudio({
   const [activeConnectedFormModal, setActiveConnectedFormModal] = useState<ConnectedFormRef | null>(null);
   const [accountForms, setAccountForms] = useState<Array<{ id: string; name: string; description?: string }>>([]);
   const [showSideSimulator, setShowSideSimulator] = useState<boolean>(true);
+  const [isInstagramModalOpen, setIsInstagramModalOpen] = useState(false);
+  const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
+  const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/forms')
@@ -391,6 +407,80 @@ export function FormAgentStudio({
             />
           </div>
 
+          {/* ── Dynamic Channel Action Button (Matching Jotform Screenshots) ── */}
+          {selectedChannel === 'instagram' && (
+            <Button
+              type="button"
+              onClick={() => setIsInstagramModalOpen(true)}
+              className="h-8 text-xs font-semibold text-white bg-gradient-to-r from-amber-500 via-pink-500 to-purple-600 hover:opacity-90 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
+            >
+              <Instagram className="size-3.5" />
+              <span>Connect your Instagram</span>
+            </Button>
+          )}
+
+          {selectedChannel === 'whatsapp' && (
+            <Button
+              type="button"
+              onClick={() => setIsWhatsAppModalOpen(true)}
+              className="h-8 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
+            >
+              <MessageCircle className="size-3.5" />
+              <span>Connect with Meta</span>
+            </Button>
+          )}
+
+          {selectedChannel === 'gmail' && (
+            <Button
+              type="button"
+              onClick={() => {
+                toast.info('Google OAuth for Gmail active. Connect in Integrations.');
+              }}
+              className="h-8 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
+            >
+              <Mail className="size-3.5 text-red-500" />
+              <span>Connect Your Gmail</span>
+            </Button>
+          )}
+
+          {selectedChannel === 'presentation' && (
+            <Button
+              type="button"
+              onClick={() => setIsPresentationModalOpen(true)}
+              className="h-8 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-600 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
+            >
+              <Presentation className="size-3.5" />
+              <span>Add Presentation</span>
+            </Button>
+          )}
+
+          {selectedChannel === 'messenger' && (
+            <Button
+              type="button"
+              onClick={() => {
+                toast.info('Launching Meta Facebook Login for Business...');
+              }}
+              className="h-8 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
+            >
+              <MessageSquare className="size-3.5" />
+              <span>Connect with Facebook</span>
+            </Button>
+          )}
+
+          {selectedChannel === 'shopify' && (
+            <Button
+              type="button"
+              onClick={() => {
+                setRightDrawerMode('channel_settings');
+                setRightDrawerOpen(true);
+              }}
+              className="h-8 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
+            >
+              <ShoppingBag className="size-3.5" />
+              <span>Connect Store</span>
+            </Button>
+          )}
+
           <Button
             type="button"
             disabled={saving}
@@ -467,15 +557,72 @@ export function FormAgentStudio({
 
           {/* ── CENTER CANVAS ── */}
           <main className="flex-1 min-h-0 flex flex-col justify-between p-6 relative overflow-hidden bg-slate-50/60 dark:bg-slate-950/60">
-            {/* VIEW A: PRESENTATION AGENT HUB (Matching Screenshot) */}
+            {/* 1. PRESENTATION AGENT HUB */}
             {selectedChannel === 'presentation' ? (
               <AgentPresentationHub
                 agent={agent}
                 onChange={setAgent}
                 onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
               />
+            ) : selectedChannel === 'instagram' ? (
+              /* 2. INSTAGRAM DM SIMULATOR (Screenshot 1) */
+              <InstagramSimulator
+                agent={agent}
+                isTestMode={isTestMode}
+                onOpenSettings={() => {
+                  setRightDrawerMode('channel_settings');
+                  setRightDrawerOpen(!rightDrawerOpen);
+                }}
+              />
+            ) : selectedChannel === 'whatsapp' ? (
+              /* 3. WHATSAPP CHAT SIMULATOR (Screenshot 2) */
+              <WhatsAppSimulator
+                agent={agent}
+                isTestMode={isTestMode}
+                onOpenSettings={() => {
+                  setRightDrawerMode('channel_settings');
+                  setRightDrawerOpen(!rightDrawerOpen);
+                }}
+              />
+            ) : selectedChannel === 'phone' ? (
+              /* 4. PHONE CALL SIMULATOR (Screenshot 4) */
+              <PhoneSimulator
+                agent={agent}
+                onOpenSettings={() => {
+                  setRightDrawerMode('channel_settings');
+                  setRightDrawerOpen(!rightDrawerOpen);
+                }}
+              />
+            ) : selectedChannel === 'gmail' ? (
+              /* 5. GMAIL WEB INBOX SIMULATOR (Screenshot 6) */
+              <GmailSimulator
+                agent={agent}
+                onOpenSettings={() => {
+                  setRightDrawerMode('channel_settings');
+                  setRightDrawerOpen(!rightDrawerOpen);
+                }}
+              />
+            ) : selectedChannel === 'voice' ? (
+              /* 6. VOICE AGENT CARD SIMULATOR (Screenshot 8) */
+              <VoiceSimulator
+                agent={agent}
+                onOpenSettings={() => {
+                  setRightDrawerMode('channel_settings');
+                  setRightDrawerOpen(!rightDrawerOpen);
+                }}
+              />
+            ) : selectedChannel === 'sms' ? (
+              /* 7. SMS TEXT CONVERSATION SIMULATOR (Screenshot 10) */
+              <SmsSimulator
+                agent={agent}
+                isTestMode={isTestMode}
+                onOpenSettings={() => {
+                  setRightDrawerMode('channel_settings');
+                  setRightDrawerOpen(!rightDrawerOpen);
+                }}
+              />
             ) : (
-              /* VIEW B: WEBSITE FRAME SIMULATOR (For Chatbot, Standalone, etc.) */
+              /* 8. WEBSITE EMBED FRAME SIMULATOR (For Chatbot, Standalone, WordPress, Shopify, Canva) */
               <>
                 <div
                   className={cn(
@@ -599,11 +746,48 @@ export function FormAgentStudio({
                 </div>
               </>
             )}
+
+            {/* Bottom Edit Mode / Test Mode for Standalone Phone/Chat views */}
+            {selectedChannel !== 'chatbot' && selectedChannel !== 'standalone' && selectedChannel !== 'presentation' && (
+              <div className="max-w-4xl mx-auto w-full pt-3 flex items-center justify-center z-20">
+                <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full p-0.5 shadow-xs text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setIsTestMode(false)}
+                    className={cn(
+                      'px-4 py-1 rounded-full font-bold transition-all',
+                      !isTestMode ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    )}
+                  >
+                    Edit Mode
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsTestMode(true)}
+                    className={cn(
+                      'px-4 py-1 rounded-full font-bold transition-all',
+                      isTestMode ? 'bg-blue-600 text-white' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                    )}
+                  >
+                    Test Mode
+                  </button>
+                </div>
+              </div>
+            )}
           </main>
 
           {/* ── RIGHT DRAWER: CHANNEL SETTINGS OR DESIGNER ── */}
-          {rightDrawerOpen && selectedChannel !== 'presentation' && (
-            <aside className="w-80 border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0 animate-in slide-in-from-right-4 duration-200">
+          {rightDrawerOpen && (
+            <aside
+              className={cn(
+                'border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0 animate-in slide-in-from-right-4 duration-200',
+                selectedChannel === 'voice'
+                  ? 'w-[410px]'
+                  : selectedChannel === 'phone' || selectedChannel === 'sms'
+                  ? 'w-[370px]'
+                  : 'w-80',
+              )}
+            >
               <AgentBuildTab
                 agent={agent}
                 onChange={setAgent}
@@ -613,6 +797,9 @@ export function FormAgentStudio({
                 onClose={() => setRightDrawerOpen(false)}
                 onPreviewPageChange={(page) => setPreviewPage(page)}
                 siteOrigin={siteOrigin}
+                onOpenWhatsAppModal={() => setIsWhatsAppModalOpen(true)}
+                onOpenInstagramModal={() => setIsInstagramModalOpen(true)}
+                onOpenPresentationModal={() => setIsPresentationModalOpen(true)}
               />
             </aside>
           )}
@@ -720,6 +907,53 @@ export function FormAgentStudio({
         onOpenChange={setSettingsOpen}
         agent={agent}
         onChange={setAgent}
+      />
+
+      {/* ── 3-STEP INSTAGRAM SETUP MODAL (Screenshot 3) ── */}
+      <InstagramConnectModal
+        open={isInstagramModalOpen}
+        onOpenChange={setIsInstagramModalOpen}
+        agent={agent}
+        onSuccess={() => {
+          setAgent((prev) => ({
+            ...prev,
+            channels: {
+              ...prev.channels,
+              instagram: { ...prev.channels?.instagram, enabled: true, autoReply: true, paired: true },
+            },
+          }));
+        }}
+      />
+
+      {/* ── 3-OPTION ADD PRESENTATION MODAL (Screenshot 7) ── */}
+      <PresentationAddModal
+        open={isPresentationModalOpen}
+        onOpenChange={setIsPresentationModalOpen}
+        onSelectOption={(option) => {
+          if (option === 'upload') {
+            toast.info('Presentation upload ready: drop PDF or PPTX slides.');
+          } else if (option === 'generate') {
+            toast.info('AI Presentation Generator active.');
+          } else {
+            toast.info('Google Slides import ready.');
+          }
+        }}
+      />
+
+      {/* ── WHATSAPP CONNECT MODAL (Screenshot 2 + Text.com Flow) ── */}
+      <WhatsAppConnectModal
+        open={isWhatsAppModalOpen}
+        onOpenChange={setIsWhatsAppModalOpen}
+        agent={agent}
+        onSuccess={(phone) => {
+          setAgent((prev) => ({
+            ...prev,
+            channels: {
+              ...prev.channels,
+              whatsapp: { ...prev.channels?.whatsapp, enabled: true, phoneNumber: phone, paired: true },
+            },
+          }));
+        }}
       />
 
       {/* Connected Form Modal — renders the REAL form via iframe (JotForm AI Agent parity) */}

@@ -190,6 +190,9 @@ export interface FormAgentData {
       voiceId: string;
       recordCalls: boolean;
       forwardingNumber?: string;
+      extensionPin?: string;
+      country?: string;
+      isProvisioned?: boolean;
     };
     gmail: {
       enabled: boolean;
@@ -207,6 +210,10 @@ export interface FormAgentData {
       realtimeStreaming: boolean;
       voiceProvider: 'tongtong' | 'chuichui' | 'xiaochen' | 'jam' | 'kazi' | 'douji' | 'luodo' | 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer' | 'Rachel' | 'Adam' | 'Antoni' | 'Bella' | string;
       speed?: number; // 0.5–2.0, default 1.0
+      language?: string;
+      accent?: string;
+      gender?: string;
+      age?: string;
     };
     messenger: {
       enabled: boolean;
@@ -225,6 +232,9 @@ export interface FormAgentData {
       enabled: boolean;
       phoneNumber?: string;
       optOutKeyword?: string;
+      extensionPin?: string;
+      country?: string;
+      isProvisioned?: boolean;
     };
     crm: {
       enabled: boolean;
@@ -422,10 +432,12 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
       paired: false,
     },
     phone: {
-      enabled: false,
+      enabled: true,
       phoneNumber: '',
       voiceId: 'Rachel',
       recordCalls: true,
+      extensionPin: '44904',
+      country: 'US',
     },
     gmail: {
       enabled: false,
@@ -439,7 +451,12 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
     voice: {
       enabled: true,
       realtimeStreaming: true,
-      voiceProvider: 'elevenlabs',
+      voiceProvider: 'Brian',
+      speed: 1.0,
+      language: 'English',
+      accent: 'American',
+      gender: 'Male',
+      age: 'Middle-aged',
     },
     messenger: {
       enabled: false,
@@ -449,8 +466,11 @@ export const DEFAULT_FORM_AGENT: FormAgentData = {
       syncProducts: true,
     },
     sms: {
-      enabled: false,
+      enabled: true,
       phoneNumber: '',
+      optOutKeyword: 'STOP',
+      extensionPin: '68058',
+      country: 'US',
     },
     crm: {
       enabled: true,
