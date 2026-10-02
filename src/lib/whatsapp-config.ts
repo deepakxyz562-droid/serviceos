@@ -139,7 +139,7 @@ function resolveWACredsFromProvider(prov: {
   const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
   let accessToken = cfg.accessToken || ''
   let phoneNumberId = cfg.phoneNumberId || ''
-  const verifyToken = cfg.verifyToken || ''
+  const verifyToken = cfg.webhookVerifyToken || cfg.verifyToken || ''
   const wabaId = cfg.wabaId || ''
 
   if (!accessToken && prov.credential) {

@@ -69,18 +69,18 @@ const CHANNELS_LIST: Array<{
 }> = [
   { id: 'chatbot', label: 'CHATBOT', subtitle: 'Add interactive chatbot to your site', icon: MessageSquare, badge: 'ACTIVE' },
   { id: 'standalone', label: 'STANDALONE', subtitle: 'Direct agent link and social share', icon: Globe },
-  { id: 'instagram', label: 'INSTAGRAM AGENT', subtitle: 'Automate your Instagram DMs', icon: Instagram },
+  { id: 'instagram', label: 'INSTAGRAM AGENT', subtitle: 'Automate your Instagram DMs', icon: Instagram, badge: 'BETA' },
   { id: 'whatsapp', label: 'WHATSAPP AGENT', subtitle: 'Connect your WhatsApp account', icon: MessageCircle },
   { id: 'phone', label: 'PHONE AGENT', subtitle: 'Let your Agent answer calls', icon: Phone },
-  { id: 'gmail', label: 'GMAIL AGENT', subtitle: 'Let your agent create email drafts', icon: Mail },
+  { id: 'gmail', label: 'GMAIL AGENT', subtitle: 'Let your agent create email drafts', icon: Mail, badge: 'COMING SOON' },
   { id: 'wordpress', label: 'AI CHATBOT FOR WORDPRESS', subtitle: 'Let your AI agent engage site visitors', icon: Code },
   { id: 'presentation', label: 'PRESENTATION AGENT', subtitle: 'Let your agent present slides', icon: Presentation },
   { id: 'voice', label: 'VOICE AGENT', subtitle: 'Add voice Agent to your website', icon: Mic },
-  { id: 'messenger', label: 'MESSENGER AGENT', subtitle: 'Connect your Facebook page', icon: MessageSquare },
+  { id: 'messenger', label: 'MESSENGER AGENT', subtitle: 'Connect your Facebook page', icon: MessageSquare, badge: 'BETA' },
   { id: 'shopify', label: 'SHOPIFY AGENT', subtitle: 'Let your Agent use your store data', icon: ShoppingBag },
   { id: 'agent_app', label: 'AGENT APP', subtitle: 'Share your AI Agent with an app', icon: Smartphone },
   { id: 'sms', label: 'SMS AGENT', subtitle: 'Let your Agent send messages', icon: Send },
-  { id: 'crm', label: 'Salesforce Agent', subtitle: 'Connect your agent to your CRM', icon: Layers },
+  { id: 'crm', label: 'Salesforce Agent', subtitle: 'Connect your agent to your CRM', icon: Layers, badge: 'COMING SOON' },
   { id: 'canva', label: 'CANVA AI CHATBOT', subtitle: 'Add a chatbot into your Canva designs', icon: Sparkles },
   { id: 'platforms', label: 'PLATFORMS', subtitle: 'Add your Agent to other platforms', icon: LayoutTemplate },
 ];
@@ -612,6 +612,7 @@ export function FormAgentStudio({
                 mode={rightDrawerMode}
                 onClose={() => setRightDrawerOpen(false)}
                 onPreviewPageChange={(page) => setPreviewPage(page)}
+                siteOrigin={siteOrigin}
               />
             </aside>
           )}

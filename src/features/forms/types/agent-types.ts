@@ -205,7 +205,8 @@ export interface FormAgentData {
     voice: {
       enabled: boolean;
       realtimeStreaming: boolean;
-      voiceProvider: 'elevenlabs' | 'openai' | 'cartesia';
+      voiceProvider: 'tongtong' | 'chuichui' | 'xiaochen' | 'jam' | 'kazi' | 'douji' | 'luodo';
+      speed?: number; // 0.5–2.0, default 1.0
     };
     messenger: {
       enabled: boolean;
@@ -964,7 +965,10 @@ export function createAgentFromPreset(presetId: string, customOverrides?: Partia
         paired: false,
       },
       phone: {
-        enabled: true,
+        // Phone Agent is a PAID ADDON ($29/mo + 150 mins). Default OFF
+        // until the tenant purchases the AI Receptionist addon and a real
+        // PhoneNumber row is provisioned via /api/addons/phones/buy.
+        enabled: false,
         voiceId: 'Rachel',
         recordCalls: true,
       },
@@ -980,16 +984,20 @@ export function createAgentFromPreset(presetId: string, customOverrides?: Partia
       voice: {
         enabled: true,
         realtimeStreaming: true,
-        voiceProvider: 'elevenlabs',
+        voiceProvider: 'tongtong',
       },
       messenger: {
         enabled: false,
       },
       sms: {
-        enabled: true,
+        // SMS requires a dedicated PhoneNumber (capabilities: ['sms'])
+        // purchased via /api/sms/numbers/buy. Default OFF until provisioned.
+        enabled: false,
       },
       crm: {
-        enabled: true,
+        // CRM provider must be explicitly chosen (fieseros | hubspot | salesforce).
+        // Default OFF — no provider is wired out of the box.
+        enabled: false,
         provider: 'fieseros',
         autoCreateLead: true,
         syncNotes: true,

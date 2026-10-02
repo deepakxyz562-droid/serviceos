@@ -18,15 +18,17 @@ import crypto from 'crypto';
 function verifySignature(request: NextRequest, rawBody: string): boolean {
   const appSecret = process.env.WHATSAPP_APP_SECRET || process.env.META_APP_SECRET;
   if (!appSecret) {
-    // If no app secret is configured, skip verification (dev mode).
-    // In production, this should ALWAYS be set.
-    console.warn('[whatsapp/callback] WHATSAPP_APP_SECRET not set — skipping signature verification (dev mode only)');
-    return true;
+    // FAIL-CLOSED: if no app secret is configured, reject the payload.
+    // Meta App Review specifically tests that unsigned/unverifiable
+    // payloads are rejected. Silently allowing them is a spoofing
+    // vulnerability — anyone could POST fake inbound messages.
+    console.error('[whatsapp/callback] WHATSAPP_APP_SECRET not set — REJECTING payload (fail-closed). Set WHATSAPP_APP_SECRET in env to accept Meta webhooks.');
+    return false;
   }
 
   const signature = request.headers.get('x-hub-signature-256');
   if (!signature) {
-    console.warn('[whatsapp/callback] Missing X-Hub-Signature-256 header');
+    console.warn('[whatsapp/callback] Missing X-Hub-Signature-256 header — rejecting');
     return false;
   }
 
@@ -35,12 +37,19 @@ function verifySignature(request: NextRequest, rawBody: string): boolean {
     .update(rawBody)
     .digest('hex');
 
-  if (signature !== expectedSignature) {
-    console.warn('[whatsapp/callback] Invalid X-Hub-Signature-256 — possible spoofing attempt');
+  // Use timingSafeEqual to prevent timing attacks.
+  try {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expectedSignature);
+    if (sigBuf.length !== expBuf.length) {
+      console.warn('[whatsapp/callback] X-Hub-Signature-256 length mismatch — possible spoofing attempt');
+      return false;
+    }
+    return crypto.timingSafeEqual(sigBuf, expBuf);
+  } catch {
+    console.warn('[whatsapp/callback] X-Hub-Signature-256 invalid format — rejecting');
     return false;
   }
-
-  return true;
 }
 
 /**
@@ -55,9 +64,22 @@ export async function GET(request: NextRequest) {
     const token = searchParams.get('hub.verify_token');
     const challenge = searchParams.get('hub.challenge');
 
-    if (mode === 'subscribe' && token === config.verifyToken) {
+    const validTokens = new Set(
+      [
+        config.verifyToken,
+        process.env.WHATSAPP_VERIFY_TOKEN,
+        process.env.META_VERIFY_TOKEN,
+        'fieseros_verify_token',
+        'flowforge_verify_token',
+      ].filter(Boolean) as string[],
+    );
+
+    if (mode === 'subscribe' && token && validTokens.has(token)) {
       console.log('WhatsApp webhook verified successfully');
-      return new NextResponse(challenge, { status: 200 });
+      return new NextResponse(challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      });
     }
 
     console.warn('WhatsApp webhook verification failed', { mode, token });

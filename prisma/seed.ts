@@ -1288,6 +1288,83 @@ async function main() {
   console.log('     vikram@quickmove.com / Employee@123  (Technician)');
   console.log('─────────────────────────────────────────────────────');
   console.log('');
+  // ════════════════════════════════════════════════
+  // ADDON CATALOG + REVENUE FEATURE TOGGLES
+  // ════════════════════════════════════════════════
+  // Seed the AI Receptionist addon plans ($29/$59/$129/Enterprise) so the
+  // checkout endpoint (/api/addons/checkout) can resolve AddonPlan rows.
+  // NOTE: creemProductId/creemPriceId on AddonPlan are NOT used — the
+  // checkout route resolves Creem product IDs from RevenueFeatureToggle.
+  // configJson.products[addonPlanCode][cycle]. The SuperAdmin Revenue
+  // Dashboard populates that configJson. We seed a placeholder toggle here
+  // (with empty products map) so the dashboard has a row to edit.
+  console.log('📦 Seeding AddonProduct + AddonPlan catalog...');
+  const addonProducts = [
+    {
+      code: 'AI_RECEPTIONIST',
+      name: 'AI Receptionist',
+      description:
+        '24/7 AI receptionist for calls, chats, and bookings. Handles lead capture, appointment booking, and human transfer.',
+      isActive: true,
+      sortOrder: 1,
+      plans: [
+        { code: 'AI_RECEPTIONIST_STARTER', name: 'AI Receptionist Starter', description: '150 AI voice minutes per month. 1 concurrent call. 1 phone number included.', price: 29.0, currency: 'USD', billingCycle: 'monthly', includedSeconds: 9000, maxCallDurationSeconds: 600, maxConcurrentCalls: 1, includedNumbers: 1, sortOrder: 1 },
+        { code: 'AI_RECEPTIONIST_PRO', name: 'AI Receptionist Pro', description: '400 AI voice minutes per month. 3 concurrent calls. 1 phone number included.', price: 59.0, currency: 'USD', billingCycle: 'monthly', includedSeconds: 24000, maxCallDurationSeconds: 600, maxConcurrentCalls: 3, includedNumbers: 1, sortOrder: 2 },
+        { code: 'AI_RECEPTIONIST_BUSINESS', name: 'AI Receptionist Business', description: '1,000 AI voice minutes per month. 10 concurrent calls. 1 phone number included.', price: 129.0, currency: 'USD', billingCycle: 'monthly', includedSeconds: 60000, maxCallDurationSeconds: 600, maxConcurrentCalls: 10, includedNumbers: 1, sortOrder: 3 },
+        { code: 'AI_RECEPTIONIST_ENTERPRISE', name: 'AI Receptionist Enterprise', description: 'Custom AI voice minutes, concurrency, and numbers. BYOK available.', price: 0, currency: 'USD', billingCycle: 'monthly', includedSeconds: 0, maxCallDurationSeconds: 0, maxConcurrentCalls: 0, includedNumbers: 0, sortOrder: 4 },
+      ],
+    },
+    {
+      code: 'AI_PHONE_NUMBER',
+      name: 'Additional AI Phone Number',
+      description: 'Additional phone number for AI Receptionist. $5/month per number.',
+      isActive: true,
+      sortOrder: 2,
+      plans: [
+        { code: 'AI_PHONE_NUMBER_ADDITIONAL', name: 'Additional AI Phone Number', description: 'One additional phone number for AI Receptionist.', price: 5.0, currency: 'USD', billingCycle: 'monthly', includedSeconds: 0, maxCallDurationSeconds: 0, maxConcurrentCalls: 0, includedNumbers: 1, sortOrder: 1 },
+      ],
+    },
+  ];
+
+  for (const product of addonProducts) {
+    const { plans, ...productData } = product;
+    const upsertedProduct = await db.addonProduct.upsert({
+      where: { code: productData.code },
+      create: productData,
+      update: { name: productData.name, description: productData.description, isActive: productData.isActive, sortOrder: productData.sortOrder },
+    });
+    console.log(`  └─ ${upsertedProduct.code}: ${upsertedProduct.name}`);
+    for (const plan of plans) {
+      const upsertedPlan = await db.addonPlan.upsert({
+        where: { code: plan.code },
+        create: { ...plan, addonProductId: upsertedProduct.id },
+        update: { name: plan.name, description: plan.description, price: plan.price, currency: plan.currency, billingCycle: plan.billingCycle, includedSeconds: plan.includedSeconds, maxCallDurationSeconds: plan.maxCallDurationSeconds, maxConcurrentCalls: plan.maxConcurrentCalls, includedNumbers: plan.includedNumbers, isActive: true, sortOrder: plan.sortOrder, addonProductId: upsertedProduct.id },
+      });
+      console.log(`     └─ ${upsertedPlan.code}: $${upsertedPlan.price}/${upsertedPlan.billingCycle} (${Math.floor(upsertedPlan.includedSeconds/60)} min)`);
+    }
+  }
+
+  console.log('🔌 Seeding RevenueFeatureToggle for addon checkout...');
+  await db.revenueFeatureToggle.upsert({
+    where: { featureKey: 'ai_receptionist_billing' },
+    create: {
+      featureKey: 'ai_receptionist_billing',
+      displayName: 'AI Receptionist Billing',
+      description: 'Creem product ID map for AI Receptionist addon plans. SuperAdmin populates configJson.products[planCode][cycle] with real Creem product IDs.',
+      enabled: true,
+      perTenantOverride: false,
+      defaultForNewTenants: true,
+      pricingJson: JSON.stringify({ currency: 'USD', billingCycle: 'monthly' }),
+      configJson: JSON.stringify({ products: {} }),
+    },
+    update: {
+      displayName: 'AI Receptionist Billing',
+      description: 'Creem product ID map for AI Receptionist addon plans. SuperAdmin populates configJson.products[planCode][cycle] with real Creem product IDs.',
+    },
+  });
+  console.log('  └─ ai_receptionist_billing (configJson.products = {} — populate via SuperAdmin Revenue Dashboard)');
+
+  console.log('');
   console.log('📊 DATA SUMMARY:');
   console.log('  Tenants: 3 | SuperAdmin: 1 | Total Users: 11 | Workspaces: 3');
   console.log('  Employees: 16 | Customers: 19 | Leads: 18');

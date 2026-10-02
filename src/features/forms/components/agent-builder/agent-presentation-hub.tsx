@@ -133,57 +133,26 @@ export function AgentPresentationHub({
   const handleGenerateWithAi = async () => {
     if (!generatePrompt.trim()) return;
     setIsGenerating(true);
-    setTimeout(() => {
-      setSlides([
-        {
-          id: 'gen_1',
-          title: `${generatePrompt}: Overview`,
-          bullets: [
-            'Understanding key requirements and documentation',
-            'Step-by-step qualification timeline',
-            'How our team guides you from application to approval',
-          ],
-          notes: `Hello! I am ${agent.name}. In this presentation, I will explain the complete ${generatePrompt}.`,
-          graphic: 'overview',
-        },
-        {
-          id: 'gen_2',
-          title: 'Eligibility & Requirements',
-          bullets: [
-            'Verified documentation and pre-screening criteria',
-            'Credit and asset qualification benchmarks',
-            'Fast-track digital intake through our smart form',
-          ],
-          notes: 'Let us look at the primary eligibility criteria so you know exactly what is required.',
-          graphic: 'checklist',
-        },
-        {
-          id: 'gen_3',
-          title: 'Rates, Options & Comparison',
-          bullets: [
-            'Competitive fixed vs adjustable programs',
-            'Zero hidden origination or penalty fees',
-            'Custom scenarios modeled in real-time',
-          ],
-          notes: 'We offer flexible options tailored to your specific financial goals and timeline.',
-          graphic: 'chart',
-        },
-        {
-          id: 'gen_4',
-          title: 'Get Started Today',
-          bullets: [
-            'Submit your details in under 2 minutes',
-            'Receive an instant automated pre-qualification decision',
-            'Dedicated advisor assigned to your file',
-          ],
-          notes: 'Ready to proceed? Fill out the connected form to start your application now.',
-          graphic: 'cta',
-        },
-      ]);
-      setIsGenerating(false);
-      setActiveModal('demo');
+    try {
+      const res = await fetch(`/api/forms/agents/${agent.id}/generate-slides`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prompt: generatePrompt.trim(), slideCount: 5 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data.slides)) {
+        toast.error(data.error || `Generation failed (${res.status})`);
+        return;
+      }
+      setSlides(data.slides);
       toast.success('✨ AI Presentation synthesized with speaker notes!');
-    }, 1400);
+      setActiveModal('demo');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Network error during slide generation');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleAskQuestion = async () => {

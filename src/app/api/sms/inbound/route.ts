@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { maybeAutoReply } from '@/lib/auto-reply'
 import { optOutSmsMarketing, optInSmsMarketing } from '@/lib/sms-consent'
 import { createInboundMessage } from '@/lib/inbox-message-service'
+import { verifyTwilioSignature } from '@/lib/twilio-signature'
 
 /**
  * POST /api/sms/inbound
@@ -13,24 +14,25 @@ import { createInboundMessage } from '@/lib/inbox-message-service'
  *   From=+14155551212  To=+14155553456  Body=Hi  MessageSid=SMxxx  SmsSid=SMxxx
  *
  * Flow (O1 Omnichannel canonical path):
- *   1. Find the PhoneNumber by `number = To` to get the tenantId.
- *   2. Find or create a Conversation with `customerPhone = From`,
+ *   1. Verify X-Twilio-Signature header (fail-closed if TWILIO_AUTH_TOKEN unset).
+ *   2. Find the PhoneNumber by `number = To` to get the tenantId.
+ *   3. Find or create a Conversation with `customerPhone = From`,
  *      `channel = 'sms'`, tenantId.
- *   3. Create the canonical InboxMessage row via `createInboundMessage()`
+ *   4. Create the canonical InboxMessage row via `createInboundMessage()`
  *      — idempotent via (tenantId, channel, externalId=MessageSid).
- *   4. Update `Conversation.lastMessageAt`, `lastMessageBody`,
+ *   5. Update `Conversation.lastMessageAt`, `lastMessageBody`,
  *      `lastDirection = 'inbound'`.
- *   5. Create a `UnifiedMessage` row (channel='sms', direction='inbound',
+ *   6. Create a `UnifiedMessage` row (channel='sms', direction='inbound',
  *      senderId=From, content=Body, externalId=MessageSid).
- *   6. Try to match `From` to a Customer by phone — if found, set
+ *   7. Try to match `From` to a Customer by phone — if found, set
  *      `customerId` on the Conversation and create an ActivityLog entry
  *      on the customer timeline (type='sms_received',
  *      description=`SMS from {customerName}: {body}`).
- *   7. Return an empty TwiML `<Response></Response>` (Content-Type: text/xml).
+ *   8. Return an empty TwiML `<Response></Response>` (Content-Type: text/xml).
  *
- * Auth: NONE — this endpoint is hit by Twilio's servers and must be public.
- * It is safe because it only acts on phone numbers we own (verified by the
- * `To` field matching a PhoneNumber row).
+ * Auth: signature-verified — Twilio's X-Twilio-Signature header is verified
+ * against HMAC-SHA256(url + rawBody, TWILIO_AUTH_TOKEN). Without this, anyone
+ * could POST fake inbound SMS and trigger auto-replies + activity-log spam.
  *
  * Idempotency: if a MessageSid arrives twice (Twilio retries), the second
  * arrival finds the existing UnifiedMessage by externalId and skips.
@@ -39,6 +41,15 @@ export async function POST(request: NextRequest) {
   try {
     // ── 1. Parse form-encoded body ───────────────────────────────────────
     const rawBody = await request.text()
+
+    // ── 1b. Verify Twilio signature (fail-closed) ────────────────────────
+    if (!verifyTwilioSignature(request, rawBody)) {
+      return new NextResponse(
+        '<Response><Say>Signature verification failed.</Say></Response>',
+        { status: 403, headers: { 'Content-Type': 'text/xml' } },
+      )
+    }
+
     const params = new URLSearchParams(rawBody)
     const from = params.get('From') || ''
     const to = params.get('To') || ''

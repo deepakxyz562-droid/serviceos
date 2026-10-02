@@ -4,7 +4,13 @@ import { getAuthUser } from '@/lib/auth';
 
 /**
  * POST /api/ecommerce/seed
- * Seeds demo e-commerce integration data for the current tenant.
+ * Seeds DEMO e-commerce integration data for the current tenant.
+ *
+ * ⚠️  DEMO ONLY — every value below (store URLs, access tokens, order/product
+ *     counts) is FAKE seed data used to populate the Shopify/WooCommerce demo
+ *     dashboard. Tokens like `shpat_demo_token_...` are NOT real Shopify
+ *     access tokens. Do not rely on this data for real integrations.
+ *
  * Prevents double-seeding by checking if IntegrationConnection records already exist.
  */
 export async function POST() {

@@ -66,6 +66,8 @@ interface AgentBuildTabProps {
   mode?: 'channel_settings' | 'designer';
   onClose?: () => void;
   onPreviewPageChange?: (page: 'conversation' | 'greeting') => void;
+  /** Origin used for embed/share URLs (defaults to window.location.origin). */
+  siteOrigin?: string;
 }
 
 export function AgentBuildTab({
@@ -76,6 +78,7 @@ export function AgentBuildTab({
   mode = 'channel_settings',
   onClose,
   onPreviewPageChange,
+  siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com',
 }: AgentBuildTabProps) {
   // Chatbot subtabs: 'layout' | 'welcome' | 'forms' | 'navigation' | 'greeting'
   const [chatbotSubTab, setChatbotSubTab] = useState<'layout' | 'welcome' | 'forms' | 'navigation' | 'greeting'>('layout');
@@ -1569,14 +1572,14 @@ export function AgentBuildTab({
                 <div className="flex items-center gap-2">
                   <Input
                     readOnly
-                    value={`https://fieseros.com/chat/${agent.slug || agent.id}`}
+                    value={`${siteOrigin}/chat/${agent.slug || agent.id}`}
                     className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://fieseros.com/chat/${agent.slug || agent.id}`);
+                      navigator.clipboard.writeText(`${siteOrigin}/chat/${agent.slug || agent.id}`);
                       toast.success('Agent URL copied to clipboard!');
                     }}
                     className="h-8 px-2 text-xs"
@@ -1684,7 +1687,7 @@ export function AgentBuildTab({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Dedicated AI Reception Phone Number</Label>
                 <Input
-                  placeholder="+1 (800) 555-0199"
+                  placeholder="Provisioned after addon purchase"
                   value={agent.channels?.phone?.phoneNumber || ''}
                   onChange={(e) => updatePhoneConfig({ phoneNumber: e.target.value })}
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
@@ -1725,6 +1728,10 @@ export function AgentBuildTab({
                   onChange={(e) => updateInstagramConfig({ accountHandle: e.target.value })}
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
+                <p className="text-[10px] text-slate-400">
+                  Connect your Instagram Professional account via the Integrations page to enable DM auto-reply.
+                  The handle above is for display only — real DM routing uses the linked SocialAccount.
+                </p>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
                 <div className="space-y-0.5">
@@ -1735,6 +1742,19 @@ export function AgentBuildTab({
                   checked={agent.channels?.instagram?.autoReply ?? true}
                   onCheckedChange={(c) => updateInstagramConfig({ autoReply: c })}
                 />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Meta Webhook URL (for DMs)</Label>
+                <Input
+                  readOnly
+                  value={`${siteOrigin}/api/meta/webhook`}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Paste this URL in the Meta App Dashboard → Webhooks →
+                  Callback URL. Subscribe to the &quot;messages&quot; field for
+                  both &quot;Page&quot; (Messenger) and &quot;Instagram&quot; objects.
+                </p>
               </div>
             </div>
           )}
@@ -1766,6 +1786,23 @@ export function AgentBuildTab({
           {/* Gmail Channel Settings */}
           {activeChannel === 'gmail' && (
             <div className="space-y-3.5">
+              <div className="space-y-1 p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <Label className="text-xs font-semibold text-slate-200">Gmail Connection</Label>
+                <p className="text-[10px] text-slate-400">
+                  Connect a Gmail account via Google OAuth (scope:
+                  https://www.googleapis.com/auth/gmail.modify + gmail.compose) on the
+                  Integrations page. The agent then drafts replies to inbound emails for
+                  your review. Drafts are never sent automatically unless Auto-Reply is on.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('integrations')}
+                  className="text-[11px] h-6 px-2 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/40 mt-1"
+                >
+                  Connect Gmail →
+                </Button>
+              </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
                 <div className="space-y-0.5">
                   <span className="text-xs font-medium text-slate-200">Auto-Reply to Inbound Inquiries</span>
@@ -1804,24 +1841,47 @@ export function AgentBuildTab({
           {activeChannel === 'voice' && (
             <div className="space-y-3.5">
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-slate-300">Voice Synthesis Engine</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['elevenlabs', 'openai', 'cartesia'] as const).map((prov) => (
-                    <button
-                      key={prov}
-                      type="button"
-                      onClick={() => updateVoiceConfig({ voiceProvider: prov })}
-                      className={cn(
-                        'py-2 px-2.5 rounded-lg border text-xs font-medium capitalize text-center transition-all',
-                        (agent.channels?.voice?.voiceProvider || 'elevenlabs') === prov
-                          ? 'border-blue-500 bg-blue-950/40 text-blue-300 font-bold'
-                          : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600',
-                      )}
-                    >
-                      {prov}
-                    </button>
-                  ))}
-                </div>
+                <Label className="text-xs font-semibold text-slate-300">TTS Endpoint</Label>
+                <Input
+                  readOnly
+                  value={`${siteOrigin}/api/voice/tts`}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                />
+                <p className="text-[10px] text-slate-400">
+                  POST JSON {`{ text, voice?, speed? }`} → returns audio/wav.
+                  The website voice widget should call this endpoint to speak agent
+                  replies instead of using the lower-quality browser speechSynthesis API.
+                  Powered by z-ai-web-dev-sdk (max 1024 chars per request).
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Voice</Label>
+                <select
+                  value={agent.channels?.voice?.voiceProvider || 'tongtong'}
+                  onChange={(e) => updateVoiceConfig({ voiceProvider: e.target.value } as any)}
+                  className="w-full text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 rounded-md px-2"
+                >
+                  <option value="tongtong">tongtong — warm & friendly</option>
+                  <option value="chuichui">chuichui — lively & cute</option>
+                  <option value="xiaochen">xiaochen — calm & professional</option>
+                  <option value="jam">jam — British gentleman</option>
+                  <option value="kazi">kazi — clear & standard</option>
+                  <option value="douji">douji — natural & fluent</option>
+                  <option value="luodo">luodo — expressive</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Speech Speed</Label>
+                <select
+                  value={String(agent.channels?.voice?.speed ?? 1.0)}
+                  onChange={(e) => updateVoiceConfig({ speed: parseFloat(e.target.value) } as any)}
+                  className="w-full text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 rounded-md px-2"
+                >
+                  <option value="0.8">0.8 — slower narration</option>
+                  <option value="1.0">1.0 — normal (default)</option>
+                  <option value="1.2">1.2 — slightly faster</option>
+                  <option value="1.5">1.5 — fast</option>
+                </select>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
                 <div className="space-y-0.5">
@@ -1842,11 +1902,15 @@ export function AgentBuildTab({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Facebook Page ID / Username</Label>
                 <Input
-                  placeholder="fieseros_official"
+                  placeholder="your_business_page"
                   value={agent.channels?.messenger?.facebookPageId || ''}
                   onChange={(e) => updateMessengerConfig({ facebookPageId: e.target.value })}
                   className="text-xs h-8 bg-slate-800 border-slate-700 text-slate-100 font-mono"
                 />
+                <p className="text-[10px] text-slate-400">
+                  Connect your Facebook Page via the Integrations page so inbound DMs route to this agent.
+                  The Page ID above is for display only — real DM routing uses the linked SocialAccount.
+                </p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Messenger Greeting</Label>
@@ -1857,12 +1921,41 @@ export function AgentBuildTab({
                   className="text-xs bg-slate-800 border-slate-700 text-slate-100 min-h-[60px]"
                 />
               </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-slate-300">Meta Webhook URL (for DMs)</Label>
+                <Input
+                  readOnly
+                  value={`${siteOrigin}/api/meta/webhook`}
+                  className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
+                />
+                <p className="text-[10px] text-slate-400">
+                  Paste this URL in the Meta App Dashboard → Webhooks →
+                  Callback URL. Subscribe to the &quot;messages&quot; field for the
+                  &quot;Page&quot; object (Messenger). Instagram DMs use the same endpoint.
+                </p>
+              </div>
             </div>
           )}
 
           {/* CRM Channel Settings */}
           {activeChannel === 'crm' && (
             <div className="space-y-3.5">
+              <div className="space-y-1 p-2.5 rounded-lg bg-slate-800/60 border border-slate-700">
+                <Label className="text-xs font-semibold text-slate-200">CRM Connection</Label>
+                <p className="text-[10px] text-slate-400">
+                  Connect your CRM on the Integrations page. HubSpot + Salesforce require
+                  an OAuth connection (client_id / client_secret) configured in SuperAdmin.
+                  The built-in Fieseros CRM needs no external setup.
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('integrations')}
+                  className="text-[11px] h-6 px-2 text-sky-600 dark:text-sky-400 border-sky-300 dark:border-sky-800 hover:bg-sky-50 dark:hover:bg-sky-950/40 mt-1"
+                >
+                  Connect CRM →
+                </Button>
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Target CRM System</Label>
                 <div className="grid grid-cols-3 gap-2">
@@ -1940,14 +2033,14 @@ export function AgentBuildTab({
                   <Textarea
                     readOnly
                     rows={6}
-                    value={`// Add to functions.php or Code Snippets plugin:\nadd_action('wp_footer', function () {\n    ?>\n    <script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>\n    <?php\n});`}
+                    value={`// Add to functions.php or Code Snippets plugin:\nadd_action('wp_footer', function () {\n    ?>\n    <script src="${siteOrigin}/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>\n    <?php\n});`}
                     className="text-[11px] bg-slate-800 border-slate-700 font-mono text-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(`add_action('wp_footer', function () {\n    ?>\n    <script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>\n    <?php\n});`);
+                      navigator.clipboard.writeText(`add_action('wp_footer', function () {\n    ?>\n    <script src="${siteOrigin}/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>\n    <?php\n});`);
                       toast.success('WordPress snippet copied!');
                     }}
                     className="absolute top-2 right-2 h-6 px-2 text-[10px] bg-slate-700 hover:bg-slate-600 text-white"
@@ -1977,14 +2070,14 @@ export function AgentBuildTab({
                   <Textarea
                     readOnly
                     rows={4}
-                    value={`<!-- Paste right before </body> in layout/theme.liquid -->\n<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`}
+                    value={`<!-- Paste right before </body> in layout/theme.liquid -->\n<script src="${siteOrigin}/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`}
                     className="text-[11px] bg-slate-800 border-slate-700 font-mono text-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(`<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`);
+                      navigator.clipboard.writeText(`<script src="${siteOrigin}/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`);
                       toast.success('Shopify script copied!');
                     }}
                     className="absolute top-2 right-2 h-6 px-2 text-[10px] bg-slate-700 hover:bg-slate-600 text-white"
@@ -2013,14 +2106,14 @@ export function AgentBuildTab({
                 <div className="flex items-center gap-2">
                   <Input
                     readOnly
-                    value={`https://fieseros.com/chat/${agent.slug || agent.id}`}
+                    value={`${siteOrigin}/chat/${agent.slug || agent.id}`}
                     className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://fieseros.com/chat/${agent.slug || agent.id}`);
+                      navigator.clipboard.writeText(`${siteOrigin}/chat/${agent.slug || agent.id}`);
                       toast.success('Agent App link copied!');
                     }}
                     className="h-8 px-2 text-xs"
@@ -2046,14 +2139,14 @@ export function AgentBuildTab({
                 <div className="flex items-center gap-2">
                   <Input
                     readOnly
-                    value={`https://fieseros.com/chat/${agent.slug || agent.id}?embed=1`}
+                    value={`${siteOrigin}/chat/${agent.slug || agent.id}?embed=1`}
                     className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(`https://fieseros.com/chat/${agent.slug || agent.id}?embed=1`);
+                      navigator.clipboard.writeText(`${siteOrigin}/chat/${agent.slug || agent.id}?embed=1`);
                       toast.success('Canva embed URL copied!');
                     }}
                     className="h-8 px-2 text-xs"
@@ -2082,14 +2175,14 @@ export function AgentBuildTab({
                   <Textarea
                     readOnly
                     rows={4}
-                    value={`<!-- Fieseros AI Agent Embed -->\n<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`}
+                    value={`<!-- Fieseros AI Agent Embed -->\n<script src="${siteOrigin}/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`}
                     className="text-[11px] bg-slate-800 border-slate-700 font-mono text-slate-200"
                   />
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => {
-                      navigator.clipboard.writeText(`<script src="https://fieseros.com/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`);
+                      navigator.clipboard.writeText(`<script src="${siteOrigin}/api/public/agents/${agent.slug || agent.id}/embed.js" async></script>`);
                       toast.success('Embed script copied!');
                     }}
                     className="absolute top-2 right-2 h-6 px-2 text-[10px] bg-slate-700 hover:bg-slate-600 text-white"
@@ -2113,7 +2206,7 @@ export function AgentBuildTab({
               <div className="space-y-1">
                 <Label className="text-xs font-semibold text-slate-300">Webhook / Dispatch Endpoint</Label>
                 <Input
-                  defaultValue={`https://api.fieseros.com/channels/${activeChannel}/webhook`}
+                  defaultValue={`${siteOrigin}/channels/${activeChannel}/webhook`}
                   className="text-xs h-8 bg-slate-800 border-slate-700 font-mono text-slate-200"
                 />
               </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   FormAgentData,
   AgentChannelType,
@@ -23,6 +23,7 @@ import {
   Zap,
   Code,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,43 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
+
+// ───────────────────────────────────────────────────────────────────────────
+// Real channel connection state — sourced from authoritative DB tables via
+// GET /api/forms/agents/[id]/channel-status. The Publish cards render from
+// THIS (not the free-text agent.channels.* JSON fields) so they always
+// reflect the tenant's actual subscription / number / social-account state.
+// ───────────────────────────────────────────────────────────────────────────
+interface ChannelStatus {
+  whatsapp: {
+    connected: boolean;
+    phoneNumber: string | null;
+    providerName: string | null;
+    reason: string | null;
+  };
+  phone: {
+    addonActive: boolean;
+    planCode: string | null;
+    includedMinutes: number;
+    usedMinutes: number;
+    remainingMinutes: number;
+    phoneNumber: string | null;
+    phoneNumberId: string | null;
+    status: string | null;
+    reason: string | null;
+  };
+  sms: {
+    connected: boolean;
+    numbers: { id: string; number: string; displayName: string | null }[];
+  };
+  instagram: {
+    connected: boolean;
+    accountHandle: string | null;
+    accountName: string | null;
+    accountId: string | null;
+    reason: string | null;
+  };
+}
 
 interface AgentPublishTabProps {
   agent: FormAgentData;
@@ -47,6 +85,80 @@ export function AgentPublishTab({
 }: AgentPublishTabProps) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // ── Real channel status (from DB, not from agent.channels JSON) ──
+  const [channelStatus, setChannelStatus] = useState<ChannelStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  const fetchChannelStatus = useCallback(async () => {
+    if (!agent.id) return;
+    setStatusLoading(true);
+    setStatusError(null);
+    try {
+      const res = await fetch(`/api/forms/agents/${agent.id}/channel-status`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        if (res.status === 404) {
+          setStatusError('Agent not found');
+        } else {
+          setStatusError(`Failed to load channel status (${res.status})`);
+        }
+        return;
+      }
+      const data = (await res.json()) as ChannelStatus;
+      setChannelStatus(data);
+    } catch (e) {
+      setStatusError(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [agent.id]);
+
+  useEffect(() => {
+    fetchChannelStatus();
+  }, [fetchChannelStatus]);
+
+  // Derive card display values from real DB state.
+  const wa = channelStatus?.whatsapp ?? null;
+  const ph = channelStatus?.phone ?? null;
+  const sm = channelStatus?.sms ?? null;
+  const ig = channelStatus?.instagram ?? null;
+
+  // ── Phone addon checkout ──
+  // Calls POST /api/addons/checkout with the STARTER plan code, then
+  // redirects to the Creem checkout URL returned by the backend.
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const handleActivatePhoneAddon = useCallback(async () => {
+    setCheckoutLoading(true);
+    try {
+      const res = await fetch('/api/addons/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          addonPlanCode: 'AI_RECEPTIONIST_STARTER',
+          billingCycle: 'monthly',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.checkoutUrl) {
+        const msg =
+          data.error ||
+          (res.status === 503
+            ? 'Payments not configured. Contact support to enable the AI Receptionist addon.'
+            : `Checkout failed (${res.status})`);
+        toast.error(msg);
+        return;
+      }
+      window.location.href = data.checkoutUrl;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Network error during checkout');
+    } finally {
+      setCheckoutLoading(false);
+    }
+  }, []);
 
   const rawPos = String(agent.channels?.chatbot?.position || '').toLowerCase();
   const initialPos: 'bottom-right' | 'bottom-left' | 'bottom-center' =
@@ -330,8 +442,22 @@ export function AgentPublishTab({
       </Card>
 
       {/* ── 3. WHATSAPP & SOCIAL CHANNELS ── */}
+      {statusLoading && (
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          Loading channel status…
+        </div>
+      )}
+      {statusError && (
+        <div className="text-[11px] text-amber-600 dark:text-amber-400">
+          {statusError} —{' '}
+          <button onClick={fetchChannelStatus} className="underline hover:no-underline">
+            retry
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {/* WhatsApp */}
+        {/* WhatsApp — source of truth: CommunicationProvider(type=whatsapp, isPlatform=false) */}
         <Card className="rounded-xl border-border/80 shadow-xs">
           <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
@@ -341,27 +467,40 @@ export function AgentPublishTab({
               <div>
                 <div className="flex items-center gap-1.5">
                   <CardTitle className="text-xs font-bold">WhatsApp Business</CardTitle>
+                  {wa?.connected && (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 text-emerald-600 border-emerald-300">
+                      BYO
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-[10px] text-muted-foreground">Automated WhatsApp scheduler</p>
               </div>
             </div>
             <Switch
-              checked={agent.channels?.whatsapp?.enabled}
-              onCheckedChange={(c) =>
-                onChange({
-                  ...agent,
-                  channels: {
-                    ...agent.channels,
-                    whatsapp: { ...agent.channels.whatsapp, enabled: c },
-                  },
-                })
-              }
+              checked={!!wa?.connected}
+              disabled={!wa?.connected}
+              onCheckedChange={(c) => {
+                if (!c) return;
+                useAppStore.getState().setCurrentView('whatsapp');
+              }}
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            {agent.channels?.whatsapp?.phoneNumber ? (
-              <div>
-                Status: <span className="font-semibold text-emerald-600">Connected ({agent.channels.whatsapp.phoneNumber})</span>
+            {wa?.connected ? (
+              <div className="space-y-1">
+                <div>
+                  Status: <span className="font-semibold text-emerald-600">Connected</span>
+                </div>
+                {wa.phoneNumber && (
+                  <div>
+                    Number: <span className="font-semibold text-foreground">{wa.phoneNumber}</span>
+                  </div>
+                )}
+                {wa.providerName && (
+                  <div className="text-[10px] text-muted-foreground/80">
+                    via {wa.providerName}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -379,7 +518,7 @@ export function AgentPublishTab({
           </CardContent>
         </Card>
 
-        {/* Phone Voice AI */}
+        {/* Phone Agent — source of truth: TenantAddonSubscription(AI_RECEPTIONIST) + PhoneNumber */}
         <Card className="rounded-xl border-border/80 shadow-xs">
           <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
@@ -389,30 +528,56 @@ export function AgentPublishTab({
               <div>
                 <div className="flex items-center gap-1.5">
                   <CardTitle className="text-xs font-bold">AI Phone Receptionist</CardTitle>
-                  <Badge variant="outline" className="text-[9px] h-4 px-1 text-purple-600 border-purple-300">
-                    Addon $29/mo
-                  </Badge>
+                  {ph?.addonActive ? (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 text-purple-600 border-purple-300">
+                      {ph.planCode || 'Active'}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1 text-purple-600 border-purple-300">
+                      Addon $29/mo
+                    </Badge>
+                  )}
                 </div>
-                <p className="text-[10px] text-muted-foreground">24/7 Inbound voice calling (150 mins included)</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {ph?.addonActive
+                    ? `${ph.remainingMinutes} min remaining of ${ph.includedMinutes}`
+                    : '24/7 inbound voice calling'}
+                </p>
               </div>
             </div>
             <Switch
-              checked={agent.channels?.phone?.enabled}
-              onCheckedChange={(c) =>
-                onChange({
-                  ...agent,
-                  channels: {
-                    ...agent.channels,
-                    phone: { ...agent.channels.phone, enabled: c },
-                  },
-                })
-              }
+              checked={!!ph?.addonActive}
+              disabled={!ph?.addonActive}
+              onCheckedChange={() => {
+                useAppStore.getState().setCurrentView('aiReceptionist');
+              }}
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            {agent.channels?.phone?.phoneNumber ? (
-              <div>
-                Number: <span className="font-semibold text-foreground">{agent.channels.phone.phoneNumber}</span>
+            {ph?.addonActive ? (
+              <div className="space-y-1">
+                {ph.phoneNumber ? (
+                  <div>
+                    Number: <span className="font-semibold text-foreground">{ph.phoneNumber}</span>
+                  </div>
+                ) : (
+                  <div>
+                    Status: <span className="font-semibold text-amber-600 dark:text-amber-400">Addon active — number provisioning</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground/80">
+                  <span>Used {ph.usedMinutes} / {ph.includedMinutes} min</span>
+                  {ph.remainingMinutes < 20 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => useAppStore.getState().setCurrentView('aiReceptionist')}
+                      className="text-[10px] h-5 px-1.5 text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                    >
+                      Top up minutes &rarr;
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -422,17 +587,25 @@ export function AgentPublishTab({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => useAppStore.getState().setCurrentView('aiReceptionist')}
-                  className="text-[11px] h-6 px-2 text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+                  onClick={handleActivatePhoneAddon}
+                  disabled={checkoutLoading}
+                  className="text-[11px] h-6 px-2 text-purple-600 dark:text-purple-400 border-purple-300 dark:border-purple-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 disabled:opacity-50"
                 >
-                  Activate Addon ($29/mo) &rarr;
+                  {checkoutLoading ? (
+                    <>
+                      <Loader2 className="size-3 animate-spin mr-1" />
+                      Starting checkout…
+                    </>
+                  ) : (
+                    'Activate Addon ($29/mo) →'
+                  )}
                 </Button>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* SMS Bot */}
+        {/* SMS — source of truth: PhoneNumber rows with capabilities containing 'sms' */}
         <Card className="rounded-xl border-border/80 shadow-xs">
           <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
@@ -445,22 +618,30 @@ export function AgentPublishTab({
               </div>
             </div>
             <Switch
-              checked={agent.channels?.sms?.enabled}
-              onCheckedChange={(c) =>
-                onChange({
-                  ...agent,
-                  channels: {
-                    ...agent.channels,
-                    sms: { ...agent.channels.sms, enabled: c },
-                  },
-                })
-              }
+              checked={!!sm?.connected}
+              disabled={!sm?.connected}
+              onCheckedChange={() => {
+                useAppStore.getState().setCurrentView('smsNumbers');
+              }}
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            {agent.channels?.sms?.phoneNumber ? (
-              <div>
-                Status: <span className="font-semibold text-emerald-600">Active ({agent.channels.sms.phoneNumber})</span>
+            {sm?.connected && sm.numbers.length > 0 ? (
+              <div className="space-y-1">
+                <div>
+                  Status: <span className="font-semibold text-emerald-600">Active</span>
+                </div>
+                <div>
+                  Number{sm.numbers.length > 1 ? 's' : ''}:{' '}
+                  <span className="font-semibold text-foreground">
+                    {sm.numbers.map((n) => n.number).join(', ')}
+                  </span>
+                </div>
+                {sm.numbers.length > 1 && (
+                  <div className="text-[10px] text-muted-foreground/80">
+                    {sm.numbers.length} dedicated numbers assigned
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -478,7 +659,7 @@ export function AgentPublishTab({
           </CardContent>
         </Card>
 
-        {/* Instagram DM */}
+        {/* Instagram — source of truth: SocialAccount(platform=instagram, isActive=true) */}
         <Card className="rounded-xl border-border/80 shadow-xs">
           <CardHeader className="p-3 pb-2 flex flex-row items-center justify-between">
             <div className="flex items-center gap-2">
@@ -491,20 +672,38 @@ export function AgentPublishTab({
               </div>
             </div>
             <Switch
-              checked={agent.channels?.instagram?.enabled}
-              onCheckedChange={(c) =>
-                onChange({
-                  ...agent,
-                  channels: {
-                    ...agent.channels,
-                    instagram: { ...agent.channels.instagram, enabled: c },
-                  },
-                })
-              }
+              checked={!!ig?.connected}
+              disabled={!ig?.connected}
+              onCheckedChange={() => {
+                toast.info('Instagram DM integration coming soon — connect via Integrations.');
+              }}
             />
           </CardHeader>
           <CardContent className="p-3 pt-0 text-[11px] text-muted-foreground">
-            Account: <span className="font-semibold text-foreground">{agent.channels?.instagram?.accountHandle || 'Not linked'}</span>
+            {ig?.connected ? (
+              <div className="space-y-1">
+                <div>
+                  Account: <span className="font-semibold text-foreground">{ig.accountHandle || ig.accountName || 'Linked'}</span>
+                </div>
+                {ig.accountName && ig.accountHandle && ig.accountName !== ig.accountHandle && (
+                  <div className="text-[10px] text-muted-foreground/80">
+                    {ig.accountName}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <div>Account: <span className="font-semibold text-slate-500">Not linked</span></div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => useAppStore.getState().setCurrentView('integrations')}
+                  className="text-[11px] h-6 px-2 text-pink-600 dark:text-pink-400 border-pink-300 dark:border-pink-800 hover:bg-pink-50 dark:hover:bg-pink-950/40"
+                >
+                  Connect Instagram &rarr;
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
