@@ -9,7 +9,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  FlatList,
   Modal,
   ActivityIndicator,
 } from "react-native";
@@ -17,134 +16,105 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAppStore } from "@/store/app";
 import { api, apiPost } from "@/api/client";
-import { formatCurrency } from "@/lib/format";
-import { MaterialIcons } from "@expo/vector-icons";
+import {
+  computeInvoiceTotals,
+  formatCurrency,
+  type DocumentType,
+  type CalcLineItem,
+} from "@/lib/quote-flow-calc";
+import { MaterialIcons, Feather } from "@expo/vector-icons";
 
-interface Item {
+interface Item extends CalcLineItem {
   description: string;
   qty: number;
   unitPrice: number;
+  taxRate?: number;
 }
 
-function computeTotals(
-  items: Item[],
-  discountValue: number,
-  discountType: "AMOUNT" | "PERCENT",
-  taxRate: number
-) {
-  const subtotal = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
-  let discount = 0;
-  if (discountType === "PERCENT") discount = (subtotal * (discountValue || 0)) / 100;
-  else discount = Math.min(discountValue || 0, subtotal);
-  const taxable = Math.max(0, subtotal - discount);
-  const tax = (taxable * (taxRate || 0)) / 100;
-  const total = taxable + tax;
-  return {
-    subtotal: Math.round((subtotal + Number.EPSILON) * 100) / 100,
-    discount: Math.round((discount + Number.EPSILON) * 100) / 100,
-    tax: Math.round((tax + Number.EPSILON) * 100) / 100,
-    total: Math.round((total + Number.EPSILON) * 100) / 100,
-  };
-}
+const MOBILE_TEMPLATES = [
+  { id: "soft-emerald-wave", name: "Emerald Wave", category: "Recommend", accentColor: "#10b981", bgColor: "#ecfdf5" },
+  { id: "minimal-clean", name: "Minimal Clean", category: "Simple", accentColor: "#18181b", bgColor: "#f8fafc" },
+  { id: "classic-corporate-blue", name: "Corporate Blue", category: "Classic", accentColor: "#2563eb", bgColor: "#eff6ff" },
+  { id: "geometric-bold-green", name: "Geometric Green", category: "Professional", accentColor: "#059669", bgColor: "#d1fae5" },
+  { id: "slate-geometric", name: "Slate Corporate", category: "Classic", accentColor: "#1e293b", bgColor: "#f1f5f9" },
+  { id: "mesh-polygonal", name: "Polygonal Mesh", category: "Creative", accentColor: "#0284c7", bgColor: "#e0f2fe" },
+  { id: "golden-luxury", name: "Golden Luxury", category: "Premium", accentColor: "#d97706", bgColor: "#fef3c7" },
+];
 
 export default function QuoteCreateScreen() {
   const router = useRouter();
   const business = useAppStore((s) => s.business);
-  const [mode, setMode] = useState<"choose" | "manual" | "ai-text">("choose");
+
+  const [docType, setDocType] = useState<DocumentType>("ESTIMATE");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("soft-emerald-wave");
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [items, setItems] = useState<Item[]>([{ description: "", qty: 1, unitPrice: 0 }]);
+
+  // Line items
+  const [items, setItems] = useState<Item[]>([
+    { description: "Service Estimate", qty: 1, unitPrice: 25000, taxRate: 18 },
+  ]);
+
+  // Adjustments
+  const [showAdjustments, setShowAdjustments] = useState(false);
   const [discountValue, setDiscountValue] = useState("0");
   const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
-  const [taxRate, setTaxRate] = useState(String(business?.defaultTaxRate ?? 0));
-  const [notes, setNotes] = useState("");
-  const [validUntil, setValidUntil] = useState("");
-  const [pdfTemplate, setPdfTemplate] = useState<"modern" | "simple">("modern");
+  const [shippingFee, setShippingFee] = useState("0");
+  const [globalTaxRate, setGlobalTaxRate] = useState("0");
+
+  const [validUntilText, setValidUntilText] = useState("Valid for 30 days");
   const [loading, setLoading] = useState(false);
 
-  // AI text state
-  const [aiInput, setAiInput] = useState("");
-  const [aiProcessing, setAiProcessing] = useState(false);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [aiCustomerSuggestion, setAiCustomerSuggestion] = useState<string | null>(null);
-
   useEffect(() => {
-    api<{ customers: any[] }>("/api/mobile/customers").then((r) => setCustomers(r.customers || []));
+    api<{ customers: any[] }>("/api/mobile/customers").then((r) => {
+      const list = r.customers || [];
+      setCustomers(list);
+      if (list.length > 0 && !selectedCustomer) {
+        setSelectedCustomer(list[0]);
+      }
+    });
   }, []);
 
-  const totals = computeTotals(parsedItems(), parseFloat(discountValue) || 0, discountType, parseFloat(taxRate) || 0);
-
-  function parsedItems(): Item[] {
-    return items;
-  }
+  const totals = computeInvoiceTotals({
+    items,
+    documentType: docType === "ESTIMATE" ? "TAX_INVOICE" : docType,
+    discountValue: parseFloat(discountValue) || 0,
+    discountType,
+    globalTaxRate: parseFloat(globalTaxRate) || 0,
+    shippingFee: parseFloat(shippingFee) || 0,
+    currency: business?.currency || "INR",
+  });
 
   function updateItem(idx: number, patch: Partial<Item>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   }
+
   function addItem() {
-    setItems((arr) => [...arr, { description: "", qty: 1, unitPrice: 0 }]);
+    setItems((arr) => [
+      ...arr,
+      { description: "", qty: 1, unitPrice: 0, taxRate: 18 },
+    ]);
   }
+
   function removeItem(idx: number) {
+    if (items.length <= 1) return;
     setItems((arr) => arr.filter((_, i) => i !== idx));
   }
 
-  function applyAiDraft(draft: any) {
-    if (draft.items && draft.items.length > 0) {
-      setItems(
-        draft.items.map((i: any) => ({
-          description: i.description,
-          qty: i.qty,
-          unitPrice: i.unitPrice,
-        }))
-      );
-    }
-    if (typeof draft.discountValue === "number") setDiscountValue(String(draft.discountValue));
-    if (draft.discountType) setDiscountType(draft.discountType);
-    if (typeof draft.taxRate === "number") setTaxRate(String(draft.taxRate));
-    if (draft.notes) setNotes(draft.notes);
-    if (draft.summary) setAiSummary(draft.summary);
-    if (draft.customerName) setAiCustomerSuggestion(draft.customerName);
-  }
-
-  async function processAiText() {
-    if (aiInput.trim().length < 5) {
-      Alert.alert("Please describe the job in more detail");
-      return;
-    }
-    setAiProcessing(true);
-    try {
-      const r = await apiPost<{ draft: any }>("/api/mobile/ai/quote-from-text", {
-        text: aiInput,
-      });
-      if (!r.draft) {
-        Alert.alert("AI failed", "Please rephrase your description");
-        setAiProcessing(false);
-        return;
-      }
-      applyAiDraft(r.draft);
-      setMode("manual");
-    } catch (e: any) {
-      Alert.alert("AI failed", e.message);
-    } finally {
-      setAiProcessing(false);
-    }
-  }
-
-  async function save() {
+  async function handleSave() {
     if (!selectedCustomer) {
-      Alert.alert("Pick a customer first");
+      Alert.alert("Required", "Please select a client for 'Bill To'");
       return;
     }
     if (items.some((i) => !i.description.trim())) {
-      Alert.alert("Fill in all item descriptions");
+      Alert.alert("Required", "Please fill in descriptions for all items");
       return;
     }
+
     setLoading(true);
     try {
-      const validUntilDate = validUntil
-        ? new Date(validUntil).toISOString()
-        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       const r = await apiPost<{ quote: any }>("/api/mobile/quotes/create-with-items", {
         customerId: selectedCustomer.id,
         items: items.map((i) => ({
@@ -154,497 +124,673 @@ export default function QuoteCreateScreen() {
         })),
         discountValue: parseFloat(discountValue) || 0,
         discountType,
-        taxRate: parseFloat(taxRate) || 0,
-        validUntil: validUntilDate,
-        notes: notes || undefined,
-        aiRawInput: aiInput || undefined,
-        pdfTemplate,
+        taxRate: 18,
+        pdfTemplate: `${docType}:${selectedTemplateId}`,
       });
+
       router.replace(`/quote/${r.quote.id}`);
     } catch (e: any) {
-      Alert.alert("Save failed", e.message);
+      Alert.alert("Error", e.message || "Failed to create estimate");
     } finally {
       setLoading(false);
     }
   }
 
-  // ----- Choose mode -----
-  if (mode === "choose") {
-    return (
-      <SafeAreaView style={styles.safe} edges={["bottom"]}>
+  const currency = business?.currency || "INR";
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        {/* Top App Bar */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backText}>‹ Back</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Quote</Text>
-          <View style={{ width: 60 }} />
-        </View>
-        <View style={styles.body}>
-          <Text style={styles.title}>Choose how to create it</Text>
-          <Text style={styles.subtitle}>AI text + manual builder ready. Voice arrives Phase 5.</Text>
-          <View style={styles.modes}>
-            <ModeCard
-              icon="✦"
-              title="Describe the job"
-              subtitle="Type it in plain words"
-              tag="Now"
-              onPress={() => setMode("ai-text")}
-            />
-            <ModeCard
-              icon="🎙️"
-              title="Speak it"
-              subtitle="Coming in Phase 5 (expo-speech-recognition)"
-              tag="Phase 5"
-            />
-            <ModeCard
-              icon="✎"
-              title="Create manually"
-              subtitle="Full control over line items"
-              tag="Now"
-              onPress={() => setMode("manual")}
-            />
+          <Text style={styles.headerTitle}>Create Estimate</Text>
+          <View style={styles.headerRight}>
+            <View style={styles.freeBadge}>
+              <MaterialIcons name="workspace-premium" size={16} color="white" />
+              <Text style={styles.freeBadgeText}>18M FREE</Text>
+            </View>
           </View>
         </View>
-      </SafeAreaView>
-    );
-  }
 
-  // ----- AI text mode -----
-  if (mode === "ai-text") {
-    return (
-      <SafeAreaView style={styles.safe} edges={["bottom"]}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => setMode("choose")}>
-            <Text style={styles.backText}>‹ Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Describe the job</Text>
-          <View style={{ width: 60 }} />
-        </View>
-        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
-            <View style={styles.aiHint}>
-              <Text style={styles.aiHintText}>
-                Type your job description in plain English. AI will extract line items, discount, tax.
-              </Text>
-            </View>
-            <TextInput
-              value={aiInput}
-              onChangeText={setAiInput}
-              placeholder="Build a website for ABC Company for $2500. Includes design, development, mobile responsive layout and 30 days support. Add 10% discount and 8% tax."
-              multiline
-              numberOfLines={6}
-              style={styles.aiInput}
-              textAlignVertical="top"
-            />
-            <TouchableOpacity
-              style={[styles.aiBtn, (aiProcessing || !aiInput.trim()) && styles.aiBtnDisabled]}
-              onPress={processAiText}
-              disabled={aiProcessing || !aiInput.trim()}
-            >
-              {aiProcessing ? (
-                <ActivityIndicator color="white" />
-              ) : (
-                <Text style={styles.aiBtnText}>Create Quote</Text>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.aiFootnote}>
-              AI extracts the structure. You can fine-tune in the next step.
-            </Text>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    );
-  }
-
-  // ----- Manual builder -----
-  return (
-    <SafeAreaView style={styles.safe} edges={["bottom"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => setMode("choose")}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Manual Quote</Text>
-        <View style={{ width: 60 }} />
-      </View>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
-          {aiSummary && (
-            <View style={styles.aiSummaryBox}>
-              <Text style={styles.aiSummaryLabel}>AI summary:</Text>
-              <Text style={styles.aiSummaryText}>{aiSummary}</Text>
-              {aiCustomerSuggestion ? (
-                <Text style={styles.aiCustomerSuggestion}>Suggested customer: {aiCustomerSuggestion}</Text>
-              ) : null}
-            </View>
-          )}
-
-          {/* Customer */}
-          <Text style={styles.label}>Customer *</Text>
-          {selectedCustomer ? (
-            <TouchableOpacity style={styles.customerBtn} onPress={() => setPickerOpen(true)}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.customerName}>{selectedCustomer.name}</Text>
-                <Text style={styles.customerSub}>
-                  {selectedCustomer.email || selectedCustomer.phone || "—"}
+        {/* Top Segmented Control */}
+        <View style={styles.segmentedContainer}>
+          {(
+            [
+              { id: "ESTIMATE", label: "Estimate" },
+              { id: "TAX_INVOICE", label: "Tax Quote" },
+              { id: "SIMPLE_BILL", label: "Simple Quote" },
+            ] as const
+          ).map((t) => {
+            const active = docType === t.id;
+            return (
+              <TouchableOpacity
+                key={t.id}
+                onPress={() => setDocType(t.id)}
+                style={[styles.segmentBtn, active && styles.segmentBtnActive]}
+              >
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                  {t.label}
                 </Text>
-              </View>
-              <MaterialIcons name="edit" size={18} color="#a8a29e" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.customerBtnEmpty}
-              onPress={() => setPickerOpen(true)}
-            >
-              <MaterialIcons name="search" size={18} color="#a8a29e" />
-              <Text style={styles.customerBtnEmptyText}>Pick a customer</Text>
-            </TouchableOpacity>
-          )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-          {/* Items */}
-          <Text style={[styles.label, { marginTop: 16 }]}>Items</Text>
-          {items.map((it, i) => (
-            <View key={i} style={styles.itemCard}>
-              <View style={styles.itemHeader}>
-                <TextInput
-                  style={styles.itemDescInput}
-                  value={it.description}
-                  onChangeText={(v) => updateItem(i, { description: v })}
-                  placeholder="Item description"
-                />
-                {items.length > 1 && (
-                  <TouchableOpacity onPress={() => removeItem(i)} style={styles.itemTrashBtn}>
-                    <MaterialIcons name="delete-outline" size={18} color="#dc2626" />
-                  </TouchableOpacity>
-                )}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        >
+          {/* Card 1: Document Details */}
+          <View style={styles.card}>
+            <View style={styles.cardRowBetween}>
+              <View>
+                <Text style={styles.invoiceNumber}>EST0001</Text>
+                <Text style={styles.dueDateText}>{validUntilText}</Text>
               </View>
-              <View style={styles.itemRow3}>
-                <View style={styles.itemCol}>
-                  <Text style={styles.itemColLabel}>Qty</Text>
-                  <TextInput
-                    style={styles.itemColInput}
-                    value={String(it.qty)}
-                    onChangeText={(v) => updateItem(i, { qty: parseFloat(v) || 0 })}
-                    keyboardType="numeric"
-                  />
+              <View style={styles.docTypeBadge}>
+                <Text style={styles.docTypeBadgeText}>ESTIMATE</Text>
+                <MaterialIcons name="chevron-right" size={18} color="#64748b" />
+              </View>
+            </View>
+          </View>
+
+          {/* Card 2: Templates Preview */}
+          <TouchableOpacity
+            style={styles.card}
+            activeOpacity={0.7}
+            onPress={() => setTemplatePickerOpen(true)}
+          >
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#f1f5f9" }]}>
+                  <MaterialIcons name="dashboard-customize" size={18} color="#475569" />
                 </View>
-                <View style={styles.itemCol}>
-                  <Text style={styles.itemColLabel}>Unit Price</Text>
-                  <TextInput
-                    style={styles.itemColInput}
-                    value={String(it.unitPrice)}
-                    onChangeText={(v) => updateItem(i, { unitPrice: parseFloat(v) || 0 })}
-                    keyboardType="numeric"
-                  />
+                <View>
+                  <Text style={styles.cardSectionTitle}>Templates</Text>
+                  <Text style={styles.freeSubText}>
+                    {MOBILE_TEMPLATES.find((t) => t.id === selectedTemplateId)?.name || "All 100+ Free"} · 18M Free
+                  </Text>
                 </View>
-                <View style={styles.itemCol}>
-                  <Text style={styles.itemColLabel}>Amount</Text>
-                  <View style={styles.itemColStatic}>
-                    <Text style={styles.itemColStaticText}>
-                      {formatCurrency(it.qty * it.unitPrice, business?.currency, business?.currencySymbol)}
-                    </Text>
+              </View>
+              <View style={styles.templateThumbRow}>
+                <View
+                  style={[
+                    styles.miniThumb,
+                    {
+                      borderColor:
+                        MOBILE_TEMPLATES.find((t) => t.id === selectedTemplateId)?.accentColor ||
+                        "#93c5fd",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.miniThumbLineBlue,
+                      {
+                        backgroundColor:
+                          MOBILE_TEMPLATES.find((t) => t.id === selectedTemplateId)?.accentColor ||
+                          "#2563eb",
+                      },
+                    ]}
+                  />
+                  <View style={styles.miniThumbLine} />
+                  <View style={styles.miniThumbLine} />
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 3: Connected Parties */}
+          <View style={styles.card}>
+            {/* Bill From */}
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#eff6ff" }]}>
+                  <MaterialIcons name="business" size={20} color="#2563eb" />
+                </View>
+                <View>
+                  <Text style={styles.cardItemTitle}>Bill From</Text>
+                  <Text style={styles.cardItemSub}>{business?.name || "Add Business"}</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.circleAddBtn}>
+                <MaterialIcons name="add" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Dotted Vertical Connector Line */}
+            <View style={styles.dottedConnector} />
+
+            {/* Bill To */}
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#fff7ed" }]}>
+                  <MaterialIcons name="people" size={20} color="#f97316" />
+                </View>
+                <View>
+                  <Text style={styles.cardItemTitle}>Bill To</Text>
+                  <Text style={styles.cardItemSub}>
+                    {selectedCustomer ? selectedCustomer.name : "Add Clients"}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.circleAddBtn}
+                onPress={() => setPickerOpen(true)}
+              >
+                <MaterialIcons name="add" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Card 4: Items & Subtotals */}
+          <View style={styles.card}>
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#f0fdf4" }]}>
+                  <MaterialIcons name="receipt" size={18} color="#16a34a" />
+                </View>
+                <View>
+                  <Text style={styles.cardItemTitle}>Items</Text>
+                  <Text style={styles.cardItemSub}>Add Items</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.circleAddBtn} onPress={addItem}>
+                <MaterialIcons name="add" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Line items list */}
+            <View style={{ marginTop: 12, gap: 10 }}>
+              {items.map((item, idx) => (
+                <View key={idx} style={styles.itemRowCard}>
+                  <View style={styles.itemHeader}>
+                    <TextInput
+                      value={item.description}
+                      onChangeText={(t) => updateItem(idx, { description: t })}
+                      placeholder="Item description (e.g. Electrical wiring)"
+                      placeholderTextColor="#94a3b8"
+                      style={styles.itemDescInput}
+                    />
+                    {items.length > 1 && (
+                      <TouchableOpacity onPress={() => removeItem(idx)} style={{ padding: 4 }}>
+                        <Feather name="trash-2" size={16} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={styles.itemInputsGrid}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemColLabel}>QTY</Text>
+                      <TextInput
+                        keyboardType="decimal-pad"
+                        value={String(item.qty)}
+                        onChangeText={(t) => updateItem(idx, { qty: parseFloat(t) || 1 })}
+                        style={styles.itemInput}
+                      />
+                    </View>
+                    <View style={{ flex: 1.2 }}>
+                      <Text style={styles.itemColLabel}>PRICE</Text>
+                      <TextInput
+                        keyboardType="decimal-pad"
+                        value={String(item.unitPrice)}
+                        onChangeText={(t) => updateItem(idx, { unitPrice: parseFloat(t) || 0 })}
+                        style={styles.itemInput}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.itemColLabel}>GST %</Text>
+                      <TextInput
+                        keyboardType="decimal-pad"
+                        value={String(item.taxRate ?? 18)}
+                        onChangeText={(t) => updateItem(idx, { taxRate: parseFloat(t) || 0 })}
+                        style={styles.itemInput}
+                      />
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Calculations Breakdown */}
+            <View style={styles.calcBreakdown}>
+              <View style={styles.calcRow}>
+                <Text style={styles.calcLabel}>Taxable Amount</Text>
+                <Text style={styles.calcValue}>{formatCurrency(totals.taxableAmount, currency)}</Text>
+              </View>
+              <View style={styles.calcRow}>
+                <Text style={styles.calcLabel}>GST Amount</Text>
+                <Text style={styles.calcValue}>{formatCurrency(totals.gstAmount, currency)}</Text>
+              </View>
+              <View style={styles.dottedDivider} />
+              <View style={styles.calcRow}>
+                <Text style={styles.subtotalLabel}>Subtotal</Text>
+                <Text style={styles.subtotalValue}>{formatCurrency(totals.subtotal, currency)}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Card 5: Adjustment */}
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.cardRowBetween}
+              onPress={() => setShowAdjustments(!showAdjustments)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#faf5ff" }]}>
+                  <MaterialIcons name="tune" size={18} color="#9333ea" />
+                </View>
+                <View>
+                  <Text style={styles.cardItemTitle}>Adjustment</Text>
+                  <Text style={styles.cardItemSub}>Add Discount &amp; Terms</Text>
+                </View>
+              </View>
+              <MaterialIcons
+                name={showAdjustments ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+                size={22}
+                color="#94a3b8"
+              />
+            </TouchableOpacity>
+
+            {showAdjustments && (
+              <View style={styles.adjustmentBody}>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemColLabel}>DISCOUNT</Text>
+                    <TextInput
+                      keyboardType="decimal-pad"
+                      value={discountValue}
+                      onChangeText={setDiscountValue}
+                      style={styles.itemInput}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemColLabel}>SHIPPING / LOGISTICS</Text>
+                    <TextInput
+                      keyboardType="decimal-pad"
+                      value={shippingFee}
+                      onChangeText={setShippingFee}
+                      style={styles.itemInput}
+                    />
                   </View>
                 </View>
               </View>
-            </View>
-          ))}
-          <TouchableOpacity style={styles.addItemBtn} onPress={addItem}>
-            <MaterialIcons name="add" size={18} color="#78716c" />
-            <Text style={styles.addItemBtnText}>Add item</Text>
-          </TouchableOpacity>
-
-          {/* Discount + tax */}
-          <View style={styles.row2}>
-            <View style={styles.col2}>
-              <Text style={styles.label}>Discount</Text>
-              <View style={styles.discountRow}>
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  value={discountValue}
-                  onChangeText={setDiscountValue}
-                  keyboardType="numeric"
-                />
-                <TouchableOpacity
-                  style={styles.discountTypeBtn}
-                  onPress={() => setDiscountType((t) => (t === "AMOUNT" ? "PERCENT" : "AMOUNT"))}
-                >
-                  <Text style={styles.discountTypeText}>{discountType === "AMOUNT" ? "$" : "%"}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.col2}>
-              <Text style={styles.label}>Tax (%)</Text>
-              <TextInput
-                style={styles.input}
-                value={taxRate}
-                onChangeText={setTaxRate}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-
-          {/* Template */}
-          <Text style={[styles.label, { marginTop: 16 }]}>Template</Text>
-          <View style={styles.row2}>
-            <TouchableOpacity
-              style={[styles.templateBtn, pdfTemplate === "modern" && styles.templateBtnActive]}
-              onPress={() => setPdfTemplate("modern")}
-            >
-              <Text style={[styles.templateBtnText, pdfTemplate === "modern" && styles.templateBtnTextActive]}>
-                Modern
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.templateBtn, pdfTemplate === "simple" && styles.templateBtnActive]}
-              onPress={() => setPdfTemplate("simple")}
-            >
-              <Text style={[styles.templateBtnText, pdfTemplate === "simple" && styles.templateBtnTextActive]}>
-                Simple
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Notes */}
-          <Text style={[styles.label, { marginTop: 16 }]}>Notes</Text>
-          <TextInput
-            style={styles.input}
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Optional notes"
-            multiline
-          />
-
-          {/* Totals */}
-          <View style={styles.totalsBox}>
-            <View style={styles.totalsRow}>
-              <Text style={styles.totalsRowLabel}>Subtotal</Text>
-              <Text style={styles.totalsRowValue}>
-                {formatCurrency(totals.subtotal, business?.currency, business?.currencySymbol)}
-              </Text>
-            </View>
-            {totals.discount > 0 && (
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsRowLabel}>Discount</Text>
-                <Text style={styles.totalsRowValue}>
-                  - {formatCurrency(totals.discount, business?.currency, business?.currencySymbol)}
-                </Text>
-              </View>
             )}
-            {totals.tax > 0 && (
-              <View style={styles.totalsRow}>
-                <Text style={styles.totalsRowLabel}>Tax</Text>
-                <Text style={styles.totalsRowValue}>
-                  {formatCurrency(totals.tax, business?.currency, business?.currencySymbol)}
-                </Text>
-              </View>
-            )}
+
             <View style={styles.totalRow}>
-              <Text style={styles.totalRowLabel}>Total</Text>
-              <Text style={styles.totalRowValue}>
-                {formatCurrency(totals.total, business?.currency, business?.currencySymbol)}
-              </Text>
+              <Text style={styles.totalLabel}>Total Estimate</Text>
+              <Text style={styles.totalValue}>{formatCurrency(totals.total, currency)}</Text>
             </View>
           </View>
 
+          {/* Card 6: Currency */}
+          <View style={styles.card}>
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#fefce8" }]}>
+                  <MaterialIcons name="payments" size={18} color="#ca8a04" />
+                </View>
+                <Text style={styles.cardSectionTitle}>Currency</Text>
+              </View>
+              <View style={styles.cardRightGroup}>
+                <Text style={styles.cardValueText}>INR ₹</Text>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </View>
+          </View>
+
+          {/* Card 7: Validity Period */}
+          <View style={styles.card}>
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#e0e7ff" }]}>
+                  <MaterialIcons name="event" size={18} color="#4f46e5" />
+                </View>
+                <Text style={styles.cardSectionTitle}>Validity Period</Text>
+              </View>
+              <View style={styles.cardRightGroup}>
+                <Text style={styles.cardValueText}>30 Days</Text>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+
+        {/* Floating Bottom Sticky Bar */}
+        <View style={styles.bottomBar}>
           <TouchableOpacity
-            style={[styles.saveBtn, loading && styles.saveBtnDisabled]}
-            onPress={save}
+            style={styles.previewBtn}
+            onPress={() => {
+              Alert.alert("Preview", `Total Estimate: ${formatCurrency(totals.total, currency)}`);
+            }}
+          >
+            <Text style={styles.previewBtnText}>Preview</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.saveBtn}
+            onPress={handleSave}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.saveBtnText}>Save quote</Text>
+              <Text style={styles.saveBtnText}>Save Estimate</Text>
             )}
           </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      {/* Customer picker */}
-      <Modal visible={pickerOpen} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.pickerSheet}>
-            <View style={styles.pickerHeader}>
-              <Text style={styles.pickerTitle}>Pick customer</Text>
-              <TouchableOpacity onPress={() => setPickerOpen(false)}>
-                <MaterialIcons name="close" size={22} color="#78716c" />
-              </TouchableOpacity>
-            </View>
-            <CustomerPickerList
-              customers={customers}
-              onPick={(c) => {
-                setSelectedCustomer(c);
-                setPickerOpen(false);
-              }}
-              onNew={() => {
-                setPickerOpen(false);
-                router.push("/customer-form");
-              }}
-            />
-          </View>
         </View>
-      </Modal>
+
+        {/* Customer Picker Modal */}
+        <Modal visible={pickerOpen} animationType="slide" transparent>
+          <View style={styles.pickerModalBackdrop}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <Text style={styles.pickerModalTitle}>Select Client</Text>
+                <TouchableOpacity onPress={() => setPickerOpen(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
+                {customers.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    onPress={() => {
+                      setSelectedCustomer(c);
+                      setPickerOpen(false);
+                    }}
+                    style={[
+                      styles.customerOption,
+                      selectedCustomer?.id === c.id && styles.customerOptionSelected,
+                    ]}
+                  >
+                    <View>
+                      <Text style={styles.customerOptionName}>{c.name}</Text>
+                      <Text style={styles.customerOptionMeta}>{c.email || c.phone || "No details"}</Text>
+                    </View>
+                    {selectedCustomer?.id === c.id && (
+                      <MaterialIcons name="check" size={20} color="#2563eb" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Template Picker Modal */}
+        <Modal visible={templatePickerOpen} animationType="slide" transparent>
+          <View style={styles.pickerModalBackdrop}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.pickerModalTitle}>Select Template</Text>
+                  <View style={{ backgroundColor: "#10b981", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>18M FREE</Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setTemplatePickerOpen(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+                {MOBILE_TEMPLATES.map((tpl) => {
+                  const isSelected = selectedTemplateId === tpl.id;
+                  return (
+                    <TouchableOpacity
+                      key={tpl.id}
+                      onPress={() => {
+                        setSelectedTemplateId(tpl.id);
+                        setTemplatePickerOpen(false);
+                      }}
+                      style={[
+                        styles.customerOption,
+                        isSelected && styles.customerOptionSelected,
+                        { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+                      ]}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                        <View
+                          style={{
+                            width: 38,
+                            height: 48,
+                            borderRadius: 6,
+                            borderWidth: 1.5,
+                            borderColor: tpl.accentColor,
+                            backgroundColor: tpl.bgColor,
+                            padding: 4,
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <View style={{ height: 4, width: "100%", backgroundColor: tpl.accentColor, borderRadius: 2 }} />
+                          <View style={{ height: 2, width: "60%", backgroundColor: "#cbd5e1", borderRadius: 1 }} />
+                          <View style={{ height: 2, width: "80%", backgroundColor: "#e2e8f0", borderRadius: 1 }} />
+                        </View>
+                        <View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={styles.customerOptionName}>{tpl.name}</Text>
+                            <View style={{ backgroundColor: "#ecfdf5", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                              <Text style={{ color: "#059669", fontSize: 9, fontWeight: "bold" }}>FREE</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.customerOptionMeta}>{tpl.category} Design</Text>
+                        </View>
+                      </View>
+                      {isSelected ? (
+                        <MaterialIcons name="check-circle" size={22} color="#10b981" />
+                      ) : (
+                        <MaterialIcons name="radio-button-unchecked" size={20} color="#cbd5e1" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function CustomerPickerList({
-  customers,
-  onPick,
-  onNew,
-}: {
-  customers: any[];
-  onPick: (c: any) => void;
-  onNew: () => void;
-}) {
-  const [q, setQ] = useState("");
-  const filtered = q
-    ? customers.filter(
-        (c) =>
-          c.name.toLowerCase().includes(q.toLowerCase()) ||
-          (c.email || "").toLowerCase().includes(q.toLowerCase())
-      )
-    : customers;
-  return (
-    <View style={{ flex: 1 }}>
-      <TextInput
-        style={styles.pickerSearch}
-        value={q}
-        onChangeText={setQ}
-        placeholder="Search..."
-      />
-      <FlatList
-        data={filtered}
-        keyExtractor={(i) => i.id}
-        ListEmptyComponent={
-          <TouchableOpacity onPress={onNew} style={styles.pickerEmpty}>
-            <Text style={styles.pickerEmptyText}>No matches — create a new customer?</Text>
-          </TouchableOpacity>
-        }
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.pickerItem} onPress={() => onPick(item)}>
-            <Text style={styles.pickerItemName}>{item.name}</Text>
-            <Text style={styles.pickerItemSub}>{item.email || item.phone || "—"}</Text>
-          </TouchableOpacity>
-        )}
-      />
-      <TouchableOpacity onPress={onNew} style={styles.pickerNewBtn}>
-        <MaterialIcons name="add" size={18} color="#10b981" />
-        <Text style={styles.pickerNewBtnText}>New customer</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function ModeCard({
-  icon,
-  title,
-  subtitle,
-  tag,
-  onPress,
-}: {
-  icon: string;
-  title: string;
-  subtitle: string;
-  tag: string;
-  onPress?: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={!onPress}
-      style={[styles.mode, !onPress && styles.modeDisabled]}
-    >
-      <Text style={styles.modeIcon}>{icon}</Text>
-      <View style={styles.modeBody}>
-        <Text style={styles.modeTitle}>{title}</Text>
-        <Text style={styles.modeSub}>{subtitle}</Text>
-      </View>
-      <View style={styles.modeTag}>
-        <Text style={styles.modeTagText}>{tag}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fafaf9" },
-  flex: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, backgroundColor: "white", borderBottomWidth: 1, borderBottomColor: "#e7e5e4" },
-  backText: { color: "#10b981", fontSize: 16, fontWeight: "500" },
-  headerTitle: { fontSize: 16, fontWeight: "600", color: "#1c1917" },
-  body: { flex: 1, padding: 20 },
-  title: { fontSize: 18, fontWeight: "600", color: "#1c1917" },
-  subtitle: { fontSize: 13, color: "#78716c", marginBottom: 20 },
-  modes: { gap: 8 },
-  mode: { flexDirection: "row", alignItems: "center", backgroundColor: "white", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#e7e5e4" },
-  modeDisabled: { opacity: 0.6 },
-  modeIcon: { fontSize: 20, marginRight: 12 },
-  modeBody: { flex: 1 },
-  modeTitle: { fontSize: 14, fontWeight: "600", color: "#1c1917" },
-  modeSub: { fontSize: 12, color: "#78716c", marginTop: 2 },
-  modeTag: { backgroundColor: "#f5f5f4", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  modeTagText: { fontSize: 10, fontWeight: "500", color: "#57534e" },
-  // AI text mode
-  aiHint: { backgroundColor: "#ecfdf5", borderWidth: 1, borderColor: "#a7f3d0", borderRadius: 8, padding: 10, marginBottom: 12 },
-  aiHintText: { fontSize: 12, color: "#047857" },
-  aiInput: { borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 8, padding: 10, fontSize: 14, backgroundColor: "white", minHeight: 120, textAlignVertical: "top" },
-  aiBtn: { backgroundColor: "#10b981", paddingVertical: 14, borderRadius: 10, alignItems: "center", marginTop: 12 },
-  aiBtnDisabled: { opacity: 0.6 },
-  aiBtnText: { color: "white", fontWeight: "600", fontSize: 15 },
-  aiFootnote: { textAlign: "center", fontSize: 11, color: "#a8a29e", marginTop: 12 },
-  aiSummaryBox: { backgroundColor: "#ecfdf5", borderWidth: 1, borderColor: "#a7f3d0", borderRadius: 8, padding: 10, marginBottom: 12 },
-  aiSummaryLabel: { fontSize: 11, fontWeight: "600", color: "#047857", textTransform: "uppercase" },
-  aiSummaryText: { fontSize: 13, color: "#1c1917", marginTop: 2 },
-  aiCustomerSuggestion: { fontSize: 11, color: "#047857", marginTop: 4 },
-  // Manual mode
-  label: { fontSize: 13, color: "#57534e", marginBottom: 4, fontWeight: "500" },
-  customerBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "white", borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 8, padding: 12 },
-  customerBtnEmpty: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "white", borderWidth: 1, borderColor: "#d6d3d1", borderStyle: "dashed", borderRadius: 8, padding: 12 },
-  customerBtnEmptyText: { color: "#78716c", fontSize: 13 },
-  customerName: { fontSize: 14, fontWeight: "600", color: "#1c1917" },
-  customerSub: { fontSize: 12, color: "#78716c", marginTop: 2 },
-  itemCard: { backgroundColor: "#f5f5f4", borderRadius: 8, padding: 10, marginBottom: 8 },
-  itemHeader: { flexDirection: "row", gap: 8, alignItems: "center" },
-  itemDescInput: { flex: 1, backgroundColor: "white", borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13 },
-  itemTrashBtn: { padding: 4 },
-  itemRow3: { flexDirection: "row", gap: 8, marginTop: 8 },
-  itemCol: { flex: 1 },
-  itemColLabel: { fontSize: 10, color: "#a8a29e", textTransform: "uppercase", marginBottom: 2 },
-  itemColInput: { backgroundColor: "white", borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6, fontSize: 13 },
-  itemColStatic: { backgroundColor: "white", borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 6 },
-  itemColStaticText: { fontSize: 13, fontWeight: "500", color: "#57534e" },
-  addItemBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, borderWidth: 1, borderColor: "#d6d3d1", borderStyle: "dashed", borderRadius: 6, padding: 10, marginTop: 4 },
-  addItemBtnText: { color: "#78716c", fontSize: 13 },
-  row2: { flexDirection: "row", gap: 12, marginTop: 8 },
-  col2: { flex: 1 },
-  input: { backgroundColor: "white", borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 6, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14 },
-  discountRow: { flexDirection: "row", gap: 6 },
-  discountTypeBtn: { backgroundColor: "#f5f5f4", borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 6, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
-  discountTypeText: { fontSize: 14, fontWeight: "600", color: "#1c1917" },
-  templateBtn: { flex: 1, borderWidth: 1, borderColor: "#e7e5e4", borderRadius: 6, padding: 10, alignItems: "center" },
-  templateBtnActive: { backgroundColor: "#ecfdf5", borderColor: "#10b981" },
-  templateBtnText: { fontSize: 13, fontWeight: "500", color: "#57534e" },
-  templateBtnTextActive: { color: "#047857" },
-  totalsBox: { backgroundColor: "#f5f5f4", borderRadius: 8, padding: 12, marginTop: 16 },
-  totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
-  totalsRowLabel: { fontSize: 13, color: "#57534e" },
-  totalsRowValue: { fontSize: 13, color: "#1c1917" },
-  totalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: "#d6d3d1" },
-  totalRowLabel: { fontSize: 15, fontWeight: "bold", color: "#1c1917" },
-  totalRowValue: { fontSize: 15, fontWeight: "bold", color: "#1c1917" },
-  saveBtn: { backgroundColor: "#10b981", paddingVertical: 14, borderRadius: 10, alignItems: "center", marginTop: 16 },
-  saveBtnDisabled: { opacity: 0.6 },
-  saveBtnText: { color: "white", fontWeight: "600", fontSize: 15 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  pickerSheet: { backgroundColor: "white", borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: "80%" },
-  pickerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#e7e5e4" },
-  pickerTitle: { fontSize: 16, fontWeight: "600", color: "#1c1917" },
-  pickerSearch: { margin: 16, backgroundColor: "#f5f5f4", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
-  pickerItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#f5f5f4" },
-  pickerItemName: { fontSize: 14, fontWeight: "600", color: "#1c1917" },
-  pickerItemSub: { fontSize: 12, color: "#78716c", marginTop: 2 },
-  pickerEmpty: { padding: 16, alignItems: "center", backgroundColor: "#f5f5f4", borderRadius: 8, margin: 16 },
-  pickerEmptyText: { color: "#78716c", fontSize: 13 },
-  pickerNewBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, padding: 14, borderTopWidth: 1, borderTopColor: "#e7e5e4" },
-  pickerNewBtnText: { color: "#10b981", fontSize: 14, fontWeight: "500" },
+  safe: { flex: 1, backgroundColor: "#f8fafc" },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "white",
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  backBtn: { padding: 4 },
+  headerTitle: { fontSize: 18, fontWeight: "bold", color: "#0f172a" },
+  headerRight: { flexDirection: "row", alignItems: "center" },
+  freeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#10b981",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  freeBadgeText: { color: "white", fontSize: 10, fontWeight: "900" },
+  segmentedContainer: {
+    flexDirection: "row",
+    backgroundColor: "#f1f5f9",
+    marginHorizontal: 16,
+    marginVertical: 10,
+    borderRadius: 12,
+    padding: 3,
+  },
+  segmentBtn: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 10 },
+  segmentBtnActive: { backgroundColor: "white", elevation: 1 },
+  segmentText: { fontSize: 12, fontWeight: "600", color: "#64748b" },
+  segmentTextActive: { color: "#0f172a", fontWeight: "700" },
+  card: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  cardRowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  invoiceNumber: { fontSize: 18, fontWeight: "900", color: "#0f172a" },
+  dueDateText: { fontSize: 12, color: "#64748b", marginTop: 2 },
+  docTypeBadge: { flexDirection: "row", alignItems: "center", gap: 2 },
+  docTypeBadgeText: { fontSize: 12, fontWeight: "700", color: "#0f172a" },
+  cardLeftGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  cardSectionTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  freeSubText: { fontSize: 10, color: "#16a34a", fontWeight: "700", marginTop: 1 },
+  cardItemTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  cardItemSub: { fontSize: 12, color: "#64748b", marginTop: 1 },
+  circleAddBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#2563eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dottedConnector: {
+    width: 1,
+    height: 18,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderStyle: "dashed",
+    marginLeft: 18,
+    marginVertical: 4,
+  },
+  templateThumbRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  miniThumb: {
+    width: 24,
+    height: 30,
+    borderRadius: 4,
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    padding: 2,
+    justifyContent: "space-between",
+  },
+  miniThumbLineBlue: { height: 3, backgroundColor: "#2563eb", borderRadius: 1 },
+  miniThumbLine: { height: 2, backgroundColor: "#cbd5e1", borderRadius: 1 },
+  itemRowCard: {
+    backgroundColor: "#f8fafc",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  itemHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  itemDescInput: {
+    flex: 1,
+    fontSize: 13,
+    color: "#0f172a",
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  itemInputsGrid: { flexDirection: "row", gap: 8, marginTop: 8 },
+  itemColLabel: { fontSize: 9, fontWeight: "700", color: "#94a3b8", marginBottom: 2 },
+  itemInput: {
+    backgroundColor: "white",
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0f172a",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  calcBreakdown: { marginTop: 12, borderTopWidth: 1, borderTopColor: "#f1f5f9", paddingTop: 10, gap: 6 },
+  calcRow: { flexDirection: "row", justifyContent: "space-between" },
+  calcLabel: { fontSize: 12, color: "#64748b" },
+  calcValue: { fontSize: 12, fontWeight: "700", color: "#0f172a" },
+  dottedDivider: { height: 1, borderWidth: 0.5, borderColor: "#e2e8f0", borderStyle: "dashed", marginVertical: 4 },
+  subtotalLabel: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  subtotalValue: { fontSize: 14, fontWeight: "900", color: "#0f172a" },
+  adjustmentBody: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#f1f5f9", paddingTop: 10 },
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 10,
+  },
+  totalLabel: { fontSize: 15, fontWeight: "800", color: "#0f172a" },
+  totalValue: { fontSize: 18, fontWeight: "900", color: "#0f172a" },
+  cardRightGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
+  cardValueText: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  bottomBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    backgroundColor: "white",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+    gap: 12,
+  },
+  previewBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: "#2563eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewBtnText: { color: "#2563eb", fontSize: 15, fontWeight: "bold" },
+  saveBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#2563eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  saveBtnText: { color: "white", fontSize: 15, fontWeight: "bold" },
+  pickerModalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  pickerModalContent: { backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "60%" },
+  pickerModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  pickerModalTitle: { fontSize: 15, fontWeight: "bold", color: "#0f172a" },
+  customerOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  customerOptionSelected: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
+  customerOptionName: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  customerOptionMeta: { fontSize: 11, color: "#64748b", marginTop: 2 },
 });

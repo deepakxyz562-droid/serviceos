@@ -14,6 +14,10 @@ export async function GET(req: Request) {
       },
     });
 
+    let totalAccepted = 0;
+    let totalPending = 0;
+    let totalDraft = 0;
+
     const enriched = quotes.map((q) => {
       const totals = computeTotals(
         q.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
@@ -22,6 +26,15 @@ export async function GET(req: Request) {
         q.taxRate,
         business.currency
       );
+
+      if (q.status === 'ACCEPTED') {
+        totalAccepted += totals.total;
+      } else if (q.status === 'SENT') {
+        totalPending += totals.total;
+      } else if (q.status === 'DRAFT') {
+        totalDraft += totals.total;
+      }
+
       return {
         ...q,
         total: totals.total,
@@ -32,7 +45,13 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ quotes: enriched });
+    const overview = {
+      accepted: Math.round(totalAccepted * 100) / 100,
+      pending: Math.round(totalPending * 100) / 100,
+      draft: Math.round(totalDraft * 100) / 100,
+    };
+
+    return NextResponse.json({ quotes: enriched, overview });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

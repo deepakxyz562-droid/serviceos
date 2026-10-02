@@ -70,15 +70,15 @@ export function LeftDrawer({ isOpen, onClose }: LeftDrawerProps) {
               onClose();
               openModal({ type: "pro-upgrade" as any });
             }}
-            className="flex cursor-pointer items-center justify-between rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white shadow-md shadow-blue-500/20 transition hover:brightness-105"
+            className="flex cursor-pointer items-center justify-between rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 p-4 text-white shadow-md shadow-emerald-500/20 transition hover:brightness-105"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400 text-amber-950 shadow-sm">
                 <Crown className="h-5 w-5 fill-amber-950" />
               </div>
               <div>
-                <div className="text-sm font-bold leading-tight">Upgrade to PRO</div>
-                <div className="text-[11px] text-blue-100">Unlock All Features</div>
+                <div className="text-sm font-bold leading-tight">18M Free Access Active</div>
+                <div className="text-[11px] text-emerald-100">All PRO Features Unlocked</div>
               </div>
             </div>
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white">

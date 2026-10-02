@@ -109,12 +109,6 @@ export function TemplateSelectModal({
       : TEMPLATES_CATALOG.filter((t) => t.category === activeCategory);
 
   function handleSave() {
-    const chosen = TEMPLATES_CATALOG.find((t) => t.id === selectedId);
-    if (chosen?.isPro) {
-      // In free tier, trigger PRO modal
-      openModal({ type: "pro-upgrade" as any });
-      return;
-    }
     onSelect(selectedId);
     onClose();
   }
@@ -130,7 +124,10 @@ export function TemplateSelectModal({
           >
             <ChevronLeft className="h-6 w-6" />
           </button>
-          <h2 className="text-base font-bold text-stone-900">Select a Template</h2>
+          <div className="text-center">
+            <h2 className="text-base font-bold text-stone-900">Select a Template</h2>
+            <p className="text-[10px] font-bold text-emerald-600">All 100+ Templates Free for 18 Months</p>
+          </div>
           <Button
             onClick={handleSave}
             size="sm"
@@ -175,11 +172,11 @@ export function TemplateSelectModal({
                   isSelected ? "border-blue-600 ring-2 ring-blue-500/20" : "border-stone-200 hover:border-stone-300"
                 }`}
               >
-                {/* PRO Badge */}
+                {/* 18M Free Badge */}
                 {tmpl.isPro && (
-                  <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-md bg-gradient-to-r from-amber-400 to-amber-500 px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm">
+                  <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-md bg-gradient-to-r from-emerald-500 to-teal-600 px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm">
                     <Crown className="h-2.5 w-2.5" />
-                    PRO
+                    18M FREE
                   </div>
                 )}
 

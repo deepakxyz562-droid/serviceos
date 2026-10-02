@@ -31,11 +31,23 @@ interface Item extends CalcLineItem {
   taxRate?: number;
 }
 
+const MOBILE_TEMPLATES = [
+  { id: "classic-corporate-blue", name: "Corporate Blue", category: "Classic", accentColor: "#2563eb", bgColor: "#eff6ff" },
+  { id: "soft-emerald-wave", name: "Emerald Wave", category: "Recommend", accentColor: "#10b981", bgColor: "#ecfdf5" },
+  { id: "minimal-clean", name: "Minimal Clean", category: "Simple", accentColor: "#18181b", bgColor: "#f8fafc" },
+  { id: "geometric-bold-green", name: "Geometric Green", category: "Professional", accentColor: "#059669", bgColor: "#d1fae5" },
+  { id: "slate-geometric", name: "Slate Corporate", category: "Classic", accentColor: "#1e293b", bgColor: "#f1f5f9" },
+  { id: "mesh-polygonal", name: "Polygonal Mesh", category: "Creative", accentColor: "#0284c7", bgColor: "#e0f2fe" },
+  { id: "golden-luxury", name: "Golden Luxury", category: "Premium", accentColor: "#d97706", bgColor: "#fef3c7" },
+];
+
 export default function InvoiceCreateScreen() {
   const router = useRouter();
   const business = useAppStore((s) => s.business);
 
   const [docType, setDocType] = useState<DocumentType>("TAX_INVOICE");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("classic-corporate-blue");
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [customers, setCustomers] = useState<any[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -114,7 +126,7 @@ export default function InvoiceCreateScreen() {
         discountValue: parseFloat(discountValue) || 0,
         discountType,
         taxRate: docType === "SIMPLE_BILL" ? parseFloat(globalTaxRate) || 0 : 18,
-        pdfTemplate: `${docType}:classic-corporate-blue`,
+        pdfTemplate: `${docType}:${selectedTemplateId}`,
       });
 
       router.replace(`/invoice/${r.invoice.id}`);
@@ -140,12 +152,10 @@ export default function InvoiceCreateScreen() {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Invoice</Text>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.crownBtn}>
-              <MaterialIcons name="workspace-premium" size={22} color="#f59e0b" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.moreBtn}>
-              <MaterialIcons name="more-vert" size={22} color="#64748b" />
-            </TouchableOpacity>
+            <View style={styles.freeBadge}>
+              <MaterialIcons name="workspace-premium" size={16} color="white" />
+              <Text style={styles.freeBadgeText}>18M FREE</Text>
+            </View>
           </View>
         </View>
 
@@ -198,17 +208,44 @@ export default function InvoiceCreateScreen() {
           </View>
 
           {/* Card 2: Templates Preview */}
-          <TouchableOpacity style={styles.card} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.card}
+            activeOpacity={0.7}
+            onPress={() => setTemplatePickerOpen(true)}
+          >
             <View style={styles.cardRowBetween}>
               <View style={styles.cardLeftGroup}>
                 <View style={[styles.iconBox, { backgroundColor: "#f1f5f9" }]}>
                   <MaterialIcons name="dashboard-customize" size={18} color="#475569" />
                 </View>
-                <Text style={styles.cardSectionTitle}>Templates</Text>
+                <View>
+                  <Text style={styles.cardSectionTitle}>Templates</Text>
+                  <Text style={styles.freeSubText}>
+                    {MOBILE_TEMPLATES.find((t) => t.id === selectedTemplateId)?.name || "All 100+ Free"} · 18M Free
+                  </Text>
+                </View>
               </View>
               <View style={styles.templateThumbRow}>
-                <View style={styles.miniThumb}>
-                  <View style={styles.miniThumbLineBlue} />
+                <View
+                  style={[
+                    styles.miniThumb,
+                    {
+                      borderColor:
+                        MOBILE_TEMPLATES.find((t) => t.id === selectedTemplateId)?.accentColor ||
+                        "#93c5fd",
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.miniThumbLineBlue,
+                      {
+                        backgroundColor:
+                          MOBILE_TEMPLATES.find((t) => t.id === selectedTemplateId)?.accentColor ||
+                          "#2563eb",
+                      },
+                    ]}
+                  />
                   <View style={styles.miniThumbLine} />
                   <View style={styles.miniThumbLine} />
                 </View>
@@ -522,6 +559,77 @@ export default function InvoiceCreateScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Template Picker Modal */}
+        <Modal visible={templatePickerOpen} animationType="slide" transparent>
+          <View style={styles.pickerModalBackdrop}>
+            <View style={styles.pickerModalContent}>
+              <View style={styles.pickerModalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.pickerModalTitle}>Select Template</Text>
+                  <View style={{ backgroundColor: "#10b981", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>18M FREE</Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setTemplatePickerOpen(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+                {MOBILE_TEMPLATES.map((tpl) => {
+                  const isSelected = selectedTemplateId === tpl.id;
+                  return (
+                    <TouchableOpacity
+                      key={tpl.id}
+                      onPress={() => {
+                        setSelectedTemplateId(tpl.id);
+                        setTemplatePickerOpen(false);
+                      }}
+                      style={[
+                        styles.customerOption,
+                        isSelected && styles.customerOptionSelected,
+                        { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+                      ]}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                        <View
+                          style={{
+                            width: 38,
+                            height: 48,
+                            borderRadius: 6,
+                            borderWidth: 1.5,
+                            borderColor: tpl.accentColor,
+                            backgroundColor: tpl.bgColor,
+                            padding: 4,
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <View style={{ height: 4, width: "100%", backgroundColor: tpl.accentColor, borderRadius: 2 }} />
+                          <View style={{ height: 2, width: "60%", backgroundColor: "#cbd5e1", borderRadius: 1 }} />
+                          <View style={{ height: 2, width: "80%", backgroundColor: "#e2e8f0", borderRadius: 1 }} />
+                        </View>
+                        <View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={styles.customerOptionName}>{tpl.name}</Text>
+                            <View style={{ backgroundColor: "#ecfdf5", paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                              <Text style={{ color: "#059669", fontSize: 9, fontWeight: "bold" }}>FREE</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.customerOptionMeta}>{tpl.category} Design</Text>
+                        </View>
+                      </View>
+                      {isSelected ? (
+                        <MaterialIcons name="check-circle" size={22} color="#10b981" />
+                      ) : (
+                        <MaterialIcons name="radio-button-unchecked" size={20} color="#cbd5e1" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -542,6 +650,16 @@ const styles = StyleSheet.create({
   backBtn: { padding: 4 },
   headerTitle: { fontSize: 18, fontWeight: "bold", color: "#0f172a" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  freeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#10b981",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  freeBadgeText: { color: "white", fontSize: 10, fontWeight: "900" },
   crownBtn: { padding: 4 },
   moreBtn: { padding: 4 },
   segmentedContainer: {
@@ -572,6 +690,7 @@ const styles = StyleSheet.create({
   cardLeftGroup: { flexDirection: "row", alignItems: "center", gap: 12 },
   iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   cardSectionTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  freeSubText: { fontSize: 10, color: "#16a34a", fontWeight: "700", marginTop: 1 },
   cardItemTitle: { fontSize: 14, fontWeight: "700", color: "#0f172a" },
   cardItemSub: { fontSize: 12, color: "#64748b", marginTop: 1 },
   circleAddBtn: {

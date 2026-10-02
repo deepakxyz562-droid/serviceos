@@ -98,10 +98,10 @@ export function InvoicesScreen() {
           </button>
           <button
             onClick={() => openModal({ type: "pro-upgrade" as any })}
-            className="flex items-center gap-1 rounded-md bg-gradient-to-r from-amber-400 to-amber-500 px-2 py-1 text-xs font-black text-white shadow-xs transition hover:brightness-105"
+            className="flex items-center gap-1 rounded-md bg-gradient-to-r from-emerald-500 to-teal-600 px-2.5 py-1 text-xs font-black text-white shadow-xs transition hover:brightness-105"
           >
             <Crown className="h-3.5 w-3.5 fill-white" />
-            <span>PRO</span>
+            <span>18M FREE</span>
           </button>
         </div>
       </header>

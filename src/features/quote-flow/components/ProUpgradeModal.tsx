@@ -1,26 +1,24 @@
 "use client";
 import { useState } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
-import { X, MoreHorizontal, Check, Crown, ArrowRight, ShieldCheck, Clock } from "lucide-react";
+import { X, Check, Crown, ArrowRight, Sparkles, Clock, PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ProSlide {
   title: string;
   subtitle: string;
-  badge?: string;
   renderVisual: () => React.ReactNode;
 }
 
 export function ProUpgradeModal() {
   const closeModal = useAppStore((s) => s.closeModal);
-  const business = useAppStore((s) => s.business);
-  const [selectedPlan, setSelectedPlan] = useState<"yearly" | "monthly" | "lifetime">("yearly");
+  const openModal = useAppStore((s) => s.openModal);
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const slides: ProSlide[] = [
     {
       title: "Massive Professional Templates",
-      subtitle: "Unlock 100+ beautifully crafted invoice & estimate layouts",
+      subtitle: "100+ beautifully crafted invoice & estimate layouts — all unlocked!",
       renderVisual: () => (
         <div className="flex flex-col items-start gap-2.5 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50/50 p-4 text-left ring-1 ring-blue-100">
           <div className="flex items-center gap-2 text-xs font-semibold text-blue-900">
@@ -133,19 +131,27 @@ export function ProUpgradeModal() {
             <X className="h-4 w-4" />
           </button>
           <div className="flex items-center gap-1.5 text-sm font-bold text-stone-900">
-            <span>Upgrade to</span>
-            <span className="rounded bg-gradient-to-r from-amber-400 to-amber-500 px-1.5 py-0.5 text-xs font-black text-white shadow-sm">
-              PRO
+            <span>Special Offer:</span>
+            <span className="rounded bg-gradient-to-r from-emerald-500 to-teal-600 px-2 py-0.5 text-xs font-black text-white shadow-sm">
+              18M FREE
             </span>
-            <span>for Unlimited Access</span>
           </div>
-          <button className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 hover:text-stone-700">
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
+          <div className="w-8" />
+        </div>
+
+        {/* 18-Month Offer Active Banner */}
+        <div className="mt-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 p-4 text-white shadow-lg shadow-emerald-500/20 text-center">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white mb-2">
+            <PartyPopper className="h-5 w-5" />
+          </div>
+          <h2 className="text-base font-black">18 Months Free Access Active!</h2>
+          <p className="mt-1 text-xs text-emerald-100">
+            All premium templates, digital signatures, GST calculations, and unlimited documents are 100% unlocked for your account.
+          </p>
         </div>
 
         {/* Carousel Visual */}
-        <div className="mt-4 text-center">
+        <div className="mt-5 text-center">
           <div className="min-h-[120px]">{slides[currentSlide].renderVisual()}</div>
           <h3 className="mt-3 text-sm font-bold text-stone-900">{slides[currentSlide].title}</h3>
           <p className="mt-0.5 text-xs text-stone-500">{slides[currentSlide].subtitle}</p>
@@ -157,140 +163,43 @@ export function ProUpgradeModal() {
                 key={i}
                 onClick={() => setCurrentSlide(i)}
                 className={`h-1.5 rounded-full transition-all ${
-                  currentSlide === i ? "w-4 bg-blue-600" : "w-1.5 bg-stone-300"
+                  currentSlide === i ? "w-4 bg-emerald-600" : "w-1.5 bg-stone-300"
                 }`}
               />
             ))}
           </div>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="mt-5 space-y-2.5">
-          {/* Yearly Card */}
-          <div
-            onClick={() => setSelectedPlan("yearly")}
-            className={`relative cursor-pointer rounded-2xl border-2 p-3.5 transition ${
-              selectedPlan === "yearly"
-                ? "border-blue-600 bg-blue-50/30 shadow-sm"
-                : "border-stone-200 hover:border-stone-300"
-            }`}
-          >
-            <div className="absolute -top-2.5 right-4 rounded-full bg-gradient-to-r from-red-500 to-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm">
-              BEST OFFER
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-bold text-stone-900">Yearly</div>
-                <div className="text-xs text-stone-500">₹15.99 for first week, then yearly billing</div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-black text-blue-600">₹15.99</div>
-                <div className="text-[10px] text-stone-400">First week</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 1 Month Card */}
-          <div
-            onClick={() => setSelectedPlan("monthly")}
-            className={`cursor-pointer rounded-2xl border-2 p-3.5 transition ${
-              selectedPlan === "monthly"
-                ? "border-blue-600 bg-blue-50/30 shadow-sm"
-                : "border-stone-200 hover:border-stone-300"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-bold text-stone-900">1 Month</div>
-                <div className="text-xs text-stone-500">₹250.00 / month</div>
-              </div>
-              <div className="text-right">
-                <div className="text-base font-bold text-stone-900">₹62.50</div>
-                <div className="text-[10px] text-stone-400">/Week</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Lifetime Card */}
-          <div
-            onClick={() => setSelectedPlan("lifetime")}
-            className={`cursor-pointer rounded-2xl border-2 p-3.5 transition ${
-              selectedPlan === "lifetime"
-                ? "border-blue-600 bg-blue-50/30 shadow-sm"
-                : "border-stone-200 hover:border-stone-300"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-bold text-stone-900">Lifetime</div>
-                <div className="text-xs text-stone-500">One-time purchase, forever access</div>
-              </div>
-              <div className="text-right">
-                <div className="text-base font-bold text-stone-900">₹1,500.00</div>
-                <div className="text-[10px] text-stone-400">One-Time</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Feature Comparison Table */}
+        {/* Feature Unlocked Table */}
         <div className="mt-5 rounded-2xl bg-stone-50 p-4 ring-1 ring-stone-200">
           <div className="mb-2 flex items-center justify-between border-b border-stone-200 pb-2 text-xs font-bold text-stone-700">
-            <span>Features</span>
-            <div className="flex gap-6">
-              <span className="w-12 text-center text-stone-400 font-semibold">Free</span>
-              <span className="w-12 text-center text-blue-600 font-black">PRO</span>
-            </div>
+            <span>Feature</span>
+            <span className="text-emerald-700 font-black">Your 18M Free Status</span>
           </div>
-          <div className="space-y-1.5 text-xs text-stone-600">
-            <div className="flex items-center justify-between py-1">
-              <span>Basic Templates</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-emerald-600">✓</span>
-                <span className="w-12 text-center text-emerald-600">✓</span>
-              </div>
+          <div className="space-y-2 text-xs text-stone-600">
+            <div className="flex items-center justify-between py-0.5">
+              <span>All 100+ Templates</span>
+              <span className="font-bold text-emerald-600">✓ Unlocked (Free)</span>
             </div>
-            <div className="flex items-center justify-between py-1">
-              <span>PRO Templates</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-stone-400">✕</span>
-                <span className="w-12 text-center font-bold text-emerald-600">100+</span>
-              </div>
+            <div className="flex items-center justify-between py-0.5">
+              <span>Unlimited Invoices &amp; Estimates</span>
+              <span className="font-bold text-emerald-600">✓ Unlocked (Free)</span>
             </div>
-            <div className="flex items-center justify-between py-1">
-              <span>Invoice Creation</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-stone-500 text-[10px]">3 /Mo</span>
-                <span className="w-12 text-center text-emerald-600 font-bold">Unlimited</span>
-              </div>
+            <div className="flex items-center justify-between py-0.5">
+              <span>Unlimited Items &amp; Line Items</span>
+              <span className="font-bold text-emerald-600">✓ Unlocked (Free)</span>
             </div>
-            <div className="flex items-center justify-between py-1">
-              <span>Invoice Item Limit</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-stone-500 text-[10px]">5 Items</span>
-                <span className="w-12 text-center text-emerald-600 font-bold">Unlimited</span>
-              </div>
+            <div className="flex items-center justify-between py-0.5">
+              <span>Digital Signatures &amp; Stamps</span>
+              <span className="font-bold text-emerald-600">✓ Unlocked (Free)</span>
             </div>
-            <div className="flex items-center justify-between py-1">
-              <span>Share & PDF Download</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-stone-500 text-[10px]">3 /Mo</span>
-                <span className="w-12 text-center text-emerald-600 font-bold">Unlimited</span>
-              </div>
+            <div className="flex items-center justify-between py-0.5">
+              <span>Custom Logos &amp; Backgrounds</span>
+              <span className="font-bold text-emerald-600">✓ Unlocked (Free)</span>
             </div>
-            <div className="flex items-center justify-between py-1">
-              <span>Digital Signatures</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-stone-400">✕</span>
-                <span className="w-12 text-center text-emerald-600 font-bold">✓</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between py-1">
-              <span>Advanced Customization</span>
-              <div className="flex gap-6">
-                <span className="w-12 text-center text-stone-400">✕</span>
-                <span className="w-12 text-center text-emerald-600 font-bold">✓</span>
-              </div>
+            <div className="flex items-center justify-between py-0.5">
+              <span>Export &amp; High-Res PDF</span>
+              <span className="font-bold text-emerald-600">✓ Unlocked (Free)</span>
             </div>
           </div>
         </div>
@@ -299,28 +208,17 @@ export function ProUpgradeModal() {
         <div className="mt-5 space-y-2 text-center">
           <Button
             onClick={() => {
-              alert("Payment gateway initialized for QuoteFlow PRO!");
               closeModal();
             }}
-            className="w-full h-12 rounded-full bg-blue-600 hover:bg-blue-700 text-sm font-bold text-white shadow-lg shadow-blue-500/20"
+            className="w-full h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-sm font-bold text-white shadow-lg shadow-emerald-500/20"
           >
-            <span>
-              {selectedPlan === "yearly"
-                ? "Start for ₹15.99 (7 Days ₹15.99, then ₹1,000.00/year)"
-                : selectedPlan === "monthly"
-                ? "Subscribe for ₹250.00/Month"
-                : "Get Lifetime Access for ₹1,500.00"}
-            </span>
+            <span>Enjoy 18 Months of Free Access</span>
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
 
-          <div className="flex items-center justify-center gap-1 text-[11px] font-medium text-stone-500">
-            <Clock className="h-3 w-3 text-stone-400" />
-            <span>CANCEL ANYTIME</span>
-          </div>
-
-          <div className="text-[10px] text-stone-400">
-            <a href="#" className="underline">Privacy Policy</a> · <a href="#" className="underline">User Agreement</a>
+          <div className="flex items-center justify-center gap-1 text-[11px] font-medium text-emerald-700">
+            <Clock className="h-3 w-3" />
+            <span>Valid for 18 Months · Zero Cost · Cancel Anytime</span>
           </div>
         </div>
       </div>

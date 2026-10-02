@@ -89,7 +89,7 @@ export default function InvoicesScreen() {
           </TouchableOpacity>
           <TouchableOpacity style={styles.proBadge} onPress={() => setShowProModal(true)}>
             <MaterialIcons name="workspace-premium" size={16} color="white" />
-            <Text style={styles.proBadgeText}>PRO</Text>
+            <Text style={styles.proBadgeText}>18M FREE</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -207,7 +207,7 @@ export default function InvoicesScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* PRO Paywall Modal */}
+      {/* 18-Month Free Modal */}
       <Modal visible={showProModal} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContent}>
@@ -216,71 +216,28 @@ export default function InvoicesScreen() {
                 <MaterialIcons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
               <View style={styles.proTitleRow}>
-                <Text style={styles.proTitle}>Upgrade to </Text>
+                <Text style={styles.proTitle}>Special Offer: </Text>
                 <View style={styles.proBadgeSmall}>
-                  <Text style={styles.proBadgeSmallText}>PRO</Text>
+                  <Text style={styles.proBadgeSmallText}>18M FREE</Text>
                 </View>
-                <Text style={styles.proTitle}> for Unlimited Access</Text>
               </View>
               <View style={{ width: 28 }} />
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16 }}>
-              {/* Feature Highlights */}
               <View style={styles.proHero}>
-                <Text style={styles.proHeroTitle}>Massive Professional Template</Text>
-                <Text style={styles.proHeroSubtitle}>Unlock 100+ templates, custom backgrounds &amp; signatures</Text>
-              </View>
-
-              {/* Plans */}
-              <View style={styles.planCardActive}>
-                <View style={styles.bestOfferBadge}>
-                  <Text style={styles.bestOfferText}>BEST OFFER</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.planTitle}>Yearly</Text>
-                  <Text style={styles.planSub}>₹15.99 for first week, then yearly billing</Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.planPrice}>₹15.99</Text>
-                  <Text style={styles.planPeriod}>First week</Text>
-                </View>
-              </View>
-
-              <View style={styles.planCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.planTitle}>1 Month</Text>
-                  <Text style={styles.planSub}>₹250.00 / month</Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.planPriceSec}>₹62.50</Text>
-                  <Text style={styles.planPeriod}>/Week</Text>
-                </View>
-              </View>
-
-              <View style={styles.planCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.planTitle}>Lifetime</Text>
-                  <Text style={styles.planSub}>One-Time purchase, forever access</Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.planPriceSec}>₹1,500.00</Text>
-                  <Text style={styles.planPeriod}>One-Time</Text>
-                </View>
+                <Text style={styles.proHeroTitle}>18 Months Free Access Active!</Text>
+                <Text style={styles.proHeroSubtitle}>
+                  All 100+ invoice &amp; estimate templates, GST calculations, custom signatures, and unlimited invoices are 100% free.
+                </Text>
               </View>
 
               <TouchableOpacity
                 style={styles.subscribeBtn}
-                onPress={() => {
-                  alert("Opening payment processor for QuoteFlow PRO!");
-                  setShowProModal(false);
-                }}
+                onPress={() => setShowProModal(false)}
               >
-                <Text style={styles.subscribeBtnText}>Start for ₹15.99</Text>
-                <MaterialIcons name="arrow-forward" size={18} color="white" />
+                <Text style={styles.subscribeBtnText}>Enjoy 18 Months of Free Access</Text>
               </TouchableOpacity>
-
-              <Text style={styles.cancelAnytime}>CANCEL ANYTIME</Text>
             </ScrollView>
           </View>
         </View>

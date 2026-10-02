@@ -63,9 +63,14 @@ export default function SettingsScreen() {
           <Text style={styles.subtitle}>Business info &amp; account</Text>
 
           <View style={styles.planCard}>
-            <Text style={styles.planTitle}>{business?.plan === "PRO" ? "Pro plan" : "Free plan"}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Text style={styles.planTitle}>18-Month Free Access Active</Text>
+              <View style={{ backgroundColor: "#10b981", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>18M FREE</Text>
+              </View>
+            </View>
             <Text style={styles.planSub}>
-              {business?.plan === "PRO" ? "Unlimited quotes & invoices" : "3 quotes per month"}
+              All PRO features, 100+ templates, and unlimited quotes &amp; invoices are 100% free.
             </Text>
           </View>
 
