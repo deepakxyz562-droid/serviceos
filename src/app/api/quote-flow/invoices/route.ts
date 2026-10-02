@@ -15,6 +15,11 @@ export async function GET(req: Request) {
       },
     });
 
+    const now = new Date();
+    let totalPaid = 0;
+    let totalUnpaid = 0;
+    let totalOverdue = 0;
+
     const enriched = invoices.map((inv) => {
       const totals = computeTotals(
         inv.items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
@@ -24,14 +29,26 @@ export async function GET(req: Request) {
         business.currency
       );
       const paid = inv.payments.reduce((s, p) => s + p.amount, 0);
+      const effectivePaid = Math.min(paid, totals.total);
       const balance = Math.max(0, totals.total - paid);
+
+      totalPaid += effectivePaid;
+      if (balance > 0) {
+        const isOverdue = inv.status === 'OVERDUE' || (inv.dueDate && new Date(inv.dueDate) < now);
+        if (isOverdue) {
+          totalOverdue += balance;
+        } else {
+          totalUnpaid += balance;
+        }
+      }
+
       return {
         ...inv,
         total: totals.total,
         subtotal: totals.subtotal,
         discount: totals.discount,
         tax: totals.tax,
-        paidAmount: Math.min(paid, totals.total),
+        paidAmount: effectivePaid,
         balance,
         totals: {
           ...totals,
@@ -41,7 +58,13 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ invoices: enriched });
+    const overview = {
+      paid: Math.round(totalPaid * 100) / 100,
+      unpaid: Math.round(totalUnpaid * 100) / 100,
+      overdue: Math.round(totalOverdue * 100) / 100,
+    };
+
+    return NextResponse.json({ invoices: enriched, overview });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

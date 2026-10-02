@@ -1,7 +1,17 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type Tab = 'home' | 'quotes' | 'invoices' | 'customers' | 'settings';
+export type Tab =
+  | 'invoices'
+  | 'estimates'
+  | 'clients'
+  | 'items'
+  | 'more'
+  | 'home'
+  | 'quotes'
+  | 'customers'
+  | 'settings';
+
 export type Modal =
   | { type: 'none' }
   | { type: 'login' }
@@ -14,7 +24,9 @@ export type Modal =
   | { type: 'invoice-create' }
   | { type: 'invoice-detail'; invoiceId: string }
   | { type: 'send-quote'; quoteId: string }
-  | { type: 'send-invoice'; invoiceId: string };
+  | { type: 'send-invoice'; invoiceId: string }
+  | { type: 'pro-upgrade' }
+  | { type: 'template-select' };
 
 interface AppState {
   activeTab: Tab;

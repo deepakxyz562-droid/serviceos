@@ -25,11 +25,6 @@ export interface DetailedInvoiceTotals {
   total: number;
 }
 
-/**
- * Pure arithmetic for quotes and invoices.
- * Supports Tax Invoice (GST itemized), Bill of Supply (tax-exempt), and Simple Bill.
- * Client and server safe (zero db or auth dependencies).
- */
 export function computeInvoiceTotals(options: {
   items: CalcLineItem[];
   documentType?: DocumentType | string;
@@ -51,7 +46,6 @@ export function computeInvoiceTotals(options: {
   const docType = (documentType.toUpperCase() as DocumentType) || 'TAX_INVOICE';
 
   if (docType === 'BILL_OF_SUPPLY') {
-    // Composition or tax-exempt: NO GST/Tax charged
     const rawSubtotal = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.unitPrice) || 0), 0);
     const subtotal = round2(rawSubtotal);
     const discount =
@@ -75,7 +69,6 @@ export function computeInvoiceTotals(options: {
   }
 
   if (docType === 'SIMPLE_BILL') {
-    // Simple receipt: subtotal with global tax & discount in adjustment
     const rawSubtotal = items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.unitPrice) || 0), 0);
     const subtotal = round2(rawSubtotal);
     const discount =
@@ -100,7 +93,6 @@ export function computeInvoiceTotals(options: {
     };
   }
 
-  // Default: TAX_INVOICE (or ESTIMATE with itemized GST)
   let taxableSum = 0;
   let gstSum = 0;
 
@@ -141,34 +133,6 @@ export function computeInvoiceTotals(options: {
     shippingFee: round2(Number(shippingFee) || 0),
     tax: gstAmount,
     total,
-  };
-}
-
-/**
- * Legacy compatible computeTotals
- */
-export function computeTotals(
-  items: { qty: number; unitPrice: number; taxRate?: number }[],
-  discountValue: number,
-  discountType: 'AMOUNT' | 'PERCENT' | string,
-  taxRate: number,
-  currency = 'USD'
-) {
-  const result = computeInvoiceTotals({
-    items,
-    documentType: 'TAX_INVOICE',
-    discountValue,
-    discountType,
-    globalTaxRate: taxRate,
-    currency,
-  });
-  return {
-    subtotal: result.subtotal,
-    taxableAmount: result.taxableAmount,
-    gstAmount: result.gstAmount,
-    discount: result.discount,
-    tax: result.tax,
-    total: result.total,
   };
 }
 

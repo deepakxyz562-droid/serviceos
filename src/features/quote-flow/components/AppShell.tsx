@@ -17,6 +17,8 @@ import { InvoiceCreateModal } from "./InvoiceCreateModal";
 import { SendQuoteModal } from "./SendQuoteModal";
 import { SendInvoiceModal } from "./SendInvoiceModal";
 
+import { ProUpgradeModal } from "./ProUpgradeModal";
+
 export function AppShell() {
   const activeTab = useAppStore((s) => s.activeTab);
   const modal = useAppStore((s) => s.modal);
@@ -37,7 +39,7 @@ export function AppShell() {
     return (
       <div className="min-h-screen bg-stone-50">
         <div className="mx-auto max-w-md px-5 pt-20 text-center">
-          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500 text-white">
+          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md">
             <Sparkle />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-stone-900">
@@ -64,11 +66,10 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-stone-50">
       <main>
-        {activeTab === "home" && <HomeScreen />}
-        {activeTab === "quotes" && <QuotesScreen />}
-        {activeTab === "invoices" && <InvoicesScreen />}
-        {activeTab === "customers" && <CustomersScreen />}
-        {activeTab === "settings" && <SettingsScreen />}
+        {(activeTab === "invoices" || activeTab === "home") && <InvoicesScreen />}
+        {(activeTab === "quotes" || activeTab === "estimates") && <QuotesScreen />}
+        {(activeTab === "customers" || activeTab === "clients") && <CustomersScreen />}
+        {(activeTab === "settings" || activeTab === "more") && <SettingsScreen />}
       </main>
       <BottomNav />
 
@@ -91,6 +92,7 @@ export function AppShell() {
       {modal.type === "send-invoice" && (
         <SendInvoiceModal invoiceId={modal.invoiceId} />
       )}
+      {modal.type === "pro-upgrade" && <ProUpgradeModal />}
     </div>
   );
 }

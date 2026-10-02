@@ -7,28 +7,17 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#10b981",
+        tabBarActiveTintColor: "#2563eb",
+        tabBarInactiveTintColor: "#94a3b8",
         tabBarStyle: {
           height: 60,
           paddingBottom: 8,
           paddingTop: 4,
+          backgroundColor: "#ffffff",
+          borderTopColor: "#f1f5f9",
         },
       }}
     >
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => <Icon name="home" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="quotes"
-        options={{
-          title: "Quotes",
-          tabBarIcon: ({ color }) => <Icon name="description" color={color} />,
-        }}
-      />
       <Tabs.Screen
         name="invoices"
         options={{
@@ -37,17 +26,30 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="quotes"
+        options={{
+          title: "Estimates",
+          tabBarIcon: ({ color }) => <Icon name="calculate" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="customers"
         options={{
-          title: "Customers",
+          title: "Clients",
           tabBarIcon: ({ color }) => <Icon name="people" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="home"
+        options={{
+          href: null, // Hide legacy home tab from bottom bar
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => <Icon name="settings" color={color} />,
+          title: "More",
+          tabBarIcon: ({ color }) => <Icon name="more-horiz" color={color} />,
         }}
       />
     </Tabs>
