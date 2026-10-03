@@ -99,13 +99,13 @@ export function CreateFormOrAgentModal({
   initialType = 'form',
   onSuccess,
 }: CreateFormOrAgentModalProps) {
-  // Stepper: 1: Type -> 2: Method -> 3: Details -> 4: Review/Generating -> 5: Success Choice
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  // Stepper: 1: Method -> 2: Details & Goal -> 3: Generating / Live Success
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
-  // Step 1: Type
-  const [creationType, setCreationType] = useState<WizardCreationType>(initialType || 'form');
+  // Creation type is strictly form
+  const creationType: WizardCreationType = 'form';
 
-  // Step 2: Method
+  // Step 1: Method
   const [method, setMethod] = useState<WizardMethod>('ai');
 
   // Method = AI State
@@ -153,7 +153,7 @@ export function CreateFormOrAgentModal({
   const [templateResults, setTemplateResults] = useState<FormTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
 
-  // Step 3: Configuration details
+  // Step 2: Configuration details
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [formGoal, setFormGoal] = useState('lead_capture');
@@ -166,7 +166,7 @@ export function CreateFormOrAgentModal({
   const [agentTone, setAgentTone] = useState<'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic'>('friendly');
   const [agentAvatar, setAgentAvatar] = useState(AVATAR_CATALOG[0].url);
 
-  // Step 4 & 5: Generation & Results
+  // Step 3: Generation & Results
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -176,21 +176,38 @@ export function CreateFormOrAgentModal({
 
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
-  // Initialize type when initialType changes
+  // Reset on open
   useEffect(() => {
     if (open) {
-      if (initialType) setCreationType(initialType);
       setStep(1);
       setCreatedFormId(null);
       setCreatedAgentId(null);
       setCreatedSlug('');
       setGenerationProgress(0);
+      setIsGenerating(false);
     }
-  }, [open, initialType]);
+  }, [open]);
 
-  // Load templates when Step 2 with Template method is active
+  // Load templates when Step 1 with Template method is active
   useEffect(() => {
-    if (step === 2 && method === 'template') {
+    if (step === 1 && method === 'template') {
+      let isSubscribed = true;
+      setTemplatesLoading(true);
+      searchTemplates({
+        query: templateSearch || undefined,
+        category: selectedCategory === 'all' ? undefined : selectedCategory,
+        limit: 40,
+      }).then((res) => {
+        if (isSubscribed) {
+          setTemplateResults(res.map((r) => r.template));
+          setTemplatesLoading(false);
+        }
+      });
+      return () => {
+        isSubscribed = false;
+      };
+    }
+  }, [step, method, templateSearch, selectedCategory]);
       let isSubscribed = true;
       setTemplatesLoading(true);
       searchTemplates({
@@ -265,8 +282,8 @@ export function CreateFormOrAgentModal({
           setCreatedSlug(effectiveSlug);
           setGenerationProgress(100);
           setGenerationStatus('Complete!');
-          setStep(5);
-          toast.success('🎉 Form & AI Agent created successfully!');
+          setStep(3);
+          toast.success('🎉 Form created successfully!');
         } else {
           throw new Error(data.error || 'Server could not save generated asset');
         }
@@ -299,7 +316,7 @@ export function CreateFormOrAgentModal({
           setCreatedFormId(data.form.id);
           setCreatedSlug(data.form.slug);
           setGenerationProgress(100);
-          setStep(5);
+          setStep(3);
           toast.success('🎉 Template initialized successfully!');
         } else {
           throw new Error(data.error || 'Failed to create form from template');
@@ -344,7 +361,7 @@ export function CreateFormOrAgentModal({
           setCreatedFormId(data.form.id);
           setCreatedSlug(data.form.slug);
           setGenerationProgress(100);
-          setStep(5);
+          setStep(3);
           toast.success('🎉 Form initialized successfully!');
         } else {
           throw new Error(data.error || 'Failed to create form');
@@ -353,7 +370,7 @@ export function CreateFormOrAgentModal({
     } catch (err) {
       console.error('Wizard error:', err);
       toast.error(err instanceof Error ? err.message : 'Creation failed. Please try again.');
-      setStep(3);
+      setStep(2);
     } finally {
       setIsGenerating(false);
     }
@@ -433,18 +450,16 @@ export function CreateFormOrAgentModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black tracking-tight text-foreground">
-                  Create Form or AI Agent
+                  AI Form Wizard
                 </h2>
                 <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
-                  Step {step} of 4
+                  Step {step} of 3
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                {step === 1 && 'Choose the type of digital intake asset you want to launch'}
-                {step === 2 && 'Select your preferred creation method'}
-                {step === 3 && 'Configure goals, capabilities, and key questions'}
-                {step === 4 && 'Generating your asset with verified parameters'}
-                {step === 5 && 'Your asset is live — choose where to proceed'}
+                {step === 1 && 'Select how you want to build your smart form'}
+                {step === 2 && 'Configure form title, goal, and layout settings'}
+                {step === 3 && (isGenerating ? 'Generating your smart form and endpoints...' : 'Your smart form is live and ready')}
               </p>
             </div>
           </div>
@@ -452,7 +467,7 @@ export function CreateFormOrAgentModal({
           <div className="flex items-center gap-3">
             {/* Step Indicators */}
             <div className="hidden sm:flex items-center gap-1.5">
-              {[1, 2, 3, 4].map((s) => (
+              {[1, 2, 3].map((s) => (
                 <div
                   key={s}
                   className={cn(
@@ -482,129 +497,14 @@ export function CreateFormOrAgentModal({
         {/* ─── Modal Scrollable Body ─── */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 1: What do you want to create?                                 */}
+          {/* STEP 1: Choose Method (AI Prompt & Crawl vs 20,000+ Templates vs Scratch) */}
           {/* ═════════════════════════════════════════════════════════════════════ */}
           {step === 1 && (
-            <div className="space-y-5 animate-in fade-in duration-200">
-              <div className="text-center max-w-xl mx-auto space-y-1">
-                <h3 className="text-xl font-extrabold text-foreground">What do you want to build?</h3>
-                <p className="text-xs text-muted-foreground">
-                  Select the intake experience that best matches your customer interaction goal.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                {/* 1. Smart Form */}
-                <div
-                  onClick={() => setCreationType('form')}
-                  className={cn(
-                    'group relative rounded-2xl border-2 p-5 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:-translate-y-1',
-                    creationType === 'form'
-                      ? 'border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/10'
-                      : 'border-border/80 bg-card hover:border-emerald-500/40'
-                  )}
-                >
-                  {creationType === 'form' && (
-                    <div className="absolute top-3 right-3 size-5 rounded-full bg-emerald-600 text-white flex items-center justify-center">
-                      <Check className="size-3 stroke-[3]" />
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <div className="size-12 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <FileInput className="size-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-base font-bold text-foreground">Interactive Smart Form</h4>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                        Step-by-step multi-page forms, dynamic formula price calculators, file uploads, and in-form Stripe payments.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-border/40 mt-4 flex items-center justify-between text-[11px] font-semibold text-emerald-600">
-                    <span>Forms, Quoting &amp; Payments</span>
-                    <ChevronRight className="size-3.5 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-
-                {/* 2. Conversational AI Agent */}
-                <div
-                  onClick={() => setCreationType('agent')}
-                  className={cn(
-                    'group relative rounded-2xl border-2 p-5 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:-translate-y-1',
-                    creationType === 'agent'
-                      ? 'border-blue-500 bg-blue-500/5 shadow-md shadow-blue-500/10'
-                      : 'border-border/80 bg-card hover:border-blue-500/40'
-                  )}
-                >
-                  {creationType === 'agent' && (
-                    <div className="absolute top-3 right-3 size-5 rounded-full bg-blue-600 text-white flex items-center justify-center">
-                      <Check className="size-3 stroke-[3]" />
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <div className="size-12 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <Bot className="size-6" />
-                    </div>
-                    <div>
-                      <h4 className="text-base font-bold text-foreground">Conversational AI Agent</h4>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                        24/7 website chat assistant grounded in your site content. Answers questions, qualifies leads, and books Google Calendar slots.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-border/40 mt-4 flex items-center justify-between text-[11px] font-semibold text-blue-600">
-                    <span>Website Chatbot &amp; Booking</span>
-                    <ChevronRight className="size-3.5 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-
-                {/* 3. Hybrid Form + Agent */}
-                <div
-                  onClick={() => setCreationType('hybrid')}
-                  className={cn(
-                    'group relative rounded-2xl border-2 p-5 flex flex-col justify-between cursor-pointer transition-all duration-200 hover:-translate-y-1',
-                    creationType === 'hybrid'
-                      ? 'border-purple-500 bg-purple-500/5 shadow-md shadow-purple-500/10'
-                      : 'border-border/80 bg-card hover:border-purple-500/40'
-                  )}
-                >
-                  {creationType === 'hybrid' && (
-                    <div className="absolute top-3 right-3 size-5 rounded-full bg-purple-600 text-white flex items-center justify-center">
-                      <Check className="size-3 stroke-[3]" />
-                    </div>
-                  )}
-                  <div className="space-y-3">
-                    <div className="size-12 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <Zap className="size-6" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-base font-bold text-foreground">Hybrid (Form + Agent)</h4>
-                        <Badge className="bg-purple-600 text-white text-[9px] px-1 py-0 uppercase">Recommended</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                        The ultimate combination: an autonomous conversational AI chatbot synchronized with a structured customer intake form.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-border/40 mt-4 flex items-center justify-between text-[11px] font-semibold text-purple-600">
-                    <span>Dual Chat &amp; Structured Form</span>
-                    <ChevronRight className="size-3.5 group-hover:translate-x-1 transition-transform" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 2: Choose Method (AI Crawl vs. 20K+ Template vs. Manual)      */}
-          {/* ═════════════════════════════════════════════════════════════════════ */}
-          {step === 2 && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto space-y-1">
-                <h3 className="text-xl font-extrabold text-foreground">How would you like to build it?</h3>
+                <h3 className="text-xl font-extrabold text-foreground">How would you like to build your form?</h3>
                 <p className="text-xs text-muted-foreground">
-                  Pick how you want to generate your {creationType === 'form' ? 'form' : creationType === 'agent' ? 'AI agent' : 'hybrid solution'}.
+                  Pick your creation method — scan a website, pick a pre-built template, or start blank.
                 </p>
               </div>
 
@@ -663,7 +563,7 @@ export function CreateFormOrAgentModal({
                   </div>
                   <div>
                     <div className="font-bold text-sm text-foreground">Manual Scratch</div>
-                    <div className="text-[11px] text-muted-foreground">Start from blank slate</div>
+                    <div className="text-[11px] text-muted-foreground">Start from blank canvas</div>
                   </div>
                 </button>
               </div>
@@ -717,7 +617,7 @@ export function CreateFormOrAgentModal({
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                       <Wand2 className="size-3.5 text-emerald-600" />
-                      Describe What You Need
+                      Describe What Your Form Should Collect
                     </label>
                     <Textarea
                       rows={3}
@@ -733,7 +633,7 @@ export function CreateFormOrAgentModal({
               {/* Sub-view for Method = Template */}
               {method === 'template' && (
                 <div className="space-y-4 animate-in fade-in duration-200">
-                  <div className="flex flex-col sm:flex-row gap-2.5">
+                  <div className="flex flex-col sm:row gap-2.5">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
                       <Input
@@ -832,7 +732,7 @@ export function CreateFormOrAgentModal({
                     <span className="text-xs font-bold text-foreground">Clean Blank Canvas</span>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    You will begin with an empty workspace pre-populated with standard contact fields (Name, Email, Phone). In Step 3, you will configure your goal and steps, then customize every field freely.
+                    You will begin with an empty workspace pre-populated with standard contact fields (Name, Email, Phone). In Step 2, configure your title and purpose, then customize every field freely.
                   </p>
                 </div>
               )}
@@ -840,23 +740,23 @@ export function CreateFormOrAgentModal({
           )}
 
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 3: Contextual Questions & Customization                       */}
+          {/* STEP 2: Configure Details & Goals                                  */}
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {step === 3 && (
+          {step === 2 && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto space-y-1">
-                <h3 className="text-xl font-extrabold text-foreground">Configure Details &amp; Capabilities</h3>
+                <h3 className="text-xl font-extrabold text-foreground">Configure Details &amp; Goal</h3>
                 <p className="text-xs text-muted-foreground">
-                  Tailor your asset title, goals, and behavioral settings.
+                  Tailor your form title, primary objective, and layout structure.
                 </p>
               </div>
 
-              {/* Title & Description */}
+              {/* Title & Purpose */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-foreground">Asset Name / Title</label>
+                  <label className="text-xs font-bold text-foreground">Form Title</label>
                   <Input
-                    placeholder="e.g. Instant Quote & Appointment Booking"
+                    placeholder="e.g. Instant Quote & Service Request"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="h-10 text-xs rounded-xl bg-card"
@@ -876,220 +776,149 @@ export function CreateFormOrAgentModal({
                 </div>
               </div>
 
-              {/* Form Options (if form or hybrid) */}
-              {(creationType === 'form' || creationType === 'hybrid') && (
-                <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold text-foreground">Multi-Step Form Layout</div>
-                      <div className="text-[11px] text-muted-foreground">One question or category per page with visual progress bar</div>
-                    </div>
-                    <Switch checked={isMultiStep} onCheckedChange={setIsMultiStep} />
+              {/* Multi-Step Layout Toggle */}
+              <div className="rounded-2xl border border-border/80 bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-foreground">Multi-Step Form Layout</div>
+                    <div className="text-[11px] text-muted-foreground">One question or category per page with visual progress bar</div>
                   </div>
+                  <Switch checked={isMultiStep} onCheckedChange={setIsMultiStep} />
                 </div>
-              )}
-
-              {/* Agent Options (if agent or hybrid) */}
-              {(creationType === 'agent' || creationType === 'hybrid') && (
-                <div className="space-y-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-foreground">AI Voice Tone &amp; Style</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {TONES.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => setAgentTone(t.id)}
-                          className={cn(
-                            'p-2.5 rounded-xl border text-left transition-all cursor-pointer',
-                            agentTone === t.id
-                              ? 'border-blue-500 bg-blue-500/10 font-bold'
-                              : 'border-border/70 bg-card hover:border-blue-500/30'
-                          )}
-                        >
-                          <div className="text-xs text-foreground">{t.label}</div>
-                          <div className="text-[10px] text-muted-foreground line-clamp-1">{t.desc}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Capabilities Toggles */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-foreground">Autonomous Capabilities</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {CAPABILITIES.map((cap) => {
-                        const Icon = cap.icon;
-                        const isChecked = selectedCapabilities.includes(cap.id);
-                        return (
-                          <div
-                            key={cap.id}
-                            onClick={() => toggleCapability(cap.id)}
-                            className={cn(
-                              'p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all',
-                              isChecked
-                                ? 'border-emerald-500 bg-emerald-500/10'
-                                : 'border-border/70 bg-card hover:border-emerald-500/30'
-                            )}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="size-7 rounded-lg bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0">
-                                <Icon className="size-3.5" />
-                              </div>
-                              <div>
-                                <div className="text-xs font-bold text-foreground">{cap.title}</div>
-                                <div className="text-[10px] text-muted-foreground">{cap.desc}</div>
-                              </div>
-                            </div>
-                            <div className={cn(
-                              'size-4 rounded-full flex items-center justify-center border transition-all',
-                              isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-muted-foreground/40'
-                            )}>
-                              {isChecked && <Check className="size-2.5 stroke-[3]" />}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 4: Generation Status / Progress Bar                           */}
-          {/* ═════════════════════════════════════════════════════════════════════ */}
-          {step === 4 && (
-            <div className="py-12 px-6 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in duration-200">
-              <div className="relative size-20 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-blue-600 text-white flex items-center justify-center shadow-xl shadow-emerald-500/25 animate-pulse">
-                <Sparkles className="size-10" />
-              </div>
-
-              <div className="space-y-2 max-w-md">
-                <h3 className="text-xl font-black text-foreground">Creating Your Digital Asset</h3>
-                <p className="text-xs text-muted-foreground">{generationStatus}</p>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full max-w-sm bg-muted rounded-full h-3 overflow-hidden border">
-                <div
-                  className="bg-gradient-to-r from-emerald-600 to-teal-500 h-full transition-all duration-300"
-                  style={{ width: `${generationProgress}%` }}
-                />
-              </div>
-
-              <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> Structured Schema</span>
-                <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> Real-time Validation</span>
-                <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> CRM Sync</span>
               </div>
             </div>
           )}
 
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 5: Post-Creation Choice Screen (Advanced Edit vs. View List)   */}
+          {/* STEP 3: Generation Status or Live Success Screen                   */}
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {step === 5 && (
-            <div className="py-6 space-y-6 animate-in fade-in zoom-in-95 duration-200">
-              <div className="text-center space-y-2 max-w-lg mx-auto">
-                <div className="size-14 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-500/10">
-                  <CheckCircle2 className="size-8" />
+          {step === 3 && (
+            isGenerating ? (
+              <div className="py-12 px-6 flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in duration-200">
+                <div className="relative size-20 rounded-3xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-blue-600 text-white flex items-center justify-center shadow-xl shadow-emerald-500/25 animate-pulse">
+                  <Sparkles className="size-10" />
                 </div>
-                <h3 className="text-2xl font-black text-foreground tracking-tight">
-                  Your {creationType === 'form' ? 'Smart Form' : creationType === 'agent' ? 'AI Agent' : 'Hybrid Solution'} is Live!
-                </h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  &quot;{name || 'New Customer Intake'}&quot; has been generated and connected to your CRM.
-                </p>
-              </div>
 
-              {/* Public Link & Embed preview box */}
-              <div className="rounded-2xl border border-border/80 bg-muted/30 p-4 space-y-3 max-w-xl mx-auto">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-foreground flex items-center gap-1.5">
-                    <Globe className="size-3.5 text-emerald-600" /> Public Hosted Link:
-                  </span>
-                  <div className="flex items-center gap-2">
+                <div className="space-y-2 max-w-md">
+                  <h3 className="text-xl font-black text-foreground">Creating Your Smart Form</h3>
+                  <p className="text-xs text-muted-foreground">{generationStatus}</p>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full max-w-sm bg-muted rounded-full h-3 overflow-hidden border">
+                  <div
+                    className="bg-gradient-to-r from-emerald-600 to-teal-500 h-full transition-all duration-300"
+                    style={{ width: `${generationProgress}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> Structured Schema</span>
+                  <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> Real-time Validation</span>
+                  <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> CRM Sync</span>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+                <div className="text-center space-y-2 max-w-lg mx-auto">
+                  <div className="size-14 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto mb-3 shadow-md shadow-emerald-500/10">
+                    <CheckCircle2 className="size-8" />
+                  </div>
+                  <h3 className="text-2xl font-black text-foreground tracking-tight">
+                    Your Smart Form is Live!
+                  </h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    &quot;{name || 'New Customer Intake'}&quot; has been generated and connected to your CRM.
+                  </p>
+                </div>
+
+                {/* Public Link & Embed preview box */}
+                <div className="rounded-2xl border border-border/80 bg-muted/30 p-4 space-y-3 max-w-xl mx-auto">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-foreground flex items-center gap-1.5">
+                      <Globe className="size-3.5 text-emerald-600" /> Public Hosted Link:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(liveFormUrl, 'Public link')}
+                        className="text-[11px] font-semibold text-emerald-600 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Copy className="size-3" /> Copy
+                      </button>
+                      <a
+                        href={liveFormUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-semibold text-foreground hover:underline flex items-center gap-1"
+                      >
+                        <ExternalLink className="size-3" /> Test
+                      </a>
+                    </div>
+                  </div>
+                  <div className="bg-card p-2.5 rounded-xl border font-mono text-[11px] text-muted-foreground truncate select-all">
+                    {liveFormUrl}
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="font-bold text-foreground flex items-center gap-1.5">
+                      <FileText className="size-3.5 text-blue-600" /> Website Embed Snippet:
+                    </span>
                     <button
                       type="button"
-                      onClick={() => handleCopy(liveFormUrl, 'Public link')}
-                      className="text-[11px] font-semibold text-emerald-600 hover:underline flex items-center gap-1 cursor-pointer"
+                      onClick={() => handleCopy(embedCode, 'Embed code')}
+                      className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      <Copy className="size-3" /> Copy
+                      <Copy className="size-3" /> Copy Snippet
                     </button>
-                    <a
-                      href={liveFormUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] font-semibold text-foreground hover:underline flex items-center gap-1"
-                    >
-                      <ExternalLink className="size-3" /> Test
-                    </a>
+                  </div>
+                  <div className="bg-card p-2.5 rounded-xl border font-mono text-[11px] text-muted-foreground truncate select-all">
+                    {embedCode}
                   </div>
                 </div>
-                <div className="bg-card p-2.5 rounded-xl border font-mono text-[11px] text-muted-foreground truncate select-all">
-                  {liveFormUrl}
-                </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="font-bold text-foreground flex items-center gap-1.5">
-                    <FileText className="size-3.5 text-blue-600" /> Website Embed Snippet:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(embedCode, 'Embed code')}
-                    className="text-[11px] font-semibold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
-                  >
-                    <Copy className="size-3" /> Copy Snippet
-                  </button>
-                </div>
-                <div className="bg-card p-2.5 rounded-xl border font-mono text-[11px] text-muted-foreground truncate select-all">
-                  {embedCode}
+                {/* ─── Two User Decision Choices ─── */}
+                <div className="pt-4 border-t border-border/60 max-w-xl mx-auto space-y-3">
+                  <div className="text-center text-xs font-semibold text-foreground/80 mb-2">
+                    What would you like to do next?
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Option A: Go to Advanced Edit Mode */}
+                    <Button
+                      size="lg"
+                      onClick={handleGoToEditor}
+                      className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-12 rounded-2xl shadow-lg shadow-emerald-600/20 gap-2 cursor-pointer"
+                    >
+                      <Sliders className="size-4" />
+                      <span>Go to Advanced Editor</span>
+                    </Button>
+
+                    {/* Option B: Done, View Form Listing */}
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      onClick={handleViewListing}
+                      className="w-full border-border hover:bg-muted font-bold text-xs h-12 rounded-2xl gap-2 cursor-pointer"
+                    >
+                      <Eye className="size-4" />
+                      <span>Done, View Form Listing</span>
+                    </Button>
+                  </div>
                 </div>
               </div>
-
-              {/* ─── Two User Decision Choices (Requested by User) ─── */}
-              <div className="pt-4 border-t border-border/60 max-w-xl mx-auto space-y-3">
-                <div className="text-center text-xs font-semibold text-foreground/80 mb-2">
-                  What would you like to do next?
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {/* Option A: Go to Advanced Edit Mode */}
-                  <Button
-                    size="lg"
-                    onClick={handleGoToEditor}
-                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-12 rounded-2xl shadow-lg shadow-emerald-600/20 gap-2 cursor-pointer"
-                  >
-                    <Sliders className="size-4" />
-                    <span>Go to Advanced Editor</span>
-                  </Button>
-
-                  {/* Option B: Done, View Form Listing */}
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    onClick={handleViewListing}
-                    className="w-full border-border hover:bg-muted font-bold text-xs h-12 rounded-2xl gap-2 cursor-pointer"
-                  >
-                    <Eye className="size-4" />
-                    <span>Done, View Form Listing</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
+            )
           )}
         </div>
 
-        {/* ─── Footer Navigation Buttons (Steps 1 to 3) ─── */}
-        {step < 4 && (
+        {/* ─── Footer Navigation Buttons (Steps 1 & 2) ─── */}
+        {step < 3 && !isGenerating && (
           <div className="border-t border-border/80 bg-muted/20 px-6 py-4 flex items-center justify-between shrink-0">
-            {step > 1 ? (
+            {step === 2 ? (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setStep((s) => (s - 1) as any)}
+                onClick={() => setStep(1)}
                 className="gap-1.5 text-xs font-bold cursor-pointer"
               >
                 <ArrowLeft className="size-3.5" /> Back
@@ -1108,10 +937,10 @@ export function CreateFormOrAgentModal({
                 Cancel
               </Button>
 
-              {step < 3 ? (
+              {step === 1 ? (
                 <Button
                   size="sm"
-                  onClick={() => setStep((s) => (s + 1) as any)}
+                  onClick={() => setStep(2)}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs font-bold px-5 h-9 rounded-xl shadow-xs cursor-pointer"
                 >
                   Continue <ArrowRight className="size-3.5" />

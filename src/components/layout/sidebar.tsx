@@ -177,7 +177,7 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'AI & Forms',
     items: [
-      { view: 'formBuilder', label: 'AI Forms & Studio', icon: FileInput },
+      { view: 'formBuilder', label: 'Forms', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
       { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
       { view: 'commerce', label: 'Orders & Store', icon: ShoppingBag, badge: 'STORE' },
@@ -234,7 +234,7 @@ const standaloneNavSections: NavSection[] = [
       { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
       { view: 'aiReceptionist', label: 'AI Voice Receptionist', icon: PhoneCall, badge: 'VOICE' },
-      { view: 'formBuilder', label: 'Forms & Studio', icon: FileInput },
+      { view: 'formBuilder', label: 'Forms', icon: FileInput },
     ],
   },
   {

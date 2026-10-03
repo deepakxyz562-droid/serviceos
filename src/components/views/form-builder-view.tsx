@@ -974,14 +974,14 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           <div className="space-y-1.5 max-w-2xl">
             <div className="flex items-center gap-2">
               <Badge className="bg-emerald-600 text-white text-[10px] font-bold">ADD-ON MODULE</Badge>
-              <h3 className="text-base font-bold text-foreground">AI Forms &amp; Chatbot Studio Suite</h3>
+              <h3 className="text-base font-bold text-foreground">AI Forms Suite</h3>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Build interactive smart forms, 200+ widgets, payment checkouts (Stripe/PayPal), and 11-channel AI chatbots with instant CRM pipeline synchronization.
+              Build interactive smart forms, 200+ widgets, payment checkouts (Stripe/PayPal), and dynamic calculations with instant CRM pipeline synchronization.
             </p>
             <div className="flex flex-wrap items-center gap-3 pt-1 text-[11px] font-medium text-foreground/80">
               <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> Unlimited AI Forms</span>
-              <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> 11-Channel Chatbots</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> Multi-Page Funnels</span>
               <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> 33 Payment Gateways</span>
               <span className="flex items-center gap-1"><CheckCircle2 className="size-3.5 text-emerald-600" /> 200+ Widgets</span>
             </div>

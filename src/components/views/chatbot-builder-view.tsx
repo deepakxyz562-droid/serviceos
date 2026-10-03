@@ -79,33 +79,35 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
       const res = await fetch('/api/forms/agents');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data.agents)) {
+        if (Array.isArray(data.agents) && data.agents.length > 0) {
           setAgents(data.agents);
+          // Directly open the business's single AI agent builder
+          setActiveStudioAgent(data.agents[0]);
+        } else {
+          // Auto-initialize the single agent for this business
+          const bizName = (auth?.tenant as any)?.name || 'My Business';
+          const defaultAgent: FormAgentData = {
+            ...DEFAULT_FORM_AGENT,
+            name: `${bizName} AI Assistant`,
+            roleTitle: 'Customer Concierge & Booking Specialist',
+            welcomeGreeting: `Hi! Welcome to ${bizName}. How can I assist you today?`,
+          };
+          setAgents([defaultAgent]);
+          setActiveStudioAgent(defaultAgent);
         }
+      } else {
+        setActiveStudioAgent(DEFAULT_FORM_AGENT);
       }
     } catch {
-      // Non-fatal, keep current state
+      setActiveStudioAgent(DEFAULT_FORM_AGENT);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [auth]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSiteOrigin(window.location.origin);
-      const params = new URLSearchParams(window.location.search);
-      const promptParam = params.get('prompt');
-      const urlParam = params.get('url');
-      if (promptParam) {
-        setPromptInput(promptParam);
-        setCreationTab('ai');
-        setPresetDialogOpen(true);
-      } else if (urlParam) {
-        setPromptInput(`Generate autonomous booking and quote assistant for website: ${urlParam}`);
-        setCreationTab('ai');
-        setPresetDialogOpen(true);
-      }
-
     }
     fetchAgents();
   }, [fetchAgents]);
@@ -285,7 +287,18 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
     }
   };
 
-  // If studio is open for an agent, render the full-screen FormAgentStudio
+  if (loading && !activeStudioAgent) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="size-8 animate-spin text-blue-600" />
+          <p className="text-xs font-semibold text-muted-foreground">Opening AI Agent Studio...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render the full-screen FormAgentStudio for the business's single AI agent
   if (activeStudioAgent) {
     return (
       <FormAgentStudio
@@ -305,8 +318,7 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
           });
         }}
         onBack={() => {
-          setActiveStudioAgent(null);
-          fetchAgents();
+          handleBackToDashboard();
         }}
         siteOrigin={siteOrigin}
       />
