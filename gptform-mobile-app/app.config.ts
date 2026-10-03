@@ -1,11 +1,13 @@
 import type { ExpoConfig, ConfigContext } from 'expo/config';
 
 const APP_NAME = 'Chatbot';
+const FULL_STORE_TITLE = 'Chatbot - AI Agent & Live Chat';
 const SCHEME = 'chatbot';
 
 export default ({ config }: ConfigContext): any => ({
   ...config,
   name: APP_NAME,
+  description: 'Build an AI chatbot for your business. Train it on your website & PDFs, connect WhatsApp, Instagram and live chat, and capture leads.',
   slug: 'chatbot',
   version: '1.0.0',
   orientation: 'portrait',

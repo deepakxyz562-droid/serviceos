@@ -141,6 +141,57 @@ export default function MoreScreen() {
           <MaterialIcons name="chevron-right" size={22} color="#8b5cf6" />
         </TouchableOpacity>
 
+        {/* Leads & Bookings Card */}
+        <View style={styles.groupedCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/leads' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="assignment-ind" size={22} color="#10b981" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Leads & Pipeline</Text>
+                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>AI Qualified</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Customer contacts, estimates & status</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/bookings' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="event-available" size={22} color="#3b82f6" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Bookings & Calendar</Text>
+                  <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#2563eb', fontSize: 10, fontWeight: '800' }}>2-Way Sync</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Appointments, Google Meet & intake</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
         {/* Grouped Menu Card 1: Team, Notifications, Appearance, Contact Us */}
         <View style={styles.groupedCard}>
           <TouchableOpacity

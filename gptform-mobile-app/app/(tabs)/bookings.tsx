@@ -11,29 +11,10 @@ import {
   Modal,
   Share,
   Alert,
+  StyleSheet,
 } from 'react-native';
-import {
-  Calendar as CalendarIcon,
-  Clock,
-  User,
-  Phone,
-  MessageCircle,
-  CheckCircle2,
-  AlertCircle,
-  Plus,
-  Sparkles,
-  Share2,
-  Copy,
-  Video,
-  MapPin,
-  X,
-  CalendarCheck,
-  ShieldAlert,
-  ArrowRight,
-  ExternalLink,
-  ChevronRight,
-  RotateCcw,
-} from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 
 interface BookingItem {
@@ -89,772 +70,729 @@ const EVENT_TYPES: EventType[] = [
     price: 50,
     description: 'On-site diagnostics and estimator inspection',
     slug: 'inspection-45m',
-    iconColor: '#A855F7',
-  },
-  {
-    id: 'evt-4',
-    title: '60-Min Full Assessment',
-    duration: '60 min',
-    price: 100,
-    description: 'Comprehensive audit & deployment review',
-    slug: 'assessment-60m',
-    iconColor: '#EC4899',
+    iconColor: '#8b5cf6',
   },
 ];
 
 const INITIAL_BOOKINGS: BookingItem[] = [
   {
     id: 'b-1',
-    customerName: 'Priya Sharma',
-    phone: '+15125550143',
-    email: 'priya.sharma@example.com',
-    service: 'Dental Routine Consultation',
-    time: '10:00 AM - 10:30 AM',
-    dateKey: 'today',
-    duration: '30 min',
-    depositPaid: true,
-    amount: 35,
-    meetingType: 'video',
-    meetingLocation: 'meet.google.com/gpt-kons-fms',
-    intakeAnswers: [
-      { question: 'Primary concern', answer: 'Routine 6-month checkup & sensitivity' },
-      { question: 'Previous visit', answer: 'September 2025' },
-    ],
-    status: 'confirmed',
-  },
-  {
-    id: 'b-2',
-    customerName: 'John Smith',
-    phone: '+15125550192',
-    email: 'john.smith@acpros.io',
-    service: 'HVAC Diagnostics & Inspection',
-    time: '11:30 AM - 12:15 PM',
+    customerName: 'Sarah Jenkins',
+    phone: '+1 (415) 992-0192',
+    email: 'sarah.j@example.com',
+    service: 'Emergency Pipe Leak Repair',
+    time: 'Today · 10:00 AM',
     dateKey: 'today',
     duration: '45 min',
     depositPaid: true,
     amount: 50,
     meetingType: 'in_person',
-    meetingLocation: '402 Oakridge Ave, Austin, TX',
+    meetingLocation: '742 Evergreen Terrace, San Francisco, CA',
     intakeAnswers: [
-      { question: 'Equipment age', answer: 'Approx 5 years, Lennox XP21' },
-      { question: 'Symptom', answer: 'Blowing warm air in afternoon peak hours' },
+      { question: 'What is the main issue?', answer: 'Pipe burst under kitchen sink, water leaking continuously.' },
+      { question: 'Can you locate main water shutoff?', answer: 'Yes, shut off main valve already.' },
+    ],
+    status: 'confirmed',
+  },
+  {
+    id: 'b-2',
+    customerName: 'Marcus Vance',
+    phone: '+1 (408) 552-3310',
+    email: 'm.vance@techcorp.com',
+    service: '30-Min Commercial HVAC Scoping',
+    time: 'Today · 2:30 PM',
+    dateKey: 'today',
+    duration: '30 min',
+    depositPaid: false,
+    amount: 0,
+    meetingType: 'video',
+    meetingLocation: 'https://meet.google.com/abc-wxyz-123',
+    intakeAnswers: [
+      { question: 'Building size?', answer: 'Approx 3,500 sq ft retail space with 2 rooftop units.' },
+      { question: 'Primary goal?', answer: 'Quarterly maintenance agreement and seasonal tune-up.' },
     ],
     status: 'confirmed',
   },
   {
     id: 'b-3',
-    customerName: 'Rahul Verma',
-    phone: '+15125550177',
-    email: 'rahul@cloudtech.dev',
-    service: 'GPTForm Webhook Integration',
-    time: '04:15 PM - 05:15 PM',
-    dateKey: 'today',
-    duration: '60 min',
-    depositPaid: false,
-    amount: 100,
-    meetingType: 'video',
-    meetingLocation: 'zoom.us/j/9812480192',
-    intakeAnswers: [
-      { question: 'Tech stack', answer: 'Next.js 15, Supabase, Stripe' },
-      { question: 'Target go-live', answer: 'Within 2 weeks' },
-    ],
-    status: 'confirmed',
-  },
-  {
-    id: 'b-4',
-    customerName: 'Emily Watson',
-    phone: '+15125550188',
-    email: 'emily.w@designcraft.co',
-    service: '30-Min Consultation',
-    time: '02:00 PM - 02:30 PM',
+    customerName: 'Elena Rostova',
+    phone: '+1 (650) 201-9988',
+    email: 'elena.rostova@gmail.com',
+    service: 'Dental Implant Consultation',
+    time: 'Tomorrow · 11:15 AM',
     dateKey: 'tomorrow',
     duration: '30 min',
     depositPaid: true,
     amount: 35,
-    meetingType: 'video',
-    meetingLocation: 'meet.google.com/evt-watson-des',
-    intakeAnswers: [
-      { question: 'Goals', answer: 'Automating multi-step lead qualification forms' },
-    ],
-    status: 'confirmed',
-  },
-  {
-    id: 'b-5',
-    customerName: 'Carlos Morales',
-    phone: '+15125550221',
-    email: 'carlos@realtymar.com',
-    service: 'Commercial Property Inspection',
-    time: '11:00 AM - 12:00 PM',
-    dateKey: 'this_week',
-    duration: '60 min',
-    depositPaid: true,
-    amount: 100,
     meetingType: 'in_person',
-    meetingLocation: '880 Congress Ave, Suite 400',
+    meetingLocation: 'Suite 400, Medical Plaza, Palo Alto, CA',
     intakeAnswers: [
-      { question: 'Property size', answer: '4,500 sq ft office space' },
+      { question: 'First-time patient?', answer: 'Yes, referred by Dr. Adams.' },
+      { question: 'Any dental insurance?', answer: 'Delta Dental Premier.' },
     ],
     status: 'confirmed',
   },
 ];
 
 export default function BookingsScreen() {
-  const [activeDateTab, setActiveDateTab] = useState<'today' | 'tomorrow' | 'this_week'>('today');
-  const [isAcceptingBookings, setIsAcceptingBookings] = useState(true);
-  const [blockedUntilTime, setBlockedUntilTime] = useState<string | null>(null);
-  const [bookings, setBookings] = useState<BookingItem[]>(INITIAL_BOOKINGS);
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'event_types' | 'settings'>('upcoming');
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
-  const [shareSheetVisible, setShareSheetVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [filterDate, setFilterDate] = useState<'all' | 'today' | 'tomorrow'>('all');
+  const [autoConfirm, setAutoConfirm] = useState(true);
+  const [googleCalendarSync, setGoogleCalendarSync] = useState(true);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 2800);
-  };
+  const filteredBookings = INITIAL_BOOKINGS.filter((b) => {
+    if (filterDate === 'all') return true;
+    return b.dateKey === filterDate;
+  });
 
-  const toggleAvailability = async (val: boolean) => {
-    await hapticFeedback.medium();
-    setIsAcceptingBookings(val);
-    if (!val) {
-      showToast('Calendar intake paused for today');
-    } else {
-      showToast('🟢 Now accepting new bookings');
-    }
-  };
-
-  // Emergency block next 2 hours
-  const handleEmergencyBlock = async () => {
-    await hapticFeedback.heavy();
-    const now = new Date();
-    now.setHours(now.getHours() + 2);
-    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-    setBlockedUntilTime(timeStr);
-    showToast(`🚫 Next 2 hours blocked (until ${timeStr})`);
-  };
-
-  const clearEmergencyBlock = async () => {
+  const handleShareLink = async (slug: string) => {
     await hapticFeedback.light();
-    setBlockedUntilTime(null);
-    showToast('Emergency block cleared. Slots reopened.');
+    try {
+      await Share.share({
+        title: 'Book an appointment',
+        message: `Book a session directly on our calendar: https://fieseros.com/book/${slug}`,
+      });
+    } catch {}
   };
 
-  const handleCall = (phone: string) => {
-    hapticFeedback.medium();
+  const handleCall = async (phone: string) => {
+    await hapticFeedback.medium();
     Linking.openURL(`tel:${phone}`);
   };
 
-  const handleWhatsApp = (phone: string, customerName: string) => {
-    hapticFeedback.medium();
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
-    const msg = encodeURIComponent(
-      `Hi ${customerName}, following up regarding your upcoming booking with us.`
-    );
-    Linking.openURL(`whatsapp://send?phone=${cleanPhone}&text=${msg}`).catch(() => {
-      Linking.openURL(`https://wa.me/${cleanPhone}?text=${msg}`);
-    });
-  };
-
-  const handleShareLink = async (eventType: EventType, method: 'whatsapp' | 'sms' | 'copy' | 'native') => {
-    await hapticFeedback.light();
-    const bookingUrl = `https://fieseros.com/book?type=${eventType.slug}`;
-    const shareText = `Hi! You can book a ${eventType.title} directly on my calendar here: ${bookingUrl}`;
-
-    if (method === 'whatsapp') {
-      Linking.openURL(`whatsapp://send?text=${encodeURIComponent(shareText)}`).catch(() => {
-        Share.share({ message: shareText, url: bookingUrl });
-      });
-    } else if (method === 'sms') {
-      Linking.openURL(`sms:?body=${encodeURIComponent(shareText)}`);
-    } else if (method === 'copy' || method === 'native') {
-      try {
-        await Share.share({
-          title: `Book ${eventType.title}`,
-          message: shareText,
-          url: bookingUrl,
-        });
-        showToast(`Ready to share ${eventType.title}`);
-      } catch (err) {
-        // fallback
-      }
-    }
-  };
-
-  const handleCancelBooking = (bookingId: string) => {
-    Alert.alert(
-      'Cancel Booking?',
-      'The client will be sent an automated cancellation notice via WhatsApp and Email.',
-      [
-        { text: 'Keep Booking', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            await hapticFeedback.heavy();
-            setBookings((prev) =>
-              prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled' } : b))
-            );
-            if (selectedBooking?.id === bookingId) {
-              setSelectedBooking((prev) => (prev ? { ...prev, status: 'cancelled' } : null));
-            }
-            showToast('Booking cancelled & client notified');
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRescheduleBooking = async (bookingId: string) => {
-    await hapticFeedback.medium();
-    setBookings((prev) =>
-      prev.map((b) =>
-        b.id === bookingId
-          ? {
-              ...b,
-              status: 'rescheduled',
-              time: 'Rescheduling requested (Client sent link)',
-            }
-          : b
-      )
-    );
-    if (selectedBooking?.id === bookingId) {
-      setSelectedBooking((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: 'rescheduled',
-              time: 'Rescheduling requested (Client sent link)',
-            }
-          : null
-      );
-    }
-    showToast('Reschedule invite link sent to client via WhatsApp');
-  };
-
-  const currentBookings = bookings.filter((b) => b.dateKey === activeDateTab);
-  const todayCount = bookings.filter((b) => b.dateKey === 'today' && b.status !== 'cancelled').length;
-  const tomorrowCount = bookings.filter((b) => b.dateKey === 'tomorrow' && b.status !== 'cancelled').length;
-  const weekCount = bookings.filter((b) => b.dateKey === 'this_week' && b.status !== 'cancelled').length;
-
   return (
-    <SafeAreaView className="flex-1 bg-slate-950">
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
 
-      {/* Floating Action Toast Banner */}
-      {toastMessage && (
-        <View className="absolute top-14 left-4 right-4 z-50 p-3.5 bg-emerald-500/90 rounded-2xl shadow-xl flex-row items-center justify-between border border-emerald-400">
-          <View className="flex-row items-center gap-2">
-            <CheckCircle2 size={16} color="#fff" />
-            <Text className="text-xs font-bold text-white tracking-wide">{toastMessage}</Text>
-          </View>
-        </View>
-      )}
-
-      <View className="flex-1 px-4 sm:px-6 pt-3">
-        {/* Header with Quick Share Trigger */}
-        <View className="flex-row items-center justify-between py-2 mb-2">
-          <View>
-            <Text className="text-2xl font-black text-white tracking-tight">Calendar &amp; Bookings</Text>
-            <Text className="text-xs text-slate-400 mt-0.5">
-              Calendly-grade scheduling &amp; availability command
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              hapticFeedback.light();
-              setShareSheetVisible(true);
-            }}
-            className="flex-row items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/20 border border-purple-500/40 active:bg-purple-500/30"
-          >
-            <Share2 size={13} color="#C084FC" />
-            <Text className="text-xs font-bold text-purple-300">Share Links</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Fast Availability Control Box */}
-        <View className="p-4 rounded-3xl bg-slate-900 border border-slate-800 mb-3 shadow-sm">
-          <View className="flex-row items-center justify-between">
-            <View>
-              <View className="flex-row items-center gap-2">
-                <View
-                  className={`size-2.5 rounded-full ${
-                    isAcceptingBookings ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'
-                  }`}
-                />
-                <Text className="text-xs font-bold text-white">
-                  {isAcceptingBookings ? 'Accepting Bookings Today' : 'Schedule Paused Today'}
-                </Text>
-              </View>
-              <Text className="text-[10px] text-slate-400 mt-0.5 ml-4">
-                {isAcceptingBookings
-                  ? 'AI Agent & website forms can book open slots'
-                  : 'All calendar slots blocked from intake'}
-              </Text>
-            </View>
-
-            <Switch
-              value={isAcceptingBookings}
-              onValueChange={toggleAvailability}
-              trackColor={{ false: '#334155', true: '#10B981' }}
-              thumbColor="#fff"
-            />
-          </View>
-
-          {/* Emergency Block Button */}
-          <View className="mt-3 pt-3 border-t border-slate-800/80 flex-row items-center justify-between">
-            {blockedUntilTime ? (
-              <View className="flex-row items-center justify-between flex-1">
-                <View className="flex-row items-center gap-1.5">
-                  <ShieldAlert size={14} color="#F59E0B" />
-                  <Text className="text-[11px] font-bold text-amber-400">
-                    Blocked until {blockedUntilTime}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={clearEmergencyBlock}
-                  className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700"
-                >
-                  <Text className="text-[10px] font-bold text-slate-300">Unblock</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={handleEmergencyBlock}
-                className="flex-1 py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex-row items-center justify-center gap-2 active:bg-amber-500/20"
-              >
-                <Clock size={13} color="#F59E0B" />
-                <Text className="text-xs font-bold text-amber-400">
-                  🚫 Block Next 2 Hours (Emergency / On-Site)
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {/* Day Selector Segmented Tabs */}
-        <View className="flex-row p-1 rounded-2xl bg-slate-900 border border-slate-800 mb-3">
-          <TouchableOpacity
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveDateTab('today');
-            }}
-            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${
-              activeDateTab === 'today' ? 'bg-slate-800 shadow' : ''
-            }`}
-          >
-            <Text
-              className={`text-xs font-bold ${
-                activeDateTab === 'today' ? 'text-white' : 'text-slate-400'
-              }`}
-            >
-              Today
-            </Text>
-            <View className="px-1.5 py-0.5 rounded-full bg-slate-700">
-              <Text className="text-[9px] font-black text-slate-300">{todayCount}</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveDateTab('tomorrow');
-            }}
-            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${
-              activeDateTab === 'tomorrow' ? 'bg-slate-800 shadow' : ''
-            }`}
-          >
-            <Text
-              className={`text-xs font-bold ${
-                activeDateTab === 'tomorrow' ? 'text-white' : 'text-slate-400'
-              }`}
-            >
-              Tomorrow
-            </Text>
-            <View className="px-1.5 py-0.5 rounded-full bg-slate-700">
-              <Text className="text-[9px] font-black text-slate-300">{tomorrowCount}</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveDateTab('this_week');
-            }}
-            className={`flex-1 py-2 rounded-xl flex-row items-center justify-center gap-1.5 ${
-              activeDateTab === 'this_week' ? 'bg-slate-800 shadow' : ''
-            }`}
-          >
-            <Text
-              className={`text-xs font-bold ${
-                activeDateTab === 'this_week' ? 'text-white' : 'text-slate-400'
-              }`}
-            >
-              This Week
-            </Text>
-            <View className="px-1.5 py-0.5 rounded-full bg-slate-700">
-              <Text className="text-[9px] font-black text-slate-300">{weekCount}</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Timeline Scroll Area */}
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 110 }}
-          showsVerticalScrollIndicator={false}
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            hapticFeedback.light();
+            router.back();
+          }}
+          activeOpacity={0.7}
         >
-          {/* Visual Open Slot (AI Permitted) */}
-          {activeDateTab === 'today' && !blockedUntilTime && isAcceptingBookings && (
-            <View className="mb-3 p-3 rounded-2xl bg-emerald-500/5 border border-dashed border-emerald-500/30 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <View className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                <Text className="text-xs font-semibold text-emerald-400">
-                  09:00 AM - 09:30 AM • Open Slot
-                </Text>
-              </View>
-              <Text className="text-[10px] text-slate-400">AI Intake Ready</Text>
-            </View>
-          )}
-
-          {/* Bookings List for Active Tab */}
-          {currentBookings.length === 0 ? (
-            <View className="p-8 rounded-3xl bg-slate-900 border border-slate-800 items-center justify-center my-6">
-              <CalendarCheck size={36} color="#64748B" />
-              <Text className="text-sm font-bold text-white mt-3">No Appointments Scheduled</Text>
-              <Text className="text-xs text-slate-400 text-center mt-1">
-                Share your booking link to let clients schedule instantly into open slots.
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShareSheetVisible(true)}
-                className="mt-4 px-4 py-2 rounded-xl bg-purple-500/20 border border-purple-500/40"
-              >
-                <Text className="text-xs font-bold text-purple-300">Share Booking Links</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View className="space-y-3">
-              {currentBookings.map((booking) => {
-                const isCancelled = booking.status === 'cancelled';
-                const isRescheduled = booking.status === 'rescheduled';
-
-                return (
-                  <TouchableOpacity
-                    key={booking.id}
-                    activeOpacity={0.85}
-                    onPress={() => {
-                      hapticFeedback.light();
-                      setSelectedBooking(booking);
-                    }}
-                    className={`p-4 rounded-3xl bg-slate-900/90 border ${
-                      isCancelled
-                        ? 'border-red-500/20 opacity-60'
-                        : isRescheduled
-                        ? 'border-amber-500/40 bg-amber-500/5'
-                        : 'border-slate-800'
-                    } shadow-md space-y-3`}
-                  >
-                    <View className="flex-row items-start justify-between">
-                      <View className="flex-row items-center gap-2.5 flex-1 pr-2">
-                        <View className="size-10 rounded-2xl bg-purple-500/10 border border-purple-500/30 items-center justify-center">
-                          {booking.meetingType === 'video' ? (
-                            <Video size={18} color="#C084FC" />
-                          ) : (
-                            <MapPin size={18} color="#C084FC" />
-                          )}
-                        </View>
-                        <View className="flex-1">
-                          <Text
-                            className={`text-sm font-bold ${
-                              isCancelled ? 'line-through text-slate-400' : 'text-white'
-                            }`}
-                          >
-                            {booking.customerName}
-                          </Text>
-                          <Text className="text-xs text-purple-400 font-semibold mt-0.5" numberOfLines={1}>
-                            {booking.service}
-                          </Text>
-                        </View>
-                      </View>
-
-                      <View className="items-end">
-                        <Text className="text-xs font-black text-white">{booking.time.split(' - ')[0]}</Text>
-                        <Text className="text-[10px] text-slate-400 font-medium">{booking.duration}</Text>
-                      </View>
-                    </View>
-
-                    {/* Meeting Location / Info */}
-                    <View className="px-3 py-2 rounded-xl bg-slate-950/60 border border-slate-800/80 flex-row items-center justify-between">
-                      <View className="flex-row items-center gap-1.5 flex-1 pr-2">
-                        {booking.meetingType === 'video' ? (
-                          <Video size={12} color="#94A3B8" />
-                        ) : (
-                          <MapPin size={12} color="#94A3B8" />
-                        )}
-                        <Text className="text-[11px] text-slate-300 font-medium" numberOfLines={1}>
-                          {booking.meetingLocation}
-                        </Text>
-                      </View>
-                      <ChevronRight size={13} color="#64748B" />
-                    </View>
-
-                    {/* Action Bar & Deposit Status */}
-                    <View className="flex-row items-center justify-between pt-2 border-t border-slate-800/80">
-                      <View className="flex-row items-center gap-1.5">
-                        {booking.depositPaid ? (
-                          <View className="flex-row items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                            <CheckCircle2 size={11} color="#10B981" />
-                            <Text className="text-[10px] font-bold text-emerald-400">
-                              ${booking.amount} Paid
-                            </Text>
-                          </View>
-                        ) : (
-                          <View className="flex-row items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
-                            <AlertCircle size={11} color="#F59E0B" />
-                            <Text className="text-[10px] font-bold text-amber-400">Pay on Arrival</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View className="flex-row items-center gap-2">
-                        <TouchableOpacity
-                          onPress={() => handleWhatsApp(booking.phone, booking.customerName)}
-                          className="h-8 px-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex-row items-center gap-1 active:bg-emerald-500/20"
-                        >
-                          <MessageCircle size={12} color="#10B981" />
-                          <Text className="text-[10px] font-bold text-emerald-400">WhatsApp</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          onPress={() => handleCall(booking.phone)}
-                          className="h-8 px-2.5 rounded-xl bg-slate-800 border border-slate-700 flex-row items-center gap-1 active:bg-slate-700"
-                        >
-                          <Phone size={12} color="#10B981" />
-                          <Text className="text-[10px] font-bold text-slate-200">Call</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Another Visual Open Slot for Afternoon */}
-          {activeDateTab === 'today' && !blockedUntilTime && isAcceptingBookings && (
-            <View className="mt-3 p-3 rounded-2xl bg-emerald-500/5 border border-dashed border-emerald-500/30 flex-row items-center justify-between">
-              <View className="flex-row items-center gap-2">
-                <View className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                <Text className="text-xs font-semibold text-emerald-400">
-                  02:00 PM - 03:00 PM • Open Slot
-                </Text>
-              </View>
-              <Text className="text-[10px] text-slate-400">AI Intake Ready</Text>
-            </View>
-          )}
-        </ScrollView>
+          <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Bookings &amp; Calendar</Text>
+        <View style={styles.headerRight} />
       </View>
 
-      {/* MODAL 1: Share Booking Links Sheet */}
-      <Modal
-        visible={shareSheetVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShareSheetVisible(false)}
-      >
-        <View className="flex-1 justify-end bg-black/75">
-          <View className="bg-slate-900 border-t border-slate-800 rounded-t-3xl p-5 max-h-[85%] space-y-4">
-            <View className="flex-row items-center justify-between pb-2 border-b border-slate-800">
-              <View>
-                <Text className="text-lg font-black text-white">Share Booking Links</Text>
-                <Text className="text-xs text-slate-400">
-                  Send directly to clients via WhatsApp, SMS, or copy link
-                </Text>
-              </View>
+      <View style={styles.container}>
+        {/* Navigation Tabs */}
+        <View style={styles.tabsRow}>
+          {[
+            { id: 'upcoming', label: 'Appointments', icon: 'event' },
+            { id: 'event_types', label: 'Event Types', icon: 'schedule' },
+            { id: 'settings', label: 'Calendar Sync', icon: 'sync' },
+          ].map((tab) => {
+            const active = activeTab === tab.id;
+            return (
               <TouchableOpacity
-                onPress={() => setShareSheetVisible(false)}
-                className="size-8 rounded-full bg-slate-800 items-center justify-center"
+                key={tab.id}
+                onPress={async () => {
+                  await hapticFeedback.light();
+                  setActiveTab(tab.id as any);
+                }}
+                style={[styles.tabItem, active && styles.tabItemActive]}
+                activeOpacity={0.8}
               >
-                <X size={16} color="#94A3B8" />
+                <MaterialIcons
+                  name={tab.icon as any}
+                  size={15}
+                  color={active ? '#ffffff' : '#64748b'}
+                />
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                  {tab.label}
+                </Text>
               </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Tab 1: Upcoming Appointments */}
+        {activeTab === 'upcoming' && (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Filter Pills */}
+            <View style={styles.filterPillsRow}>
+              {(['all', 'today', 'tomorrow'] as const).map((filter) => (
+                <TouchableOpacity
+                  key={filter}
+                  onPress={async () => {
+                    await hapticFeedback.light();
+                    setFilterDate(filter);
+                  }}
+                  style={[styles.pill, filterDate === filter && styles.pillActive]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.pillText, filterDate === filter && styles.pillTextActive]}>
+                    {filter === 'all' ? 'All Slots' : filter === 'today' ? 'Today' : 'Tomorrow'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} className="space-y-3">
-              {EVENT_TYPES.map((evt) => (
-                <View
-                  key={evt.id}
-                  className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5"
-                >
-                  <View className="flex-row items-start justify-between">
-                    <View className="flex-1 pr-2">
-                      <Text className="text-sm font-bold text-white">{evt.title}</Text>
-                      <Text className="text-xs text-slate-400 mt-0.5">{evt.description}</Text>
-                    </View>
-                    <View className="items-end">
-                      <Text className="text-xs font-black text-purple-400">
-                        {evt.price === 0 ? 'FREE' : `$${evt.price}`}
-                      </Text>
-                      <Text className="text-[10px] text-slate-500">{evt.duration}</Text>
-                    </View>
+            {filteredBookings.map((b) => (
+              <TouchableOpacity
+                key={b.id}
+                style={styles.bookingCard}
+                onPress={() => {
+                  hapticFeedback.light();
+                  setSelectedBooking(b);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.bookingCardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.bookingCustomer}>{b.customerName}</Text>
+                    <Text style={styles.bookingService}>{b.service}</Text>
                   </View>
+                  <View style={styles.bookingStatusBadge}>
+                    <Text style={styles.bookingStatusText}>Confirmed</Text>
+                  </View>
+                </View>
 
-                  <View className="flex-row items-center gap-2 pt-2 border-t border-slate-800/80">
-                    <TouchableOpacity
-                      onPress={() => handleShareLink(evt, 'whatsapp')}
-                      className="flex-1 py-2 px-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex-row items-center justify-center gap-1 active:bg-emerald-500/20"
-                    >
-                      <MessageCircle size={12} color="#10B981" />
-                      <Text className="text-[11px] font-bold text-emerald-400">WhatsApp</Text>
-                    </TouchableOpacity>
+                <View style={styles.bookingDetailsRow}>
+                  <View style={styles.detailItem}>
+                    <MaterialIcons name="access-time" size={14} color="#64748b" style={{ marginRight: 4 }} />
+                    <Text style={styles.detailText}>{b.time} ({b.duration})</Text>
+                  </View>
+                  <View style={styles.detailItem}>
+                    <MaterialIcons
+                      name={b.meetingType === 'video' ? 'videocam' : b.meetingType === 'phone' ? 'phone' : 'place'}
+                      size={14}
+                      color="#64748b"
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text style={styles.detailText}>
+                      {b.meetingType === 'video' ? 'Google Meet' : b.meetingType === 'phone' ? 'Phone' : 'In-Person'}
+                    </Text>
+                  </View>
+                </View>
 
-                    <TouchableOpacity
-                      onPress={() => handleShareLink(evt, 'sms')}
-                      className="flex-1 py-2 px-2 rounded-xl bg-blue-500/10 border border-blue-500/30 flex-row items-center justify-center gap-1 active:bg-blue-500/20"
-                    >
-                      <Phone size={12} color="#3B82F6" />
-                      <Text className="text-[11px] font-bold text-blue-400">SMS</Text>
-                    </TouchableOpacity>
+                {b.depositPaid && (
+                  <View style={styles.depositRow}>
+                    <MaterialIcons name="check-circle" size={14} color="#10b981" style={{ marginRight: 4 }} />
+                    <Text style={styles.depositText}>Deposit Paid: ${b.amount}</Text>
+                  </View>
+                )}
 
+                <View style={styles.bookingFooter}>
+                  <Text style={styles.viewIntakeLink}>View Intake Details →</Text>
+                  <TouchableOpacity
+                    onPress={() => handleCall(b.phone)}
+                    style={styles.callIconBtn}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name="phone" size={16} color="#10b981" />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Tab 2: Event Types */}
+        {activeTab === 'event_types' && (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.eventTypeList}>
+              {EVENT_TYPES.map((evt) => (
+                <View key={evt.id} style={styles.eventTypeCard}>
+                  <View style={styles.evtHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.evtTitle}>{evt.title}</Text>
+                      <Text style={styles.evtDuration}>{evt.duration} • {evt.price > 0 ? `$${evt.price}` : 'Free'}</Text>
+                    </View>
                     <TouchableOpacity
-                      onPress={() => handleShareLink(evt, 'copy')}
-                      className="py-2 px-3 rounded-xl bg-slate-800 border border-slate-700 flex-row items-center justify-center gap-1 active:bg-slate-700"
+                      onPress={() => handleShareLink(evt.slug)}
+                      style={styles.shareBtn}
+                      activeOpacity={0.7}
                     >
-                      <Copy size={12} color="#CBD5E1" />
-                      <Text className="text-[11px] font-bold text-slate-200">Copy</Text>
+                      <MaterialIcons name="share" size={16} color="#3b82f6" style={{ marginRight: 4 }} />
+                      <Text style={styles.shareBtnText}>Share</Text>
                     </TouchableOpacity>
+                  </View>
+                  <Text style={styles.evtDesc}>{evt.description}</Text>
+                  <View style={styles.evtLinkRow}>
+                    <Text style={styles.evtLinkText}>fieseros.com/book/{evt.slug}</Text>
                   </View>
                 </View>
               ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+            </View>
+          </ScrollView>
+        )}
 
-      {/* MODAL 2: Customer Booking Dossier Sheet */}
+        {/* Tab 3: Calendar Sync & Settings */}
+        {activeTab === 'settings' && (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.settingsCard}>
+              <View style={styles.settingsRow}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.settingsLabel}>Auto-Confirm Bookings</Text>
+                  <Text style={styles.settingsSubtitle}>Instantly reserve calendar slots without manual review</Text>
+                </View>
+                <Switch
+                  value={autoConfirm}
+                  onValueChange={setAutoConfirm}
+                  trackColor={{ false: '#cbd5e1', true: '#10b981' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+
+              <View style={styles.settingsDivider} />
+
+              <View style={styles.settingsRow}>
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={styles.settingsLabel}>Google Calendar 2-Way Sync</Text>
+                  <Text style={styles.settingsSubtitle}>Automatically block out busy slots and push new meetings</Text>
+                </View>
+                <Switch
+                  value={googleCalendarSync}
+                  onValueChange={setGoogleCalendarSync}
+                  trackColor={{ false: '#cbd5e1', true: '#3b82f6' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            </View>
+          </ScrollView>
+        )}
+      </View>
+
+      {/* Appointment Detail Modal */}
       <Modal
         visible={!!selectedBooking}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setSelectedBooking(null)}
       >
-        <View className="flex-1 justify-end bg-black/80">
-          <View className="bg-slate-900 border-t border-slate-800 rounded-t-3xl p-5 max-h-[90%] space-y-4">
-            {selectedBooking && (
-              <>
-                {/* Header */}
-                <View className="flex-row items-start justify-between pb-3 border-b border-slate-800">
-                  <View>
-                    <View className="flex-row items-center gap-2">
-                      <Text className="text-xl font-black text-white">{selectedBooking.customerName}</Text>
-                      {selectedBooking.status === 'confirmed' && (
-                        <View className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                          <Text className="text-[9px] font-bold text-emerald-400">CONFIRMED</Text>
-                        </View>
-                      )}
-                      {selectedBooking.status === 'rescheduled' && (
-                        <View className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
-                          <Text className="text-[9px] font-bold text-amber-400">RESCHEDULED</Text>
-                        </View>
-                      )}
-                      {selectedBooking.status === 'cancelled' && (
-                        <View className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30">
-                          <Text className="text-[9px] font-bold text-red-400">CANCELLED</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text className="text-xs text-purple-400 font-semibold mt-0.5">
-                      {selectedBooking.service}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setSelectedBooking(null)}
-                    className="size-8 rounded-full bg-slate-800 items-center justify-center"
-                  >
-                    <X size={16} color="#94A3B8" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Date & Location Grid */}
-                <View className="grid grid-cols-2 gap-2">
-                  <View className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
-                    <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Date &amp; Time
-                    </Text>
-                    <Text className="text-xs font-bold text-white mt-1">{selectedBooking.time}</Text>
-                    <Text className="text-[10px] text-slate-400">{selectedBooking.duration}</Text>
-                  </View>
-
-                  <View className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
-                    <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      Location / Access
-                    </Text>
-                    <Text className="text-xs font-bold text-white mt-1" numberOfLines={1}>
-                      {selectedBooking.meetingLocation}
-                    </Text>
-                    <Text className="text-[10px] text-slate-400">
-                      {selectedBooking.meetingType === 'video' ? 'Video Meeting' : 'On-Site'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Intake Form Answers */}
-                <View className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
-                  <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Intake Form Responses
-                  </Text>
-                  {selectedBooking.intakeAnswers.map((item, idx) => (
-                    <View key={idx} className="pb-1">
-                      <Text className="text-[11px] font-semibold text-slate-400">{item.question}</Text>
-                      <Text className="text-xs font-bold text-white mt-0.5">{item.answer}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Contact Shortcuts */}
-                <View className="flex-row items-center gap-2 pt-1">
-                  <TouchableOpacity
-                    onPress={() => handleCall(selectedBooking.phone)}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-800 border border-slate-700 flex-row items-center justify-center gap-1.5 active:bg-slate-700"
-                  >
-                    <Phone size={14} color="#10B981" />
-                    <Text className="text-xs font-bold text-white">Call Client</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => handleWhatsApp(selectedBooking.phone, selectedBooking.customerName)}
-                    className="flex-1 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex-row items-center justify-center gap-1.5 active:bg-emerald-500/20"
-                  >
-                    <MessageCircle size={14} color="#10B981" />
-                    <Text className="text-xs font-bold text-emerald-400">WhatsApp</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Reschedule & Cancel Row */}
-                {selectedBooking.status !== 'cancelled' && (
-                  <View className="flex-row items-center gap-2 pt-1">
-                    <TouchableOpacity
-                      onPress={() => handleRescheduleBooking(selectedBooking.id)}
-                      className="flex-1 py-2.5 rounded-xl bg-slate-800 border border-slate-700 flex-row items-center justify-center gap-1.5 active:bg-slate-700"
-                    >
-                      <RotateCcw size={13} color="#C084FC" />
-                      <Text className="text-xs font-bold text-purple-300">Reschedule Link</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      onPress={() => handleCancelBooking(selectedBooking.id)}
-                      className="py-2.5 px-4 rounded-xl bg-red-500/10 border border-red-500/30 flex-row items-center justify-center gap-1 active:bg-red-500/20"
-                    >
-                      <X size={13} color="#EF4444" />
-                      <Text className="text-xs font-bold text-red-400">Cancel</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </>
-            )}
+        <SafeAreaView style={styles.modalSafe}>
+          <View style={styles.modalHeader}>
+            <View>
+              <Text style={styles.modalTitle}>{selectedBooking?.customerName}</Text>
+              <Text style={styles.modalSubtitle}>{selectedBooking?.service}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setSelectedBooking(null)}
+              style={styles.modalCloseBtn}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="close" size={24} color="#64748b" />
+            </TouchableOpacity>
           </View>
-        </View>
+
+          <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalFieldRow}>
+                <MaterialIcons name="access-time" size={18} color="#64748b" style={{ marginRight: 8 }} />
+                <Text style={styles.modalFieldText}>{selectedBooking?.time}</Text>
+              </View>
+              <View style={styles.modalFieldRow}>
+                <MaterialIcons name="phone" size={18} color="#64748b" style={{ marginRight: 8 }} />
+                <Text style={styles.modalFieldText}>{selectedBooking?.phone}</Text>
+              </View>
+              <View style={styles.modalFieldRow}>
+                <MaterialIcons name="place" size={18} color="#64748b" style={{ marginRight: 8 }} />
+                <Text style={styles.modalFieldText}>{selectedBooking?.meetingLocation}</Text>
+              </View>
+            </View>
+
+            {/* Intake Questions & Answers */}
+            <Text style={styles.intakeHeading}>Customer Intake Answers</Text>
+            <View style={styles.intakeBox}>
+              {selectedBooking?.intakeAnswers.map((item, idx) => (
+                <View key={idx} style={styles.intakeItem}>
+                  <Text style={styles.intakeQuestion}>{item.question}</Text>
+                  <Text style={styles.intakeAnswer}>{item.answer}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Actions */}
+            <View style={styles.modalActionRow}>
+              <TouchableOpacity
+                onPress={() => handleCall(selectedBooking?.phone || '')}
+                style={styles.modalCallBtn}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="phone" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.modalCallBtnText}>Call Customer</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  backBtn: {
+    padding: 6,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  headerRight: {
+    width: 36,
+  },
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    padding: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 5,
+  },
+  tabItemActive: {
+    backgroundColor: '#0f172a',
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabLabelActive: {
+    color: '#ffffff',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+    gap: 12,
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+  },
+  pill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  pillActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  pillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  pillTextActive: {
+    color: '#ffffff',
+  },
+  bookingCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  bookingCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  bookingCustomer: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  bookingService: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginTop: 2,
+  },
+  bookingStatusBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  bookingStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  bookingDetailsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  depositRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  depositText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  bookingFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  viewIntakeLink: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#3b82f6',
+  },
+  callIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventTypeList: {
+    gap: 12,
+  },
+  eventTypeCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  evtHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  evtTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  evtDuration: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  shareBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#3b82f6',
+  },
+  evtDesc: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  evtLinkRow: {
+    backgroundColor: '#f8fafc',
+    padding: 8,
+    borderRadius: 8,
+  },
+  evtLinkText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontFamily: 'monospace',
+  },
+  settingsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingsLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  settingsSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  settingsDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 14,
+  },
+  modalSafe: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+  },
+  modalScroll: {
+    flex: 1,
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalFieldText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  intakeHeading: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 8,
+  },
+  intakeBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 12,
+    marginBottom: 20,
+  },
+  intakeItem: {
+    gap: 4,
+  },
+  intakeQuestion: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  intakeAnswer: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '600',
+  },
+  modalActionRow: {
+    paddingBottom: 20,
+  },
+  modalCallBtn: {
+    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: 12,
+  },
+  modalCallBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});

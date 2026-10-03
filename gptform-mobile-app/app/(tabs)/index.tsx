@@ -10,6 +10,7 @@ import {
   Share,
   Modal,
   TextInput,
+  Switch,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -21,13 +22,14 @@ export default function DashboardScreen() {
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [isAiAnswering, setIsAiAnswering] = useState(true);
 
   const handleShareLink = async () => {
     await hapticFeedback.light();
     try {
       await Share.share({
-        title: 'Chat with us',
-        message: 'Chat with our AI team here: https://fieseros.com/agent/support',
+        title: 'Chat with our AI Assistant',
+        message: 'Chat with our AI assistant 24/7 here: https://fieseros.com/agent/support',
       });
     } catch {}
   };
@@ -50,31 +52,260 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Header: Hi, Deepak! + 0 🌐 */}
+        {/* Top Header: Business Greeting + Live Pulse */}
         <View style={styles.topHeader}>
-          <Text style={styles.greetingTitle}>
-            Hi, {user?.name ? user.name.split(' ')[0] : 'there'}!
-          </Text>
-          <View style={styles.globePill}>
-            <Text style={styles.globeNumber}>0</Text>
-            <MaterialIcons name="public" size={18} color="#1e293b" />
+          <View>
+            <Text style={styles.greetingTitle}>
+              Hi, {user?.name ? user.name.split(' ')[0] : 'there'}!
+            </Text>
+            <Text style={styles.greetingSubtitle}>AI Employee Command Center</Text>
+          </View>
+          <View style={styles.liveStatusPill}>
+            <View style={styles.livePulseDot} />
+            <Text style={styles.liveStatusText}>AI Live 24/7</Text>
           </View>
         </View>
 
-        {/* 4 Circular Action Icons */}
+        {/* ─── Hero: Your AI Assistant Card ─── */}
+        <View style={styles.assistantCard}>
+          <View style={styles.assistantCardHeader}>
+            <View style={styles.assistantAvatarWrap}>
+              <View style={styles.assistantAvatar}>
+                <MaterialIcons name="smart-toy" size={26} color="#ffffff" />
+              </View>
+              <View style={styles.onlineBadgeDot} />
+            </View>
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={styles.assistantName}>Ava</Text>
+                <View style={styles.roleTag}>
+                  <Text style={styles.roleTagText}>AI EMPLOYEE</Text>
+                </View>
+              </View>
+              <Text style={styles.assistantRole}>Customer Support &amp; Lead Agent</Text>
+            </View>
+          </View>
+
+          {/* Active Channels Grid */}
+          <Text style={styles.channelsHeading}>CONNECTED CHANNELS</Text>
+          <View style={styles.channelsRow}>
+            <View style={styles.channelChip}>
+              <MaterialIcons name="language" size={15} color="#2563eb" style={{ marginRight: 4 }} />
+              <Text style={styles.channelChipText}>Website</Text>
+              <View style={styles.channelActiveDot} />
+            </View>
+
+            <View style={styles.channelChip}>
+              <MaterialIcons name="chat" size={15} color="#059669" style={{ marginRight: 4 }} />
+              <Text style={styles.channelChipText}>WhatsApp</Text>
+              <View style={styles.channelActiveDot} />
+            </View>
+
+            <View style={styles.channelChip}>
+              <MaterialIcons name="camera-alt" size={15} color="#db2777" style={{ marginRight: 4 }} />
+              <Text style={styles.channelChipText}>Instagram</Text>
+              <View style={styles.channelActiveDot} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.channelChip, styles.channelChipVoice]}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/receptionist');
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="phone" size={14} color="#8b5cf6" style={{ marginRight: 4 }} />
+              <Text style={styles.channelVoiceText}>Voice $29/mo</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Knowledge Status Bar */}
+          <View style={styles.knowledgeBar}>
+            <View style={styles.knowledgeItem}>
+              <MaterialIcons name="check-circle" size={13} color="#10b981" style={{ marginRight: 4 }} />
+              <Text style={styles.knowledgeText}>Website: Synced</Text>
+            </View>
+            <View style={styles.knowledgeDivider} />
+            <View style={styles.knowledgeItem}>
+              <MaterialIcons name="description" size={13} color="#64748b" style={{ marginRight: 4 }} />
+              <Text style={styles.knowledgeText}>12 PDFs</Text>
+            </View>
+            <View style={styles.knowledgeDivider} />
+            <View style={styles.knowledgeItem}>
+              <MaterialIcons name="help" size={13} color="#64748b" style={{ marginRight: 4 }} />
+              <Text style={styles.knowledgeText}>42 FAQs</Text>
+            </View>
+          </View>
+
+          {/* Primary Action Buttons */}
+          <View style={styles.heroActionRow}>
+            <TouchableOpacity
+              style={styles.trainBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/team/train-agent' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="psychology" size={18} color="#ffffff" style={{ marginRight: 6 }} />
+              <Text style={styles.trainBtnText}>Train AI Knowledge</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.conversationsBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/(tabs)/inbox');
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="forum" size={18} color="#0f172a" style={{ marginRight: 6 }} />
+              <Text style={styles.conversationsBtnText}>View Chats</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ─── Urgent Human Takeover Alert Banner ─── */}
+        <TouchableOpacity
+          style={styles.takeoverAlertCard}
+          onPress={() => {
+            hapticFeedback.light();
+            router.push('/(tabs)/inbox');
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.takeoverLeft}>
+            <View style={styles.takeoverIconCircle}>
+              <MaterialIcons name="warning" size={20} color="#d97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.takeoverTitle}>2 Chats Need Attention</Text>
+              <Text style={styles.takeoverSubtitle}>
+                WhatsApp visitor requested custom discount approval
+              </Text>
+            </View>
+          </View>
+          <View style={styles.takeoverActionPill}>
+            <Text style={styles.takeoverActionText}>Take Over →</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ─── Today's AI Activity (Interactive Metrics) ─── */}
+        <View style={styles.sectionHeadingRow}>
+          <Text style={styles.sectionHeading}>Today's Activity</Text>
+          <Text style={styles.sectionSubHeading}>Automated by AI</Text>
+        </View>
+
+        <View style={styles.metricsGrid}>
+          {/* Total Conversations */}
+          <TouchableOpacity
+            style={styles.metricCard}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/inbox');
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.metricTopRow}>
+              <Text style={styles.metricCardLabel}>CONVERSATIONS</Text>
+              <MaterialIcons name="chat-bubble-outline" size={18} color="#2563eb" />
+            </View>
+            <Text style={[styles.metricCardValue, { color: '#2563eb' }]}>28</Text>
+            <Text style={styles.metricCardFoot}>94% resolved by AI</Text>
+          </TouchableOpacity>
+
+          {/* Leads Qualified */}
+          <TouchableOpacity
+            style={styles.metricCard}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/leads' as any);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.metricTopRow}>
+              <Text style={styles.metricCardLabel}>LEADS CAPTURED</Text>
+              <MaterialIcons name="assignment-ind" size={18} color="#059669" />
+            </View>
+            <Text style={[styles.metricCardValue, { color: '#059669' }]}>7</Text>
+            <Text style={styles.metricCardFoot}>Phone &amp; WhatsApp</Text>
+          </TouchableOpacity>
+
+          {/* Bookings Confirmed */}
+          <TouchableOpacity
+            style={styles.metricCard}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/bookings' as any);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.metricTopRow}>
+              <Text style={styles.metricCardLabel}>BOOKINGS</Text>
+              <MaterialIcons name="event-available" size={18} color="#7c3aed" />
+            </View>
+            <Text style={[styles.metricCardValue, { color: '#7c3aed' }]}>3</Text>
+            <Text style={styles.metricCardFoot}>Google Calendar sync</Text>
+          </TouchableOpacity>
+
+          {/* Response Time */}
+          <View style={styles.metricCard}>
+            <View style={styles.metricTopRow}>
+              <Text style={styles.metricCardLabel}>AVG SPEED</Text>
+              <MaterialIcons name="speed" size={18} color="#ea580c" />
+            </View>
+            <Text style={[styles.metricCardValue, { color: '#ea580c' }]}>1.2s</Text>
+            <Text style={styles.metricCardFoot}>Instant response</Text>
+          </View>
+        </View>
+
+        {/* ─── Quick Operations & Tools ─── */}
+        <View style={styles.sectionHeadingRow}>
+          <Text style={styles.sectionHeading}>Quick Shortcuts</Text>
+        </View>
+
         <View style={styles.quickActionRow}>
           <TouchableOpacity
             style={styles.quickActionItem}
             onPress={() => {
               hapticFeedback.light();
-              router.push('/archives');
+              router.push('/(tabs)/leads' as any);
             }}
             activeOpacity={0.7}
           >
-            <View style={styles.quickActionCircle}>
-              <MaterialIcons name="inventory-2" size={22} color="#1e293b" />
+            <View style={[styles.quickActionCircle, { backgroundColor: '#ecfdf5' }]}>
+              <MaterialIcons name="assignment-ind" size={22} color="#059669" />
             </View>
-            <Text style={styles.quickActionLabel}>Archives</Text>
+            <Text style={styles.quickActionLabel}>Leads</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionItem}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/bookings' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionCircle, { backgroundColor: '#eff6ff' }]}>
+              <MaterialIcons name="event-available" size={22} color="#2563eb" />
+            </View>
+            <Text style={styles.quickActionLabel}>Bookings</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionItem}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/receptionist');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.quickActionCircle, { backgroundColor: '#f5f3ff' }]}>
+              <MaterialIcons name="phone-in-talk" size={22} color="#8b5cf6" />
+            </View>
+            <Text style={styles.quickActionLabel}>Voice ($29)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -93,222 +324,16 @@ export default function DashboardScreen() {
 
           <TouchableOpacity
             style={styles.quickActionItem}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/tickets');
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.quickActionCircle}>
-              <MaterialIcons name="confirmation-number" size={22} color="#1e293b" />
-            </View>
-            <Text style={styles.quickActionLabel}>Tickets</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.quickActionItem}
-            onPress={() => {
-              hapticFeedback.light();
-              setFeedbackModalVisible(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.quickActionCircle}>
-              <MaterialIcons name="thumb-up-alt" size={22} color="#1e293b" />
-            </View>
-            <Text style={styles.quickActionLabel}>Share feedback</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Gradient Announcement Card */}
-        <View style={styles.promoCard}>
-          <View style={styles.promoLeft}>
-            <Text style={styles.promoTitle}>GPTForm is now AI Powered</Text>
-            <TouchableOpacity
-              style={styles.promoBtn}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/team');
-              }}
-            >
-              <Text style={styles.promoBtnText}>See agents</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.promoIconWrap}>
-            <View style={styles.promoIconBox}>
-              <MaterialIcons name="smart-toy" size={26} color="#1e293b" />
-            </View>
-            <View style={styles.promoBadge}>
-              <Text style={styles.promoBadgeText}>1</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Card: Today's Wins (matches 18.35.48 (1).jpeg) */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderTitle}>Today's wins</Text>
-          </View>
-
-          {/* Sales Closed */}
-          <View style={styles.winCard}>
-            <View style={styles.winHeader}>
-              <View style={styles.winTagPill}>
-                <Text style={styles.winTagText}>Ecommerce only</Text>
-              </View>
-              <MaterialIcons name="monetization-on" size={20} color="#94a3b8" />
-            </View>
-            <Text style={styles.winLabel}>SALES CLOSED</Text>
-            <Text style={styles.winValue}>$0.00</Text>
-            <Text style={styles.winSub}>Sales made during chats by your team or AI agent.</Text>
-          </View>
-
-          {/* Customers Served */}
-          <View style={[styles.winCard, { marginTop: 10 }]}>
-            <View style={styles.winHeader}>
-              <Text style={styles.winLabel}>CUSTOMERS SERVED</Text>
-              <MaterialIcons name="check" size={20} color="#1e293b" />
-            </View>
-            <Text style={styles.winValue}>0</Text>
-            <Text style={styles.winSub}>People successfully served through chats or tickets.</Text>
-          </View>
-
-          {/* Leads Qualified */}
-          <View style={[styles.winCard, { marginTop: 10 }]}>
-            <View style={styles.winHeader}>
-              <Text style={styles.winLabel}>LEADS QUALIFIED</Text>
-              <MaterialIcons name="verified" size={20} color="#1e293b" />
-            </View>
-            <Text style={styles.winValue}>0</Text>
-            <Text style={styles.winSub}>
-              Contacts collected through chats today, like emails, phone numbers, or ZIP codes.
-            </Text>
-          </View>
-
-          {/* Info pill */}
-          <View style={styles.infoPillBox}>
-            <MaterialIcons name="info-outline" size={18} color="#2563eb" style={{ marginRight: 8 }} />
-            <Text style={styles.infoPillText}>Wins reset at midnight</Text>
-          </View>
-        </View>
-
-        {/* Card: TRAFFIC NOW 🟢 (matches 18.35.52 (1).jpeg & 18.35.53.jpeg) */}
-        <View style={styles.card}>
-          <View style={styles.trafficHeaderRow}>
-            <Text style={styles.trafficTag}>TRAFFIC NOW</Text>
-            <View style={styles.livePulseDot} />
-          </View>
-
-          {/* Dotted Globe Graphic */}
-          <View style={styles.globeIllustrationWrap}>
-            <View style={styles.globeCircle}>
-              <MaterialIcons name="public" size={130} color="#e2e8f0" />
-            </View>
-          </View>
-
-          {/* Active Chats vs Visitors Online */}
-          <View style={styles.trafficMetricsRow}>
-            <View>
-              <Text style={styles.metricLabel}>Active chats</Text>
-              <Text style={styles.metricNumber}>1</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.metricLabel}>Visitors online</Text>
-              <Text style={styles.metricNumber}>1</Text>
-            </View>
-          </View>
-
-          {/* Split bar */}
-          <View style={styles.splitBar}>
-            <View style={[styles.splitFill, { width: '100%', backgroundColor: '#3b82f6' }]} />
-          </View>
-
-          {/* Legend */}
-          <View style={styles.legendRow}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#fb923c' }]} />
-              <Text style={styles.legendText}>Automated 0</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#3b82f6' }]} />
-              <Text style={styles.legendText}>Team 1</Text>
-            </View>
-          </View>
-
-          {/* Inside Action: Share chat link > */}
-          <TouchableOpacity
-            style={styles.shareActionCard}
             onPress={handleShareLink}
             activeOpacity={0.7}
           >
-            <MaterialIcons name="share" size={20} color="#1e293b" style={{ marginRight: 12 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.shareActionTitle}>Share chat link</Text>
-              <Text style={styles.shareActionSub}>Don't wait for visitors. Bring chat to them.</Text>
+            <View style={styles.quickActionCircle}>
+              <MaterialIcons name="share" size={22} color="#1e293b" />
             </View>
-            <MaterialIcons name="chevron-right" size={22} color="#94a3b8" />
+            <Text style={styles.quickActionLabel}>Share Bot</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Card: RECENT FEEDBACK */}
-        <View style={styles.card}>
-          <Text style={styles.feedbackTag}>RECENT FEEDBACK</Text>
-          <View style={styles.emptyFeedbackBox}>
-            <MaterialIcons name="thumb-up-alt" size={28} color="#94a3b8" style={{ marginBottom: 8 }} />
-            <Text style={styles.emptyFeedbackTitle}>No feedback or ratings yet</Text>
-            <Text style={styles.emptyFeedbackSub}>
-              They'll show up here once customers start sharing.
-            </Text>
-          </View>
-        </View>
       </ScrollView>
-
-      {/* Share Feedback Bottom Sheet */}
-      <Modal
-        visible={feedbackModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setFeedbackModalVisible(false)}
-      >
-        <View style={styles.sheetBackdrop}>
-          <View style={styles.sheetContent}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Share feedback</Text>
-              <TouchableOpacity onPress={() => setFeedbackModalVisible(false)}>
-                <MaterialIcons name="close" size={22} color="#64748b" />
-              </TouchableOpacity>
-            </View>
-
-            {feedbackSent ? (
-              <View style={styles.feedbackSuccessBox}>
-                <MaterialIcons name="check-circle" size={48} color="#10b981" />
-                <Text style={styles.feedbackSuccessText}>Thank you for your feedback!</Text>
-              </View>
-            ) : (
-              <View style={{ padding: 16 }}>
-                <Text style={styles.feedbackQuestion}>How can we make GPTForm Mobile better for you?</Text>
-                <TextInput
-                  style={styles.feedbackInput}
-                  multiline
-                  numberOfLines={4}
-                  placeholder="Tell us what you'd like to see..."
-                  placeholderTextColor="#94a3b8"
-                  value={feedbackText}
-                  onChangeText={setFeedbackText}
-                />
-                <TouchableOpacity
-                  style={[styles.feedbackSubmitBtn, !feedbackText.trim() && { opacity: 0.5 }]}
-                  disabled={!feedbackText.trim()}
-                  onPress={submitFeedback}
-                >
-                  <Text style={styles.feedbackSubmitText}>Send Feedback</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -322,51 +347,331 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    padding: 16,
     paddingBottom: 40,
   },
   topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginBottom: 10,
+    marginBottom: 16,
+    paddingTop: 4,
   },
   greetingTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
     color: '#0f172a',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
-  globePill: {
+  greetingSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 1,
+  },
+  liveStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 20,
-    gap: 6,
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
   },
-  globeNumber: {
-    fontSize: 14,
-    fontWeight: '700',
+  livePulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10b981',
+    marginRight: 6,
+  },
+  liveStatusText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  assistantCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  assistantCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  assistantAvatarWrap: {
+    position: 'relative',
+  },
+  assistantAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineBadgeDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  assistantName: {
+    fontSize: 18,
+    fontWeight: '900',
     color: '#0f172a',
+  },
+  roleTag: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roleTagText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+  assistantRole: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  channelsHeading: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.6,
+    marginBottom: 8,
+  },
+  channelsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 12,
+  },
+  channelChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  channelChipVoice: {
+    backgroundColor: '#faf5ff',
+    borderColor: '#f3e8ff',
+  },
+  channelChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  channelVoiceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#8b5cf6',
+  },
+  channelActiveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#10b981',
+    marginLeft: 6,
+  },
+  knowledgeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: 14,
+  },
+  knowledgeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  knowledgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  knowledgeDivider: {
+    width: 1,
+    height: 12,
+    backgroundColor: '#cbd5e1',
+  },
+  heroActionRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  trainBtn: {
+    flex: 1,
+    backgroundColor: '#2563eb',
+    height: 42,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  trainBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  conversationsBtn: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    height: 42,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  conversationsBtnText: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  takeoverAlertCard: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  takeoverLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  takeoverIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  takeoverTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  takeoverSubtitle: {
+    fontSize: 11,
+    color: '#b45309',
+    marginTop: 1,
+  },
+  takeoverActionPill: {
+    backgroundColor: '#d97706',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  takeoverActionText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  sectionHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  sectionSubHeading: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  metricCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  metricTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  metricCardLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+  },
+  metricCardValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    marginBottom: 2,
+  },
+  metricCardFoot: {
+    fontSize: 10,
+    color: '#94a3b8',
+    fontWeight: '500',
   },
   quickActionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 12,
-    paddingHorizontal: 6,
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   quickActionItem: {
     alignItems: 'center',
-    width: 72,
   },
   quickActionCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -375,331 +680,6 @@ const styles = StyleSheet.create({
   quickActionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#0f172a',
-    textAlign: 'center',
-  },
-  promoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#e0e7ff',
-    borderRadius: 20,
-    padding: 16,
-    marginVertical: 12,
-  },
-  promoLeft: {
-    flex: 1,
-  },
-  promoTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1e1b4b',
-    marginBottom: 8,
-  },
-  promoBtn: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  promoBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  promoIconWrap: {
-    position: 'relative',
-    marginLeft: 16,
-  },
-  promoIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  promoBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#ef4444',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  promoBadgeText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOpacity: 0.02,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  cardHeaderRow: {
-    marginBottom: 12,
-  },
-  cardHeaderTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  winCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  winHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  winTagPill: {
-    backgroundColor: '#e2e8f0',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  winTagText: {
-    fontSize: 11,
-    fontWeight: '600',
     color: '#475569',
-  },
-  winLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748b',
-    letterSpacing: 0.5,
-  },
-  winValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginVertical: 4,
-  },
-  winSub: {
-    fontSize: 12,
-    color: '#64748b',
-    lineHeight: 16,
-  },
-  infoPillBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 12,
-  },
-  infoPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1e40af',
-  },
-  trafficHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
-  },
-  trafficTag: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: 0.5,
-  },
-  livePulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-  },
-  globeIllustrationWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-  },
-  globeCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#f8fafc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trafficMetricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  metricLabel: {
-    fontSize: 13,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  metricNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginTop: 2,
-  },
-  splitBar: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#f1f5f9',
-    overflow: 'hidden',
-    marginVertical: 8,
-  },
-  splitFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 16,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
-  },
-  shareActionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  shareActionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  shareActionSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
-  },
-  feedbackTag: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#64748b',
-    letterSpacing: 0.5,
-    marginBottom: 10,
-  },
-  emptyFeedbackBox: {
-    alignItems: 'center',
-    paddingVertical: 18,
-  },
-  emptyFeedbackTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 4,
-  },
-  emptyFeedbackSub: {
-    fontSize: 12,
-    color: '#64748b',
-    textAlign: 'center',
-  },
-  sheetBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheetContent: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 36,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#cbd5e1',
-    alignSelf: 'center',
-    marginTop: 10,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  sheetTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  feedbackQuestion: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 10,
-  },
-  feedbackInput: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
-    padding: 12,
-    fontSize: 14,
-    color: '#0f172a',
-    minHeight: 100,
-    textAlignVertical: 'top',
-    marginBottom: 14,
-  },
-  feedbackSubmitBtn: {
-    backgroundColor: '#0f172a',
-    paddingVertical: 13,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  feedbackSubmitText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  feedbackSuccessBox: {
-    alignItems: 'center',
-    paddingVertical: 36,
-    gap: 12,
-  },
-  feedbackSuccessText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a',
   },
 });

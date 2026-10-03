@@ -7,19 +7,9 @@ import {
   Linking,
   SafeAreaView,
   StatusBar,
+  StyleSheet,
 } from 'react-native';
-import {
-  Phone,
-  MessageCircle,
-  Mail,
-  Target,
-  Sparkles,
-  ArrowRight,
-  CheckCircle2,
-  DollarSign,
-  Clock,
-  ChevronRight,
-} from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 
@@ -40,7 +30,7 @@ const MOCK_LEADS: DemoLead[] = [
   {
     id: 'lead-1',
     name: 'John Smith',
-    phone: '+15125550192',
+    phone: '+1 (512) 555-0192',
     email: 'john.smith@gmail.com',
     service: 'HVAC Compressor Repair',
     source: 'ai_agent',
@@ -52,7 +42,7 @@ const MOCK_LEADS: DemoLead[] = [
   {
     id: 'lead-2',
     name: 'Sarah Jones',
-    phone: '+15125550143',
+    phone: '+1 (512) 555-0143',
     email: 'sarah.j@outlook.com',
     service: 'Dental Routine Checkup',
     source: 'form',
@@ -64,19 +54,19 @@ const MOCK_LEADS: DemoLead[] = [
   {
     id: 'lead-3',
     name: 'Michael Chang',
-    phone: '+15125550188',
+    phone: '+1 (512) 555-0188',
     email: 'm.chang@techcorp.com',
     service: 'Roof Shingle Inspection',
     source: 'ai_agent',
     status: 'contacted',
     estimatedValue: 3400,
-    time: 'Yesterday · 16:40 PM',
+    time: 'Yesterday · 4:40 PM',
     summary: 'Storm damage inspection request after hail storm. Quoted estimate range $3K-$4K.',
   },
   {
     id: 'lead-4',
     name: 'David Miller',
-    phone: '+15125550119',
+    phone: '+1 (512) 555-0119',
     email: 'david.m@yahoo.com',
     service: 'Emergency Drain Unclogging',
     source: 'chat',
@@ -100,33 +90,42 @@ export default function LeadsScreen() {
   const handleWhatsApp = async (phone: string, name: string) => {
     await hapticFeedback.medium();
     const clean = phone.replace(/[^0-9]/g, '');
-    const msg = encodeURIComponent(`Hi ${name}, this is Deepak from GPTForm following up on your inquiry.`);
+    const msg = encodeURIComponent(`Hi ${name}, following up on your inquiry with our AI Assistant.`);
     Linking.openURL(`whatsapp://send?phone=${clean}&text=${msg}`);
   };
 
   const handleOpenLead = async (id: string) => {
     await hapticFeedback.light();
-    router.push(`/lead/${id}`);
+    router.push(`/lead/${id}` as any);
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-950">
-      <StatusBar barStyle="light-content" />
-      <View className="flex-1 px-4 sm:px-6 pt-3">
-        {/* Header */}
-        <View className="py-2 mb-2">
-          <Text className="text-2xl font-black text-white tracking-tight">Leads Pipeline</Text>
-          <Text className="text-xs text-slate-400 mt-0.5">
-            Capture, qualify, and convert from phone &amp; WhatsApp
-          </Text>
-        </View>
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
 
+      {/* Header with Back button */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            hapticFeedback.light();
+            router.back();
+          }}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Leads Pipeline</Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      <View style={styles.container}>
         {/* Pipeline Tabs */}
-        <View className="flex-row p-1 bg-slate-900 border border-slate-800 rounded-2xl mb-4">
+        <View style={styles.tabsRow}>
           {[
-            { id: 'new', label: '🔥 New', count: 2 },
-            { id: 'contacted', label: 'Contacted', count: 1 },
-            { id: 'won', label: 'Won', count: 1 },
+            { id: 'new', label: '🔥 New', count: MOCK_LEADS.filter((l) => l.status === 'new').length },
+            { id: 'contacted', label: 'Contacted', count: MOCK_LEADS.filter((l) => l.status === 'contacted').length },
+            { id: 'won', label: 'Won', count: MOCK_LEADS.filter((l) => l.status === 'won').length },
           ].map((tab) => {
             const active = selectedStatus === tab.id;
             return (
@@ -136,27 +135,14 @@ export default function LeadsScreen() {
                   await hapticFeedback.light();
                   setSelectedStatus(tab.id as any);
                 }}
-                className={`flex-1 py-2 rounded-xl items-center justify-center flex-row gap-1.5 ${
-                  active ? 'bg-emerald-500' : 'bg-transparent'
-                }`}
+                style={[styles.tabItem, active && styles.tabItemActive]}
+                activeOpacity={0.8}
               >
-                <Text
-                  className={`text-xs font-bold ${
-                    active ? 'text-slate-950 font-black' : 'text-slate-400'
-                  }`}
-                >
+                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
                   {tab.label}
                 </Text>
-                <View
-                  className={`px-1.5 py-0.2 rounded-full ${
-                    active ? 'bg-slate-950/20' : 'bg-slate-800'
-                  }`}
-                >
-                  <Text
-                    className={`text-[10px] font-bold ${
-                      active ? 'text-slate-950' : 'text-slate-400'
-                    }`}
-                  >
+                <View style={[styles.tabBadge, active && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, active && styles.tabBadgeTextActive]}>
                     {tab.count}
                   </Text>
                 </View>
@@ -165,74 +151,293 @@ export default function LeadsScreen() {
           })}
         </View>
 
-        {/* Leads Cards */}
+        {/* Leads List */}
         <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ paddingBottom: 110 }}
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View className="space-y-3">
-            {filteredLeads.map((lead) => (
-              <View
-                key={lead.id}
-                className="p-4 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-md space-y-3"
+          {filteredLeads.map((lead) => (
+            <View key={lead.id} style={styles.leadCard}>
+              <TouchableOpacity
+                onPress={() => handleOpenLead(lead.id)}
+                activeOpacity={0.8}
+                style={styles.leadCardHeader}
               >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.leadName}>{lead.name}</Text>
+                  <Text style={styles.leadService}>{lead.service}</Text>
+                </View>
+                <View style={styles.leadPriceCol}>
+                  <Text style={styles.leadValue}>${lead.estimatedValue}</Text>
+                  <Text style={styles.leadTime}>{lead.time}</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* AI Summary Card */}
+              <View style={styles.summaryBox}>
+                <View style={styles.summaryTag}>
+                  <MaterialIcons name="auto-awesome" size={13} color="#10b981" style={{ marginRight: 4 }} />
+                  <Text style={styles.summaryTagText}>AI Qualified</Text>
+                </View>
+                <Text style={styles.summaryText}>{lead.summary}</Text>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionRow}>
                 <TouchableOpacity
-                  onPress={() => handleOpenLead(lead.id)}
-                  activeOpacity={0.8}
-                  className="flex-row items-center justify-between"
+                  onPress={() => handleCall(lead.phone)}
+                  style={styles.callBtn}
+                  activeOpacity={0.7}
                 >
-                  <View>
-                    <Text className="text-base font-bold text-white">{lead.name}</Text>
-                    <Text className="text-xs text-emerald-400 font-semibold mt-0.5">
-                      {lead.service}
-                    </Text>
-                  </View>
-                  <View className="items-end">
-                    <Text className="text-sm font-black text-white">
-                      ${lead.estimatedValue}
-                    </Text>
-                    <Text className="text-[10px] text-slate-500 font-medium">{lead.time}</Text>
-                  </View>
+                  <MaterialIcons name="phone" size={15} color="#10b981" style={{ marginRight: 6 }} />
+                  <Text style={styles.callBtnText}>Call</Text>
                 </TouchableOpacity>
 
-                {/* AI Summary Quote */}
-                <View className="p-3 rounded-2xl bg-slate-950 border border-slate-800/80">
-                  <Text className="text-xs text-slate-300 font-medium leading-relaxed">
-                    {lead.summary}
-                  </Text>
-                </View>
+                <TouchableOpacity
+                  onPress={() => handleWhatsApp(lead.phone, lead.name)}
+                  style={styles.waBtn}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="chat" size={15} color="#0d9488" style={{ marginRight: 6 }} />
+                  <Text style={styles.waBtnText}>WhatsApp</Text>
+                </TouchableOpacity>
 
-                {/* 1-Tap CRM Quick Actions */}
-                <View className="flex-row items-center gap-2 pt-1 border-t border-slate-800/80">
-                  <TouchableOpacity
-                    onPress={() => handleCall(lead.phone)}
-                    className="flex-1 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex-row items-center justify-center gap-1.5 active:bg-emerald-500/20"
-                  >
-                    <Phone size={13} color="#10B981" />
-                    <Text className="text-xs font-bold text-emerald-400">Call</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => handleWhatsApp(lead.phone, lead.name)}
-                    className="flex-1 h-9 rounded-xl bg-teal-500/10 border border-teal-500/30 flex-row items-center justify-center gap-1.5 active:bg-teal-500/20"
-                  >
-                    <MessageCircle size={13} color="#14B8A6" />
-                    <Text className="text-xs font-bold text-teal-300">WhatsApp</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => handleOpenLead(lead.id)}
-                    className="size-9 rounded-xl bg-slate-800 items-center justify-center"
-                  >
-                    <ChevronRight size={16} color="#94A3B8" />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  onPress={() => handleOpenLead(lead.id)}
+                  style={styles.detailsBtn}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="chevron-right" size={20} color="#64748b" />
+                </TouchableOpacity>
               </View>
-            ))}
-          </View>
+            </View>
+          ))}
+
+          {filteredLeads.length === 0 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="assignment" size={40} color="#cbd5e1" style={{ marginBottom: 8 }} />
+              <Text style={styles.emptyTitle}>No leads in this stage</Text>
+              <Text style={styles.emptySubtitle}>AI will automatically capture and qualify incoming inquiries.</Text>
+            </View>
+          )}
         </ScrollView>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  backBtn: {
+    padding: 6,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  headerRight: {
+    width: 36,
+  },
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    padding: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+  },
+  tabItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: 10,
+    gap: 6,
+  },
+  tabItemActive: {
+    backgroundColor: '#10b981',
+  },
+  tabLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabLabelActive: {
+    color: '#ffffff',
+  },
+  tabBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+  },
+  tabBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  tabBadgeTextActive: {
+    color: '#ffffff',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+    gap: 12,
+  },
+  leadCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  leadCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  leadName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  leadService: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 2,
+  },
+  leadPriceCol: {
+    alignItems: 'flex-end',
+  },
+  leadValue: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  leadTime: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  summaryBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    marginBottom: 12,
+  },
+  summaryTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  summaryTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    textTransform: 'uppercase',
+  },
+  summaryText: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 17,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  callBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  waBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0d9488',
+  },
+  detailsBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+});
