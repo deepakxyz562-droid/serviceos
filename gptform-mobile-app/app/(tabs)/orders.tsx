@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_BASE_URL, API_PATHS } from '@/lib/constants';
 
 interface OrderItem {
   name: string;
@@ -43,7 +44,7 @@ export default function OrdersScreen() {
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/commerce/orders');
+      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceOrders}`);
       if (res.ok) {
         const data = await res.json();
         if (data.orders) {
@@ -120,7 +121,7 @@ export default function OrdersScreen() {
     setUpdatingId(orderId);
     hapticFeedback.medium();
     try {
-      await fetch(`http://localhost:3000/api/commerce/orders/${orderId}`, {
+      await fetch(`${API_BASE_URL}${API_PATHS.commerceOrderDetail(orderId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),

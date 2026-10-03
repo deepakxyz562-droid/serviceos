@@ -3,15 +3,17 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 /**
- * POST /api/ecommerce/shopify/sync
- * Connects to a Shopify store, synchronizes products into EcommerceProduct,
+ * POST /api/ecommerce/woocommerce/sync
+ * Connects to a WooCommerce store via REST API,
+ * synchronizes products into EcommerceProduct,
  * and attaches the store catalog to the tenant's AI Agent.
  */
 export async function POST(req: NextRequest) {
   try {
     const auth = await getAuthUser();
     const body = await req.json().catch(() => ({}));
-    const { storeUrl: rawStoreUrl, accessToken, agentId } = body;
+    const { siteUrl: rawSiteUrl, storeUrl: altStoreUrl, consumerKey, consumerSecret, agentId } = body;
+    const inputUrl = rawSiteUrl || altStoreUrl || '';
 
     // Resolve tenantId
     let tenantId = auth?.tenantId;
@@ -35,89 +37,90 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let cleanDomain = (rawStoreUrl || '').trim();
-    if (!cleanDomain) {
+    let cleanSiteUrl = inputUrl.trim();
+    if (!cleanSiteUrl) {
       // Check existing connection
       const existingConn = await db.integrationConnection.findFirst({
-        where: { tenantId, provider: 'shopify' },
+        where: { tenantId, provider: 'woocommerce' },
       });
       if (existingConn?.storeUrl) {
-        cleanDomain = existingConn.storeUrl;
+        cleanSiteUrl = existingConn.storeUrl;
       } else {
         return NextResponse.json(
-          { error: 'Store URL is required (e.g., mystore.myshopify.com)' },
+          { error: 'Store URL is required (e.g., https://mystore.com)' },
           { status: 400 }
         );
       }
     }
 
-    // Clean up domain format
-    cleanDomain = cleanDomain.replace(/^https?:\/\//i, '').replace(/\/.*$/, '').trim();
-    if (!cleanDomain.includes('.') && !cleanDomain.includes(':')) {
-      cleanDomain = `${cleanDomain}.myshopify.com`;
+    // Ensure protocol
+    if (!cleanSiteUrl.startsWith('http://') && !cleanSiteUrl.startsWith('https://')) {
+      cleanSiteUrl = `https://${cleanSiteUrl}`;
     }
+    cleanSiteUrl = cleanSiteUrl.replace(/\/+$/, '');
 
     let products: any[] = [];
     let syncError: string | null = null;
 
-    // 1. Try Shopify Admin REST API if accessToken is provided
-    if (accessToken) {
+    // 1. Try WooCommerce REST API v3 with credentials
+    if (consumerKey && consumerSecret) {
       try {
-        const adminUrl = `https://${cleanDomain}/admin/api/2024-01/products.json?limit=50`;
-        const res = await fetch(adminUrl, {
+        const authHeader = 'Basic ' + Buffer.from(`${consumerKey}:${consumerSecret}`).toString('base64');
+        const apiUrl = `${cleanSiteUrl}/wp-json/wc/v3/products?per_page=100`;
+
+        const res = await fetch(apiUrl, {
           method: 'GET',
           headers: {
-            'X-Shopify-Access-Token': accessToken,
+            Authorization: authHeader,
             'Content-Type': 'application/json',
+            'User-Agent': 'ServiceOS-Agent/1.0',
           },
         });
 
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data.products)) {
-            products = data.products;
+          if (Array.isArray(data)) {
+            products = data;
           }
         } else {
-          syncError = `Shopify Admin API responded with HTTP ${res.status}: ${res.statusText}`;
+          syncError = `WooCommerce REST API returned HTTP ${res.status}: ${res.statusText}`;
         }
       } catch (err: any) {
-        syncError = err.message || 'Failed to contact Shopify Admin API';
+        syncError = err?.message || 'Failed to contact WooCommerce REST API';
       }
     }
 
-    // 2. Fallback to public Storefront products.json if Admin API didn't return products
+    // 2. Fallback: WooCommerce Store API (Public Storefront API for WP)
     if (products.length === 0) {
       try {
-        const publicUrl = `https://${cleanDomain}/products.json?limit=50`;
-        const publicRes = await fetch(publicUrl, {
+        const publicUrl = `${cleanSiteUrl}/wp-json/wc/store/v1/products?per_page=100`;
+        const pubRes = await fetch(publicUrl, {
           method: 'GET',
           headers: {
             'User-Agent': 'ServiceOS-Agent/1.0',
-            'Accept': 'application/json',
+            Accept: 'application/json',
           },
         });
 
-        if (publicRes.ok) {
-          const publicData = await publicRes.json();
-          if (Array.isArray(publicData.products)) {
-            products = publicData.products;
-            syncError = null; // Successfully retrieved via Storefront
+        if (pubRes.ok) {
+          const pubData = await pubRes.json();
+          if (Array.isArray(pubData)) {
+            products = pubData;
+            syncError = null;
           }
-        } else if (!syncError) {
-          syncError = `Could not reach store at https://${cleanDomain}/products.json (${publicRes.status})`;
         }
-      } catch (err: any) {
-        if (!syncError) {
-          syncError = err.message || 'Failed to connect to store domain';
-        }
+      } catch {
+        // continue
       }
     }
 
     if (products.length === 0) {
       return NextResponse.json(
         {
-          error: syncError || 'No products found. Verify your store domain and Admin API Access Token.',
-          storeDomain: cleanDomain,
+          error:
+            syncError ||
+            'No products found. Verify your WooCommerce Site URL, Consumer Key, and Consumer Secret.',
+          storeUrl: cleanSiteUrl,
         },
         { status: 400 }
       );
@@ -125,17 +128,18 @@ export async function POST(req: NextRequest) {
 
     // 3. Find or create IntegrationConnection record
     let connection = await db.integrationConnection.findFirst({
-      where: { tenantId, provider: 'shopify' },
+      where: { tenantId, provider: 'woocommerce' },
     });
 
     if (!connection) {
       connection = await db.integrationConnection.create({
         data: {
-          provider: 'shopify',
-          name: `${cleanDomain} Store`,
+          provider: 'woocommerce',
+          name: `${cleanSiteUrl.replace(/^https?:\/\//, '')} Store`,
           status: 'connected',
-          storeUrl: cleanDomain,
-          accessToken: accessToken || null,
+          storeUrl: cleanSiteUrl,
+          apiKey: consumerKey || null,
+          apiSecret: consumerSecret || null,
           tenantId,
           workspaceId: workspaceId || null,
           syncSettingsJson: JSON.stringify({ products: true }),
@@ -145,8 +149,9 @@ export async function POST(req: NextRequest) {
       connection = await db.integrationConnection.update({
         where: { id: connection.id },
         data: {
-          storeUrl: cleanDomain,
-          accessToken: accessToken || connection.accessToken,
+          storeUrl: cleanSiteUrl,
+          apiKey: consumerKey || connection.apiKey,
+          apiSecret: consumerSecret || connection.apiSecret,
           status: 'connected',
           lastSyncAt: new Date(),
           lastSyncStatus: 'success',
@@ -156,37 +161,49 @@ export async function POST(req: NextRequest) {
 
     // 4. Upsert products into EcommerceProduct
     let syncedCount = 0;
-    const syncedSummary = [];
+    const syncedSummary: any[] = [];
     const catalogJsonItems: any[] = [];
 
     for (const p of products) {
       const extId = String(p.id);
-      const title = p.title || 'Untitled Product';
-      const description = (p.body_html || p.description || '')
+      const title = p.name || p.title || 'Untitled Product';
+      const rawDesc = p.description || p.short_description || '';
+      const description = rawDesc
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 500);
-      const price = parseFloat(p.variants?.[0]?.price || '0') || 0;
-      const compareAtPrice = p.variants?.[0]?.compare_at_price
-        ? parseFloat(p.variants[0].compare_at_price)
-        : null;
+
+      const price = parseFloat(p.price || p.regular_price || '0') || 0;
+      const compareAtPrice = p.regular_price ? parseFloat(p.regular_price) : null;
       const inventoryQuantity =
-        p.variants?.reduce(
-          (sum: number, v: any) => sum + (Number(v.inventory_quantity) || 0),
-          0
-        ) ?? 0;
-      const sku = p.variants?.[0]?.sku || null;
-      const vendor = p.vendor || null;
-      const productType = p.product_type || 'Product';
+        p.stock_quantity !== null && p.stock_quantity !== undefined
+          ? Number(p.stock_quantity)
+          : p.in_stock || p.is_in_stock
+          ? 999
+          : 0;
+
+      const sku = p.sku || null;
+      const productType = p.type || 'Product';
+
+      // Tags
       const tags = Array.isArray(p.tags)
-        ? p.tags
-        : typeof p.tags === 'string'
-        ? p.tags.split(',').map((t: string) => t.trim())
+        ? p.tags.map((t: any) => (typeof t === 'string' ? t : t?.name)).filter(Boolean)
         : [];
+
+      // Images
       const images = Array.isArray(p.images)
         ? p.images.map((img: any) => (typeof img === 'string' ? img : img?.src)).filter(Boolean)
         : [];
+
+      // Primary image
+      const primaryImageUrl = images[0] || '';
+
+      // Categories
+      const categories = Array.isArray(p.categories)
+        ? p.categories.map((c: any) => (typeof c === 'string' ? c : c?.name)).filter(Boolean)
+        : [];
+      const primaryCategory = categories[0] || 'General';
 
       const existingProd = await db.ecommerceProduct.findFirst({
         where: { integrationId: connection.id, externalProductId: extId },
@@ -202,11 +219,10 @@ export async function POST(req: NextRequest) {
             compareAtPrice,
             inventoryQuantity,
             sku,
-            vendor,
             productType,
             tagsJson: JSON.stringify(tags),
             imagesJson: JSON.stringify(images),
-            status: p.status || 'active',
+            status: p.status === 'publish' || p.status === 'active' ? 'active' : 'draft',
           },
         });
       } else {
@@ -215,9 +231,8 @@ export async function POST(req: NextRequest) {
             externalProductId: extId,
             title,
             description,
-            status: p.status || 'active',
+            status: p.status === 'publish' || p.status === 'active' ? 'active' : 'draft',
             productType,
-            vendor,
             tagsJson: JSON.stringify(tags),
             price,
             compareAtPrice,
@@ -236,12 +251,12 @@ export async function POST(req: NextRequest) {
         id: extId,
         name: title,
         price,
-        category: productType || vendor || 'General',
+        category: primaryCategory,
         description,
-        imageUrl: images[0] || '',
+        imageUrl: primaryImageUrl,
         sku: sku || undefined,
         isActive: inventoryQuantity > 0,
-        source: 'shopify',
+        source: 'woocommerce',
       });
 
       syncedCount++;
@@ -260,7 +275,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Update Commerce Config catalog if exists
+    // 5. Update Commerce Config catalog if exists
     try {
       const existingConfig = await db.gptformCommerceConfig.findFirst({
         where: { businessId: tenantId },
@@ -271,8 +286,9 @@ export async function POST(req: NextRequest) {
           existingCatalog = JSON.parse(existingConfig.catalogJson || '[]');
         } catch {}
 
-        const nonShopify = existingCatalog.filter((it: any) => it.source !== 'shopify');
-        const mergedCatalog = [...nonShopify, ...catalogJsonItems];
+        // Merge: keep non-woocommerce items, replace/append woocommerce items
+        const nonWoo = existingCatalog.filter((it: any) => it.source !== 'woocommerce');
+        const mergedCatalog = [...nonWoo, ...catalogJsonItems];
 
         await db.gptformCommerceConfig.update({
           where: { id: existingConfig.id },
@@ -282,24 +298,27 @@ export async function POST(req: NextRequest) {
         });
       }
     } catch (confErr) {
-      console.warn('[shopify/sync] Could not update commerce config catalog:', confErr);
+      console.warn('[woocommerce/sync] Could not update commerce config catalog:', confErr);
     }
 
-    // 5. Update agent configJson if agentId is provided
+    // 6. Update agent configJson if agentId is provided
     if (agentId) {
       try {
         const agent = await db.formAgent.findUnique({ where: { id: agentId } });
         if (agent) {
           let config: any = {};
           try {
-            config = typeof agent.configJson === 'string' ? JSON.parse(agent.configJson) : (agent.configJson || {});
+            config =
+              typeof agent.configJson === 'string'
+                ? JSON.parse(agent.configJson)
+                : agent.configJson || {};
           } catch {}
 
           config.channels = config.channels || {};
-          config.channels.shopify = {
-            ...(config.channels.shopify || {}),
+          config.channels.woocommerce = {
+            ...(config.channels.woocommerce || {}),
             enabled: true,
-            shopDomain: cleanDomain,
+            siteUrl: cleanSiteUrl,
             syncProducts: true,
             lastSyncAt: new Date().toISOString(),
             productCount: syncedCount,
@@ -313,21 +332,21 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (err) {
-        console.warn('[shopify/sync] Warning updating agent configJson:', err);
+        console.warn('[woocommerce/sync] Warning updating agent configJson:', err);
       }
     }
 
     return NextResponse.json({
       success: true,
-      storeDomain: cleanDomain,
+      storeUrl: cleanSiteUrl,
       count: syncedCount,
       sampleProducts: syncedSummary,
-      message: `Successfully synchronized ${syncedCount} products from Shopify.`,
+      message: `Successfully synchronized ${syncedCount} products from WooCommerce.`,
     });
   } catch (error: any) {
-    console.error('[shopify/sync] Error:', error);
+    console.error('[woocommerce/sync] Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Internal server error while syncing Shopify catalog' },
+      { error: error?.message || 'Internal server error while syncing WooCommerce catalog' },
       { status: 500 }
     );
   }

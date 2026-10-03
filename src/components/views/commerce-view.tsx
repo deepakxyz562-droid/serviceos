@@ -31,6 +31,12 @@ import {
   Check,
   RefreshCw,
   UtensilsCrossed,
+  Upload,
+  Cloud,
+  Edit3,
+  Image as ImageIcon,
+  Tag,
+  Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,6 +79,29 @@ export function CommerceView() {
   // Dine-In QR State
   const [tableCount, setTableCount] = useState(10);
   const [selectedTableForQr, setSelectedTableForQr] = useState<number | null>(1);
+
+  // Products Filter & Management State
+  const [productSearch, setProductSearch] = useState('');
+  const [productCategory, setProductCategory] = useState('ALL');
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [prodName, setProdName] = useState('');
+  const [prodPrice, setProdPrice] = useState('');
+  const [prodCategory, setProdCategory] = useState('Main');
+  const [prodDesc, setProdDesc] = useState('');
+  const [prodImageUrl, setProdImageUrl] = useState('');
+  const [prodSku, setProdSku] = useState('');
+  const [prodIsActive, setProdIsActive] = useState(true);
+
+  // Store Sync & Import Modal State
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncProvider, setSyncProvider] = useState<'shopify' | 'woocommerce' | 'csv'>('shopify');
+  const [syncDomain, setSyncDomain] = useState('');
+  const [syncToken, setSyncToken] = useState('');
+  const [syncKey, setSyncKey] = useState('');
+  const [syncSecret, setSyncSecret] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   // Load Data
   const loadCommerceData = async () => {
@@ -203,6 +232,175 @@ export function CommerceView() {
     }
   };
 
+  // Product Add / Edit Handlers
+  const openAddProductModal = () => {
+    setEditingItem(null);
+    setProdName('');
+    setProdPrice('');
+    setProdCategory('Main');
+    setProdDesc('');
+    setProdImageUrl('');
+    setProdSku('');
+    setProdIsActive(true);
+    setProductModalOpen(true);
+  };
+
+  const openEditProductModal = (item: any) => {
+    setEditingItem(item);
+    setProdName(item.name || '');
+    setProdPrice(String(item.price ?? ''));
+    setProdCategory(item.category || 'General');
+    setProdDesc(item.description || '');
+    setProdImageUrl(item.imageUrl || '');
+    setProdSku(item.sku || '');
+    setProdIsActive(item.isActive !== false);
+    setProductModalOpen(true);
+  };
+
+  const handleSaveProductModal = () => {
+    if (!prodName.trim() || !prodPrice.trim()) {
+      toast.error('Item name and price are required');
+      return;
+    }
+
+    const price = parseFloat(prodPrice) || 0;
+    let updatedCatalog: any[];
+
+    if (editingItem) {
+      updatedCatalog = catalog.map((it) =>
+        it.id === editingItem.id
+          ? {
+              ...it,
+              name: prodName.trim(),
+              price,
+              category: prodCategory.trim() || 'General',
+              description: prodDesc.trim(),
+              imageUrl: prodImageUrl.trim(),
+              sku: prodSku.trim(),
+              isActive: prodIsActive,
+            }
+          : it
+      );
+      toast.success('Product updated');
+    } else {
+      const newItem = {
+        id: Date.now().toString(),
+        name: prodName.trim(),
+        price,
+        category: prodCategory.trim() || 'General',
+        description: prodDesc.trim(),
+        imageUrl: prodImageUrl.trim(),
+        sku: prodSku.trim(),
+        isActive: prodIsActive,
+        source: 'manual',
+      };
+      updatedCatalog = [...catalog, newItem];
+      toast.success('Product created');
+    }
+
+    setCatalog(updatedCatalog);
+    setProductModalOpen(false);
+    saveSettings(updatedCatalog);
+  };
+
+  const toggleProductStock = (id: string) => {
+    const updated = catalog.map((item) =>
+      item.id === id ? { ...item, isActive: !item.isActive } : item
+    );
+    setCatalog(updated);
+    saveSettings(updated);
+    toast.success('Stock status updated');
+  };
+
+  const removeProduct = (id: string, name: string) => {
+    if (confirm(`Are you sure you want to remove "${name}" from your catalog?`)) {
+      const updated = catalog.filter((p) => p.id !== id);
+      setCatalog(updated);
+      saveSettings(updated);
+      toast.success('Product removed');
+    }
+  };
+
+  // Store Sync Handlers
+  const handleExecuteStoreSync = async () => {
+    if (!syncDomain.trim()) {
+      toast.error('Store URL or domain is required');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      if (syncProvider === 'shopify') {
+        const res = await fetch('/api/ecommerce/shopify/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storeUrl: syncDomain.trim(), accessToken: syncToken.trim() }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.message || `Synced ${data.count} Shopify products!`);
+          setSyncModalOpen(false);
+          loadCommerceData();
+        } else {
+          toast.error(data.error || 'Failed to sync Shopify products');
+        }
+      } else if (syncProvider === 'woocommerce') {
+        const res = await fetch('/api/ecommerce/woocommerce/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            siteUrl: syncDomain.trim(),
+            consumerKey: syncKey.trim(),
+            consumerSecret: syncSecret.trim(),
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(data.message || `Synced ${data.count} WooCommerce products!`);
+          setSyncModalOpen(false);
+          loadCommerceData();
+        } else {
+          toast.error(data.error || 'Failed to sync WooCommerce products');
+        }
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Network error during sync');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleImportCSVFile = async () => {
+    if (!csvFile) {
+      toast.error('Please select a CSV file to import');
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', csvFile);
+
+      const res = await fetch('/api/commerce/products/import', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || `Successfully imported ${data.imported} products!`);
+        setSyncModalOpen(false);
+        setCsvFile(null);
+        loadCommerceData();
+      } else {
+        toast.error(data.error || 'Failed to import CSV');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Error uploading CSV');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // POS Handlers
   const addToPosCart = (item: any) => {
     setPosCart((prev) => {
@@ -275,6 +473,26 @@ export function CommerceView() {
   const filteredOrders = orders.filter((o) => {
     if (statusFilter === 'ALL') return true;
     return o.status === statusFilter;
+  });
+
+  const productCategories = [
+    'ALL',
+    ...Array.from(new Set(catalog.map((p) => (p.category || 'General').trim()).filter(Boolean))),
+  ];
+
+  const filteredCatalog = catalog.filter((item) => {
+    const query = productSearch.toLowerCase().trim();
+    const matchesSearch =
+      !query ||
+      (item.name && item.name.toLowerCase().includes(query)) ||
+      (item.sku && item.sku.toLowerCase().includes(query)) ||
+      (item.description && item.description.toLowerCase().includes(query));
+
+    const matchesCategory =
+      productCategory === 'ALL' ||
+      (item.category || 'General').toLowerCase() === productCategory.toLowerCase();
+
+    return matchesSearch && matchesCategory;
   });
 
   const currencySymbol = config?.currencySymbol || '₹';
@@ -559,136 +777,256 @@ export function CommerceView() {
 
         {/* ======================= TAB 2: PRODUCTS & MENU ======================= */}
         {activeTab === 'catalog' && (
-          <div className="space-y-6 max-w-5xl mx-auto">
+          <div className="space-y-6 max-w-6xl mx-auto">
+            {/* Header & Actions Bar */}
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-100">
                 <div>
-                  <h2 className="text-base font-bold text-stone-900">Product & Menu Catalog</h2>
-                  <p className="text-xs text-stone-500">
-                    Products appear on your WhatsApp bot and online mobile storefront
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-stone-900">Products & Catalog</h2>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold">
+                      {catalog.length} Products
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Sync with Shopify/WooCommerce or manage items for AI Agent, WhatsApp, and POS storefront
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"
+                    variant="outline"
                     onClick={() => {
-                      setCatalog([
-                        ...catalog,
-                        {
-                          id: Date.now().toString(),
-                          name: 'New Item',
-                          price: 100,
-                          category: 'Main',
-                          description: '',
-                          isActive: true,
-                        },
-                      ]);
+                      setSyncProvider('shopify');
+                      setSyncModalOpen(true);
                     }}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-8 text-xs gap-1.5"
+                    className="border-stone-200 hover:bg-stone-50 text-stone-700 font-bold h-9 text-xs gap-1.5 shadow-2xs"
+                  >
+                    <Cloud className="h-3.5 w-3.5 text-blue-600" />
+                    Sync Store / Import
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={openAddProductModal}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 text-xs gap-1.5 shadow-2xs"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Product
                   </Button>
+
                   <Button
                     size="sm"
                     onClick={() => saveSettings()}
                     disabled={savingSettings}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-8 text-xs gap-1.5"
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-9 text-xs gap-1.5 shadow-2xs"
                   >
                     {savingSettings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save Catalog'}
                   </Button>
                 </div>
               </div>
 
-              {catalog.length === 0 ? (
-                <div className="py-12 text-center border border-dashed border-stone-200 rounded-xl bg-stone-50">
-                  <ShoppingCart className="h-8 w-8 text-stone-300 mx-auto mb-2" />
-                  <h3 className="text-sm font-bold text-stone-700">No products in catalog</h3>
-                  <p className="text-xs text-stone-400 mt-1 mb-3">Add items manually or pick a vertical template in Settings.</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setActiveTab('settings')}
-                    className="text-xs font-bold gap-1"
-                  >
-                    <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-                    Load Template
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {catalog.map((product, idx) => (
-                    <div
-                      key={product.id || idx}
-                      className="flex flex-wrap items-center gap-3 p-3 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 transition"
+              {/* Search & Filter Bar */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-4">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+                  <Input
+                    placeholder="Search by product name, SKU or description..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="pl-9 h-9 text-xs bg-stone-50/60 border-stone-200"
+                  />
+                  {productSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setProductSearch('')}
+                      className="absolute right-2.5 top-2.5 text-stone-400 hover:text-stone-700"
                     >
-                      <div className="flex-1 min-w-[200px]">
-                        <label className="text-[10px] font-bold uppercase text-stone-400">Name</label>
-                        <Input
-                          value={product.name}
-                          onChange={(e) => {
-                            const updated = [...catalog];
-                            updated[idx] = { ...product, name: e.target.value };
-                            setCatalog(updated);
-                          }}
-                          placeholder="e.g. Chocolate Truffle Cake"
-                          className="h-8 text-xs font-semibold bg-white"
-                        />
-                      </div>
-                      <div className="w-28">
-                        <label className="text-[10px] font-bold uppercase text-stone-400">Category</label>
-                        <Input
-                          value={product.category || 'General'}
-                          onChange={(e) => {
-                            const updated = [...catalog];
-                            updated[idx] = { ...product, category: e.target.value };
-                            setCatalog(updated);
-                          }}
-                          placeholder="Category"
-                          className="h-8 text-xs bg-white"
-                        />
-                      </div>
-                      <div className="w-24">
-                        <label className="text-[10px] font-bold uppercase text-stone-400">Price ({currencySymbol})</label>
-                        <Input
-                          type="number"
-                          value={product.price}
-                          onChange={(e) => {
-                            const updated = [...catalog];
-                            updated[idx] = { ...product, price: parseFloat(e.target.value) || 0 };
-                            setCatalog(updated);
-                          }}
-                          className="h-8 text-xs font-bold bg-white"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-[180px]">
-                        <label className="text-[10px] font-bold uppercase text-stone-400">Description / Details</label>
-                        <Input
-                          value={product.description || ''}
-                          onChange={(e) => {
-                            const updated = [...catalog];
-                            updated[idx] = { ...product, description: e.target.value };
-                            setCatalog(updated);
-                          }}
-                          placeholder="Brief description or dietary info"
-                          className="h-8 text-xs bg-white"
-                        />
-                      </div>
-                      <div className="pt-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCatalog(catalog.filter((_, i) => i !== idx));
-                          }}
-                          className="p-2 text-stone-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-              )}
+
+                {/* Category Pills */}
+                {productCategories.length > 1 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+                    {productCategories.map((cat) => {
+                      const isActive = productCategory.toLowerCase() === cat.toLowerCase();
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setProductCategory(cat)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap ${
+                            isActive
+                              ? 'bg-stone-900 text-white shadow-2xs'
+                              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Products List / Table */}
+              <div className="mt-5">
+                {catalog.length === 0 ? (
+                  <div className="py-16 text-center border-2 border-dashed border-stone-200 rounded-2xl bg-stone-50/50">
+                    <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                      <ShoppingCart className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-base font-bold text-stone-800">No products in your catalog</h3>
+                    <p className="text-xs text-stone-500 max-w-sm mx-auto mt-1 mb-5">
+                      Add products individually, import a CSV list, or connect Shopify / WooCommerce to auto-sync.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={openAddProductModal}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add First Product
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSyncProvider('shopify');
+                          setSyncModalOpen(true);
+                        }}
+                        className="font-bold text-xs gap-1.5"
+                      >
+                        <Cloud className="h-3.5 w-3.5 text-blue-600" />
+                        Connect Store
+                      </Button>
+                    </div>
+                  </div>
+                ) : filteredCatalog.length === 0 ? (
+                  <div className="py-12 text-center border border-dashed border-stone-200 rounded-xl bg-stone-50">
+                    <Search className="h-6 w-6 text-stone-300 mx-auto mb-2" />
+                    <h4 className="text-xs font-bold text-stone-600">No matching products found</h4>
+                    <p className="text-[11px] text-stone-400 mt-1">Try clearing your search query or filters.</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-stone-100 rounded-xl border border-stone-200 overflow-hidden bg-white shadow-2xs">
+                    {filteredCatalog.map((product) => {
+                      const inStock = product.isActive !== false;
+                      return (
+                        <div
+                          key={product.id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 gap-4 hover:bg-stone-50/70 transition"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Product Thumbnail */}
+                            <div className="h-14 w-14 rounded-xl border border-stone-200 bg-stone-100 shrink-0 overflow-hidden relative flex items-center justify-center">
+                              {product.imageUrl ? (
+                                <img
+                                  src={product.imageUrl}
+                                  alt={product.name}
+                                  className="h-full w-full object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <Package className="h-6 w-6 text-stone-400" />
+                              )}
+                              {product.source && product.source !== 'manual' && (
+                                <span className="absolute bottom-0 inset-x-0 bg-stone-900/80 text-[8px] font-black text-white text-center py-0.5 uppercase tracking-wider">
+                                  {product.source === 'shopify'
+                                    ? 'Shopify'
+                                    : product.source === 'woocommerce'
+                                    ? 'Woo'
+                                    : 'CSV'}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Details */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-stone-900 truncate">
+                                  {product.name}
+                                </h4>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] font-bold bg-stone-100 text-stone-700 shrink-0"
+                                >
+                                  {product.category || 'General'}
+                                </Badge>
+                              </div>
+
+                              <div className="flex items-center gap-3 mt-1 text-xs text-stone-500">
+                                <span className="font-extrabold text-emerald-700">
+                                  {currencySymbol}
+                                  {Number(product.price || 0).toFixed(2)}
+                                </span>
+                                {product.sku && (
+                                  <span className="font-mono text-[10px] text-stone-400">
+                                    SKU: {product.sku}
+                                  </span>
+                                )}
+                              </div>
+
+                              {product.description && (
+                                <p className="text-[11px] text-stone-500 line-clamp-1 mt-1">
+                                  {product.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right Controls */}
+                          <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                            {/* Stock Toggle */}
+                            <button
+                              type="button"
+                              onClick={() => toggleProductStock(product.id)}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition border ${
+                                inStock
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                              }`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  inStock ? 'bg-emerald-500' : 'bg-rose-500'
+                                }`}
+                              />
+                              {inStock ? 'In Stock' : 'Out of Stock'}
+                            </button>
+
+                            {/* Edit Button */}
+                            <button
+                              type="button"
+                              onClick={() => openEditProductModal(product)}
+                              className="p-2 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition"
+                              title="Edit product"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              type="button"
+                              onClick={() => removeProduct(product.id, product.name)}
+                              className="p-2 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                              title="Delete product"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1220,6 +1558,358 @@ export function CommerceView() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= ADD / EDIT PRODUCT MODAL ======================= */}
+      {productModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase text-stone-400">
+                  {editingItem ? 'Edit Listing' : 'New Listing'}
+                </span>
+                <h3 className="text-lg font-black text-stone-900">
+                  {editingItem ? 'Edit Product' : 'Add New Product'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProductModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-700">Product Name *</label>
+                <Input
+                  value={prodName}
+                  onChange={(e) => setProdName(e.target.value)}
+                  placeholder="e.g. Sourdough Loaf 500g"
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Price ({currencySymbol}) *</label>
+                  <Input
+                    type="number"
+                    value={prodPrice}
+                    onChange={(e) => setProdPrice(e.target.value)}
+                    placeholder="180"
+                    className="mt-1 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Category</label>
+                  <Input
+                    value={prodCategory}
+                    onChange={(e) => setProdCategory(e.target.value)}
+                    placeholder="e.g. Breads"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">SKU Code</label>
+                  <Input
+                    value={prodSku}
+                    onChange={(e) => setProdSku(e.target.value)}
+                    placeholder="e.g. BRD-001"
+                    className="mt-1 text-xs font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Stock Availability</label>
+                  <div className="mt-1 flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 h-9">
+                    <span className="text-xs font-semibold text-stone-700">
+                      {prodIsActive ? 'In Stock' : 'Out of Stock'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setProdIsActive(!prodIsActive)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                        prodIsActive ? 'bg-emerald-600' : 'bg-stone-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          prodIsActive ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700">Image URL</label>
+                <div className="mt-1 flex items-center gap-3">
+                  <Input
+                    value={prodImageUrl}
+                    onChange={(e) => setProdImageUrl(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="text-xs flex-1"
+                  />
+                  <div className="h-9 w-9 rounded-lg border border-stone-200 bg-stone-50 flex items-center justify-center shrink-0 overflow-hidden">
+                    {prodImageUrl ? (
+                      <img
+                        src={prodImageUrl}
+                        alt="Preview"
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <ImageIcon className="h-4 w-4 text-stone-400" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700">Description / Details</label>
+                <textarea
+                  value={prodDesc}
+                  onChange={(e) => setProdDesc(e.target.value)}
+                  placeholder="Ingredients, dietary info, package weight..."
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2.5 text-xs text-stone-900 focus:border-stone-900 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setProductModalOpen(false)}
+                  className="text-xs font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveProductModal}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                >
+                  {editingItem ? 'Save Changes' : 'Create Product'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= STORE SYNC & CSV MODAL ======================= */}
+      {syncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase text-stone-400">
+                  Data Integration
+                </span>
+                <h3 className="text-lg font-black text-stone-900">Sync Catalog & Import</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSyncModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Provider Tabs */}
+            <div className="grid grid-cols-3 gap-2 p-1 rounded-xl bg-stone-100 mb-5">
+              <button
+                type="button"
+                onClick={() => setSyncProvider('shopify')}
+                className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                  syncProvider === 'shopify'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Store className="h-3.5 w-3.5 text-emerald-600" />
+                Shopify
+              </button>
+              <button
+                type="button"
+                onClick={() => setSyncProvider('woocommerce')}
+                className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                  syncProvider === 'woocommerce'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <ShoppingCart className="h-3.5 w-3.5 text-purple-600" />
+                WooCommerce
+              </button>
+              <button
+                type="button"
+                onClick={() => setSyncProvider('csv')}
+                className={`py-2 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 ${
+                  syncProvider === 'csv'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Upload className="h-3.5 w-3.5 text-blue-600" />
+                CSV Import
+              </button>
+            </div>
+
+            {/* Tab Contents */}
+            {syncProvider === 'shopify' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Shopify Store Domain *</label>
+                  <Input
+                    value={syncDomain}
+                    onChange={(e) => setSyncDomain(e.target.value)}
+                    placeholder="e.g. yourstore.myshopify.com"
+                    className="mt-1 text-xs"
+                  />
+                  <p className="text-[11px] text-stone-400 mt-1">
+                    Enter your myshopify.com domain or custom storefront domain.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-stone-700">
+                    Admin API Access Token (Optional)
+                  </label>
+                  <Input
+                    type="password"
+                    value={syncToken}
+                    onChange={(e) => setSyncToken(e.target.value)}
+                    placeholder="shpat_xxxxxxxxxxxxxxxxxxxxx"
+                    className="mt-1 text-xs font-mono"
+                  />
+                  <p className="text-[11px] text-stone-400 mt-1">
+                    If omitted, public storefront catalog will be fetched automatically.
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    onClick={handleExecuteStoreSync}
+                    disabled={isSyncing}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 gap-2"
+                  >
+                    {isSyncing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Cloud className="h-4 w-4" />
+                    )}
+                    {isSyncing ? 'Syncing Products...' : 'Start Shopify Catalog Sync'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {syncProvider === 'woocommerce' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">WooCommerce Site URL *</label>
+                  <Input
+                    value={syncDomain}
+                    onChange={(e) => setSyncDomain(e.target.value)}
+                    placeholder="https://yourstore.com"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-stone-700">Consumer Key *</label>
+                    <Input
+                      value={syncKey}
+                      onChange={(e) => setSyncKey(e.target.value)}
+                      placeholder="ck_xxxxxxxxxxxx"
+                      className="mt-1 text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-stone-700">Consumer Secret *</label>
+                    <Input
+                      type="password"
+                      value={syncSecret}
+                      onChange={(e) => setSyncSecret(e.target.value)}
+                      placeholder="cs_xxxxxxxxxxxx"
+                      className="mt-1 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-stone-400">
+                  Generate keys in WooCommerce → Settings → Advanced → REST API.
+                </p>
+
+                <div className="pt-2">
+                  <Button
+                    onClick={handleExecuteStoreSync}
+                    disabled={isSyncing}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-10 gap-2"
+                  >
+                    {isSyncing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Cloud className="h-4 w-4" />
+                    )}
+                    {isSyncing ? 'Syncing Products...' : 'Start WooCommerce Catalog Sync'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {syncProvider === 'csv' && (
+              <div className="space-y-4">
+                <div className="rounded-xl border-2 border-dashed border-stone-200 p-6 text-center bg-stone-50/50">
+                  <Upload className="h-8 w-8 text-stone-400 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-stone-700">
+                    {csvFile ? csvFile.name : 'Choose a CSV file to upload'}
+                  </p>
+                  <p className="text-[11px] text-stone-400 mt-1 mb-4">
+                    Columns supported: name, price, category, description, imageUrl, sku, stock
+                  </p>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        setCsvFile(e.target.files[0]);
+                      }
+                    }}
+                    className="text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                </div>
+
+                <div className="pt-2">
+                  <Button
+                    onClick={handleImportCSVFile}
+                    disabled={isSyncing || !csvFile}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-10 gap-2"
+                  >
+                    {isSyncing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {isSyncing ? 'Importing Products...' : 'Upload & Import Catalog'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

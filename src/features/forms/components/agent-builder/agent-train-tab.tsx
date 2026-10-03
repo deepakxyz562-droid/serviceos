@@ -37,7 +37,11 @@ import {
   FolderOpen,
   Eye,
   Filter,
+  ShoppingBag,
+  Store,
+  Package,
 } from 'lucide-react';
+import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -112,11 +116,47 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
   const [crawledPagesCount, setCrawledPagesCount] = useState<number | null>(null);
   const [extractedFacts, setExtractedFacts] = useState<any>(null);
 
-  // Multi-source and hierarchical folder state (Text.com parity)
-  const [activeSourceCategory, setActiveSourceCategory] = useState<'all' | 'website' | 'files' | 'faq' | 'facts' | 'unanswered'>('all');
+  // Multi-source and hierarchical folder state (Text.com & Tidio parity)
+  const [activeSourceCategory, setActiveSourceCategory] = useState<'all' | 'website' | 'files' | 'faq' | 'facts' | 'unanswered' | 'products'>('all');
   const [selectedFolder, setSelectedFolder] = useState<string>('All Pages');
   const [searchPageQuery, setSearchPageQuery] = useState('');
   const [previewDoc, setPreviewDoc] = useState<{ title: string; content?: string; url?: string } | null>(null);
+
+  // Products & Storefront Brain State (Tidio Lyro parity)
+  const [productsList, setProductsList] = useState<any[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productTestQ, setProductTestQ] = useState('');
+  const [productTestA, setProductTestA] = useState('');
+  const [testingProductAI, setTestingProductAI] = useState(false);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+
+  useEffect(() => {
+    fetch('/api/commerce/products')
+      .then((r) => r.json())
+      .then((d) => {
+        const items = [...(d.catalog || []), ...(d.dbProducts || [])];
+        const seen = new Set();
+        const deduped: any[] = [];
+        items.forEach((it) => {
+          const key = it.name || it.title;
+          if (key && !seen.has(key.toLowerCase())) {
+            seen.add(key.toLowerCase());
+            deduped.push({
+              id: it.id,
+              name: it.name || it.title,
+              price: it.price,
+              category: it.category || it.productType || 'General',
+              sku: it.sku,
+              imageUrl: it.imageUrl || (it.imagesJson ? JSON.parse(it.imagesJson || '[]')[0] : ''),
+              isActive: it.isActive !== false,
+              source: it.source || (it.externalProductId ? 'shopify' : 'manual'),
+            });
+          }
+        });
+        setProductsList(deduped);
+      })
+      .catch(() => {});
+  }, []);
 
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
@@ -605,7 +645,8 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
       {/* ── 0. SOURCE CATEGORY FILTER BAR (TEXT.COM PARITY) ── */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-border/60">
         {[
-          { id: 'all', label: 'All Sources', count: allDocs.length + (agent.knowledge?.faqPairs?.length || 0), icon: Layers },
+          { id: 'all', label: 'All Sources', count: allDocs.length + (agent.knowledge?.faqPairs?.length || 0) + productsList.length, icon: Layers },
+          { id: 'products', label: 'Products & Store', count: productsList.length, icon: ShoppingBag },
           { id: 'website', label: 'Websites & Sitemaps', count: allDocs.filter(d => d.type === 'url').length || agent.knowledge?.crawledUrls?.length || 0, icon: Globe },
           { id: 'files', label: 'Files & PDFs', count: allDocs.filter(d => d.type === 'pdf' || d.type === 'text').length, icon: FileText },
           { id: 'faq', label: 'FAQ Pairs', count: agent.knowledge?.faqPairs?.length || 0, icon: HelpCircle },
@@ -1357,6 +1398,154 @@ export function AgentTrainTab({ agent, onChange }: AgentTrainTabProps) {
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {/* ── PRODUCTS & E-COMMERCE CATALOG KNOWLEDGE (TIDIO LYRO PARITY) ── */}
+      {(activeSourceCategory === 'all' || activeSourceCategory === 'products') && (
+        <Card className="rounded-xl border-border/80 shadow-xs">
+          <CardHeader className="p-4 pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-xs font-bold flex items-center gap-1.5">
+                  <ShoppingBag className="size-3.5 text-emerald-600" />
+                  E-Commerce &amp; Product Catalog Knowledge (Tidio / Lyro Brain)
+                </CardTitle>
+                <CardDescription className="text-[11px] mt-0.5">
+                  Your AI employee automatically retrieves product details, real-time inventory, pricing, and specs when chatting with customers.
+                </CardDescription>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCurrentView('commerce')}
+                  className="text-xs h-7 gap-1 font-bold border-border/80 shadow-2xs"
+                >
+                  <Store className="size-3 text-emerald-600" />
+                  Open Full Commerce Hub
+                  <ArrowRight className="size-3" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-4 pt-1 space-y-4">
+            {/* Sync Status Banner */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-muted/30 border border-border/60">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                  <Package className="size-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-foreground">
+                    {productsList.length} Total Items
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">Indexed in AI Brain</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
+                  <Store className="size-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-foreground">
+                    {productsList.filter((p) => p.source && p.source !== 'manual').length} Synced Items
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">Shopify / WooCommerce / CSV</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+                  <CheckCircle2 className="size-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-foreground">
+                    {productsList.filter((p) => p.isActive !== false).length} In Stock
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">Available for ordering</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Products Preview Grid */}
+            {productsList.length === 0 ? (
+              <div className="py-8 text-center border border-dashed border-border/80 rounded-xl bg-muted/10">
+                <ShoppingBag className="size-8 text-muted-foreground/40 mx-auto mb-2" />
+                <h4 className="text-xs font-bold text-foreground">No Products Synced Yet</h4>
+                <p className="text-[11px] text-muted-foreground max-w-sm mx-auto mt-0.5 mb-3">
+                  Add products in the Commerce Hub or connect Shopify/WooCommerce so Lyro AI can answer product queries.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setCurrentView('commerce')}
+                  className="text-xs h-7 font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                >
+                  <Plus className="size-3" /> Go to Products Manager
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground font-semibold px-0.5">
+                  <span>Synced Products Sample ({Math.min(productsList.length, 6)} of {productsList.length})</span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('commerce')}
+                    className="text-blue-600 hover:underline flex items-center gap-0.5"
+                  >
+                    View &amp; Edit All ({productsList.length}) →
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {productsList.slice(0, 6).map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-2.5 rounded-lg border border-border/70 bg-background flex items-center gap-2.5 shadow-2xs"
+                    >
+                      <div className="size-10 rounded-md bg-muted/50 border border-border/60 overflow-hidden shrink-0 flex items-center justify-center">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="size-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <Package className="size-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-bold text-foreground truncate">{item.name}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] font-bold text-emerald-600">
+                            ₹{Number(item.price || 0).toFixed(2)}
+                          </span>
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-muted text-muted-foreground font-semibold">
+                            {item.category || 'General'}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          'size-2 rounded-full shrink-0',
+                          item.isActive !== false ? 'bg-emerald-500' : 'bg-rose-500'
+                        )}
+                        title={item.isActive !== false ? 'In Stock' : 'Out of Stock'}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* ── 6. SYSTEM PROMPT & STRICT GUARDRAILS ── */}

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_BASE_URL, API_PATHS } from '@/lib/constants';
 
 interface CartItem {
   id: string;
@@ -30,7 +31,7 @@ export default function MobilePosScreen() {
 
   useEffect(() => {
     // Load menu
-    fetch('http://localhost:3000/api/commerce/config')
+    fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.config?.catalogJson) {
@@ -79,7 +80,7 @@ export default function MobilePosScreen() {
 
     hapticFeedback.success();
     try {
-      await fetch('http://localhost:3000/api/commerce/orders', {
+      await fetch(`${API_BASE_URL}${API_PATHS.commerceOrders}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

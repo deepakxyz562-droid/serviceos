@@ -25,4 +25,9 @@ export const API_PATHS = {
   forms: '/api/forms',
   aiCopilot: '/api/ai/copilot',
   teachAi: '/api/forms/ai-teach',
+  commerceConfig: '/api/commerce/config',
+  commerceOrders: '/api/commerce/orders',
+  commerceOrderDetail: (id: string) => `/api/commerce/orders/${id}`,
+  ecommerceShopifySync: '/api/ecommerce/shopify/sync',
+  ecommerceWooSync: '/api/ecommerce/woocommerce/sync',
 };
