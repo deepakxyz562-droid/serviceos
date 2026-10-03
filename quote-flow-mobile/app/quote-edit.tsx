@@ -32,6 +32,10 @@ import { useAppStore } from "@/store/app";
 import { api, apiPatch, apiDelete } from "@/api/client";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
+import { sanitizeDecimal } from "@/lib/validation";
+import { CustomerSelectModal } from "@/components/CustomerSelectModal";
+import { CurrencySelectModal } from "@/components/CurrencySelectModal";
+import { SignaturePadModal } from "@/components/SignaturePadModal";
 
 interface Item {
   description: string;
@@ -55,11 +59,14 @@ export default function QuoteEditScreen() {
   const [selectedTemplateId, setSelectedTemplateId] = useState("modern");
   const [clientName, setClientName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [items, setItems] = useState<Item[]>([]);
   const [discountValue, setDiscountValue] = useState("0");
   const [discountType, setDiscountType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
   const [taxRate, setTaxRate] = useState("0");
   const [currency, setCurrency] = useState(business?.currency || "INR");
+  const [currencySymbol, setCurrencySymbol] = useState(business?.currencySymbol || "₹");
+  const [signatureData, setSignatureData] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState("DRAFT");
 
@@ -69,6 +76,9 @@ export default function QuoteEditScreen() {
   const [notesModalVisible, setNotesModalVisible] = useState(false);
   const [statusModalVisible, setStatusModalVisible] = useState(false);
   const [itemPickerVisible, setItemPickerVisible] = useState(false);
+  const [customerSelectVisible, setCustomerSelectVisible] = useState(false);
+  const [currencyModalVisible, setCurrencyModalVisible] = useState(false);
+  const [signaturePadVisible, setSignaturePadVisible] = useState(false);
   const [availableItems, setAvailableItems] = useState<any[]>([]);
 
   const load = useCallback(async () => {
@@ -84,9 +94,23 @@ export default function QuoteEditScreen() {
       setDiscountValue(String(q.discountValue || 0));
       setDiscountType(q.discountType || "AMOUNT");
       setTaxRate(String(q.taxRate || 0));
+      setCustomerId(q.customerId || null);
       setClientName(q.customer?.name || "");
       setClientEmail(q.customer?.email || "");
       setCurrency(business?.currency || "INR");
+      setCurrencySymbol(business?.currencySymbol || "₹");
+
+      if (q.notes) {
+        try {
+          if (q.notes.startsWith("{") && q.notes.endsWith("}")) {
+            const meta = JSON.parse(q.notes);
+            if (meta.signature) setSignatureData(meta.signature);
+            if (meta.currencyCode) setCurrency(meta.currencyCode);
+            if (meta.currencySymbol) setCurrencySymbol(meta.currencySymbol);
+            if (meta.terms) setNotes(meta.terms);
+          }
+        } catch {}
+      }
 
       if (q.pdfTemplate) {
         const tpl = q.pdfTemplate.includes(":")
@@ -111,7 +135,7 @@ export default function QuoteEditScreen() {
     } finally {
       setLoading(false);
     }
-  }, [params.id, business?.currency]);
+  }, [params.id, business?.currency, business?.currencySymbol]);
 
   useEffect(() => {
     load();
@@ -126,7 +150,8 @@ export default function QuoteEditScreen() {
   );
 
   function updateItem(idx: number, field: keyof Item, value: string) {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+    const sanitized = (field === "qty" || field === "unitPrice") ? sanitizeDecimal(value) : value;
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: sanitized } : it)));
   }
 
   function addItem() {
@@ -150,9 +175,29 @@ export default function QuoteEditScreen() {
       Alert.alert("Error", "Please add at least one line item");
       return;
     }
+    for (let i = 0; i < items.length; i++) {
+      if (!items[i].description.trim()) {
+        Alert.alert("Invalid Item", `Item #${i + 1} is missing a description.`);
+        return;
+      }
+      if ((parseFloat(items[i].qty) || 0) <= 0) {
+        Alert.alert("Invalid Quantity", `Item #${i + 1} must have a quantity greater than 0.`);
+        return;
+      }
+    }
     setSaving(true);
     try {
+      const meta = {
+        currencyCode: currency,
+        currencySymbol,
+        signature: signatureData,
+        signatureDataUrl: signatureData,
+        terms: notes,
+        docType,
+      };
+
       await apiPatch(`/api/quotes/${params.id}`, {
+        customerId: customerId || undefined,
         items: items.map((i) => ({
           description: i.description,
           qty: parseFloat(i.qty) || 0,
@@ -162,10 +207,23 @@ export default function QuoteEditScreen() {
         discountType,
         taxRate: parseFloat(taxRate) || 0,
         validUntil: validUntil ? new Date(validUntil).toISOString() : null,
-        notes,
+        notes: JSON.stringify(meta),
         status,
         pdfTemplate: selectedTemplateId,
       });
+
+      // Update business currency
+      apiPatch("/api/business/onboarding", {
+        currency,
+        currencySymbol,
+      }).catch(() => {});
+      if (business) {
+        useAppStore.getState().setBusiness({
+          ...business,
+          currency,
+          currencySymbol,
+        });
+      }
 
       if (thenPreview) {
         router.replace(`/quote/${params.id}`);
@@ -376,7 +434,7 @@ export default function QuoteEditScreen() {
             {/* Bill To */}
             <TouchableOpacity
               style={styles.partyRow}
-              onPress={() => router.push("/(tabs)/customers")}
+              onPress={() => setCustomerSelectVisible(true)}
             >
               <View style={[styles.partyIconWrap, { backgroundColor: "#ffedd5" }]}>
                 <MaterialIcons name="people" size={18} color="#ea580c" />
@@ -515,17 +573,29 @@ export default function QuoteEditScreen() {
             {/* Currency */}
             <TouchableOpacity
               style={styles.optionRow}
-              onPress={() => {
-                const nextCurr = currency === "INR" ? "USD" : currency === "USD" ? "EUR" : "INR";
-                setCurrency(nextCurr);
-              }}
+              onPress={() => setCurrencyModalVisible(true)}
             >
               <View style={styles.cardIconRow}>
                 <MaterialIcons name="payments" size={20} color="#475569" style={{ marginRight: 12 }} />
                 <Text style={styles.optionRowTitle}>Currency</Text>
               </View>
               <View style={styles.cardActionRight}>
-                <Text style={styles.optionRowValue}>{currency} {currency === "INR" ? "₹" : "$"}</Text>
+                <Text style={styles.optionRowValue}>{currency} {currencySymbol}</Text>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Signature */}
+            <TouchableOpacity
+              style={styles.optionRow}
+              onPress={() => setSignaturePadVisible(true)}
+            >
+              <View style={styles.cardIconRow}>
+                <MaterialIcons name="draw" size={20} color="#475569" style={{ marginRight: 12 }} />
+                <Text style={styles.optionRowTitle}>Signature</Text>
+              </View>
+              <View style={styles.cardActionRight}>
+                <Text style={styles.optionRowValue}>{signatureData ? "Attached" : "Add"}</Text>
                 <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
               </View>
             </TouchableOpacity>
@@ -609,7 +679,7 @@ export default function QuoteEditScreen() {
                 style={[styles.modalInput, { flex: 1 }]}
                 keyboardType="decimal-pad"
                 value={discountValue}
-                onChangeText={setDiscountValue}
+                onChangeText={(v) => setDiscountValue(sanitizeDecimal(v))}
                 placeholder="0"
               />
               <TouchableOpacity
@@ -802,6 +872,38 @@ export default function QuoteEditScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Customer Select Modal with In-line Add Client */}
+      <CustomerSelectModal
+        visible={customerSelectVisible}
+        onClose={() => setCustomerSelectVisible(false)}
+        selectedCustomerId={customerId}
+        onSelect={(c) => {
+          setCustomerId(c.id);
+          setClientName(c.name);
+          setClientEmail(c.email || "");
+        }}
+      />
+
+      {/* Currency Select Modal */}
+      <CurrencySelectModal
+        visible={currencyModalVisible}
+        onClose={() => setCurrencyModalVisible(false)}
+        selectedCode={currency}
+        onSelect={(c) => {
+          setCurrency(c.code);
+          setCurrencySymbol(c.symbol);
+        }}
+      />
+
+      {/* Signature Pad Modal */}
+      <SignaturePadModal
+        visible={signaturePadVisible}
+        onClose={() => setSignaturePadVisible(false)}
+        onSave={(dataUrl) => {
+          setSignatureData(dataUrl);
+        }}
+      />
     </SafeAreaView>
   );
 }

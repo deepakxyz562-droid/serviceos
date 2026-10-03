@@ -18,6 +18,18 @@ import * as ImagePicker from "expo-image-picker";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/app";
 import { apiPatch, clearToken, API_BASE_URL } from "@/api/client";
+import {
+  sanitizePhone,
+  isValidPhone,
+  sanitizeEmail,
+  isValidEmail,
+  sanitizeDecimal,
+  sanitizeInteger,
+  sanitizeIfsc,
+  isValidIfsc,
+  sanitizeUpi,
+  isValidUpi,
+} from "@/lib/validation";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -43,6 +55,31 @@ export default function SettingsScreen() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   async function save() {
+    if (!name.trim()) {
+      Alert.alert("Validation", "Please enter your business name.");
+      return;
+    }
+    if (phone.trim() && !isValidPhone(phone)) {
+      Alert.alert("Invalid Phone Number", "Please enter a valid phone number (7 to 15 digits).");
+      return;
+    }
+    if (email.trim() && !isValidEmail(email)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address.");
+      return;
+    }
+    const taxNum = parseFloat(defaultTaxRate);
+    if (defaultTaxRate.trim() && (isNaN(taxNum) || taxNum < 0 || taxNum > 100)) {
+      Alert.alert("Invalid Tax Rate", "Default tax percentage must be between 0 and 100.");
+      return;
+    }
+    if (upiId.trim() && !isValidUpi(upiId)) {
+      Alert.alert("Invalid UPI ID", "Please enter a valid UPI ID (e.g. yourname@bank).");
+      return;
+    }
+    if (bankIfsc.trim() && !isValidIfsc(bankIfsc)) {
+      Alert.alert("Invalid IFSC Code", "IFSC code must be 11 characters (e.g. HDFC0001234).");
+      return;
+    }
     setSaving(true);
     try {
       const r = await apiPatch<{ business: any }>("/api/mobile/business", {
@@ -144,18 +181,40 @@ export default function SettingsScreen() {
           </View>
 
           <View style={styles.card}>
-            <Input label="Business name" value={name} onChangeText={setName} />
-            <Input label="Your name" value={ownerName} onChangeText={setOwnerName} />
+            <Input label="Business name" value={name} onChangeText={setName} placeholder="e.g. Acme Services" />
+            <Input label="Your name" value={ownerName} onChangeText={setOwnerName} placeholder="e.g. John Doe" />
             <View style={styles.row}>
               <View style={styles.col}>
-                <Input label="Phone" value={phone} onChangeText={setPhone} />
+                <Input
+                  label="Phone"
+                  value={phone}
+                  onChangeText={(t) => setPhone(sanitizePhone(t))}
+                  keyboardType="phone-pad"
+                  textContentType="telephoneNumber"
+                  placeholder="+91 98765 43210"
+                />
               </View>
               <View style={styles.col}>
-                <Input label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" />
+                <Input
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="emailAddress"
+                  placeholder="contact@business.com"
+                />
               </View>
             </View>
-            <Input label="Address" value={address} onChangeText={setAddress} />
-            <Input label="Default tax %" value={defaultTaxRate} onChangeText={setDefaultTaxRate} keyboardType="numeric" />
+            <Input label="Address" value={address} onChangeText={setAddress} placeholder="Street, City, State, Pincode" />
+            <Input
+              label="Default tax %"
+              value={defaultTaxRate}
+              onChangeText={(t) => setDefaultTaxRate(sanitizeDecimal(t))}
+              keyboardType="decimal-pad"
+              placeholder="e.g. 18"
+            />
             <TouchableOpacity style={[styles.button, saving && styles.buttonDisabled]} onPress={save} disabled={saving}>
               <Text style={styles.buttonText}>{saving ? "Please wait..." : "Save"}</Text>
             </TouchableOpacity>
@@ -186,7 +245,14 @@ export default function SettingsScreen() {
           {/* Payment details (Phase M3) */}
           <Text style={styles.sectionTitle}>Payment Details</Text>
           <View style={styles.card}>
-            <Input label="UPI ID" value={upiId} onChangeText={setUpiId} placeholder="yourname@okhdfcbank" />
+            <Input
+              label="UPI ID"
+              value={upiId}
+              onChangeText={(t) => setUpiId(sanitizeUpi(t))}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="yourname@okhdfcbank"
+            />
 
             <TouchableOpacity
               style={styles.collapseBtn}
@@ -199,10 +265,24 @@ export default function SettingsScreen() {
 
             {showBankFields && (
               <>
-                <Input label="Account holder name" value={bankAccountName} onChangeText={setBankAccountName} />
-                <Input label="Account number" value={bankAccountNumber} onChangeText={setBankAccountNumber} keyboardType="numeric" />
-                <Input label="IFSC code" value={bankIfsc} onChangeText={setBankIfsc} placeholder="HDFC0001234" />
-                <Input label="Bank name" value={bankName} onChangeText={setBankName} placeholder="HDFC Bank" />
+                <Input label="Account holder name" value={bankAccountName} onChangeText={setBankAccountName} placeholder="Account holder name" />
+                <Input
+                  label="Account number"
+                  value={bankAccountNumber}
+                  onChangeText={(t) => setBankAccountNumber(sanitizeInteger(t))}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 5010023456789"
+                />
+                <Input
+                  label="IFSC code"
+                  value={bankIfsc}
+                  onChangeText={(t) => setBankIfsc(sanitizeIfsc(t))}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={11}
+                  placeholder="e.g. HDFC0001234"
+                />
+                <Input label="Bank name" value={bankName} onChangeText={setBankName} placeholder="e.g. HDFC Bank" />
               </>
             )}
             <Text style={styles.hint}>These details appear on your invoice PDFs + customer portal.</Text>
@@ -272,13 +352,21 @@ function Input({
   value,
   onChangeText,
   placeholder,
-  keyboardType,
+  keyboardType = "default",
+  autoCapitalize = "sentences",
+  autoCorrect = true,
+  maxLength,
+  textContentType,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
-  keyboardType?: "default" | "email-address" | "numeric";
+  keyboardType?: "default" | "email-address" | "numeric" | "phone-pad" | "decimal-pad" | "number-pad";
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  autoCorrect?: boolean;
+  maxLength?: number;
+  textContentType?: any;
 }) {
   return (
     <View style={{ marginBottom: 12 }}>
@@ -289,6 +377,10 @@ function Input({
         onChangeText={onChangeText}
         placeholder={placeholder}
         keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        maxLength={maxLength}
+        textContentType={textContentType}
       />
     </View>
   );

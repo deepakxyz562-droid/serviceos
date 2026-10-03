@@ -27,6 +27,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { api, apiPost, apiPatch } from "@/api/client";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
+import {
+  sanitizePhone,
+  isValidPhone,
+  sanitizeEmail,
+  isValidEmail,
+  sanitizeGstin,
+} from "@/lib/validation";
 
 export default function CustomerFormScreen() {
   const router = useRouter();
@@ -102,7 +109,19 @@ export default function CustomerFormScreen() {
 
   async function submit() {
     if (!name.trim()) {
-      Alert.alert("Required", "Please enter client name");
+      Alert.alert("Required Field", "Please enter client name");
+      return;
+    }
+    if (phone.trim() && !isValidPhone(phone)) {
+      Alert.alert("Invalid Phone Number", "Please enter a valid phone number (7 to 15 digits).");
+      return;
+    }
+    if (email.trim() && !isValidEmail(email)) {
+      Alert.alert("Invalid Email Address", "Please enter a valid email address (e.g. name@example.com).");
+      return;
+    }
+    if (gstin.trim() && gstin.trim().length !== 15) {
+      Alert.alert("Invalid GSTIN", "GSTIN must be exactly 15 alphanumeric characters.");
       return;
     }
     setLoading(true);
@@ -213,30 +232,35 @@ export default function CustomerFormScreen() {
             <Text style={styles.inputLabel}>GSTIN</Text>
             <TextInput
               style={styles.inputField}
-              placeholder="Enter GSTIN Number Here"
+              placeholder="15-digit GSTIN (Optional)"
               placeholderTextColor="#94a3b8"
               value={gstin}
-              onChangeText={setGstin}
+              onChangeText={(t) => setGstin(sanitizeGstin(t))}
               autoCapitalize="characters"
+              autoCorrect={false}
+              maxLength={15}
             />
 
             <Text style={styles.inputLabel}>Phone</Text>
             <TextInput
               style={styles.inputField}
-              placeholder="Optional"
+              placeholder="e.g. +91 98765 43210 (Optional)"
               placeholderTextColor="#94a3b8"
               keyboardType="phone-pad"
+              textContentType="telephoneNumber"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(t) => setPhone(sanitizePhone(t))}
             />
 
             <Text style={styles.inputLabel}>Email</Text>
             <TextInput
               style={[styles.inputField, { marginBottom: 0 }]}
-              placeholder="Optional"
+              placeholder="client@example.com (Optional)"
               placeholderTextColor="#94a3b8"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
               value={email}
               onChangeText={setEmail}
             />

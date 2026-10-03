@@ -17,6 +17,7 @@ import * as Linking from "expo-linking";
 import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { useAppStore } from "@/store/app";
 import { apiPost, saveToken, API_BASE_URL } from "@/api/client";
+import { isValidEmail } from "@/lib/validation";
 
 // Complete auth sessions if opened in browser popup
 WebBrowser.maybeCompleteAuthSession();
@@ -33,8 +34,16 @@ export default function AuthScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   async function submit() {
-    if (!email || !password || password.length < 6) {
-      Alert.alert("Input Error", "Please enter a valid email and password (min 6 chars).");
+    if (!email.trim() || !isValidEmail(email)) {
+      Alert.alert("Invalid Email", "Please enter a valid email address (e.g. you@example.com).");
+      return;
+    }
+    if (!password || password.length < 6) {
+      Alert.alert("Password Required", "Password must be at least 6 characters.");
+      return;
+    }
+    if (mode === "register" && !name.trim()) {
+      Alert.alert("Name Required", "Please enter your name or business name.");
       return;
     }
     setLoading(true);
@@ -166,6 +175,8 @@ export default function AuthScreen() {
             placeholder="you@example.com"
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="emailAddress"
           />
           <Input
             label="Password"
@@ -173,6 +184,9 @@ export default function AuthScreen() {
             onChangeText={setPassword}
             placeholder="At least 6 characters"
             secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="password"
           />
 
           <TouchableOpacity
@@ -199,9 +213,11 @@ function Input({
   value,
   onChangeText,
   placeholder,
-  keyboardType,
+  keyboardType = "default",
   secureTextEntry,
-  autoCapitalize,
+  autoCapitalize = "sentences",
+  autoCorrect = true,
+  textContentType,
 }: {
   label: string;
   value: string;
@@ -210,6 +226,8 @@ function Input({
   keyboardType?: "default" | "email-address";
   secureTextEntry?: boolean;
   autoCapitalize?: "none" | "sentences";
+  autoCorrect?: boolean;
+  textContentType?: any;
 }) {
   return (
     <View style={styles.inputWrap}>
@@ -219,9 +237,12 @@ function Input({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
+        placeholderTextColor="#94a3b8"
         keyboardType={keyboardType}
         secureTextEntry={secureTextEntry}
         autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        textContentType={textContentType}
       />
     </View>
   );

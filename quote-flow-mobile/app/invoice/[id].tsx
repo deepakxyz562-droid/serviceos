@@ -412,15 +412,25 @@ export default function InvoicePreviewScreen() {
   const balance = Math.max(0, (inv.total || 0) - paidAmount);
   const isPaid = inv.status === "PAID" || balance === 0;
 
-  // Extract currency overrides from invoice notes metadata if set
+  // Extract currency and metadata overrides from invoice notes
   let invoiceCurrency = business?.currency || "INR";
   let invoiceCurrencySymbol = business?.currencySymbol || "₹";
+  let signatureDataUrl: string | null = null;
+  let termsList: string[] = [];
+  let showBank = business?.showBankOnInvoice ?? true;
+  let showUpi = business?.showUpiOnInvoice ?? true;
+
   if (inv?.notes) {
     try {
       if (inv.notes.startsWith("{") && inv.notes.endsWith("}")) {
         const meta = JSON.parse(inv.notes);
         if (meta.currencyCode) invoiceCurrency = meta.currencyCode;
         if (meta.currencySymbol) invoiceCurrencySymbol = meta.currencySymbol;
+        if (meta.signature || meta.signatureDataUrl) signatureDataUrl = meta.signature || meta.signatureDataUrl;
+        if (Array.isArray(meta.terms)) termsList = meta.terms;
+        else if (typeof meta.terms === "string") termsList = [meta.terms];
+        if (meta.showBankDetails !== undefined) showBank = meta.showBankDetails;
+        if (meta.showUpiQr !== undefined) showUpi = meta.showUpiQr;
       }
     } catch {}
   }
@@ -616,6 +626,71 @@ export default function InvoicePreviewScreen() {
               </View>
             </View>
           </View>
+
+          {/* Payment & Bank Details on Document Sheet */}
+          {((showBank && (business?.bankName || business?.bankAccountNumber)) || (showUpi && business?.upiId)) ? (
+            <View style={styles.sheetPaymentDetailsCard}>
+              <Text style={[styles.sheetSectionHeading, { color: theme.accent }]}>Payment Details</Text>
+              {showBank && business?.bankName ? (
+                <View style={styles.sheetBankDetails}>
+                  <Text style={styles.sheetBankRow}>
+                    <Text style={styles.sheetBankLabel}>Bank: </Text>
+                    {business.bankName}
+                  </Text>
+                  {business.bankAccountNumber ? (
+                    <Text style={styles.sheetBankRow}>
+                      <Text style={styles.sheetBankLabel}>A/C: </Text>
+                      {business.bankAccountNumber}
+                    </Text>
+                  ) : null}
+                  {business.bankIfsc ? (
+                    <Text style={styles.sheetBankRow}>
+                      <Text style={styles.sheetBankLabel}>IFSC: </Text>
+                      {business.bankIfsc}
+                    </Text>
+                  ) : null}
+                  {business.name ? (
+                    <Text style={styles.sheetBankRow}>
+                      <Text style={styles.sheetBankLabel}>Name: </Text>
+                      {business.name}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+              {showUpi && business?.upiId ? (
+                <View style={styles.sheetUpiRow}>
+                  <MaterialIcons name="qr-code-2" size={32} color="#1e293b" />
+                  <View style={{ marginLeft: 8 }}>
+                    <Text style={styles.sheetUpiLabel}>Scan to Pay (UPI)</Text>
+                    <Text style={styles.sheetUpiId}>{business.upiId}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Terms and Conditions */}
+          {termsList.length > 0 ? (
+            <View style={styles.sheetTermsCard}>
+              <Text style={[styles.sheetSectionHeading, { color: theme.accent }]}>Terms & Conditions</Text>
+              {termsList.map((term, idx) => (
+                <Text key={idx} style={styles.sheetTermItem}>• {term}</Text>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Authorized Signature Stamp */}
+          {signatureDataUrl ? (
+            <View style={styles.sheetSignatureWrap}>
+              <Image
+                source={{ uri: signatureDataUrl }}
+                style={styles.sheetSignatureImg}
+                resizeMode="contain"
+              />
+              <View style={styles.sheetSignatoryLine} />
+              <Text style={styles.sheetSignatoryText}>Authorized Signatory</Text>
+            </View>
+          ) : null}
 
           {/* PAID Stamp Overlay (if paid) */}
           {isPaid && (
@@ -1350,5 +1425,87 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 999,
+  },
+  sheetPaymentDetailsCard: {
+    marginTop: 14,
+    padding: 10,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  sheetSectionHeading: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  sheetBankDetails: {
+    gap: 2,
+  },
+  sheetBankRow: {
+    fontSize: 10,
+    color: "#334155",
+  },
+  sheetBankLabel: {
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  sheetUpiRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  sheetUpiLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+  },
+  sheetUpiId: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  sheetTermsCard: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  sheetTermItem: {
+    fontSize: 9,
+    color: "#475569",
+    lineHeight: 14,
+    marginBottom: 2,
+  },
+  sheetSignatureWrap: {
+    alignItems: "flex-end",
+    marginTop: 18,
+    paddingRight: 8,
+  },
+  sheetSignatureImg: {
+    width: 110,
+    height: 38,
+    marginBottom: 4,
+  },
+  sheetSignatoryLine: {
+    width: 120,
+    height: 1,
+    backgroundColor: "#94a3b8",
+    marginBottom: 3,
+  },
+  sheetSignatoryText: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
 });

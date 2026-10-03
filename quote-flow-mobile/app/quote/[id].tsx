@@ -415,15 +415,25 @@ export default function QuotePreviewScreen() {
   const theme = getTemplateTheme(quote.pdfTemplate);
   const isAccepted = quote.status === "ACCEPTED";
 
-  // Extract currency overrides from quote notes metadata if set
+  // Extract currency and metadata overrides from quote notes
   let quoteCurrency = business?.currency || "INR";
   let quoteCurrencySymbol = business?.currencySymbol || "₹";
+  let signatureDataUrl: string | null = null;
+  let termsList: string[] = [];
+  let showBank = business?.showBankOnInvoice ?? true;
+  let showUpi = business?.showUpiOnInvoice ?? true;
+
   if (quote?.notes) {
     try {
       if (quote.notes.startsWith("{") && quote.notes.endsWith("}")) {
         const meta = JSON.parse(quote.notes);
         if (meta.currencyCode) quoteCurrency = meta.currencyCode;
         if (meta.currencySymbol) quoteCurrencySymbol = meta.currencySymbol;
+        if (meta.signature || meta.signatureDataUrl) signatureDataUrl = meta.signature || meta.signatureDataUrl;
+        if (Array.isArray(meta.terms)) termsList = meta.terms;
+        else if (typeof meta.terms === "string") termsList = [meta.terms];
+        if (meta.showBankDetails !== undefined) showBank = meta.showBankDetails;
+        if (meta.showUpiQr !== undefined) showUpi = meta.showUpiQr;
       }
     } catch {}
   }
@@ -584,7 +594,7 @@ export default function QuotePreviewScreen() {
                 <View style={styles.docSummaryRow}>
                   <Text style={styles.docSummaryLabel}>Discount</Text>
                   <Text style={styles.docSummaryVal}>
-                    -{formatCurrency(quote.discount || 0, business?.currency, business?.currencySymbol)}
+                    -{formatCurrency(quote.discount || 0, quoteCurrency, quoteCurrencySymbol)}
                   </Text>
                 </View>
               )}
@@ -593,7 +603,7 @@ export default function QuotePreviewScreen() {
                 <View style={styles.docSummaryRow}>
                   <Text style={styles.docSummaryLabel}>Tax ({quote.taxRate || 0}%)</Text>
                   <Text style={styles.docSummaryVal}>
-                    {formatCurrency(quote.tax || 0, business?.currency, business?.currencySymbol)}
+                    {formatCurrency(quote.tax || 0, quoteCurrency, quoteCurrencySymbol)}
                   </Text>
                 </View>
               )}
@@ -602,11 +612,70 @@ export default function QuotePreviewScreen() {
               <View style={[styles.balanceDueBanner, { backgroundColor: theme.accent }]}>
                 <Text style={styles.balanceDueText}>ESTIMATE TOTAL</Text>
                 <Text style={styles.balanceDueAmount}>
-                  {formatCurrency(quote.total || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(quote.total || 0, quoteCurrency, quoteCurrencySymbol)}
                 </Text>
               </View>
             </View>
           </View>
+
+          {/* Payment & Bank Details on Document Sheet */}
+          {((showBank && (business?.bankName || business?.bankAccountNumber)) || (showUpi && business?.upiId)) ? (
+            <View style={styles.sheetPaymentDetailsCard}>
+              <Text style={[styles.sheetSectionHeading, { color: theme.accent }]}>Payment Details</Text>
+              {showBank && business?.bankName ? (
+                <View style={styles.sheetBankDetails}>
+                  <Text style={styles.sheetBankRow}>
+                    <Text style={styles.sheetBankLabel}>Bank: </Text>
+                    {business.bankName}
+                  </Text>
+                  {business.bankAccountNumber ? (
+                    <Text style={styles.sheetBankRow}>
+                      <Text style={styles.sheetBankLabel}>A/C: </Text>
+                      {business.bankAccountNumber}
+                    </Text>
+                  ) : null}
+                  {business.bankIfsc ? (
+                    <Text style={styles.sheetBankRow}>
+                      <Text style={styles.sheetBankLabel}>IFSC: </Text>
+                      {business.bankIfsc}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+              {showUpi && business?.upiId ? (
+                <View style={styles.sheetUpiRow}>
+                  <MaterialIcons name="qr-code-2" size={32} color="#1e293b" />
+                  <View style={{ marginLeft: 8 }}>
+                    <Text style={styles.sheetUpiLabel}>Scan to Pay (UPI)</Text>
+                    <Text style={styles.sheetUpiId}>{business.upiId}</Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Terms and Conditions */}
+          {termsList.length > 0 ? (
+            <View style={styles.sheetTermsCard}>
+              <Text style={[styles.sheetSectionHeading, { color: theme.accent }]}>Terms & Conditions</Text>
+              {termsList.map((term, idx) => (
+                <Text key={idx} style={styles.sheetTermItem}>• {term}</Text>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Authorized Signature Stamp */}
+          {signatureDataUrl ? (
+            <View style={styles.sheetSignatureWrap}>
+              <Image
+                source={{ uri: signatureDataUrl }}
+                style={styles.sheetSignatureImg}
+                resizeMode="contain"
+              />
+              <View style={styles.sheetSignatoryLine} />
+              <Text style={styles.sheetSignatoryText}>Authorized Signatory</Text>
+            </View>
+          ) : null}
 
           {/* ACCEPTED Stamp Overlay (if accepted) */}
           {isAccepted && (
@@ -1342,5 +1411,87 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 999,
+  },
+  sheetPaymentDetailsCard: {
+    marginTop: 14,
+    padding: 10,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  sheetSectionHeading: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  sheetBankDetails: {
+    gap: 2,
+  },
+  sheetBankRow: {
+    fontSize: 10,
+    color: "#334155",
+  },
+  sheetBankLabel: {
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  sheetUpiRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#e2e8f0",
+  },
+  sheetUpiLabel: {
+    fontSize: 9,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+  },
+  sheetUpiId: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0f172a",
+  },
+  sheetTermsCard: {
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: "#ffffff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  sheetTermItem: {
+    fontSize: 9,
+    color: "#475569",
+    lineHeight: 14,
+    marginBottom: 2,
+  },
+  sheetSignatureWrap: {
+    alignItems: "flex-end",
+    marginTop: 18,
+    paddingRight: 8,
+  },
+  sheetSignatureImg: {
+    width: 110,
+    height: 38,
+    marginBottom: 4,
+  },
+  sheetSignatoryLine: {
+    width: 120,
+    height: 1,
+    backgroundColor: "#94a3b8",
+    marginBottom: 3,
+  },
+  sheetSignatoryText: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
   },
 });

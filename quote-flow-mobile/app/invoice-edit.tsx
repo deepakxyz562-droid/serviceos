@@ -43,6 +43,10 @@ import { formatCurrency } from "@/lib/format";
 import { WORLD_CURRENCIES, type CurrencyItem } from "@/lib/currencies";
 import { PRESET_TERMS } from "@/lib/preset-terms";
 import { MaterialIcons, Feather, FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { sanitizeDecimal, sanitizeInteger } from "@/lib/validation";
+import { SignaturePadModal } from "@/components/SignaturePadModal";
+import { CustomerSelectModal, type CustomerItem } from "@/components/CustomerSelectModal";
+import { CurrencySelectModal } from "@/components/CurrencySelectModal";
 
 interface Item {
   description: string;
@@ -116,6 +120,8 @@ export default function InvoiceEditScreen() {
   const [tempPaymentText, setTempPaymentText] = useState("");
 
   const [signatureSheetVisible, setSignatureSheetVisible] = useState(false);
+  const [signaturePadVisible, setSignaturePadVisible] = useState(false);
+  const [customerSelectVisible, setCustomerSelectVisible] = useState(false);
   const [createTermModalVisible, setCreateTermModalVisible] = useState(false);
   const [tempCustomTerm, setTempCustomTerm] = useState("");
 
@@ -246,7 +252,8 @@ export default function InvoiceEditScreen() {
   const grandTotal = taxableAmount + gstAmount + (parseFloat(shippingFee) || 0);
 
   function updateItem(idx: number, field: keyof Item, value: string) {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+    const sanitized = (field === "qty" || field === "unitPrice") ? sanitizeDecimal(value) : value;
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: sanitized } : it)));
   }
 
   function addItem() {
@@ -662,17 +669,11 @@ export default function InvoiceEditScreen() {
                 style={styles.sheetOptionRow}
                 onPress={() => {
                   setSignatureSheetVisible(false);
-                  Alert.prompt
-                    ? Alert.prompt("Sign Now", "Enter your name to sign", (name) => {
-                        if (name) {
-                          setSignatureData(`https://via.placeholder.com/200x60.png?text=${encodeURIComponent(name)}`);
-                        }
-                      })
-                    : pickSignatureImage(false);
+                  setSignaturePadVisible(true);
                 }}
               >
                 <MaterialIcons name="draw" size={22} color="#2563eb" style={{ marginRight: 14 }} />
-                <Text style={styles.sheetOptionText}>Sign Now</Text>
+                <Text style={styles.sheetOptionText}>Sign Now (Draw with finger)</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.sheetOptionRow} onPress={() => pickSignatureImage(false)}>
@@ -913,7 +914,7 @@ export default function InvoiceEditScreen() {
 
             <TouchableOpacity
               style={styles.partyRow}
-              onPress={() => router.push("/(tabs)/customers")}
+              onPress={() => setCustomerSelectVisible(true)}
             >
               <View style={[styles.partyIconWrap, { backgroundColor: "#ffedd5" }]}>
                 <MaterialIcons name="people" size={18} color="#ea580c" />
@@ -1058,7 +1059,7 @@ export default function InvoiceEditScreen() {
                       style={[styles.miniInput, { flex: 1 }]}
                       keyboardType="decimal-pad"
                       value={discountValue}
-                      onChangeText={setDiscountValue}
+                      onChangeText={(v) => setDiscountValue(sanitizeDecimal(v))}
                     />
                     <TouchableOpacity
                       style={styles.toggleUnitBtn}
@@ -1077,7 +1078,7 @@ export default function InvoiceEditScreen() {
                     style={[styles.miniInput, { marginTop: 4 }]}
                     keyboardType="decimal-pad"
                     value={shippingFee}
-                    onChangeText={setShippingFee}
+                    onChangeText={(v) => setShippingFee(sanitizeDecimal(v))}
                   />
                 </View>
               </View>
@@ -1406,6 +1407,26 @@ export default function InvoiceEditScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Customer Select Modal */}
+      <CustomerSelectModal
+        visible={customerSelectVisible}
+        onClose={() => setCustomerSelectVisible(false)}
+        selectedCustomerId={customerId}
+        onSelect={(cust) => {
+          setCustomerId(cust.id);
+          setClientName(cust.name);
+        }}
+      />
+
+      {/* Signature Pad Modal */}
+      <SignaturePadModal
+        visible={signaturePadVisible}
+        onClose={() => setSignaturePadVisible(false)}
+        onSave={(dataUrl) => {
+          setSignatureData(dataUrl);
+        }}
+      />
     </SafeAreaView>
   );
 }

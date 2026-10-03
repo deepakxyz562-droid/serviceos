@@ -27,6 +27,7 @@ import { useAppStore } from "@/store/app";
 import { api, apiPatch, API_BASE_URL } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
+import { SignaturePadModal } from "@/components/SignaturePadModal";
 
 // Available templates matching web PDF catalog
 const TEMPLATES = [
@@ -83,6 +84,7 @@ export default function CustomizeScreen() {
   const [showUpiQr, setShowUpiQr] = useState(business?.showUpiOnInvoice ?? true);
   const [logoUrl, setLogoUrl] = useState(business?.logoUrl || "");
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [signaturePadVisible, setSignaturePadVisible] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -550,13 +552,17 @@ export default function CustomizeScreen() {
             {signatureData ? (
               <View style={[styles.sigBox, { alignItems: "center", paddingVertical: 10 }]}>
                 <Image source={{ uri: signatureData }} style={{ width: 140, height: 50, marginBottom: 8 }} resizeMode="contain" />
-                <View style={{ flexDirection: "row", gap: 10 }}>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={[styles.sigBtn, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]} onPress={() => setSignaturePadVisible(true)}>
+                    <MaterialIcons name="draw" size={15} color="#2563eb" style={{ marginRight: 4 }} />
+                    <Text style={[styles.sigBtnText, { color: "#2563eb" }]}>Draw</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(false)}>
-                    <Feather name="image" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Feather name="image" size={14} color="#2563eb" style={{ marginRight: 4 }} />
                     <Text style={styles.sigBtnText}>Gallery</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(true)}>
-                    <Feather name="camera" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Feather name="camera" size={14} color="#2563eb" style={{ marginRight: 4 }} />
                     <Text style={styles.sigBtnText}>Camera</Text>
                   </TouchableOpacity>
                 </View>
@@ -564,14 +570,14 @@ export default function CustomizeScreen() {
             ) : (
               <View style={styles.sigBox}>
                 <Text style={styles.sigBoxText}>No authorized signature attached yet</Text>
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
-                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(false)}>
-                    <Feather name="image" size={14} color="#2563eb" style={{ marginRight: 6 }} />
-                    <Text style={styles.sigBtnText}>Choose Photo</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                  <TouchableOpacity style={[styles.sigBtn, { backgroundColor: "#eff6ff", borderColor: "#bfdbfe" }]} onPress={() => setSignaturePadVisible(true)}>
+                    <MaterialIcons name="draw" size={15} color="#2563eb" style={{ marginRight: 4 }} />
+                    <Text style={[styles.sigBtnText, { color: "#2563eb" }]}>Draw Signature</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(true)}>
-                    <Feather name="camera" size={14} color="#2563eb" style={{ marginRight: 6 }} />
-                    <Text style={styles.sigBtnText}>Take Photo</Text>
+                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(false)}>
+                    <Feather name="image" size={14} color="#2563eb" style={{ marginRight: 4 }} />
+                    <Text style={styles.sigBtnText}>Photo</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -653,6 +659,15 @@ export default function CustomizeScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Signature Pad Modal */}
+      <SignaturePadModal
+        visible={signaturePadVisible}
+        onClose={() => setSignaturePadVisible(false)}
+        onSave={(dataUrl) => {
+          setSignatureData(dataUrl);
+        }}
+      />
     </SafeAreaView>
   );
 }

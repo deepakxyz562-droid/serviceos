@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useAppStore } from "@/store/app";
-import { api, apiPost } from "@/api/client";
+import { api, apiPost, apiPatch } from "@/api/client";
 import {
   computeInvoiceTotals,
   formatCurrency,
@@ -24,6 +24,9 @@ import {
   type CalcLineItem,
 } from "@/lib/quote-flow-calc";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
+import { sanitizeDecimal } from "@/lib/validation";
+import { CustomerSelectModal } from "@/components/CustomerSelectModal";
+import { CurrencySelectModal } from "@/components/CurrencySelectModal";
 
 interface Item extends CalcLineItem {
   description: string;
@@ -81,6 +84,9 @@ export default function InvoiceCreateScreen() {
   const [dueDateText, setDueDateText] = useState(pendingDraft?.terms || "Due on receipt");
   const [paymentMethod, setPaymentMethod] = useState("Bank Transfer & UPI");
   const [loading, setLoading] = useState(false);
+  const [currencyCode, setCurrencyCode] = useState(business?.currency || "INR");
+  const [currencySymbol, setCurrencySymbol] = useState(business?.currencySymbol || "₹");
+  const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
 
   useEffect(() => {
     api<{ customers: any[] }>("/api/mobile/customers").then((r) => {
@@ -155,7 +161,7 @@ export default function InvoiceCreateScreen() {
     discountType,
     globalTaxRate: parseFloat(globalTaxRate) || 0,
     shippingFee: parseFloat(shippingFee) || 0,
-    currency: business?.currency || "INR",
+    currency: currencyCode,
   });
 
   function updateItem(idx: number, patch: Partial<Item>) {
@@ -197,7 +203,26 @@ export default function InvoiceCreateScreen() {
         discountType,
         taxRate: docType === "SIMPLE_BILL" ? parseFloat(globalTaxRate) || 0 : 18,
         pdfTemplate: selectedTemplateId,
+        notes: JSON.stringify({
+          currencyCode,
+          currencySymbol,
+          shippingFee: parseFloat(shippingFee) || 0,
+          dueTerms: dueDateText,
+        }),
       });
+
+      // Update business currency
+      apiPatch("/api/business/onboarding", {
+        currency: currencyCode,
+        currencySymbol,
+      }).catch(() => {});
+      if (business) {
+        useAppStore.getState().setBusiness({
+          ...business,
+          currency: currencyCode,
+          currencySymbol,
+        });
+      }
 
       router.replace(`/invoice/${r.invoice.id}`);
     } catch (e: any) {
@@ -224,7 +249,7 @@ export default function InvoiceCreateScreen() {
     return () => sub.remove();
   }, [handleBack]);
 
-  const currency = business?.currency || "INR";
+  const currency = currencyCode;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -422,7 +447,11 @@ export default function InvoiceCreateScreen() {
             <View style={styles.dottedConnector} />
 
             {/* Bill To */}
-            <View style={styles.cardRowBetween}>
+            <TouchableOpacity
+              style={styles.cardRowBetween}
+              onPress={() => setPickerOpen(true)}
+              activeOpacity={0.7}
+            >
               <View style={styles.cardLeftGroup}>
                 <View style={[styles.iconBox, { backgroundColor: "#fff7ed" }]}>
                   <MaterialIcons name="people" size={20} color="#f97316" />
@@ -434,13 +463,10 @@ export default function InvoiceCreateScreen() {
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.circleAddBtn}
-                onPress={() => setPickerOpen(true)}
-              >
-                <MaterialIcons name="add" size={18} color="white" />
-              </TouchableOpacity>
-            </View>
+              <View style={styles.circleAddBtn}>
+                <MaterialIcons name={selectedCustomer ? "check" : "add"} size={18} color="white" />
+              </View>
+            </TouchableOpacity>
           </View>
 
           {/* Card 4: Items & Subtotals */}
@@ -485,7 +511,10 @@ export default function InvoiceCreateScreen() {
                       <TextInput
                         keyboardType="decimal-pad"
                         value={String(item.qty)}
-                        onChangeText={(t) => updateItem(idx, { qty: parseFloat(t) || 1 })}
+                        onChangeText={(t) => {
+                          const clean = sanitizeDecimal(t);
+                          updateItem(idx, { qty: clean === "" ? 0 : parseFloat(clean) || 0 });
+                        }}
                         style={styles.itemInput}
                       />
                     </View>
@@ -494,7 +523,10 @@ export default function InvoiceCreateScreen() {
                       <TextInput
                         keyboardType="decimal-pad"
                         value={String(item.unitPrice)}
-                        onChangeText={(t) => updateItem(idx, { unitPrice: parseFloat(t) || 0 })}
+                        onChangeText={(t) => {
+                          const clean = sanitizeDecimal(t);
+                          updateItem(idx, { unitPrice: clean === "" ? 0 : parseFloat(clean) || 0 });
+                        }}
                         style={styles.itemInput}
                       />
                     </View>
@@ -504,7 +536,10 @@ export default function InvoiceCreateScreen() {
                         <TextInput
                           keyboardType="decimal-pad"
                           value={String(item.taxRate ?? 18)}
-                          onChangeText={(t) => updateItem(idx, { taxRate: parseFloat(t) || 0 })}
+                          onChangeText={(t) => {
+                            const clean = sanitizeDecimal(t);
+                            updateItem(idx, { taxRate: clean === "" ? 0 : parseFloat(clean) || 0 });
+                          }}
                           style={styles.itemInput}
                         />
                       </View>
@@ -578,7 +613,7 @@ export default function InvoiceCreateScreen() {
                     <TextInput
                       keyboardType="decimal-pad"
                       value={discountValue}
-                      onChangeText={setDiscountValue}
+                      onChangeText={(t) => setDiscountValue(sanitizeDecimal(t))}
                       style={styles.itemInput}
                     />
                   </View>
@@ -587,7 +622,7 @@ export default function InvoiceCreateScreen() {
                     <TextInput
                       keyboardType="decimal-pad"
                       value={shippingFee}
-                      onChangeText={setShippingFee}
+                      onChangeText={(t) => setShippingFee(sanitizeDecimal(t))}
                       style={styles.itemInput}
                     />
                   </View>
@@ -599,7 +634,7 @@ export default function InvoiceCreateScreen() {
                     <TextInput
                       keyboardType="decimal-pad"
                       value={globalTaxRate}
-                      onChangeText={setGlobalTaxRate}
+                      onChangeText={(t) => setGlobalTaxRate(sanitizeDecimal(t))}
                       style={styles.itemInput}
                     />
                   </View>
@@ -614,7 +649,11 @@ export default function InvoiceCreateScreen() {
           </View>
 
           {/* Card 6: Currency */}
-          <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => setCurrencyModalOpen(true)}
+            activeOpacity={0.7}
+          >
             <View style={styles.cardRowBetween}>
               <View style={styles.cardLeftGroup}>
                 <View style={[styles.iconBox, { backgroundColor: "#fefce8" }]}>
@@ -623,11 +662,11 @@ export default function InvoiceCreateScreen() {
                 <Text style={styles.cardSectionTitle}>Currency</Text>
               </View>
               <View style={styles.cardRightGroup}>
-                <Text style={styles.cardValueText}>INR ₹</Text>
+                <Text style={styles.cardValueText}>{currencyCode} {currencySymbol}</Text>
                 <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Card 7: Payment Method */}
           <View style={styles.card}>
@@ -669,42 +708,24 @@ export default function InvoiceCreateScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Customer Picker Modal */}
-        <Modal visible={pickerOpen} animationType="slide" transparent>
-          <View style={styles.pickerModalBackdrop}>
-            <View style={styles.pickerModalContent}>
-              <View style={styles.pickerModalHeader}>
-                <Text style={styles.pickerModalTitle}>Select Client</Text>
-                <TouchableOpacity onPress={() => setPickerOpen(false)}>
-                  <MaterialIcons name="close" size={22} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView contentContainerStyle={{ padding: 16, gap: 8 }}>
-                {customers.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    onPress={() => {
-                      setSelectedCustomer(c);
-                      setPickerOpen(false);
-                    }}
-                    style={[
-                      styles.customerOption,
-                      selectedCustomer?.id === c.id && styles.customerOptionSelected,
-                    ]}
-                  >
-                    <View>
-                      <Text style={styles.customerOptionName}>{c.name}</Text>
-                      <Text style={styles.customerOptionMeta}>{c.email || c.phone || "No details"}</Text>
-                    </View>
-                    {selectedCustomer?.id === c.id && (
-                      <MaterialIcons name="check" size={20} color="#2563eb" />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
+        {/* Customer Select Modal with in-line client creation */}
+        <CustomerSelectModal
+          visible={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          selectedCustomerId={selectedCustomer?.id}
+          onSelect={(c) => setSelectedCustomer(c)}
+        />
+
+        {/* Currency Select Modal */}
+        <CurrencySelectModal
+          visible={currencyModalOpen}
+          onClose={() => setCurrencyModalOpen(false)}
+          selectedCode={currencyCode}
+          onSelect={(c) => {
+            setCurrencyCode(c.code);
+            setCurrencySymbol(c.symbol);
+          }}
+        />
 
         {/* Template Picker Modal */}
         <Modal visible={templatePickerOpen} animationType="slide" transparent>

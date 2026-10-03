@@ -19,6 +19,7 @@ import { useAppStore } from "@/store/app";
 import { api, apiPost, apiPatch, apiDelete } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
 import { MaterialIcons } from "@expo/vector-icons";
+import { sanitizeDecimal } from "@/lib/validation";
 
 export default function ItemsScreen() {
   const business = useAppStore((s) => s.business);
@@ -195,6 +196,16 @@ function ItemFormModal({
       Alert.alert("Validation", "Description is required");
       return;
     }
+    const price = parseFloat(unitPrice);
+    if (unitPrice.trim() && (isNaN(price) || price < 0)) {
+      Alert.alert("Invalid Price", "Unit price must be a valid positive number.");
+      return;
+    }
+    const tax = parseFloat(taxRate);
+    if (taxRate.trim() && (isNaN(tax) || tax < 0 || tax > 100)) {
+      Alert.alert("Invalid Tax Rate", "Tax percentage must be between 0 and 100.");
+      return;
+    }
     setSaving(true);
     try {
       const body = {
@@ -229,7 +240,13 @@ function ItemFormModal({
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Unit Price</Text>
-              <TextInput style={styles.input} value={unitPrice} onChangeText={setUnitPrice} keyboardType="numeric" placeholder="0.00" />
+              <TextInput
+                style={styles.input}
+                value={unitPrice}
+                onChangeText={(t) => setUnitPrice(sanitizeDecimal(t))}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Unit</Text>
@@ -240,7 +257,13 @@ function ItemFormModal({
           <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Tax %</Text>
-              <TextInput style={styles.input} value={taxRate} onChangeText={setTaxRate} keyboardType="numeric" placeholder="0" />
+              <TextInput
+                style={styles.input}
+                value={taxRate}
+                onChangeText={(t) => setTaxRate(sanitizeDecimal(t))}
+                keyboardType="decimal-pad"
+                placeholder="0"
+              />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.label}>Category</Text>
