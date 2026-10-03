@@ -9208,3 +9208,79 @@ model AiTemplate {
 }
 
 
+
+// ==========================================
+// GPTFORM COMMERCE ENGINE (WhatsApp Order Engine)
+// ==========================================
+// Turns WhatsApp conversations into structured orders. The AI agent
+// converses with customers, extracts order data field-by-field via a
+// deterministic state machine, creates orders, sends UPI payment links,
+// and notifies the business owner.
+
+model GptformCommerceConfig {
+  id               String   @id @default(cuid())
+  businessId       String
+  agentId          String?  // links to FormAgent for knowledge base / greeting
+  catalogJson      String   @default("[]")  // [{id,name,price,description,category,imageUrl,isActive}]
+  fieldsJson       String   @default("[]")  // [{id,label,type,required,options,placeholder}]
+  upiId            String?
+  deliveryAreasJson String  @default("[]")  // ["Bangalore","Mumbai","Patna"]
+  businessHoursJson String  @default("{}")  // {mon:{start:"09:00",end:"18:00"}, ...}
+  greetingMessage  String?  // override for the first message
+  currency         String   @default("INR")
+  currencySymbol   String   @default("₹")
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  orders           GptformCommerceOrder[]
+
+  @@index([businessId])
+  @@index([agentId])
+}
+
+model GptformCommerceOrder {
+  id              String   @id @default(cuid())
+  configId        String
+  businessId      String
+  customerPhone   String   // E.164 without + for WhatsApp lookup
+  customerName    String?
+  status          String   @default("PENDING")  // PENDING, CONFIRMED, PAID, PREPARING, READY, DELIVERED, CANCELLED
+  itemsJson       String   @default("[]")  // [{productId,name,qty,unit,price,amount}]
+  total           Float    @default(0)
+  deliveryAddress String?
+  deliveryDate    String?  // ISO date or free text
+  deliveryType    String?  // delivery | pickup
+  notes           String?
+  paymentStatus   String   @default("UNPAID")  // UNPAID, PAID, PARTIAL, REFUNDED
+  paymentMethod   String?  // UPI, CASH, CARD, BANK_TRANSFER
+  paymentRef      String?  // UTR / transaction ID
+  conversationId  String?  // GptformConversationState.id for reference
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  config           GptformCommerceConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId])
+  @@index([businessId])
+  @@index([customerPhone])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model GptformConversationState {
+  id              String   @id @default(cuid())
+  businessId      String
+  customerPhone   String   // E.164 without +
+  currentState    String   @default("AWAITING_INTENT")
+  // AWAITING_INTENT → AWAITING_{FIELD} → CONFIRMING → AWAITING_PAYMENT → COMPLETED
+  collectedFields String   @default("{}")  // JSON: {product:"chocolate cake",quantity:"1",...}
+  messagesJson    String   @default("[]")  // [{role,direction,text,timestamp}]
+  orderId         String?  // set when order is created
+  configId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([businessId, customerPhone])
+  @@unique([businessId, customerPhone])
+}
