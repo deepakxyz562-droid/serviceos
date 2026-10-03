@@ -102,10 +102,11 @@ export default function InvoicesScreen() {
         ListHeaderComponent={
           <View>
             {/* Overview Section */}
+            {/* Overview Section */}
             <View style={styles.overviewHeader}>
               <Text style={styles.overviewTitle}>Overview</Text>
               <TouchableOpacity style={styles.timeDropdown}>
-                <Text style={styles.timeDropdownText}>This Month</Text>
+                <Text style={styles.timeDropdownText}>All Time</Text>
                 <MaterialIcons name="keyboard-arrow-down" size={18} color="#64748b" />
               </TouchableOpacity>
             </View>
@@ -132,6 +133,27 @@ export default function InvoicesScreen() {
                   {formatCurrency(overview.overdue, currency)}
                 </Text>
               </View>
+            </View>
+
+            {/* 30% Off Limited Offer Card matching 13.03.44.jpeg */}
+            <View style={styles.promoBanner}>
+              <View style={styles.promoBadgeIcon}>
+                <Text style={styles.promoBadgeIconTop}>30%</Text>
+                <Text style={styles.promoBadgeIconSub}>OFF</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.promoTitle}>Limited Offer End in</Text>
+                <View style={styles.timerRow}>
+                  <View style={styles.timerBlock}><Text style={styles.timerNum}>08</Text></View>
+                  <Text style={styles.timerColon}>:</Text>
+                  <View style={styles.timerBlock}><Text style={styles.timerNum}>30</Text></View>
+                  <Text style={styles.timerColon}>:</Text>
+                  <View style={styles.timerBlock}><Text style={styles.timerNum}>43</Text></View>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.promoGetBtn} onPress={() => setShowProModal(true)}>
+                <Text style={styles.promoGetBtnText}>Get</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Filters Row */}
@@ -180,17 +202,22 @@ export default function InvoicesScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card} onPress={() => router.push(`/invoice/${item.id}`)}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardName}>{item.customer?.name || "Client"}</Text>
-              <Text style={styles.cardMeta}>{item.number} · {item.items?.length || 0} items</Text>
+              <Text style={styles.cardName}>{item.customer?.name || "Unknown Client"}</Text>
+              <Text style={styles.cardMeta}>
+                {item.number} | {item.dueDate ? new Date(item.dueDate).toLocaleDateString("en-GB") : "02/10/2026"}
+              </Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={styles.cardAmount}>
                 {formatCurrency(item.total, currency)}
               </Text>
-              <View style={[styles.status, statusStyle(item.status)]}>
-                <Text style={[styles.statusText, statusTextStyle(item.status)]}>
-                  {item.status.replace("_", " ")}
-                </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 4 }}>
+                <View style={[styles.status, statusStyle(item.status)]}>
+                  <Text style={[styles.statusText, statusTextStyle(item.status)]}>
+                    {item.status === "DRAFT" ? "Unpaid" : item.status.replace("_", " ")}
+                  </Text>
+                </View>
+                <MaterialIcons name="more-vert" size={18} color="#94a3b8" />
               </View>
             </View>
           </TouchableOpacity>
@@ -333,6 +360,71 @@ const styles = StyleSheet.create({
   },
   metricLabel: { fontSize: 11, fontWeight: "600", color: "#64748b" },
   metricValue: { fontSize: 15, fontWeight: "800", marginTop: 4 },
+  promoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#2563eb",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 14,
+  },
+  promoBadgeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#fef08a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  promoBadgeIconTop: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: "#dc2626",
+  },
+  promoBadgeIconSub: {
+    fontSize: 8,
+    fontWeight: "900",
+    color: "#dc2626",
+  },
+  promoTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 4,
+  },
+  timerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  timerBlock: {
+    backgroundColor: "#ffffff",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  timerNum: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#dc2626",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  timerColon: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#ffffff",
+    marginHorizontal: 3,
+  },
+  promoGetBtn: {
+    backgroundColor: "#facc15",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  promoGetBtnText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#1e293b",
+  },
   filtersRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 },
   filterIconBtn: {
     width: 32,

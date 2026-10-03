@@ -4,7 +4,9 @@ import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness, computeTotals } from '@/lib/quote-flow-session';
 
 const patchSchema = z.object({
-  status: z.enum(['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE']).optional(),
+  number: z.string().optional(),
+  customerId: z.string().optional(),
+  status: z.enum(['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'UNPAID']).optional(),
   dueDate: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   discountValue: z.number().optional(),
@@ -90,7 +92,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await tx.aiInvoice.update({
         where: { id: existing.id },
         data: {
-          ...(parsed.data.status && { status: parsed.data.status }),
+          ...(parsed.data.number && { number: parsed.data.number }),
+          ...(parsed.data.customerId && { customerId: parsed.data.customerId }),
+          ...(parsed.data.status && {
+            status: parsed.data.status === 'UNPAID' ? 'DRAFT' : parsed.data.status,
+          }),
           ...(parsed.data.dueDate !== undefined && {
             dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null,
           }),
