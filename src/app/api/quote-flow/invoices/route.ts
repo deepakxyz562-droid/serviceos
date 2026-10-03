@@ -72,3 +72,78 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const { business } = await requireQuoteFlowBusiness(req);
+    const body = await req.json();
+
+    let targetCustomerId = body.customerId;
+    if (!targetCustomerId) {
+      let defaultCust = await db.aiCustomer.findFirst({
+        where: { businessId: business.id },
+      });
+      if (!defaultCust) {
+        defaultCust = await db.aiCustomer.create({
+          data: {
+            businessId: business.id,
+            name: 'Valued Client',
+          },
+        });
+      }
+      targetCustomerId = defaultCust.id;
+    }
+
+    const updatedBiz = await db.aiBusiness.update({
+      where: { id: business.id },
+      data: { invoiceSeq: { increment: 1 } },
+    });
+    const number = `INV-${updatedBiz.invoiceSeq}`;
+
+    const invoice = await db.$transaction(async (tx) => {
+      const inv = await tx.aiInvoice.create({
+        data: {
+          businessId: business.id,
+          customerId: targetCustomerId,
+          number,
+          status: body.status || 'DRAFT',
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          notes: body.notes || null,
+          discountValue: Number(body.discountValue) || 0,
+          discountType: body.discountType || 'AMOUNT',
+          taxRate: Number(body.taxRate) || 0,
+          pdfTemplate: body.pdfTemplate || 'classic-corporate-blue',
+          fromQuoteId: body.fromQuoteId || null,
+        },
+      });
+
+      const rawItems = Array.isArray(body.items) && body.items.length > 0
+        ? body.items
+        : [{ description: 'Custom Service', qty: 1, unitPrice: 0 }];
+
+      for (const it of rawItems) {
+        await tx.aiInvoiceItem.create({
+          data: {
+            invoiceId: inv.id,
+            description: it.description || 'Service',
+            qty: Number(it.qty) || 1,
+            unitPrice: Number(it.unitPrice) || 0,
+            hsnCode: it.hsnCode || null,
+          },
+        });
+      }
+
+      return tx.aiInvoice.findUnique({
+        where: { id: inv.id },
+        include: { customer: true, items: true, payments: true },
+      });
+    });
+
+    return NextResponse.json({ invoice }, { status: 201 });
+  } catch (e: any) {
+    if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

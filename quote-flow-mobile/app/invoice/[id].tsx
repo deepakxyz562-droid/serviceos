@@ -28,7 +28,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useAppStore } from "@/store/app";
-import { api, apiPatch, apiPost, apiDelete, API_BASE_URL } from "@/api/client";
+import { api, apiPatch, apiPost, apiDelete, API_BASE_URL, loadToken } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
 
@@ -201,8 +201,11 @@ export default function InvoicePreviewScreen() {
         Linking.openURL(pdfUrl);
         return;
       }
+      const token = await loadToken();
       const localUri = `${FileSystem.documentDirectory}${inv.number}.pdf`;
-      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
+        headers: token ? { "x-quoteflow-token": token } : undefined,
+      });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadRes.uri, {
           mimeType: "application/pdf",
@@ -229,8 +232,11 @@ export default function InvoicePreviewScreen() {
         window.open(pdfUrl, "_blank");
         return;
       }
+      const token = await loadToken();
       const localUri = `${FileSystem.documentDirectory}${inv.number}-print.pdf`;
-      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
+        headers: token ? { "x-quoteflow-token": token } : undefined,
+      });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadRes.uri, {
           mimeType: "application/pdf",
@@ -330,24 +336,11 @@ export default function InvoicePreviewScreen() {
     setMoreModalVisible(false);
     setBusy(true);
     try {
-      const items = (inv.items || []).map((it: any) => ({
-        description: it.description,
-        qty: it.qty,
-        unitPrice: it.unitPrice,
-      }));
-      const r = await apiPost<{ quote: any }>("/api/quotes", {
-        customerId: inv.customerId,
-        items,
-        discountValue: inv.discountValue,
-        discountType: inv.discountType,
-        taxRate: inv.taxRate,
-        notes: inv.notes,
-        pdfTemplate: inv.pdfTemplate,
-      });
+      const r = await apiPost<{ quote: any }>(`/api/invoices/${inv.id}/convert-to-estimate`);
       router.push(`/quote/${r.quote.id}`);
       Alert.alert("Converted", `Created estimate ${r.quote.number}`);
     } catch (e: any) {
-      Alert.alert("Conversion failed", e.message);
+      Alert.alert("Conversion failed", e.message || "Could not convert to estimate");
     } finally {
       setBusy(false);
     }

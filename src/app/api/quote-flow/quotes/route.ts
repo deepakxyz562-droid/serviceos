@@ -59,3 +59,78 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+export async function POST(req: Request) {
+  try {
+    const { business } = await requireQuoteFlowBusiness(req);
+    const body = await req.json();
+
+    let targetCustomerId = body.customerId;
+    if (!targetCustomerId) {
+      // Find or create default client
+      let defaultCust = await db.aiCustomer.findFirst({
+        where: { businessId: business.id },
+      });
+      if (!defaultCust) {
+        defaultCust = await db.aiCustomer.create({
+          data: {
+            businessId: business.id,
+            name: 'Valued Client',
+          },
+        });
+      }
+      targetCustomerId = defaultCust.id;
+    }
+
+    const updatedBiz = await db.aiBusiness.update({
+      where: { id: business.id },
+      data: { quoteSeq: { increment: 1 } },
+    });
+    const number = `Q-${updatedBiz.quoteSeq}`;
+
+    const quote = await db.$transaction(async (tx) => {
+      const q = await tx.aiQuote.create({
+        data: {
+          businessId: business.id,
+          customerId: targetCustomerId,
+          number,
+          status: body.status || 'DRAFT',
+          discountValue: Number(body.discountValue) || 0,
+          discountType: body.discountType || 'AMOUNT',
+          taxRate: Number(body.taxRate) || 0,
+          notes: body.notes || null,
+          pdfTemplate: body.pdfTemplate || 'classic-corporate-blue',
+          expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
+        },
+      });
+
+      const rawItems = Array.isArray(body.items) && body.items.length > 0
+        ? body.items
+        : [{ description: 'Custom Service', qty: 1, unitPrice: 0 }];
+
+      for (const it of rawItems) {
+        await tx.aiQuoteItem.create({
+          data: {
+            quoteId: q.id,
+            description: it.description || 'Service',
+            qty: Number(it.qty) || 1,
+            unitPrice: Number(it.unitPrice) || 0,
+            hsnCode: it.hsnCode || null,
+          },
+        });
+      }
+
+      return tx.aiQuote.findUnique({
+        where: { id: q.id },
+        include: { customer: true, items: true },
+      });
+    });
+
+    return NextResponse.json({ quote }, { status: 201 });
+  } catch (e: any) {
+    if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

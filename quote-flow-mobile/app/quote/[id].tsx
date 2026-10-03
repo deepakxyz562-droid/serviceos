@@ -27,7 +27,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useAppStore } from "@/store/app";
-import { api, apiPatch, apiPost, apiDelete, API_BASE_URL } from "@/api/client";
+import { api, apiPatch, apiPost, apiDelete, API_BASE_URL, loadToken } from "@/api/client";
 import { formatCurrency } from "@/lib/format";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
 
@@ -200,8 +200,11 @@ export default function QuotePreviewScreen() {
         Linking.openURL(pdfUrl);
         return;
       }
+      const token = await loadToken();
       const localUri = `${FileSystem.documentDirectory}${quote.number}.pdf`;
-      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
+        headers: token ? { "x-quoteflow-token": token } : undefined,
+      });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadRes.uri, {
           mimeType: "application/pdf",
@@ -228,8 +231,11 @@ export default function QuotePreviewScreen() {
         window.open(pdfUrl, "_blank");
         return;
       }
+      const token = await loadToken();
       const localUri = `${FileSystem.documentDirectory}${quote.number}-print.pdf`;
-      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri);
+      const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
+        headers: token ? { "x-quoteflow-token": token } : undefined,
+      });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadRes.uri, {
           mimeType: "application/pdf",

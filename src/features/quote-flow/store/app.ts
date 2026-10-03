@@ -30,6 +30,7 @@ export type Modal =
   | { type: 'send-invoice'; invoiceId: string }
   | { type: 'pro-upgrade' }
   | { type: 'template-select' }
+  | { type: 'customize'; documentId: string; documentType: 'invoice' | 'quote' }
   | { type: 'reports' }
   | { type: 'ai-omni-input'; defaultDocType?: 'QUOTE' | 'INVOICE' };
 

@@ -24,6 +24,7 @@ import { SendInvoiceModal } from "./SendInvoiceModal";
 
 import { ProUpgradeModal } from "./ProUpgradeModal";
 import { AiOmniInputModal } from "./AiOmniInputModal";
+import { CustomizeModal } from "./CustomizeModal";
 
 export function AppShell() {
   const activeTab = useAppStore((s) => s.activeTab);
@@ -103,6 +104,13 @@ export function AppShell() {
         <SendInvoiceModal invoiceId={modal.invoiceId} />
       )}
       {modal.type === "pro-upgrade" && <ProUpgradeModal />}
+      {modal.type === "customize" && (
+        <CustomizeModal
+          documentId={modal.documentId}
+          documentType={modal.documentType}
+        />
+      )}
+      {modal.type === "template-select" && <CustomizeModal />}
       {modal.type === "reports" && <ReportsScreen />}
       {modal.type === "ai-omni-input" && (
         <AiOmniInputModal

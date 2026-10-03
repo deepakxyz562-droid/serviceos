@@ -82,6 +82,31 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
     }
   }
 
+  async function handleDownloadPdf() {
+    if (!inv) return;
+    try {
+      toast.loading("Preparing PDF...", { id: "pdf-dl" });
+      const res = await fetch(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`);
+      if (!res.ok) throw new Error("Failed to generate PDF");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${inv.number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success("PDF downloaded successfully", { id: "pdf-dl" });
+    } catch (err: any) {
+      toast.error(err.message || "Could not download PDF", { id: "pdf-dl" });
+    }
+  }
+
+  function handlePrint() {
+    window.print();
+  }
+
   async function duplicateInvoice() {
     if (!inv) return;
     setBusy(true);
@@ -113,24 +138,13 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
     if (!inv) return;
     setBusy(true);
     try {
-      const items = (inv.items || []).map((it: any) => ({
-        description: it.description,
-        qty: it.qty,
-        unitPrice: it.unitPrice,
-      }));
-      const r = await apiPost<{ quote: any }>("/api/quotes", {
-        customerId: inv.customerId,
-        items,
-        discountValue: inv.discountValue,
-        discountType: inv.discountType,
-        taxRate: inv.taxRate,
-        notes: inv.notes,
-        pdfTemplate: inv.pdfTemplate,
-      });
+      const r = await apiPost<{ quote: any }>(`/api/invoices/${inv.id}/convert-to-estimate`);
       window.dispatchEvent(new CustomEvent("quote-list-changed"));
+      toast.success(`Converted to Estimate ${r.quote.number}`);
+      closeModal();
       openModal({ type: "quote-detail", quoteId: r.quote.id });
     } catch (e: any) {
-      alert(e.message);
+      toast.error(e.message || "Failed to convert to estimate");
     } finally {
       setBusy(false);
     }
@@ -165,7 +179,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
   return (
     <div className="fixed inset-0 z-40 bg-[#eef2f6] overflow-y-auto">
       {/* Top sticky navbar */}
-      <div className="sticky top-0 z-20 flex items-center justify-between border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur shadow-sm">
+      <div className="no-print sticky top-0 z-20 flex items-center justify-between border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur shadow-sm">
         <button onClick={closeModal} className="text-stone-600 hover:text-stone-900 flex items-center gap-1.5 text-sm font-medium">
           <ArrowLeft className="h-5 w-5" /> Back
         </button>
@@ -190,7 +204,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <DropdownMenuItem onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}>
                 <Edit className="mr-2 h-4 w-4" /> Edit Invoice
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal({ type: "template-select" })}>
+              <DropdownMenuItem onClick={() => openModal({ type: "customize", documentId: inv.id, documentType: "invoice" })}>
                 <Palette className="mr-2 h-4 w-4" /> Customize Template
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openModal({ type: "send-invoice", invoiceId: inv.id })}>
@@ -202,10 +216,10 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <DropdownMenuItem onClick={convertToEstimate}>
                 <FileText className="mr-2 h-4 w-4" /> Convert to Estimate
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}>
+              <DropdownMenuItem onClick={handleDownloadPdf}>
                 <Download className="mr-2 h-4 w-4" /> Download PDF
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}>
+              <DropdownMenuItem onClick={handlePrint}>
                 <Printer className="mr-2 h-4 w-4" /> Print
               </DropdownMenuItem>
               <DropdownMenuItem onClick={remove} className="text-red-600 focus:text-red-700">
@@ -220,7 +234,8 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
       <div className="px-3 py-6 pb-48 md:px-6">
         {/* The White A4 Document Sheet (1:1 with media_1790971011559.jpg) */}
         <div
-          className={`relative mx-auto rounded bg-white p-6 shadow-md transition-all md:p-8 ${
+          id="invoice-document-sheet"
+          className={`invoice-preview relative mx-auto rounded bg-white p-6 shadow-md transition-all md:p-8 ${
             zoomed ? "max-w-4xl" : "max-w-2xl"
           }`}
           style={{ minHeight: "520px" }}
@@ -431,7 +446,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
         </div>
 
         {/* Floating Bottom Summary Card (1:1 with media_1790971011559.jpg) */}
-        <div className="mx-auto mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
+        <div className="no-print mx-auto mt-6 max-w-2xl rounded-2xl border border-slate-200 bg-white p-4 shadow-lg">
           {/* Row 1: Due date on left, Status pill on right */}
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>
@@ -476,7 +491,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
           {/* Quick Actions Row */}
           <div className="mt-3 flex items-center justify-around border-t border-slate-100 pt-3 text-xs">
             <button
-              onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf?download=1`, "_blank")}
+              onClick={handleDownloadPdf}
               className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
@@ -485,7 +500,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <span>Download</span>
             </button>
             <button
-              onClick={() => window.open(`/api/quote-flow/invoices/${inv.id}/pdf`, "_blank")}
+              onClick={handlePrint}
               className="flex flex-col items-center gap-1 text-slate-700 hover:text-slate-900"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
