@@ -179,7 +179,7 @@ export type ViewType =
   | 'creatorProfile' | 'creatorOffers'
   // Operations
   | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'realtimeStatus' | 'employees' | 'employeePerformance' | 'timesheet' | 'recurringJobs'
-  | 'inventory' | 'purchaseOrders'
+  | 'inventory' | 'purchaseOrders' | 'commerce'
   // Finance
   | 'quotes' | 'quoteFlow' | 'invoices' | 'billing' | 'expenses'
   // System

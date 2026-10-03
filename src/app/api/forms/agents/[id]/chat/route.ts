@@ -443,27 +443,94 @@ HYPERLINK RULE: When mentioning specific services, service areas, or contact inf
       `- Online scheduling available 24/7`,
     ].filter(Boolean).join('\n');
 
-    // Fetch synced E-commerce products (Shopify / Store catalog)
+    // Fetch synced E-commerce products (Shopify / Store catalog / WhatsApp Commerce)
     let productCatalogPrompt = '';
     const storeTenantId = tenantId || agent.tenantId;
     if (storeTenantId) {
       try {
-        const products = await db.ecommerceProduct.findMany({
-          where: { tenantId: storeTenantId, status: 'active' },
-          select: {
-            title: true,
-            description: true,
-            price: true,
-            currency: true,
-            inventoryQuantity: true,
-            productType: true,
-          },
-          take: 20,
-        });
+        const [products, commerceConfig] = await Promise.all([
+          db.ecommerceProduct.findMany({
+            where: { tenantId: storeTenantId, status: 'active' },
+            select: {
+              title: true,
+              description: true,
+              price: true,
+              currency: true,
+              inventoryQuantity: true,
+              productType: true,
+            },
+            take: 20,
+          }),
+          db.gptformCommerceConfig.findFirst({
+            where: {
+              OR: [
+                { businessId: storeTenantId },
+                { agentId: agent.id },
+              ],
+            },
+          }),
+        ]);
+
+        const catalogItems: string[] = [];
         if (products.length > 0) {
-          productCatalogPrompt = `STORE PRODUCTS & INVENTORY (Shopify / E-Commerce Catalog):\n${products
-            .map((p) => `- ${p.title} (${p.currency || 'USD'} $${p.price.toFixed(2)}${p.inventoryQuantity > 0 ? `, in stock: ${p.inventoryQuantity}` : ', out of stock'})${p.description ? `: ${p.description.slice(0, 100)}` : ''}`)
-            .join('\n')}\nYou can answer questions about product availability, features, and pricing.`;
+          products.forEach((p) => {
+            catalogItems.push(
+              `- ${p.title} (${p.currency || 'USD'} $${p.price.toFixed(2)}${p.inventoryQuantity > 0 ? `, in stock: ${p.inventoryQuantity}` : ', out of stock'})${p.description ? `: ${p.description.slice(0, 100)}` : ''}`
+            );
+          });
+        }
+
+        if (commerceConfig?.catalogJson) {
+          try {
+            const parsedCatalog = JSON.parse(commerceConfig.catalogJson);
+            const cSymbol = commerceConfig.currencySymbol || '₹';
+            parsedCatalog.forEach((it: any) => {
+              catalogItems.push(
+                `- ${it.name} (${cSymbol}${it.price}) [${it.category || 'General'}]${it.description ? `: ${it.description}` : ''}`
+              );
+            });
+          } catch {}
+        }
+
+        let liveOrderInfo = '';
+        const orderNumMatch = safeMessage.match(/(?:order\s*#?|#)\s*([a-zA-Z0-9]{4,10})/i);
+        const phoneMatch = safeMessage.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+        if (orderNumMatch || phoneMatch || lowerMessage.includes('where is my order') || lowerMessage.includes('track my order')) {
+          const queryConditions: any[] = [];
+          if (orderNumMatch) {
+            const term = orderNumMatch[1];
+            queryConditions.push({ id: { endsWith: term.toLowerCase() } });
+          }
+          if (phoneMatch) {
+            const cleanPhone = phoneMatch[0].replace(/\D/g, '');
+            queryConditions.push({ customerPhone: { contains: cleanPhone } });
+          }
+
+          if (queryConditions.length > 0) {
+            const matchedOrder = await db.gptformCommerceOrder.findFirst({
+              where: {
+                OR: queryConditions,
+              },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (matchedOrder) {
+              const items = JSON.parse(matchedOrder.itemsJson || '[]');
+              liveOrderInfo = `\nREAL-TIME ORDER STATUS (Tidio Tracking Parity):
+- Order ID: #${matchedOrder.id.slice(-6).toUpperCase()}
+- Status: ${matchedOrder.status}
+- Customer: ${matchedOrder.customerName || 'Valued Customer'}
+- Items: ${items.map((i: any) => `${i.name} × ${i.qty}`).join(', ')}
+- Total: ${commerceConfig?.currencySymbol || '₹'}${matchedOrder.total}
+- Delivery Address / Table: ${matchedOrder.deliveryAddress || 'N/A'}
+- Payment: ${matchedOrder.paymentStatus}
+Instructions: Tell the customer their exact order status and details warmly!`;
+            }
+          }
+        }
+
+        if (catalogItems.length > 0 || liveOrderInfo) {
+          productCatalogPrompt = `STORE PRODUCTS & ORDER TRACKING (Tidio & Take.app Engine):\n${catalogItems.join('\n')}${liveOrderInfo}\nYou can answer questions about product availability, menu items, prices, and live order tracking.`;
         }
       } catch (err) {
         console.warn('[forms/agent-chat] Product catalog load warning:', err);

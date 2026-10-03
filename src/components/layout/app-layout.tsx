@@ -123,6 +123,7 @@ const SaaSDashboardView = lazy(() => import('@/components/views/saas-dashboard-v
 const FormsDashboardView = lazy(() => import('@/components/views/forms-dashboard-view').then(m => ({ default: m.FormsDashboardView })));
 const FormsAnalyticsView = lazy(() => import('@/components/views/forms-analytics-view').then(m => ({ default: m.FormsAnalyticsView })));
 const OperationsView = lazy(() => import('@/components/views/operations-view').then(m => ({ default: m.OperationsView })));
+const CommerceView = lazy(() => import('@/components/views/commerce-view').then(m => ({ default: m.CommerceView })));
 const CrmView = lazy(() => import('@/components/views/crm-view').then(m => ({ default: m.CrmView })));
 const SchedulingView = lazy(() => import('@/components/views/scheduling-view').then(m => ({ default: m.SchedulingView })));
 
@@ -241,6 +242,7 @@ const viewComponents: Record<string, any> = {
   timesheet: TimesheetView,
   inventory: InventoryView,
   purchaseOrders: PurchaseOrdersView,
+  commerce: CommerceView,
   // Finance
   quotes: QuotesView,
   quoteFlow: QuoteFlowView,
@@ -517,7 +519,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'formsAnalytics', 'chatbotBuilder',
     // Bookings & Calendar
-    'booking', 'calendar',
+    'booking', 'calendar', 'commerce',
     // System & Integrations
     'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
   ]), []);

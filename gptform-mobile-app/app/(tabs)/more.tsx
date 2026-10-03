@@ -192,6 +192,92 @@ export default function MoreScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Commerce & Store Management Card (Take.app + Tidio Suite) */}
+        <View style={styles.groupedCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/orders' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="shopping-bag" size={22} color="#059669" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Orders & Store</Text>
+                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Live</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>WhatsApp & Storefront order stream</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/catalog' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="restaurant-menu" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
+              <View>
+                <Text style={styles.menuLabel}>Products & Catalog</Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Manage menu items, prices & stock</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/pos' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="point-of-sale" size={22} color="#8b5cf6" style={{ marginRight: 14 }} />
+              <View>
+                <Text style={styles.menuLabel}>POS Cashier Register</Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Fast walk-in customer checkout</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/dine-in-qr' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="qr-code-2" size={22} color="#0284c7" style={{ marginRight: 14 }} />
+              <View>
+                <Text style={styles.menuLabel}>Dine-In Table QR</Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Table ordering QR code generator</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
         {/* Grouped Menu Card 1: Team, Notifications, Appearance, Contact Us */}
         <View style={styles.groupedCard}>
           <TouchableOpacity

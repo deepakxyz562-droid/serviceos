@@ -441,32 +441,101 @@ export async function POST(req: NextRequest) {
       ? services.map((s) => `- ${s.name} ($${s.defaultPrice || 'Custom Quote'}): ${s.description || ''}`).join('\n')
       : 'Services: Not yet configured — check our website or knowledge base for details.';
 
-    // Fetch synced E-commerce products (Shopify / Store catalog)
-    const ecommerceProducts = (tenantId || workspaceId)
-      ? await db.ecommerceProduct.findMany({
-          where: {
-            OR: [
-              ...(tenantId ? [{ tenantId }] : []),
-              ...(workspaceId ? [{ workspaceId }] : []),
-            ],
-            status: 'active',
-          },
-          select: {
-            title: true,
-            description: true,
-            price: true,
-            currency: true,
-            inventoryQuantity: true,
-            productType: true,
-          },
-          take: 20,
-        }).catch(() => [])
-      : [];
+    // Fetch synced E-commerce products (Shopify / Store catalog / WhatsApp Commerce)
+    const [ecommerceProducts, commerceConfig] = await Promise.all([
+      (tenantId || workspaceId)
+        ? db.ecommerceProduct.findMany({
+            where: {
+              OR: [
+                ...(tenantId ? [{ tenantId }] : []),
+                ...(workspaceId ? [{ workspaceId }] : []),
+              ],
+              status: 'active',
+            },
+            select: {
+              title: true,
+              description: true,
+              price: true,
+              currency: true,
+              inventoryQuantity: true,
+              productType: true,
+            },
+            take: 20,
+          }).catch(() => [])
+        : Promise.resolve([]),
+      (tenantId || workspaceId)
+        ? db.gptformCommerceConfig.findFirst({
+            where: {
+              OR: [
+                ...(tenantId ? [{ businessId: tenantId }] : []),
+                ...(workspaceId ? [{ businessId: workspaceId }] : []),
+                ...(agentId ? [{ agentId }] : []),
+              ],
+            },
+          }).catch(() => null)
+        : Promise.resolve(null),
+    ]);
 
-    const productCatalogPrompt = ecommerceProducts.length > 0
-      ? `STORE PRODUCTS & INVENTORY (Shopify / E-Commerce Catalog):\n${ecommerceProducts
-          .map((p) => `- ${p.title} (${p.currency || 'USD'} $${p.price.toFixed(2)}${p.inventoryQuantity > 0 ? `, in stock: ${p.inventoryQuantity}` : ', out of stock'})${p.description ? `: ${p.description.slice(0, 100)}` : ''}`)
-          .join('\n')}\nYou can answer questions about product availability, stock, and pricing.`
+    const catalogItems: string[] = [];
+    if (ecommerceProducts.length > 0) {
+      ecommerceProducts.forEach((p) => {
+        catalogItems.push(
+          `- ${p.title} (${p.currency || 'USD'} $${p.price.toFixed(2)}${p.inventoryQuantity > 0 ? `, in stock: ${p.inventoryQuantity}` : ', out of stock'})${p.description ? `: ${p.description.slice(0, 100)}` : ''}`
+        );
+      });
+    }
+
+    if (commerceConfig?.catalogJson) {
+      try {
+        const parsedCatalog = JSON.parse(commerceConfig.catalogJson);
+        const cSymbol = commerceConfig.currencySymbol || '₹';
+        parsedCatalog.forEach((it: any) => {
+          catalogItems.push(
+            `- ${it.name} (${cSymbol}${it.price}) [${it.category || 'General'}]${it.description ? `: ${it.description}` : ''}`
+          );
+        });
+      } catch {}
+    }
+
+    let liveOrderInfo = '';
+    const orderNumMatch = message.match(/(?:order\s*#?|#)\s*([a-zA-Z0-9]{4,10})/i);
+    const phoneMatch = message.match(/(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+    if (orderNumMatch || phoneMatch || message.toLowerCase().includes('where is my order') || message.toLowerCase().includes('track my order')) {
+      const queryConditions: any[] = [];
+      if (orderNumMatch) {
+        const term = orderNumMatch[1];
+        queryConditions.push({ id: { endsWith: term.toLowerCase() } });
+      }
+      if (phoneMatch) {
+        const cleanPhone = phoneMatch[0].replace(/\D/g, '');
+        queryConditions.push({ customerPhone: { contains: cleanPhone } });
+      }
+
+      if (queryConditions.length > 0) {
+        const matchedOrder = await db.gptformCommerceOrder.findFirst({
+          where: {
+            OR: queryConditions,
+          },
+          orderBy: { createdAt: 'desc' },
+        }).catch(() => null);
+
+        if (matchedOrder) {
+          const items = JSON.parse(matchedOrder.itemsJson || '[]');
+          liveOrderInfo = `\nREAL-TIME ORDER STATUS (Tidio Tracking Parity):
+- Order ID: #${matchedOrder.id.slice(-6).toUpperCase()}
+- Status: ${matchedOrder.status}
+- Customer: ${matchedOrder.customerName || 'Valued Customer'}
+- Items: ${items.map((i: any) => `${i.name} × ${i.qty}`).join(', ')}
+- Total: ${commerceConfig?.currencySymbol || '₹'}${matchedOrder.total}
+- Delivery Address / Table: ${matchedOrder.deliveryAddress || 'N/A'}
+- Payment: ${matchedOrder.paymentStatus}
+Instructions: Tell the customer their exact order status and details warmly!`;
+        }
+      }
+    }
+
+    const productCatalogPrompt = (catalogItems.length > 0 || liveOrderInfo)
+      ? `STORE PRODUCTS & ORDER TRACKING (Tidio & Take.app Engine):\n${catalogItems.join('\n')}${liveOrderInfo}\nYou can answer questions about product availability, menu items, prices, and live order tracking.`
       : '';
 
     // 4. Construct AI Prompt with Zero-Hallucination Guardrails
