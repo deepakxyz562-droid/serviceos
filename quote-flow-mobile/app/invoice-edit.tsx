@@ -341,8 +341,8 @@ export default function InvoiceEditScreen() {
               style={styles.partyRow}
               onPress={() => router.push("/(tabs)/settings")}
             >
-              <View style={[styles.partyIconWrap, { backgroundColor: "#dbeafe" }]}>
-                <MaterialIcons name="business" size={18} color="#2563eb" />
+              <View style={[styles.partyIconWrap, { backgroundColor: "#eff6ff" }]}>
+                <MaterialIcons name="badge" size={18} color="#2563eb" />
               </View>
               <View style={styles.partyTextCol}>
                 <Text style={styles.partyLabel}>Bill From</Text>
@@ -351,7 +351,7 @@ export default function InvoiceEditScreen() {
                 </Text>
               </View>
               <View style={styles.partyAddIcon}>
-                <MaterialIcons name="edit" size={16} color="#2563eb" />
+                <MaterialIcons name="add" size={18} color="#ffffff" />
               </View>
             </TouchableOpacity>
 
@@ -376,7 +376,7 @@ export default function InvoiceEditScreen() {
                   {clientName || "Add Clients"}
                 </Text>
               </View>
-              <View style={[styles.partyAddIcon, { backgroundColor: "#ea580c" }]}>
+              <View style={styles.partyAddIcon}>
                 <MaterialIcons name="add" size={18} color="#ffffff" />
               </View>
             </TouchableOpacity>
@@ -391,10 +391,12 @@ export default function InvoiceEditScreen() {
                 </View>
                 <View>
                   <Text style={styles.cardTitle}>Items</Text>
-                  <Text style={styles.cardSubText}>Add Items</Text>
+                  <Text style={styles.cardSubText}>
+                    {items.length > 0 ? `${items.length} item(s)` : "Add Items"}
+                  </Text>
                 </View>
               </View>
-              <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                 {availableItems.length > 0 && (
                   <TouchableOpacity
                     style={styles.btnSmOutline}
@@ -403,8 +405,8 @@ export default function InvoiceEditScreen() {
                     <Text style={styles.btnSmOutlineText}>Library</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.itemAddIcon} onPress={addItem}>
-                  <MaterialIcons name="add" size={20} color="#ffffff" />
+                <TouchableOpacity style={styles.partyAddIcon} onPress={addItem}>
+                  <MaterialIcons name="add" size={18} color="#ffffff" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -461,39 +463,47 @@ export default function InvoiceEditScreen() {
             ))}
           </View>
 
-          {/* Subtotal Row with Dashed Separator (edit.jpeg) */}
-          <View style={styles.subtotalRow}>
-            <Text style={styles.subtotalLabel}>Subtotal</Text>
-            <Text style={styles.subtotalVal}>
-              {formatCurrency(totals.subtotal, currency)}
-            </Text>
-          </View>
-          <View style={styles.dashedDivider} />
-
-          {/* Adjustment Row (Discount, Tax, Shipping) (edit.jpeg) */}
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => setAdjustModalVisible(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.cardIconRow}>
-              <MaterialIcons name="tune" size={20} color="#475569" style={{ marginRight: 12 }} />
-              <View>
-                <Text style={styles.cardTitle}>Adjustment</Text>
-                <Text style={styles.cardSubText}>
-                  Add Discount ({discountValue ? `${discountValue}${discountType === "PERCENT" ? "%" : ""}` : "0"}), Tax ({taxRate}%) & Shipping
-                </Text>
-              </View>
+          {/* Unified Financial Summary Card (Subtotal, Adjustment, Total) (edit.jpeg) */}
+          <View style={styles.summaryCard}>
+            {/* Subtotal Row */}
+            <View style={styles.subtotalRow}>
+              <Text style={styles.subtotalLabel}>Subtotal</Text>
+              <Text style={styles.subtotalVal}>
+                {formatCurrency(totals.subtotal, currency)}
+              </Text>
             </View>
-            <MaterialIcons name="unfold-more" size={22} color="#94a3b8" />
-          </TouchableOpacity>
 
-          {/* Total Row (edit.jpeg) */}
-          <View style={styles.grandTotalCard}>
-            <Text style={styles.grandTotalLabel}>Total</Text>
-            <Text style={styles.grandTotalVal}>
-              {formatCurrency(totals.total, currency)}
-            </Text>
+            <View style={styles.dashedDivider} />
+
+            {/* Adjustment Row (Discount, Tax, Shipping) */}
+            <TouchableOpacity
+              style={styles.adjustmentRow}
+              onPress={() => setAdjustModalVisible(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.cardIconRow}>
+                <View style={styles.adjustmentIconBox}>
+                  <MaterialIcons name="tune" size={18} color="#475569" />
+                </View>
+                <View>
+                  <Text style={styles.cardTitle}>Adjustment</Text>
+                  <Text style={styles.cardSubText}>
+                    Add Discount, Tax & Shipping
+                  </Text>
+                </View>
+              </View>
+              <MaterialIcons name="unfold-more" size={22} color="#64748b" />
+            </TouchableOpacity>
+
+            <View style={styles.dashedDivider} />
+
+            {/* Total Row */}
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalVal}>
+                {formatCurrency(totals.total, currency)}
+              </Text>
+            </View>
           </View>
 
           {/* Extended Settings Rows (edit-2.jpeg) */}
@@ -544,7 +554,7 @@ export default function InvoiceEditScreen() {
 
             {/* Terms or Notes */}
             <TouchableOpacity
-              style={styles.optionRow}
+              style={[styles.optionRow, { borderBottomWidth: 0 }]}
               onPress={() => setNotesModalVisible(true)}
             >
               <View style={styles.cardIconRow}>
@@ -553,19 +563,23 @@ export default function InvoiceEditScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
             </TouchableOpacity>
+          </View>
 
-            {/* Attachments */}
-            <TouchableOpacity
-              style={styles.optionRow}
-              onPress={() => Alert.alert("Attachments", "Attach photos or receipts")}
-            >
-              <View style={styles.cardIconRow}>
-                <MaterialIcons name="attach-file" size={20} color="#475569" style={{ marginRight: 12 }} />
-                <Text style={styles.optionRowTitle}>Attachments</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-            </TouchableOpacity>
+          {/* Attachments Card */}
+          <TouchableOpacity
+            style={styles.singleOptionCard}
+            onPress={() => Alert.alert("Attachments", "Attach photos or receipts")}
+            activeOpacity={0.8}
+          >
+            <View style={styles.cardIconRow}>
+              <MaterialIcons name="attach-file" size={20} color="#475569" style={{ marginRight: 12 }} />
+              <Text style={styles.optionRowTitle}>Attachments</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
 
+          {/* Status & Stamp Card */}
+          <View style={styles.optionsCard}>
             {/* Mark as Status */}
             <TouchableOpacity
               style={styles.optionRow}
@@ -576,7 +590,7 @@ export default function InvoiceEditScreen() {
                 <Text style={styles.optionRowTitle}>Mark as</Text>
               </View>
               <View style={styles.cardActionRight}>
-                <Text style={styles.optionRowValue}>{status}</Text>
+                <Text style={styles.optionRowValue}>{status === "PAID" ? "Paid" : "Unpaid"}</Text>
                 <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
               </View>
             </TouchableOpacity>
@@ -590,13 +604,14 @@ export default function InvoiceEditScreen() {
               <Switch
                 value={showPaidStamp}
                 onValueChange={setShowPaidStamp}
-                thumbColor="#2563eb"
+                trackColor={{ false: "#cbd5e1", true: "#93c5fd" }}
+                thumbColor={showPaidStamp ? "#2563eb" : "#f8fafc"}
               />
             </View>
           </View>
 
           {/* Delete Invoice Button (edit-2.jpeg) */}
-          <TouchableOpacity style={styles.deleteInvoiceBtn} onPress={handleDelete}>
+          <TouchableOpacity style={styles.deleteInvoiceBtn} onPress={handleDelete} activeOpacity={0.8}>
             <Feather name="trash-2" size={18} color="#ef4444" style={{ marginRight: 8 }} />
             <Text style={styles.deleteInvoiceBtnText}>Delete Invoice</Text>
           </TouchableOpacity>
@@ -618,7 +633,7 @@ export default function InvoiceEditScreen() {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color="#2563eb" />
           ) : (
             <Text style={styles.bottomSaveText}>Save</Text>
           )}
@@ -1114,72 +1129,113 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     marginBottom: 4,
   },
+  summaryCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
   subtotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    alignItems: "center",
+    paddingVertical: 8,
   },
   subtotalLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#475569",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0f172a",
   },
   subtotalVal: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: "#0f172a",
   },
   dashedDivider: {
-    borderBottomWidth: 1,
-    borderColor: "#cbd5e1",
+    borderTopWidth: 1,
+    borderColor: "#e2e8f0",
     borderStyle: "dashed",
-    marginVertical: 8,
+    marginVertical: 4,
   },
-  grandTotalCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
+  adjustmentRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingVertical: 10,
+  },
+  adjustmentIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#e2e8f0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
-  grandTotalLabel: {
+  totalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  totalLabel: {
     fontSize: 16,
     fontWeight: "800",
     color: "#0f172a",
   },
-  grandTotalVal: {
-    fontSize: 20,
-    fontWeight: "900",
+  totalVal: {
+    fontSize: 17,
+    fontWeight: "800",
     color: "#0f172a",
   },
   optionsCard: {
     backgroundColor: "#ffffff",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  singleOptionCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   optionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
   },
   optionRowTitle: {
-    fontSize: 14,
-    fontWeight: "500",
+    fontSize: 15,
+    fontWeight: "600",
     color: "#1e293b",
   },
   optionRowValue: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "600",
     color: "#64748b",
     marginRight: 4,
@@ -1188,13 +1244,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fee2e2",
-    borderRadius: 10,
-    paddingVertical: 14,
-    marginBottom: 20,
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingVertical: 16,
+    marginHorizontal: 16,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   deleteInvoiceBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: "#ef4444",
   },
@@ -1212,29 +1274,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   bottomPreviewBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
+    flex: 0.38,
+    paddingVertical: 13,
+    borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: "#2563eb",
+    borderColor: "#cbd5e1",
+    backgroundColor: "#ffffff",
     alignItems: "center",
+    justifyContent: "center",
   },
   bottomPreviewText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#2563eb",
+    color: "#0f172a",
   },
   bottomSaveBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#2563eb",
+    flex: 0.62,
+    paddingVertical: 13,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: "#2563eb",
+    backgroundColor: "#ffffff",
     alignItems: "center",
+    justifyContent: "center",
   },
   bottomSaveText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#ffffff",
+    color: "#2563eb",
   },
   modalBackdrop: {
     flex: 1,
