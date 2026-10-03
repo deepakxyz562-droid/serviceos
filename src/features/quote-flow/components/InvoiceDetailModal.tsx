@@ -181,6 +181,18 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
   const isPaid = inv.status === "PAID" || (inv.balance <= 0 && inv.total > 0);
   const items = inv.items || [];
 
+  let invoiceCurrency = business?.currency || "INR";
+  let invoiceCurrencySymbol = business?.currencySymbol || "₹";
+  if (inv?.notes) {
+    try {
+      if (inv.notes.startsWith("{") && inv.notes.endsWith("}")) {
+        const meta = JSON.parse(inv.notes);
+        if (meta.currencyCode) invoiceCurrency = meta.currencyCode;
+        if (meta.currencySymbol) invoiceCurrencySymbol = meta.currencySymbol;
+      }
+    } catch {}
+  }
+
   return (
     <div className="fixed inset-0 z-40 bg-[#eef2f6] overflow-y-auto">
       {/* Top sticky navbar */}
@@ -373,13 +385,13 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
                     className="w-24 border-r px-2 py-2.5 text-right text-slate-700"
                     style={{ borderColor: theme.gridBorderColor }}
                   >
-                    {formatCurrency(it.unitPrice, business?.currency, business?.currencySymbol)}
+                    {formatCurrency(it.unitPrice, invoiceCurrency, invoiceCurrencySymbol)}
                   </div>
                   <div className="w-28 px-3 py-2.5 text-right font-bold text-slate-900">
                     {formatCurrency(
                       it.qty * it.unitPrice,
-                      business?.currency,
-                      business?.currencySymbol
+                      invoiceCurrency,
+                      invoiceCurrencySymbol
                     )}
                   </div>
                 </div>
@@ -393,7 +405,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <div className="flex justify-between text-slate-600">
                 <span className="font-medium">Subtotal</span>
                 <span className="font-bold text-slate-900">
-                  {formatCurrency(inv.subtotal || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(inv.subtotal || 0, invoiceCurrency, invoiceCurrencySymbol)}
                 </span>
               </div>
 
@@ -401,7 +413,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
                 <div className="flex justify-between text-slate-600">
                   <span className="font-medium">Discount</span>
                   <span className="font-bold text-slate-900">
-                    -{formatCurrency(inv.discount || 0, business?.currency, business?.currencySymbol)}
+                    -{formatCurrency(inv.discount || 0, invoiceCurrency, invoiceCurrencySymbol)}
                   </span>
                 </div>
               )}
@@ -410,7 +422,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
                 <div className="flex justify-between text-slate-600">
                   <span className="font-medium">Tax ({inv.taxRate || 0}%)</span>
                   <span className="font-bold text-slate-900">
-                    {formatCurrency(inv.tax || 0, business?.currency, business?.currencySymbol)}
+                    {formatCurrency(inv.tax || 0, invoiceCurrency, invoiceCurrencySymbol)}
                   </span>
                 </div>
               )}
@@ -418,14 +430,14 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <div className="flex justify-between text-slate-600">
                 <span className="font-medium">Total</span>
                 <span className="font-bold text-slate-900">
-                  {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(inv.total || 0, invoiceCurrency, invoiceCurrencySymbol)}
                 </span>
               </div>
 
               <div className="flex justify-between text-slate-600">
                 <span className="font-medium">Paid</span>
                 <span className="font-bold text-slate-900">
-                  {formatCurrency(inv.paidAmount || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(inv.paidAmount || 0, invoiceCurrency, invoiceCurrencySymbol)}
                 </span>
               </div>
 
@@ -436,7 +448,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               >
                 <span>BALANCE DUE</span>
                 <span className="text-sm">
-                  {formatCurrency(inv.balance || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(inv.balance || 0, invoiceCurrency, invoiceCurrencySymbol)}
                 </span>
               </div>
             </div>
@@ -473,7 +485,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
 
           {/* Row 2: Large total amount */}
           <div className="my-1 text-2xl font-black text-slate-900">
-            {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
+            {formatCurrency(inv.total || 0, invoiceCurrency, invoiceCurrencySymbol)}
           </div>
 
           {/* Row 3: Client name on left, Not sent / Sent pill on right */}
