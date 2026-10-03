@@ -14,7 +14,18 @@ import {
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import { api } from "@/api/client";
-import ExpoSpeechRecognition from "expo-speech-recognition";
+
+let _speechModule: any = undefined;
+function getSpeechModule(): any {
+  if (_speechModule !== undefined) return _speechModule;
+  try {
+    const mod = require("expo-speech-recognition");
+    _speechModule = mod?.ExpoSpeechRecognitionModule || null;
+  } catch {
+    _speechModule = null;
+  }
+  return _speechModule;
+}
 
 interface AiOmniInputModalProps {
   visible: boolean;
@@ -64,11 +75,20 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
   const recognitionRef = useRef<any>(null);
 
   async function toggleVoice() {
+    const speechModule = getSpeechModule();
+    if (!speechModule) {
+      Alert.alert(
+        "Voice Input in Expo Go",
+        "Live speech recognition requires custom native code and is not supported in the standard Expo Go client.\n\nYou can use the Paste or Prompt tabs instead, or type directly!"
+      );
+      return;
+    }
+
     if (isRecording) {
       // Stop recording
       setIsRecording(false);
       try {
-        ExpoSpeechRecognition.stop();
+        speechModule.stop();
       } catch {
         /* ignore */
       }
@@ -77,10 +97,10 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
 
     // Check permissions + start
     try {
-      const available = await ExpoSpeechRecognition.getPermissionsAsync();
+      const available = await speechModule.getPermissionsAsync();
       if (!available.granted) {
         if (available.canAskAgain) {
-          const result = await ExpoSpeechRecognition.requestPermissionsAsync();
+          const result = await speechModule.requestPermissionsAsync();
           if (!result.granted) {
             Alert.alert(
               "Microphone Permission",
@@ -109,7 +129,7 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
       setTextInput("");
       setIsRecording(true);
 
-      ExpoSpeechRecognition.start({
+      speechModule.start({
         lang: "en-US",
         interimResults: true,
         continuous: true,
@@ -117,7 +137,7 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
 
       // Set up result listener (only once)
       if (!recognitionRef.current) {
-        recognitionRef.current = ExpoSpeechRecognition.addListener("result", (event: any) => {
+        recognitionRef.current = speechModule.addListener("result", (event: any) => {
           let transcript = "";
           if (event.results && event.results.length > 0) {
             const last = event.results[event.results.length - 1];
@@ -128,7 +148,7 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
           }
         });
 
-        ExpoSpeechRecognition.addListener("error", (event: any) => {
+        speechModule.addListener("error", (event: any) => {
           console.error("[voice] error:", event);
           setIsRecording(false);
           if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -136,7 +156,7 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
           }
         });
 
-        ExpoSpeechRecognition.addListener("end", () => {
+        speechModule.addListener("end", () => {
           setIsRecording(false);
         });
       }

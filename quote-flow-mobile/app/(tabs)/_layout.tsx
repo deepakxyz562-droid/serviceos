@@ -63,7 +63,7 @@ export default function TabsLayout() {
   );
 }
 
-function Icon({ name, color }: { name: string; color: string }) {
+function Icon({ name, color }: { name: string; color: any }) {
   // Cast to any because not all icon names are typed
   return <MaterialIcons name={name as any} size={24} color={color} />;
 }

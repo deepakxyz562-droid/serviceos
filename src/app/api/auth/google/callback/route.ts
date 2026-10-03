@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { generateToken, generateSlug, COOKIE_OPTIONS, getAppUrl } from '@/lib/auth';
 import { BRAND } from '@/lib/brand';
 import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
+import { signMobileToken, getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -337,6 +338,17 @@ export async function GET(request: NextRequest) {
       return `${baseUrl}/?google_login=success`;
     };
 
+    const isMobileMode = state.mode === 'mobile' ||
+      state.redirect?.includes('auth-callback') ||
+      state.redirect?.startsWith('quoteflow://') ||
+      state.redirect?.startsWith('exp://');
+
+    const buildMobileSuccessUrl = (token: string, email: string, name: string) => {
+      const target = state.redirect || 'quoteflow://auth-callback';
+      const sep = target.includes('?') ? '&' : '?';
+      return `${target}${sep}token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}`;
+    };
+
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);
     const userInfo = await getUserInfo(tokens.access_token);
@@ -421,6 +433,13 @@ export async function GET(request: NextRequest) {
         return response;
       }
 
+      await getOrCreateBusinessForUser(existingUser.id, existingUser.tenantId || undefined, existingUser.name || 'My Business');
+
+      if (isMobileMode) {
+        const mobileToken = signMobileToken(existingUser.id, existingUser.email);
+        return NextResponse.redirect(buildMobileSuccessUrl(mobileToken, existingUser.email, existingUser.name || ''));
+      }
+
       const isStandalone = existingUser.tenant?.signupMode === 'standalone' || existingUser.tenant?.plan === 'standalone_starter' || existingUser.tenant?.plan === 'standalone_business';
       const needsOnboarding = !existingUser.tenant?.onboardingCompleted;
       const response = NextResponse.redirect(buildSuccessUrl(baseUrl, !!isStandalone, needsOnboarding));
@@ -465,6 +484,13 @@ export async function GET(request: NextRequest) {
       avatar: tempUser.avatar,
     };
     const token = generateToken(authUser);
+
+    await getOrCreateBusinessForUser(tempUser.id, tenant.id, tempUser.name || 'My Business');
+
+    if (isMobileMode) {
+      const mobileToken = signMobileToken(tempUser.id, tempUser.email);
+      return NextResponse.redirect(buildMobileSuccessUrl(mobileToken, tempUser.email, tempUser.name || ''));
+    }
 
     const baseUrl = getBaseUrl(request);
     const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';

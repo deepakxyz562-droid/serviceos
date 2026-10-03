@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "QuoteFlow",
+    "name": "Invoice Maker - GST Billing",
     "slug": "quoteflow",
+    "description": "Fast Invoice, Bill, Quote & PDF Maker. Professional invoice maker, billing app, GST bill maker, quotation & estimate generator for small businesses.",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "quoteflow",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.quoteflow.app",
@@ -22,7 +22,9 @@
         "backgroundColor": "#10b981"
       },
       "package": "com.quoteflow.app",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -34,9 +36,12 @@
       [
         "expo-speech-recognition",
         {
-          "permissions": [" RECORD_AUDIO"]
+          "permissions": [
+            " RECORD_AUDIO"
+          ]
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "tsconfigPaths": true,

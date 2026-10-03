@@ -889,7 +889,7 @@ export default function InvoiceEditScreen() {
           <View style={styles.partiesCard}>
             <TouchableOpacity
               style={styles.partyRow}
-              onPress={() => router.push("/(tabs)/more")}
+              onPress={() => router.push("/(tabs)/settings")}
             >
               <View style={[styles.partyIconWrap, { backgroundColor: "#eff6ff" }]}>
                 <MaterialIcons name="badge" size={18} color="#2563eb" />
@@ -913,7 +913,7 @@ export default function InvoiceEditScreen() {
 
             <TouchableOpacity
               style={styles.partyRow}
-              onPress={() => router.push("/(tabs)/clients")}
+              onPress={() => router.push("/(tabs)/customers")}
             >
               <View style={[styles.partyIconWrap, { backgroundColor: "#ffedd5" }]}>
                 <MaterialIcons name="people" size={18} color="#ea580c" />

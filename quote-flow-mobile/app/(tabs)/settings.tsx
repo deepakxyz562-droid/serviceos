@@ -107,8 +107,9 @@ export default function SettingsScreen() {
         return;
       }
       // Update business in store
-      const updated = { ...business, logoUrl: data.logoUrl };
-      setBusiness(updated);
+      if (business) {
+        setBusiness({ ...business, logoUrl: data.logoUrl });
+      }
       Alert.alert("Logo uploaded");
     } catch (e: any) {
       Alert.alert("Upload failed", e.message);

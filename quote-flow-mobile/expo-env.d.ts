@@ -1,3 +1,3 @@
 /// <reference types="expo/types" />
 
-// This file is auto-generated and should not be edited manually.
+// NOTE: This file should not be edited and should be in your git ignore

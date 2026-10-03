@@ -26,7 +26,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useAppStore } from "@/store/app";
 import { api, apiPatch, apiPost, apiDelete, API_BASE_URL, loadToken } from "@/api/client";
@@ -1345,7 +1345,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   busyOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as any),
     backgroundColor: "rgba(0, 0, 0, 0.4)",
     justifyContent: "center",
     alignItems: "center",

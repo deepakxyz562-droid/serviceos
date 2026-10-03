@@ -13,6 +13,18 @@ interface Business {
   currencySymbol: string;
   defaultTaxRate: number;
   plan: string;
+  logoUrl?: string | null;
+  taxNumber?: string | null;
+  upiId?: string | null;
+  bankName?: string | null;
+  bankAccountNo?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountName?: string | null;
+  bankIfsc?: string | null;
+  paymentTerms?: string | null;
+  notes?: string | null;
+  showBankOnInvoice?: boolean | null;
+  showUpiOnInvoice?: boolean | null;
 }
 
 interface User {
