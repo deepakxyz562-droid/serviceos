@@ -81,6 +81,7 @@ export default function CustomizeScreen() {
   const [showBankDetails, setShowBankDetails] = useState(business?.showBankOnInvoice ?? true);
   const [showUpiQr, setShowUpiQr] = useState(business?.showUpiOnInvoice ?? true);
   const [logoUrl, setLogoUrl] = useState(business?.logoUrl || "");
+  const [signatureData, setSignatureData] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,6 +97,15 @@ export default function CustomizeScreen() {
         setSelectedTemplate(cleanTpl);
         const match = TEMPLATES.find((t) => t.id === cleanTpl);
         if (match) setSelectedAccent(match.accent);
+      }
+      if (data?.notes) {
+        try {
+          if (data.notes.startsWith("{") && data.notes.endsWith("}")) {
+            const meta = JSON.parse(data.notes);
+            if (meta.signature) setSignatureData(meta.signature);
+            else if (meta.signatureDataUrl) setSignatureData(meta.signatureDataUrl);
+          }
+        } catch {}
       }
     } catch {
       Alert.alert("Error", "Could not load document");
@@ -128,21 +138,70 @@ export default function CustomizeScreen() {
     }
   }
 
+  // Pick signature from camera or library
+  async function pickSignature(fromCamera = false) {
+    const { status } = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Camera or photo library permission is required");
+      return;
+    }
+    const result = fromCamera
+      ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [3, 1], quality: 0.8, base64: true })
+      : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [3, 1], quality: 0.8, base64: true });
+
+    if (!result.canceled && result.assets?.[0]?.base64) {
+      setSignatureData(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      Alert.alert("Success", "Signature attached");
+    }
+  }
+
   // Save customizations
   async function handleSave() {
     setSaving(true);
     try {
       const endpoint = isQuote ? `/api/quotes/${params.id}` : `/api/invoices/${params.id}`;
+      
+      let prefix = "";
+      if (doc?.pdfTemplate && doc.pdfTemplate.includes(":")) {
+        prefix = doc.pdfTemplate.split(":")[0] + ":";
+      }
+      const fullTemplate = `${prefix}${selectedTemplate}`;
+
+      let updatedNotes = doc?.notes;
+      try {
+        let meta: any = {};
+        if (doc?.notes && doc.notes.startsWith("{") && doc.notes.endsWith("}")) {
+          meta = JSON.parse(doc.notes);
+        } else if (doc?.notes) {
+          meta = { notes: doc.notes };
+        }
+        meta.signature = signatureData;
+        meta.signatureDataUrl = signatureData;
+        updatedNotes = JSON.stringify(meta);
+      } catch {}
+
       await apiPatch(endpoint, {
-        pdfTemplate: selectedTemplate,
+        pdfTemplate: fullTemplate,
+        notes: updatedNotes,
       });
 
       // Update business profile if options changed
       await apiPatch("/api/business/onboarding", {
         showBankOnInvoice: showBankDetails,
         showUpiOnInvoice: showUpiQr,
-        ...(logoUrl && logoUrl !== business?.logoUrl ? { logoUrl } : {}),
+        logoUrl: logoUrl || null,
       }).catch(() => {});
+
+      if (business) {
+        useAppStore.getState().setBusiness({
+          ...business,
+          logoUrl: logoUrl || "",
+          showBankOnInvoice: showBankDetails,
+          showUpiOnInvoice: showUpiQr,
+        });
+      }
 
       router.back();
     } catch (e: any) {
@@ -260,6 +319,16 @@ export default function CustomizeScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* Signature Preview */}
+            {signatureData ? (
+              <View style={{ alignItems: "flex-end", marginTop: 6, paddingRight: 6 }}>
+                <Image source={{ uri: signatureData }} style={{ width: 80, height: 26 }} resizeMode="contain" />
+                <View style={{ width: 80, borderTopWidth: 1, borderTopColor: "#cbd5e1", marginTop: 2, alignItems: "center" }}>
+                  <Text style={{ fontSize: 7, color: "#64748b", textTransform: "uppercase" }}>Signature</Text>
+                </View>
+              </View>
+            ) : null}
 
             {/* Watermark stamp if enabled */}
             {showPaidStamp && (
@@ -448,17 +517,44 @@ export default function CustomizeScreen() {
         {/* If "Signature" tool is active */}
         {activeTab === "Signature" && (
           <View style={styles.sigPanel}>
-            <Text style={styles.panelSectionTitle}>Authorized Signature</Text>
-            <View style={styles.sigBox}>
-              <Text style={styles.sigBoxText}>Default authorized owner signature is applied</Text>
-              <TouchableOpacity
-                style={styles.sigBtn}
-                onPress={() => Alert.alert("Signature", "Owner signature synced from settings")}
-              >
-                <Feather name="edit-2" size={16} color="#2563eb" style={{ marginRight: 6 }} />
-                <Text style={styles.sigBtnText}>Update Signature</Text>
-              </TouchableOpacity>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <Text style={styles.panelSectionTitle}>Authorized Signature</Text>
+              {signatureData ? (
+                <TouchableOpacity onPress={() => setSignatureData(null)}>
+                  <Text style={{ fontSize: 12, color: "#ef4444", fontWeight: "600" }}>Remove</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
+
+            {signatureData ? (
+              <View style={[styles.sigBox, { alignItems: "center", paddingVertical: 10 }]}>
+                <Image source={{ uri: signatureData }} style={{ width: 140, height: 50, marginBottom: 8 }} resizeMode="contain" />
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(false)}>
+                    <Feather name="image" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Text style={styles.sigBtnText}>Gallery</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(true)}>
+                    <Feather name="camera" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Text style={styles.sigBtnText}>Camera</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.sigBox}>
+                <Text style={styles.sigBoxText}>No authorized signature attached yet</Text>
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
+                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(false)}>
+                    <Feather name="image" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Text style={styles.sigBtnText}>Choose Photo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.sigBtn} onPress={() => pickSignature(true)}>
+                    <Feather name="camera" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Text style={styles.sigBtnText}>Take Photo</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         )}
 

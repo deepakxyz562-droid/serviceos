@@ -189,6 +189,40 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
     })();
   }, [invoiceId, business]);
 
+  // Keep template and signature in sync if updated from customize modal
+  useEffect(() => {
+    const handleInvoiceChanged = (e: any) => {
+      const detail = e?.detail;
+      if (detail?.templateId) {
+        setSelectedTemplateId(detail.templateId);
+      }
+      if (detail?.signatureData !== undefined) {
+        setSignatureData(detail.signatureData);
+      }
+      api<{ invoice: any }>(`/api/invoices/${invoiceId}`)
+        .then((r) => {
+          if (r?.invoice?.pdfTemplate) {
+            const tpl = r.invoice.pdfTemplate.includes(":")
+              ? r.invoice.pdfTemplate.split(":").pop()!
+              : r.invoice.pdfTemplate;
+            setSelectedTemplateId(tpl);
+          }
+          if (r?.invoice?.notes) {
+            try {
+              if (r.invoice.notes.startsWith("{") && r.invoice.notes.endsWith("}")) {
+                const meta = JSON.parse(r.invoice.notes);
+                if (meta.signature) setSignatureData(meta.signature);
+                else if (meta.signatureDataUrl) setSignatureData(meta.signatureDataUrl);
+              }
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("invoice-list-changed", handleInvoiceChanged);
+    return () => window.removeEventListener("invoice-list-changed", handleInvoiceChanged);
+  }, [invoiceId]);
+
   // Sync title when document type segmented tab changes
   function handleSegmentChange(tab: DocTypeSegment) {
     setDocTypeSegment(tab);
@@ -246,6 +280,7 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
         dueTerms,
         terms: selectedTerms,
         signature: signatureData,
+        signatureDataUrl: signatureData,
         payments: paymentsList,
         attachments,
         showPaidStamp,
@@ -970,7 +1005,7 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
 
         {/* Card 2: Templates Card */}
         <div
-          onClick={() => openModal({ type: "customize", documentId: invoiceId, documentType: "invoice" })}
+          onClick={() => openModal({ type: "customize", documentId: invoiceId, documentType: "invoice", returnTo: "edit" })}
           className="flex items-center justify-between rounded-2xl border border-stone-200/80 bg-white p-4 shadow-2xs cursor-pointer hover:border-stone-300 transition"
         >
           <div className="flex items-center gap-3">

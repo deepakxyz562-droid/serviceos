@@ -45,6 +45,46 @@ export async function GET(
     const paidAmount = invoice.payments.reduce((s, p) => s + p.amount, 0);
     const balance = Math.max(0, t.total - paidAmount);
 
+    // Sanitize business logoUrl (must not be svg or invalid for @react-pdf/renderer)
+    let sanitizedLogoUrl = business.logoUrl;
+    if (sanitizedLogoUrl && (sanitizedLogoUrl.startsWith('data:image/svg') || sanitizedLogoUrl.endsWith('.svg'))) {
+      sanitizedLogoUrl = null;
+    }
+
+    // Extract human-readable notes and signature from notes JSON if present
+    let cleanNotes: string | null = invoice.notes;
+    let signatureObj: { dataUrl: string | null; signedAt?: string | null; signerName?: string | null } | null = null;
+
+    if (invoice.notes && invoice.notes.startsWith('{') && invoice.notes.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(invoice.notes);
+        if (parsed.notes) {
+          cleanNotes = String(parsed.notes);
+        } else if (Array.isArray(parsed.terms) && parsed.terms.length > 0) {
+          cleanNotes = parsed.terms.join('\n');
+        } else if (parsed.terms) {
+          cleanNotes = String(parsed.terms);
+        } else if (parsed.termsAndConditions) {
+          cleanNotes = String(parsed.termsAndConditions);
+        } else {
+          cleanNotes = null;
+        }
+
+        const sigData = parsed.signatureDataUrl || parsed.signature;
+        if (sigData && typeof sigData === 'string' && (sigData.startsWith('data:image/') || sigData.startsWith('http'))) {
+          if (!sigData.startsWith('data:image/svg') && !sigData.endsWith('.svg')) {
+            signatureObj = {
+              dataUrl: sigData,
+              signedAt: parsed.signedAt || null,
+              signerName: parsed.signerName || null,
+            };
+          }
+        }
+      } catch {
+        cleanNotes = invoice.notes;
+      }
+    }
+
     const data: QuotePdfData = {
       business: {
         name: business.name,
@@ -52,7 +92,7 @@ export async function GET(
         phone: business.phone,
         email: business.email,
         address: business.address,
-        logoUrl: business.logoUrl,
+        logoUrl: sanitizedLogoUrl,
         currencySymbol: business.currencySymbol,
         currency: business.currency,
         // Bank + UPI payment details (Phase 3)
@@ -101,7 +141,7 @@ export async function GET(
         number: invoice.number,
         status: invoice.status,
         dueDate: invoice.dueDate?.toISOString() ?? null,
-        notes: invoice.notes,
+        notes: cleanNotes,
         items: invoice.items.map((i) => ({
           description: i.description,
           qty: i.qty,
@@ -118,26 +158,23 @@ export async function GET(
         balance,
         createdAt: invoice.createdAt.toISOString(),
       },
-      // Parse signature from notes JSON (Phase 2 — same as quotes)
-      signature: (() => {
-        try {
-          if (invoice.notes && invoice.notes.startsWith('{') && invoice.notes.endsWith('}')) {
-            const parsed = JSON.parse(invoice.notes);
-            if (parsed.signatureDataUrl) {
-              return {
-                dataUrl: parsed.signatureDataUrl,
-                signedAt: parsed.signedAt || null,
-                signerName: parsed.signerName || null,
-              };
-            }
-          }
-        } catch {
-          /* not JSON */
-        }
-        return null;
-      })(),
+      signature: signatureObj,
     };
-    const buffer = await renderToBuffer(renderQuotePdf(data, resolveTemplateName(invoice.pdfTemplate as string)));
+
+    let buffer: Buffer;
+    const tplName = resolveTemplateName(invoice.pdfTemplate as string);
+    try {
+      buffer = await renderToBuffer(renderQuotePdf(data, tplName));
+    } catch (renderErr) {
+      console.error('Invoice PDF generation failed with primary template, retrying with fallback:', renderErr);
+      const fallbackData: QuotePdfData = {
+        ...data,
+        business: { ...data.business, logoUrl: null, upiQrDataUrl: null },
+        signature: null,
+      };
+      buffer = await renderToBuffer(renderQuotePdf(fallbackData, 'simple'));
+    }
+
     // ?download=1 → Content-Disposition: attachment (forces browser Download).
     // Default → inline (opens PDF in a new tab for preview).
     const url = new URL(req.url);
@@ -151,9 +188,10 @@ export async function GET(
       },
     });
   } catch (e: any) {
+    console.error('PDF route fatal error:', e);
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message || 'Failed to generate PDF' }, { status: 500 });
   }
 }

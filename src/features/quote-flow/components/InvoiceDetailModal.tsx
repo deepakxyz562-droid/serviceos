@@ -38,6 +38,11 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
 
   useEffect(() => {
     load();
+    const onInvoiceChanged = () => {
+      load();
+    };
+    window.addEventListener("invoice-list-changed", onInvoiceChanged);
+    return () => window.removeEventListener("invoice-list-changed", onInvoiceChanged);
   }, [invoiceId]);
 
   async function markPaid() {
@@ -204,7 +209,7 @@ export function InvoiceDetailModal({ invoiceId }: { invoiceId: string }) {
               <DropdownMenuItem onClick={() => openModal({ type: "invoice-edit", invoiceId: inv.id })}>
                 <Edit className="mr-2 h-4 w-4" /> Edit Invoice
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openModal({ type: "customize", documentId: inv.id, documentType: "invoice" })}>
+              <DropdownMenuItem onClick={() => openModal({ type: "customize", documentId: inv.id, documentType: "invoice", returnTo: "detail" })}>
                 <Palette className="mr-2 h-4 w-4" /> Customize Template
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openModal({ type: "send-invoice", invoiceId: inv.id })}>

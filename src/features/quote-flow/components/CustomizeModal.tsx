@@ -1,8 +1,24 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAppStore } from "@/features/quote-flow/store/app";
 import { api, apiPatch } from "@/features/quote-flow/lib/api";
-import { ChevronLeft, Check, Crown, Palette, Type, Sliders, ImageIcon, PenTool, Layout, Upload, RefreshCw } from "lucide-react";
+import {
+  ChevronLeft,
+  Check,
+  Crown,
+  Palette,
+  Type,
+  Sliders,
+  ImageIcon,
+  PenTool,
+  Layout,
+  Upload,
+  RefreshCw,
+  X,
+  Trash2,
+  Edit3,
+  RotateCcw,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/quote-flow-calc";
@@ -134,11 +150,13 @@ type BottomTool = "Templates" | "Color" | "Font Size" | "Options" | "Logo" | "Si
 interface CustomizeModalProps {
   documentId?: string;
   documentType?: "invoice" | "quote";
+  returnTo?: "edit" | "detail";
 }
 
 export function CustomizeModal({
   documentId,
   documentType = "invoice",
+  returnTo = "detail",
 }: CustomizeModalProps) {
   const closeModal = useAppStore((s) => s.closeModal);
   const business = useAppStore((s) => s.business);
@@ -161,6 +179,12 @@ export function CustomizeModal({
   const [showUpiQr, setShowUpiQr] = useState(business?.showUpiOnInvoice ?? true);
   const [logoUrl, setLogoUrl] = useState(business?.logoUrl || "");
 
+  // Signature state & canvas
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [isDrawingPadOpen, setIsDrawingPadOpen] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isDrawing = useRef(false);
+
   // Load existing document data if documentId provided
   useEffect(() => {
     if (!documentId) return;
@@ -176,6 +200,15 @@ export function CustomizeModal({
           const matched = TEMPLATE_CARDS.find((t) => t.id === clean);
           if (matched) setSelectedAccent(matched.accentColor);
         }
+        if (item?.notes) {
+          try {
+            if (item.notes.startsWith("{") && item.notes.endsWith("}")) {
+              const meta = JSON.parse(item.notes);
+              if (meta.signature) setSignatureData(meta.signature);
+              else if (meta.signatureDataUrl) setSignatureData(meta.signatureDataUrl);
+            }
+          } catch {}
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -185,34 +218,142 @@ export function CustomizeModal({
     ? TEMPLATE_CARDS
     : TEMPLATE_CARDS.filter((t) => t.category === activeCategory);
 
-  async function handleSave() {
-    setSaving(true);
-    try {
-      if (documentId) {
-        const endpoint = documentType === "quote" ? `/api/quotes/${documentId}` : `/api/invoices/${documentId}`;
-        await apiPatch(endpoint, {
-          pdfTemplate: selectedTemplate,
-        });
-        window.dispatchEvent(new CustomEvent(documentType === "quote" ? "quote-list-changed" : "invoice-list-changed"));
-      }
+  // Canvas drawing handlers for signature
+  function startDrawing(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    isDrawing.current = true;
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  }
 
-      // Update business profile default template & options
-      await apiPatch("/api/business/onboarding", {
-        defaultPdfTemplate: selectedTemplate,
-        showBankOnInvoice: showBankDetails,
-        showUpiOnInvoice: showUpiQr,
-        ...(logoUrl && logoUrl !== business?.logoUrl ? { logoUrl } : {}),
-      }).catch(() => {});
+  function draw(e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) {
+    if (!isDrawing.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y = "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
 
-      toast.success("Template customization saved successfully");
-      closeModal();
-      if (documentId) {
+  function stopDrawing() {
+    isDrawing.current = false;
+  }
+
+  function clearCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function saveCanvasSignature() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    setSignatureData(dataUrl);
+    setIsDrawingPadOpen(false);
+    toast.success("Signature saved");
+  }
+
+  function handleBack() {
+    closeModal();
+    if (documentId) {
+      if (returnTo === "edit") {
+        if (documentType === "quote") {
+          openModal({ type: "quote-edit", quoteId: documentId });
+        } else {
+          openModal({ type: "invoice-edit", invoiceId: documentId });
+        }
+      } else {
         if (documentType === "quote") {
           openModal({ type: "quote-detail", quoteId: documentId });
         } else {
           openModal({ type: "invoice-detail", invoiceId: documentId });
         }
       }
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      let fullTemplate = selectedTemplate;
+      if (documentId) {
+        const endpoint = documentType === "quote" ? `/api/quotes/${documentId}` : `/api/invoices/${documentId}`;
+        
+        // Preserve docType prefix (e.g. TAX_INVOICE:...) if present
+        let prefix = "";
+        if (doc?.pdfTemplate && doc.pdfTemplate.includes(":")) {
+          prefix = doc.pdfTemplate.split(":")[0] + ":";
+        }
+        fullTemplate = `${prefix}${selectedTemplate}`;
+
+        // Merge signature into notes JSON
+        let updatedNotes = doc?.notes;
+        try {
+          let meta: any = {};
+          if (doc?.notes && doc.notes.startsWith("{") && doc.notes.endsWith("}")) {
+            meta = JSON.parse(doc.notes);
+          } else if (doc?.notes) {
+            meta = { notes: doc.notes };
+          }
+          meta.signature = signatureData;
+          meta.signatureDataUrl = signatureData;
+          updatedNotes = JSON.stringify(meta);
+        } catch {}
+
+        await apiPatch(endpoint, {
+          pdfTemplate: fullTemplate,
+          notes: updatedNotes,
+        });
+
+        // Broadcast change event with complete details
+        window.dispatchEvent(
+          new CustomEvent(documentType === "quote" ? "quote-list-changed" : "invoice-list-changed", {
+            detail: {
+              templateId: selectedTemplate,
+              fullTemplate,
+              signatureData,
+              logoUrl,
+            },
+          })
+        );
+      }
+
+      // Update business profile default template, logo, & options
+      await apiPatch("/api/business/onboarding", {
+        showBankOnInvoice: showBankDetails,
+        showUpiOnInvoice: showUpiQr,
+        logoUrl: logoUrl || null,
+      }).catch(() => {});
+
+      // Crucial: Update frontend Zustand store so all views immediately reflect the new logo and options
+      if (business) {
+        useAppStore.getState().setBusiness({
+          ...business,
+          logoUrl: logoUrl || "",
+          showBankOnInvoice: showBankDetails,
+          showUpiOnInvoice: showUpiQr,
+        });
+      }
+
+      toast.success("Template customization saved successfully");
+      handleBack();
     } catch (err: any) {
       toast.error(err.message || "Failed to save template");
     } finally {
@@ -229,7 +370,7 @@ export function CustomizeModal({
       {/* Top Header matching customize.jpeg: < Customize [ Save ] */}
       <div className="flex h-14 items-center justify-between border-b border-stone-200 bg-white/95 px-4 backdrop-blur shadow-xs">
         <button
-          onClick={closeModal}
+          onClick={handleBack}
           className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100 transition"
         >
           <ChevronLeft className="h-6 w-6 stroke-[2.5]" />
@@ -353,6 +494,20 @@ export function CustomizeModal({
               </div>
             </div>
           </div>
+
+          {/* Authorized Signature Preview on Sheet */}
+          {signatureData && (
+            <div className="mt-4 flex flex-col items-end pr-2">
+              <img
+                src={signatureData}
+                alt="Authorized Signature"
+                className="h-10 w-auto max-w-[130px] object-contain"
+              />
+              <div className="mt-1 w-28 border-t border-stone-300 text-center text-[8px] font-semibold text-stone-500 uppercase tracking-wider">
+                Authorized Signature
+              </div>
+            </div>
+          )}
 
           {/* Paid Stamp Watermark if enabled */}
           {showPaidStamp && (
@@ -547,9 +702,13 @@ export function CustomizeModal({
           <div className="flex items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
               {logoUrl ? (
-                <img src={logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded border border-stone-200 p-1 bg-white" />
+                <img
+                  src={logoUrl}
+                  alt="Logo"
+                  className="h-11 w-11 object-contain rounded-lg border border-stone-200 p-1 bg-white shadow-2xs"
+                />
               ) : (
-                <div className="h-10 w-10 rounded border border-dashed border-stone-300 flex items-center justify-center text-stone-400">
+                <div className="h-11 w-11 rounded-lg border border-dashed border-stone-300 flex items-center justify-center text-stone-400 bg-stone-50">
                   <ImageIcon className="h-5 w-5" />
                 </div>
               )}
@@ -558,48 +717,164 @@ export function CustomizeModal({
                 <p className="text-[10px] text-stone-500">Appears on header of invoices & estimates</p>
               </div>
             </div>
-            <label className="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs">
-              Upload
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => setLogoUrl(reader.result as string);
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-            </label>
+            <div className="flex items-center gap-2">
+              {logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLogoUrl("");
+                    toast.info("Logo removed");
+                  }}
+                  className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+                >
+                  Remove
+                </button>
+              )}
+              <label className="cursor-pointer rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs flex items-center gap-1.5 transition">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{logoUrl ? "Change" : "Upload"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setLogoUrl(reader.result as string);
+                        toast.success("Logo uploaded");
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+            </div>
           </div>
         )}
 
         {/* Tool: Signature */}
         {activeTool === "Signature" && (
-          <div className="flex items-center justify-between px-6 py-4">
-            <div>
-              <p className="text-xs font-bold text-stone-800">Authorized Signature</p>
-              <p className="text-[10px] text-stone-500">Stamp or digital signature on bottom of invoice</p>
+          <div className="flex flex-col gap-3 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-stone-800">Authorized Signature</p>
+                <p className="text-[10px] text-stone-500">Draw or upload digital signature for this document</p>
+              </div>
+              {signatureData && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignatureData(null);
+                    toast.info("Signature removed");
+                  }}
+                  className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:underline"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Remove
+                </button>
+              )}
             </div>
-            <label className="cursor-pointer rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs">
-              Draw / Upload
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = () => toast.success("Signature attached");
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-            </label>
+
+            <div className="flex items-center gap-3">
+              {signatureData ? (
+                <div className="flex-1 rounded-xl border border-stone-200 bg-stone-50 p-2 flex items-center justify-center h-14">
+                  <img src={signatureData} alt="Signature Preview" className="h-10 max-w-full object-contain" />
+                </div>
+              ) : (
+                <div className="flex-1 rounded-xl border border-dashed border-stone-200 p-2 text-center text-xs text-stone-400 h-14 flex items-center justify-center">
+                  No signature attached
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setIsDrawingPadOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
+              >
+                <Edit3 className="h-3.5 w-3.5" /> Draw
+              </button>
+
+              <label className="cursor-pointer rounded-xl bg-blue-600 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-blue-700 shadow-xs flex items-center gap-1.5 transition">
+                <Upload className="h-3.5 w-3.5" /> Upload
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        setSignatureData(reader.result as string);
+                        toast.success("Signature uploaded");
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Interactive Signature Drawing Pad */}
+        {isDrawingPadOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-2xs p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                <h3 className="text-base font-bold text-stone-900">Draw Signature</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawingPadOpen(false)}
+                  className="rounded-full p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-2">
+                <canvas
+                  ref={canvasRef}
+                  width={340}
+                  height={150}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  onTouchStart={startDrawing}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDrawing}
+                  className="w-full h-[150px] touch-none rounded-lg bg-white shadow-inner cursor-crosshair"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={clearCanvas}
+                  className="flex items-center gap-1.5 rounded-xl border border-stone-200 px-3.5 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-50"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Clear
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawingPadOpen(false)}
+                    className="rounded-xl px-3 py-2 text-xs font-semibold text-stone-500 hover:bg-stone-100"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveCanvasSignature}
+                    className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 shadow-xs"
+                  >
+                    Save Signature
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 

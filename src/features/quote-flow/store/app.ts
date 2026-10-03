@@ -30,7 +30,7 @@ export type Modal =
   | { type: 'send-invoice'; invoiceId: string }
   | { type: 'pro-upgrade' }
   | { type: 'template-select' }
-  | { type: 'customize'; documentId: string; documentType: 'invoice' | 'quote' }
+  | { type: 'customize'; documentId: string; documentType: 'invoice' | 'quote'; returnTo?: 'edit' | 'detail' }
   | { type: 'reports' }
   | { type: 'ai-omni-input'; defaultDocType?: 'QUOTE' | 'INVOICE' };
 
@@ -50,10 +50,14 @@ interface AppState {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
+    logoUrl?: string | null;
     currency: string;
     currencySymbol: string;
     defaultTaxRate: number;
     plan: string;
+    showBankOnInvoice?: boolean;
+    showUpiOnInvoice?: boolean;
+    [key: string]: any;
   } | null;
   setBusiness: (b: AppState['business']) => void;
   /** light user session mirror */

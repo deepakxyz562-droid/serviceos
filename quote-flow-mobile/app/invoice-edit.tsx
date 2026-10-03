@@ -34,7 +34,7 @@ import {
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useAppStore } from "@/store/app";
 import { api, apiPatch, apiDelete } from "@/api/client";
@@ -179,9 +179,11 @@ export default function InvoiceEditScreen() {
     }
   }, [params.id, business?.currency, business?.currencySymbol]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   // Segment Tab switch
   function handleSegmentChange(tab: DocTypeTab) {
@@ -284,6 +286,7 @@ export default function InvoiceEditScreen() {
         dueTerms,
         terms: selectedTerms,
         signature: signatureData,
+        signatureDataUrl: signatureData,
         payments: paymentsList,
         attachments,
         showPaidStamp,

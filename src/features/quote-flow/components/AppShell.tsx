@@ -108,6 +108,7 @@ export function AppShell() {
         <CustomizeModal
           documentId={modal.documentId}
           documentType={modal.documentType}
+          returnTo={modal.returnTo}
         />
       )}
       {modal.type === "template-select" && <CustomizeModal />}
