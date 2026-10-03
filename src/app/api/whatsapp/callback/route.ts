@@ -535,6 +535,80 @@ async function handlePlainTextInbound(
     // from InboxMessage via the omnichannel conversations API.
     // (The fallback above is only used during the pre-migration rollout window.)
 
+    // ── 5.5 Commerce Engine (NEW) ─────────────────────────────────────
+    // Check if this tenant has a commerce config. If so, route the
+    // message through the commerce state machine instead of the
+    // regular auto-reply flow. The state machine handles product
+    // ordering, field extraction, order creation, and payment links.
+    try {
+      const commerceConfig = await db.gptformCommerceConfig.findFirst({
+        where: {
+          businessId: tenant?.id || tenantId,
+          isActive: true,
+        },
+      });
+
+      if (commerceConfig) {
+        const { processCommerceMessage } = await import('@/lib/commerce/state-machine');
+        const { sendWhatsAppMessage } = await import('@/lib/whatsapp-send');
+
+        const config = {
+          id: commerceConfig.id,
+          businessId: commerceConfig.businessId,
+          agentId: commerceConfig.agentId,
+          catalogJson: commerceConfig.catalogJson,
+          fieldsJson: commerceConfig.fieldsJson,
+          upiId: commerceConfig.upiId,
+          deliveryAreasJson: commerceConfig.deliveryAreasJson,
+          businessHoursJson: commerceConfig.businessHoursJson,
+          greetingMessage: commerceConfig.greetingMessage,
+          currency: commerceConfig.currency,
+          currencySymbol: commerceConfig.currencySymbol,
+        };
+
+        const result = await processCommerceMessage(
+          commerceConfig.businessId,
+          from,
+          textBody,
+          config
+        );
+
+        // Send the state machine response via WhatsApp
+        if (result.response) {
+          await sendWhatsAppMessage({
+            tenantId,
+            to: from,
+            body: result.response,
+          }).catch((err: any) =>
+            console.warn('[WhatsApp Commerce] send failed:', err.message)
+          );
+        }
+
+        // If order was created, also notify the business owner
+        if (result.orderCreated && result.orderId) {
+          const order = await db.gptformCommerceOrder.findUnique({
+            where: { id: result.orderId },
+          });
+          if (order) {
+            const items = JSON.parse(order.itemsJson || '[]');
+            const ownerMsg = `📦 New Order #${order.id.slice(-6).toUpperCase()}\n\n` +
+              `Customer: ${order.customerName || order.customerPhone}\n` +
+              `Items: ${items.map((i: any) => `${i.name} ×${i.qty} = ₹${i.amount}`).join(', ')}\n` +
+              `Total: ${commerceConfig.currencySymbol}${order.total}\n` +
+              `Status: ${order.status}\n` +
+              `Payment: ${order.paymentStatus}`;
+            // Best-effort notification to business owner
+            console.log('[WhatsApp Commerce] Notify owner:', ownerMsg);
+          }
+        }
+
+        return; // Commerce flow handled — skip regular auto-reply
+      }
+    } catch (commerceErr) {
+      console.warn('[WhatsApp Commerce] Failed, falling back to regular flow:', commerceErr);
+      // Fall through to regular auto-reply if commerce fails
+    }
+
     // ── 6. Auto-reply when tenant is offline ──────────────────────────────
     // maybeAutoReply checks subscription + config + presence + cooldown
     // internally and never throws. For the whatsapp channel, it sends the

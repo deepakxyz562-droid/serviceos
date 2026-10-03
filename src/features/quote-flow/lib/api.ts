@@ -8,7 +8,9 @@ export async function api<T = any>(
 ): Promise<T> {
   let resolvedPath = path;
   if (!resolvedPath.startsWith('/api/quote-flow/')) {
-    if (resolvedPath.startsWith('/api/')) {
+    if (resolvedPath.startsWith('/api/commerce/')) {
+      // Direct commerce API route
+    } else if (resolvedPath.startsWith('/api/')) {
       resolvedPath = resolvedPath.replace('/api/', '/api/quote-flow/');
     } else {
       resolvedPath = `/api/quote-flow${resolvedPath.startsWith('/') ? '' : '/'}${resolvedPath}`;
