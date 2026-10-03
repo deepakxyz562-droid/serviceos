@@ -10,13 +10,10 @@
  */
 import * as SecureStore from "expo-secure-store";
 
-// Try to read from environment, fallback to localhost (works on iOS sim).
-// For real devices, override this with your LAN IP before building.
-const HOST = "localhost"; // ← change this or set EXPO_PUBLIC_API_URL for device testing
-const PORT = "3000";
-
+// Default to production cloud API (https://fieseros.com) so physical mobile devices can connect
+// Overridden by EXPO_PUBLIC_API_URL if specified in .env
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || `http://${HOST}:${PORT}`;
+  process.env.EXPO_PUBLIC_API_URL || "https://fieseros.com";
 
 let cachedToken: string | null = null;
 
