@@ -21,6 +21,7 @@ import {
   Modal,
   Platform,
   Image,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -382,11 +383,28 @@ export default function QuotePreviewScreen() {
     );
   }
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/quotes");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
+
   if (!quote) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
         <Text style={styles.errorText}>Estimate not found</Text>
-        <TouchableOpacity style={styles.btnOutline} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.btnOutline} onPress={handleBack}>
           <Text style={styles.btnOutlineText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -397,11 +415,24 @@ export default function QuotePreviewScreen() {
   const theme = getTemplateTheme(quote.pdfTemplate);
   const isAccepted = quote.status === "ACCEPTED";
 
+  // Extract currency overrides from quote notes metadata if set
+  let quoteCurrency = business?.currency || "INR";
+  let quoteCurrencySymbol = business?.currencySymbol || "₹";
+  if (quote?.notes) {
+    try {
+      if (quote.notes.startsWith("{") && quote.notes.endsWith("}")) {
+        const meta = JSON.parse(quote.notes);
+        if (meta.currencyCode) quoteCurrency = meta.currencyCode;
+        if (meta.currencySymbol) quoteCurrencySymbol = meta.currencySymbol;
+      }
+    } catch {}
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
           <MaterialIcons name="arrow-back-ios" size={20} color="#1e293b" />
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>

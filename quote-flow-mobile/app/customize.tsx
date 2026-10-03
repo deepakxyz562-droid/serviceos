@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Image,
   Switch,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -203,13 +204,33 @@ export default function CustomizeScreen() {
         });
       }
 
-      router.back();
+      handleBack();
     } catch (e: any) {
       Alert.alert("Save failed", e.message || "Could not save template customization");
     } finally {
       setSaving(false);
     }
   }
+
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (params.id) {
+      const target = isQuote ? `/quote/${params.id}` : `/invoice/${params.id}`;
+      router.replace(target as any);
+    } else {
+      router.replace(isQuote ? "/(tabs)/quotes" : "/(tabs)/invoices");
+    }
+  }, [router, params.id, isQuote]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
 
   if (loading) {
     return (
@@ -228,7 +249,7 @@ export default function CustomizeScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       {/* Header matching customize.jpeg */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBackBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.headerBackBtn}>
           <MaterialIcons name="arrow-back-ios" size={20} color="#1e293b" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Customize</Text>

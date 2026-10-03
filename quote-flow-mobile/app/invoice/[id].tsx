@@ -22,6 +22,7 @@ import {
   Modal,
   Platform,
   Image,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -377,11 +378,28 @@ export default function InvoicePreviewScreen() {
     );
   }
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/invoices");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
+
   if (!inv) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]}>
         <Text style={styles.errorText}>Invoice not found</Text>
-        <TouchableOpacity style={styles.btnOutline} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.btnOutline} onPress={handleBack}>
           <Text style={styles.btnOutlineText}>Go Back</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -394,11 +412,24 @@ export default function InvoicePreviewScreen() {
   const balance = Math.max(0, (inv.total || 0) - paidAmount);
   const isPaid = inv.status === "PAID" || balance === 0;
 
+  // Extract currency overrides from invoice notes metadata if set
+  let invoiceCurrency = business?.currency || "INR";
+  let invoiceCurrencySymbol = business?.currencySymbol || "₹";
+  if (inv?.notes) {
+    try {
+      if (inv.notes.startsWith("{") && inv.notes.endsWith("}")) {
+        const meta = JSON.parse(inv.notes);
+        if (meta.currencyCode) invoiceCurrency = meta.currencyCode;
+        if (meta.currencySymbol) invoiceCurrencySymbol = meta.currencySymbol;
+      }
+    } catch {}
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Top Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
           <MaterialIcons name="arrow-back-ios" size={20} color="#1e293b" />
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
@@ -517,15 +548,15 @@ export default function InvoicePreviewScreen() {
                   </View>
                   <View style={[styles.gridCell, styles.colPrice, { borderRightWidth: 1, borderColor: theme.gridBorderColor, alignItems: "flex-end" }]}>
                     <Text style={styles.tableCellText}>
-                      {formatCurrency(it.unitPrice, business?.currency, business?.currencySymbol)}
+                      {formatCurrency(it.unitPrice, invoiceCurrency, invoiceCurrencySymbol)}
                     </Text>
                   </View>
                   <View style={[styles.gridCell, styles.colAmount, { alignItems: "flex-end" }]}>
                     <Text style={styles.tableCellBold}>
                       {formatCurrency(
                         it.qty * it.unitPrice,
-                        business?.currency,
-                        business?.currencySymbol
+                        invoiceCurrency,
+                        invoiceCurrencySymbol
                       )}
                     </Text>
                   </View>
@@ -540,7 +571,7 @@ export default function InvoicePreviewScreen() {
               <View style={styles.docSummaryRow}>
                 <Text style={styles.docSummaryLabel}>Subtotal</Text>
                 <Text style={styles.docSummaryVal}>
-                  {formatCurrency(inv.subtotal || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(inv.subtotal || 0, invoiceCurrency, invoiceCurrencySymbol)}
                 </Text>
               </View>
 
@@ -548,7 +579,7 @@ export default function InvoicePreviewScreen() {
                 <View style={styles.docSummaryRow}>
                   <Text style={styles.docSummaryLabel}>Discount</Text>
                   <Text style={styles.docSummaryVal}>
-                    -{formatCurrency(inv.discount || 0, business?.currency, business?.currencySymbol)}
+                    -{formatCurrency(inv.discount || 0, invoiceCurrency, invoiceCurrencySymbol)}
                   </Text>
                 </View>
               )}
@@ -557,7 +588,7 @@ export default function InvoicePreviewScreen() {
                 <View style={styles.docSummaryRow}>
                   <Text style={styles.docSummaryLabel}>Tax ({inv.taxRate || 0}%)</Text>
                   <Text style={styles.docSummaryVal}>
-                    {formatCurrency(inv.tax || 0, business?.currency, business?.currencySymbol)}
+                    {formatCurrency(inv.tax || 0, invoiceCurrency, invoiceCurrencySymbol)}
                   </Text>
                 </View>
               )}
@@ -565,14 +596,14 @@ export default function InvoicePreviewScreen() {
               <View style={styles.docSummaryRow}>
                 <Text style={styles.docSummaryLabel}>Total</Text>
                 <Text style={styles.docSummaryVal}>
-                  {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(inv.total || 0, invoiceCurrency, invoiceCurrencySymbol)}
                 </Text>
               </View>
 
               <View style={styles.docSummaryRow}>
                 <Text style={styles.docSummaryLabel}>Paid</Text>
                 <Text style={styles.docSummaryVal}>
-                  {formatCurrency(paidAmount, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(paidAmount, invoiceCurrency, invoiceCurrencySymbol)}
                 </Text>
               </View>
 
@@ -580,7 +611,7 @@ export default function InvoicePreviewScreen() {
               <View style={[styles.balanceDueBanner, { backgroundColor: theme.accent }]}>
                 <Text style={styles.balanceDueText}>BALANCE DUE</Text>
                 <Text style={styles.balanceDueAmount}>
-                  {formatCurrency(balance, business?.currency, business?.currencySymbol)}
+                  {formatCurrency(balance, invoiceCurrency, invoiceCurrencySymbol)}
                 </Text>
               </View>
             </View>
@@ -612,7 +643,7 @@ export default function InvoicePreviewScreen() {
         {/* Row 2: Large total amount on left */}
         <View style={styles.bottomRow2}>
           <Text style={styles.bottomTotalAmount}>
-            {formatCurrency(inv.total || 0, business?.currency, business?.currencySymbol)}
+            {formatCurrency(inv.total || 0, invoiceCurrency, invoiceCurrencySymbol)}
           </Text>
         </View>
 

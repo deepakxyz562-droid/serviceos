@@ -32,6 +32,7 @@ import {
   Switch,
   Modal,
   Image,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -143,6 +144,9 @@ export default function InvoiceEditScreen() {
         );
       }
 
+      let foundCurrency = business?.currency || "INR";
+      let foundSymbol = business?.currencySymbol || "₹";
+
       if (invoice.notes) {
         try {
           if (invoice.notes.startsWith("{") && invoice.notes.endsWith("}")) {
@@ -157,14 +161,14 @@ export default function InvoiceEditScreen() {
             if (meta.attachments && Array.isArray(meta.attachments)) setAttachments(meta.attachments);
             if (typeof meta.showPaidStamp === "boolean") setShowPaidStamp(meta.showPaidStamp);
             if (meta.shippingFee) setShippingFee(String(meta.shippingFee));
+            if (meta.currencyCode) foundCurrency = meta.currencyCode;
+            if (meta.currencySymbol) foundSymbol = meta.currencySymbol;
           }
         } catch {}
       }
 
-      if (business?.currency) {
-        setCurrencyCode(business.currency);
-        setCurrencySymbol(business.currencySymbol || "₹");
-      }
+      setCurrencyCode(foundCurrency);
+      setCurrencySymbol(foundSymbol);
 
       if (invoice.pdfTemplate) {
         const tpl = invoice.pdfTemplate.includes(":")
@@ -184,6 +188,33 @@ export default function InvoiceEditScreen() {
       load();
     }, [load])
   );
+
+  const handleBack = useCallback(() => {
+    if (subview !== "main") {
+      setSubview("main");
+      return;
+    }
+    if (router.canGoBack()) {
+      router.back();
+    } else if (params.id) {
+      router.replace(`/invoice/${params.id}`);
+    } else {
+      router.replace("/(tabs)/invoices");
+    }
+  }, [subview, params.id, router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (subview !== "main") {
+        setSubview("main");
+        return true;
+      }
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [subview, handleBack]);
 
   // Segment Tab switch
   function handleSegmentChange(tab: DocTypeTab) {
@@ -291,6 +322,8 @@ export default function InvoiceEditScreen() {
         attachments,
         showPaidStamp,
         shippingFee: parseFloat(shippingFee) || 0,
+        currencyCode,
+        currencySymbol,
       };
 
       await apiPatch(`/api/invoices/${params.id}`, {
@@ -310,18 +343,34 @@ export default function InvoiceEditScreen() {
         pdfTemplate: `${docTypeTab}:${selectedTemplateId}`,
       });
 
-      // Update business currency if changed
-      if (currencyCode !== business?.currency) {
-        await apiPatch("/api/business/onboarding", {
+      // Update business currency and immediately sync Zustand store
+      try {
+        const bizRes = await apiPatch("/api/business/onboarding", {
           currency: currencyCode,
           currencySymbol,
-        }).catch(() => {});
+        });
+        if (bizRes?.business) {
+          useAppStore.getState().setBusiness(bizRes.business);
+        } else {
+          const curBiz = useAppStore.getState().business;
+          useAppStore.getState().setBusiness({
+            ...(curBiz as any),
+            currency: currencyCode,
+            currencySymbol,
+          });
+        }
+      } catch (err) {
+        console.warn("Could not patch business currency:", err);
       }
 
       if (thenPreview) {
         router.replace(`/invoice/${params.id}`);
       } else {
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace(`/invoice/${params.id}`);
+        }
       }
     } catch (e: any) {
       Alert.alert("Save failed", e.message || "Could not update invoice");
@@ -753,7 +802,7 @@ export default function InvoiceEditScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       {/* Sticky Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
           <MaterialIcons name="arrow-back-ios" size={20} color="#1e293b" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Invoice</Text>

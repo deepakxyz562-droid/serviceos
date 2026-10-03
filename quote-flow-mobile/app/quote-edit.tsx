@@ -24,6 +24,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -169,7 +170,11 @@ export default function QuoteEditScreen() {
       if (thenPreview) {
         router.replace(`/quote/${params.id}`);
       } else {
-        router.back();
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace(`/quote/${params.id}`);
+        }
       }
     } catch (e: any) {
       Alert.alert("Save failed", e.message || "Could not update estimate");
@@ -177,6 +182,25 @@ export default function QuoteEditScreen() {
       setSaving(false);
     }
   }
+
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else if (params.id) {
+      router.replace(`/quote/${params.id}`);
+    } else {
+      router.replace("/(tabs)/quotes");
+    }
+  }, [router, params.id]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
 
   async function handleDelete() {
     Alert.alert("Delete Estimate", "Are you sure you want to delete this estimate?", [
@@ -208,7 +232,7 @@ export default function QuoteEditScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       {/* Top Header matching edit.jpeg */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+        <TouchableOpacity onPress={handleBack} style={styles.headerBtn}>
           <MaterialIcons name="arrow-back-ios" size={20} color="#1e293b" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Estimate</Text>

@@ -164,13 +164,13 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
               if (meta.attachments && Array.isArray(meta.attachments)) setAttachments(meta.attachments);
               if (typeof meta.showPaidStamp === "boolean") setShowPaidStamp(meta.showPaidStamp);
               if (meta.shippingFee) setShippingFee(meta.shippingFee);
+              if (meta.currencyCode) setCurrencyCode(meta.currencyCode);
+              if (meta.currencySymbol) setCurrencySymbol(meta.currencySymbol);
             }
           } catch {
             // plain text notes
           }
-        }
-
-        if (business?.currency) {
+        } else if (business?.currency) {
           setCurrencyCode(business.currency);
           setCurrencySymbol(business.currencySymbol || "₹");
         }
@@ -285,6 +285,8 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
         attachments,
         showPaidStamp,
         shippingFee,
+        currencyCode,
+        currencySymbol,
       };
 
       await apiPatch(`/api/invoices/${invoiceId}`, {
@@ -304,12 +306,24 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
         pdfTemplate: `${docTypeSegment}:${selectedTemplateId}`,
       });
 
-      // Update business currency if changed
-      if (currencyCode !== business?.currency) {
-        await apiPatch("/api/business/onboarding", {
+      // Update business currency and immediately sync Zustand store
+      try {
+        const bizRes = await apiPatch<{ business: any }>("/api/business/onboarding", {
           currency: currencyCode,
           currencySymbol,
-        }).catch(() => {});
+        });
+        if (bizRes?.business) {
+          useAppStore.getState().setBusiness(bizRes.business);
+        } else {
+          const curBiz = useAppStore.getState().business;
+          useAppStore.getState().setBusiness({
+            ...(curBiz as any),
+            currency: currencyCode,
+            currencySymbol,
+          });
+        }
+      } catch (err) {
+        console.warn("Could not patch business currency:", err);
       }
 
       window.dispatchEvent(new CustomEvent("invoice-list-changed"));

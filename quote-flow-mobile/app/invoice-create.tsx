@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   Modal,
   ActivityIndicator,
+  BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -206,6 +207,23 @@ export default function InvoiceCreateScreen() {
     }
   }
 
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/invoices");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      handleBack();
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+    return () => sub.remove();
+  }, [handleBack]);
+
   const currency = business?.currency || "INR";
 
   return (
@@ -216,7 +234,7 @@ export default function InvoiceCreateScreen() {
       >
         {/* Top App Bar */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Invoice</Text>
