@@ -14,6 +14,63 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
+const PRESET_TEMPLATES = [
+  {
+    name: "🎂 Birthday Cake Order",
+    desc: "Flavors, sizes, message & delivery",
+    greeting: "Hi! Welcome to our bakery. What cake would you like to order today?",
+    catalog: [
+      { id: "1", name: "Belgian Chocolate Cake", price: 800, isActive: true },
+      { id: "2", name: "Red Velvet Cake", price: 850, isActive: true },
+      { id: "3", name: "Fresh Pineapple Cake", price: 650, isActive: true },
+      { id: "4", name: "Black Forest Cake", price: 700, isActive: true },
+    ],
+    fields: [
+      { id: "product", label: "What cake flavor would you like to order?", type: "product", required: true, mapsTo: "product" },
+      { id: "quantity", label: "What size / weight do you need? (e.g. 0.5kg, 1kg, 2kg)", type: "quantity", required: true, mapsTo: "quantity" },
+      { id: "message_on_cake", label: "Any message you want written on the cake?", type: "text", required: false, mapsTo: "notes" },
+      { id: "delivery_date", label: "What date & time do you need it by?", type: "date", required: true, mapsTo: "deliveryDate" },
+      { id: "delivery_type", label: "Would you prefer Delivery or Store Pickup?", type: "choice", options: ["Delivery", "Pickup"], required: true, mapsTo: "deliveryType" },
+      { id: "address", label: "Please share your delivery address:", type: "address", required: true, mapsTo: "deliveryAddress" },
+      { id: "name", label: "May I know your name for the order?", type: "text", required: true, mapsTo: "customerName" },
+    ],
+  },
+  {
+    name: "🍱 Tiffin Service",
+    desc: "Meal plans, dietary preferences & address",
+    greeting: "Namaste! Welcome to our Home Tiffin Service. Which meal plan can we start for you?",
+    catalog: [
+      { id: "1", name: "Daily Veg Thali", price: 120, isActive: true },
+      { id: "2", name: "Weekly Lunch Plan (6 days)", price: 700, isActive: true },
+      { id: "3", name: "Monthly Lunch + Dinner (30 days)", price: 4500, isActive: true },
+    ],
+    fields: [
+      { id: "product", label: "Which tiffin plan would you like?", type: "product", required: true, mapsTo: "product" },
+      { id: "quantity", label: "How many tiffins per delivery?", type: "quantity", required: true, mapsTo: "quantity" },
+      { id: "start_date", label: "Starting from which date?", type: "date", required: true, mapsTo: "deliveryDate" },
+      { id: "diet", label: "Any dietary preference? (e.g. Jain, No Onion/Garlic)", type: "text", required: false, mapsTo: "notes" },
+      { id: "address", label: "Please provide your full delivery address:", type: "address", required: true, mapsTo: "deliveryAddress" },
+      { id: "name", label: "Your name please:", type: "text", required: true, mapsTo: "customerName" },
+    ],
+  },
+  {
+    name: "💇 Salon Booking",
+    desc: "Services, slot & stylist preference",
+    greeting: "Hello! Welcome to our Salon. Which service would you like to book?",
+    catalog: [
+      { id: "1", name: "Haircut & Styling", price: 499, isActive: true },
+      { id: "2", name: "Facial & Glow Treatment", price: 1299, isActive: true },
+      { id: "3", name: "Hair Spa & Keratin", price: 1899, isActive: true },
+    ],
+    fields: [
+      { id: "product", label: "Which service would you like to book?", type: "product", required: true, mapsTo: "product" },
+      { id: "appointment_date", label: "Preferred date & time slot for your appointment?", type: "date", required: true, mapsTo: "deliveryDate" },
+      { id: "stylist", label: "Any preferred stylist or staff member?", type: "text", required: false, mapsTo: "notes" },
+      { id: "name", label: "May I know your name?", type: "text", required: true, mapsTo: "customerName" },
+    ],
+  },
+];
+
 export default function CommerceSettingsPage() {
   const closeModal = useAppStore((s) => s.closeModal);
   const business = useAppStore((s) => s.business);
@@ -41,6 +98,15 @@ export default function CommerceSettingsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  function applyPreset(preset: typeof PRESET_TEMPLATES[0]) {
+    if (catalog.length > 0 && !confirm(`Load the "${preset.name}" template? This will replace your current catalog and fields.`)) {
+      return;
+    }
+    setCatalog(preset.catalog);
+    setFields(preset.fields);
+    setGreetingMessage(preset.greeting);
+  }
 
   async function save() {
     setSaving(true);
@@ -81,6 +147,31 @@ export default function CommerceSettingsPage() {
       </div>
 
       <div className="mx-auto max-w-md px-5 py-4 pb-24 space-y-6">
+        {/* Quick Setup Templates */}
+        <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-blue-900 mb-1">
+            ⚡ Quick Setup from Template
+          </h3>
+          <p className="text-[11px] text-blue-700 mb-3">
+            Choose a vertical to auto-populate products, checkout fields, and greeting message:
+          </p>
+          <div className="grid grid-cols-1 gap-2">
+            {PRESET_TEMPLATES.map((tmpl, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => applyPreset(tmpl)}
+                className="flex items-center justify-between rounded-lg border border-blue-200 bg-white px-3 py-2 text-left hover:border-blue-400 hover:bg-blue-50 transition shadow-2xs"
+              >
+                <div>
+                  <div className="text-xs font-bold text-stone-900">{tmpl.name}</div>
+                  <div className="text-[10px] text-stone-500">{tmpl.desc}</div>
+                </div>
+                <span className="text-[10px] font-semibold text-blue-600">Apply →</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <Section icon={<MessageSquare className="size-4" />} title="Greeting Message">
           <textarea value={greetingMessage} onChange={(e) => setGreetingMessage(e.target.value)} placeholder="Hi! Welcome to our store. What would you like to order?" className="w-full rounded-lg border border-stone-200 p-2 text-xs" rows={2} />
         </Section>
