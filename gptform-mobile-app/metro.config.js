@@ -1,11 +1,15 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 const { getDefaultConfig } = require('expo/metro-config');
-const { withNativeWind } = require('nativewind/metro');
+const path = require('path');
 
 const config = getDefaultConfig(__dirname);
+
+config.resolver.extraNodeModules = {
+  ...(config.resolver.extraNodeModules || {}),
+  '@': path.resolve(__dirname, 'src'),
+};
 
 if (config.watcher && config.watcher.healthCheck) {
   config.watcher.healthCheck.enabled = false;
 }
 
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = config;

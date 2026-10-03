@@ -1,41 +1,45 @@
-import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
+
+let HapticsModule: any = null;
+try {
+  HapticsModule = require('expo-haptics');
+} catch {}
 
 export const hapticFeedback = {
   light: async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !HapticsModule) return;
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle?.Light);
     } catch {}
   },
   medium: async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !HapticsModule) return;
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle?.Medium);
     } catch {}
   },
   heavy: async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !HapticsModule) return;
     try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      await HapticsModule.impactAsync(HapticsModule.ImpactFeedbackStyle?.Heavy);
     } catch {}
   },
   success: async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !HapticsModule) return;
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await HapticsModule.notificationAsync(HapticsModule.NotificationFeedbackType?.Success);
     } catch {}
   },
   warning: async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !HapticsModule) return;
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      await HapticsModule.notificationAsync(HapticsModule.NotificationFeedbackType?.Warning);
     } catch {}
   },
   error: async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web' || !HapticsModule) return;
     try {
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      await HapticsModule.notificationAsync(HapticsModule.NotificationFeedbackType?.Error);
     } catch {}
   },
 };

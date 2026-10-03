@@ -577,6 +577,10 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // "Back to App" button that restores the normal tenant shell.
   const isSuperAdminConsole = currentView === 'superadmin';
 
+  // ─── Full-takeover AI Agent Studio: hides app sidebar & header ─────────
+  // The studio takes 100% of viewport and provides its own "Back to Dashboard" button.
+  const isAgentStudioTakeover = currentView === 'agentStudio' || currentView === 'chatbotBuilder';
+
   // ─── SuperAdmin console — full-takeover (no app sidebar / header / bottom
   // nav). The console component renders its own three-panel layout. ───────
   if (isSuperAdminConsole) {
@@ -600,17 +604,17 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         darkMode && 'dark',
       )}
     >
-      <AppSidebar onLogout={onLogout} />
+      {!isAgentStudioTakeover && <AppSidebar onLogout={onLogout} />}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader onLogout={onLogout} />
-        <PastDueBanner trialStatus={trialStatus} />
-        <TrialBanner />
+        {!isAgentStudioTakeover && <AppHeader onLogout={onLogout} />}
+        {!isAgentStudioTakeover && <PastDueBanner trialStatus={trialStatus} />}
+        {!isAgentStudioTakeover && <TrialBanner />}
 
         <main
           className={cn(
             'flex-1 overflow-auto animate-fade-in bg-background',
-            isFullHeight
+            (isFullHeight || isAgentStudioTakeover)
               ? 'flex flex-col min-h-0 p-0 overflow-hidden'
               : isMobile
                 ? 'pb-[calc(4rem+env(safe-area-inset-bottom,0px))]'
@@ -651,7 +655,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
             is not hidden behind the fixed nav. Since both <main> and the nav
             use `bg-background`, the padding area is the same color as the nav
             — no visible gap when content is shorter than the viewport. */}
-        <MobileBottomNav />
+        {!isAgentStudioTakeover && <MobileBottomNav />}
       </div>
 
       {/* Web Push enrolment for tenant admins — auto-subscribes when

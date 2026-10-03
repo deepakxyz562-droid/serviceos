@@ -4,250 +4,654 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  TextInput,
-  Switch,
-  Alert,
   SafeAreaView,
   StatusBar,
+  StyleSheet,
+  Switch,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
-import {
-  FileInput,
-  Bot,
-  Sparkles,
-  Share2,
-  Check,
-  Pause,
-  Play,
-  LogOut,
-  ChevronRight,
-  TrendingUp,
-  Brain,
-  HelpCircle,
-  Eye,
-  ShieldCheck,
-} from 'lucide-react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
 import { hapticFeedback } from '@/lib/haptics';
 
 export default function MoreScreen() {
-  const { user, tenant, logout } = useAuthStore();
-  const [teachingQuestion, setTeachingQuestion] = useState(
-    'Do you service South Austin on Sunday evenings?'
-  );
-  const [aiAnswer, setAiAnswer] = useState('');
-  const [taught, setTaught] = useState(false);
+  const { user, logout } = useAuthStore();
+  const [acceptChats, setAcceptChats] = useState(true);
+  const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [contactMessage, setContactMessage] = useState('');
 
-  const handleSaveAnswer = async () => {
-    if (!aiAnswer.trim()) return;
-    await hapticFeedback.success();
-    setTaught(true);
-    setTimeout(() => {
-      setTaught(false);
-      setAiAnswer('');
-    }, 2500);
+  const handleToggleAcceptChats = async (val: boolean) => {
+    await hapticFeedback.light();
+    setAcceptChats(val);
   };
 
   const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of GPTForm?', [
+    Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Sign Out',
+        text: 'Log out',
         style: 'destructive',
         onPress: async () => {
-          await hapticFeedback.medium();
-          logout();
+          await hapticFeedback.warning();
+          await logout();
         },
       },
     ]);
   };
 
+  const handleSendContact = async () => {
+    if (contactMessage.length < 20) {
+      Alert.alert('Notice', 'Please type at least 20 characters.');
+      return;
+    }
+    await hapticFeedback.success();
+    Alert.alert('Sent', 'Your message has been sent to our support team.');
+    setContactModalVisible(false);
+    setContactMessage('');
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-slate-950">
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.safe}>
+      <StatusBar barStyle="dark-content" />
       <ScrollView
-        className="flex-1 px-4 sm:px-6 pt-3"
-        contentContainerStyle={{ paddingBottom: 110 }}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View className="py-2 mb-2">
-          <Text className="text-2xl font-black text-white tracking-tight">Studio Monitor</Text>
-          <Text className="text-xs text-slate-400 mt-0.5">
-            Forms Health, AI Agents, and Knowledge Training
-          </Text>
+        {/* Header: More */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>More</Text>
         </View>
 
-        {/* ── 1. FORMS PERFORMANCE ── */}
-        <View className="mb-6">
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-            Active Forms (3)
-          </Text>
+        {/* Profile Card (matches 18.35.50.jpeg) */}
+        <TouchableOpacity
+          style={styles.profileCard}
+          onPress={() => hapticFeedback.light()}
+          activeOpacity={0.8}
+        >
+          <View style={styles.avatarWrap}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>
+                {(user?.name?.[0] || user?.email?.[0] || 'U').toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.onlineDot} />
+          </View>
 
-          <View className="space-y-3">
-            {[
-              {
-                id: 'f1',
-                title: 'Emergency Plumbing Intake',
-                views: 1203,
-                submissions: 87,
-                rate: '7.2%',
-                status: 'published',
-              },
-              {
-                id: 'f2',
-                title: 'HVAC Seasonal Inspection',
-                views: 892,
-                submissions: 61,
-                rate: '6.8%',
-                status: 'published',
-              },
-              {
-                id: 'f3',
-                title: 'Dental Consultation Booking',
-                views: 421,
-                submissions: 38,
-                rate: '9.0%',
-                status: 'published',
-              },
-            ].map((form) => (
-              <View
-                key={form.id}
-                className="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-3 shadow-sm"
-              >
-                <View className="flex-row items-center justify-between">
-                  <View className="flex-row items-center gap-2">
-                    <View className="size-8 rounded-xl bg-emerald-500/10 items-center justify-center">
-                      <FileInput size={16} color="#10B981" />
-                    </View>
-                    <Text className="text-sm font-bold text-white">{form.title}</Text>
-                  </View>
-                  <View className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                    <Text className="text-[9px] font-bold text-emerald-400 uppercase">Active</Text>
-                  </View>
+          <View style={styles.profileInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.profileName}>
+                {user?.name || 'Account Owner'}
+              </Text>
+              <View style={styles.ownerBadge}>
+                <Text style={styles.ownerBadgeText}>Owner</Text>
+              </View>
+            </View>
+            <Text style={styles.profileRole}>Product Expert</Text>
+            <Text style={styles.profileEmail}>
+              {user?.email || 'Active Account'}
+            </Text>
+          </View>
+
+          <MaterialIcons name="chevron-right" size={24} color="#94a3b8" />
+        </TouchableOpacity>
+
+        {/* Accept Chats Card */}
+        <View style={styles.toggleCard}>
+          <View style={styles.toggleLeft}>
+            <MaterialIcons name="chat-bubble-outline" size={20} color="#1e293b" style={{ marginRight: 12 }} />
+            <Text style={styles.toggleLabel}>Accept chats</Text>
+          </View>
+          <Switch
+            value={acceptChats}
+            onValueChange={handleToggleAcceptChats}
+            trackColor={{ false: '#cbd5e1', true: '#10b981' }}
+            thumbColor="#ffffff"
+          />
+        </View>
+
+        {/* AI Voice Receptionist Card ($29/mo) */}
+        <TouchableOpacity
+          style={styles.receptionistCard}
+          onPress={() => {
+            hapticFeedback.light();
+            router.push('/receptionist');
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.receptionistLeft}>
+            <View style={styles.receptionistIconWrap}>
+              <MaterialIcons name="phone-in-talk" size={22} color="#8b5cf6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={styles.receptionistTitle}>AI Voice Receptionist</Text>
+                <View style={styles.receptionistBadge}>
+                  <Text style={styles.receptionistBadgeText}>$29/mo</Text>
                 </View>
-
-                {/* Metrics */}
-                <View className="flex-row justify-between py-2 px-3 rounded-2xl bg-slate-950 border border-slate-800/80">
-                  <View className="items-center">
-                    <Text className="text-[10px] text-slate-400 font-medium">Views</Text>
-                    <Text className="text-xs font-bold text-white mt-0.5">{form.views}</Text>
-                  </View>
-                  <View className="items-center">
-                    <Text className="text-[10px] text-slate-400 font-medium">Submissions</Text>
-                    <Text className="text-xs font-bold text-white mt-0.5">{form.submissions}</Text>
-                  </View>
-                  <View className="items-center">
-                    <Text className="text-[10px] text-slate-400 font-medium">Conversion</Text>
-                    <Text className="text-xs font-black text-emerald-400 mt-0.5">{form.rate}</Text>
-                  </View>
-                </View>
               </View>
-            ))}
-          </View>
-        </View>
-
-        {/* ── 2. AI AGENTS HEALTH & TEACH AI ── */}
-        <View className="mb-6">
-          <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-            AI Agent &amp; Knowledge Base
-          </Text>
-
-          {/* AI Stats Pill */}
-          <View className="p-4 rounded-3xl bg-slate-900 border border-slate-800 mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2.5">
-              <View className="size-9 rounded-2xl bg-blue-500/10 items-center justify-center">
-                <Bot size={18} color="#3B82F6" />
-              </View>
-              <View>
-                <Text className="text-xs font-bold text-white">AI Employee Agent</Text>
-                <Text className="text-[10px] text-emerald-400 font-semibold">● 94% Resolution Rate</Text>
-              </View>
-            </View>
-            <View className="items-end">
-              <Text className="text-xs font-bold text-slate-300">126 Conversations</Text>
-              <Text className="text-[10px] text-slate-500">Last 7 days</Text>
-            </View>
-          </View>
-
-          {/* 10-Second Teach AI Card */}
-          <View className="p-4 rounded-3xl bg-slate-900 border border-amber-500/30 space-y-3">
-            <View className="flex-row items-center gap-2">
-              <Brain size={16} color="#F59E0B" />
-              <Text className="text-xs font-black text-amber-400">Teach AI in 10 Seconds</Text>
-            </View>
-
-            <View className="p-3 rounded-2xl bg-slate-950 border border-slate-800">
-              <Text className="text-[10px] text-slate-400 uppercase font-bold mb-1">
-                Unanswered Customer Question:
-              </Text>
-              <Text className="text-xs font-semibold text-white italic">
-                “{teachingQuestion}”
-              </Text>
-            </View>
-
-            {taught ? (
-              <View className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex-row items-center gap-2">
-                <Check size={16} color="#10B981" />
-                <Text className="text-xs font-bold text-emerald-400">
-                  Learned! Knowledge base updated across all channels.
-                </Text>
-              </View>
-            ) : (
-              <View className="space-y-2">
-                <TextInput
-                  value={aiAnswer}
-                  onChangeText={setAiAnswer}
-                  placeholder="e.g. Yes, we provide 24/7 emergency service in South Austin."
-                  placeholderTextColor="#64748B"
-                  className="bg-slate-950 border border-slate-800 rounded-2xl p-3 text-xs text-white"
-                />
-                <TouchableOpacity
-                  onPress={handleSaveAnswer}
-                  disabled={!aiAnswer.trim()}
-                  className={`h-10 rounded-2xl items-center justify-center flex-row gap-1.5 ${
-                    aiAnswer.trim() ? 'bg-amber-500 active:bg-amber-600' : 'bg-slate-800'
-                  }`}
-                >
-                  <Sparkles size={14} color={aiAnswer.trim() ? '#022C22' : '#64748B'} />
-                  <Text
-                    className={`text-xs font-bold ${
-                      aiAnswer.trim() ? 'text-slate-950 font-black' : 'text-slate-400'
-                    }`}
-                  >
-                    Teach Agent Answer
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* ── 3. ACCOUNT & SIGN OUT ── */}
-        <View className="p-4 rounded-3xl bg-slate-900 border border-slate-800 space-y-3">
-          <View className="flex-row items-center justify-between pb-2 border-b border-slate-800">
-            <View>
-              <Text className="text-xs font-bold text-white">{user?.name || 'Deepak Chandra'}</Text>
-              <Text className="text-[10px] text-slate-400">{user?.email || 'deepak@fieseros.com'}</Text>
-            </View>
-            <View className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-              <Text className="text-[9px] font-bold text-emerald-400 uppercase">
-                {tenant?.plan || 'PRO'}
+              <Text style={styles.receptionistSubtitle}>
+                24/7 phone call answering & calendar booking
               </Text>
             </View>
           </View>
+          <MaterialIcons name="chevron-right" size={22} color="#8b5cf6" />
+        </TouchableOpacity>
+
+        {/* Grouped Menu Card 1: Team, Notifications, Appearance, Contact Us */}
+        <View style={styles.groupedCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/team');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="people-outline" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Team</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
 
           <TouchableOpacity
-            onPress={handleLogout}
-            className="flex-row items-center justify-between py-2"
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/notifications');
+            }}
+            activeOpacity={0.7}
           >
-            <View className="flex-row items-center gap-2">
-              <LogOut size={16} color="#EF4444" />
-              <Text className="text-xs font-bold text-red-400">Sign Out</Text>
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="notifications-none" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Notifications</Text>
             </View>
-            <ChevronRight size={16} color="#64748B" />
+            <View style={styles.menuRight}>
+              <View style={styles.alertExclamation}>
+                <Text style={styles.alertExclamationText}>!</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/appearance');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="palette" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Appearance</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              setContactModalVisible(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="mail-outline" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Contact us</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
           </TouchableOpacity>
         </View>
+
+        {/* Grouped Card 2: Tickets */}
+        <View style={styles.groupedCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/tickets');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="confirmation-number" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Tickets</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Grouped Card 3: Channels & Forms */}
+        <View style={styles.groupedCard}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/channels');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="hub" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Channels & Integrations</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/forms');
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="description" size={22} color="#1e293b" style={{ marginRight: 14 }} />
+              <Text style={styles.menuLabel}>Forms & Submissions</Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Log out Card */}
+        <TouchableOpacity
+          style={styles.logoutCard}
+          onPress={handleLogout}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="logout" size={20} color="#ef4444" style={{ marginRight: 12 }} />
+          <Text style={styles.logoutText}>Log out</Text>
+        </TouchableOpacity>
+
+        {/* App Version Footer */}
+        <View style={styles.footerWrap}>
+          <Text style={styles.footerLogo}>text</Text>
+          <Text style={styles.footerVersion}>v2.44.3-080 · GPTForm Mobile</Text>
+        </View>
       </ScrollView>
+
+      {/* Contact Us Bottom Sheet Modal (matches 18.35.49 (1).jpeg) */}
+      <Modal
+        visible={contactModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setContactModalVisible(false)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <View style={styles.sheetContent}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>How can we help you?</Text>
+              <TouchableOpacity onPress={() => setContactModalVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 18 }}>
+              <TextInput
+                style={styles.contactInput}
+                multiline
+                numberOfLines={4}
+                placeholder="Type a message (min. 20 characters)"
+                placeholderTextColor="#94a3b8"
+                value={contactMessage}
+                onChangeText={setContactMessage}
+              />
+
+              <TouchableOpacity style={styles.addScreenshotsBtn}>
+                <MaterialIcons name="photo-camera" size={18} color="#1e293b" style={{ marginRight: 8 }} />
+                <Text style={styles.addScreenshotsText}>Add screenshots</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sendContactBtn, contactMessage.length < 20 && { opacity: 0.5 }]}
+                disabled={contactMessage.length < 20}
+                onPress={handleSendContact}
+              >
+                <Text style={styles.sendContactText}>Send message</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  header: {
+    paddingVertical: 10,
+    marginBottom: 6,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  avatarWrap: {
+    position: 'relative',
+    marginRight: 14,
+  },
+  avatarCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ca8a04',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  onlineDot: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  ownerBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  ownerBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  profileRole: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  profileEmail: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  toggleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  toggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  groupedCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    overflow: 'hidden',
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 15,
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  menuRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  menuLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  alertExclamation: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#fee2e2',
+    borderWidth: 1.5,
+    borderColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  alertExclamationText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#ef4444',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#f8fafc',
+    marginLeft: 54,
+  },
+  logoutCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ef4444',
+  },
+  footerWrap: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 2,
+  },
+  footerLogo: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: -1,
+    color: '#0f172a',
+  },
+  footerVersion: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '500',
+  },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheetContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 36,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#cbd5e1',
+    alignSelf: 'center',
+    marginTop: 10,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  contactInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 14,
+    color: '#0f172a',
+    minHeight: 110,
+    textAlignVertical: 'top',
+    marginBottom: 14,
+  },
+  addScreenshotsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#cbd5e1',
+    borderRadius: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  addScreenshotsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+  },
+  sendContactBtn: {
+    backgroundColor: '#0f172a',
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  sendContactText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  receptionistCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1.5,
+    borderColor: '#e9d5ff',
+    marginBottom: 14,
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  receptionistLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  receptionistIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#f5f3ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  receptionistTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  receptionistBadge: {
+    backgroundColor: '#8b5cf6',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  receptionistBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  receptionistSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+});

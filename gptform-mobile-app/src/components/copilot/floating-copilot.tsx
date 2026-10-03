@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import { Sparkles, X, Mic, Send, Bot, Check, ArrowRight } from 'lucide-react-native';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -119,7 +119,7 @@ export function FloatingCopilot() {
           activeOpacity={0.85}
           className="size-14 rounded-full bg-gradient-to-tr bg-emerald-500 items-center justify-center shadow-2xl shadow-emerald-500/50 border-2 border-emerald-300/40"
         >
-          <Sparkles size={24} color="#022C22" />
+          <Ionicons name="sparkles" size={24} color="#022C22" />
         </TouchableOpacity>
       </Animated.View>
 
@@ -136,7 +136,7 @@ export function FloatingCopilot() {
             <View className="flex-row items-center justify-between pb-4 border-b border-slate-800">
               <View className="flex-row items-center gap-2.5">
                 <View className="size-9 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 items-center justify-center">
-                  <Bot size={20} color="#10B981" />
+                  <Ionicons name="hardware-chip-outline" size={20} color="#10B981" />
                 </View>
                 <View>
                   <Text className="text-base font-black text-white">GPTForm Copilot</Text>
@@ -147,7 +147,7 @@ export function FloatingCopilot() {
                 onPress={() => setModalOpen(false)}
                 className="size-8 rounded-full bg-slate-800 items-center justify-center"
               >
-                <X size={16} color="#94A3B8" />
+                <Ionicons name="close" size={16} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
@@ -207,7 +207,7 @@ export function FloatingCopilot() {
                     : 'bg-slate-800 border-slate-700'
                 }`}
               >
-                <Mic size={18} color={isRecording ? '#fff' : '#10B981'} />
+                <Feather name="mic" size={18} color={isRecording ? '#fff' : '#10B981'} />
               </TouchableOpacity>
 
               <TextInput
@@ -226,7 +226,7 @@ export function FloatingCopilot() {
                   prompt.trim() ? 'bg-emerald-500' : 'bg-slate-800'
                 }`}
               >
-                <Send size={16} color={prompt.trim() ? '#022C22' : '#64748B'} />
+                <Ionicons name="send" size={16} color={prompt.trim() ? '#022C22' : '#64748B'} />
               </TouchableOpacity>
             </View>
           </View>

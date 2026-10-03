@@ -15,7 +15,7 @@ import {
   Layers, CheckCircle2, Copy, ExternalLink, Trash2, Settings,
   BarChart3, RefreshCw, Smartphone, Code, ShieldCheck, Share2,
   ChevronRight, Users, MessageCircle, FileInput, Flame, ShieldAlert,
-  Loader2, Wand2, FileText, ArrowRight, LayoutTemplate
+  Loader2, Wand2, FileText, ArrowRight, ArrowLeft, LayoutTemplate
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 import { FormAgentStudio } from '@/features/forms/components/agent-builder/form-agent-studio';
 import {
   FormAgentData,
@@ -37,9 +38,25 @@ import {
 
 export interface ChatbotBuilderViewProps {
   embedded?: boolean;
+  onBackToDashboard?: () => void;
 }
 
-export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps = {}) {
+export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: ChatbotBuilderViewProps = {}) {
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const auth = useAppStore((s) => s.auth);
+
+  const handleBackToDashboard = () => {
+    if (onBackToDashboard) {
+      onBackToDashboard();
+    } else {
+      const isStandalone =
+        (auth?.tenant as any)?.signupMode === 'standalone' ||
+        (auth?.tenant as any)?.productType === 'forms' ||
+        (auth?.workspace as any)?.productType === 'forms';
+      setCurrentView(isStandalone ? 'formsDashboard' : 'dashboard');
+    }
+  };
+
   // Active agents state - initialized empty, populated from database
   const [agents, setAgents] = useState<FormAgentData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -301,6 +318,16 @@ export function ChatbotBuilderView({ embedded = false }: ChatbotBuilderViewProps
       {/* ─── Header ────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4 border-b border-border/60 pb-5">
         <div className="flex items-center gap-3">
+          {!embedded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBackToDashboard}
+              className="h-10 px-3.5 rounded-xl text-xs font-bold gap-1.5 border-border shadow-2xs hover:bg-muted text-muted-foreground hover:text-foreground mr-1"
+            >
+              <ArrowLeft className="size-4" /> Back to Dashboard
+            </Button>
+          )}
           <div className="flex items-center justify-center size-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md">
             <Bot className="size-6" />
           </div>

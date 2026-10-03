@@ -43,7 +43,6 @@ import { DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
   WhatsAppSendDialog,
 } from '@/features/forms/components/form-action-dialogs';
 import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form-dialog';
-import { ChatbotBuilderView } from '@/components/views/chatbot-builder-view';
 import { SchedulingView } from '@/components/views/scheduling-view';
 import { CreatorOffersView } from '@/components/views/creator-offers-view';
 import { useAppStore } from '@/store/app-store';
@@ -63,7 +62,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   const [formsError, setFormsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
-  const [viewMode, setViewMode] = useState<'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions'>('forms');
+  const [viewMode, setViewMode] = useState<'forms' | 'scheduling' | 'offers' | 'submissions'>('forms');
   const [highlightedFormId, setHighlightedFormId] = useState<string | null>(null);
 
   const openCreateFormWizard = useAppStore((s) => s.openCreateFormWizard);
@@ -72,11 +71,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab');
-      if (tabParam === 'offers' || tabParam === 'scheduling' || tabParam === 'chatbots' || tabParam === 'submissions' || tabParam === 'forms') {
+      if (tabParam === 'offers' || tabParam === 'scheduling' || tabParam === 'submissions' || tabParam === 'forms') {
         setViewMode(tabParam as any);
       } else {
         const storedTab = sessionStorage.getItem('pendingFormStudioTab');
-        if (storedTab && (storedTab === 'offers' || storedTab === 'scheduling' || storedTab === 'chatbots' || storedTab === 'submissions' || storedTab === 'forms')) {
+        if (storedTab && (storedTab === 'offers' || storedTab === 'scheduling' || storedTab === 'submissions' || storedTab === 'forms')) {
           setViewMode(storedTab as any);
           sessionStorage.removeItem('pendingFormStudioTab');
         }
@@ -1013,14 +1012,12 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             className={cn(
               'flex items-center justify-center size-12 rounded-2xl text-white shadow-md transition-all',
               viewMode === 'forms' && 'bg-gradient-to-tr from-emerald-600 to-teal-600',
-              viewMode === 'chatbots' && 'bg-gradient-to-tr from-blue-600 to-indigo-600',
               viewMode === 'scheduling' && 'bg-gradient-to-tr from-indigo-600 to-blue-600',
               viewMode === 'offers' && 'bg-gradient-to-tr from-purple-600 to-pink-600',
               viewMode === 'submissions' && 'bg-gradient-to-tr from-teal-600 to-emerald-600'
             )}
           >
             {viewMode === 'forms' && <FileInput className="size-6" />}
-            {viewMode === 'chatbots' && <Bot className="size-6" />}
             {viewMode === 'scheduling' && <CalendarClock className="size-6" />}
             {viewMode === 'offers' && <Sparkles className="size-6" />}
             {viewMode === 'submissions' && <Inbox className="size-6" />}
@@ -1028,8 +1025,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-xl md:text-2xl font-black tracking-tight text-foreground">
-                {viewMode === 'forms' && 'AI Forms & Studio'}
-                {viewMode === 'chatbots' && 'AI Chatbots & Agents'}
+                {viewMode === 'forms' && 'AI Forms & Surveys'}
                 {viewMode === 'scheduling' && 'Scheduling & Calendly Engine'}
                 {viewMode === 'offers' && 'Special Offers & Monetization'}
                 {viewMode === 'submissions' && 'Submissions & Inquiries'}
@@ -1037,8 +1033,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
               <Badge variant="secondary" className="text-[10px] font-bold uppercase tracking-wider">
                 {viewMode === 'forms'
                   ? 'Interactive Forms'
-                  : viewMode === 'chatbots'
-                  ? '11 Channels'
                   : viewMode === 'scheduling'
                   ? '1:1 & Group'
                   : viewMode === 'offers'
@@ -1048,7 +1042,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               {viewMode === 'forms' && 'Smart conversational forms, quiz funnels, payment checkouts & real-time CRM capture.'}
-              {viewMode === 'chatbots' && 'Autonomous AI assistants for customer support, appointment scheduling, and automated qualification.'}
               {viewMode === 'scheduling' && 'Seamless booking calendar with Google Meet, Zoom, custom availability, and conflict detection.'}
               {viewMode === 'offers' && 'Sell 1:1 consultation calls, priority answers, and downloadable digital products via Creem & UPI.'}
               {viewMode === 'submissions' && 'Unified inbox of inquiries, customer details, qualification scores, and booked meetings.'}
@@ -1061,21 +1054,10 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             <Button
               size="sm"
               className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white h-9 rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
-              onClick={() => openCreateFormWizard('agent')}
+              onClick={() => openCreateFormWizard('form')}
             >
               <Sparkles className="size-4" />
-              <span>AI Agent Wizard</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-blue-500/40 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 gap-1.5 h-9 rounded-xl font-bold text-xs"
-              onClick={() => {
-                setAgentStudioData(DEFAULT_FORM_AGENT);
-                setShowAiAgentStudio(true);
-              }}
-            >
-              <Bot className="size-4 text-blue-600" /> AI Agent Studio
+              <span>AI Form Wizard</span>
             </Button>
             <Button
               size="sm"
@@ -1088,14 +1070,14 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         )}
       </div>
 
-      {/* ─── Mode Switcher Tabs (AI Forms | Chatbot Builder | Scheduling | Special Offers | Submissions) ── */}
+      {/* ─── Mode Switcher Tabs (AI Forms | Scheduling | Special Offers | Submissions) ── */}
       <Tabs
         value={viewMode}
-        onValueChange={(v) => setViewMode(v as 'forms' | 'chatbots' | 'scheduling' | 'offers' | 'submissions')}
+        onValueChange={(v) => setViewMode(v as 'forms' | 'scheduling' | 'offers' | 'submissions')}
         className="w-full space-y-6"
       >
         <div className="w-full bg-muted/50 p-1.5 rounded-2xl border flex items-center justify-between gap-1 overflow-x-auto shadow-2xs">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-0 bg-transparent gap-1.5">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto p-0 bg-transparent gap-1.5">
             <TabsTrigger
               value="forms"
               className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
@@ -1107,13 +1089,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                   {forms.length}
                 </Badge>
               )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="chatbots"
-              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
-            >
-              <Bot className="size-4 text-blue-600" />
-              <span>Chatbots</span>
             </TabsTrigger>
             <TabsTrigger
               value="scheduling"
@@ -1389,10 +1364,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           )}
         </>
       )}
-        </TabsContent>
-
-        <TabsContent value="chatbots" className="mt-0 space-y-6">
-          <ChatbotBuilderView embedded={true} />
         </TabsContent>
 
         <TabsContent value="scheduling" className="mt-0 space-y-6">

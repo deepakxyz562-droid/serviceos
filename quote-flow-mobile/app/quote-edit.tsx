@@ -32,7 +32,7 @@ import { useAppStore } from "@/store/app";
 import { api, apiPatch, apiDelete } from "@/api/client";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
-import { sanitizeDecimal } from "@/lib/validation";
+import { sanitizeDecimal, safeIsoDate } from "@/lib/validation";
 import { CustomerSelectModal } from "@/components/CustomerSelectModal";
 import { CurrencySelectModal } from "@/components/CurrencySelectModal";
 import { SignaturePadModal } from "@/components/SignaturePadModal";
@@ -200,13 +200,13 @@ export default function QuoteEditScreen() {
         customerId: customerId || undefined,
         items: items.map((i) => ({
           description: i.description,
-          qty: parseFloat(i.qty) || 0,
-          unitPrice: parseFloat(i.unitPrice) || 0,
+          qty: Math.max(0.01, parseFloat(i.qty) || 1),
+          unitPrice: Math.max(0, parseFloat(i.unitPrice) || 0),
         })),
         discountValue: parseFloat(discountValue) || 0,
         discountType,
         taxRate: parseFloat(taxRate) || 0,
-        validUntil: validUntil ? new Date(validUntil).toISOString() : null,
+        validUntil: safeIsoDate(validUntil),
         notes: JSON.stringify(meta),
         status,
         pdfTemplate: selectedTemplateId,

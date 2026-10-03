@@ -227,8 +227,8 @@ export default function QuoteCreateScreen() {
         customerId: selectedCustomer.id,
         items: items.map((i) => ({
           description: i.description,
-          qty: i.qty,
-          unitPrice: i.unitPrice,
+          qty: Math.max(0.01, Number(i.qty) || 1),
+          unitPrice: Math.max(0, Number(i.unitPrice) || 0),
         })),
         discountValue: parseFloat(discountValue) || 0,
         discountType,

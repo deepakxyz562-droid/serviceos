@@ -9,7 +9,6 @@ import {
   Dimensions,
   Alert,
 } from "react-native";
-import Svg, { Path } from "react-native-svg";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 
@@ -136,6 +135,56 @@ export function SignaturePadModal({
     }
   }
 
+  // Render stroke path as native line segments
+  const renderStroke = (pts: Point[], keyPrefix: string) => {
+    if (!pts || pts.length === 0) return null;
+    if (pts.length === 1) {
+      return (
+        <View
+          key={`${keyPrefix}-dot`}
+          style={{
+            position: "absolute",
+            left: pts[0].x - 2,
+            top: pts[0].y - 2,
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: "#1e293b",
+          }}
+        />
+      );
+    }
+    const segments: React.ReactNode[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 0.5) continue;
+      const angle = Math.atan2(dy, dx);
+      const cx = (p1.x + p2.x) / 2;
+      const cy = (p1.y + p2.y) / 2;
+
+      segments.push(
+        <View
+          key={`${keyPrefix}-seg-${i}`}
+          style={{
+            position: "absolute",
+            left: cx - dist / 2,
+            top: cy - 1.5,
+            width: dist,
+            height: 3,
+            borderRadius: 1.5,
+            backgroundColor: "#1e293b",
+            transform: [{ rotate: `${angle}rad` }],
+          }}
+        />
+      );
+    }
+    return segments;
+  };
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -153,28 +202,8 @@ export function SignaturePadModal({
 
           {/* Interactive Pad Canvas */}
           <View style={[styles.canvasWrapper, { width: padWidth, height: padHeight }]} {...panResponder.panHandlers}>
-            <Svg width={padWidth} height={padHeight} style={styles.svg}>
-              {completedPathsSvg ? (
-                <Path
-                  d={completedPathsSvg}
-                  fill="none"
-                  stroke="#1e293b"
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              ) : null}
-              {currentPathSvg ? (
-                <Path
-                  d={currentPathSvg}
-                  fill="none"
-                  stroke="#1e293b"
-                  strokeWidth={3}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              ) : null}
-            </Svg>
+            {paths.map((pts, idx) => renderStroke(pts, `p-${idx}`))}
+            {currentPath.length > 0 && renderStroke(currentPath, "curr")}
 
             {paths.length === 0 && currentPath.length === 0 && (
               <View style={styles.placeholderOverlay} pointerEvents="none">

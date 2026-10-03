@@ -38,6 +38,7 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
   const [textInput, setTextInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [loading, setLoading] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   if (!visible) return null;
 
@@ -72,8 +73,6 @@ export function AiOmniInputModal({ visible, onClose, onParsed }: AiOmniInputModa
   }
 
   // ── Real voice recognition via expo-speech-recognition ─────────────────
-  const recognitionRef = useRef<any>(null);
-
   async function toggleVoice() {
     const speechModule = getSpeechModule();
     if (!speechModule) {

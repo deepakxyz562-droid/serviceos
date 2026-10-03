@@ -1,17 +1,16 @@
 import type { ExpoConfig, ConfigContext } from 'expo/config';
 
-const APP_NAME = 'GPTForm';
-const SCHEME = 'gptform';
+const APP_NAME = 'Chatbot';
+const SCHEME = 'chatbot';
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+export default ({ config }: ConfigContext): any => ({
   ...config,
   name: APP_NAME,
-  slug: 'gptform',
+  slug: 'chatbot',
   version: '1.0.0',
   orientation: 'portrait',
   scheme: SCHEME,
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
   splash: {
     resizeMode: 'contain',
     backgroundColor: '#0F172A',
@@ -45,19 +44,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-secure-store',
-    [
-      'expo-build-properties',
-      {
-        ios: {
-          deploymentTarget: '15.1',
-        },
-        android: {
-          compileSdkVersion: 35,
-          targetSdkVersion: 35,
-          minSdkVersion: 24,
-        },
-      },
-    ],
   ],
   experiments: {
     typedRoutes: true,

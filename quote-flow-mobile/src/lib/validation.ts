@@ -87,3 +87,38 @@ export function isValidUpi(text: string): boolean {
   const upiRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/;
   return upiRegex.test(clean);
 }
+
+/** Safely parse any date string to ISO without throwing RangeError */
+export function safeIsoDate(d?: string | null): string | null {
+  if (!d || !d.trim()) return null;
+  const trimmed = d.trim();
+  const parsed = Date.parse(trimmed);
+  if (!isNaN(parsed)) {
+    try {
+      return new Date(parsed).toISOString();
+    } catch {
+      return null;
+    }
+  }
+  // Try DD/MM/YYYY or DD-MM-YYYY format
+  const parts = trimmed.split(/[\/\-.]/);
+  if (parts.length === 3) {
+    const p0 = Number(parts[0]);
+    const p1 = Number(parts[1]);
+    const p2 = Number(parts[2]);
+    // Determine year vs day
+    const year = p2 > 1000 ? p2 : p0 > 1000 ? p0 : 2000 + p2;
+    const month = p2 > 1000 ? p1 - 1 : p1 - 1;
+    const day = p2 > 1000 ? p0 : p2;
+    const dt = new Date(year, month, day);
+    if (!isNaN(dt.getTime())) {
+      try {
+        return dt.toISOString();
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+

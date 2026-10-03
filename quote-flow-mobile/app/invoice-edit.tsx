@@ -43,7 +43,7 @@ import { formatCurrency } from "@/lib/format";
 import { WORLD_CURRENCIES, type CurrencyItem } from "@/lib/currencies";
 import { PRESET_TERMS } from "@/lib/preset-terms";
 import { MaterialIcons, Feather, FontAwesome5, Ionicons } from "@expo/vector-icons";
-import { sanitizeDecimal, sanitizeInteger } from "@/lib/validation";
+import { sanitizeDecimal, sanitizeInteger, safeIsoDate } from "@/lib/validation";
 import { SignaturePadModal } from "@/components/SignaturePadModal";
 import { CustomerSelectModal, type CustomerItem } from "@/components/CustomerSelectModal";
 import { CurrencySelectModal } from "@/components/CurrencySelectModal";
@@ -338,13 +338,13 @@ export default function InvoiceEditScreen() {
         customerId: customerId || undefined,
         items: items.map((i) => ({
           description: i.description,
-          qty: parseFloat(i.qty) || 0,
-          unitPrice: parseFloat(i.unitPrice) || 0,
+          qty: Math.max(0.01, parseFloat(i.qty) || 1),
+          unitPrice: Math.max(0, parseFloat(i.unitPrice) || 0),
         })),
         discountValue: parseFloat(discountValue) || 0,
         discountType,
         taxRate: isTaxActive ? parseFloat(taxRate) || 0 : 0,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        dueDate: safeIsoDate(dueDate),
         notes: JSON.stringify(metadata),
         status,
         pdfTemplate: `${docTypeTab}:${selectedTemplateId}`,
@@ -669,7 +669,7 @@ export default function InvoiceEditScreen() {
                 style={styles.sheetOptionRow}
                 onPress={() => {
                   setSignatureSheetVisible(false);
-                  setSignaturePadVisible(true);
+                  setTimeout(() => setSignaturePadVisible(true), 250);
                 }}
               >
                 <MaterialIcons name="draw" size={22} color="#2563eb" style={{ marginRight: 14 }} />
@@ -688,6 +688,16 @@ export default function InvoiceEditScreen() {
             </View>
           </View>
         </Modal>
+
+        <SignaturePadModal
+          visible={signaturePadVisible}
+          onClose={() => setSignaturePadVisible(false)}
+          onSave={(dataUrl) => {
+            setSignatureData(dataUrl);
+            setSignaturePadVisible(false);
+            setSignatureSheetVisible(false);
+          }}
+        />
       </SafeAreaView>
     );
   }
@@ -852,7 +862,7 @@ export default function InvoiceEditScreen() {
 
           {/* Card: Invoice Header (INV0001 TAX INVOICE >) */}
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, styles.rowCard]}
             onPress={() => setSubview("invoice-info")}
             activeOpacity={0.8}
           >
@@ -868,7 +878,7 @@ export default function InvoiceEditScreen() {
 
           {/* Card: Templates */}
           <TouchableOpacity
-            style={styles.card}
+            style={[styles.card, styles.rowCard]}
             onPress={() => router.push(`/customize?id=${params.id}&type=invoice`)}
             activeOpacity={0.8}
           >
@@ -1136,17 +1146,34 @@ export default function InvoiceEditScreen() {
             {/* Signature */}
             <TouchableOpacity
               style={styles.optionRow}
-              onPress={() => setSubview("signature")}
+              onPress={() => setSignatureSheetVisible(true)}
             >
               <View style={styles.cardIconRow}>
                 <MaterialIcons name="draw" size={20} color="#475569" style={{ marginRight: 12 }} />
                 <Text style={styles.optionRowTitle}>Signature</Text>
               </View>
               <View style={styles.cardActionRight}>
-                <Text style={styles.optionRowValue}>{signatureData ? "Attached" : ""}</Text>
+                {signatureData ? (
+                  <View style={styles.attachedBadge}>
+                    <Text style={styles.attachedBadgeText}>Attached</Text>
+                  </View>
+                ) : null}
                 <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
               </View>
             </TouchableOpacity>
+
+            {signatureData ? (
+              <View style={styles.signaturePreviewWrap}>
+                <Image source={{ uri: signatureData }} style={styles.signatureThumb} resizeMode="contain" />
+                <TouchableOpacity
+                  onPress={() => setSignatureData(null)}
+                  style={styles.removeSigBtn}
+                >
+                  <MaterialIcons name="close" size={14} color="#ef4444" />
+                  <Text style={styles.removeSigText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             {/* Terms or Notes */}
             <TouchableOpacity
@@ -1408,6 +1435,65 @@ export default function InvoiceEditScreen() {
         </View>
       </Modal>
 
+      {/* Signature Sheet Modal */}
+      <Modal
+        visible={signatureSheetVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSignatureSheetVisible(false)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <View style={styles.sheetCard}>
+            <View style={styles.sheetTopBar}>
+              <Text style={styles.sheetTitle}>Signature</Text>
+              <TouchableOpacity onPress={() => setSignatureSheetVisible(false)}>
+                <MaterialIcons name="close" size={22} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.sheetOptionRow}
+              onPress={() => {
+                setSignatureSheetVisible(false);
+                setTimeout(() => setSignaturePadVisible(true), 250);
+              }}
+            >
+              <MaterialIcons name="draw" size={22} color="#2563eb" style={{ marginRight: 14 }} />
+              <Text style={styles.sheetOptionText}>Sign Now (Draw with finger)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetOptionRow}
+              onPress={() => pickSignatureImage(false)}
+            >
+              <MaterialIcons name="image" size={22} color="#10b981" style={{ marginRight: 14 }} />
+              <Text style={styles.sheetOptionText}>Choose from Gallery</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sheetOptionRow}
+              onPress={() => pickSignatureImage(true)}
+            >
+              <MaterialIcons name="photo-camera" size={22} color="#8b5cf6" style={{ marginRight: 14 }} />
+              <Text style={styles.sheetOptionText}>Take Photo</Text>
+            </TouchableOpacity>
+
+            {signatureData ? (
+              <TouchableOpacity
+                style={[styles.sheetOptionRow, { borderTopWidth: 1, borderTopColor: "#f1f5f9" }]}
+                onPress={() => {
+                  setSignatureData(null);
+                  setSignatureSheetVisible(false);
+                }}
+              >
+                <MaterialIcons name="delete-outline" size={22} color="#ef4444" style={{ marginRight: 14 }} />
+                <Text style={[styles.sheetOptionText, { color: "#ef4444" }]}>Remove Signature</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
+
       {/* Customer Select Modal */}
       <CustomerSelectModal
         visible={customerSelectVisible}
@@ -1425,6 +1511,8 @@ export default function InvoiceEditScreen() {
         onClose={() => setSignaturePadVisible(false)}
         onSave={(dataUrl) => {
           setSignatureData(dataUrl);
+          setSignaturePadVisible(false);
+          setSignatureSheetVisible(false);
         }}
       />
     </SafeAreaView>
@@ -2269,5 +2357,49 @@ const styles = StyleSheet.create({
   markAsRowTextSelected: {
     color: "#2563eb",
     fontWeight: "bold",
+  },
+  rowCard: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  attachedBadge: {
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 4,
+  },
+  attachedBadgeText: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: "#059669",
+  },
+  signaturePreviewWrap: {
+    marginHorizontal: 12,
+    marginBottom: 10,
+    padding: 10,
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  signatureThumb: {
+    width: 140,
+    height: 44,
+  },
+  removeSigBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    padding: 6,
+  },
+  removeSigText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#ef4444",
   },
 });

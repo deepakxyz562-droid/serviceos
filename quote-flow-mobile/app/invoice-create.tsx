@@ -12,9 +12,12 @@ import {
   Modal,
   ActivityIndicator,
   BackHandler,
+  Switch,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useAppStore } from "@/store/app";
 import { api, apiPost, apiPatch } from "@/api/client";
 import {
@@ -23,10 +26,12 @@ import {
   type DocumentType,
   type CalcLineItem,
 } from "@/lib/quote-flow-calc";
-import { MaterialIcons, Feather } from "@expo/vector-icons";
-import { sanitizeDecimal } from "@/lib/validation";
+import { MaterialIcons, Feather, FontAwesome5 } from "@expo/vector-icons";
+import { sanitizeDecimal, safeIsoDate } from "@/lib/validation";
+import { PRESET_TERMS } from "@/lib/preset-terms";
 import { CustomerSelectModal } from "@/components/CustomerSelectModal";
 import { CurrencySelectModal } from "@/components/CurrencySelectModal";
+import { SignaturePadModal } from "@/components/SignaturePadModal";
 
 interface Item extends CalcLineItem {
   description: string;
@@ -87,6 +92,61 @@ export default function InvoiceCreateScreen() {
   const [currencyCode, setCurrencyCode] = useState(business?.currency || "INR");
   const [currencySymbol, setCurrencySymbol] = useState(business?.currencySymbol || "₹");
   const [currencyModalOpen, setCurrencyModalOpen] = useState(false);
+
+  // Extended Options
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [signatureSheetVisible, setSignatureSheetVisible] = useState(false);
+  const [signaturePadVisible, setSignaturePadVisible] = useState(false);
+
+  const [selectedTerms, setSelectedTerms] = useState<string[]>([
+    "Payment due within 30 days unless otherwise agreed.",
+    "Please quote invoice number when making payment.",
+  ]);
+  const [termsModalVisible, setTermsModalVisible] = useState(false);
+  const [createTermModalVisible, setCreateTermModalVisible] = useState(false);
+  const [tempCustomTerm, setTempCustomTerm] = useState("");
+
+  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachmentsSheetVisible, setAttachmentsSheetVisible] = useState(false);
+
+  const [status, setStatus] = useState<"UNPAID" | "PAID" | "PARTIALLY_PAID">("UNPAID");
+  const [markAsModalVisible, setMarkAsModalVisible] = useState(false);
+  const [showPaidStamp, setShowPaidStamp] = useState(true);
+
+  async function handlePickSignatureImage(fromCamera = false) {
+    const perm = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission Required", "Camera/gallery access is needed to attach a signature.");
+      return;
+    }
+    const res = fromCamera
+      ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [3, 1], quality: 0.8, base64: true })
+      : await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [3, 1], quality: 0.8, base64: true });
+    if (!res.canceled && res.assets?.[0]?.base64) {
+      setSignatureData(`data:image/jpeg;base64,${res.assets[0].base64}`);
+      setSignatureSheetVisible(false);
+    }
+  }
+
+  async function handlePickAttachment(fromCamera = false) {
+    const perm = fromCamera
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission Required", "Camera/gallery access is needed to attach files.");
+      return;
+    }
+    const res = fromCamera
+      ? await ImagePicker.launchCameraAsync({ quality: 0.7, base64: true })
+      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, base64: true });
+    if (!res.canceled && res.assets?.[0]?.base64) {
+      const dataUri = `data:image/jpeg;base64,${res.assets[0].base64}`;
+      setAttachments((prev) => [...prev, dataUri]);
+      setAttachmentsSheetVisible(false);
+    }
+  }
 
   useEffect(() => {
     api<{ customers: any[] }>("/api/mobile/customers").then((r) => {
@@ -192,24 +252,44 @@ export default function InvoiceCreateScreen() {
 
     setLoading(true);
     try {
+      const metadata = {
+        title: docType === "TAX_INVOICE" ? "TAX INVOICE" : docType === "BILL_OF_SUPPLY" ? "BILL OF SUPPLY" : "INVOICE",
+        docTypeSegment: docType,
+        currencyCode,
+        currencySymbol,
+        shippingFee: parseFloat(shippingFee) || 0,
+        dueTerms: dueDateText,
+        terms: selectedTerms,
+        signature: signatureData,
+        signatureDataUrl: signatureData,
+        attachments,
+        showPaidStamp,
+        status,
+        payments: [paymentMethod],
+      };
+
       const r = await apiPost<{ invoice: any }>("/api/mobile/invoices/create-with-items", {
         customerId: selectedCustomer.id,
         items: items.map((i) => ({
           description: i.description,
-          qty: i.qty,
-          unitPrice: i.unitPrice,
+          qty: Math.max(0.01, Number(i.qty) || 1),
+          unitPrice: Math.max(0, Number(i.unitPrice) || 0),
         })),
         discountValue: parseFloat(discountValue) || 0,
         discountType,
         taxRate: docType === "SIMPLE_BILL" ? parseFloat(globalTaxRate) || 0 : 18,
         pdfTemplate: selectedTemplateId,
-        notes: JSON.stringify({
-          currencyCode,
-          currencySymbol,
-          shippingFee: parseFloat(shippingFee) || 0,
-          dueTerms: dueDateText,
-        }),
+        notes: JSON.stringify(metadata),
       });
+
+      // Sync status if marked as paid
+      if (status && status !== "UNPAID" && r?.invoice?.id) {
+        try {
+          await apiPatch(`/api/invoices/${r.invoice.id}`, { status });
+        } catch {
+          /* non-blocking */
+        }
+      }
 
       // Update business currency
       apiPatch("/api/business/onboarding", {
@@ -683,6 +763,180 @@ export default function InvoiceCreateScreen() {
               </View>
             </View>
           </View>
+
+          {/* Card 8: Signature */}
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.cardRowBetween}
+              onPress={() => setSignatureSheetVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#fef2f2" }]}>
+                  <MaterialIcons name="draw" size={18} color="#ef4444" />
+                </View>
+                <View>
+                  <Text style={styles.cardSectionTitle}>Signature</Text>
+                  <Text style={styles.cardItemSub}>
+                    {signatureData ? "Signature attached" : "Draw or upload authorized sign"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.cardRightGroup}>
+                {signatureData ? (
+                  <View style={styles.attachedBadge}>
+                    <Text style={styles.attachedBadgeText}>Attached</Text>
+                  </View>
+                ) : null}
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </TouchableOpacity>
+
+            {signatureData ? (
+              <View style={styles.signaturePreviewWrap}>
+                <Image source={{ uri: signatureData }} style={styles.signatureThumb} resizeMode="contain" />
+                <TouchableOpacity
+                  onPress={() => setSignatureData(null)}
+                  style={styles.removeSigBtn}
+                >
+                  <MaterialIcons name="close" size={14} color="#ef4444" />
+                  <Text style={styles.removeSigText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Card 9: Terms or Notes */}
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => setTermsModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#ecfdf5" }]}>
+                  <MaterialIcons name="notes" size={18} color="#059669" />
+                </View>
+                <View>
+                  <Text style={styles.cardSectionTitle}>Terms or Notes</Text>
+                  <Text style={styles.cardItemSub}>
+                    {selectedTerms.length} active clause{selectedTerms.length === 1 ? "" : "s"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.cardRightGroup}>
+                <Text style={styles.cardValueText}>{selectedTerms.length} clauses</Text>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 10: Attachments */}
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.cardRowBetween}
+              onPress={() => setAttachmentsSheetVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#f0fdfa" }]}>
+                  <MaterialIcons name="attach-file" size={18} color="#0d9488" />
+                </View>
+                <View>
+                  <Text style={styles.cardSectionTitle}>Attachments</Text>
+                  <Text style={styles.cardItemSub}>
+                    {attachments.length > 0 ? `${attachments.length} file(s) attached` : "Attach photos or receipts"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.cardRightGroup}>
+                <Text style={styles.cardValueText}>{attachments.length > 0 ? `${attachments.length} files` : ""}</Text>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </TouchableOpacity>
+
+            {attachments.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.attachStrip}>
+                {attachments.map((uri, idx) => (
+                  <View key={idx} style={styles.attachItem}>
+                    <Image source={{ uri }} style={styles.attachThumb} resizeMode="cover" />
+                    <TouchableOpacity
+                      style={styles.attachDeleteBtn}
+                      onPress={() => setAttachments((all) => all.filter((_, i) => i !== idx))}
+                    >
+                      <MaterialIcons name="close" size={12} color="#ffffff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* Card 11: Mark as Status */}
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => setMarkAsModalVisible(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#fff7ed" }]}>
+                  <MaterialIcons name="bookmark-border" size={18} color="#ea580c" />
+                </View>
+                <View>
+                  <Text style={styles.cardSectionTitle}>Mark as</Text>
+                  <Text style={styles.cardItemSub}>Payment status of invoice</Text>
+                </View>
+              </View>
+              <View style={styles.cardRightGroup}>
+                <View
+                  style={[
+                    styles.statusPill,
+                    status === "PAID"
+                      ? styles.statusPaid
+                      : status === "PARTIALLY_PAID"
+                      ? styles.statusPartial
+                      : styles.statusUnpaid,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusPillText,
+                      status === "PAID"
+                        ? { color: "#16a34a" }
+                        : status === "PARTIALLY_PAID"
+                        ? { color: "#ea580c" }
+                        : { color: "#475569" },
+                    ]}
+                  >
+                    {status === "PAID" ? "Paid" : status === "PARTIALLY_PAID" ? "Partially Paid" : "Unpaid"}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Card 12: Show 'PAID' Stamp on Invoice */}
+          <View style={styles.card}>
+            <View style={styles.cardRowBetween}>
+              <View style={styles.cardLeftGroup}>
+                <View style={[styles.iconBox, { backgroundColor: "#ecfdf5" }]}>
+                  <MaterialIcons name="verified" size={18} color="#10b981" />
+                </View>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={styles.cardSectionTitle}>Show 'PAID' Stamp on Invoice</Text>
+                  <Text style={styles.cardItemSub}>Displays rubber paid stamp across PDF</Text>
+                </View>
+              </View>
+              <Switch
+                value={showPaidStamp}
+                onValueChange={setShowPaidStamp}
+                trackColor={{ false: "#cbd5e1", true: "#93c5fd" }}
+                thumbColor={showPaidStamp ? "#2563eb" : "#f1f5f9"}
+              />
+            </View>
+          </View>
         </ScrollView>
 
         {/* Floating Bottom Sticky Bar */}
@@ -794,6 +1048,261 @@ export default function InvoiceCreateScreen() {
                   );
                 })}
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Signature Pad Modal */}
+        <SignaturePadModal
+          visible={signaturePadVisible}
+          onClose={() => setSignaturePadVisible(false)}
+          onSave={(url) => {
+            setSignatureData(url);
+            setSignaturePadVisible(false);
+            setSignatureSheetVisible(false);
+          }}
+        />
+
+        {/* Signature Action Sheet Modal */}
+        <Modal visible={signatureSheetVisible} animationType="slide" transparent>
+          <View style={styles.sheetBackdrop}>
+            <View style={styles.sheetContent}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Add Signature</Text>
+                <TouchableOpacity onPress={() => setSignatureSheetVisible(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ padding: 16, gap: 10 }}>
+                <TouchableOpacity
+                  style={styles.sheetOption}
+                  onPress={() => {
+                    setSignatureSheetVisible(false);
+                    setTimeout(() => setSignaturePadVisible(true), 250);
+                  }}
+                >
+                  <MaterialIcons name="gesture" size={22} color="#2563eb" />
+                  <Text style={styles.sheetOptionText}>Draw on Screen</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sheetOption}
+                  onPress={() => handlePickSignatureImage(false)}
+                >
+                  <MaterialIcons name="photo-library" size={22} color="#059669" />
+                  <Text style={styles.sheetOptionText}>Choose from Library</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sheetOption}
+                  onPress={() => handlePickSignatureImage(true)}
+                >
+                  <MaterialIcons name="camera-alt" size={22} color="#7c3aed" />
+                  <Text style={styles.sheetOptionText}>Take Photo</Text>
+                </TouchableOpacity>
+
+                {signatureData ? (
+                  <TouchableOpacity
+                    style={[styles.sheetOption, { borderColor: "#fecaca" }]}
+                    onPress={() => {
+                      setSignatureData(null);
+                      setSignatureSheetVisible(false);
+                    }}
+                  >
+                    <MaterialIcons name="delete-outline" size={22} color="#ef4444" />
+                    <Text style={[styles.sheetOptionText, { color: "#ef4444" }]}>Remove Signature</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Terms or Notes Picker Modal */}
+        <Modal visible={termsModalVisible} animationType="slide" transparent>
+          <View style={styles.sheetBackdrop}>
+            <View style={[styles.sheetContent, { maxHeight: "80%" }]}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Terms & Conditions</Text>
+                <TouchableOpacity onPress={() => setTermsModalVisible(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={{ padding: 16, gap: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#64748b", marginBottom: 4 }}>
+                  Select clauses to include on invoice:
+                </Text>
+
+                {PRESET_TERMS.map((term, idx) => {
+                  const isChecked = selectedTerms.includes(term);
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.termRow, isChecked && styles.termRowActive]}
+                      onPress={() => {
+                        if (isChecked) {
+                          setSelectedTerms((prev) => prev.filter((t) => t !== term));
+                        } else {
+                          setSelectedTerms((prev) => [...prev, term]);
+                        }
+                      }}
+                    >
+                      <MaterialIcons
+                        name={isChecked ? "check-box" : "check-box-outline-blank"}
+                        size={22}
+                        color={isChecked ? "#2563eb" : "#94a3b8"}
+                      />
+                      <Text style={[styles.termText, isChecked && styles.termTextActive]}>{term}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                <TouchableOpacity
+                  style={styles.addCustomTermBtn}
+                  onPress={() => {
+                    setTempCustomTerm("");
+                    setCreateTermModalVisible(true);
+                  }}
+                >
+                  <MaterialIcons name="add" size={18} color="#2563eb" />
+                  <Text style={styles.addCustomTermText}>Add Custom Clause</Text>
+                </TouchableOpacity>
+              </ScrollView>
+
+              <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: "#f1f5f9" }}>
+                <TouchableOpacity
+                  style={styles.doneBtn}
+                  onPress={() => setTermsModalVisible(false)}
+                >
+                  <Text style={styles.doneBtnText}>Done ({selectedTerms.length} Selected)</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Create Custom Term Dialog */}
+        <Modal visible={createTermModalVisible} transparent animationType="fade">
+          <View style={styles.centerBackdrop}>
+            <View style={styles.dialogCard}>
+              <Text style={styles.dialogTitle}>Add Custom Clause</Text>
+              <TextInput
+                style={styles.customTermInput}
+                placeholder="Enter term or condition..."
+                value={tempCustomTerm}
+                onChangeText={setTempCustomTerm}
+                multiline
+                numberOfLines={3}
+                autoFocus
+              />
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <TouchableOpacity
+                  style={[styles.dialogBtn, { backgroundColor: "#f1f5f9" }]}
+                  onPress={() => setCreateTermModalVisible(false)}
+                >
+                  <Text style={{ fontWeight: "700", color: "#475569" }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dialogBtn, { backgroundColor: "#2563eb" }]}
+                  onPress={() => {
+                    if (tempCustomTerm.trim()) {
+                      setSelectedTerms((prev) => [...prev, tempCustomTerm.trim()]);
+                    }
+                    setCreateTermModalVisible(false);
+                  }}
+                >
+                  <Text style={{ fontWeight: "700", color: "#ffffff" }}>Add Clause</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Attachments Sheet Modal */}
+        <Modal visible={attachmentsSheetVisible} animationType="slide" transparent>
+          <View style={styles.sheetBackdrop}>
+            <View style={styles.sheetContent}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Add Attachment</Text>
+                <TouchableOpacity onPress={() => setAttachmentsSheetVisible(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ padding: 16, gap: 10 }}>
+                <TouchableOpacity
+                  style={styles.sheetOption}
+                  onPress={() => handlePickAttachment(false)}
+                >
+                  <MaterialIcons name="photo-library" size={22} color="#2563eb" />
+                  <Text style={styles.sheetOptionText}>Choose from Gallery</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.sheetOption}
+                  onPress={() => handlePickAttachment(true)}
+                >
+                  <MaterialIcons name="camera-alt" size={22} color="#059669" />
+                  <Text style={styles.sheetOptionText}>Take Photo</Text>
+                </TouchableOpacity>
+
+                {attachments.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.sheetOption, { borderColor: "#fecaca" }]}
+                    onPress={() => {
+                      setAttachments([]);
+                      setAttachmentsSheetVisible(false);
+                    }}
+                  >
+                    <MaterialIcons name="delete-outline" size={22} color="#ef4444" />
+                    <Text style={[styles.sheetOptionText, { color: "#ef4444" }]}>Clear All ({attachments.length})</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Mark As Status Modal */}
+        <Modal visible={markAsModalVisible} animationType="slide" transparent>
+          <View style={styles.sheetBackdrop}>
+            <View style={styles.sheetContent}>
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Mark Invoice Status</Text>
+                <TouchableOpacity onPress={() => setMarkAsModalVisible(false)}>
+                  <MaterialIcons name="close" size={22} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+              <View style={{ padding: 16, gap: 10 }}>
+                {(["UNPAID", "PARTIALLY_PAID", "PAID"] as const).map((st) => {
+                  const isSelected = status === st;
+                  const label = st === "PAID" ? "Paid" : st === "PARTIALLY_PAID" ? "Partially Paid" : "Unpaid";
+                  const color = st === "PAID" ? "#16a34a" : st === "PARTIALLY_PAID" ? "#ea580c" : "#475569";
+                  return (
+                    <TouchableOpacity
+                      key={st}
+                      style={[styles.sheetOption, isSelected && { borderColor: "#2563eb", backgroundColor: "#eff6ff" }]}
+                      onPress={() => {
+                        setStatus(st);
+                        if (st === "PAID") setShowPaidStamp(true);
+                        setMarkAsModalVisible(false);
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                        <MaterialIcons
+                          name={st === "PAID" ? "check-circle" : st === "PARTIALLY_PAID" ? "schedule" : "bookmark-border"}
+                          size={22}
+                          color={color}
+                        />
+                        <Text style={[styles.sheetOptionText, { color, fontWeight: isSelected ? "bold" : "600" }]}>
+                          {label}
+                        </Text>
+                      </View>
+                      {isSelected ? <MaterialIcons name="check" size={20} color="#2563eb" /> : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           </View>
         </Modal>
@@ -1060,4 +1569,131 @@ const styles = StyleSheet.create({
     borderColor: "#bbf7d0",
   },
   aiChipText: { fontSize: 10, fontWeight: "600", color: "#065f46" },
+  attachedBadge: {
+    backgroundColor: "#ecfdf5",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  attachedBadgeText: { fontSize: 11, fontWeight: "bold", color: "#059669" },
+  signaturePreviewWrap: {
+    marginTop: 10,
+    padding: 10,
+    backgroundColor: "#f8fafc",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  signatureThumb: { width: 140, height: 44 },
+  removeSigBtn: { flexDirection: "row", alignItems: "center", gap: 3, padding: 4 },
+  removeSigText: { fontSize: 11, fontWeight: "700", color: "#ef4444" },
+  attachStrip: { marginTop: 10, flexDirection: "row" },
+  attachItem: {
+    position: "relative",
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+  },
+  attachThumb: { width: "100%", height: "100%" },
+  attachDeleteBtn: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: "rgba(239, 68, 68, 0.85)",
+    borderRadius: 8,
+    padding: 2,
+  },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  statusPaid: { backgroundColor: "#dcfce7" },
+  statusPartial: { backgroundColor: "#ffedd5" },
+  statusUnpaid: { backgroundColor: "#f1f5f9" },
+  statusPillText: { fontSize: 12, fontWeight: "800" },
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  sheetContent: { backgroundColor: "white", borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  sheetTitle: { fontSize: 16, fontWeight: "bold", color: "#0f172a" },
+  sheetOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 12,
+  },
+  sheetOptionText: { fontSize: 14, fontWeight: "600", color: "#0f172a" },
+  termRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 10,
+    backgroundColor: "#ffffff",
+  },
+  termRowActive: { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
+  termText: { fontSize: 13, color: "#334155", flex: 1, lineHeight: 18 },
+  termTextActive: { color: "#1e40af", fontWeight: "600" },
+  addCustomTermBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
+    backgroundColor: "#eff6ff",
+    marginTop: 4,
+  },
+  addCustomTermText: { fontSize: 13, fontWeight: "700", color: "#2563eb" },
+  doneBtn: {
+    backgroundColor: "#2563eb",
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  doneBtnText: { color: "white", fontSize: 15, fontWeight: "bold" },
+  centerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  dialogCard: { width: "100%", backgroundColor: "white", borderRadius: 16, padding: 20 },
+  dialogTitle: { fontSize: 16, fontWeight: "bold", color: "#0f172a", marginBottom: 12 },
+  customTermInput: {
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    color: "#0f172a",
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  dialogBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

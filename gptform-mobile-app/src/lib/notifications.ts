@@ -32,7 +32,7 @@ let channelsConfigured = false;
 let notificationHandlerConfigured = false;
 
 // Lazy-load expo-notifications safely on native platforms
-let Notifications: typeof import('expo-notifications') | null = null;
+let Notifications: any = null;
 if (Platform.OS !== 'web') {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports

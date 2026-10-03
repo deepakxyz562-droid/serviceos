@@ -375,14 +375,6 @@ export default function QuotePreviewScreen() {
     ]);
   }
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color="#059669" />
-      </SafeAreaView>
-    );
-  }
-
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -399,6 +391,14 @@ export default function QuotePreviewScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
   }, [handleBack]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <ActivityIndicator size="large" color="#059669" />
+      </SafeAreaView>
+    );
+  }
 
   if (!quote) {
     return (

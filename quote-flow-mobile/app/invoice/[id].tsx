@@ -370,14 +370,6 @@ export default function InvoicePreviewScreen() {
     ]);
   }
 
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.safe, styles.center]}>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </SafeAreaView>
-    );
-  }
-
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -394,6 +386,14 @@ export default function InvoicePreviewScreen() {
     const sub = BackHandler.addEventListener("hardwareBackPress", onBackPress);
     return () => sub.remove();
   }, [handleBack]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safe, styles.center]}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </SafeAreaView>
+    );
+  }
 
   if (!inv) {
     return (
