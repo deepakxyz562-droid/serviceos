@@ -15,10 +15,6 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest, ApiError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
-import {
-  ExpoSpeechRecognitionModule,
-  useSpeechRecognitionEvent,
-} from 'expo-speech-recognition';
 
 const QUICK_PROMPTS = [
   'Who owes me money (Udhaar dues)?',
@@ -126,69 +122,13 @@ export function FloatingCopilot() {
   };
   handleSendRef.current = handleSend;
 
-  // expo-speech-recognition event listeners. They are no-ops on platforms
-  // where the native module is unavailable (e.g. web).
-  useSpeechRecognitionEvent('result', (event) => {
-    setIsRecording(false);
-    const transcript = event.results?.[0]?.transcript;
-    if (transcript && transcript.trim()) {
-      setPrompt(transcript);
-      handleSendRef.current(transcript);
-    }
-  });
-
-  useSpeechRecognitionEvent('error', (event) => {
-    setIsRecording(false);
-    console.warn('[copilot] speech recognition error:', event?.error, event?.message);
-  });
-
-  useSpeechRecognitionEvent('end', () => {
-    setIsRecording(false);
-  });
-
   const toggleVoice = async () => {
     await hapticFeedback.medium();
-
-    // Web platform has no native speech recognition — surface a clear
-    // message instead of silently failing.
-    if (Platform.OS === 'web') {
-      Alert.alert(
-        'Voice input unavailable',
-        'Speech recognition is only available on iOS and Android devices.',
-      );
-      return;
-    }
-
-    if (isRecording) {
-      try { ExpoSpeechRecognitionModule.stop(); } catch {}
-      setIsRecording(false);
-      return;
-    }
-
-    try {
-      const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert(
-          'Microphone permission required',
-          'Grant microphone access in Settings to use voice input.',
-        );
-        return;
-      }
-      setIsRecording(true);
-      ExpoSpeechRecognitionModule.start({
-        lang: 'en-US',
-        interimResults: false,
-        maxAlternatives: 1,
-        continuous: false,
-        requiresOnDeviceRecognition: false,
-      });
-    } catch (err) {
-      setIsRecording(false);
-      Alert.alert(
-        'Voice input failed',
-        err instanceof Error ? err.message : 'Please try again.',
-      );
-    }
+    Alert.alert(
+      'Voice Dictation',
+      'You can dictate hands-free using the microphone key on your device keyboard.',
+      [{ text: 'Got it' }]
+    );
   };
 
   return (
