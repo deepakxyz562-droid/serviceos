@@ -394,23 +394,13 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         title="Configure Business Type & Currency"
       >
         <span className="text-sm leading-none">
-          {blueprint?.businessType === 'restaurant'
-            ? '🍽️'
-            : blueprint?.businessType === 'retail'
-            ? '🛍️'
-            : blueprint?.businessType === 'services'
-            ? '🔧'
-            : blueprint?.businessType === 'salon'
-            ? '💇'
-            : blueprint?.businessType === 'grocery'
-            ? '🏪'
-            : blueprint?.businessType === 'wholesale'
-            ? '📦'
+          {blueprint?.businessType && BUSINESS_TYPE_LABELS[blueprint.businessType]?.icon
+            ? BUSINESS_TYPE_LABELS[blueprint.businessType].icon
             : '🏢'}
         </span>
         <span className="capitalize">
           {blueprint?.businessType
-            ? (BUSINESS_TYPE_LABELS[blueprint.businessType] || blueprint.businessType.replace('_', ' '))
+            ? (BUSINESS_TYPE_LABELS[blueprint.businessType]?.label || blueprint.businessType.replace('_', ' '))
             : 'Adaptive Profile'}
         </span>
         <span className="text-indigo-300 dark:text-indigo-600">·</span>

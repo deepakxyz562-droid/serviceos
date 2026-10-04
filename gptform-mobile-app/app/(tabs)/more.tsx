@@ -623,32 +623,6 @@ export default function MoreScreen() {
             </View>
             <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
           </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
-          {/* Local Directory */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/marketplace' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="travel-explore" size={22} color="#0284c7" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Local Store Directory</Text>
-                  <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>Discovery</Text>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Explore verified businesses & listings</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
         </View>
 
         {/* Grouped Menu Card 1: Team, Notifications, Appearance, Contact Us */}
