@@ -208,23 +208,6 @@ export function CreateFormOrAgentModal({
       };
     }
   }, [step, method, templateSearch, selectedCategory]);
-      let isSubscribed = true;
-      setTemplatesLoading(true);
-      searchTemplates({
-        query: templateSearch || undefined,
-        category: selectedCategory === 'all' ? undefined : selectedCategory,
-        limit: 40,
-      }).then((res) => {
-        if (isSubscribed) {
-          setTemplateResults(res.map((r) => r.template));
-          setTemplatesLoading(false);
-        }
-      });
-      return () => {
-        isSubscribed = false;
-      };
-    }
-  }, [step, method, templateSearch, selectedCategory]);
 
   // Auto-fill details when template is picked
   const handleSelectTemplate = (tpl: FormTemplate) => {

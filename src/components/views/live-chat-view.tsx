@@ -27,6 +27,20 @@ import {
   Laptop,
   CheckCheck,
   ArrowRight,
+  ShoppingBag,
+  BookOpen,
+  Package,
+  Truck,
+  MessageCircle,
+  Bot,
+  Layers,
+  Inbox,
+  CheckCircle2,
+  ChevronDown,
+  Hash,
+  Instagram,
+  Tag,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +49,21 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 import { authFetch } from '@/lib/api'
+
+export type TidioView =
+  | 'all'
+  | 'unassigned'
+  | 'my_open'
+  | 'solved'
+  | 'lyro_ai'
+  | 'view_products'
+  | 'view_order_status'
+  | 'view_order_issues'
+  | 'view_shipping'
+  | 'channel_whatsapp'
+  | 'channel_web'
+  | 'channel_instagram'
+  | 'channel_messenger';
 
 interface ChatSession {
   id: string
@@ -88,6 +117,7 @@ export function LiveChatView() {
   const [sending, setSending] = useState(false)
   const [simulating, setSimulating] = useState(false)
   const [filter, setFilter] = useState<'active' | 'closed' | 'all'>('active')
+  const [tidioView, setTidioView] = useState<TidioView>('all')
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [detailsOpen, setDetailsOpen] = useState(true)
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -423,9 +453,81 @@ export function LiveChatView() {
     }
   }
 
-  // Filtered session list based on search and status
+  // Tidio Counts (Take.app & Tidio Suite Parity)
+  const counts = useMemo(() => {
+    let unassigned = 0
+    let myOpen = 0
+    let solved = 0
+    let lyroAi = 0
+    let products = 0
+    let orderStatus = 0
+    let orderIssues = 0
+    let shipping = 0
+    let whatsapp = 0
+    let web = 0
+
+    sessions.forEach((s) => {
+      if (s.status === 'waiting_for_agent' || s.status === 'active') unassigned++
+      if (s.status === 'claimed') myOpen++
+      if (s.status === 'closed') solved++
+      if (s.status !== 'claimed') lyroAi++
+
+      const text = `${s.lastMessage?.body || ''} ${s.formName || ''}`.toLowerCase()
+      if (/(product|price|menu|cake|pizza|item|buy|cost|catalog|stock)/i.test(text)) products++
+      if (/(order|status|where|tracking|track|ready|prepare|deliver)/i.test(text)) orderStatus++
+      if (/(return|refund|cancel|wrong|broken|damaged|delay|late|missing|complaint)/i.test(text)) orderIssues++
+      if (/(shipping|delivery|address|area|pincode|charge|ship|courier|pickup)/i.test(text)) shipping++
+
+      if (s.visitorPhone) whatsapp++
+      else web++
+    })
+
+    return {
+      all: sessions.length,
+      unassigned,
+      myOpen,
+      solved,
+      lyroAi,
+      products,
+      orderStatus,
+      orderIssues,
+      shipping,
+      whatsapp,
+      web,
+    }
+  }, [sessions])
+
+  // Filtered session list based on search, filter, and Tidio view
   const filteredSessions = useMemo(() => {
     return sessions.filter((s) => {
+      // 1. Tidio folder filter
+      if (tidioView === 'unassigned') {
+        if (s.status !== 'waiting_for_agent' && s.status !== 'active') return false
+      } else if (tidioView === 'my_open') {
+        if (s.status !== 'claimed') return false
+      } else if (tidioView === 'solved') {
+        if (s.status !== 'closed') return false
+      } else if (tidioView === 'lyro_ai') {
+        if (s.status === 'claimed') return false
+      } else if (tidioView === 'view_products') {
+        const text = `${s.lastMessage?.body || ''} ${s.formName || ''}`.toLowerCase()
+        if (!/(product|price|menu|cake|pizza|item|buy|cost|catalog|stock)/i.test(text)) return false
+      } else if (tidioView === 'view_order_status') {
+        const text = `${s.lastMessage?.body || ''} ${s.formName || ''}`.toLowerCase()
+        if (!/(order|status|where|tracking|track|ready|prepare|deliver)/i.test(text)) return false
+      } else if (tidioView === 'view_order_issues') {
+        const text = `${s.lastMessage?.body || ''} ${s.formName || ''}`.toLowerCase()
+        if (!/(return|refund|cancel|wrong|broken|damaged|delay|late|missing|complaint)/i.test(text)) return false
+      } else if (tidioView === 'view_shipping') {
+        const text = `${s.lastMessage?.body || ''} ${s.formName || ''}`.toLowerCase()
+        if (!/(shipping|delivery|address|area|pincode|charge|ship|courier|pickup)/i.test(text)) return false
+      } else if (tidioView === 'channel_whatsapp') {
+        if (!s.visitorPhone) return false
+      } else if (tidioView === 'channel_web') {
+        if (s.visitorPhone) return false
+      }
+
+      // 2. Search query filter
       if (!searchQuery.trim()) return true
       const q = searchQuery.toLowerCase()
       const name = (s.visitorName || '').toLowerCase()
@@ -435,7 +537,7 @@ export function LiveChatView() {
       const form = (s.formName || '').toLowerCase()
       return name.includes(q) || email.includes(q) || phone.includes(q) || body.includes(q) || form.includes(q)
     })
-  }, [sessions, searchQuery])
+  }, [sessions, tidioView, searchQuery])
 
   const selectedSession = sessions.find((s) => s.id === selectedSessionId)
 
@@ -453,6 +555,169 @@ export function LiveChatView() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background overflow-hidden border-t">
+      {/* ── TIDIO INBOX NAV PANE (Tidio Parity) ── */}
+      <div className="hidden md:flex flex-col w-60 border-r bg-muted/20 shrink-0 select-none text-xs">
+        {/* Tidio Top Search / Title */}
+        <div className="p-3 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Inbox className="size-4 text-emerald-600" />
+            <span className="font-bold text-foreground">Inbox</span>
+          </div>
+          <Badge variant="outline" className="text-[10px] font-mono font-bold text-muted-foreground">
+            {sessions.length} total
+          </Badge>
+        </div>
+
+        <ScrollArea className="flex-1 min-h-0 py-2">
+          {/* Section: Live Conversations */}
+          <div className="px-3 py-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              Live Conversations
+            </span>
+            <div className="mt-1 space-y-0.5">
+              {[
+                { id: 'all', label: 'All Conversations', icon: MessageSquare, count: counts.all },
+                { id: 'unassigned', label: 'Unassigned', icon: Circle, count: counts.unassigned, pulse: counts.unassigned > 0 },
+                { id: 'my_open', label: 'My open', icon: CheckCheck, count: counts.myOpen },
+                { id: 'solved', label: 'Solved', icon: CheckCircle2, count: counts.solved },
+              ].map((item) => {
+                const Icon = item.icon
+                const active = tidioView === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setTidioView(item.id as TidioView)}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+                      active
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Icon className={`size-3.5 ${item.pulse ? 'text-amber-500 fill-amber-500' : ''}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.count > 0 && (
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                          active
+                            ? 'bg-emerald-600 text-white'
+                            : item.pulse
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {item.count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Section: Lyro AI Agent */}
+          <div className="px-3 py-1.5 pt-3 border-t border-border/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 flex items-center gap-1">
+              <Bot className="size-3 text-purple-600" />
+              Lyro AI Agent
+            </span>
+            <div className="mt-1 space-y-0.5">
+              <button
+                onClick={() => setTidioView('lyro_ai')}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+                  tidioView === 'lyro_ai'
+                    ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Sparkles className="size-3.5 text-purple-600" />
+                  <span className="truncate">Autonomous AI</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-muted text-muted-foreground">
+                  {counts.lyroAi}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Section: Views (Tidio E-Commerce Smart Folders) */}
+          <div className="px-3 py-1.5 pt-3 border-t border-border/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              Views
+            </span>
+            <div className="mt-1 space-y-0.5">
+              {[
+                { id: 'view_products', label: '🛍️ Products', count: counts.products },
+                { id: 'view_order_status', label: '📖 Order status', count: counts.orderStatus },
+                { id: 'view_order_issues', label: '📦 Order issues', count: counts.orderIssues },
+                { id: 'view_shipping', label: '🚚 Shipping policy', count: counts.shipping },
+              ].map((item) => {
+                const active = tidioView === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setTidioView(item.id as TidioView)}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+                      active
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
+                  >
+                    <span className="truncate">{item.label}</span>
+                    {item.count > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-muted text-muted-foreground">
+                        {item.count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Section: Channels */}
+          <div className="px-3 py-1.5 pt-3 border-t border-border/40">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              Channels
+            </span>
+            <div className="mt-1 space-y-0.5">
+              {[
+                { id: 'channel_whatsapp', label: 'WhatsApp', icon: MessageCircle, count: counts.whatsapp, color: 'text-emerald-600' },
+                { id: 'channel_web', label: 'Live Chat (Web)', icon: Globe, count: counts.web, color: 'text-blue-600' },
+                { id: 'channel_instagram', label: 'Instagram', icon: Instagram, count: 0, color: 'text-pink-600' },
+                { id: 'channel_messenger', label: 'Messenger', icon: MessageSquare, count: 0, color: 'text-indigo-600' },
+              ].map((item) => {
+                const Icon = item.icon
+                const active = tidioView === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setTidioView(item.id as TidioView)}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${
+                      active
+                        ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold'
+                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 truncate">
+                      <Icon className={`size-3.5 ${item.color}`} />
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.count > 0 && (
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold bg-muted text-muted-foreground">
+                        {item.count}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </ScrollArea>
+      </div>
+
       {/* ── LEFT PANE: Session Queue (Text.com Parity) ── */}
       <div
         className={`${
@@ -467,13 +732,35 @@ export function LiveChatView() {
                 <MessageSquare className="size-4" />
               </div>
               <div>
-                <h2 className="text-sm font-semibold tracking-tight text-foreground">Live Operator Console</h2>
+                <h2 className="text-sm font-semibold tracking-tight text-foreground truncate max-w-[150px]">
+                  {tidioView === 'all'
+                    ? 'All Live Chats'
+                    : tidioView === 'unassigned'
+                    ? 'Unassigned'
+                    : tidioView === 'my_open'
+                    ? 'My Open'
+                    : tidioView === 'solved'
+                    ? 'Solved'
+                    : tidioView === 'lyro_ai'
+                    ? 'Lyro AI Handled'
+                    : tidioView === 'view_products'
+                    ? '🛍️ Products'
+                    : tidioView === 'view_order_status'
+                    ? '📖 Order Status'
+                    : tidioView === 'view_order_issues'
+                    ? '📦 Order Issues'
+                    : tidioView === 'view_shipping'
+                    ? '🚚 Shipping'
+                    : tidioView === 'channel_whatsapp'
+                    ? 'WhatsApp'
+                    : 'Live Web'}
+                </h2>
                 <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                   </span>
-                  <span>Online · Ready for visitors</span>
+                  <span>{filteredSessions.length} conversations</span>
                 </div>
               </div>
             </div>

@@ -17,7 +17,7 @@ import { hapticFeedback } from '@/lib/haptics';
 
 interface KnowledgeSource {
   id: string;
-  type: 'website' | 'pdf' | 'faq' | 'text';
+  type: 'website' | 'pdf' | 'faq' | 'text' | 'products';
   title: string;
   count: string;
   lastUpdated: string;
@@ -25,6 +25,7 @@ interface KnowledgeSource {
 
 export default function TrainAgentScreen() {
   const [sources, setSources] = useState<KnowledgeSource[]>([
+    { id: 's0', type: 'products', title: 'WooCommerce & Shopify Catalog', count: 'Live sync', lastUpdated: 'Active' },
     { id: 's1', type: 'website', title: 'Website Pages', count: '42 pages', lastUpdated: '3m ago' },
     { id: 's2', type: 'faq', title: 'Curated FAQs', count: '37 Q&As', lastUpdated: '1h ago' },
     { id: 's3', type: 'pdf', title: 'PDF Manuals & Pricing', count: '8 files', lastUpdated: 'Yesterday' },
@@ -203,6 +204,21 @@ export default function TrainAgentScreen() {
             <Text style={styles.gridItemTitle}>Plain Text</Text>
             <Text style={styles.gridItemSub}>Policies & guidelines</Text>
           </TouchableOpacity>
+
+          {/* Products & Store Sync (WooCommerce / Shopify) */}
+          <TouchableOpacity
+            style={styles.addGridItem}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/catalog');
+            }}
+          >
+            <View style={[styles.gridIconCircle, { backgroundColor: '#f0fdf4' }]}>
+              <MaterialIcons name="storefront" size={24} color="#16a34a" />
+            </View>
+            <Text style={styles.gridItemTitle}>Store Sync</Text>
+            <Text style={styles.gridItemSub}>WooCommerce & Shopify</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Existing Sources List */}
@@ -214,6 +230,7 @@ export default function TrainAgentScreen() {
                 <View
                   style={[
                     styles.sourceIconBox,
+                    item.type === 'products' && { backgroundColor: '#f0fdf4' },
                     item.type === 'website' && { backgroundColor: '#eff6ff' },
                     item.type === 'faq' && { backgroundColor: '#ecfdf5' },
                     item.type === 'pdf' && { backgroundColor: '#fef2f2' },
@@ -222,7 +239,9 @@ export default function TrainAgentScreen() {
                 >
                   <MaterialIcons
                     name={
-                      item.type === 'website'
+                      item.type === 'products'
+                        ? 'storefront'
+                        : item.type === 'website'
                         ? 'public'
                         : item.type === 'faq'
                         ? 'help'

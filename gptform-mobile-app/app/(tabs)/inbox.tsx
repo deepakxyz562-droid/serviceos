@@ -12,7 +12,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 
-type InboxFilter = 'my_chats' | 'queued' | 'unassigned' | 'supervised';
+type InboxFilter =
+  | 'my_chats'
+  | 'unassigned'
+  | 'products'
+  | 'order_status'
+  | 'order_issues'
+  | 'shipping'
+  | 'whatsapp';
 
 interface ChatItem {
   id: string;
@@ -22,44 +29,65 @@ interface ChatItem {
   timeAgo: string;
   unread: boolean;
   channel: 'website' | 'whatsapp' | 'instagram' | 'sms';
+  category?: string;
 }
 
 const SAMPLE_CHATS: ChatItem[] = [
   {
     id: 'session-urgent-1',
-    name: 'Example Customer',
-    avatarText: 'EC',
-    lastMessage: 'Reopened - by agent',
+    name: 'Aarav Sharma',
+    avatarText: 'AS',
+    lastMessage: 'Where is my order #B7C19D? Has it been shipped?',
     timeAgo: '2 min',
     unread: true,
-    channel: 'website',
+    channel: 'whatsapp',
+    category: 'order_status',
   },
   {
     id: 'session-wa-2',
-    name: 'Rahul Sharma',
-    avatarText: 'RS',
-    lastMessage: 'AI: Our AC service starts at ₹499...',
+    name: 'Rahul Verma',
+    avatarText: 'RV',
+    lastMessage: 'Do you have red velvet cake 1kg in stock today?',
     timeAgo: '15 min',
     unread: false,
     channel: 'whatsapp',
+    category: 'products',
   },
   {
     id: 'session-ig-3',
     name: 'Priya Patel',
     avatarText: 'PP',
-    lastMessage: 'AI: Available slots tomorrow are 11 AM or 3 PM.',
+    lastMessage: 'Can you deliver to Bandra West? What are shipping charges?',
     timeAgo: '1h',
     unread: false,
-    channel: 'instagram',
+    channel: 'website',
+    category: 'shipping',
+  },
+  {
+    id: 'session-issue-4',
+    name: 'Kavita Singh',
+    avatarText: 'KS',
+    lastMessage: 'The cake arrived slightly damaged, can I get a replacement?',
+    timeAgo: '3h',
+    unread: true,
+    channel: 'whatsapp',
+    category: 'order_issues',
   },
 ];
 
 export default function InboxScreen() {
   const [activeFilter, setActiveFilter] = useState<InboxFilter>('my_chats');
 
-  const filteredChats = activeFilter === 'my_chats'
-    ? SAMPLE_CHATS
-    : [];
+  const filteredChats = SAMPLE_CHATS.filter((c) => {
+    if (activeFilter === 'my_chats') return true;
+    if (activeFilter === 'unassigned') return c.unread;
+    if (activeFilter === 'products') return c.category === 'products';
+    if (activeFilter === 'order_status') return c.category === 'order_status';
+    if (activeFilter === 'order_issues') return c.category === 'order_issues';
+    if (activeFilter === 'shipping') return c.category === 'shipping';
+    if (activeFilter === 'whatsapp') return c.channel === 'whatsapp';
+    return true;
+  });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -67,59 +95,42 @@ export default function InboxScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Inbox</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={styles.headerTitle}>Inbox</Text>
+          <View style={styles.tidioBadge}>
+            <Text style={styles.tidioBadgeText}>Tidio Suite</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Filter Row */}
+      {/* Filter Row: Tidio Smart Views */}
       <View style={styles.filterRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'my_chats' && styles.filterPillActive]}
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveFilter('my_chats');
-            }}
-          >
-            <Text style={[styles.filterPillText, activeFilter === 'my_chats' && styles.filterPillTextActive]}>
-              My chats (1)
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'queued' && styles.filterPillActive]}
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveFilter('queued');
-            }}
-          >
-            <Text style={[styles.filterPillText, activeFilter === 'queued' && styles.filterPillTextActive]}>
-              Queued
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'unassigned' && styles.filterPillActive]}
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveFilter('unassigned');
-            }}
-          >
-            <Text style={[styles.filterPillText, activeFilter === 'unassigned' && styles.filterPillTextActive]}>
-              Unassigned
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterPill, activeFilter === 'supervised' && styles.filterPillActive]}
-            onPress={() => {
-              hapticFeedback.light();
-              setActiveFilter('supervised');
-            }}
-          >
-            <Text style={[styles.filterPillText, activeFilter === 'supervised' && styles.filterPillTextActive]}>
-              Supervised
-            </Text>
-          </TouchableOpacity>
+          {[
+            { id: 'my_chats', label: 'All Open' },
+            { id: 'unassigned', label: 'Unassigned' },
+            { id: 'products', label: '🛍️ Products' },
+            { id: 'order_status', label: '📖 Order status' },
+            { id: 'order_issues', label: '📦 Order issues' },
+            { id: 'shipping', label: '🚚 Shipping' },
+            { id: 'whatsapp', label: 'WhatsApp' },
+          ].map((item) => {
+            const active = activeFilter === item.id;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[styles.filterPill, active && styles.filterPillActive]}
+                onPress={() => {
+                  hapticFeedback.light();
+                  setActiveFilter(item.id as InboxFilter);
+                }}
+              >
+                <Text style={[styles.filterPillText, active && styles.filterPillTextActive]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
@@ -213,6 +224,20 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
     letterSpacing: -0.5,
+  },
+  tidioBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  tidioBadgeText: {
+    color: '#2563eb',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   filterRow: {
     paddingVertical: 8,

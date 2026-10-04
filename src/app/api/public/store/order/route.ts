@@ -89,9 +89,96 @@ export async function POST(req: NextRequest) {
       success: true,
       orderId: order.id,
       orderNumber: order.id.slice(-6).toUpperCase(),
+      trackingUrl: `/store/${resolvedBusinessId}/order/${order.id}`,
     });
   } catch (err: any) {
     console.error('Failed to create public store order:', err);
     return NextResponse.json({ error: err.message || 'Failed to place order' }, { status: 500 });
   }
 }
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const orderId = searchParams.get('orderId');
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
+    const order = await db.gptformCommerceOrder.findFirst({
+      where: {
+        OR: [
+          { id: orderId },
+          { id: { endsWith: orderId.toLowerCase() } },
+        ],
+      },
+      include: {
+        config: true,
+      },
+    });
+
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    // Count how many orders are ahead in the queue today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const ordersAhead = await db.gptformCommerceOrder.count({
+      where: {
+        businessId: order.businessId,
+        createdAt: {
+          gte: startOfDay,
+          lt: order.createdAt,
+        },
+        status: { in: ['PENDING', 'CONFIRMED', 'PREPARING'] },
+      },
+    });
+
+    let items = [];
+    try {
+      items = JSON.parse(order.itemsJson || '[]');
+    } catch {}
+
+    // Find tenant for clean business name
+    let storeName = order.config?.businessId || 'Store';
+    const tenant = await db.tenant.findFirst({
+      where: { OR: [{ id: order.businessId }, { slug: order.businessId }] },
+      select: { name: true, phone: true },
+    });
+    if (tenant?.name) {
+      storeName = tenant.name;
+    }
+
+    return NextResponse.json({
+      order: {
+        id: order.id,
+        orderNumber: order.id.slice(-6).toUpperCase(),
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        deliveryType: order.deliveryType,
+        deliveryAddress: order.deliveryAddress,
+        deliveryDate: order.deliveryDate,
+        notes: order.notes,
+        total: order.total,
+        createdAt: order.createdAt,
+        items,
+        currencySymbol: order.config?.currencySymbol || '₹',
+        businessName: storeName,
+        businessPhone: tenant?.phone || '',
+      },
+      queue: {
+        ordersAhead,
+        estimatedWaitMinutes: Math.max(3, ordersAhead * 3),
+        counterNumber: 'Counter 1',
+      },
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Failed to fetch order status' }, { status: 500 });
+  }
+}
+

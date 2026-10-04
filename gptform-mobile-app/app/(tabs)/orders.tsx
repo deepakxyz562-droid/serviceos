@@ -136,6 +136,26 @@ export default function OrdersScreen() {
     setUpdatingId(null);
   };
 
+  const sendWhatsAppReceipt = (order: Order) => {
+    const phone = order.customerPhone.replace(/\D/g, '');
+    const itemsText = (order.items || [])
+      .map((it) => `• ${it.name} x${it.qty} = ₹${(it.amount || it.price * it.qty).toFixed(2)}`)
+      .join('\n');
+    const msg = `🧾 *RECEIPT: Order #${order.id.slice(-6).toUpperCase()}*\n${order.deliveryAddress ? `Table/Address: ${order.deliveryAddress}\n` : ''}------------------------\n${itemsText}\n------------------------\n*TOTAL: ₹${order.total.toFixed(2)}*\nStatus: ${order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'}\n\nThank you for ordering with us!`;
+    Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+  };
+
+  const viewKOT = (order: Order) => {
+    const itemsText = (order.items || [])
+      .map((it) => `[ ] ${it.qty}x ${it.name}`)
+      .join('\n');
+    Alert.alert(
+      `🍳 Kitchen KOT — #${order.id.slice(-6).toUpperCase()}`,
+      `Table/Delivery: ${order.deliveryAddress || 'Dine-In'}\nTime: ${new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n${itemsText}`,
+      [{ text: 'OK' }]
+    );
+  };
+
   const filtered = orders.filter((o) => {
     if (activeFilter === 'ALL') return true;
     return o.status === activeFilter;
@@ -351,6 +371,26 @@ export default function OrdersScreen() {
                         <Text style={styles.completedText}>Completed</Text>
                       </View>
                     )}
+                  </View>
+
+                  {/* Take.app Parity: Receipts & Kitchen Ticket */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                    <TouchableOpacity
+                      style={[styles.contactBtn, { flex: 1 }]}
+                      onPress={() => viewKOT(order)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="restaurant" size={14} color="#d97706" />
+                      <Text style={[styles.contactBtnText, { color: '#b45309' }]}>KOT Ticket</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.contactBtn, { flex: 1, backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}
+                      onPress={() => sendWhatsAppReceipt(order)}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="receipt" size={14} color="#059669" />
+                      <Text style={[styles.contactBtnText, { color: '#059669' }]}>WhatsApp Bill</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               );

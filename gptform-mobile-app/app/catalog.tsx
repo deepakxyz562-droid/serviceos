@@ -372,6 +372,31 @@ export default function MobileCatalogScreen() {
         </View>
       </View>
 
+      {/* WooCommerce & Shopify Sync Banner */}
+      <View style={styles.syncBanner}>
+        <View style={styles.syncBannerContent}>
+          <View style={styles.syncBannerIconWrap}>
+            <MaterialIcons name="cloud-sync" size={22} color="#0284c7" />
+          </View>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={styles.syncBannerTitle}>WooCommerce & Shopify Sync</Text>
+            <Text style={styles.syncBannerSubtitle}>
+              Auto-sync products to answer questions & power WhatsApp shop.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.syncBannerBtn}
+            onPress={() => {
+              hapticFeedback.medium();
+              setSyncModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.syncBannerBtnText}>Connect</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Category Filter Chips */}
       {categories.length > 1 && (
         <View style={styles.chipsSection}>
@@ -866,6 +891,51 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: '#0f172a',
+  },
+  syncBanner: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 6,
+    borderRadius: 14,
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    padding: 10,
+  },
+  syncBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  syncBannerIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0369a1',
+  },
+  syncBannerSubtitle: {
+    fontSize: 10,
+    color: '#0284c7',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  syncBannerBtn: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  syncBannerBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
   },
   chipsSection: {
     backgroundColor: '#ffffff',

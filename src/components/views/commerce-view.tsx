@@ -37,6 +37,17 @@ import {
   Image as ImageIcon,
   Tag,
   Globe,
+  Receipt,
+  DollarSign,
+  Percent,
+  Coffee,
+  Download,
+  Share2,
+  Layers,
+  ChefHat,
+  Flame,
+  Volume2,
+  BellRing,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,8 +55,11 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 export function CommerceView() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'catalog' | 'pos' | 'dineIn' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'catalog' | 'pos' | 'dineIn' | 'kds' | 'closing' | 'settings'>('orders');
   const auth = useAppStore((s) => s.auth);
+
+  // KDS filter state
+  const [kdsTypeFilter, setKdsTypeFilter] = useState<'ALL' | 'DINE_IN' | 'TAKEOUT' | 'DELIVERY'>('ALL');
 
   // Commerce Data State
   const [loading, setLoading] = useState(true);
@@ -76,9 +90,38 @@ export function CommerceView() {
   const [posOrderType, setPosOrderType] = useState<'DINE_IN' | 'TAKEOUT' | 'DELIVERY'>('DINE_IN');
   const [posSubmitting, setPosSubmitting] = useState(false);
 
-  // Dine-In QR State
-  const [tableCount, setTableCount] = useState(10);
-  const [selectedTableForQr, setSelectedTableForQr] = useState<number | null>(1);
+  // Dynamic Dine-In Table Management State (Take.app Parity)
+  const [tables, setTables] = useState<Array<{ id: string; name: string; capacity?: number; section?: string; status?: string }>>([
+    { id: 'tbl_1', name: 'Table 1', capacity: 4, section: 'Main Floor' },
+    { id: 'tbl_2', name: 'Table 2', capacity: 4, section: 'Main Floor' },
+    { id: 'tbl_3', name: 'Table 3', capacity: 2, section: 'Main Floor' },
+    { id: 'tbl_4', name: 'Table 4', capacity: 6, section: 'Outdoor Patio' },
+    { id: 'tbl_5', name: 'Table 5', capacity: 4, section: 'Outdoor Patio' },
+  ]);
+  const [selectedTableForQr, setSelectedTableForQr] = useState<string>('Table 1');
+  const [tableModalOpen, setTableModalOpen] = useState(false);
+  const [editingTable, setEditingTable] = useState<any | null>(null);
+  const [tableNameInput, setTableNameInput] = useState('');
+  const [tableCapacityInput, setTableCapacityInput] = useState('4');
+  const [tableSectionInput, setTableSectionInput] = useState('Main Floor');
+  const [batchPrintModalOpen, setBatchPrintModalOpen] = useState(false);
+
+  // Billing, Tax & Invoicing State (Take.app POS Parity)
+  const [taxRate, setTaxRate] = useState<number>(5);
+  const [taxType, setTaxType] = useState<'exclusive' | 'inclusive'>('exclusive');
+  const [taxName, setTaxName] = useState<string>('GST');
+  const [serviceChargeRate, setServiceChargeRate] = useState<number>(0);
+  const [gstin, setGstin] = useState<string>('');
+  const [billFooterText, setBillFooterText] = useState<string>('Thank you for dining with us! Please visit again.');
+  const [discounts, setDiscounts] = useState<Array<{ code: string; type: 'percentage' | 'fixed'; value: number; minOrder?: number; label?: string }>>([
+    { code: 'WELCOME10', type: 'percentage', value: 10, minOrder: 200, label: '10% Off' },
+    { code: 'FLAT50', type: 'fixed', value: 50, minOrder: 500, label: '₹50 Flat Off' },
+  ]);
+
+  // Customer Receipt & Kitchen Order Ticket (KOT) Modal State
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
+  const [receiptType, setReceiptType] = useState<'CUSTOMER_BILL' | 'KOT'>('CUSTOMER_BILL');
+  const [receiptOrder, setReceiptOrder] = useState<any | null>(null);
 
   // Products Filter & Management State
   const [productSearch, setProductSearch] = useState('');
@@ -136,6 +179,21 @@ export function CommerceView() {
           setDeliveryAreas('');
         }
         setGreetingMessage(c.greetingMessage || '');
+        if (c.tables && Array.isArray(c.tables) && c.tables.length > 0) {
+          setTables(c.tables);
+          setSelectedTableForQr((prev) => (c.tables.some((t: any) => t.name === prev) ? prev : c.tables[0].name));
+        }
+        if (c.billing) {
+          setTaxRate(c.billing.taxRate ?? 5);
+          setTaxType(c.billing.taxType || 'exclusive');
+          setTaxName(c.billing.taxName || 'GST');
+          setServiceChargeRate(c.billing.serviceChargeRate ?? 0);
+          setGstin(c.billing.gstin || '');
+          setBillFooterText(c.billing.billFooterText || 'Thank you for dining with us! Please visit again.');
+        }
+        if (c.discounts && Array.isArray(c.discounts)) {
+          setDiscounts(c.discounts);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load commerce data:', err);
@@ -187,6 +245,23 @@ export function CommerceView() {
     }
   };
 
+  const markReadyAndAlertCustomer = async (order: any) => {
+    await updateOrderStatus(order.id, 'READY');
+    if (order.customerPhone) {
+      const cleanPhone = String(order.customerPhone).replace(/\D/g, '');
+      const orderNum = order.id.slice(-6).toUpperCase();
+      const locationText = order.deliveryType === 'dine_in'
+        ? (order.deliveryAddress || 'your table')
+        : 'Counter 1';
+      const storeName = auth?.tenant?.name || 'Kitchen';
+      const msg = `🍜 *Order #${orderNum} is READY!*\nStore: ${storeName}\nYour order has been freshly prepared. Please collect it from *${locationText}*.\n\nEnjoy your meal!`;
+      const waUrl = cleanPhone
+        ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+        : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+      window.open(waUrl, '_blank');
+    }
+  };
+
   const markOrderPaid = async (orderId: string) => {
     setUpdatingOrder(true);
     try {
@@ -208,28 +283,141 @@ export function CommerceView() {
     }
   };
 
-  const saveSettings = async (customCatalog?: any[]) => {
+  const saveSettings = async (
+    customCatalog?: any[],
+    customTables?: any[],
+    customBilling?: any,
+    customDiscounts?: any[]
+  ) => {
     setSavingSettings(true);
     try {
       const catToSave = customCatalog || catalog;
+      const tablesToSave = customTables || tables;
+      const billingToSave = customBilling || {
+        taxRate,
+        taxType,
+        taxName,
+        serviceChargeRate,
+        gstin,
+        billFooterText,
+      };
+      const discountsToSave = customDiscounts || discounts;
+
       await fetch('/api/commerce/config', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           catalogJson: catToSave,
-          fieldsJson: fields,
+          tables: tablesToSave,
+          billing: billingToSave,
+          discounts: discountsToSave,
           upiId: upiId || null,
           deliveryAreasJson: deliveryAreas.split(',').map((s) => s.trim()).filter(Boolean),
           greetingMessage: greetingMessage || null,
         }),
       });
-      toast.success('Settings and catalog saved!');
+      toast.success('Configuration saved!');
       loadCommerceData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to save settings');
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  // Dynamic Table Management Handlers (Take.app Dine-in Parity)
+  const handleOpenAddTable = () => {
+    setEditingTable(null);
+    setTableNameInput(`Table ${tables.length + 1}`);
+    setTableCapacityInput('4');
+    setTableSectionInput('Main Floor');
+    setTableModalOpen(true);
+  };
+
+  const handleOpenEditTable = (tbl: any) => {
+    setEditingTable(tbl);
+    setTableNameInput(tbl.name);
+    setTableCapacityInput(String(tbl.capacity || 4));
+    setTableSectionInput(tbl.section || 'Main Floor');
+    setTableModalOpen(true);
+  };
+
+  const handleSaveTable = () => {
+    if (!tableNameInput.trim()) {
+      toast.error('Table name is required');
+      return;
+    }
+    let updated: any[];
+    if (editingTable) {
+      updated = tables.map((t) =>
+        t.id === editingTable.id
+          ? {
+              ...t,
+              name: tableNameInput.trim(),
+              capacity: parseInt(tableCapacityInput, 10) || 4,
+              section: tableSectionInput.trim() || 'Main Floor',
+            }
+          : t
+      );
+      toast.success(`Updated ${tableNameInput}`);
+    } else {
+      const newTbl = {
+        id: `tbl_${Date.now()}`,
+        name: tableNameInput.trim(),
+        capacity: parseInt(tableCapacityInput, 10) || 4,
+        section: tableSectionInput.trim() || 'Main Floor',
+        status: 'vacant',
+      };
+      updated = [...tables, newTbl];
+      toast.success(`Added ${tableNameInput}`);
+    }
+    setTables(updated);
+    setTableModalOpen(false);
+    saveSettings(undefined, updated);
+  };
+
+  const handleDeleteTable = (id: string, name: string) => {
+    if (confirm(`Are you sure you want to remove ${name}?`)) {
+      const updated = tables.filter((t) => t.id !== id);
+      setTables(updated);
+      saveSettings(undefined, updated);
+      toast.success(`Removed ${name}`);
+    }
+  };
+
+  // Customer Receipt & KOT Calculation Helper (Take.app POS Parity)
+  const openReceiptModal = (order: any, type: 'CUSTOMER_BILL' | 'KOT') => {
+    setReceiptOrder(order);
+    setReceiptType(type);
+    setReceiptModalOpen(true);
+  };
+
+  const computeBillBreakdown = (order: any) => {
+    if (!order) return { subtotal: 0, tax: 0, serviceCharge: 0, discount: 0, total: 0 };
+    const items = order.items || [];
+    const subtotal = items.reduce((acc: number, it: any) => acc + (it.amount || it.price * it.qty || 0), 0);
+    const discount = order.discountAmount || 0;
+    const taxableAmount = Math.max(0, subtotal - discount);
+    const tax = taxType === 'inclusive' ? 0 : (taxableAmount * (taxRate || 0)) / 100;
+    const serviceCharge = (taxableAmount * (serviceChargeRate || 0)) / 100;
+    const total = taxType === 'inclusive' ? taxableAmount : taxableAmount + tax + serviceCharge;
+    return { subtotal, discount, tax, serviceCharge, total: order.total || total };
+  };
+
+  const sendWhatsAppReceipt = (order: any) => {
+    if (!order?.customerPhone || order.customerPhone === 'Walk-in') {
+      toast.error('No customer phone number available');
+      return;
+    }
+    const phone = order.customerPhone.replace(/\D/g, '');
+    const bill = computeBillBreakdown(order);
+    const itemsText = (order.items || [])
+      .map((it: any) => `• ${it.name} x${it.qty} = ${currencySymbol}${(it.amount || it.price * it.qty || 0).toFixed(2)}`)
+      .join('\n');
+
+    const message = `🧾 *RECEIPT: ${auth?.tenant?.name || 'STORE'}*\nOrder #${order.id.slice(-6).toUpperCase()}\nDate: ${new Date().toLocaleDateString()}\n${order.deliveryAddress ? `Table/Delivery: ${order.deliveryAddress}\n` : ''}------------------------\n${itemsText}\n------------------------\nSubtotal: ${currencySymbol}${bill.subtotal.toFixed(2)}${bill.tax > 0 ? `\n${taxName} (${taxRate}%): ${currencySymbol}${bill.tax.toFixed(2)}` : ''}\n*TOTAL: ${currencySymbol}${Number(order.total || bill.total).toFixed(2)}*\nStatus: ${order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'}${upiId && order.paymentStatus !== 'PAID' ? `\n\nPay via UPI: upi://pay?pa=${upiId}&pn=${encodeURIComponent(auth?.tenant?.name || 'Store')}&am=${Number(order.total).toFixed(2)}` : ''}\n\n${billFooterText}`;
+
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   // Product Add / Edit Handlers
@@ -561,7 +749,30 @@ export function CommerceView() {
             }`}
           >
             <QrCode className="h-3.5 w-3.5 text-amber-600" />
-            Dine-In QR Tables
+            Dine-In QR ({tables.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('kds')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+              activeTab === 'kds' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <ChefHat className="h-3.5 w-3.5 text-orange-600" />
+            Kitchen KDS
+            {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length > 0 && (
+              <span className="ml-1 rounded-full bg-orange-100 text-orange-700 px-1.5 py-0.2 text-[10px] font-bold">
+                {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('closing')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+              activeTab === 'closing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Receipt className="h-3.5 w-3.5 text-blue-600" />
+            Billing & Closing
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -824,6 +1035,130 @@ export function CommerceView() {
                   >
                     {savingSettings ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save Catalog'}
                   </Button>
+                </div>
+              </div>
+
+              {/* Tidio Lyro Style: 4 Product Data Sources Cards */}
+              <div className="pt-4 border-t border-stone-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
+                    Product Listing &amp; Auto-Sync (Tidio &amp; Take.app Parity)
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* WooCommerce Sync */}
+                  <div className="rounded-xl border border-purple-200 bg-purple-50/50 p-3.5 flex flex-col justify-between hover:border-purple-300 transition">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-purple-900">
+                          <ShoppingCart className="h-4 w-4 text-purple-600" />
+                          WooCommerce
+                        </div>
+                        <Badge variant="outline" className="text-[9px] bg-purple-100 text-purple-700 border-purple-200 font-bold">
+                          Auto-Sync
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-purple-700 mt-1.5 leading-snug">
+                        Sync WooCommerce product database so your AI Agent answers stock &amp; pricing questions.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSyncProvider('woocommerce');
+                        setSyncModalOpen(true);
+                      }}
+                      className="mt-3 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-7 gap-1"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Connect WooCommerce
+                    </Button>
+                  </div>
+
+                  {/* Shopify Sync */}
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5 flex flex-col justify-between hover:border-emerald-300 transition">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-emerald-900">
+                          <Store className="h-4 w-4 text-emerald-600" />
+                          Shopify
+                        </div>
+                        <Badge variant="outline" className="text-[9px] bg-emerald-100 text-emerald-700 border-emerald-200 font-bold">
+                          Auto-Sync
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-emerald-700 mt-1.5 leading-snug">
+                        Import Shopify product catalog, images, variants &amp; stock into AI chat and storefront.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSyncProvider('shopify');
+                        setSyncModalOpen(true);
+                      }}
+                      className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-7 gap-1"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Connect Shopify
+                    </Button>
+                  </div>
+
+                  {/* CSV Feed Upload */}
+                  <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3.5 flex flex-col justify-between hover:border-blue-300 transition">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-blue-900">
+                          <Upload className="h-4 w-4 text-blue-600" />
+                          Product Feed (CSV)
+                        </div>
+                        <Badge variant="outline" className="text-[9px] bg-blue-100 text-blue-700 border-blue-200 font-bold">
+                          Bulk Upload
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-blue-700 mt-1.5 leading-snug">
+                        Import entire catalog at once via CSV or Google Merchant Center feed for large inventories.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setSyncProvider('csv');
+                        setSyncModalOpen(true);
+                      }}
+                      className="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-7 gap-1"
+                    >
+                      <Upload className="h-3 w-3" />
+                      Import CSV File
+                    </Button>
+                  </div>
+
+                  {/* Add Manually */}
+                  <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-3.5 flex flex-col justify-between hover:border-stone-300 transition">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold text-xs text-stone-900">
+                          <Plus className="h-4 w-4 text-stone-700" />
+                          Add Manually
+                        </div>
+                        <Badge variant="outline" className="text-[9px] bg-stone-100 text-stone-600 border-stone-200 font-bold">
+                          Custom
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-stone-600 mt-1.5 leading-snug">
+                        Add items 1-by-1 with custom pictures, prices, categories, and stock availability.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={openAddProductModal}
+                      variant="outline"
+                      className="mt-3 w-full border-stone-300 hover:bg-white text-stone-800 font-bold text-xs h-7 gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add Product Listing
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -1197,86 +1532,820 @@ export function CommerceView() {
           </div>
         )}
 
-        {/* ======================= TAB 4: DINE-IN QR GENERATOR ======================= */}
+        {/* ======================= TAB 4: DINE-IN TABLE MANAGEMENT & QR ======================= */}
         {activeTab === 'dineIn' && (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="max-w-6xl mx-auto space-y-6">
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-100">
                 <div>
-                  <h2 className="text-base font-bold text-stone-900">Dine-In Table QR Stand Generator</h2>
-                  <p className="text-xs text-stone-500">
-                    Generate printable QR codes for your restaurant or cafe tables (Take.app format)
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-stone-900">Dine-In Table QR Stands</h2>
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs font-bold">
+                      {tables.length} Tables Active
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Generate printable QR tent cards for your restaurant tables (Take.app format)
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => window.print()}
-                  variant="outline"
-                  className="gap-1.5 text-xs font-bold"
-                >
-                  <Printer className="h-3.5 w-3.5 text-stone-600" />
-                  Print QR Stands
-                </Button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setBatchPrintModalOpen(true)}
+                    className="border-stone-200 hover:bg-stone-50 text-stone-700 font-bold h-9 text-xs gap-1.5 shadow-2xs"
+                  >
+                    <Printer className="h-3.5 w-3.5 text-blue-600" />
+                    Print All Stand Cards (Batch)
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={handleOpenAddTable}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold h-9 text-xs gap-1.5 shadow-2xs"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Table
+                  </Button>
+                </div>
               </div>
 
-              <div className="flex items-center gap-3 mb-6 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+              <div className="flex items-center gap-3 my-4 p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-800">
                 <UtensilsCrossed className="h-5 w-5 text-amber-600 shrink-0" />
                 <span>
-                  Guests scan the QR code at their table $\rightarrow$ the digital menu opens with the table number tagged $\rightarrow$ orders go directly to your kitchen and live orders board!
+                  <strong>How it works:</strong> Guests scan the QR stand at their table → your digital menu opens with the table number tagged → orders flow directly to your kitchen KOT and live orders board!
                 </span>
               </div>
 
-              {/* Table Selector */}
-              <div className="flex items-center gap-2 mb-6">
-                <span className="text-xs font-bold text-stone-700">Preview Table:</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {Array.from({ length: tableCount }, (_, i) => i + 1).map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => setSelectedTableForQr(num)}
-                      className={`w-8 h-8 rounded-lg text-xs font-bold transition ${
-                        selectedTableForQr === num
-                          ? 'bg-stone-900 text-white'
-                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  ))}
+              {/* Tables Grid & Active Selection */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+                {/* Left: Table Cards Grid */}
+                <div className="lg:col-span-7 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold uppercase text-stone-400 tracking-wider">
+                      Tables &amp; Dining Areas ({tables.length})
+                    </h3>
+                    <span className="text-[11px] text-stone-500">Tap table to preview stand</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {tables.map((tbl) => {
+                      const isSelected = selectedTableForQr === tbl.name;
+                      const tableUrl = `${publicStoreUrl}?table=${encodeURIComponent(tbl.name)}`;
+                      return (
+                        <div
+                          key={tbl.id}
+                          onClick={() => setSelectedTableForQr(tbl.name)}
+                          className={`p-3.5 rounded-xl border transition cursor-pointer flex flex-col justify-between ${
+                            isSelected
+                              ? 'border-stone-900 bg-stone-900 text-white shadow-md'
+                              : 'border-stone-200 bg-white hover:border-stone-400 hover:bg-stone-50/70 text-stone-900'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-sm">{tbl.name}</span>
+                                <span
+                                  className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase ${
+                                    isSelected
+                                      ? 'bg-white/20 text-white'
+                                      : 'bg-stone-100 text-stone-600'
+                                  }`}
+                                >
+                                  {tbl.section || 'Main'}
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[11px] mt-0.5 block ${
+                                  isSelected ? 'text-stone-300' : 'text-stone-500'
+                                }`}
+                              >
+                                {tbl.capacity || 4} Seats · Ready for Orders
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditTable(tbl);
+                                }}
+                                className={`p-1.5 rounded-lg transition ${
+                                  isSelected
+                                    ? 'hover:bg-white/20 text-white'
+                                    : 'hover:bg-stone-100 text-stone-400 hover:text-stone-700'
+                                }`}
+                                title="Edit Table"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteTable(tbl.id, tbl.name);
+                                }}
+                                className={`p-1.5 rounded-lg transition ${
+                                  isSelected
+                                    ? 'hover:bg-white/20 text-red-300'
+                                    : 'hover:bg-red-50 text-stone-400 hover:text-red-600'
+                                }`}
+                                title="Remove Table"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 pt-2 border-t border-white/10 flex items-center justify-between text-[11px]">
+                            <span className={isSelected ? 'text-stone-300 font-mono' : 'text-stone-400 font-mono'}>
+                              ?table={encodeURIComponent(tbl.name)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(tableUrl);
+                                toast.success(`Copied link for ${tbl.name}!`);
+                              }}
+                              className={`flex items-center gap-1 font-bold ${
+                                isSelected ? 'text-emerald-300 hover:underline' : 'text-emerald-600 hover:underline'
+                              }`}
+                            >
+                              <Share2 className="h-3 w-3" />
+                              Copy Link
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Right: Live Stand Card Preview */}
+                <div className="lg:col-span-5 flex flex-col items-center">
+                  <div className="w-full max-w-xs bg-white rounded-3xl p-6 shadow-xl border-2 border-stone-800 text-center flex flex-col items-center">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
+                      Scan to Order
+                    </div>
+                    <h3 className="text-base font-black text-stone-900 line-clamp-1">
+                      {auth?.tenant?.name || 'Restaurant Table'}
+                    </h3>
+                    <div className="inline-flex items-center gap-1.5 bg-stone-900 text-white rounded-full px-3 py-1 text-xs font-bold my-2 shadow-xs">
+                      <UtensilsCrossed className="h-3 w-3" />
+                      {selectedTableForQr}
+                    </div>
+
+                    {/* QR Code Container */}
+                    <div className="w-48 h-48 my-3 bg-white p-2 border-2 border-stone-200 rounded-2xl flex items-center justify-center shadow-inner">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                          `${publicStoreUrl}?table=${encodeURIComponent(selectedTableForQr)}`
+                        )}`}
+                        alt={`${selectedTableForQr} QR`}
+                        className="w-full h-full object-contain rounded-lg"
+                      />
+                    </div>
+
+                    <p className="text-xs text-stone-600 font-semibold px-2">
+                      Point phone camera to browse digital menu &amp; order
+                    </p>
+                    <div className="mt-2 text-[10px] font-mono text-stone-400 truncate max-w-full">
+                      {publicStoreUrl}?table={encodeURIComponent(selectedTableForQr)}
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-2 w-full">
+                      <Button
+                        size="sm"
+                        onClick={() => window.print()}
+                        className="flex-1 bg-stone-900 hover:bg-black text-white text-xs font-bold gap-1.5 h-8"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                        Print Stand
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const url = `${publicStoreUrl}?table=${encodeURIComponent(selectedTableForQr)}`;
+                          navigator.clipboard.writeText(url);
+                          toast.success('Table link copied!');
+                        }}
+                        className="text-xs font-bold h-8"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: KITCHEN DISPLAY SYSTEM (KDS KANBAN) ======================= */}
+        {activeTab === 'kds' && (
+          <div className="space-y-6 max-w-7xl mx-auto">
+            {/* KDS Header & Quick Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center">
+                    <ChefHat className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-stone-900">
+                      Kitchen Display System (KDS Kanban)
+                    </h2>
+                    <p className="text-xs text-stone-500">
+                      Live touch Kanban for kitchen cooks, roadside cart chefs &amp; counter staff. Tap to advance orders.
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Printable QR Stand Card Preview */}
-              <div className="flex justify-center p-8 bg-stone-100 rounded-2xl border border-stone-200">
-                <div className="w-72 bg-white rounded-3xl p-6 shadow-lg border-2 border-stone-800 text-center flex flex-col items-center">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1">
-                    Scan to Order
-                  </div>
-                  <h3 className="text-lg font-black text-stone-900 mb-1">
-                    {auth?.tenant?.name || 'Welcome to our Table'}
-                  </h3>
-                  <div className="inline-flex items-center gap-1.5 bg-stone-900 text-white rounded-full px-3 py-1 text-xs font-bold my-2">
-                    <UtensilsCrossed className="h-3 w-3" />
-                    Table #{selectedTableForQr}
-                  </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Type Filter */}
+                <div className="flex items-center bg-stone-100 p-0.5 rounded-lg border border-stone-200 text-xs font-bold">
+                  {(['ALL', 'DINE_IN', 'TAKEOUT', 'DELIVERY'] as const).map((filterVal) => (
+                    <button
+                      key={filterVal}
+                      type="button"
+                      onClick={() => setKdsTypeFilter(filterVal)}
+                      className={`px-2.5 py-1 rounded-md transition ${
+                        kdsTypeFilter === filterVal
+                          ? 'bg-white text-stone-900 shadow-2xs'
+                          : 'text-stone-500 hover:text-stone-900'
+                      }`}
+                    >
+                      {filterVal === 'ALL' && 'All Types'}
+                      {filterVal === 'DINE_IN' && '🪑 Dine-In'}
+                      {filterVal === 'TAKEOUT' && '🛍️ Takeout / Cart'}
+                      {filterVal === 'DELIVERY' && '🚚 Delivery'}
+                    </button>
+                  ))}
+                </div>
 
-                  {/* QR Image Placeholder / SVG */}
-                  <div className="w-44 h-44 my-3 bg-white p-2 border-2 border-stone-200 rounded-2xl flex items-center justify-center shadow-inner">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                        `${publicStoreUrl}?table=${selectedTableForQr}`
-                      )}`}
-                      alt={`Table ${selectedTableForQr} QR`}
-                      className="w-full h-full object-contain rounded-lg"
-                    />
-                  </div>
+                {/* Sound Chime Test */}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    try {
+                      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+                      if (!AudioCtx) return;
+                      const ctx = new AudioCtx();
+                      const osc = ctx.createOscillator();
+                      const gain = ctx.createGain();
+                      osc.type = 'sine';
+                      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+                      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+                      osc.connect(gain);
+                      gain.connect(ctx.destination);
+                      osc.start(ctx.currentTime);
+                      osc.stop(ctx.currentTime + 0.4);
+                      toast.success('Kitchen alert chime played!');
+                    } catch {}
+                  }}
+                  className="text-xs font-bold gap-1.5 h-8 border-stone-200"
+                >
+                  <Volume2 className="h-3.5 w-3.5 text-stone-600" />
+                  Test Bell
+                </Button>
+              </div>
+            </div>
 
-                  <p className="text-[11px] text-stone-500 font-medium">
-                    Point your camera to browse menu & order directly from your phone
+            {/* KDS 3-Column Kanban Board */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+              {/* Column 1: NEW / QUEUED */}
+              {(() => {
+                const queuedOrders = orders
+                  .filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED')
+                  .filter((o) => {
+                    if (kdsTypeFilter === 'ALL') return true;
+                    if (kdsTypeFilter === 'DINE_IN') return o.deliveryType === 'dine_in' || o.deliveryAddress?.includes('Table #');
+                    if (kdsTypeFilter === 'TAKEOUT') return o.deliveryType === 'takeout';
+                    if (kdsTypeFilter === 'DELIVERY') return o.deliveryType === 'delivery';
+                    return true;
+                  });
+
+                return (
+                  <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded-full bg-amber-500 animate-pulse" />
+                        <h3 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                          1. New &amp; Queued
+                        </h3>
+                      </div>
+                      <Badge className="bg-amber-500 text-white font-bold text-xs">
+                        {queuedOrders.length}
+                      </Badge>
+                    </div>
+
+                    {queuedOrders.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-amber-800/60 font-semibold">
+                        No orders waiting in queue.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+                        {queuedOrders.map((o) => {
+                          const orderItems = Array.isArray(o.items) ? o.items : [];
+                          const elapsedMins = Math.max(1, Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000));
+                          const isTable = o.deliveryType === 'dine_in' || o.deliveryAddress?.includes('Table #');
+
+                          return (
+                            <div
+                              key={o.id}
+                              className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-3"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <span className="text-base font-black text-stone-900 font-mono">
+                                    #{o.id.slice(-6).toUpperCase()}
+                                  </span>
+                                  <div className="text-[11px] text-stone-500 mt-0.5">
+                                    {o.customerName || 'Guest'} {o.customerPhone ? `(${o.customerPhone})` : ''}
+                                  </div>
+                                </div>
+                                <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <Clock className="h-3 w-3" /> {elapsedMins}m ago
+                                </span>
+                              </div>
+
+                              {/* Order Type & Timing Badge */}
+                              <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                                {isTable ? (
+                                  <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <UtensilsCrossed className="h-3 w-3" />
+                                    {o.deliveryAddress || 'Dine-In Table'}
+                                  </span>
+                                ) : o.deliveryType === 'takeout' ? (
+                                  <span className="bg-blue-100 text-blue-900 px-2 py-0.5 rounded-md">
+                                    🛍️ Stall Takeout
+                                  </span>
+                                ) : (
+                                  <span className="bg-purple-100 text-purple-900 px-2 py-0.5 rounded-md">
+                                    🚚 Delivery
+                                  </span>
+                                )}
+
+                                {o.deliveryDate && o.deliveryDate !== 'Immediate (Now)' && (
+                                  <span className="bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {o.deliveryDate}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Items List */}
+                              <div className="py-2 border-y border-dashed border-stone-200 space-y-1.5">
+                                {orderItems.map((it: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-stone-900">
+                                      <span className="text-amber-700 mr-1.5 font-black">{it.qty}×</span>
+                                      {it.name}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {o.notes && (
+                                <div className="text-[10px] bg-stone-50 p-2 rounded-lg text-stone-600 border border-stone-200/60">
+                                  <span className="font-bold text-stone-700 block">Notes:</span>
+                                  {o.notes}
+                                </div>
+                              )}
+
+                              {/* Action Buttons */}
+                              <div className="flex items-center gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateOrderStatus(o.id, 'PREPARING')}
+                                  disabled={updatingOrder}
+                                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 gap-1.5"
+                                >
+                                  <Flame className="h-3.5 w-3.5" />
+                                  Start Cooking
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openReceiptModal(o, 'KOT')}
+                                  className="text-xs font-bold h-8 px-2 border-stone-200"
+                                >
+                                  KOT
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Column 2: COOKING / PREPARING */}
+              {(() => {
+                const preparingOrders = orders
+                  .filter((o) => o.status === 'PREPARING')
+                  .filter((o) => {
+                    if (kdsTypeFilter === 'ALL') return true;
+                    if (kdsTypeFilter === 'DINE_IN') return o.deliveryType === 'dine_in' || o.deliveryAddress?.includes('Table #');
+                    if (kdsTypeFilter === 'TAKEOUT') return o.deliveryType === 'takeout';
+                    if (kdsTypeFilter === 'DELIVERY') return o.deliveryType === 'delivery';
+                    return true;
+                  });
+
+                return (
+                  <div className="rounded-2xl border-2 border-blue-300 bg-blue-50/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-blue-200">
+                      <div className="flex items-center gap-1.5">
+                        <Flame className="h-4 w-4 text-blue-600 animate-bounce" />
+                        <h3 className="text-xs font-black uppercase tracking-wider text-blue-950">
+                          2. Cooking / Preparing
+                        </h3>
+                      </div>
+                      <Badge className="bg-blue-600 text-white font-bold text-xs">
+                        {preparingOrders.length}
+                      </Badge>
+                    </div>
+
+                    {preparingOrders.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-blue-800/60 font-semibold">
+                        No orders currently cooking on the grill/station.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+                        {preparingOrders.map((o) => {
+                          const orderItems = Array.isArray(o.items) ? o.items : [];
+                          const elapsedMins = Math.max(1, Math.round((Date.now() - new Date(o.createdAt).getTime()) / 60000));
+                          const isTable = o.deliveryType === 'dine_in' || o.deliveryAddress?.includes('Table #');
+
+                          return (
+                            <div
+                              key={o.id}
+                              className="rounded-xl border border-stone-200 bg-white p-4 shadow-xs space-y-3"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <span className="text-base font-black text-stone-900 font-mono">
+                                    #{o.id.slice(-6).toUpperCase()}
+                                  </span>
+                                  <div className="text-[11px] text-stone-500 mt-0.5">
+                                    {o.customerName || 'Guest'} {o.customerPhone ? `(${o.customerPhone})` : ''}
+                                  </div>
+                                </div>
+                                <span className="text-[11px] font-bold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <Flame className="h-3 w-3 text-orange-600" /> Prep {elapsedMins}m
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                                {isTable ? (
+                                  <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <UtensilsCrossed className="h-3 w-3" />
+                                    {o.deliveryAddress || 'Dine-In Table'}
+                                  </span>
+                                ) : (
+                                  <span className="bg-stone-100 text-stone-700 px-2 py-0.5 rounded-md">
+                                    {o.deliveryType === 'takeout' ? '🛍️ Stall Takeout' : '🚚 Delivery'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="py-2 border-y border-dashed border-stone-200 space-y-1.5">
+                                {orderItems.map((it: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs">
+                                    <span className="font-bold text-stone-900">
+                                      <span className="text-blue-700 mr-1.5 font-black">{it.qty}×</span>
+                                      {it.name}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {o.notes && (
+                                <div className="text-[10px] bg-stone-50 p-2 rounded-lg text-stone-600 border border-stone-200/60">
+                                  <span className="font-bold text-stone-700 block">Notes:</span>
+                                  {o.notes}
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => markReadyAndAlertCustomer(o)}
+                                  disabled={updatingOrder}
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-8 gap-1.5 shadow-sm active:scale-95 transition"
+                                >
+                                  <BellRing className="h-3.5 w-3.5" />
+                                  Mark Ready &amp; Alert Customer
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openReceiptModal(o, 'KOT')}
+                                  className="text-xs font-bold h-8 px-2 border-stone-200"
+                                >
+                                  KOT
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Column 3: READY FOR PICKUP */}
+              {(() => {
+                const readyOrders = orders
+                  .filter((o) => o.status === 'READY')
+                  .filter((o) => {
+                    if (kdsTypeFilter === 'ALL') return true;
+                    if (kdsTypeFilter === 'DINE_IN') return o.deliveryType === 'dine_in' || o.deliveryAddress?.includes('Table #');
+                    if (kdsTypeFilter === 'TAKEOUT') return o.deliveryType === 'takeout';
+                    if (kdsTypeFilter === 'DELIVERY') return o.deliveryType === 'delivery';
+                    return true;
+                  });
+
+                return (
+                  <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50/40 p-4 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-emerald-200">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <h3 className="text-xs font-black uppercase tracking-wider text-emerald-950">
+                          3. Ready for Pickup / Serving
+                        </h3>
+                      </div>
+                      <Badge className="bg-emerald-600 text-white font-bold text-xs">
+                        {readyOrders.length}
+                      </Badge>
+                    </div>
+
+                    {readyOrders.length === 0 ? (
+                      <div className="py-12 text-center text-xs text-emerald-800/60 font-semibold">
+                        No orders waiting at pickup counter.
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-1">
+                        {readyOrders.map((o) => {
+                          const orderItems = Array.isArray(o.items) ? o.items : [];
+                          const isTable = o.deliveryType === 'dine_in' || o.deliveryAddress?.includes('Table #');
+
+                          return (
+                            <div
+                              key={o.id}
+                              className="rounded-xl border-2 border-emerald-200 bg-white p-4 shadow-sm space-y-3"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <span className="text-base font-black text-stone-900 font-mono">
+                                    #{o.id.slice(-6).toUpperCase()}
+                                  </span>
+                                  <div className="text-[11px] text-stone-500 mt-0.5">
+                                    {o.customerName || 'Guest'} {o.customerPhone ? `(${o.customerPhone})` : ''}
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <Sparkles className="h-3 w-3" /> Ready
+                                </span>
+                              </div>
+
+                              <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-black text-emerald-900 flex items-center gap-1.5">
+                                <MapPin className="h-3.5 w-3.5 text-emerald-700" />
+                                <span>
+                                  Collect from: {isTable ? (o.deliveryAddress || 'Table') : 'Counter 1'}
+                                </span>
+                              </div>
+
+                              <div className="py-2 border-y border-dashed border-stone-200 space-y-1">
+                                {orderItems.map((it: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-xs">
+                                    <span className="font-semibold text-stone-800">
+                                      <span className="text-emerald-700 mr-1.5 font-black">{it.qty}×</span>
+                                      {it.name}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <Button
+                                  size="sm"
+                                  onClick={() => updateOrderStatus(o.id, 'DELIVERED')}
+                                  disabled={updatingOrder}
+                                  className="flex-1 bg-stone-900 hover:bg-black text-white font-bold text-xs h-8 gap-1"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                  Handed Over / Complete
+                                </Button>
+                                {o.customerPhone && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => markReadyAndAlertCustomer(o)}
+                                    className="text-xs font-bold h-8 px-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                                    title="Re-send WhatsApp ready alert"
+                                  >
+                                    <MessageCircle className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB 5: BILLING & DAILY CLOSING (Z-REPORT) ======================= */}
+        {activeTab === 'closing' && (
+          <div className="max-w-5xl mx-auto space-y-6">
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-100">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-stone-900">Billing &amp; Daily Closing (Z-Report)</h2>
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs font-bold">
+                      Take.app POS Parity
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    End-of-day revenue reconciliation, tax audit (GST/VAT), payment methods breakdown &amp; receipts
                   </p>
-                  <div className="mt-3 text-[9px] font-mono text-stone-400">
-                    {publicStoreUrl}?table={selectedTableForQr}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => window.print()}
+                    className="bg-stone-900 hover:bg-black text-white font-bold h-9 text-xs gap-1.5 shadow-2xs"
+                  >
+                    <Printer className="h-3.5 w-3.5" />
+                    Print Daily Closing (Z-Report)
+                  </Button>
+                </div>
+              </div>
+
+              {/* Today's Closing Metrics */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/60">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">Total Settled Sales</div>
+                  <div className="text-2xl font-black text-emerald-700 mt-1">
+                    {currencySymbol}
+                    {orders
+                      .filter((o) => o.paymentStatus === 'PAID')
+                      .reduce((sum, o) => sum + Number(o.total || 0), 0)
+                      .toFixed(2)}
                   </div>
+                  <div className="text-[10px] text-stone-400 mt-1">
+                    {orders.filter((o) => o.paymentStatus === 'PAID').length} paid orders today
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/60">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">Taxes ({taxName} {taxRate}%)</div>
+                  <div className="text-2xl font-black text-stone-900 mt-1">
+                    {currencySymbol}
+                    {(
+                      (orders
+                        .filter((o) => o.paymentStatus === 'PAID')
+                        .reduce((sum, o) => sum + Number(o.total || 0), 0) *
+                        (taxRate || 0)) /
+                      100
+                    ).toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-stone-400 mt-1">
+                    GSTIN: {gstin || 'Not configured'}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/60">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">UPI / Digital Sales</div>
+                  <div className="text-2xl font-black text-blue-600 mt-1">
+                    {currencySymbol}
+                    {orders
+                      .filter((o) => o.paymentMethod === 'UPI' && o.paymentStatus === 'PAID')
+                      .reduce((sum, o) => sum + Number(o.total || 0), 0)
+                      .toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-stone-400 mt-1">Direct to {upiId || 'UPI'}</div>
+                </div>
+
+                <div className="p-4 rounded-xl border border-stone-200 bg-stone-50/60">
+                  <div className="text-[11px] font-bold uppercase text-stone-400">Cash in Register</div>
+                  <div className="text-2xl font-black text-purple-700 mt-1">
+                    {currencySymbol}
+                    {orders
+                      .filter((o) => o.paymentMethod === 'CASH' && o.paymentStatus === 'PAID')
+                      .reduce((sum, o) => sum + Number(o.total || 0), 0)
+                      .toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-stone-400 mt-1">Physical drawer cash</div>
+                </div>
+              </div>
+
+              {/* Settled Orders Table with 1-click Receipt & KOT Printing */}
+              <div className="mt-8">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-stone-900">Recent Customer Bills &amp; Receipts</h3>
+                  <span className="text-xs text-stone-500">Tap to reprint customer receipt or kitchen ticket</span>
+                </div>
+
+                <div className="rounded-xl border border-stone-200 overflow-hidden bg-white shadow-2xs">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-stone-50 text-[10px] font-bold uppercase text-stone-400 border-b border-stone-200">
+                      <tr>
+                        <th className="py-2.5 px-4">Order #</th>
+                        <th className="py-2.5 px-4">Time</th>
+                        <th className="py-2.5 px-4">Customer / Table</th>
+                        <th className="py-2.5 px-4">Items</th>
+                        <th className="py-2.5 px-4">Total</th>
+                        <th className="py-2.5 px-4">Payment</th>
+                        <th className="py-2.5 px-4 text-right">Receipt Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {orders.slice(0, 10).map((o) => (
+                        <tr key={o.id} className="hover:bg-stone-50/60 transition">
+                          <td className="py-3 px-4 font-mono font-bold text-stone-900">
+                            #{o.id.slice(-6).toUpperCase()}
+                          </td>
+                          <td className="py-3 px-4 text-stone-500">
+                            {new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="font-bold text-stone-900 block">{o.customerName || 'Walk-in'}</span>
+                            <span className="text-[10px] text-stone-400">{o.deliveryAddress || 'Dine-In'}</span>
+                          </td>
+                          <td className="py-3 px-4 text-stone-600">
+                            {(o.items || []).map((it: any) => `${it.name} (x${it.qty})`).join(', ') || 'Items'}
+                          </td>
+                          <td className="py-3 px-4 font-black text-stone-900">
+                            {currencySymbol}{Number(o.total || 0).toFixed(2)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-bold ${
+                                o.paymentStatus === 'PAID'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                            >
+                              {o.paymentMethod || 'CASH'} · {o.paymentStatus || 'UNPAID'}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openReceiptModal(o, 'CUSTOMER_BILL')}
+                                className="h-7 text-[11px] font-bold gap-1 px-2"
+                                title="Print Customer Thermal Receipt"
+                              >
+                                <Receipt className="h-3 w-3 text-blue-600" />
+                                Bill
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openReceiptModal(o, 'KOT')}
+                                className="h-7 text-[11px] font-bold gap-1 px-2"
+                                title="Print Kitchen Order Ticket"
+                              >
+                                <UtensilsCrossed className="h-3 w-3 text-amber-600" />
+                                KOT
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => sendWhatsAppReceipt(o)}
+                                className="h-7 text-[11px] font-bold gap-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                title="Send WhatsApp Receipt"
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1517,6 +2586,36 @@ export function CommerceView() {
                     <CheckCircle2 className="h-3.5 w-3.5" /> Paid
                   </span>
                 )}
+              </div>
+
+              {/* Take.app Parity: 1-Click Receipts & KOT */}
+              <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openReceiptModal(selectedOrder, 'CUSTOMER_BILL')}
+                  className="flex-1 text-xs font-bold gap-1.5 h-8 border-stone-200 hover:bg-stone-50"
+                >
+                  <Receipt className="h-3.5 w-3.5 text-blue-600" />
+                  Print Bill
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openReceiptModal(selectedOrder, 'KOT')}
+                  className="flex-1 text-xs font-bold gap-1.5 h-8 border-stone-200 hover:bg-stone-50"
+                >
+                  <UtensilsCrossed className="h-3.5 w-3.5 text-amber-600" />
+                  Kitchen KOT
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => sendWhatsAppReceipt(selectedOrder)}
+                  className="flex-1 text-xs font-bold gap-1.5 h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  WhatsApp Bill
+                </Button>
               </div>
 
               {/* Chat Transcript View */}
@@ -1910,6 +3009,390 @@ export function CommerceView() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ======================= ADD / EDIT TABLE MODAL (Take.app Dine-In Parity) ======================= */}
+      {tableModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase text-stone-400">Dine-In Management</span>
+                <h3 className="text-lg font-black text-stone-900">
+                  {editingTable ? 'Edit Dining Table' : 'Add Dining Table'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTableModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-700">Table Name / Number *</label>
+                <Input
+                  value={tableNameInput}
+                  onChange={(e) => setTableNameInput(e.target.value)}
+                  placeholder="e.g. Table 12, Patio 4, Bar 2, VIP Lounge"
+                  className="mt-1 text-xs"
+                />
+                <p className="text-[11px] text-stone-400 mt-1">This name appears on the QR stand, customer cart, and kitchen KOT.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Seating Capacity</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="50"
+                    value={tableCapacityInput}
+                    onChange={(e) => setTableCapacityInput(e.target.value)}
+                    placeholder="4"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Floor / Section</label>
+                  <Input
+                    value={tableSectionInput}
+                    onChange={(e) => setTableSectionInput(e.target.value)}
+                    placeholder="Main Floor"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setTableModalOpen(false)}
+                  className="text-xs font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveTable}
+                  className="bg-stone-900 hover:bg-black text-white font-bold text-xs"
+                >
+                  {editingTable ? 'Save Changes' : 'Create Table'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= BATCH PRINT STAND CARDS MODAL ======================= */}
+      {batchPrintModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 my-8">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-4 mb-6">
+              <div>
+                <h3 className="text-lg font-black text-stone-900">
+                  Print All Dine-In Table QR Stand Cards ({tables.length} Tables)
+                </h3>
+                <p className="text-xs text-stone-500">
+                  Foldable tent cards formatted for standard cardstock printing (A4 / Letter)
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => window.print()}
+                  className="bg-stone-900 hover:bg-black text-white font-bold text-xs gap-1.5 h-9"
+                >
+                  <Printer className="h-4 w-4" />
+                  Print Now
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setBatchPrintModalOpen(false)}
+                  className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Grid of Tent Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 p-2 bg-stone-50 rounded-xl max-h-[70vh] overflow-y-auto">
+              {tables.map((tbl) => {
+                const tableUrl = `${publicStoreUrl}?table=${encodeURIComponent(tbl.name)}`;
+                const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(tableUrl)}`;
+                return (
+                  <div
+                    key={tbl.id}
+                    className="rounded-2xl border-2 border-stone-300 bg-white p-5 text-center shadow-xs flex flex-col items-center justify-between min-h-[360px]"
+                  >
+                    <div>
+                      <div className="text-[10px] font-mono font-bold uppercase tracking-widest text-stone-400">
+                        {auth?.tenant?.name || 'WELCOME'}
+                      </div>
+                      <h4 className="text-xl font-black text-stone-900 mt-1">{tbl.name}</h4>
+                      <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 mt-1">
+                        {tbl.section || 'Main Floor'} · Seats {tbl.capacity || 4}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white rounded-xl border border-stone-200 shadow-2xs my-3">
+                      <img
+                        src={qrSrc}
+                        alt={`${tbl.name} QR Code`}
+                        className="h-36 w-36 object-contain"
+                      />
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-bold text-stone-800">
+                        Scan to Browse Menu &amp; Order
+                      </p>
+                      <p className="text-[10px] text-stone-500 mt-0.5">
+                        Order directly from your phone — no app download required!
+                      </p>
+                      <div className="mt-2 text-[9px] font-mono text-stone-400 truncate max-w-[200px]">
+                        {tableUrl}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= THERMAL 80MM CUSTOMER BILL & KOT MODAL (Take.app POS Parity) ======================= */}
+      {receiptModalOpen && receiptOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            {/* Header Switcher */}
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 mb-4">
+              <div className="flex items-center bg-stone-100 p-0.5 rounded-lg border border-stone-200 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('CUSTOMER_BILL')}
+                  className={`px-3 py-1 rounded-md transition ${
+                    receiptType === 'CUSTOMER_BILL'
+                      ? 'bg-white text-stone-900 shadow-2xs'
+                      : 'text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  Customer Bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('KOT')}
+                  className={`px-3 py-1 rounded-md transition ${
+                    receiptType === 'KOT'
+                      ? 'bg-white text-stone-900 shadow-2xs'
+                      : 'text-stone-500 hover:text-stone-900'
+                  }`}
+                >
+                  Kitchen KOT
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReceiptModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* 80mm Standard POS Slip Layout */}
+            <div className="p-4 bg-stone-50 rounded-xl border border-dashed border-stone-300 font-mono text-xs text-stone-900 leading-relaxed shadow-inner max-h-[60vh] overflow-y-auto">
+              {receiptType === 'CUSTOMER_BILL' ? (
+                <div>
+                  <div className="text-center pb-3 border-b border-stone-300">
+                    <h2 className="text-base font-black tracking-wider uppercase">
+                      {auth?.tenant?.name || 'STORE'}
+                    </h2>
+                    {gstin && <p className="text-[10px] text-stone-600 font-bold mt-0.5">GSTIN: {gstin}</p>}
+                    <p className="text-[10px] text-stone-500 mt-0.5">TAX INVOICE / CASH BILL</p>
+                  </div>
+
+                  <div className="py-2.5 text-[11px] space-y-0.5 border-b border-stone-300">
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Invoice #:</span>
+                      <span className="font-bold">#{receiptOrder.id.slice(-6).toUpperCase()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Date &amp; Time:</span>
+                      <span>
+                        {new Date(receiptOrder.createdAt || Date.now()).toLocaleDateString()}{' '}
+                        {new Date(receiptOrder.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Customer:</span>
+                      <span className="font-bold">{receiptOrder.customerName || 'Walk-in'}</span>
+                    </div>
+                    {receiptOrder.deliveryAddress && (
+                      <div className="flex justify-between">
+                        <span className="text-stone-500">Table / Address:</span>
+                        <span className="font-bold">{receiptOrder.deliveryAddress}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">Type:</span>
+                      <span className="font-bold uppercase">{receiptOrder.deliveryType || 'Dine-In'}</span>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="py-2.5 border-b border-stone-300">
+                    <div className="flex justify-between font-bold text-[10px] uppercase text-stone-500 pb-1">
+                      <span>Item</span>
+                      <span>Qty × Price</span>
+                      <span>Amt</span>
+                    </div>
+                    {(receiptOrder.items || []).map((it: any, i: number) => {
+                      const lineTotal = it.amount || it.price * it.qty || 0;
+                      return (
+                        <div key={i} className="flex justify-between items-start py-1 text-[11px]">
+                          <span className="flex-1 font-bold pr-2">{it.name}</span>
+                          <span className="text-stone-500 px-2 shrink-0">
+                            {it.qty} × {currencySymbol}{it.price}
+                          </span>
+                          <span className="font-bold shrink-0">
+                            {currencySymbol}{lineTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Total Breakdown */}
+                  {(() => {
+                    const bill = computeBillBreakdown(receiptOrder);
+                    return (
+                      <div className="py-2.5 space-y-1 text-[11px] border-b border-stone-300">
+                        <div className="flex justify-between">
+                          <span className="text-stone-500">Subtotal:</span>
+                          <span>{currencySymbol}{bill.subtotal.toFixed(2)}</span>
+                        </div>
+                        {bill.discount > 0 && (
+                          <div className="flex justify-between text-emerald-700">
+                            <span>Discount:</span>
+                            <span>-{currencySymbol}{bill.discount.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {bill.tax > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-stone-500">{taxName} ({taxRate}%):</span>
+                            <span>{currencySymbol}{bill.tax.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {bill.serviceCharge > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-stone-500">Service Charge:</span>
+                            <span>{currencySymbol}{bill.serviceCharge.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-black text-sm pt-1 border-t border-dashed border-stone-300">
+                          <span>GRAND TOTAL:</span>
+                          <span>{currencySymbol}{Number(receiptOrder.total || bill.total).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="py-2 text-[10px] flex justify-between items-center border-b border-stone-300">
+                    <span className="text-stone-500">Payment:</span>
+                    <span className="font-bold">
+                      {receiptOrder.paymentMethod || 'CASH'} ·{' '}
+                      {receiptOrder.paymentStatus === 'PAID' ? 'PAID ✅' : 'UNPAID ⏳'}
+                    </span>
+                  </div>
+
+                  <div className="text-center pt-3 text-[10px] text-stone-500 space-y-1">
+                    <p>{billFooterText}</p>
+                    <p className="text-[9px] text-stone-400">Powered by ServiceOS Take.app POS</p>
+                  </div>
+                </div>
+              ) : (
+                /* Kitchen Order Ticket (KOT) */
+                <div>
+                  <div className="text-center pb-3 border-b-2 border-dashed border-stone-400">
+                    <h2 className="text-base font-black tracking-wider uppercase text-amber-900">
+                      *** KITCHEN ORDER TICKET ***
+                    </h2>
+                    <h3 className="text-lg font-black text-stone-900 mt-1">
+                      {receiptOrder.deliveryAddress || 'DINE-IN'}
+                    </h3>
+                    <p className="text-[10px] text-stone-500">
+                      Order #{receiptOrder.id.slice(-6).toUpperCase()} ·{' '}
+                      {new Date(receiptOrder.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+
+                  <div className="py-4 space-y-3">
+                    {(receiptOrder.items || []).map((it: any, i: number) => (
+                      <div key={i} className="flex items-center gap-3 text-sm">
+                        <div className="h-6 w-6 rounded border-2 border-stone-400 shrink-0" />
+                        <span className="font-black text-base text-stone-900">
+                          {it.qty} ×
+                        </span>
+                        <span className="font-bold text-stone-900 flex-1">
+                          {it.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {receiptOrder.notes && (
+                    <div className="p-2.5 rounded bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-bold mb-3">
+                      Note: {receiptOrder.notes}
+                    </div>
+                  )}
+
+                  <div className="text-center pt-2 text-[10px] text-stone-400 border-t border-stone-300">
+                    Kitchen Copy · Please prepare promptly
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between gap-2 pt-4 border-t border-stone-100 mt-4">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setReceiptModalOpen(false)}
+                className="text-xs font-bold"
+              >
+                Close
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => sendWhatsAppReceipt(receiptOrder)}
+                  className="text-xs font-bold gap-1.5 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  WhatsApp
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => window.print()}
+                  className="bg-stone-900 hover:bg-black text-white font-bold text-xs gap-1.5"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  Print 80mm
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

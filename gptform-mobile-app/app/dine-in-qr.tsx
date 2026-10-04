@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,20 +7,95 @@ import {
   TouchableOpacity,
   Share,
   Image,
+  TextInput,
+  Modal,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_BASE_URL, API_PATHS } from '@/lib/constants';
+
+interface DiningTable {
+  id: string;
+  name: string;
+  capacity?: number;
+  section?: string;
+}
 
 export default function MobileDineInQrScreen() {
   const router = useRouter();
-  const [selectedTable, setSelectedTable] = useState(1);
-  const totalTables = 12;
+  const [tables, setTables] = useState<DiningTable[]>([
+    { id: 'tbl_1', name: 'Table 1', capacity: 4, section: 'Main Floor' },
+    { id: 'tbl_2', name: 'Table 2', capacity: 4, section: 'Main Floor' },
+    { id: 'tbl_3', name: 'Table 3', capacity: 2, section: 'Main Floor' },
+    { id: 'tbl_4', name: 'Table 4', capacity: 6, section: 'Patio' },
+    { id: 'tbl_5', name: 'VIP Lounge', capacity: 8, section: 'VIP' },
+  ]);
+  const [selectedTable, setSelectedTable] = useState<string>('Table 1');
+  const [storeSlug, setStoreSlug] = useState('demo-store');
+  const [loading, setLoading] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [newTableName, setNewTableName] = useState('');
+  const [newTableCapacity, setNewTableCapacity] = useState('4');
+  const [newTableSection, setNewTableSection] = useState('Main Floor');
 
-  const storeSlug = 'demo-store';
-  const qrUrl = `https://yourdomain.com/store/${storeSlug}?table=${selectedTable}`;
-  const qrImageUri = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(
+  const fetchTables = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config?.businessId) {
+          setStoreSlug(data.config.businessId);
+        }
+        if (data.config?.tables && Array.isArray(data.config.tables) && data.config.tables.length > 0) {
+          setTables(data.config.tables);
+          setSelectedTable(data.config.tables[0].name);
+        }
+      }
+    } catch {
+      // Keep defaults
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTables();
+  }, []);
+
+  const handleAddTable = async () => {
+    if (!newTableName.trim()) {
+      Alert.alert('Required', 'Please enter a table name');
+      return;
+    }
+    const newTbl: DiningTable = {
+      id: `tbl_${Date.now()}`,
+      name: newTableName.trim(),
+      capacity: parseInt(newTableCapacity, 10) || 4,
+      section: newTableSection.trim() || 'Main Floor',
+    };
+    const updated = [...tables, newTbl];
+    setTables(updated);
+    setSelectedTable(newTbl.name);
+    setAddModalOpen(false);
+    setNewTableName('');
+
+    // Persist to backend
+    try {
+      await fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tables: updated }),
+      });
+    } catch {}
+  };
+
+  const qrUrl = `https://fieseros.com/store/${storeSlug}?table=${encodeURIComponent(selectedTable)}`;
+  const qrImageUri = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
     qrUrl
   )}`;
 
@@ -28,7 +103,7 @@ export default function MobileDineInQrScreen() {
     hapticFeedback.light();
     try {
       await Share.share({
-        message: `Order directly at Table #${selectedTable}: ${qrUrl}`,
+        message: `Order directly at ${selectedTable}: ${qrUrl}`,
         url: qrUrl,
       });
     } catch {}
@@ -49,22 +124,35 @@ export default function MobileDineInQrScreen() {
 
       <ScrollView contentContainerStyle={styles.container}>
         {/* Table Selector Pills */}
-        <Text style={styles.sectionLabel}>Select Table Number</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionLabel}>Select Table ({tables.length} Tables)</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setNewTableName(`Table ${tables.length + 1}`);
+              setAddModalOpen(true);
+            }}
+            style={styles.addTableBtn}
+          >
+            <MaterialIcons name="add" size={14} color="#059669" />
+            <Text style={styles.addTableBtnText}>Add Table</Text>
+          </TouchableOpacity>
+        </View>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
-          {Array.from({ length: totalTables }, (_, i) => i + 1).map((num) => {
-            const active = selectedTable === num;
+          {tables.map((tbl) => {
+            const active = selectedTable === tbl.name;
             return (
               <TouchableOpacity
-                key={num}
+                key={tbl.id}
                 onPress={() => {
                   hapticFeedback.light();
-                  setSelectedTable(num);
+                  setSelectedTable(tbl.name);
                 }}
                 style={[styles.pill, active && styles.pillActive]}
                 activeOpacity={0.7}
               >
                 <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                  Table {num}
+                  {tbl.name}
                 </Text>
               </TouchableOpacity>
             );
@@ -75,7 +163,7 @@ export default function MobileDineInQrScreen() {
         <View style={styles.card}>
           <View style={styles.tableBadge}>
             <MaterialIcons name="restaurant" size={16} color="#059669" />
-            <Text style={styles.tableBadgeText}>TABLE #{selectedTable}</Text>
+            <Text style={styles.tableBadgeText}>{selectedTable.toUpperCase()}</Text>
           </View>
 
           <Text style={styles.cardTitle}>Scan to Order</Text>
@@ -97,6 +185,63 @@ export default function MobileDineInQrScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Add Table Modal */}
+      <Modal visible={addModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Add Dining Table</Text>
+            <Text style={styles.modalSubtitle}>Configure table name, capacity, and seating area</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Table Name *</Text>
+              <TextInput
+                value={newTableName}
+                onChangeText={setNewTableName}
+                placeholder="e.g. Table 6, Patio B, VIP 2"
+                style={styles.input}
+              />
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>Seats</Text>
+                <TextInput
+                  value={newTableCapacity}
+                  onChangeText={setNewTableCapacity}
+                  keyboardType="numeric"
+                  placeholder="4"
+                  style={styles.input}
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 1 }]}>
+                <Text style={styles.inputLabel}>Section</Text>
+                <TextInput
+                  value={newTableSection}
+                  onChangeText={setNewTableSection}
+                  placeholder="Main Floor"
+                  style={styles.input}
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setAddModalOpen(false)}
+                style={styles.cancelBtn}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAddTable}
+                style={styles.saveBtn}
+              >
+                <Text style={styles.saveBtnText}>Create Table</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -128,13 +273,32 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: 'center',
   },
+  sectionHeaderRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   sectionLabel: {
-    alignSelf: 'flex-start',
     fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
     color: '#64748b',
-    marginBottom: 8,
+  },
+  addTableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  addTableBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
   },
   pillsRow: {
     gap: 8,
@@ -238,6 +402,85 @@ const styles = StyleSheet.create({
   shareBtnText: {
     fontSize: 14,
     fontWeight: '800',
+    color: '#ffffff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 12,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    backgroundColor: '#f8fafc',
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 16,
+  },
+  cancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  saveBtn: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  saveBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#ffffff',
   },
 });

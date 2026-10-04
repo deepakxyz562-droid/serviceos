@@ -138,7 +138,7 @@ export async function POST(req: NextRequest) {
           name: `${cleanSiteUrl.replace(/^https?:\/\//, '')} Store`,
           status: 'connected',
           storeUrl: cleanSiteUrl,
-          apiKey: consumerKey || null,
+          accessToken: consumerKey || null,
           apiSecret: consumerSecret || null,
           tenantId,
           workspaceId: workspaceId || null,
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
         where: { id: connection.id },
         data: {
           storeUrl: cleanSiteUrl,
-          apiKey: consumerKey || connection.apiKey,
+          accessToken: consumerKey || connection.accessToken,
           apiSecret: consumerSecret || connection.apiSecret,
           status: 'connected',
           lastSyncAt: new Date(),

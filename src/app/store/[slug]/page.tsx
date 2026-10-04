@@ -69,6 +69,17 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     ];
   }
 
+  // Parse extra billing & discount config from fieldsJson
+  let billingConfig: any = null;
+  let discountsConfig: any[] = [];
+  if (config?.fieldsJson) {
+    try {
+      const parsedFields = JSON.parse(config.fieldsJson);
+      if (parsedFields.billing) billingConfig = parsedFields.billing;
+      if (Array.isArray(parsedFields.discounts)) discountsConfig = parsedFields.discounts;
+    } catch {}
+  }
+
   return (
     <StoreClient
       businessId={businessId}
@@ -81,6 +92,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       greeting={config?.greetingMessage || `Welcome to ${businessName}!`}
       catalog={catalog}
       tableNumber={table || null}
+      billing={billingConfig}
+      discounts={discountsConfig}
     />
   );
 }
