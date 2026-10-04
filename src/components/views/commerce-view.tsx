@@ -66,6 +66,12 @@ import {
   Flame,
   Volume2,
   BellRing,
+  BookOpen,
+  Copy,
+  Send,
+  Smartphone,
+  Link2,
+  Building2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,8 +79,63 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 export function CommerceView() {
-  const [activeTab, setActiveTab] = useState<'orders' | 'catalog' | 'pos' | 'dineIn' | 'kds' | 'closing' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<
+    | 'orders'
+    | 'catalog'
+    | 'pos'
+    | 'dineIn'
+    | 'templates'
+    | 'promotions'
+    | 'domain'
+    | 'khata'
+    | 'daybook'
+    | 'kds'
+    | 'closing'
+    | 'settings'
+  >('orders');
   const auth = useAppStore((s) => s.auth);
+
+  // Industry Templates State
+  const [templatesList, setTemplatesList] = useState<any[]>([]);
+  const [applyingTemplateId, setApplyingTemplateId] = useState<string | null>(null);
+
+  // Promotions & Coupons State
+  const [couponsList, setCouponsList] = useState<any[]>([]);
+  const [announcementBanner, setAnnouncementBanner] = useState<{ text: string; enabled: boolean; code?: string }>({
+    text: '',
+    enabled: false,
+    code: '',
+  });
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponType, setNewCouponType] = useState<'PERCENT' | 'FLAT'>('PERCENT');
+  const [newCouponValue, setNewCouponValue] = useState('10');
+  const [newCouponMinOrder, setNewCouponMinOrder] = useState('0');
+  const [savingCoupon, setSavingCoupon] = useState(false);
+  const [savingBanner, setSavingBanner] = useState(false);
+
+  // Custom Domain State
+  const [customDomainInput, setCustomDomainInput] = useState('');
+  const [domainRecord, setDomainRecord] = useState<any>(null);
+  const [savingDomain, setSavingDomain] = useState(false);
+  const [verifyingDomain, setVerifyingDomain] = useState(false);
+
+  // Khata (Udhaar) State
+  const [khataList, setKhataList] = useState<any[]>([]);
+  const [khataReceivable, setKhataReceivable] = useState(0);
+  const [khataLoading, setKhataLoading] = useState(false);
+
+  // Day Book State
+  const [dayBookData, setDayBookData] = useState<any>({
+    totalSales: 0,
+    totalInflow: 0,
+    totalOutflow: 0,
+    cashInHand: 0,
+    transactions: [],
+  });
+  const [newExpenseAmt, setNewExpenseAmt] = useState('');
+  const [newExpenseCat, setNewExpenseCat] = useState('Raw Materials');
+  const [newExpenseNote, setNewExpenseNote] = useState('');
+  const [savingExpense, setSavingExpense] = useState(false);
 
   // KDS filter state
   const [kdsTypeFilter, setKdsTypeFilter] = useState<'ALL' | 'DINE_IN' | 'TAKEOUT' | 'DELIVERY'>('ALL');
@@ -285,6 +346,251 @@ export function CommerceView() {
   useEffect(() => {
     loadCommerceData();
   }, []);
+
+  // Data Loaders for Merchant OS Modules
+  const loadTemplates = async () => {
+    try {
+      const res = await fetch('/api/commerce/templates').then((r) => r.json());
+      if (res.templates) setTemplatesList(res.templates);
+    } catch {
+      toast.error('Failed to load industry templates');
+    }
+  };
+
+  const loadPromotions = async () => {
+    try {
+      const res = await fetch('/api/commerce/promotions').then((r) => r.json());
+      if (res.coupons) setCouponsList(res.coupons);
+      if (res.banner) setAnnouncementBanner(res.banner);
+    } catch {
+      toast.error('Failed to load promotions');
+    }
+  };
+
+  const loadDomain = async () => {
+    try {
+      const res = await fetch('/api/commerce/domain').then((r) => r.json());
+      setDomainRecord(res);
+      if (res.domain) setCustomDomainInput(res.domain);
+    } catch {
+      toast.error('Failed to load custom domain');
+    }
+  };
+
+  const loadKhata = async () => {
+    setKhataLoading(true);
+    try {
+      const res = await fetch('/api/commerce/khata').then((r) => r.json());
+      if (res.records) setKhataList(res.records);
+      if (res.summary) setKhataReceivable(res.summary.totalReceivable || 0);
+    } catch {
+      toast.error('Failed to load customer khata');
+    } finally {
+      setKhataLoading(false);
+    }
+  };
+
+  const loadDayBook = async () => {
+    try {
+      const res = await fetch('/api/commerce/daybook').then((r) => r.json());
+      if (res.dayBook) setDayBookData(res.dayBook);
+    } catch {
+      toast.error('Failed to load day book');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'templates') loadTemplates();
+    if (activeTab === 'promotions') loadPromotions();
+    if (activeTab === 'domain') loadDomain();
+    if (activeTab === 'khata') loadKhata();
+    if (activeTab === 'daybook') loadDayBook();
+  }, [activeTab]);
+
+  // Actions for Merchant OS Modules
+  const handleApplyTemplate = async (templateId: string) => {
+    if (!confirm('Apply this industry template? This will seed your store with prebuilt products, categories, and prices.')) return;
+    setApplyingTemplateId(templateId);
+    try {
+      const res = await fetch('/api/commerce/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId, replaceExisting: false }),
+      }).then((r) => r.json());
+      if (res.ok) {
+        toast.success(res.message || 'Template applied successfully!');
+        loadCommerceData();
+        setActiveTab('catalog');
+      } else {
+        toast.error(res.error || 'Failed to apply template');
+      }
+    } catch {
+      toast.error('Failed to apply template');
+    } finally {
+      setApplyingTemplateId(null);
+    }
+  };
+
+  const handleSaveCoupon = async () => {
+    if (!newCouponCode.trim() || !newCouponValue) {
+      toast.error('Coupon code and discount value are required');
+      return;
+    }
+    setSavingCoupon(true);
+    try {
+      const res = await fetch('/api/commerce/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'CREATE_COUPON',
+          coupon: {
+            code: newCouponCode.trim().toUpperCase(),
+            type: newCouponType,
+            value: parseFloat(newCouponValue) || 0,
+            minOrder: parseFloat(newCouponMinOrder) || 0,
+          },
+        }),
+      }).then((r) => r.json());
+      if (res.ok) {
+        toast.success('Coupon created!');
+        setNewCouponCode('');
+        loadPromotions();
+      } else {
+        toast.error(res.error || 'Failed to create coupon');
+      }
+    } catch {
+      toast.error('Error creating coupon');
+    } finally {
+      setSavingCoupon(false);
+    }
+  };
+
+  const handleDeleteCoupon = async (code: string) => {
+    if (!confirm(`Delete coupon ${code}?`)) return;
+    try {
+      const res = await fetch('/api/commerce/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'DELETE_COUPON', code }),
+      }).then((r) => r.json());
+      if (res.ok) {
+        toast.success('Coupon removed');
+        loadPromotions();
+      }
+    } catch {
+      toast.error('Failed to remove coupon');
+    }
+  };
+
+  const handleSaveBanner = async () => {
+    setSavingBanner(true);
+    try {
+      const res = await fetch('/api/commerce/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'UPDATE_BANNER', banner: announcementBanner }),
+      }).then((r) => r.json());
+      if (res.ok) {
+        toast.success('Storefront announcement banner updated!');
+        loadPromotions();
+      } else {
+        toast.error(res.error || 'Failed to save banner');
+      }
+    } catch {
+      toast.error('Error saving banner');
+    } finally {
+      setSavingBanner(false);
+    }
+  };
+
+  const handleSaveDomain = async () => {
+    if (!customDomainInput.trim()) {
+      toast.error('Please enter a domain name');
+      return;
+    }
+    setSavingDomain(true);
+    try {
+      const res = await fetch('/api/commerce/domain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customDomain: customDomainInput.trim() }),
+      }).then((r) => r.json());
+      if (res.ok) {
+        toast.success('Domain configured! Please update your DNS records.');
+        loadDomain();
+      } else {
+        toast.error(res.error || 'Failed to save domain');
+      }
+    } catch {
+      toast.error('Error saving domain');
+    } finally {
+      setSavingDomain(false);
+    }
+  };
+
+  const handleVerifyDomain = async () => {
+    setVerifyingDomain(true);
+    try {
+      const res = await fetch('/api/commerce/domain/verify', { method: 'POST' }).then((r) => r.json());
+      if (res.verified) {
+        toast.success('Domain verified and connected successfully!');
+      } else {
+        toast.info(res.message || 'DNS verification in progress. Please allow up to 24-48 hours for propagation.');
+      }
+      loadDomain();
+    } catch {
+      toast.error('Verification request failed');
+    } finally {
+      setVerifyingDomain(false);
+    }
+  };
+
+  const handleSendKhataWhatsApp = (entry: any) => {
+    const phone = (entry.customerPhone || '').replace(/\D/g, '');
+    const amount = Number(entry.balance || 0).toFixed(2);
+    const storeName = auth?.tenant?.name || 'Store';
+    const upiLink = upiId
+      ? `upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${amount}`
+      : '';
+    const text = `Namaste ${entry.customerName || 'Customer'},\nThis is a polite reminder from *${storeName}*.\nYour outstanding balance is *₹${amount}*.\n${upiLink ? `\nTap to pay instantly via UPI: ${upiLink}\n` : ''}\nThank you!`;
+    const waUrl = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  const handleAddExpense = async () => {
+    const amt = parseFloat(newExpenseAmt);
+    if (!amt || amt <= 0) {
+      toast.error('Please enter a valid expense amount');
+      return;
+    }
+    setSavingExpense(true);
+    try {
+      const res = await fetch('/api/commerce/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amt,
+          category: newExpenseCat,
+          description: newExpenseNote.trim() || newExpenseCat,
+          paymentMethod: 'CASH',
+        }),
+      }).then((r) => r.json());
+      if (res.ok || res.expense) {
+        toast.success(`Expense of ₹${amt} recorded!`);
+        setNewExpenseAmt('');
+        setNewExpenseNote('');
+        loadDayBook();
+      } else {
+        toast.error(res.error || 'Failed to record expense');
+      }
+    } catch {
+      toast.error('Error recording expense');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
 
   const openOrderDetail = async (orderId: string) => {
     setOrderModalLoading(true);
@@ -988,22 +1294,67 @@ export function CommerceView() {
             )}
           </button>
           <button
+            onClick={() => setActiveTab('templates')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'templates' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+            Templates
+          </button>
+          <button
+            onClick={() => setActiveTab('promotions')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'promotions' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Tag className="h-3.5 w-3.5 text-amber-600" />
+            Promotions
+          </button>
+          <button
+            onClick={() => setActiveTab('domain')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'domain' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5 text-purple-600" />
+            Custom Domain
+          </button>
+          <button
+            onClick={() => setActiveTab('khata')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'khata' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5 text-amber-700" />
+            Khata (Udhaar)
+          </button>
+          <button
+            onClick={() => setActiveTab('daybook')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'daybook' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
+            Day Book
+          </button>
+          <button
             onClick={() => setActiveTab('closing')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
               activeTab === 'closing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
             }`}
           >
             <Receipt className="h-3.5 w-3.5 text-blue-600" />
-            Billing & Closing
+            Closing
           </button>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
               activeTab === 'settings' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
             }`}
           >
             <Store className="h-3.5 w-3.5 text-stone-600" />
-            Store Settings
+            Settings
           </button>
         </div>
 
@@ -2746,6 +3097,601 @@ export function CommerceView() {
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
                 >
                   {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Store Settings'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: INDUSTRY TEMPLATES ======================= */}
+        {activeTab === 'templates' && (
+          <div className="space-y-6 max-w-7xl mx-auto">
+            <div>
+              <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-emerald-600" />
+                Industry Catalog Templates
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">
+                Select your business vertical to seed your store catalog in 1-click with prebuilt items, categories, units, and market prices.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {(templatesList.length > 0
+                ? templatesList
+                : [
+                    {
+                      id: 'kirana-grocery',
+                      name: 'Kirana & Grocery Store',
+                      category: 'Grocery & Essentials',
+                      icon: '🏪',
+                      desc: 'Essential daily groceries, packaged foods, spices, grains & FMCG products.',
+                      categories: ['Grains & Flours', 'Oils & Ghee', 'Dairy & Eggs', 'Spices & Masalas', 'Snacks & Beverages'],
+                      itemCount: 15,
+                    },
+                    {
+                      id: 'salon-spa',
+                      name: 'Salon & Spa Studio',
+                      category: 'Personal Care & Beauty',
+                      icon: '💇',
+                      desc: 'Hair styling, beauty treatments, facials, spa sessions & grooming packages.',
+                      categories: ['Hair Care', 'Skin & Facial', 'Grooming', 'Hands & Feet', 'Spa & Wellness'],
+                      itemCount: 15,
+                    },
+                    {
+                      id: 'restaurant-cafe',
+                      name: 'Restaurant, Cafe & Fast Food',
+                      category: 'Food & Beverage',
+                      icon: '🍕',
+                      desc: 'Breakfast, quick bites, hot & cold beverages, meals, and desserts.',
+                      categories: ['Quick Bites', 'Main Course', 'Beverages', 'Desserts', 'Combos'],
+                      itemCount: 15,
+                    },
+                    {
+                      id: 'fashion-boutique',
+                      name: 'Fashion & Clothing Boutique',
+                      category: 'Apparel & Accessories',
+                      icon: '👗',
+                      desc: 'Traditional wear, casual apparel, western outfits, and daily fashion accessories.',
+                      categories: ['Ethnic Wear', 'Casual Wear', 'Western Wear', 'Winter & Seasonal', 'Accessories'],
+                      itemCount: 14,
+                    },
+                    {
+                      id: 'bakery-sweets',
+                      name: 'Bakery, Cakes & Sweets',
+                      category: 'Bakery & Confectionery',
+                      icon: '🧁',
+                      desc: 'Artisanal cakes, pastries, fresh breads, traditional sweets, and bakery savories.',
+                      categories: ['Cakes & Pastries', 'Fresh Breads', 'Cookies & Biscuits', 'Traditional Sweets', 'Savories'],
+                      itemCount: 15,
+                    },
+                  ]
+              ).map((tmpl: any) => (
+                <div
+                  key={tmpl.id}
+                  className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs flex flex-col justify-between hover:border-emerald-400 hover:shadow-md transition"
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-3xl">{tmpl.icon || '🛍️'}</span>
+                      <Badge variant="outline" className="bg-stone-50 text-stone-600 text-[10px] font-bold">
+                        {tmpl.itemCount || 15} Products
+                      </Badge>
+                    </div>
+
+                    <h3 className="text-base font-black text-stone-900 mt-3">{tmpl.name}</h3>
+                    <p className="text-xs text-stone-500 mt-1 line-clamp-2">{tmpl.desc}</p>
+
+                    <div className="mt-4">
+                      <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
+                        Included Categories
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {(tmpl.categories || []).map((cat: string, ci: number) => (
+                          <span
+                            key={ci}
+                            className="rounded-md bg-stone-100 text-stone-700 px-2 py-0.5 text-[10px] font-medium"
+                          >
+                            {cat}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-stone-100">
+                    <Button
+                      onClick={() => handleApplyTemplate(tmpl.id)}
+                      disabled={applyingTemplateId === tmpl.id}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-1.5 h-9"
+                    >
+                      {applyingTemplateId === tmpl.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Apply to Catalog
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: PROMOTIONS & COUPONS ======================= */}
+        {activeTab === 'promotions' && (
+          <div className="space-y-6 max-w-5xl mx-auto">
+            <div>
+              <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                <Tag className="h-5 w-5 text-amber-600" />
+                Promotions, Coupons & Banners
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">
+                Boost sales with storefront announcement banners, discount codes, and 1-tap WhatsApp broadcast messages.
+              </p>
+            </div>
+
+            {/* Storefront Announcement Banner Card */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">Storefront Announcement Banner</h3>
+                  <p className="text-xs text-stone-500">
+                    Displayed prominently at the top of your public store link.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-stone-700">
+                    {announcementBanner.enabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAnnouncementBanner((prev) => ({ ...prev, enabled: !prev.enabled }))
+                    }
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                      announcementBanner.enabled ? 'bg-amber-600' : 'bg-stone-300'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                        announcementBanner.enabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700">Banner Message</label>
+                <Input
+                  value={announcementBanner.text}
+                  onChange={(e) =>
+                    setAnnouncementBanner((prev) => ({ ...prev, text: e.target.value }))
+                  }
+                  placeholder="e.g. 🎉 Weekend Dhamaka: Flat 20% OFF on all orders above ₹499! Use coupon WEEKEND20"
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              {/* Live Preview */}
+              {announcementBanner.text && (
+                <div className="rounded-xl bg-amber-500 text-white p-3 text-xs font-bold text-center shadow-xs">
+                  {announcementBanner.text}
+                </div>
+              )}
+
+              <Button
+                onClick={handleSaveBanner}
+                disabled={savingBanner}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-9"
+              >
+                {savingBanner ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Announcement Banner'}
+              </Button>
+            </div>
+
+            {/* Coupons Management Card */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-stone-900">Discount Coupons</h3>
+                <p className="text-xs text-stone-500">
+                  Customers enter these codes at checkout for instant discounts.
+                </p>
+              </div>
+
+              {/* Add Coupon Form */}
+              <div className="rounded-xl bg-stone-50 p-4 border border-stone-200 space-y-3">
+                <div className="text-xs font-bold text-stone-800 uppercase tracking-wide">
+                  + Create New Coupon Code
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-600">Coupon Code *</label>
+                    <Input
+                      value={newCouponCode}
+                      onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. SAVE20"
+                      className="mt-1 text-xs font-mono font-bold uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-600">Discount Type</label>
+                    <select
+                      value={newCouponType}
+                      onChange={(e) => setNewCouponType(e.target.value as any)}
+                      className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-bold h-9"
+                    >
+                      <option value="PERCENT">Percentage (%)</option>
+                      <option value="FLAT">Flat Amount (₹)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-600">Discount Value *</label>
+                    <Input
+                      type="number"
+                      value={newCouponValue}
+                      onChange={(e) => setNewCouponValue(e.target.value)}
+                      placeholder="10"
+                      className="mt-1 text-xs font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-stone-600">Min Order (₹)</label>
+                    <Input
+                      type="number"
+                      value={newCouponMinOrder}
+                      onChange={(e) => setNewCouponMinOrder(e.target.value)}
+                      placeholder="0"
+                      className="mt-1 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <Button
+                    onClick={handleSaveCoupon}
+                    disabled={savingCoupon}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8"
+                  >
+                    {savingCoupon ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save Coupon'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Coupons List */}
+              <div className="space-y-3">
+                <div className="text-xs font-bold text-stone-500 uppercase">
+                  Active Coupons ({couponsList.length})
+                </div>
+
+                {couponsList.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-stone-300 p-8 text-center text-xs text-stone-400">
+                    No custom discount coupons created yet. Create one above!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {couponsList.map((c: any) => (
+                      <div
+                        key={c.code || c.id}
+                        className="rounded-xl border border-stone-200 bg-white p-4 flex items-center justify-between shadow-2xs"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-black text-stone-900 text-sm">{c.code}</span>
+                            <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold border-emerald-200">
+                              {c.type === 'PERCENT' ? `${c.value}% OFF` : `₹${c.value} OFF`}
+                            </Badge>
+                          </div>
+                          <div className="text-[11px] text-stone-500 mt-1">
+                            {c.minOrder > 0 ? `Min order ₹${c.minOrder}` : 'No minimum order required'}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const storeName = auth?.tenant?.name || 'our store';
+                              const msg = `🎉 Special Offer from *${storeName}*!\nUse coupon code *${c.code}* to get *${c.type === 'PERCENT' ? `${c.value}% OFF` : `₹${c.value} OFF`}* on your next order.\nOrder now: ${publicStoreUrl}`;
+                              navigator.clipboard.writeText(msg);
+                              toast.success('Promotional WhatsApp text copied to clipboard!');
+                            }}
+                            className="h-8 text-xs text-stone-600 gap-1"
+                          >
+                            <Copy className="h-3 w-3" />
+                            Share
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteCoupon(c.code)}
+                            className="h-8 text-xs text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: CUSTOM DOMAIN ======================= */}
+        {activeTab === 'domain' && (
+          <div className="space-y-6 max-w-4xl mx-auto">
+            <div>
+              <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                <Globe className="h-5 w-5 text-purple-600" />
+                White-Label Custom Domain
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">
+                Connect your brand's own custom domain (e.g. <span className="font-mono text-stone-700">order.yourbrand.com</span>) with free automatic SSL.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-6">
+              <div>
+                <label className="text-xs font-bold text-stone-700">Enter Your Custom Domain</label>
+                <div className="mt-1.5 flex items-center gap-3">
+                  <Input
+                    value={customDomainInput}
+                    onChange={(e) => setCustomDomainInput(e.target.value)}
+                    placeholder="shop.yourbrand.com"
+                    className="text-xs font-mono flex-1"
+                  />
+                  <Button
+                    onClick={handleSaveDomain}
+                    disabled={savingDomain}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-9"
+                  >
+                    {savingDomain ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Connect Domain'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Status & DNS Record Configuration */}
+              <div className="rounded-xl bg-purple-50/60 border border-purple-200 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-purple-900 uppercase tracking-wide">
+                    DNS Configuration Instructions
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] font-bold ${
+                      domainRecord?.status === 'ACTIVE'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border-amber-300'
+                    }`}
+                  >
+                    {domainRecord?.status === 'ACTIVE' ? 'Active & SSL Ready ✓' : 'Pending DNS Propagation ⏳'}
+                  </Badge>
+                </div>
+
+                <p className="text-xs text-purple-800">
+                  Add the following DNS record in your domain registrar (GoDaddy, Cloudflare, Namecheap, Hostinger):
+                </p>
+
+                <div className="rounded-lg bg-white border border-purple-200 overflow-hidden text-xs">
+                  <div className="grid grid-cols-4 bg-purple-100/70 p-2.5 font-bold text-purple-900 border-b border-purple-200 text-[11px]">
+                    <span>Type</span>
+                    <span>Host / Name</span>
+                    <span>Points to / Target</span>
+                    <span>TTL</span>
+                  </div>
+                  <div className="grid grid-cols-4 p-2.5 font-mono text-[11px] text-stone-800 items-center">
+                    <span className="font-bold text-purple-700">CNAME</span>
+                    <span>{customDomainInput.split('.')[0] || 'shop'}</span>
+                    <span className="truncate">cname.serviceos.app</span>
+                    <span>Automatic / 300</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  <Button
+                    onClick={handleVerifyDomain}
+                    disabled={verifyingDomain}
+                    variant="outline"
+                    className="bg-white border-purple-300 text-purple-800 hover:bg-purple-100 text-xs font-bold h-8 gap-1.5"
+                  >
+                    {verifyingDomain ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Verify DNS Record
+                  </Button>
+
+                  {customDomainInput && (
+                    <a
+                      href={`https://${customDomainInput}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-purple-700 font-bold hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Test URL
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: KHATA (UDHAAR) ======================= */}
+        {activeTab === 'khata' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-amber-700" />
+                  Customer Khata (Udhaar Book)
+                </h2>
+                <p className="text-xs text-stone-500 mt-1">
+                  Track customer credit balances, record repayments, and send 1-tap WhatsApp payment reminders with dynamic UPI links.
+                </p>
+              </div>
+
+              {/* Total Aapko Milega Badge */}
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-right shadow-2xs">
+                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Aapko Milega (Receivable)</div>
+                <div className="text-2xl font-black text-amber-900 mt-0.5">₹{khataReceivable.toFixed(2)}</div>
+              </div>
+            </div>
+
+            {/* Customers Khata Ledger */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-stone-900">Credit Ledger</h3>
+                <span className="text-xs text-stone-400 font-medium">
+                  {khataList.length} Customer{khataList.length === 1 ? '' : 's'} with Credit
+                </span>
+              </div>
+
+              {khataLoading ? (
+                <div className="p-12 text-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-amber-600 mx-auto" />
+                  <span className="text-xs text-stone-400 mt-2 block">Loading Khata entries...</span>
+                </div>
+              ) : khataList.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-stone-300 p-12 text-center text-xs text-stone-400">
+                  No pending Udhaar entries. All customer accounts are fully paid! ✓
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-100 rounded-xl border border-stone-200 overflow-hidden text-xs">
+                  {khataList.map((entry: any, i: number) => (
+                    <div key={i} className="p-4 flex flex-wrap items-center justify-between gap-3 bg-white hover:bg-stone-50 transition">
+                      <div>
+                        <div className="font-bold text-stone-900 text-sm">{entry.customerName || 'Customer'}</div>
+                        <div className="text-stone-500 font-mono text-[11px] mt-0.5">{entry.customerPhone}</div>
+                        {entry.lastTransaction && (
+                          <div className="text-[10px] text-stone-400 mt-1">
+                            Last entry: {new Date(entry.lastTransaction).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-red-600">Pending Due</div>
+                          <div className="text-base font-black text-red-700">₹{Number(entry.balance || 0).toFixed(2)}</div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          onClick={() => handleSendKhataWhatsApp(entry)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5"
+                        >
+                          <Send className="h-3 w-3" />
+                          Send WhatsApp Reminder
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ======================= TAB: DAY BOOK & EXPENSES ======================= */}
+        {activeTab === 'daybook' && (
+          <div className="space-y-6 max-w-6xl mx-auto">
+            <div>
+              <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-700" />
+                Day Book & Cash Drawer
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">
+                Monitor physical cash in hand, daily sales inflows, and store expenses in real-time.
+              </p>
+            </div>
+
+            {/* Cash Drawer Summary KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-2xs">
+                <div className="text-xs font-bold text-blue-700 uppercase">Today's Sales</div>
+                <div className="text-2xl font-black text-stone-900 mt-2">
+                  ₹{Number(dayBookData.totalSales || stats.revenue || 0).toFixed(2)}
+                </div>
+                <div className="text-[11px] text-blue-600 mt-0.5">Orders + POS</div>
+              </div>
+
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs">
+                <div className="text-xs font-bold text-emerald-700 uppercase">Total Cash Inflow</div>
+                <div className="text-2xl font-black text-emerald-900 mt-2">
+                  ₹{Number(dayBookData.totalInflow || stats.revenue || 0).toFixed(2)}
+                </div>
+                <div className="text-[11px] text-emerald-600 mt-0.5">Cash collected</div>
+              </div>
+
+              <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 shadow-2xs">
+                <div className="text-xs font-bold text-red-700 uppercase">Total Outflows</div>
+                <div className="text-2xl font-black text-red-900 mt-2">
+                  ₹{Number(dayBookData.totalOutflow || 0).toFixed(2)}
+                </div>
+                <div className="text-[11px] text-red-600 mt-0.5">Daily expenses</div>
+              </div>
+
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-2xs">
+                <div className="text-xs font-black text-amber-800 uppercase tracking-wide">Cash in Hand</div>
+                <div className="text-2xl font-black text-amber-900 mt-2">
+                  ₹{Number(dayBookData.cashInHand || (stats.revenue || 0)).toFixed(2)}
+                </div>
+                <div className="text-[11px] text-amber-700 mt-0.5">Physical Cash Drawer</div>
+              </div>
+            </div>
+
+            {/* Quick Record Expense Form */}
+            <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
+              <h3 className="text-base font-bold text-stone-900">+ Record Daily Store Expense</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Expense Amount (₹) *</label>
+                  <Input
+                    type="number"
+                    value={newExpenseAmt}
+                    onChange={(e) => setNewExpenseAmt(e.target.value)}
+                    placeholder="e.g. 500"
+                    className="mt-1 text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Category</label>
+                  <select
+                    value={newExpenseCat}
+                    onChange={(e) => setNewExpenseCat(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-bold h-9"
+                  >
+                    <option value="Raw Materials">Raw Materials / Stock</option>
+                    <option value="Staff Wages">Staff Wages / Daily Pay</option>
+                    <option value="Utilities">Utilities & Fuel</option>
+                    <option value="Rent">Rent & Maintenance</option>
+                    <option value="Packaging">Packaging & Supplies</option>
+                    <option value="Other">Other Miscellaneous</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Description / Notes</label>
+                  <Input
+                    value={newExpenseNote}
+                    onChange={(e) => setNewExpenseNote(e.target.value)}
+                    placeholder="e.g. Milk & bread morning delivery"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  onClick={handleAddExpense}
+                  disabled={savingExpense}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs h-8"
+                >
+                  {savingExpense ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Record Expense'}
                 </Button>
               </div>
             </div>

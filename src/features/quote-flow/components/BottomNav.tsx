@@ -1,6 +1,6 @@
 "use client";
 import { useAppStore, type Tab } from "@/features/quote-flow/store/app";
-import { Receipt, Calculator, Users, Package, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Receipt, Users, MoreHorizontal } from "lucide-react";
 
 interface NavItem {
   id: Tab;
@@ -9,10 +9,10 @@ interface NavItem {
 }
 
 const navTabs: NavItem[] = [
-  { id: "invoices", label: "Invoices", Icon: Receipt },
-  { id: "quotes", label: "Estimates", Icon: Calculator },
-  { id: "customers", label: "Clients", Icon: Users },
-  { id: "items", label: "Items", Icon: Package },
+  { id: "home", label: "Today", Icon: LayoutDashboard },
+  { id: "items", label: "Orders", Icon: ShoppingBag },
+  { id: "invoices", label: "Billing", Icon: Receipt },
+  { id: "customers", label: "Customers", Icon: Users },
   { id: "settings", label: "More", Icon: MoreHorizontal },
 ];
 
@@ -26,10 +26,11 @@ export function BottomNav() {
         {navTabs.map(({ id, label, Icon }) => {
           const active =
             activeTab === id ||
-            (id === "invoices" && activeTab === "home") ||
-            (id === "quotes" && activeTab === "estimates") ||
-            (id === "customers" && activeTab === "clients") ||
-            (id === "settings" && activeTab === "more");
+            (id === "home" && activeTab === "home") ||
+            (id === "items" && activeTab === "items") ||
+            (id === "invoices" && (activeTab === "invoices" || activeTab === "quotes" || activeTab === "estimates")) ||
+            (id === "customers" && (activeTab === "customers" || activeTab === "clients")) ||
+            (id === "settings" && (activeTab === "settings" || activeTab === "more"));
 
           return (
             <button
