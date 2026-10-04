@@ -32,13 +32,6 @@ import {
   apiFormToFormItem, buildApiPayload, getDefaultActions,
 } from '@/features/forms/utils/form-helpers';
 import { FormStudioBuilder } from '@/features/forms/components/form-studio-builder';
-import { FormAgentStudio } from '@/features/forms/components/agent-builder/form-agent-studio';
-import { AgentSetupWizard } from '@/features/forms/components/agent-builder/agent-setup-wizard';
-import {
-  DEFAULT_FORM_AGENT,
-  FormAgentData,
-  createAgentFromPreset,
-} from '@/features/forms/types/agent-types';
 import { DeleteConfirmDialog, EmbedDialog, PreviewDialog, ResponsesDialog,
   WhatsAppSendDialog,
 } from '@/features/forms/components/form-action-dialogs';
@@ -81,22 +74,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         }
       }
 
-      if (params.get('wizard') === '1' || sessionStorage.getItem('open_agent_setup_wizard') === 'true') {
-        sessionStorage.removeItem('open_agent_setup_wizard');
-        openCreateFormWizard('agent');
+      if (params.get('wizard') === '1') {
+        openCreateFormWizard('form');
       }
       if (params.get('agentStudio') === '1' || sessionStorage.getItem('open_agent_studio') === 'true') {
         sessionStorage.removeItem('open_agent_studio');
-        setShowAiAgentStudio(true);
+        useAppStore.getState().setCurrentView('agentStudio');
       }
     }
   }, [openCreateFormWizard]);
-
-  useEffect(() => {
-    if (initialAgentStudio) {
-      setShowAiAgentStudio(true);
-    }
-  }, [initialAgentStudio]);
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const authTenant = useAppStore((s) => s.auth?.tenant) as any;
@@ -110,9 +96,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     authTenant?.plan === 'enterprise' ||
     authTenant?.planStatus === 'trial';
   const [showAiWebsiteDialog, setShowAiWebsiteDialog] = useState(false);
-  const [showAiAgentStudio, setShowAiAgentStudio] = useState(initialAgentStudio);
-  const [showAgentWizard, setShowAgentWizard] = useState(false);
-  const [agentStudioData, setAgentStudioData] = useState<FormAgentData | null>(null);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
   const [showResponsesDialog, setShowResponsesDialog] = useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
@@ -898,57 +881,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     if (path) window.open(path, '_blank', 'noopener,noreferrer');
   };
 
-  if (showAgentWizard) {
-    return (
-      <AgentSetupWizard
-        initialAgent={agentStudioData || DEFAULT_FORM_AGENT}
-        siteOrigin={siteOrigin}
-        onComplete={(newAgent, formId) => {
-          setShowAgentWizard(false);
-          fetchForms();
-          if (formId) {
-            sessionStorage.setItem('fieseros_active_edit_form_id', formId);
-            authFetch(`/api/forms/${formId}`).then(async (res) => {
-              if (res.ok) {
-                const data = await res.json();
-                if (data.form) {
-                  const fullItem = apiFormToFormItem(data.form as ApiForm);
-                  setFormData({
-                    ...fullItem,
-                    agentConfig: newAgent,
-                  });
-                  setEditMode(true);
-                  setEditFormId(formId);
-                  setShowCreateDialog(true);
-                }
-              }
-            }).catch(() => {});
-          } else {
-            setAgentStudioData(newAgent);
-            setShowAiAgentStudio(true);
-          }
-        }}
-        onCancel={() => setShowAgentWizard(false)}
-      />
-    );
-  }
-
-  if (showAiAgentStudio) {
-    return (
-      <FormAgentStudio
-        initialAgent={agentStudioData || DEFAULT_FORM_AGENT}
-        onChange={(updated) => {
-          setAgentStudioData(updated);
-        }}
-        onBack={() => {
-          setShowAiAgentStudio(false);
-          setAgentStudioData(null);
-        }}
-        siteOrigin={siteOrigin}
-      />
-    );
-  }
-
   if (showCreateDialog) {
     return (
       <FormStudioBuilder
@@ -1293,31 +1225,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 h-8 text-xs font-bold border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-xl"
-                        onClick={() => {
-                          const existingConfig = (form as any).agentConfig;
-                          const formAgent: FormAgentData = {
-                            ...(existingConfig || DEFAULT_FORM_AGENT),
-                            id: existingConfig?.id || `agent_${form.id}`,
-                            name: existingConfig?.name || `${form.name.split(' ')[0] || 'AI'} Assistant`,
-                            roleTitle: existingConfig?.roleTitle || `${form.name} AI Agent`,
-                            connectedForms: existingConfig?.connectedForms?.length
-                              ? existingConfig.connectedForms
-                              : [
-                                  {
-                                    id: form.id,
-                                    name: form.name,
-                                    description: form.description,
-                                    submissionCount: form.submissions,
-                                  },
-                                ],
-                            welcomeGreeting: existingConfig?.welcomeGreeting || `Hi! I am your AI Assistant for **${form.name}**. How may I help you today?`,
-                          };
-                          setAgentStudioData(formAgent);
-                          setShowAiAgentStudio(true);
-                        }}
+                        className="flex-1 h-8 text-xs font-bold border-stone-200 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl"
+                        onClick={() => openFormLink(form)}
+                        title="Open hosted live form in new tab"
                       >
-                        <Bot className="size-3.5 mr-1.5 text-blue-600" /> AI Agent
+                        <ExternalLink className="size-3.5 mr-1.5 text-stone-500" /> View Live
                       </Button>
                       <Button
                         variant="outline"
@@ -1344,13 +1256,13 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             <div className="text-center py-12">
               <FileInput className="size-12 mx-auto text-muted-foreground/50 mb-4" />
               <h3 className="text-lg font-medium mb-1">No forms found</h3>
-              <p className="text-muted-foreground mb-4">{search ? 'Try adjusting your search' : 'Create your first smart form or conversational AI agent'}</p>
+              <p className="text-muted-foreground mb-4">{search ? 'Try adjusting your search' : 'Create your first smart form to capture leads and bookings'}</p>
               <div className="flex items-center justify-center gap-3">
                 <Button
                   className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold gap-1.5 rounded-xl shadow-md shadow-emerald-600/20 cursor-pointer"
-                  onClick={() => openCreateFormWizard('agent')}
+                  onClick={() => openCreateFormWizard('form')}
                 >
-                  <Sparkles className="size-4" /> Build with AI Wizard
+                  <Sparkles className="size-4" /> AI Form Wizard
                 </Button>
                 <Button
                   variant="outline"

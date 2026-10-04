@@ -144,6 +144,20 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
+            name="channels/instagram"
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="channels/messenger"
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
             name="forms/index"
             options={{
               headerShown: false,

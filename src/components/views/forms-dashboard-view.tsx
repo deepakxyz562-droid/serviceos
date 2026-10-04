@@ -120,6 +120,7 @@ const DASHBOARD_QUICK_STARTERS = [
 
 export function FormsDashboardView() {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const openCreateFormWizard = useAppStore((s) => s.openCreateFormWizard);
   const [stats, setStats] = useState<FormsDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -361,20 +362,25 @@ export function FormsDashboardView() {
         <div className="flex gap-2 flex-wrap items-center">
           <Button
             className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-9 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
-            onClick={() => {
-              if (typeof window !== 'undefined') sessionStorage.setItem('open_agent_setup_wizard', 'true');
-              setCurrentView('formBuilder');
-            }}
+            onClick={() => openCreateFormWizard('form')}
           >
             <Sparkles className="size-4" />
-            <span>AI Agent Wizard</span>
+            <span>AI Form Wizard</span>
           </Button>
-          <Button variant="outline" onClick={() => setTemplatePickerOpen(true)}>
-            <LayoutGrid className="w-4 h-4 mr-2" />
+          <Button
+            variant="outline"
+            className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer"
+            onClick={() => setCurrentView('agentStudio')}
+          >
+            <Bot className="size-4 text-blue-600" />
+            <span>AI Agent Studio</span>
+          </Button>
+          <Button variant="outline" className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer" onClick={() => setTemplatePickerOpen(true)}>
+            <LayoutGrid className="w-4 h-4 mr-1 text-slate-600" />
             Browse Templates
           </Button>
-          <Button onClick={() => setCurrentView('formBuilder')}>
-            <Plus className="w-4 h-4 mr-2" />
+          <Button className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer" onClick={() => setCurrentView('formBuilder')}>
+            <Plus className="w-4 h-4 mr-1" />
             Create Form
           </Button>
         </div>
@@ -490,21 +496,15 @@ export function FormsDashboardView() {
           <span className="text-[11px] font-bold text-muted-foreground">Or start directly with:</span>
           <button
             type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') sessionStorage.setItem('open_agent_setup_wizard', 'true');
-              setCurrentView('formBuilder');
-            }}
+            onClick={() => openCreateFormWizard('form')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:from-emerald-700 hover:to-teal-700 shadow-sm transition-all cursor-pointer"
           >
             <Sparkles className="size-3.5 text-white" />
-            <span>AI Agent Wizard</span>
+            <span>AI Form Wizard</span>
           </button>
           <button
             type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') sessionStorage.setItem('open_agent_studio', 'true');
-              setCurrentView('agentStudio');
-            }}
+            onClick={() => setCurrentView('agentStudio')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-white dark:bg-slate-900 border border-border/80 hover:border-emerald-500 hover:text-emerald-600 transition-all cursor-pointer shadow-2xs"
           >
             <Bot className="size-3.5 text-blue-600" />

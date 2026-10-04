@@ -477,11 +477,11 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
         className="w-56"
       >
         <DropdownMenuItem
-          onClick={() => useAppStore.getState().openCreateFormWizard('hybrid')}
+          onClick={() => useAppStore.getState().openCreateFormWizard('form')}
           className="cursor-pointer font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 focus:bg-emerald-500/20 mb-1"
         >
           <Sparkles className="size-4 mr-2 text-emerald-600" />
-          <span>New Form or AI Agent</span>
+          <span>AI Form Wizard</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {items.map((item) => {

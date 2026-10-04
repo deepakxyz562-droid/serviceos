@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,14 @@ import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
 
 type InboxFilter =
   | 'my_chats'
@@ -77,8 +81,54 @@ const SAMPLE_CHATS: ChatItem[] = [
 
 export default function InboxScreen() {
   const [activeFilter, setActiveFilter] = useState<InboxFilter>('my_chats');
+  const [chats, setChats] = useState<ChatItem[]>(SAMPLE_CHATS);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredChats = SAMPLE_CHATS.filter((c) => {
+  const fetchChats = async () => {
+    try {
+      const res = await apiRequest<any>(API_PATHS.sessions);
+      const list = Array.isArray(res) ? res : res?.sessions || [];
+      if (list.length > 0) {
+        setChats(
+          list.map((s: any, idx: number) => {
+            const name = s.visitorName || s.customerName || `Customer #${idx + 1}`;
+            const initials = name
+              .split(' ')
+              .map((w: string) => w[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase();
+            return {
+              id: s.id,
+              name,
+              avatarText: initials || 'CU',
+              lastMessage: s.lastMessage || s.summary || 'Customer started a conversation',
+              timeAgo: s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+              unread: !!s.unread || s.status === 'open',
+              channel: (s.channel === 'whatsapp' || s.channel === 'instagram') ? s.channel : 'website',
+              category: s.category || 'my_chats',
+            };
+          })
+        );
+        return;
+      }
+    } catch {}
+    setChats(SAMPLE_CHATS);
+  };
+
+  useEffect(() => {
+    fetchChats().finally(() => setLoading(false));
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    hapticFeedback.light();
+    await fetchChats();
+    setRefreshing(false);
+  };
+
+  const filteredChats = chats.filter((c) => {
     if (activeFilter === 'my_chats') return true;
     if (activeFilter === 'unassigned') return c.unread;
     if (activeFilter === 'products') return c.category === 'products';
@@ -136,7 +186,10 @@ export default function InboxScreen() {
 
       {/* White Content Container */}
       <View style={styles.contentWrap}>
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10B981']} />}
+        >
           {/* Archives Row at the top (matches 18.35.51.jpeg) */}
           <TouchableOpacity
             style={styles.archiveRow}

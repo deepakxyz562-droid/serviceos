@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,14 @@ import {
   Share,
   Alert,
   StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
 
 interface BookingItem {
   id: string;
@@ -140,8 +144,51 @@ export default function BookingsScreen() {
   const [filterDate, setFilterDate] = useState<'all' | 'today' | 'tomorrow'>('all');
   const [autoConfirm, setAutoConfirm] = useState(true);
   const [googleCalendarSync, setGoogleCalendarSync] = useState(true);
+  const [bookings, setBookings] = useState<BookingItem[]>(INITIAL_BOOKINGS);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredBookings = INITIAL_BOOKINGS.filter((b) => {
+  const fetchBookings = async () => {
+    try {
+      const res = await apiRequest<any>(API_PATHS.bookings);
+      const list = Array.isArray(res) ? res : res?.bookings || [];
+      if (list.length > 0) {
+        setBookings(
+          list.map((it: any, idx: number) => ({
+            id: it.id || `b-${idx}`,
+            customerName: it.customerName || it.name || 'Customer',
+            phone: it.customerPhone || it.phone || '',
+            email: it.customerEmail || it.email || '',
+            service: it.serviceName || it.title || 'Consultation',
+            time: it.scheduledAt ? new Date(it.scheduledAt).toLocaleString() : 'Scheduled',
+            dateKey: 'today',
+            duration: it.duration || '30 min',
+            depositPaid: !!it.depositPaid,
+            amount: Number(it.price || it.amount || 0),
+            meetingType: (it.meetingType === 'video' || it.meetingType === 'phone') ? it.meetingType : 'in_person',
+            meetingLocation: it.location || 'Store / Office',
+            intakeAnswers: Array.isArray(it.answers) ? it.answers : [],
+            status: it.status || 'confirmed',
+          }))
+        );
+        return;
+      }
+    } catch {}
+    setBookings(INITIAL_BOOKINGS);
+  };
+
+  useEffect(() => {
+    fetchBookings().finally(() => setLoading(false));
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    hapticFeedback.light();
+    await fetchBookings();
+    setRefreshing(false);
+  };
+
+  const filteredBookings = bookings.filter((b) => {
     if (filterDate === 'all') return true;
     return b.dateKey === filterDate;
   });
@@ -218,6 +265,7 @@ export default function BookingsScreen() {
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10B981']} />}
             showsVerticalScrollIndicator={false}
           >
             {/* Filter Pills */}

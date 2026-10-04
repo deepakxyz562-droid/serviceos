@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,14 @@ import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
 
 interface DemoLead {
   id: string;
@@ -79,8 +83,47 @@ const MOCK_LEADS: DemoLead[] = [
 
 export default function LeadsScreen() {
   const [selectedStatus, setSelectedStatus] = useState<'new' | 'contacted' | 'won'>('new');
+  const [leads, setLeads] = useState<DemoLead[]>(MOCK_LEADS);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const filteredLeads = MOCK_LEADS.filter((l) => l.status === selectedStatus);
+  const fetchLeads = async () => {
+    try {
+      const res = await apiRequest<any>(API_PATHS.leads);
+      const list = Array.isArray(res) ? res : res?.leads || [];
+      if (list.length > 0) {
+        setLeads(
+          list.map((it: any, idx: number) => ({
+            id: it.id || `lead-${idx}`,
+            name: it.name || it.customerName || 'Lead',
+            phone: it.phone || it.customerPhone || '',
+            email: it.email || it.customerEmail || '',
+            service: it.service || it.title || 'General Inquiry',
+            source: it.source || 'ai_agent',
+            status: (it.status === 'won' || it.status === 'contacted') ? it.status : 'new',
+            estimatedValue: Number(it.estimatedValue || it.value || 250),
+            time: it.createdAt ? new Date(it.createdAt).toLocaleDateString() : 'Recent',
+            summary: it.summary || it.notes || 'Inquiry captured by AI Assistant.',
+          }))
+        );
+        return;
+      }
+    } catch {}
+    setLeads(MOCK_LEADS);
+  };
+
+  useEffect(() => {
+    fetchLeads().finally(() => setLoading(false));
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    hapticFeedback.light();
+    await fetchLeads();
+    setRefreshing(false);
+  };
+
+  const filteredLeads = leads.filter((l) => l.status === selectedStatus);
 
   const handleCall = async (phone: string) => {
     await hapticFeedback.medium();
@@ -123,9 +166,9 @@ export default function LeadsScreen() {
         {/* Pipeline Tabs */}
         <View style={styles.tabsRow}>
           {[
-            { id: 'new', label: '🔥 New', count: MOCK_LEADS.filter((l) => l.status === 'new').length },
-            { id: 'contacted', label: 'Contacted', count: MOCK_LEADS.filter((l) => l.status === 'contacted').length },
-            { id: 'won', label: 'Won', count: MOCK_LEADS.filter((l) => l.status === 'won').length },
+            { id: 'new', label: '🔥 New', count: leads.filter((l) => l.status === 'new').length },
+            { id: 'contacted', label: 'Contacted', count: leads.filter((l) => l.status === 'contacted').length },
+            { id: 'won', label: 'Won', count: leads.filter((l) => l.status === 'won').length },
           ].map((tab) => {
             const active = selectedStatus === tab.id;
             return (
@@ -155,6 +198,7 @@ export default function LeadsScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10B981']} />}
           showsVerticalScrollIndicator={false}
         >
           {filteredLeads.map((lead) => (

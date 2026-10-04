@@ -818,7 +818,7 @@ export function DashboardView() {
             className="bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
           >
             <Sparkles className="size-3.5" />
-            <span>Create Form / AI Agent</span>
+            <span>AI Form Wizard</span>
           </Button>
           <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
             <Zap className="size-3 mr-1" /> Live
@@ -1228,10 +1228,10 @@ export function DashboardView() {
               <Button
                 variant="outline"
                 className="justify-start gap-2.5 h-auto py-3 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold bg-emerald-500/5 cursor-pointer"
-                onClick={() => useAppStore.getState().openCreateFormWizard('hybrid')}
+                onClick={() => useAppStore.getState().openCreateFormWizard('form')}
               >
                 <Sparkles className="size-4 text-emerald-600" />
-                <span className="text-sm">Create Form or AI Agent</span>
+                <span className="text-sm">AI Form Wizard</span>
               </Button>
               <Button
                 className="justify-start gap-2.5 bg-emerald-600 hover:bg-emerald-700 h-auto py-3"

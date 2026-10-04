@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,13 +16,27 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
 import { hapticFeedback } from '@/lib/haptics';
+import { API_PATHS, API_BASE_URL } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
+  const [agent, setAgent] = useState<any | null>(null);
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isAiAnswering, setIsAiAnswering] = useState(true);
+
+  useEffect(() => {
+    apiRequest<any>(API_PATHS.agents)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.agents || [];
+        if (list.length > 0) {
+          setAgent(list[0]);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleShareLink = async () => {
     await hapticFeedback.light();
@@ -77,35 +91,83 @@ export default function DashboardScreen() {
             </View>
             <View style={{ flex: 1, marginLeft: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={styles.assistantName}>Ava</Text>
+                <Text style={styles.assistantName}>{agent?.name || 'Ava'}</Text>
                 <View style={styles.roleTag}>
                   <Text style={styles.roleTagText}>AI EMPLOYEE</Text>
                 </View>
               </View>
-              <Text style={styles.assistantRole}>Customer Support &amp; Lead Agent</Text>
+              <Text style={styles.assistantRole}>
+                {agent?.systemPrompt ? 'Trained 24/7 AI Receptionist' : 'Customer Support & Lead Agent'}
+              </Text>
             </View>
           </View>
 
           {/* Active Channels Grid */}
-          <Text style={styles.channelsHeading}>CONNECTED CHANNELS</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, marginBottom: 8 }}>
+            <Text style={styles.channelsHeading}>CONNECTED CHANNELS</Text>
+            <TouchableOpacity
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/channels');
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#10b981' }}>Manage All &gt;</Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.channelsRow}>
-            <View style={styles.channelChip}>
+            <TouchableOpacity
+              style={styles.channelChip}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/channels/website');
+              }}
+              activeOpacity={0.7}
+            >
               <MaterialIcons name="language" size={15} color="#2563eb" style={{ marginRight: 4 }} />
               <Text style={styles.channelChipText}>Website</Text>
               <View style={styles.channelActiveDot} />
-            </View>
+            </TouchableOpacity>
 
-            <View style={styles.channelChip}>
+            <TouchableOpacity
+              style={styles.channelChip}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/channels/whatsapp');
+              }}
+              activeOpacity={0.7}
+            >
               <MaterialIcons name="chat" size={15} color="#059669" style={{ marginRight: 4 }} />
               <Text style={styles.channelChipText}>WhatsApp</Text>
               <View style={styles.channelActiveDot} />
-            </View>
+            </TouchableOpacity>
 
-            <View style={styles.channelChip}>
+            <TouchableOpacity
+              style={styles.channelChip}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/channels/instagram');
+              }}
+              activeOpacity={0.7}
+            >
               <MaterialIcons name="camera-alt" size={15} color="#db2777" style={{ marginRight: 4 }} />
               <Text style={styles.channelChipText}>Instagram</Text>
               <View style={styles.channelActiveDot} />
-            </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.channelChip}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/channels/messenger');
+              }}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="forum" size={15} color="#0084FF" style={{ marginRight: 4 }} />
+              <Text style={styles.channelChipText}>Messenger</Text>
+              <View style={styles.channelActiveDot} />
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.channelChip, styles.channelChipVoice]}
@@ -116,7 +178,7 @@ export default function DashboardScreen() {
               activeOpacity={0.7}
             >
               <MaterialIcons name="phone" size={14} color="#8b5cf6" style={{ marginRight: 4 }} />
-              <Text style={styles.channelVoiceText}>Voice $29/mo</Text>
+              <Text style={styles.channelVoiceText}>Voice</Text>
             </TouchableOpacity>
           </View>
 

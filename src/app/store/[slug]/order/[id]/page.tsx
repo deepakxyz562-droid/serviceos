@@ -62,6 +62,13 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
     items = JSON.parse(order.itemsJson || '[]');
   } catch {}
 
+  const config = await db.gptformCommerceConfig.findFirst({
+    where: {
+      OR: [{ businessId: businessId }, { id: businessId }],
+    },
+    select: { upiId: true, currencySymbol: true },
+  });
+
   const initialOrderData = {
     id: order.id,
     orderNumber: order.id.slice(-6).toUpperCase(),
@@ -93,7 +100,8 @@ export default async function OrderTrackingPage({ params }: OrderTrackingPagePro
       orderId={order.id}
       initialOrder={initialOrderData}
       initialQueue={initialQueueData}
-      currencySymbol="₹"
+      currencySymbol={config?.currencySymbol || '₹'}
+      upiId={config?.upiId || ''}
     />
   );
 }

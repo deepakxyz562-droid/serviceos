@@ -182,3 +182,45 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { orderId, utrNumber, paymentStatus, paymentMethod } = body;
+    if (!orderId) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
+    const order = await db.gptformCommerceOrder.findFirst({
+      where: {
+        OR: [{ id: orderId }, { id: { endsWith: orderId.toLowerCase() } }],
+      },
+    });
+
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    const cleanUtr = utrNumber ? String(utrNumber).trim() : null;
+    let updatedNotes = order.notes || '';
+    if (cleanUtr && !updatedNotes.includes(`UTR: ${cleanUtr}`)) {
+      updatedNotes = updatedNotes ? `${updatedNotes} • UTR: ${cleanUtr}` : `UTR: ${cleanUtr}`;
+    }
+
+    const updated = await db.gptformCommerceOrder.update({
+      where: { id: order.id },
+      data: {
+        ...(cleanUtr ? { notes: updatedNotes } : {}),
+        ...(paymentStatus ? { paymentStatus } : {}),
+        ...(paymentMethod ? { paymentMethod } : {}),
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      order: updated,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'Failed to update order' }, { status: 500 });
+  }
+}
+

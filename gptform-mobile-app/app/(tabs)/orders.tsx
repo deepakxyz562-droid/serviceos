@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_BASE_URL, API_PATHS } from '@/lib/constants';
@@ -31,11 +32,14 @@ interface Order {
   deliveryType: string | null;
   deliveryAddress: string | null;
   paymentStatus: string;
+  paymentMethod?: string | null;
+  notes?: string | null;
   createdAt: string;
   items: OrderItem[];
 }
 
 export default function OrdersScreen() {
+  const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -63,14 +67,16 @@ export default function OrdersScreen() {
         customerName: 'Aarav Sharma',
         customerPhone: '+919876543210',
         status: 'PENDING',
-        total: 850,
+        total: 180,
         deliveryType: 'dine_in',
         deliveryAddress: 'Table #4',
         paymentStatus: 'UNPAID',
+        paymentMethod: 'UPI',
+        notes: '[UTR: 428198765432] Less spicy please',
         createdAt: new Date().toISOString(),
         items: [
-          { name: 'Chocolate Truffle Cake', qty: 1, price: 750, amount: 750 },
-          { name: 'Iced Cappuccino', qty: 1, price: 100, amount: 100 },
+          { name: 'Steamed Momos (6 pcs)', qty: 2, price: 80, amount: 160 },
+          { name: 'Special Masala Chai', qty: 1, price: 20, amount: 20 },
         ],
       },
       {
@@ -82,25 +88,31 @@ export default function OrdersScreen() {
         deliveryType: 'delivery',
         deliveryAddress: 'Flat 402, Sunshine Apts, Bandra West',
         paymentStatus: 'PAID',
+        paymentMethod: 'UPI',
+        notes: 'Call before arriving',
         createdAt: new Date(Date.now() - 3600000).toISOString(),
         items: [
-          { name: 'Artisan Sourdough Loaf', qty: 2, price: 180, amount: 360 },
-          { name: 'Croissant', qty: 1, price: 60, amount: 60 },
+          { name: 'Paneer Kathi Roll', qty: 2, price: 110, amount: 220 },
+          { name: 'Chicken Egg Roll', qty: 1, price: 140, amount: 140 },
+          { name: 'Cold Drink 500ml', qty: 1, price: 60, amount: 60 },
         ],
       },
       {
         id: 'ord_103',
         customerName: 'Vikram Mehta',
         customerPhone: '+919898765432',
-        status: 'PREPARING',
-        total: 1250,
+        status: 'READY',
+        total: 250,
         deliveryType: 'takeout',
-        deliveryAddress: 'Store Pickup at 5:00 PM',
+        deliveryAddress: 'Counter 1',
         paymentStatus: 'PAID',
+        paymentMethod: 'CASH',
+        notes: 'Extra green chutney',
         createdAt: new Date(Date.now() - 7200000).toISOString(),
         items: [
-          { name: 'Black Forest Cake 1kg', qty: 1, price: 850, amount: 850 },
-          { name: 'Red Velvet Pastries', qty: 4, price: 100, amount: 400 },
+          { name: 'Fried Momos (6 pcs)', qty: 2, price: 90, amount: 180 },
+          { name: 'Cold Drink 500ml', qty: 1, price: 40, amount: 40 },
+          { name: 'Special Masala Chai', qty: 1, price: 30, amount: 30 },
         ],
       },
     ]);
@@ -136,13 +148,44 @@ export default function OrdersScreen() {
     setUpdatingId(null);
   };
 
+  const handleMarkPaid = async (orderId: string) => {
+    setUpdatingId(orderId);
+    hapticFeedback.success();
+    try {
+      await fetch(`${API_BASE_URL}${API_PATHS.commerceOrderDetail(orderId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paymentStatus: 'PAID' }),
+      });
+    } catch {}
+
+    setOrders((prev) =>
+      prev.map((o) => (o.id === orderId ? { ...o, paymentStatus: 'PAID' } : o))
+    );
+    setUpdatingId(null);
+    Alert.alert('Payment Verified', 'Order marked as PAID ✓');
+  };
+
+  const alertCustomerReady = (order: Order) => {
+    const phone = (order.customerPhone || '').replace(/\D/g, '');
+    const location = order.deliveryAddress || 'the counter';
+    const msg = `🎉 *Your Order #${order.id.slice(-6).toUpperCase()} is READY!* 🍽️\n\nYour hot meal is ready for pickup at ${location}.\n\nThank you for ordering with us!`;
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    Linking.openURL(url);
+  };
+
   const sendWhatsAppReceipt = (order: Order) => {
-    const phone = order.customerPhone.replace(/\D/g, '');
+    const phone = (order.customerPhone || '').replace(/\D/g, '');
     const itemsText = (order.items || [])
       .map((it) => `• ${it.name} x${it.qty} = ₹${(it.amount || it.price * it.qty).toFixed(2)}`)
       .join('\n');
-    const msg = `🧾 *RECEIPT: Order #${order.id.slice(-6).toUpperCase()}*\n${order.deliveryAddress ? `Table/Address: ${order.deliveryAddress}\n` : ''}------------------------\n${itemsText}\n------------------------\n*TOTAL: ₹${order.total.toFixed(2)}*\nStatus: ${order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'}\n\nThank you for ordering with us!`;
-    Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+    const msg = `🧾 *RECEIPT: Order #${order.id.slice(-6).toUpperCase()}*\n${order.deliveryAddress ? `Location: ${order.deliveryAddress}\n` : ''}------------------------\n${itemsText}\n------------------------\n*TOTAL: ₹${order.total.toFixed(2)}*\nPayment: ${order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'} (${order.paymentMethod || 'COD'})\n\nThank you for ordering with us!`;
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    Linking.openURL(url);
   };
 
   const viewKOT = (order: Order) => {
@@ -151,9 +194,15 @@ export default function OrdersScreen() {
       .join('\n');
     Alert.alert(
       `🍳 Kitchen KOT — #${order.id.slice(-6).toUpperCase()}`,
-      `Table/Delivery: ${order.deliveryAddress || 'Dine-In'}\nTime: ${new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n${itemsText}`,
+      `Table/Delivery: ${order.deliveryAddress || 'Dine-In'}\nTime: ${new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\nNotes: ${order.notes || 'None'}\n\n${itemsText}`,
       [{ text: 'OK' }]
     );
+  };
+
+  const extractUtr = (notes?: string | null): string | null => {
+    if (!notes) return null;
+    const match = notes.match(/\[UTR:\s*([A-Za-z0-9]+)\]/i) || notes.match(/UTR[:\s]+([A-Za-z0-9]+)/i);
+    return match ? match[1] : null;
   };
 
   const filtered = orders.filter((o) => {
@@ -184,21 +233,32 @@ export default function OrdersScreen() {
       <View style={styles.header}>
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.title}>Orders & Store</Text>
+            <Text style={styles.title}>Orders & Queue</Text>
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>Take.app Live</Text>
+              <Text style={styles.badgeText}>Live Store</Text>
             </View>
           </View>
-          <Text style={styles.subtitle}>WhatsApp & Online Storefront orders</Text>
+          <Text style={styles.subtitle}>Direct UPI, Cash & WhatsApp Kitchen</Text>
         </View>
 
-        <TouchableOpacity
-          onPress={onRefresh}
-          style={styles.refreshBtn}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="refresh" size={20} color="#0f172a" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => router.push('/pos')}
+            style={styles.posHeaderBtn}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="point-of-sale" size={16} color="#ffffff" />
+            <Text style={styles.posHeaderBtnText}>POS Register</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={onRefresh}
+            style={styles.refreshBtn}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="refresh" size={18} color="#0f172a" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Filter Tabs */}
@@ -232,14 +292,14 @@ export default function OrdersScreen() {
       {/* Orders Stream */}
       {loading ? (
         <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#10b981" />
+          <ActivityIndicator size="large" color="#059669" />
           <Text style={styles.loadingText}>Syncing orders...</Text>
         </View>
       ) : (
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10b981']} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />}
         >
           {filtered.length === 0 ? (
             <View style={styles.emptyState}>
@@ -252,15 +312,33 @@ export default function OrdersScreen() {
               const sc = getStatusColor(order.status);
               const items = order.items || [];
               const isUpdating = updatingId === order.id;
+              const utr = extractUtr(order.notes);
 
               return (
                 <View key={order.id} style={styles.orderCard}>
                   {/* Card Header */}
                   <View style={styles.orderHeader}>
                     <View>
-                      <Text style={styles.orderNumber}>
-                        #{order.id.slice(-6).toUpperCase()}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.orderNumber}>
+                          #{order.id.slice(-6).toUpperCase()}
+                        </Text>
+                        <View
+                          style={[
+                            styles.payBadge,
+                            order.paymentStatus === 'PAID' ? styles.payBadgePaid : styles.payBadgeUnpaid,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.payBadgeText,
+                              order.paymentStatus === 'PAID' ? styles.payTextPaid : styles.payTextUnpaid,
+                            ]}
+                          >
+                            {order.paymentStatus === 'PAID' ? 'PAID ✓' : 'UNPAID'}
+                          </Text>
+                        </View>
+                      </View>
                       <Text style={styles.customerName}>{order.customerName || 'Guest'}</Text>
                     </View>
 
@@ -286,6 +364,16 @@ export default function OrdersScreen() {
                     </View>
                   )}
 
+                  {/* UTR Pill if customer entered UPI Reference */}
+                  {utr && (
+                    <View style={styles.utrBox}>
+                      <MaterialIcons name="verified" size={14} color="#065f46" />
+                      <Text style={styles.utrText}>
+                        Customer UPI Ref / UTR: <Text style={{ fontWeight: '900' }}>{utr}</Text>
+                      </Text>
+                    </View>
+                  )}
+
                   {/* Line Items */}
                   <View style={styles.itemsBox}>
                     {items.map((it, idx) => (
@@ -298,6 +386,32 @@ export default function OrdersScreen() {
                     ))}
                   </View>
 
+                  {/* Special Notes */}
+                  {order.notes && !utr && (
+                    <Text style={styles.orderNotesText} numberOfLines={2}>
+                      Note: {order.notes}
+                    </Text>
+                  )}
+
+                  {/* Quick Payment Verification Row if Unpaid */}
+                  {order.paymentStatus !== 'PAID' && (
+                    <View style={styles.verifyPayBanner}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.verifyPayTitle}>Payment Pending (₹{order.total.toFixed(2)})</Text>
+                        <Text style={styles.verifyPaySub}>Direct UPI / Pay at Counter</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.markPaidBtn}
+                        onPress={() => handleMarkPaid(order.id)}
+                        disabled={isUpdating}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="check" size={14} color="#ffffff" />
+                        <Text style={styles.markPaidText}>Mark Paid</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
                   {/* Quick Action Buttons */}
                   <View style={styles.actionRow}>
                     {/* Call Button */}
@@ -306,7 +420,7 @@ export default function OrdersScreen() {
                       onPress={() => Linking.openURL(`tel:${order.customerPhone}`)}
                       activeOpacity={0.7}
                     >
-                      <MaterialIcons name="phone" size={16} color="#0f172a" />
+                      <MaterialIcons name="phone" size={15} color="#0f172a" />
                       <Text style={styles.contactBtnText}>Call</Text>
                     </TouchableOpacity>
 
@@ -316,8 +430,8 @@ export default function OrdersScreen() {
                       onPress={() => Linking.openURL(`https://wa.me/${order.customerPhone.replace(/\D/g, '')}`)}
                       activeOpacity={0.7}
                     >
-                      <MaterialIcons name="chat" size={16} color="#059669" />
-                      <Text style={[styles.contactBtnText, { color: '#059669' }]}>WhatsApp</Text>
+                      <MaterialIcons name="chat" size={15} color="#059669" />
+                      <Text style={[styles.contactBtnText, { color: '#059669' }]}>Chat</Text>
                     </TouchableOpacity>
 
                     {/* Step Status Forward Button */}
@@ -373,23 +487,36 @@ export default function OrdersScreen() {
                     )}
                   </View>
 
-                  {/* Take.app Parity: Receipts & Kitchen Ticket */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                  {/* Ready WhatsApp alert button if READY */}
+                  {order.status === 'READY' && (
+                    <TouchableOpacity
+                      style={styles.readyAlertBtn}
+                      onPress={() => alertCustomerReady(order)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="notifications-active" size={15} color="#ffffff" />
+                      <Text style={styles.readyAlertBtnText}>Alert Customer Ready on WhatsApp</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Receipts & Kitchen Ticket Row */}
+                  <View style={styles.receiptFooterRow}>
                     <TouchableOpacity
                       style={[styles.contactBtn, { flex: 1 }]}
                       onPress={() => viewKOT(order)}
                       activeOpacity={0.7}
                     >
                       <MaterialIcons name="restaurant" size={14} color="#d97706" />
-                      <Text style={[styles.contactBtnText, { color: '#b45309' }]}>KOT Ticket</Text>
+                      <Text style={[styles.contactBtnText, { color: '#b45309' }]}>Kitchen KOT</Text>
                     </TouchableOpacity>
+
                     <TouchableOpacity
                       style={[styles.contactBtn, { flex: 1, backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}
                       onPress={() => sendWhatsAppReceipt(order)}
                       activeOpacity={0.7}
                     >
                       <MaterialIcons name="receipt" size={14} color="#059669" />
-                      <Text style={[styles.contactBtnText, { color: '#059669' }]}>WhatsApp Bill</Text>
+                      <Text style={[styles.contactBtnText, { color: '#059669' }]}>Send Bill</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -419,33 +546,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0f172a',
   },
   badge: {
     backgroundColor: '#ecfdf5',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#a7f3d0',
   },
   badgeText: {
     color: '#059669',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748b',
     marginTop: 2,
   },
+  posHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  posHeaderBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   refreshBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 8,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -470,7 +611,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748b',
   },
@@ -481,13 +622,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
+    padding: 14,
     gap: 12,
   },
   orderCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#0f172a',
@@ -508,8 +649,32 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     color: '#64748b',
   },
+  payBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  payBadgePaid: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  payBadgeUnpaid: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+  },
+  payBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  payTextPaid: {
+    color: '#059669',
+  },
+  payTextUnpaid: {
+    color: '#d97706',
+  },
   customerName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0f172a',
     marginTop: 2,
@@ -538,18 +703,34 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 10,
+    borderRadius: 6,
+    marginBottom: 8,
   },
   addressText: {
     fontSize: 11,
     fontWeight: '600',
     color: '#475569',
   },
+  utrBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  utrText: {
+    fontSize: 11,
+    color: '#065f46',
+  },
   itemsBox: {
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    paddingTop: 8,
+    paddingTop: 6,
     paddingBottom: 4,
     gap: 4,
   },
@@ -570,12 +751,53 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  orderNotesText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  verifyPayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+  },
+  verifyPayTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  verifyPaySub: {
+    fontSize: 10,
+    color: '#b45309',
+  },
+  markPaidBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  markPaidText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingTop: 10,
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
   },
@@ -583,28 +805,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
-    height: 34,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 32,
+    borderRadius: 6,
     backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
   },
   waBtn: {
     backgroundColor: '#ecfdf5',
   },
   contactBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0f172a',
   },
   advanceBtn: {
     flex: 1,
-    height: 34,
-    borderRadius: 8,
+    height: 32,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   advanceBtnText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#ffffff',
   },
@@ -616,9 +839,32 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   completedText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#059669',
+  },
+  readyAlertBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#0891b2',
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  readyAlertBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  receiptFooterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
   centerContainer: {
     flex: 1,

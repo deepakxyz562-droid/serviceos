@@ -18,6 +18,10 @@ import {
   Sparkles,
   Calendar,
   AlertCircle,
+  QrCode,
+  Smartphone,
+  Check,
+  Send,
 } from 'lucide-react';
 
 interface OrderItem {
@@ -58,6 +62,7 @@ interface OrderTrackerClientProps {
   initialOrder: OrderData;
   initialQueue: QueueData;
   currencySymbol?: string;
+  upiId?: string;
 }
 
 export function OrderTrackerClient({
@@ -66,12 +71,16 @@ export function OrderTrackerClient({
   initialOrder,
   initialQueue,
   currencySymbol = '₹',
+  upiId = '',
 }: OrderTrackerClientProps) {
   const [order, setOrder] = useState<OrderData>(initialOrder);
   const [queue, setQueue] = useState<QueueData>(initialQueue);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [hasPlayedChime, setHasPlayedChime] = useState(false);
+  const [utrInput, setUtrInput] = useState('');
+  const [submittingUtr, setSubmittingUtr] = useState(false);
+  const [utrSuccess, setUtrSuccess] = useState(false);
   const previousStatusRef = useRef(initialOrder.status);
 
   // Play pleasant acoustic chime using Web Audio API
@@ -179,6 +188,38 @@ export function OrderTrackerClient({
   };
 
   const currentStep = getStepIndex();
+
+  const upiUri = upiId
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(order.businessName)}&am=${order.total.toFixed(2)}&tn=${encodeURIComponent(`Order #${order.orderNumber}`)}&cu=INR`
+    : '';
+
+  const qrCodeUrl = upiUri
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiUri)}`
+    : '';
+
+  const handleSubmitUtr = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!utrInput.trim() || submittingUtr) return;
+    setSubmittingUtr(true);
+    try {
+      const res = await fetch('/api/public/store/order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          utrNumber: utrInput.trim(),
+        }),
+      });
+      if (res.ok) {
+        setUtrSuccess(true);
+        setUtrInput('');
+      }
+    } catch (err) {
+      console.error('Failed to submit UTR', err);
+    } finally {
+      setSubmittingUtr(false);
+    }
+  };
 
   const handleOpenWhatsApp = () => {
     const cleanBizPhone = (order.businessPhone || '').replace(/\D/g, '');
@@ -301,6 +342,105 @@ export function OrderTrackerClient({
                   <span>Notify Me When Ready (Sound & Alert)</span>
                 </button>
               )}
+            </div>
+          )}
+
+          {/* PAYMENT STATUS & DIRECT UPI CARD */}
+          {order.paymentStatus === 'PAID' ? (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold">
+                  <Check className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
+                    Payment Verified
+                  </h4>
+                  <p className="text-[11px] text-emerald-700">
+                    Paid {currencySymbol}{order.total.toFixed(2)} via {order.paymentMethod || 'UPI'}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
+                PAID ✓
+              </span>
+            </div>
+          ) : (
+            <div className="bg-white border border-stone-200/90 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                    Payment Pending
+                  </span>
+                  <h3 className="text-sm font-black text-stone-900 mt-1">
+                    Amount Due: {currencySymbol}{order.total.toFixed(2)}
+                  </h3>
+                </div>
+                <span className="text-xs text-stone-400 font-mono">
+                  {order.paymentMethod === 'cash' ? 'Pay at Counter' : 'Direct UPI'}
+                </span>
+              </div>
+
+              {upiId && (
+                <div className="space-y-3 pt-1">
+                  <a
+                    href={upiUri}
+                    className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-98"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    <span>Pay {currencySymbol}{order.total.toFixed(2)} with any UPI App</span>
+                  </a>
+
+                  {qrCodeUrl && (
+                    <div className="bg-stone-50 border border-stone-100 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+                      <p className="text-[11px] text-stone-600 font-medium mb-2">
+                        Or scan to pay directly to vendor ({upiId})
+                      </p>
+                      <img
+                        src={qrCodeUrl}
+                        alt="Vendor UPI QR Code"
+                        className="w-36 h-36 rounded-xl border border-stone-200 shadow-xs"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* UTR Submission Box */}
+              <div className="pt-2 border-t border-stone-100">
+                <p className="text-[11px] font-bold text-stone-800 mb-1">
+                  Already paid via UPI?
+                </p>
+                <p className="text-[10px] text-stone-500 mb-2">
+                  Enter your 12-digit UPI Reference / UTR number for faster verification:
+                </p>
+
+                {utrSuccess ? (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span>UTR submitted! Stall owner will verify and mark paid.</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmitUtr} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. 428198765432"
+                      value={utrInput}
+                      onChange={(e) => setUtrInput(e.target.value)}
+                      maxLength={16}
+                      className="flex-1 px-3 py-2 text-xs font-mono rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!utrInput.trim() || submittingUtr}
+                      className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition shrink-0"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>{submittingUtr ? 'Saving...' : 'Submit'}</span>
+                    </button>
+                  </form>
+                )}
+              </div>
             </div>
           )}
 

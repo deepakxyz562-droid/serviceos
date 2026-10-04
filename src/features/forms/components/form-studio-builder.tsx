@@ -58,10 +58,6 @@ import {
   PaymentGatewayDef, searchPaymentGateways, getPaymentGatewayById,
 } from '@/lib/forms/payments/payment-gateways-registry';
 import { FormRuntimeRenderer } from './runtime/form-runtime-renderer';
-import { FormAgentStudio } from './agent-builder/form-agent-studio';
-import { AgentDeviceSimulator } from './agent-builder/agent-device-simulator';
-import { AgentSetupWizard } from './agent-builder/agent-setup-wizard';
-import { DEFAULT_FORM_AGENT, FormAgentData } from '../types/agent-types';
 import { getFormContentFingerprint } from '@/features/forms/utils/form-helpers';
 import { ensureSplitMediaLeftWidgets, injectMediaPanelContent } from '@/lib/forms/form-node-schema';
 import { WidgetRuntimeDispatcher } from './runtime/widgets/widget-runtime-dispatcher';
@@ -251,7 +247,7 @@ export function FormStudioBuilder({
     return result;
   }, [onSave, formData]);
   // Studio navigation
-  const [studioTab, setStudioTab] = useState<'build' | 'agent' | 'settings' | 'publish' | 'templates' | 'responses'>('build');
+  const [studioTab, setStudioTab] = useState<'build' | 'settings' | 'publish' | 'templates' | 'responses'>('build');
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   // ─── Unified Layout Vocabulary (Phase 2) ──────────────────────────────
@@ -349,9 +345,7 @@ export function FormStudioBuilder({
   const viewMode = formLayout;
   const [themeModalOpen, setThemeModalOpen] = useState(false);
   const [currentThemeId, setCurrentThemeId] = useState('fieseros-emerald');
-  const [canvasMode, setCanvasMode] = useState<'form' | 'agent'>('form');
   const [copilotProcessing, setCopilotProcessing] = useState(false);
-  const [showAgentWizard, setShowAgentWizard] = useState(false);
 
   // ─── Keyboard Shortcuts (Jotform/Elementor parity) ────────────────────
   // Cmd/Ctrl+Z = Undo, Cmd/Ctrl+Shift+Z = Redo, Cmd/Ctrl+S = Save,
@@ -562,50 +556,6 @@ export function FormStudioBuilder({
       },
     };
   }, [formData, formLayout]);
-
-  const activeAgentData: FormAgentData = useMemo(() => {
-    if (formData.agentConfig) {
-      return formData.agentConfig as FormAgentData;
-    }
-    const cleanBusinessName = (formData.name || 'Service')
-      .replace(/\s+(Intake|Quote|Form|Application|Contact|Lead|Request|Booking)(\s+Form)?/gi, '')
-      .trim() || 'Service';
-
-    return {
-      ...DEFAULT_FORM_AGENT,
-      id: `agent_${formData.id || 'form'}`,
-      name: `${cleanBusinessName} Assistant`,
-      roleTitle: '24/7 Intake & Service Specialist',
-      welcomeGreeting: `Hi! 👋 Welcome to **${cleanBusinessName}**. I'm your 24/7 Service Specialist. How can I help you today?`,
-      greetingSubtitle: 'Instant estimates, service booking, and quick answers.',
-      quickActions: [
-        {
-          id: 'qa_quote',
-          label: 'Get Instant Estimate',
-          actionType: 'open_form',
-          payload: formData.id || 'form_current',
-        },
-        {
-          id: 'qa_book',
-          label: 'Book Service',
-          actionType: 'booking',
-          payload: 'booking',
-        },
-        {
-          id: 'qa_services',
-          label: 'Services & Pricing',
-          actionType: 'message',
-          payload: 'What services do you offer and what are your rates?',
-        },
-      ],
-      connectedForms: [{
-        id: formData.id || 'form_current',
-        name: formData.name || 'Service Form',
-        description: formData.description,
-        fields: formData.fields,
-      }],
-    };
-  }, [formData.agentConfig, formData.id, formData.name, formData.description, formData.fields]);
 
   const handleAiCopilotInstruction = useCallback(async (promptText: string) => {
     if (!promptText.trim()) return;
@@ -1233,24 +1183,6 @@ export function FormStudioBuilder({
     toast.success('Form link copied to clipboard!');
   }, [formData.slug, formData.id, siteOrigin]);
 
-  if (showAgentWizard) {
-    return (
-      <AgentSetupWizard
-        initialAgent={activeAgentData}
-        siteOrigin={siteOrigin}
-        onComplete={(newAgent) => {
-          setShowAgentWizard(false);
-          onFormDataChangeWithHistory((prev) => ({
-            ...prev,
-            agentConfig: newAgent,
-          }));
-          toast.success('AI Agent configured successfully!');
-        }}
-        onCancel={() => setShowAgentWizard(false)}
-      />
-    );
-  }
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col w-screen h-screen bg-slate-100/70 dark:bg-zinc-950 overflow-hidden">
       {/* ═════════════════════════════════════════════════════════════════════════
@@ -1342,22 +1274,6 @@ export function FormStudioBuilder({
             <span>Templates</span>
           </Button>
 
-          {/* AI Agent Studio Quick Button */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
-            className={cn(
-              'h-8 px-2.5 text-xs font-semibold rounded-lg text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer hidden xl:flex gap-1.5',
-              studioTab === 'agent' ? 'bg-slate-100 text-slate-900 dark:bg-zinc-800 dark:text-zinc-100' : ''
-            )}
-            title="Configure AI Voice & Chatbot Agent"
-          >
-            <Bot className="size-3.5 text-blue-500" />
-            <span>AI Agent</span>
-          </Button>
-
           <Separator orientation="vertical" className="h-4 hidden lg:block bg-slate-200 dark:bg-zinc-800" />
 
           {/* Undo / Redo Buttons */}
@@ -1431,42 +1347,7 @@ export function FormStudioBuilder({
         <div className="h-10 border-b border-border/70 bg-slate-50/80 dark:bg-slate-950/80 px-4 flex items-center justify-between gap-3 shrink-0 select-none z-20">
           {/* Left: Dual Canvas + Layout View + Stepper Mode Switchers */}
           <div className="flex items-center gap-2">
-            {/* Dual-Canvas Switcher: Form Canvas vs Live AI Agent Simulator */}
-            <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold shadow-2xs">
-              <button
-                type="button"
-                onClick={() => setCanvasMode('form')}
-                className={cn(
-                  'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5',
-                  canvasMode === 'form'
-                    ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Visual Form Canvas"
-              >
-                <FileText className="size-3.5" />
-                <span>Form Canvas</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCanvasMode('agent')}
-                className={cn(
-                  'px-2.5 py-0.5 rounded-md transition-all cursor-pointer flex items-center gap-1.5',
-                  canvasMode === 'agent'
-                    ? 'bg-violet-50 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 font-bold shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Live AI Agent Simulator"
-              >
-                <Bot className="size-3.5 text-violet-600" />
-                <span>AI Agent Simulator</span>
-                <Badge variant="outline" className="text-[9px] px-1 py-0 h-3.5 border-violet-400/40 text-violet-600 bg-violet-500/10">
-                  Live
-                </Badge>
-              </button>
-            </div>
 
-            <Separator orientation="vertical" className="h-4" />
 
             {/* Canonical layout selector: Classic | Card | Split Media */}
             <div className="flex items-center bg-white dark:bg-slate-900 p-0.5 rounded-lg border border-border/80 text-[11px] font-semibold">
@@ -1713,40 +1594,8 @@ export function FormStudioBuilder({
               />
             )}
 
-            {/* Center: Live Focus WYSIWYG split canvas OR Live AI Agent Simulator */}
-            {canvasMode === 'agent' ? (
-              <div className="flex-1 min-h-0 h-full flex flex-col bg-slate-100/90 dark:bg-slate-950/80 overflow-y-auto p-4 items-center">
-                <div className="w-full max-w-xl flex items-center justify-between py-2 px-1 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs font-bold gap-1 bg-violet-50 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border-violet-400/40">
-                      <Bot className="size-3.5" />
-                      Live AI Agent Simulator
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => { setStudioTab('agent'); setIsPreviewMode(false); }}
-                      className="h-7 text-xs font-semibold gap-1 text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer"
-                    >
-                      <Settings className="size-3" />
-                      <span>Full Studio</span>
-                    </Button>
-                  </div>
-                </div>
-                <div className="w-full max-w-xl flex-1 min-h-0 flex flex-col items-center justify-center pb-4">
-                  <AgentDeviceSimulator
-                    agent={activeAgentData}
-                    isTestMode={true}
-                    previewPage="conversation"
-                  />
-                </div>
-              </div>
-            ) : (
-              <StudioFocusCanvas
+            {/* Center: Live Focus WYSIWYG split canvas */}
+            <StudioFocusCanvas
                 formData={formData}
                 onFormDataChange={onFormDataChangeWithHistory}
                 currentStepIndex={currentStepIndex}
@@ -1778,7 +1627,6 @@ export function FormStudioBuilder({
                 onOpenAddWidgetDialog={() => setShowWidgetPalette(true)}
                 className="flex-1 min-h-0 h-full"
               />
-            )}
 
             {/* Right Panel: Unified Field Inspector & Widget Settings */}
             {showInspector && (selectedField || selectedFieldId === '__media_panel__') && (
@@ -2947,32 +2795,7 @@ export function FormStudioBuilder({
           </div>
         )}
 
-        {/* ─── 5. AI AGENT STUDIO (OPTIONAL STANDALONE/INTEGRATED AGENT) ─── */}
-        {studioTab === 'agent' && !isPreviewMode && (
-          <div className="flex-1 flex overflow-hidden w-full">
-            <FormAgentStudio
-              initialAgent={formData.agentConfig || activeAgentData}
-              onChange={(updated) => {
-                onFormDataChangeWithHistory((prev) => ({
-                  ...prev,
-                  agentConfig: updated,
-                }));
-              }}
-              onSave={async (savedAgent) => {
-                onFormDataChangeWithHistory((prev) => ({
-                  ...prev,
-                  agentConfig: savedAgent,
-                }));
-                if (onSave) {
-                  await onSave();
-                }
-              }}
-              siteOrigin={siteOrigin}
-            />
-          </div>
-        )}
-
-        {/* ─── 5.5 RESPONSES TAB (INQUIRIES & SUBMISSIONS) ─── */}
+        {/* ─── 4. RESPONSES TAB (INQUIRIES & SUBMISSIONS) ─── */}
         {studioTab === 'responses' && !isPreviewMode && (
           <main className="flex-1 min-h-0 h-full overflow-y-auto overscroll-contain p-4 md:p-8 flex justify-center bg-slate-50/60 dark:bg-zinc-950">
             <div className="w-full max-w-5xl space-y-4 pb-24">

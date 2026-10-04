@@ -96,11 +96,11 @@ export function StoreClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<any | null>(null);
 
-  // Take.app Parity: Promo codes & Service Requests
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountRule | null>(null);
   const [promoError, setPromoError] = useState('');
   const [callServerSuccess, setCallServerSuccess] = useState(false);
+  const [whatsappUpdatesOptIn, setWhatsappUpdatesOptIn] = useState(true);
 
   // Categories
   const categories = useMemo(() => {
@@ -300,8 +300,8 @@ export function StoreClient({
         waMessage,
       });
 
-      // 3. Launch WhatsApp if businessPhone is available
-      if (cleanBizPhone) {
+      // 3. Only Launch WhatsApp if customer explicitly opted in
+      if (whatsappUpdatesOptIn && cleanBizPhone) {
         window.open(waUrl, '_blank');
       }
     } catch (err: any) {
@@ -738,30 +738,43 @@ export function StoreClient({
                 </div>
               </div>
 
-                <div className="space-y-2">
-                  {/* WhatsApp 1-Click Checkout Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleCheckout('WHATSAPP')}
-                    disabled={isSubmitting}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.99] transition disabled:opacity-50"
-                  >
-                    <MessageCircle className="h-5 w-5" />
-                    <span>Order via WhatsApp</span>
-                  </button>
+                {/* Optional WhatsApp Updates Checkbox */}
+                <div className="flex items-center gap-2 py-2 px-1">
+                  <input
+                    type="checkbox"
+                    id="waOptInCheckbox"
+                    checked={whatsappUpdatesOptIn}
+                    onChange={(e) => setWhatsappUpdatesOptIn(e.target.checked)}
+                    className="size-4 rounded accent-emerald-600 cursor-pointer"
+                  />
+                  <label htmlFor="waOptInCheckbox" className="text-xs text-stone-600 font-medium cursor-pointer">
+                    Send order updates to my WhatsApp
+                  </label>
+                </div>
 
-                  {/* UPI Direct Pay Button if configured */}
+                <div className="space-y-2">
+                  {/* Instant Pay with UPI if configured */}
                   {upiId && (
                     <button
                       type="button"
                       onClick={() => handleCheckout('UPI')}
                       disabled={isSubmitting}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 px-4 rounded-xl font-bold flex items-center justify-center gap-2 text-xs transition"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
                     >
-                      <QrCode className="h-4 w-4" />
-                      <span>Pay directly via UPI ({upiId})</span>
+                      <QrCode className="h-5 w-5" />
+                      <span>Pay with UPI ({currencySymbol}{grandTotal.toFixed(2)})</span>
                     </button>
                   )}
+
+                  {/* Place Order & Pay at Counter */}
+                  <button
+                    type="button"
+                    onClick={() => handleCheckout('COD')}
+                    disabled={isSubmitting}
+                    className="w-full bg-stone-900 hover:bg-black text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition disabled:opacity-50 cursor-pointer text-xs"
+                  >
+                    <span>Place Order • Pay at Counter ({currencySymbol}{grandTotal.toFixed(2)})</span>
+                  </button>
                 </div>
               </div>
             </div>

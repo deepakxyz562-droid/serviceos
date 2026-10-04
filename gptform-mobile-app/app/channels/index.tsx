@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, FontAwesome, FontAwesome5 } from '@expo/vector-icons';
+import { hapticFeedback } from '@/lib/haptics';
+import { API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
 
 interface ChannelItem {
   id: string;
@@ -17,7 +20,7 @@ interface ChannelItem {
   category: string;
   description: string;
   iconName: string;
-  iconType: 'fa' | 'ionicons' | 'mci';
+  iconType: 'fa' | 'fa5' | 'ionicons';
   color: string;
   connected: boolean;
   statusText: string;
@@ -26,64 +29,85 @@ interface ChannelItem {
 
 export default function ChannelsScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [liveConfigs, setLiveConfigs] = useState<any[]>([]);
+
+  useEffect(() => {
+    apiRequest<any[]>(API_PATHS.channels)
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setLiveConfigs(data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const isChannelConnected = (type: string) => {
+    const found = liveConfigs.find((c) => c.type === type || c.channel === type);
+    return found ? !!found.connected || found.status === 'active' : false;
+  };
 
   const channels: ChannelItem[] = [
-    {
-      id: 'whatsapp',
-      name: 'WhatsApp Business',
-      category: 'MESSAGING',
-      description: 'Receive and reply to WhatsApp messages directly in your unified inbox with AI auto-pilot.',
-      iconName: 'whatsapp',
-      iconType: 'fa',
-      color: '#25D366',
-      connected: true,
-      statusText: 'Connected (+1 415-555-0192)',
-      route: '/channels/whatsapp',
-    },
     {
       id: 'website',
       name: 'Website Chat Widget',
       category: 'WEB',
-      description: 'Live chat & AI assistant widget for your website, landing pages, and web apps.',
+      description: 'Embed floating live chat & AI assistant widget onto WordPress, Shopify, Wix, or custom websites.',
       iconName: 'globe-outline',
       iconType: 'ionicons',
       color: '#0284C7',
-      connected: true,
-      statusText: 'Active on 1 domain (hydroplumbing.org)',
+      connected: isChannelConnected('website'),
+      statusText: isChannelConnected('website') ? 'Active & Ready to Embed' : 'Embed script ready',
       route: '/channels/website',
+    },
+    {
+      id: 'whatsapp',
+      name: 'WhatsApp Business',
+      category: 'MESSAGING',
+      description: 'Receive and reply to customer WhatsApp messages automatically with 24/7 AI employee.',
+      iconName: 'whatsapp',
+      iconType: 'fa',
+      color: '#25D366',
+      connected: isChannelConnected('whatsapp'),
+      statusText: isChannelConnected('whatsapp') ? 'Connected & Listening' : 'Connect via Cloud API or Phone',
+      route: '/channels/whatsapp',
     },
     {
       id: 'instagram',
       name: 'Instagram Direct',
       category: 'SOCIAL',
-      description: 'Turn Instagram followers and DM inquiries into qualified leads and bookings automatically.',
+      description: 'Turn Instagram followers, story replies, and DM inquiries into qualified leads and bookings automatically.',
       iconName: 'instagram',
       iconType: 'fa',
       color: '#E1306C',
-      connected: false,
-      statusText: 'Not connected',
+      connected: isChannelConnected('instagram'),
+      statusText: isChannelConnected('instagram') ? 'Active on Direct Messages' : 'Connect Professional Account',
+      route: '/channels/instagram',
     },
     {
-      id: 'sms',
-      name: 'SMS / Text Messaging',
-      category: 'MOBILE',
-      description: 'Two-way SMS text conversations powered by Twilio phone numbers.',
-      iconName: 'chatbox-ellipses',
-      iconType: 'ionicons',
-      color: '#6366F1',
-      connected: false,
-      statusText: 'Not connected',
+      id: 'messenger',
+      name: 'Facebook Messenger',
+      category: 'SOCIAL',
+      description: 'Instantly respond to inquiries on your Facebook Business Page with automated qualification.',
+      iconName: 'facebook-messenger',
+      iconType: 'fa5',
+      color: '#0084FF',
+      connected: isChannelConnected('messenger'),
+      statusText: isChannelConnected('messenger') ? 'Active on Facebook Page' : 'Connect Facebook Page',
+      route: '/channels/messenger',
     },
     {
-      id: 'email',
-      name: 'Email Forwarding',
-      category: 'INBOX',
-      description: 'Forward support emails into tickets and manage replies within GPTForm.',
-      iconName: 'mail-outline',
+      id: 'voice',
+      name: 'AI Voice Receptionist',
+      category: 'VOICE & PHONE',
+      description: '24/7 autonomous phone answering, call screening, and calendar appointment booking.',
+      iconName: 'call-outline',
       iconType: 'ionicons',
-      color: '#F59E0B',
-      connected: false,
-      statusText: 'support@hydroplumbing.org (Forwarding)',
+      color: '#8B5CF6',
+      connected: true,
+      statusText: 'Dedicated Inbound Answering',
+      route: '/receptionist',
     },
   ];
 
@@ -111,18 +135,23 @@ export default function ChannelsScreen() {
             <Text style={styles.bannerTitle}>Omnichannel AI Hub</Text>
           </View>
           <Text style={styles.bannerDesc}>
-            Connect your customer touchpoints. When a customer reaches out via WhatsApp, website, or Instagram, your trained AI agent answers instantly and surfaces hot leads directly to your phone.
+            Connect your customer touchpoints. When a customer reaches out via Website, WhatsApp, Instagram, or Phone, your trained AI agent answers instantly and captures leads in your mobile inbox.
           </Text>
         </View>
 
-        {/* Channels List */}
-        <Text style={styles.sectionTitle}>AVAILABLE CHANNELS</Text>
+        {/* Section Title */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>AVAILABLE CHANNELS</Text>
+          {loading && <ActivityIndicator size="small" color="#10B981" />}
+        </View>
 
+        {/* Channels List */}
         {channels.map((channel) => (
           <TouchableOpacity
             key={channel.id}
             style={styles.channelCard}
             onPress={() => {
+              hapticFeedback.light();
               if (channel.route) {
                 router.push(channel.route as any);
               }
@@ -134,11 +163,11 @@ export default function ChannelsScreen() {
                 {channel.iconType === 'fa' && (
                   <FontAwesome name={channel.iconName as any} size={24} color={channel.color} />
                 )}
+                {channel.iconType === 'fa5' && (
+                  <FontAwesome5 name={channel.iconName as any} size={22} color={channel.color} />
+                )}
                 {channel.iconType === 'ionicons' && (
                   <Ionicons name={channel.iconName as any} size={24} color={channel.color} />
-                )}
-                {channel.iconType === 'mci' && (
-                  <MaterialCommunityIcons name={channel.iconName as any} size={24} color={channel.color} />
                 )}
               </View>
 
@@ -152,7 +181,7 @@ export default function ChannelsScreen() {
                     </View>
                   ) : (
                     <View style={styles.connectActionBadge}>
-                      <Text style={styles.connectActionText}>Connect</Text>
+                      <Text style={styles.connectActionText}>Setup</Text>
                     </View>
                   )}
                 </View>
@@ -167,7 +196,7 @@ export default function ChannelsScreen() {
                 {channel.statusText}
               </Text>
               <View style={styles.manageRow}>
-                <Text style={styles.manageText}>{channel.connected ? 'Manage' : 'Setup'}</Text>
+                <Text style={styles.manageText}>{channel.connected ? 'Manage' : 'Configure'}</Text>
                 <Ionicons name="chevron-forward" size={16} color="#0F172A" />
               </View>
             </View>
@@ -214,7 +243,7 @@ const styles = StyleSheet.create({
     padding: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   bannerHeader: {
     flexDirection: 'row',
@@ -240,21 +269,31 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 19,
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 0.8,
-    marginBottom: 12,
-    marginLeft: 4,
   },
   channelCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   cardTopRow: {
     flexDirection: 'row',
@@ -262,9 +301,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   iconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -278,78 +317,82 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   channelName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-  },
-  channelCategory: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginTop: 2,
-    letterSpacing: 0.5,
   },
   connectedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
   greenDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#10B981',
-    marginRight: 5,
+    marginRight: 4,
   },
   connectedText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#15803D',
+    color: '#059669',
   },
   connectActionBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#0F172A',
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   connectActionText: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  channelCategory: {
+    fontSize: 11,
+    color: '#94A3B8',
     fontWeight: '600',
-    color: '#3B82F6',
+    marginTop: 2,
   },
   channelDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     lineHeight: 18,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 12,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   statusText: {
     fontSize: 12,
     color: '#94A3B8',
+    fontWeight: '500',
+    flex: 1,
+    paddingRight: 8,
   },
   activeStatusText: {
     color: '#059669',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   manageRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 2,
   },
   manageText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#0F172A',
-    marginRight: 4,
   },
 });

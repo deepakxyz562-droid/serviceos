@@ -7,6 +7,10 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Modal,
+  Image,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,36 +25,84 @@ interface CartItem {
   qty: number;
 }
 
+interface MenuItem {
+  id: string;
+  name: string;
+  price: number;
+  category?: string;
+  description?: string;
+}
+
 export default function MobilePosScreen() {
   const router = useRouter();
-  const [menu, setMenu] = useState<any[]>([]);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [tableNo, setTableNo] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
+  const [upiId, setUpiId] = useState('');
+  const [businessName, setBusinessName] = useState('Local Store');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [completedOrder, setCompletedOrder] = useState<any | null>(null);
 
   useEffect(() => {
-    // Load menu
+    // Load live catalog and merchant config
     fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`)
       .then((r) => r.json())
       .then((d) => {
-        if (d.config?.catalogJson) {
-          setMenu(JSON.parse(d.config.catalogJson));
+        if (d.config) {
+          if (d.config.upiId) setUpiId(d.config.upiId);
+          if (d.config.catalogJson) {
+            try {
+              const parsed = JSON.parse(d.config.catalogJson);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                setMenu(
+                  parsed.map((it: any, idx: number) => ({
+                    id: it.id || `item_${idx}`,
+                    name: it.name || 'Item',
+                    price: Number(it.price || 0),
+                    category: it.category || 'General',
+                    description: it.description || '',
+                  }))
+                );
+                return;
+              }
+            } catch {}
+          }
         }
+        // Default sample fallback for instant use
+        setMenu([
+          { id: '1', name: 'Steamed Momos (6 pcs)', price: 80, category: 'Snacks' },
+          { id: '2', name: 'Fried Momos (6 pcs)', price: 90, category: 'Snacks' },
+          { id: '3', name: 'Paneer Kathi Roll', price: 110, category: 'Rolls' },
+          { id: '4', name: 'Chicken Egg Roll', price: 140, category: 'Rolls' },
+          { id: '5', name: 'Special Masala Chai', price: 25, category: 'Beverages' },
+          { id: '6', name: 'Cold Drink 500ml', price: 40, category: 'Beverages' },
+        ]);
       })
-      .catch(() => {});
-
-    setMenu([
-      { id: '1', name: 'Chocolate Truffle Cake', price: 750 },
-      { id: '2', name: 'Artisan Sourdough', price: 180 },
-      { id: '3', name: 'Iced Cappuccino', price: 140 },
-      { id: '4', name: 'Red Velvet Pastry', price: 120 },
-      { id: '5', name: 'French Croissant', price: 90 },
-      { id: '6', name: 'Cheesecake Slice', price: 160 },
-    ]);
+      .catch(() => {
+        setMenu([
+          { id: '1', name: 'Steamed Momos (6 pcs)', price: 80, category: 'Snacks' },
+          { id: '2', name: 'Fried Momos (6 pcs)', price: 90, category: 'Snacks' },
+          { id: '3', name: 'Paneer Kathi Roll', price: 110, category: 'Rolls' },
+          { id: '4', name: 'Chicken Egg Roll', price: 140, category: 'Rolls' },
+        ]);
+      });
   }, []);
 
-  const addToCart = (item: any) => {
+  const categories = ['ALL', ...Array.from(new Set(menu.map((m) => m.category || 'General')))];
+
+  const filteredMenu = menu.filter((item) => {
+    const matchCat = selectedCategory === 'ALL' || (item.category || 'General') === selectedCategory;
+    const matchSearch = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  const addToCart = (item: MenuItem) => {
     hapticFeedback.light();
     setCart((prev) => {
       const exists = prev.find((p) => p.id === item.id);
@@ -65,49 +117,100 @@ export default function MobilePosScreen() {
     hapticFeedback.light();
     setCart((prev) =>
       prev
-        .map((p) => (p.id === id ? { ...p, qty: Math.max(1, p.qty + delta) } : p))
+        .map((p) => (p.id === id ? { ...p, qty: Math.max(0, p.qty + delta) } : p))
         .filter((p) => p.qty > 0)
     );
   };
 
   const total = cart.reduce((sum, it) => sum + it.price * it.qty, 0);
 
-  const handleCompleteOrder = async () => {
+  const upiDeepLink = upiId
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(businessName)}&am=${total.toFixed(2)}&tn=${encodeURIComponent('POS Order')}&cu=INR`
+    : '';
+
+  const qrImageUrl = upiDeepLink
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(upiDeepLink)}`
+    : '';
+
+  const handleCheckoutPress = () => {
     if (cart.length === 0) {
-      Alert.alert('Empty Cart', 'Please tap items to add them to the bill.');
+      Alert.alert('Empty Bill', 'Tap menu items on the left to add them.');
       return;
     }
 
+    if (paymentMethod === 'UPI') {
+      if (upiId) {
+        setShowQrModal(true);
+        return;
+      }
+    }
+
+    // Default cash or card completion
+    handleSaveOrder('PAID', paymentMethod);
+  };
+
+  const handleSaveOrder = async (payStatus: 'PAID' | 'UNPAID', method: string) => {
+    setSavingOrder(true);
     hapticFeedback.success();
+
+    const orderPayload = {
+      customerName: customerName || 'Walk-in Guest',
+      customerPhone: customerPhone || 'Walk-in',
+      status: 'CONFIRMED',
+      paymentStatus: payStatus,
+      paymentMethod: method,
+      deliveryType: tableNo ? 'dine_in' : 'takeout',
+      deliveryAddress: tableNo ? `Table #${tableNo}` : 'Stall / POS Counter',
+      items: cart.map((i) => ({
+        name: i.name,
+        qty: i.qty,
+        price: i.price,
+        amount: i.price * i.qty,
+      })),
+      total,
+      notes: method === 'UPI' ? 'Paid via Customer UPI Scan' : 'Paid at Counter (Cash)',
+    };
+
+    let savedId = `ord_${Date.now().toString().slice(-6)}`;
     try {
-      await fetch(`${API_BASE_URL}${API_PATHS.commerceOrders}`, {
+      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceOrders}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          customerName: customerName || 'Walk-in Guest',
-          customerPhone: 'Walk-in',
-          status: 'CONFIRMED',
-          paymentStatus: 'PAID',
-          paymentMethod,
-          deliveryType: tableNo ? 'dine_in' : 'takeout',
-          deliveryAddress: tableNo ? `Table #${tableNo}` : 'In-store POS',
-          items: cart.map((i) => ({ name: i.name, qty: i.qty, price: i.price, amount: i.price * i.qty })),
-          total,
-        }),
+        body: JSON.stringify(orderPayload),
       });
+      if (res.ok) {
+        const d = await res.json();
+        if (d.order?.id) savedId = d.order.id;
+      }
     } catch {}
 
-    Alert.alert('Order Confirmed!', `Total ₹${total.toFixed(2)} recorded via ${paymentMethod}.`, [
-      {
-        text: 'Done',
-        onPress: () => {
-          setCart([]);
-          setCustomerName('');
-          setTableNo('');
-          router.back();
-        },
-      },
-    ]);
+    setSavingOrder(false);
+    setShowQrModal(false);
+
+    setCompletedOrder({
+      ...orderPayload,
+      id: savedId,
+    });
+  };
+
+  const sendWhatsAppBill = (order: any) => {
+    const phone = (order.customerPhone || '').replace(/\D/g, '');
+    const itemsText = (order.items || [])
+      .map((it: any) => `• ${it.name} x${it.qty} = ₹${(it.amount || it.price * it.qty).toFixed(2)}`)
+      .join('\n');
+    const msg = `🧾 *RECEIPT: Order #${order.id.slice(-6).toUpperCase()}*\n${order.deliveryAddress ? `Location: ${order.deliveryAddress}\n` : ''}------------------------\n${itemsText}\n------------------------\n*TOTAL: ₹${order.total.toFixed(2)}*\nPayment: ${order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'} (${order.paymentMethod})\n\nThank you for your visit!`;
+    const url = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    Linking.openURL(url);
+  };
+
+  const handleResetForNextCustomer = () => {
+    setCart([]);
+    setCustomerName('');
+    setCustomerPhone('');
+    setTableNo('');
+    setCompletedOrder(null);
   };
 
   return (
@@ -117,111 +220,292 @@ export default function MobilePosScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>POS Cashier Register</Text>
-        <View style={{ width: 36 }} />
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>POS Cashier Register</Text>
+          <Text style={styles.headerSub}>Fast Order & Dynamic UPI Billing</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)/orders')}
+          style={styles.ordersShortcut}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="receipt-long" size={20} color="#059669" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.container}>
-        {/* Menu Grid */}
+        {/* Left Side: Menu Grid & Category Filters */}
         <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Tap Items to Add</Text>
-          <ScrollView contentContainerStyle={styles.menuGrid}>
-            {menu.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                onPress={() => addToCart(item)}
-                style={styles.menuItem}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.menuItemName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={styles.menuItemPrice}>₹{item.price}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* Current Cart Bill */}
-        <View style={styles.cartSection}>
-          <Text style={styles.sectionTitle}>Current Bill ({cart.length} items)</Text>
-
-          <ScrollView style={styles.cartList}>
-            {cart.map((item) => (
-              <View key={item.id} style={styles.cartRow}>
-                <View style={{ flex: 1, paddingRight: 6 }}>
-                  <Text style={styles.cartItemName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.cartItemRate}>₹{item.price} each</Text>
-                </View>
-
-                <View style={styles.qtyRow}>
-                  <TouchableOpacity onPress={() => updateQty(item.id, -1)} style={styles.qtyBtn}>
-                    <Text style={styles.qtyBtnText}>-</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.qtyText}>{item.qty}</Text>
-                  <TouchableOpacity onPress={() => updateQty(item.id, 1)} style={styles.qtyBtn}>
-                    <Text style={styles.qtyBtnText}>+</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <Text style={styles.cartItemTotal}>₹{(item.price * item.qty).toFixed(2)}</Text>
-              </View>
-            ))}
-          </ScrollView>
-
-          {/* Quick Inputs */}
-          <View style={{ flexDirection: 'row', gap: 8, marginVertical: 8 }}>
+          {/* Search bar */}
+          <View style={styles.searchBar}>
+            <MaterialIcons name="search" size={18} color="#94a3b8" />
             <TextInput
-              placeholder="Table # (Optional)"
-              value={tableNo}
-              onChangeText={setTableNo}
-              keyboardType="numeric"
-              style={[styles.input, { flex: 1 }]}
-            />
-            <TextInput
-              placeholder="Guest Name (Optional)"
-              value={customerName}
-              onChangeText={setCustomerName}
-              style={[styles.input, { flex: 2 }]}
+              placeholder="Search items..."
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
             />
           </View>
 
-          {/* Payment Method Chips */}
+          {/* Category Chips */}
+          {categories.length > 2 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.catScroll}
+            >
+              {categories.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => {
+                    hapticFeedback.light();
+                    setSelectedCategory(cat);
+                  }}
+                  style={[styles.catChip, selectedCategory === cat && styles.catChipActive]}
+                >
+                  <Text style={[styles.catText, selectedCategory === cat && styles.catTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Menu Items Grid */}
+          <ScrollView contentContainerStyle={styles.menuGrid} showsVerticalScrollIndicator={false}>
+            {filteredMenu.map((item) => {
+              const inCart = cart.find((c) => c.id === item.id);
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => addToCart(item)}
+                  style={[styles.menuItem, inCart && styles.menuItemActive]}
+                  activeOpacity={0.7}
+                >
+                  {inCart && (
+                    <View style={styles.badgeQty}>
+                      <Text style={styles.badgeQtyText}>{inCart.qty}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.menuItemName} numberOfLines={2}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.menuItemPrice}>₹{item.price}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Right Side: Current Bill / Cashier Box */}
+        <View style={styles.cartSection}>
+          <View style={styles.cartHeader}>
+            <Text style={styles.sectionTitle}>Current Bill</Text>
+            {cart.length > 0 && (
+              <TouchableOpacity onPress={() => setCart([])} activeOpacity={0.7}>
+                <Text style={styles.clearText}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Cart item list */}
+          <ScrollView style={styles.cartList} showsVerticalScrollIndicator={false}>
+            {cart.length === 0 ? (
+              <View style={styles.emptyCart}>
+                <MaterialIcons name="point-of-sale" size={32} color="#cbd5e1" />
+                <Text style={styles.emptyCartText}>Cart is empty</Text>
+                <Text style={styles.emptyCartSub}>Tap dishes on the menu to add</Text>
+              </View>
+            ) : (
+              cart.map((item) => (
+                <View key={item.id} style={styles.cartRow}>
+                  <View style={{ flex: 1, paddingRight: 6 }}>
+                    <Text style={styles.cartItemName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.cartItemRate}>₹{item.price} each</Text>
+                  </View>
+
+                  <View style={styles.qtyRow}>
+                    <TouchableOpacity onPress={() => updateQty(item.id, -1)} style={styles.qtyBtn}>
+                      <Text style={styles.qtyBtnText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyText}>{item.qty}</Text>
+                    <TouchableOpacity onPress={() => updateQty(item.id, 1)} style={styles.qtyBtn}>
+                      <Text style={styles.qtyBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.cartItemTotal}>₹{(item.price * item.qty).toFixed(2)}</Text>
+                </View>
+              ))
+            )}
+          </ScrollView>
+
+          {/* Quick Info Inputs */}
+          <View style={styles.inputsContainer}>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              <TextInput
+                placeholder="Table / Token #"
+                value={tableNo}
+                onChangeText={setTableNo}
+                style={[styles.input, { flex: 1 }]}
+              />
+              <TextInput
+                placeholder="Customer Name"
+                value={customerName}
+                onChangeText={setCustomerName}
+                style={[styles.input, { flex: 2 }]}
+              />
+            </View>
+            <TextInput
+              placeholder="WhatsApp Phone (for auto receipt)"
+              value={customerPhone}
+              onChangeText={setCustomerPhone}
+              keyboardType="phone-pad"
+              style={[styles.input, { marginTop: 6 }]}
+            />
+          </View>
+
+          {/* Payment Method Selector */}
           <View style={styles.methodRow}>
             {(['CASH', 'UPI', 'CARD'] as const).map((m) => (
               <TouchableOpacity
                 key={m}
-                onPress={() => setPaymentMethod(m)}
+                onPress={() => {
+                  hapticFeedback.light();
+                  setPaymentMethod(m);
+                }}
                 style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]}
               >
                 <Text style={[styles.methodText, paymentMethod === m && styles.methodTextActive]}>
-                  {m}
+                  {m === 'CASH' ? '💵 Cash' : m === 'UPI' ? '📱 Direct UPI' : '💳 Card'}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Bill Footer */}
+          {/* Bill Footer & Checkout Button */}
           <View style={styles.billFooter}>
             <View>
-              <Text style={styles.billTotalLabel}>Total Due</Text>
+              <Text style={styles.billTotalLabel}>Total Amount</Text>
               <Text style={styles.billTotalAmount}>₹{total.toFixed(2)}</Text>
             </View>
 
             <TouchableOpacity
-              onPress={handleCompleteOrder}
-              disabled={cart.length === 0}
-              style={[styles.checkoutBtn, cart.length === 0 && { opacity: 0.5 }]}
+              onPress={handleCheckoutPress}
+              disabled={cart.length === 0 || savingOrder}
+              style={[styles.checkoutBtn, (cart.length === 0 || savingOrder) && { opacity: 0.5 }]}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="check" size={20} color="#ffffff" />
-              <Text style={styles.checkoutBtnText}>Complete Sale</Text>
+              {savingOrder ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <MaterialIcons
+                    name={paymentMethod === 'UPI' ? 'qr-code' : 'check-circle'}
+                    size={18}
+                    color="#ffffff"
+                  />
+                  <Text style={styles.checkoutBtnText}>
+                    {paymentMethod === 'UPI' ? 'Show UPI QR' : 'Complete Sale'}
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {/* DYNAMIC UPI QR MODAL (Customer scans vendor's phone) */}
+      <Modal
+        visible={showQrModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowQrModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.qrCard}>
+            <View style={styles.qrHeader}>
+              <View>
+                <Text style={styles.qrTitle}>Scan & Pay with UPI</Text>
+                <Text style={styles.qrSub}>GPay • PhonePe • Paytm • Any UPI</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowQrModal(false)} style={styles.closeBtn}>
+                <MaterialIcons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.amountBox}>
+              <Text style={styles.amountLabel}>Total to Pay</Text>
+              <Text style={styles.amountValue}>₹{total.toFixed(2)}</Text>
+            </View>
+
+            {qrImageUrl ? (
+              <View style={styles.qrWrapper}>
+                <Image source={{ uri: qrImageUrl }} style={styles.qrImage} />
+                <Text style={styles.upiIdTag}>UPI: {upiId}</Text>
+              </View>
+            ) : (
+              <View style={styles.noUpiBox}>
+                <Text style={styles.noUpiText}>No UPI ID configured.</Text>
+                <Text style={styles.noUpiSub}>Set up your UPI ID in Store Settings.</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={() => handleSaveOrder('PAID', 'UPI')}
+              style={styles.confirmPaidBtn}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="verified" size={18} color="#ffffff" />
+              <Text style={styles.confirmPaidText}>Payment Received ✓</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => handleSaveOrder('UNPAID', 'UPI')}
+              style={styles.skipPayBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.skipPayText}>Save as Payment Pending</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ORDER COMPLETED DIALOG */}
+      <Modal visible={!!completedOrder} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.successCard}>
+            <View style={styles.successIconBox}>
+              <MaterialIcons name="check" size={32} color="#059669" />
+            </View>
+            <Text style={styles.successTitle}>Order Confirmed!</Text>
+            <Text style={styles.successSub}>
+              Order #{completedOrder?.id?.slice(-6).toUpperCase()} • ₹{completedOrder?.total?.toFixed(2)}
+            </Text>
+
+            <View style={styles.successActions}>
+              <TouchableOpacity
+                onPress={() => sendWhatsAppBill(completedOrder)}
+                style={styles.shareWaBtn}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="chat" size={18} color="#ffffff" />
+                <Text style={styles.shareWaText}>Share WhatsApp Bill</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleResetForNextCustomer}
+                style={styles.nextSaleBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.nextSaleText}>Next Customer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -232,7 +516,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    height: 52,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -245,75 +529,172 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0f172a',
   },
+  headerSub: {
+    fontSize: 10,
+    color: '#64748b',
+  },
+  ordersShortcut: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#ecfdf5',
+  },
   container: {
     flex: 1,
-    padding: 12,
-    gap: 12,
+    flexDirection: 'row',
   },
   menuSection: {
-    flex: 1,
+    flex: 1.1,
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+    padding: 10,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 6,
+    gap: 4,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0f172a',
+    paddingVertical: 2,
+  },
+  catScroll: {
+    gap: 4,
+    paddingBottom: 6,
+  },
+  catChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+  catChipActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  catText: {
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748b',
-    marginBottom: 8,
+  },
+  catTextActive: {
+    color: '#ffffff',
   },
   menuGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    paddingBottom: 20,
   },
   menuItem: {
-    width: '48%',
-    padding: 10,
-    borderRadius: 12,
+    width: '47.5%',
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 10,
+    position: 'relative',
+    justifyContent: 'space-between',
+    minHeight: 70,
+  },
+  menuItemActive: {
+    borderColor: '#10b981',
+    backgroundColor: '#f0fdf4',
+  },
+  badgeQty: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: '#10b981',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeQtyText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '900',
   },
   menuItemName: {
     fontSize: 12,
     fontWeight: '700',
     color: '#0f172a',
+    marginBottom: 4,
   },
   menuItemPrice: {
     fontSize: 13,
     fontWeight: '900',
     color: '#059669',
-    marginTop: 4,
   },
   cartSection: {
+    flex: 1,
+    padding: 10,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    maxHeight: 320,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  cartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  clearText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#dc2626',
   },
   cartList: {
-    maxHeight: 120,
+    flex: 1,
+    maxHeight: 180,
+  },
+  emptyCart: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 30,
+  },
+  emptyCartText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginTop: 6,
+  },
+  emptyCartSub: {
+    fontSize: 10,
+    color: '#cbd5e1',
+    marginTop: 2,
   },
   cartRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
   },
   cartItemName: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -324,7 +705,7 @@ const styles = StyleSheet.create({
   qtyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: '#f1f5f9',
     borderRadius: 6,
     paddingHorizontal: 4,
@@ -333,23 +714,26 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   qtyBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#334155',
   },
   qtyText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#0f172a',
     minWidth: 14,
     textAlign: 'center',
   },
   cartItemTotal: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
     color: '#0f172a',
-    width: 65,
+    width: 55,
     textAlign: 'right',
+  },
+  inputsContainer: {
+    marginVertical: 6,
   },
   input: {
     backgroundColor: '#f8fafc',
@@ -357,12 +741,13 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 6,
-    fontSize: 12,
+    paddingVertical: 5,
+    fontSize: 11,
+    color: '#0f172a',
   },
   methodRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
     marginBottom: 8,
   },
   methodChip: {
@@ -373,10 +758,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   methodChipActive: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#059669',
   },
   methodText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#64748b',
   },
@@ -392,13 +777,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   billTotalLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     color: '#64748b',
   },
   billTotalAmount: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     color: '#0f172a',
   },
@@ -406,14 +791,184 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#10b981',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderRadius: 10,
   },
   checkoutBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: '#ffffff',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  qrCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+    alignItems: 'center',
+  },
+  qrHeader: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  qrTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  qrSub: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  closeBtn: {
+    padding: 4,
+  },
+  amountBox: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 14,
+    width: '100%',
+  },
+  amountLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+    textTransform: 'uppercase',
+  },
+  amountValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#065f46',
+    marginTop: 2,
+  },
+  qrWrapper: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+  },
+  upiIdTag: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  noUpiBox: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  noUpiText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#dc2626',
+  },
+  noUpiSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 4,
+  },
+  confirmPaidBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  confirmPaidText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  skipPayBtn: {
+    marginTop: 10,
+    padding: 6,
+  },
+  skipPayText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '700',
+  },
+  successCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+  },
+  successIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  successTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  successSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  successActions: {
+    width: '100%',
+    gap: 10,
+  },
+  shareWaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  shareWaText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  nextSaleBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  nextSaleText: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

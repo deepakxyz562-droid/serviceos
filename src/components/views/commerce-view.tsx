@@ -1,7 +1,25 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
+import {
+  ThermalPrinterModal,
+  ThermalPrinterConfig,
+} from '@/components/commerce/thermal-printer-modal';
+import {
+  printKOT,
+  printCustomerBill,
+  handleAutoPrintNewOrder,
+  loadPrinterConfig,
+  savePrinterConfig,
+  DEFAULT_PRINTER_CONFIG,
+} from '@/lib/hardware/print-service';
+import {
+  activeBluetoothPrinter,
+  activeUsbPrinter,
+  PrintOrderData,
+  BusinessPrintInfo,
+} from '@/lib/hardware/escpos-printer';
 import {
   Package,
   TrendingUp,
@@ -123,6 +141,23 @@ export function CommerceView() {
   const [receiptType, setReceiptType] = useState<'CUSTOMER_BILL' | 'KOT'>('CUSTOMER_BILL');
   const [receiptOrder, setReceiptOrder] = useState<any | null>(null);
 
+  // Thermal Printer Hardware State
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerConfig, setPrinterConfig] = useState<ThermalPrinterConfig>(DEFAULT_PRINTER_CONFIG);
+  const seenOrderIdsRef = useRef<Set<string>>(new Set());
+  const isInitialOrderFetchRef = useRef<boolean>(true);
+
+  // Initialize printer config on client
+  useEffect(() => {
+    const saved = loadPrinterConfig();
+    setPrinterConfig(saved);
+  }, []);
+
+  const handleUpdatePrinterConfig = (newCfg: ThermalPrinterConfig) => {
+    setPrinterConfig(newCfg);
+    savePrinterConfig(newCfg);
+  };
+
   // Products Filter & Management State
   const [productSearch, setProductSearch] = useState('');
   const [productCategory, setProductCategory] = useState('ALL');
@@ -157,7 +192,52 @@ export function CommerceView() {
 
       if (dashRes.overview) {
         setStats(dashRes.overview);
-        setOrders(dashRes.recentOrders || []);
+        const incomingOrders: any[] = dashRes.recentOrders || [];
+        setOrders(incomingOrders);
+
+        // Auto-print check for newly arrived orders
+        if (!isInitialOrderFetchRef.current) {
+          const newOrders = incomingOrders.filter((o) => !seenOrderIdsRef.current.has(o.id));
+          if (newOrders.length > 0) {
+            newOrders.forEach((newOrder) => {
+              seenOrderIdsRef.current.add(newOrder.id);
+              toast.info(`🛎️ New Order #${newOrder.id.slice(-6).toUpperCase()} received!`);
+
+              const bInfo: BusinessPrintInfo = {
+                name: auth?.tenant?.name || 'Local Store',
+                address: auth?.tenant?.address || undefined,
+                phone: auth?.tenant?.phone || undefined,
+                gstin: gstin || undefined,
+                billFooter: billFooterText || undefined,
+              };
+              const pData: PrintOrderData = {
+                orderNumber: newOrder.id.slice(-6).toUpperCase(),
+                orderType: newOrder.deliveryType || 'TAKEOUT',
+                tableNumber: newOrder.deliveryAddress?.includes('Table')
+                  ? newOrder.deliveryAddress.replace(/[^0-9]/g, '')
+                  : undefined,
+                customerName: newOrder.customerName,
+                customerPhone: newOrder.customerPhone,
+                createdAt: newOrder.createdAt,
+                items: (newOrder.items || []).map((it: any) => ({
+                  name: it.name,
+                  qty: it.qty,
+                  price: it.price,
+                  amount: it.amount || it.price * it.qty,
+                })),
+                total: Number(newOrder.total || 0),
+                paymentMethod: newOrder.paymentMethod,
+                paymentStatus: newOrder.paymentStatus,
+                notes: newOrder.notes,
+              };
+
+              handleAutoPrintNewOrder(pData, bInfo, printerConfig);
+            });
+          }
+        } else {
+          incomingOrders.forEach((o) => seenOrderIdsRef.current.add(o.id));
+          isInitialOrderFetchRef.current = false;
+        }
       }
       if (configRes.config) {
         const c = configRes.config;
@@ -223,6 +303,67 @@ export function CommerceView() {
       setOrderModalLoading(false);
     }
   };
+
+  // Background polling for real-time kitchen orders & auto-print
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetch('/api/commerce/dashboard')
+        .then((r) => r.json())
+        .then((dashRes) => {
+          if (dashRes.recentOrders && Array.isArray(dashRes.recentOrders)) {
+            const incoming: any[] = dashRes.recentOrders;
+            setOrders(incoming);
+            if (dashRes.overview) setStats(dashRes.overview);
+
+            if (!isInitialOrderFetchRef.current) {
+              const newOrders = incoming.filter((o: any) => !seenOrderIdsRef.current.has(o.id));
+              if (newOrders.length > 0) {
+                newOrders.forEach((newOrder: any) => {
+                  seenOrderIdsRef.current.add(newOrder.id);
+                  toast.info(`🛎️ New Order #${newOrder.id.slice(-6).toUpperCase()} received!`);
+
+                  const bInfo: BusinessPrintInfo = {
+                    name: auth?.tenant?.name || 'Local Store',
+                    address: auth?.tenant?.address || undefined,
+                    phone: auth?.tenant?.phone || undefined,
+                    gstin: gstin || undefined,
+                    billFooter: billFooterText || undefined,
+                  };
+                  const pData: PrintOrderData = {
+                    orderNumber: newOrder.id.slice(-6).toUpperCase(),
+                    orderType: newOrder.deliveryType || 'TAKEOUT',
+                    tableNumber: newOrder.deliveryAddress?.includes('Table')
+                      ? newOrder.deliveryAddress.replace(/[^0-9]/g, '')
+                      : undefined,
+                    customerName: newOrder.customerName,
+                    customerPhone: newOrder.customerPhone,
+                    createdAt: newOrder.createdAt,
+                    items: (newOrder.items || []).map((it: any) => ({
+                      name: it.name,
+                      qty: it.qty,
+                      price: it.price,
+                      amount: it.amount || it.price * it.qty,
+                    })),
+                    total: Number(newOrder.total || 0),
+                    paymentMethod: newOrder.paymentMethod,
+                    paymentStatus: newOrder.paymentStatus,
+                    notes: newOrder.notes,
+                  };
+
+                  handleAutoPrintNewOrder(pData, bInfo, printerConfig);
+                });
+              }
+            } else {
+              incoming.forEach((o: any) => seenOrderIdsRef.current.add(o.id));
+              isInitialOrderFetchRef.current = false;
+            }
+          }
+        })
+        .catch(() => {});
+    }, 7000);
+
+    return () => clearInterval(timer);
+  }, [auth, gstin, billFooterText, printerConfig]);
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdatingOrder(true);
@@ -418,6 +559,87 @@ export function CommerceView() {
     const message = `🧾 *RECEIPT: ${auth?.tenant?.name || 'STORE'}*\nOrder #${order.id.slice(-6).toUpperCase()}\nDate: ${new Date().toLocaleDateString()}\n${order.deliveryAddress ? `Table/Delivery: ${order.deliveryAddress}\n` : ''}------------------------\n${itemsText}\n------------------------\nSubtotal: ${currencySymbol}${bill.subtotal.toFixed(2)}${bill.tax > 0 ? `\n${taxName} (${taxRate}%): ${currencySymbol}${bill.tax.toFixed(2)}` : ''}\n*TOTAL: ${currencySymbol}${Number(order.total || bill.total).toFixed(2)}*\nStatus: ${order.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'}${upiId && order.paymentStatus !== 'PAID' ? `\n\nPay via UPI: upi://pay?pa=${upiId}&pn=${encodeURIComponent(auth?.tenant?.name || 'Store')}&am=${Number(order.total).toFixed(2)}` : ''}\n\n${billFooterText}`;
 
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  // Direct Thermal Printer Execution Handlers (ESC/POS)
+  const handlePrintOrderKOT = async (order: any) => {
+    if (!order) return;
+    const businessInfo: BusinessPrintInfo = {
+      name: auth?.tenant?.name || 'Local Kitchen',
+      address: auth?.tenant?.address || undefined,
+      phone: auth?.tenant?.phone || undefined,
+      gstin: gstin || undefined,
+      billFooter: billFooterText || undefined,
+    };
+    const printData: PrintOrderData = {
+      orderNumber: order.id.slice(-6).toUpperCase(),
+      orderType: order.deliveryType || 'TAKEOUT',
+      tableNumber: order.deliveryAddress?.includes('Table')
+        ? order.deliveryAddress.replace(/[^0-9]/g, '')
+        : undefined,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      createdAt: order.createdAt,
+      items: (order.items || []).map((it: any) => ({
+        name: it.name,
+        qty: it.qty,
+        price: it.price,
+        amount: it.amount || it.price * it.qty,
+      })),
+      total: Number(order.total || 0),
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      notes: order.notes,
+    };
+    const res = await printKOT(printData, businessInfo, printerConfig);
+    if (res.method === 'bluetooth' || res.method === 'usb') {
+      toast.success(`🖨️ KOT printed directly to thermal printer (${res.method.toUpperCase()})!`);
+    } else {
+      toast.info('Printed KOT via browser dialog');
+    }
+  };
+
+  const handlePrintOrderBill = async (order: any) => {
+    if (!order) return;
+    const bill = computeBillBreakdown(order);
+    const businessInfo: BusinessPrintInfo = {
+      name: auth?.tenant?.name || 'Store Receipt',
+      address: auth?.tenant?.address || undefined,
+      phone: auth?.tenant?.phone || undefined,
+      gstin: gstin || undefined,
+      billFooter: billFooterText || undefined,
+    };
+    const printData: PrintOrderData = {
+      orderNumber: order.id.slice(-6).toUpperCase(),
+      orderType: order.deliveryType || 'TAKEOUT',
+      tableNumber: order.deliveryAddress?.includes('Table')
+        ? order.deliveryAddress.replace(/[^0-9]/g, '')
+        : undefined,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      createdAt: order.createdAt,
+      items: (order.items || []).map((it: any) => ({
+        name: it.name,
+        qty: it.qty,
+        price: it.price,
+        amount: it.amount || it.price * it.qty,
+      })),
+      subtotal: bill.subtotal,
+      discount: bill.discount,
+      taxAmount: bill.tax,
+      taxName: taxName,
+      serviceCharge: bill.serviceCharge,
+      total: Number(order.total || bill.total),
+      paymentMethod: order.paymentMethod,
+      paymentStatus: order.paymentStatus,
+      notes: order.notes,
+    };
+    const res = await printCustomerBill(printData, businessInfo, printerConfig);
+    if (res.method === 'bluetooth' || res.method === 'usb') {
+      toast.success(`🖨️ Bill printed directly to thermal printer (${res.method.toUpperCase()})!`);
+    } else {
+      toast.info('Printed Bill via browser dialog');
+    }
   };
 
   // Product Add / Edit Handlers
@@ -786,6 +1008,32 @@ export function CommerceView() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Thermal Printer Hardware & Auto-Print Status */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setPrinterModalOpen(true)}
+            className={`h-8 gap-1.5 text-xs font-bold transition shadow-2xs cursor-pointer ${
+              printerConfig.autoPrintEnabled
+                ? 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                : (activeBluetoothPrinter.isConnected || activeUsbPrinter.isConnected)
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
+                : 'border-stone-300 text-stone-700 hover:bg-stone-50'
+            }`}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">
+              {activeBluetoothPrinter.isConnected || activeUsbPrinter.isConnected
+                ? `${printerConfig.deviceName || 'Thermal'} (${printerConfig.paperWidth}mm)`
+                : 'Thermal Printer'}
+            </span>
+            {printerConfig.autoPrintEnabled && (
+              <Badge className="bg-amber-600 text-white text-[9px] px-1 py-0 font-bold">
+                Auto-Print
+              </Badge>
+            )}
+          </Button>
+
           <a
             href={publicStoreUrl}
             target="_blank"
@@ -793,14 +1041,14 @@ export function CommerceView() {
             className="flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            Public Store Link
+            <span className="hidden md:inline">Public Store Link</span>
           </a>
           <Button
             size="sm"
             variant="outline"
             onClick={loadCommerceData}
             disabled={loading}
-            className="h-8 gap-1 text-xs"
+            className="h-8 gap-1 text-xs cursor-pointer"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           </Button>
@@ -966,14 +1214,36 @@ export function CommerceView() {
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs font-bold"
-                                onClick={() => openOrderDetail(o.id)}
-                              >
-                                View Details
-                              </Button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-[11px] font-bold gap-1 text-stone-700 hover:text-stone-900 border-stone-200"
+                                  onClick={() => handlePrintOrderKOT(o)}
+                                  title="Print Kitchen Ticket (Thermal)"
+                                >
+                                  <Printer className="h-3 w-3 text-stone-500" />
+                                  KOT
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-[11px] font-bold gap-1 text-emerald-800 hover:text-emerald-950 border-emerald-200 bg-emerald-50/50"
+                                  onClick={() => handlePrintOrderBill(o)}
+                                  title="Print Customer Bill (Thermal)"
+                                >
+                                  <Receipt className="h-3 w-3 text-emerald-600" />
+                                  Bill
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs font-bold"
+                                  onClick={() => openOrderDetail(o.id)}
+                                >
+                                  View
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -3385,17 +3655,40 @@ export function CommerceView() {
                 </Button>
                 <Button
                   size="sm"
+                  variant="outline"
                   onClick={() => window.print()}
-                  className="bg-stone-900 hover:bg-black text-white font-bold text-xs gap-1.5"
+                  className="text-xs font-bold gap-1 text-stone-600 hover:text-stone-900 border-stone-300"
                 >
                   <Printer className="h-3.5 w-3.5" />
-                  Print 80mm
+                  Browser Print
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (receiptType === 'KOT') {
+                      handlePrintOrderKOT(receiptOrder);
+                    } else {
+                      handlePrintOrderBill(receiptOrder);
+                    }
+                  }}
+                  className="bg-stone-900 hover:bg-black text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Printer className="h-3.5 w-3.5 text-emerald-400" />
+                  {receiptType === 'KOT' ? 'Print KOT (Thermal)' : 'Print Bill (Thermal)'}
                 </Button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* ======================= THERMAL HARDWARE SETUP MODAL ======================= */}
+      <ThermalPrinterModal
+        open={printerModalOpen}
+        onOpenChange={setPrinterModalOpen}
+        config={printerConfig}
+        onConfigChange={handleUpdatePrinterConfig}
+      />
     </div>
   );
 }

@@ -1,12 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
-  Bot,
-  FileInput,
-  Zap,
   ArrowRight,
   ArrowLeft,
   Check,
@@ -22,19 +19,15 @@ import {
   Copy,
   Wand2,
   Layers,
-  ChevronRight,
   Loader2,
   Users,
   Eye,
-  ShieldCheck,
-  Palette,
   Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -42,16 +35,10 @@ import { useAppStore } from '@/store/app-store';
 import { authFetch } from '@/lib/api';
 import {
   searchTemplates,
-  getAllTemplates,
   TEMPLATE_CATEGORIES,
   type FormTemplate,
   type TemplateCategoryId,
 } from '@/lib/forms/templates';
-import {
-  generateAgentAndFormFromWizard,
-  parseBusinessText,
-} from '@/lib/forms/generators/ai-agent-wizard-service';
-import { AVATAR_CATALOG, DEFAULT_FORM_AGENT, FormAgentData } from '@/features/forms/types/agent-types';
 
 export type WizardCreationType = 'form' | 'agent' | 'hybrid';
 export type WizardMethod = 'ai' | 'template' | 'manual';
@@ -69,20 +56,37 @@ export interface CreateFormOrAgentModalProps {
   }) => void;
 }
 
-const TONES = [
-  { id: 'friendly' as const, label: 'Friendly & Welcoming', desc: 'Approachable, cheerful, conversational' },
-  { id: 'professional' as const, label: 'Strictly Professional', desc: 'Crisp, polite, corporate-grade' },
-  { id: 'sales' as const, label: 'High-Converting Sales', desc: 'Persuasive, action-oriented, focused on booking' },
-  { id: 'medical' as const, label: 'Clinical & Confidential', desc: 'Discreet, empathetic, clear intake' },
-  { id: 'empathetic' as const, label: 'Warm & Supportive', desc: 'Gentle, understanding, reassuring' },
-];
-
-const CAPABILITIES = [
-  { id: 'answer_questions', title: 'Answer FAQs from Website', desc: 'Zero-hallucination answers from your content', icon: MessageSquare },
-  { id: 'capture_leads', title: 'Qualify & Capture Leads', desc: 'Extract contact details & score readiness', icon: Zap },
-  { id: 'generate_quotes', title: 'Dynamic Formula Quotes', desc: 'Calculate instant mathematical estimates', icon: Calculator },
-  { id: 'book_appointments', title: '2-Way Calendar Booking', desc: 'Direct slot reservation on Google Calendar', icon: Calendar },
-  { id: 'take_payments', title: 'In-Chat Payments (0% Fee)', desc: 'Stripe deposits, retainers & Apple Pay', icon: CreditCard },
+const QUICK_PROMPTS = [
+  {
+    label: '🚰 Emergency Plumbing',
+    text: 'Emergency plumbing quote and dispatch form. Collect customer address, issue type (pipe burst, drain clog, water heater leak), urgency level, and preferred arrival window.',
+    title: 'Emergency Plumbing Request & Quote',
+    goal: 'quote',
+  },
+  {
+    label: '🦷 Dental Intake & Booking',
+    text: 'New patient intake and appointment booking form. Collect personal details, dental insurance provider, reason for visit (cleaning, toothache, cosmetic), and appointment calendar selection.',
+    title: 'Patient Intake & Consultation Booking',
+    goal: 'booking',
+  },
+  {
+    label: '🏠 Roofing Inspection',
+    text: 'Residential roofing quote and damage inspection request. Collect roof square footage, roof age, storm damage assessment, photo uploads of roof, and contact details for on-site estimate.',
+    title: 'Roof Inspection & Estimate Request',
+    goal: 'quote',
+  },
+  {
+    label: '❄️ HVAC Repair & Quote',
+    text: 'HVAC repair and maintenance diagnostic form. Collect system type (AC, heat pump, furnace), problem description (not cooling, strange noise, frozen coils), address, and service timing.',
+    title: 'HVAC Diagnostic & Service Booking',
+    goal: 'booking',
+  },
+  {
+    label: '🧹 Commercial Cleaning',
+    text: 'Commercial cleaning proposal generator. Collect facility type (office, clinic, retail), square footage, cleaning frequency (daily, weekly, bi-weekly), special sanitation needs, and budget.',
+    title: 'Commercial Cleaning Quote Calculator',
+    goal: 'quote',
+  },
 ];
 
 const FORM_GOALS = [
@@ -96,24 +100,61 @@ const FORM_GOALS = [
 export function CreateFormOrAgentModal({
   open,
   onOpenChange,
-  initialType = 'form',
   onSuccess,
 }: CreateFormOrAgentModalProps) {
-  // Stepper: 1: Method -> 2: Details & Goal -> 3: Generating / Live Success
+  // 3 Streamlined Steps:
+  // Step 1: Prompt & Crawl Input
+  // Step 2: Form Details & Goal Setup
+  // Step 3: Live Generation & Ready
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // Creation type is strictly form
   const creationType: WizardCreationType = 'form';
 
-  // Step 1: Method
+  // Step 1: Input (AI Prompt + URL Crawl)
   const [method, setMethod] = useState<WizardMethod>('ai');
-
-  // Method = AI State
   const [aiPrompt, setAiPrompt] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [isScanningUrl, setIsScanningUrl] = useState(false);
   const [crawledData, setCrawledData] = useState<any | null>(null);
 
+  // Optional Template & Manual Switchers
+  const [showAlternativeModes, setShowAlternativeModes] = useState(false);
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<TemplateCategoryId | 'all'>('all');
+  const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
+  const [templateResults, setTemplateResults] = useState<FormTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+
+  // Step 2: Configuration details
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [formGoal, setFormGoal] = useState('lead_capture');
+  const [isMultiStep, setIsMultiStep] = useState(true);
+
+  // Step 3: Generation & Results
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationStatus, setGenerationStatus] = useState('');
+  const [createdFormId, setCreatedFormId] = useState<string | null>(null);
+  const [createdSlug, setCreatedSlug] = useState<string>('');
+
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+
+  // Reset on open
+  useEffect(() => {
+    if (open) {
+      setStep(1);
+      setMethod('ai');
+      setShowAlternativeModes(false);
+      setCreatedFormId(null);
+      setCreatedSlug('');
+      setGenerationProgress(0);
+      setIsGenerating(false);
+    }
+  }, [open]);
+
+  // Handle URL scanning
   const handleScanWebsiteModal = async (targetUrl?: string) => {
     const target = (targetUrl || websiteUrl).trim();
     if (!target) {
@@ -146,51 +187,9 @@ export function CreateFormOrAgentModal({
     }
   };
 
-  // Method = Template State
-  const [templateSearch, setTemplateSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<TemplateCategoryId | 'all'>('all');
-  const [selectedTemplate, setSelectedTemplate] = useState<FormTemplate | null>(null);
-  const [templateResults, setTemplateResults] = useState<FormTemplate[]>([]);
-  const [templatesLoading, setTemplatesLoading] = useState(false);
-
-  // Step 2: Configuration details
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [formGoal, setFormGoal] = useState('lead_capture');
-  const [isMultiStep, setIsMultiStep] = useState(true);
-  const [selectedCapabilities, setSelectedCapabilities] = useState<string[]>([
-    'answer_questions',
-    'capture_leads',
-    'book_appointments',
-  ]);
-  const [agentTone, setAgentTone] = useState<'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic'>('friendly');
-  const [agentAvatar, setAgentAvatar] = useState(AVATAR_CATALOG[0].url);
-
-  // Step 3: Generation & Results
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [generationStatus, setGenerationStatus] = useState('');
-  const [createdFormId, setCreatedFormId] = useState<string | null>(null);
-  const [createdAgentId, setCreatedAgentId] = useState<string | null>(null);
-  const [createdSlug, setCreatedSlug] = useState<string>('');
-
-  const setCurrentView = useAppStore((s) => s.setCurrentView);
-
-  // Reset on open
+  // Load templates when alternative template mode is chosen
   useEffect(() => {
-    if (open) {
-      setStep(1);
-      setCreatedFormId(null);
-      setCreatedAgentId(null);
-      setCreatedSlug('');
-      setGenerationProgress(0);
-      setIsGenerating(false);
-    }
-  }, [open]);
-
-  // Load templates when Step 1 with Template method is active
-  useEffect(() => {
-    if (step === 1 && method === 'template') {
+    if (method === 'template') {
       let isSubscribed = true;
       setTemplatesLoading(true);
       searchTemplates({
@@ -207,9 +206,8 @@ export function CreateFormOrAgentModal({
         isSubscribed = false;
       };
     }
-  }, [step, method, templateSearch, selectedCategory]);
+  }, [method, templateSearch, selectedCategory]);
 
-  // Auto-fill details when template is picked
   const handleSelectTemplate = (tpl: FormTemplate) => {
     setSelectedTemplate(tpl);
     setName(tpl.title);
@@ -218,55 +216,58 @@ export function CreateFormOrAgentModal({
     toast.success(`Selected template: "${tpl.title}"`);
   };
 
-  // Toggle capabilities for agent/hybrid
-  const toggleCapability = (id: string) => {
-    setSelectedCapabilities((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
+  const handleApplyQuickPrompt = (qp: (typeof QUICK_PROMPTS)[number]) => {
+    setAiPrompt(qp.text);
+    setName(qp.title);
+    setFormGoal(qp.goal);
+    toast.info(`Applied "${qp.label}" preset!`);
   };
 
-  // Handle final generation
+  // Step 3 Generation Logic
   const handleGenerate = async () => {
-    setStep(4);
+    setStep(3);
     setIsGenerating(true);
     setGenerationProgress(15);
-    setGenerationStatus('Ingesting requirements and knowledge sources...');
+    setGenerationStatus('Ingesting requirements and knowledge context...');
 
     try {
       if (method === 'ai') {
         setGenerationProgress(40);
-        setGenerationStatus('Formulating questions, logic and persona...');
+        setGenerationStatus('Formulating questions, logic, and validation schema...');
 
-        const promptText = aiPrompt.trim() || (crawledData ? `${crawledData.businessName} - ${crawledData.description}` : '') || websiteUrl.trim() || `${name || 'Business Services'}: provide consultations, quote estimates, and appointments.`;
+        const promptText =
+          aiPrompt.trim() ||
+          (crawledData ? `${crawledData.businessName} - ${crawledData.description}` : '') ||
+          websiteUrl.trim() ||
+          `${name || 'Business Services'}: provide consultations, quote estimates, and appointments.`;
+
         const res = await fetch('/api/forms/ai-agent-wizard-generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             businessDescription: promptText,
             businessName: name.trim() || crawledData?.businessName || undefined,
-            capabilities: selectedCapabilities,
+            capabilities: ['capture_leads', formGoal === 'booking' ? 'book_appointments' : 'generate_quotes'],
             knowledgeUrl: websiteUrl.trim() || undefined,
             crawledContext: crawledData || undefined,
-            tone: agentTone,
             save: true,
           }),
         });
 
         const data = await res.json();
         setGenerationProgress(80);
-        setGenerationStatus('Publishing live endpoints and linking workflows...');
+        setGenerationStatus('Publishing live endpoints and linking CRM sync...');
 
         if (res.ok && data.success) {
           const effectiveFormId = data.savedFormId || data.form?.id || null;
-          const effectiveAgentId = data.savedAgentId || data.agent?.id || null;
-          const effectiveSlug = data.savedFormSlug || data.form?.slug || data.savedAgentSlug || data.agent?.slug || 'new-intake';
+          const effectiveSlug =
+            data.savedFormSlug || data.form?.slug || data.savedAgentSlug || 'new-intake';
           setCreatedFormId(effectiveFormId);
-          setCreatedAgentId(effectiveAgentId);
           setCreatedSlug(effectiveSlug);
           setGenerationProgress(100);
           setGenerationStatus('Complete!');
-          setStep(3);
-          toast.success('🎉 Form created successfully!');
+          setIsGenerating(false);
+          toast.success('🎉 Smart Form created successfully!');
         } else {
           throw new Error(data.error || 'Server could not save generated asset');
         }
@@ -299,7 +300,7 @@ export function CreateFormOrAgentModal({
           setCreatedFormId(data.form.id);
           setCreatedSlug(data.form.slug);
           setGenerationProgress(100);
-          setStep(3);
+          setIsGenerating(false);
           toast.success('🎉 Template initialized successfully!');
         } else {
           throw new Error(data.error || 'Failed to create form from template');
@@ -344,7 +345,7 @@ export function CreateFormOrAgentModal({
           setCreatedFormId(data.form.id);
           setCreatedSlug(data.form.slug);
           setGenerationProgress(100);
-          setStep(3);
+          setIsGenerating(false);
           toast.success('🎉 Form initialized successfully!');
         } else {
           throw new Error(data.error || 'Failed to create form');
@@ -353,19 +354,16 @@ export function CreateFormOrAgentModal({
     } catch (err) {
       console.error('Wizard error:', err);
       toast.error(err instanceof Error ? err.message : 'Creation failed. Please try again.');
-      setStep(2);
-    } finally {
       setIsGenerating(false);
+      setStep(2);
     }
   };
 
-  // Step 5: Post-Creation Decisions
   const handleGoToEditor = () => {
     onOpenChange(false);
     if (onSuccess) {
       onSuccess({
         formId: createdFormId || undefined,
-        agentId: createdAgentId || undefined,
         slug: createdSlug,
         type: creationType,
         mode: 'editor',
@@ -387,7 +385,6 @@ export function CreateFormOrAgentModal({
     if (onSuccess) {
       onSuccess({
         formId: createdFormId || undefined,
-        agentId: createdAgentId || undefined,
         slug: createdSlug,
         type: creationType,
         mode: 'listing',
@@ -398,11 +395,14 @@ export function CreateFormOrAgentModal({
   };
 
   const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast.success(`${label} copied to clipboard!`);
-    }).catch(() => {
-      toast.error('Could not copy to clipboard.');
-    });
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        toast.success(`${label} copied to clipboard!`);
+      })
+      .catch(() => {
+        toast.error('Could not copy to clipboard.');
+      });
   };
 
   if (!open) return null;
@@ -414,7 +414,7 @@ export function CreateFormOrAgentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
-      {/* ─── Blacked-out Backdrop ─── */}
+      {/* ─── Backdrop ─── */}
       <div
         className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity cursor-pointer"
         onClick={() => {
@@ -422,7 +422,7 @@ export function CreateFormOrAgentModal({
         }}
       />
 
-      {/* ─── Modal Content Box ─── */}
+      {/* ─── Modal Content ─── */}
       <div className="relative z-10 w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl border border-border/80 bg-card text-card-foreground shadow-2xl overflow-hidden font-sans">
         {/* ─── Header & Stepper Bar ─── */}
         <div className="border-b border-border/80 bg-muted/40 px-6 py-4 flex items-center justify-between shrink-0">
@@ -435,20 +435,26 @@ export function CreateFormOrAgentModal({
                 <h2 className="text-base sm:text-lg font-black tracking-tight text-foreground">
                   AI Form Wizard
                 </h2>
-                <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 border-emerald-500/30 bg-emerald-500/10">
+                <Badge
+                  variant="outline"
+                  className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 border-emerald-500/30 bg-emerald-500/10"
+                >
                   Step {step} of 3
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                {step === 1 && 'Select how you want to build your smart form'}
-                {step === 2 && 'Configure form title, goal, and layout settings'}
-                {step === 3 && (isGenerating ? 'Generating your smart form and endpoints...' : 'Your smart form is live and ready')}
+                {step === 1 && 'Describe your form or enter your website to auto-generate questions'}
+                {step === 2 && 'Review title, primary goal, and layout structure'}
+                {step === 3 &&
+                  (isGenerating
+                    ? 'Generating smart form, pricing logic, and live endpoints...'
+                    : 'Your smart form is live and connected')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Step Indicators */}
+            {/* 3 Step Pill Indicators */}
             <div className="hidden sm:flex items-center gap-1.5">
               {[1, 2, 3].map((s) => (
                 <div
@@ -477,264 +483,224 @@ export function CreateFormOrAgentModal({
           </div>
         </div>
 
-        {/* ─── Modal Scrollable Body ─── */}
+        {/* ─── Scrollable Body ─── */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 1: Choose Method (AI Prompt & Crawl vs 20,000+ Templates vs Scratch) */}
+          {/* STEP 1: Describe Form & Optional Website URL Crawl                  */}
           {/* ═════════════════════════════════════════════════════════════════════ */}
           {step === 1 && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto space-y-1">
-                <h3 className="text-xl font-extrabold text-foreground">How would you like to build your form?</h3>
+                <h3 className="text-xl font-extrabold text-foreground">
+                  What kind of form do you want to create?
+                </h3>
                 <p className="text-xs text-muted-foreground">
-                  Pick your creation method — scan a website, pick a pre-built template, or start blank.
+                  Tell our AI what questions to ask, or paste your website URL to auto-extract services and pricing.
                 </p>
               </div>
 
-              {/* Method Toggle Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMethod('ai')}
-                  className={cn(
-                    'flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer',
-                    method === 'ai'
-                      ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
-                      : 'border-border/80 bg-card hover:border-emerald-500/40'
-                  )}
-                >
-                  <div className="size-9 rounded-xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0">
-                    <Sparkles className="size-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm text-foreground">AI Prompt &amp; Crawl</div>
-                    <div className="text-[11px] text-muted-foreground">URL crawl or prompt</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMethod('template')}
-                  className={cn(
-                    'flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer',
-                    method === 'template'
-                      ? 'border-blue-500 bg-blue-500/10 shadow-xs'
-                      : 'border-border/80 bg-card hover:border-blue-500/40'
-                  )}
-                >
-                  <div className="size-9 rounded-xl bg-blue-500/15 text-blue-600 flex items-center justify-center shrink-0">
-                    <Layers className="size-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm text-foreground">20,000+ Templates</div>
-                    <div className="text-[11px] text-muted-foreground">Pre-built industry setups</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMethod('manual')}
-                  className={cn(
-                    'flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all cursor-pointer',
-                    method === 'manual'
-                      ? 'border-slate-500 bg-slate-500/10 shadow-xs'
-                      : 'border-border/80 bg-card hover:border-slate-500/40'
-                  )}
-                >
-                  <div className="size-9 rounded-xl bg-slate-500/15 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
-                    <Sliders className="size-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-sm text-foreground">Manual Scratch</div>
-                    <div className="text-[11px] text-muted-foreground">Start from blank canvas</div>
-                  </div>
-                </button>
-              </div>
-
-              {/* Sub-view for Method = AI */}
-              {method === 'ai' && (
-                <div className="space-y-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 animate-in fade-in duration-200">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                        <Globe className="size-3.5 text-emerald-600" />
-                        Website URL to Crawl (Optional)
-                      </label>
-                      {crawledData && (
-                        <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-0 text-[10px] font-bold">
-                          ✓ {crawledData.businessName} Indexed
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="https://integrityroofingandrepair.com"
-                        value={websiteUrl}
-                        onChange={(e) => setWebsiteUrl(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleScanWebsiteModal(websiteUrl)}
-                        className="bg-card text-xs h-10 rounded-xl"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={isScanningUrl || !websiteUrl.trim()}
-                        onClick={() => handleScanWebsiteModal(websiteUrl)}
-                        className="h-10 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer shadow-xs gap-1.5"
-                      >
-                        {isScanningUrl ? (
-                          <>
-                            <Loader2 className="size-3.5 animate-spin" /> Scanning...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="size-3.5" /> Scan &amp; Auto-Fill
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Our crawler indexes your pages, services, FAQs, and pricing automatically.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5">
+              {/* Primary AI Prompt Box */}
+              <div className="space-y-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
                       <Wand2 className="size-3.5 text-emerald-600" />
-                      Describe What Your Form Should Collect
+                      Describe Your Form &amp; Questions
                     </label>
-                    <Textarea
-                      rows={3}
-                      placeholder="e.g. We are a family clinic in Austin offering routine checkups, teeth whitening, and emergency care. We need to collect patient contact info, insurance details, and preferred appointment slots."
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      className="bg-card text-xs rounded-xl"
-                    />
+                    <span className="text-[11px] text-muted-foreground">
+                      Natural language prompt
+                    </span>
                   </div>
+                  <Textarea
+                    rows={4}
+                    placeholder="e.g. We are a residential roofing and gutter company. We need to collect customer contact info, property address, roof age, issue type (storm damage, leak, replacement), and preferred date for an on-site inspection."
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    className="bg-card text-xs rounded-xl focus-visible:ring-emerald-500/30"
+                  />
                 </div>
-              )}
 
-              {/* Sub-view for Method = Template */}
-              {method === 'template' && (
-                <div className="space-y-4 animate-in fade-in duration-200">
-                  <div className="flex flex-col sm:row gap-2.5">
-                    <div className="relative flex-1">
-                      <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search 20,000+ templates (e.g. quote calculator, booking, patient intake)..."
-                        value={templateSearch}
-                        onChange={(e) => setTemplateSearch(e.target.value)}
-                        className="pl-9 h-10 text-xs rounded-xl bg-card"
-                      />
-                    </div>
+                {/* Quick starter suggestion chips */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-semibold text-muted-foreground">
+                    Quick Industry Starters:
                   </div>
-
-                  {/* Category Chips */}
-                  <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory('all')}
-                      className={cn(
-                        'text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer',
-                        selectedCategory === 'all'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted/80 text-muted-foreground hover:bg-muted'
-                      )}
-                    >
-                      All
-                    </button>
-                    {TEMPLATE_CATEGORIES.slice(0, 8).map((cat) => (
+                  <div className="flex flex-wrap gap-1.5">
+                    {QUICK_PROMPTS.map((qp) => (
                       <button
-                        key={cat.id}
+                        key={qp.label}
                         type="button"
-                        onClick={() => setSelectedCategory(cat.id as any)}
-                        className={cn(
-                          'text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors cursor-pointer',
-                          selectedCategory === cat.id
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted/80 text-muted-foreground hover:bg-muted'
-                        )}
+                        onClick={() => handleApplyQuickPrompt(qp)}
+                        className="text-xs px-2.5 py-1 rounded-lg font-medium bg-card hover:bg-emerald-50 dark:hover:bg-emerald-950/40 hover:text-emerald-600 border border-border/80 transition-all cursor-pointer text-foreground"
                       >
-                        {cat.label}
+                        {qp.label}
                       </button>
                     ))}
                   </div>
+                </div>
 
-                  {/* Template Cards Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-1">
-                    {templatesLoading ? (
-                      <div className="col-span-2 py-8 flex items-center justify-center text-xs text-muted-foreground gap-2">
-                        <Loader2 className="size-4 animate-spin text-emerald-600" />
-                        Loading templates...
-                      </div>
-                    ) : templateResults.length === 0 ? (
-                      <div className="col-span-2 py-8 text-center text-xs text-muted-foreground">
-                        No templates found. Try a different keyword or start from scratch.
-                      </div>
-                    ) : (
-                      templateResults.map((tpl) => {
-                        const isPicked = selectedTemplate?.id === tpl.id;
-                        return (
-                          <div
-                            key={tpl.id}
-                            onClick={() => handleSelectTemplate(tpl)}
-                            className={cn(
-                              'p-3.5 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between gap-2',
-                              isPicked
-                                ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
-                                : 'border-border/80 bg-card hover:border-emerald-500/40'
-                            )}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between">
-                                <span className="font-bold text-xs text-foreground line-clamp-1">{tpl.title}</span>
-                                {isPicked && <Check className="size-3.5 text-emerald-600 shrink-0" />}
-                              </div>
-                              <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1">
-                                {tpl.description}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                              <Badge variant="secondary" className="text-[9px] px-1.5 py-0">
-                                {tpl.categories[0]}
-                              </Badge>
-                              <span>{tpl.schema?.fields?.length || 5} fields</span>
-                            </div>
-                          </div>
-                        );
-                      })
+                {/* Integrated Website Scanner */}
+                <div className="pt-3 border-t border-emerald-500/20 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Globe className="size-3.5 text-emerald-600" />
+                      Website URL to Scan (Optional Auto-Fill)
+                    </label>
+                    {crawledData && (
+                      <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-0 text-[10px] font-bold">
+                        ✓ {crawledData.businessName} Indexed
+                      </Badge>
                     )}
                   </div>
-                </div>
-              )}
-
-              {/* Sub-view for Method = Manual */}
-              {method === 'manual' && (
-                <div className="rounded-2xl border border-border/80 bg-muted/20 p-5 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="size-4 text-emerald-600" />
-                    <span className="text-xs font-bold text-foreground">Clean Blank Canvas</span>
+                    <Input
+                      placeholder="https://yourbusiness.com"
+                      value={websiteUrl}
+                      onChange={(e) => setWebsiteUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleScanWebsiteModal(websiteUrl)}
+                      className="bg-card text-xs h-10 rounded-xl"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isScanningUrl || !websiteUrl.trim()}
+                      onClick={() => handleScanWebsiteModal(websiteUrl)}
+                      className="h-10 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 cursor-pointer shadow-xs gap-1.5"
+                    >
+                      {isScanningUrl ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" /> Scanning...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="size-3.5" /> Scan &amp; Auto-Fill
+                        </>
+                      )}
+                    </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    You will begin with an empty workspace pre-populated with standard contact fields (Name, Email, Phone). In Step 2, configure your title and purpose, then customize every field freely.
+                  <p className="text-[11px] text-muted-foreground">
+                    Our scanner indexes your services, FAQs, and pricing to create ready-to-use form fields automatically.
                   </p>
+                </div>
+              </div>
+
+              {/* Template / Manual Alternative Switcher (Optional Drawer) */}
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAlternativeModes(!showAlternativeModes)}
+                  className="text-xs font-medium text-muted-foreground hover:text-emerald-600 underline underline-offset-4 cursor-pointer transition-colors"
+                >
+                  {showAlternativeModes
+                    ? 'Hide template & manual options'
+                    : 'Or browse 20,000+ templates / start blank canvas'}
+                </button>
+              </div>
+
+              {showAlternativeModes && (
+                <div className="space-y-4 rounded-2xl border border-border/80 bg-muted/20 p-4 animate-in fade-in duration-200">
+                  <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+                    <button
+                      type="button"
+                      onClick={() => setMethod('ai')}
+                      className={cn(
+                        'text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer',
+                        method === 'ai'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-card text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      AI Generator (Default)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMethod('template')}
+                      className={cn(
+                        'text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer',
+                        method === 'template'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-card text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      Templates Library
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMethod('manual')}
+                      className={cn(
+                        'text-xs font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer',
+                        method === 'manual'
+                          ? 'bg-slate-700 text-white'
+                          : 'bg-card text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      Blank Canvas
+                    </button>
+                  </div>
+
+                  {method === 'template' && (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search 20,000+ templates (e.g. quote calculator, dental, plumbing)..."
+                          value={templateSearch}
+                          onChange={(e) => setTemplateSearch(e.target.value)}
+                          className="pl-9 h-10 text-xs rounded-xl bg-card"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto">
+                        {templatesLoading ? (
+                          <div className="col-span-2 py-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                            <Loader2 className="size-4 animate-spin text-emerald-600" /> Loading templates...
+                          </div>
+                        ) : (
+                          templateResults.slice(0, 8).map((tpl) => (
+                            <div
+                              key={tpl.id}
+                              onClick={() => handleSelectTemplate(tpl)}
+                              className={cn(
+                                'p-3 rounded-xl border text-left cursor-pointer transition-all',
+                                selectedTemplate?.id === tpl.id
+                                  ? 'border-emerald-500 bg-emerald-500/10'
+                                  : 'border-border bg-card hover:border-emerald-500/40'
+                              )}
+                            >
+                              <div className="font-bold text-xs text-foreground flex items-center justify-between">
+                                <span className="truncate">{tpl.title}</span>
+                                {selectedTemplate?.id === tpl.id && <Check className="size-3.5 text-emerald-600" />}
+                              </div>
+                              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{tpl.description}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {method === 'manual' && (
+                    <div className="p-3 bg-card rounded-xl text-xs text-muted-foreground">
+                      You will begin with an empty workspace pre-populated with standard contact fields (Name, Email, Phone) and customize every field freely in Form Studio.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
 
           {/* ═════════════════════════════════════════════════════════════════════ */}
-          {/* STEP 2: Configure Details & Goals                                  */}
+          {/* STEP 2: Configure Details & Goal                                  */}
           {/* ═════════════════════════════════════════════════════════════════════ */}
           {step === 2 && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="text-center max-w-xl mx-auto space-y-1">
                 <h3 className="text-xl font-extrabold text-foreground">Configure Details &amp; Goal</h3>
                 <p className="text-xs text-muted-foreground">
-                  Tailor your form title, primary objective, and layout structure.
+                  Customize your form title, primary objective, and layout structure.
                 </p>
               </div>
 
-              {/* Title & Purpose */}
+              {/* Title & Goal */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-foreground">Form Title</label>
@@ -753,10 +719,38 @@ export function CreateFormOrAgentModal({
                     className="w-full h-10 px-3 rounded-xl border border-border bg-card text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   >
                     {FORM_GOALS.map((g) => (
-                      <option key={g.id} value={g.id}>{g.label}</option>
+                      <option key={g.id} value={g.id}>
+                        {g.label}
+                      </option>
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Form Goal Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {FORM_GOALS.slice(0, 3).map((g) => {
+                  const Icon = g.icon;
+                  const isSelected = formGoal === g.id;
+                  return (
+                    <div
+                      key={g.id}
+                      onClick={() => setFormGoal(g.id)}
+                      className={cn(
+                        'p-3.5 rounded-2xl border text-left cursor-pointer transition-all',
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-500/10 shadow-xs'
+                          : 'border-border/80 bg-card hover:border-emerald-500/40'
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon className={cn('size-4', isSelected ? 'text-emerald-600' : 'text-muted-foreground')} />
+                        <span className="text-xs font-bold text-foreground">{g.label.split('&')[0]}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{g.desc}</p>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Multi-Step Layout Toggle */}
@@ -764,7 +758,9 @@ export function CreateFormOrAgentModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs font-bold text-foreground">Multi-Step Form Layout</div>
-                    <div className="text-[11px] text-muted-foreground">One question or category per page with visual progress bar</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      One question or category per screen with interactive progress bar
+                    </div>
                   </div>
                   <Switch checked={isMultiStep} onCheckedChange={setIsMultiStep} />
                 </div>
@@ -796,9 +792,15 @@ export function CreateFormOrAgentModal({
                 </div>
 
                 <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> Structured Schema</span>
-                  <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> Real-time Validation</span>
-                  <span className="flex items-center gap-1"><CheckCircle2 className="size-3 text-emerald-600" /> CRM Sync</span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="size-3 text-emerald-600" /> Structured Schema
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="size-3 text-emerald-600" /> Real-time Validation
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="size-3 text-emerald-600" /> CRM Sync
+                  </span>
                 </div>
               </div>
             ) : (
@@ -860,21 +862,21 @@ export function CreateFormOrAgentModal({
                   </div>
                 </div>
 
-                {/* ─── Two User Decision Choices ─── */}
+                {/* ─── Two Decision Choices ─── */}
                 <div className="pt-4 border-t border-border/60 max-w-xl mx-auto space-y-3">
                   <div className="text-center text-xs font-semibold text-foreground/80 mb-2">
                     What would you like to do next?
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Option A: Go to Advanced Edit Mode */}
+                    {/* Option A: Go to Advanced Form Studio */}
                     <Button
                       size="lg"
                       onClick={handleGoToEditor}
                       className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-12 rounded-2xl shadow-lg shadow-emerald-600/20 gap-2 cursor-pointer"
                     >
                       <Sliders className="size-4" />
-                      <span>Go to Advanced Editor</span>
+                      <span>Open in Form Studio</span>
                     </Button>
 
                     {/* Option B: Done, View Form Listing */}

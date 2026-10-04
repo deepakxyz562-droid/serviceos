@@ -8,9 +8,8 @@ import {
   SafeAreaView,
   Switch,
   Alert,
-  TextInput,
   Linking,
-  ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
@@ -18,23 +17,26 @@ import { hapticFeedback } from '@/lib/haptics';
 import { API_BASE_URL, API_PATHS } from '@/lib/constants';
 import { apiRequest } from '@/lib/api';
 
-export default function WhatsAppChannelScreen() {
+export default function InstagramChannelScreen() {
   const router = useRouter();
 
-  const [aiAutoResponder, setAiAutoResponder] = useState(true);
-  const [takeoverAlerts, setTakeoverAlerts] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
-  const [phone, setPhone] = useState('');
+  const [handle, setHandle] = useState('');
+  const [aiAutoResponder, setAiAutoResponder] = useState(true);
+  const [leadCaptureEnabled, setLeadCaptureEnabled] = useState(true);
+  const [triggerKeywords, setTriggerKeywords] = useState('price, book, quote, order, help, appointment');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Check real channel status
     apiRequest<any[]>(API_PATHS.channels)
       .then((channels) => {
         if (Array.isArray(channels)) {
-          const wa = channels.find((c) => c.type === 'whatsapp' || c.channel === 'whatsapp');
-          if (wa) {
-            setIsConnected(!!wa.connected || wa.status === 'active');
-            if (wa.config?.phoneNumber) setPhone(wa.config.phoneNumber);
+          const ig = channels.find((c) => c.type === 'instagram' || c.channel === 'instagram');
+          if (ig) {
+            setIsConnected(!!ig.connected || ig.status === 'active');
+            if (ig.config?.handle) setHandle(ig.config.handle);
+            if (ig.config?.triggerKeywords) setTriggerKeywords(ig.config.triggerKeywords);
           }
         }
       })
@@ -42,51 +44,44 @@ export default function WhatsAppChannelScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleConnectMeta = () => {
+  const handleConnectInstagram = () => {
     hapticFeedback.medium();
     Alert.alert(
-      'Connect WhatsApp Business',
-      'Choose your preferred WhatsApp connection method:\n\n1. Meta Cloud API: Recommended for high-volume automated messaging.\n2. Business Phone Linking: Connect your existing WhatsApp Business number directly.',
+      'Connect Instagram Professional',
+      'To connect your Instagram Direct Messages:\n\n1. Ensure your Instagram is switched to a Professional or Creator account.\n2. Ensure it is connected to your Facebook Business Page.\n3. Grant "instagram_manage_messages" permission.\n\nOpen Meta OAuth connection in browser?',
       [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Meta Cloud API (OAuth)',
-          onPress: () => {
-            const oauthUrl = `${API_BASE_URL}/api/oauth/facebook/callback`;
-            Linking.openURL(oauthUrl).catch(() => {
-              Alert.alert('Browser Error', 'Could not open Meta OAuth.');
-            });
-          },
+          text: 'Cancel',
+          style: 'cancel',
         },
         {
-          text: 'Enter Phone Manually',
+          text: 'Connect Meta OAuth',
           onPress: () => {
-            Alert.prompt
-              ? Alert.prompt(
-                  'WhatsApp Phone Number',
-                  'Enter your business WhatsApp number with country code (e.g. +91 9876543210):',
-                  (val) => {
-                    if (val) {
-                      setPhone(val);
-                      setIsConnected(true);
-                    }
-                  }
-                )
-              : (() => {
-                  setPhone('+91 9876543210');
-                  setIsConnected(true);
-                })();
+            const oauthUrl = `${API_BASE_URL}/api/oauth/instagram/callback`;
+            Linking.openURL(oauthUrl).catch(() => {
+              Alert.alert('Browser Error', 'Could not open Meta OAuth. Please try from your desktop dashboard or verify browser settings.');
+            });
           },
         },
       ]
     );
   };
 
+  const handleToggleAutoResponder = async (val: boolean) => {
+    hapticFeedback.light();
+    setAiAutoResponder(val);
+  };
+
+  const handleToggleLeadCapture = async (val: boolean) => {
+    hapticFeedback.light();
+    setLeadCaptureEnabled(val);
+  };
+
   const handleDisconnect = () => {
     hapticFeedback.medium();
     Alert.alert(
-      'Disconnect WhatsApp',
-      'Are you sure you want to disconnect WhatsApp Business? Your AI agent will no longer respond to incoming messages on this number.',
+      'Disconnect Instagram',
+      'Are you sure you want to disconnect Instagram Direct Messages? Your AI agent will stop answering customer DMs.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -94,7 +89,7 @@ export default function WhatsAppChannelScreen() {
           style: 'destructive',
           onPress: () => {
             setIsConnected(false);
-            setPhone('');
+            setHandle('');
           },
         },
       ]
@@ -112,75 +107,70 @@ export default function WhatsAppChannelScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>WhatsApp Business</Text>
+        <Text style={styles.headerTitle}>Instagram Direct</Text>
       </View>
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {/* Hero Card */}
         <View style={styles.heroCard}>
-          <View style={styles.whatsappIconCircle}>
-            <FontAwesome name="whatsapp" size={36} color="#FFFFFF" />
+          <View style={styles.igIconCircle}>
+            <FontAwesome name="instagram" size={34} color="#FFFFFF" />
           </View>
-          <Text style={styles.heroTitle}>Bring WhatsApp chats into your inbox</Text>
+          <Text style={styles.heroTitle}>Automate Instagram Inquiries & DMs</Text>
           <Text style={styles.heroDesc}>
-            Reach your customers on WhatsApp. Answer inquiries, take orders, and send automated status updates directly from your AI employee.
+            Turn story replies, bio link clicks, and DM questions into qualified leads, orders, and booked appointments automatically with your 24/7 AI employee.
           </Text>
 
-          {loading ? (
-            <ActivityIndicator size="small" color="#25D366" />
-          ) : isConnected ? (
+          {isConnected ? (
             <View style={styles.connectedPillRow}>
               <View style={styles.greenPulseDot} />
-              <Text style={styles.connectedPhoneText}>
-                {phone || 'WhatsApp Business'} · Active & Linked
+              <Text style={styles.connectedHandleText}>
+                {handle ? `@${handle}` : 'Instagram Professional'} · Active & Linked
               </Text>
             </View>
           ) : (
             <TouchableOpacity
               style={styles.connectMetaBtn}
-              onPress={handleConnectMeta}
+              onPress={handleConnectInstagram}
               activeOpacity={0.8}
             >
-              <FontAwesome name="whatsapp" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-              <Text style={styles.connectMetaBtnText}>Connect WhatsApp Business</Text>
+              <FontAwesome name="instagram" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.connectMetaBtnText}>Connect Instagram Professional</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Requirements Checklist */}
         <View style={styles.checklistCard}>
-          <Text style={styles.checkTitle}>WhatsApp Automation Capabilities:</Text>
+          <Text style={styles.checkTitle}>Requirements for Meta API:</Text>
           <View style={styles.checkRow}>
             <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-            <Text style={styles.checkText}>Instant AI replies to all customer inquiries</Text>
+            <Text style={styles.checkText}>Instagram Professional / Creator Account</Text>
           </View>
           <View style={styles.checkRow}>
             <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-            <Text style={styles.checkText}>Order tracking and "Food Ready" pickup alerts</Text>
+            <Text style={styles.checkText}>Linked to a Facebook Business Page</Text>
           </View>
           <View style={styles.checkRow}>
             <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-            <Text style={styles.checkText}>Itemized digital receipt generation</Text>
+            <Text style={styles.checkText}>"Allow Access to Messages" enabled in Instagram Settings</Text>
           </View>
         </View>
 
-        {/* Settings */}
-        <Text style={styles.sectionHeader}>WHATSAPP AI AUTOMATION</Text>
+        {/* Automation Settings */}
+        <Text style={styles.sectionHeader}>DM AUTOMATION CONTROLS</Text>
         <View style={styles.settingCard}>
           <View style={styles.switchRow}>
             <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={styles.settingTitle}>AI Auto-Pilot Responder</Text>
+              <Text style={styles.settingTitle}>AI Autopilot Responder</Text>
               <Text style={styles.settingSubtitle}>
-                Allow AI to reply automatically to incoming inquiries within 5 seconds.
+                AI automatically replies to incoming DMs within 3 seconds using your business catalog and knowledge base.
               </Text>
             </View>
             <Switch
               value={aiAutoResponder}
-              onValueChange={(val) => {
-                hapticFeedback.light();
-                setAiAutoResponder(val);
-              }}
-              trackColor={{ false: '#CBD5E1', true: '#25D366' }}
+              onValueChange={handleToggleAutoResponder}
+              trackColor={{ false: '#CBD5E1', true: '#E1306C' }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -189,19 +179,31 @@ export default function WhatsAppChannelScreen() {
 
           <View style={styles.switchRow}>
             <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={styles.settingTitle}>Live Takeover Push Notifications</Text>
+              <Text style={styles.settingTitle}>Auto-Qualify & Capture Leads</Text>
               <Text style={styles.settingSubtitle}>
-                Notify your mobile app immediately when a customer asks for a human.
+                Ask for customer phone, name, and service need before handing off to human inbox.
               </Text>
             </View>
             <Switch
-              value={takeoverAlerts}
-              onValueChange={(val) => {
-                hapticFeedback.light();
-                setTakeoverAlerts(val);
-              }}
-              trackColor={{ false: '#CBD5E1', true: '#25D366' }}
+              value={leadCaptureEnabled}
+              onValueChange={handleToggleLeadCapture}
+              trackColor={{ false: '#CBD5E1', true: '#E1306C' }}
               thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={{ paddingTop: 8 }}>
+            <Text style={styles.settingTitle}>Priority DM Trigger Keywords</Text>
+            <Text style={styles.settingSubtitle}>
+              When a follower sends any of these words, the AI triggers instant VIP response & booking link:
+            </Text>
+            <TextInput
+              style={styles.keywordInput}
+              value={triggerKeywords}
+              onChangeText={setTriggerKeywords}
+              placeholder="e.g. price, book, menu, quote, appointment"
             />
           </View>
         </View>
@@ -213,19 +215,19 @@ export default function WhatsAppChannelScreen() {
             onPress={handleDisconnect}
             activeOpacity={0.8}
           >
-            <Text style={styles.disconnectBtnText}>Disconnect WhatsApp</Text>
+            <Text style={styles.disconnectBtnText}>Disconnect Instagram Channel</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.manualBtn}
+            style={styles.manualVerifyBtn}
             onPress={() => {
               setIsConnected(true);
-              setPhone('+91 9876543210');
-              Alert.alert('Channel Active', 'WhatsApp channel marked as connected.');
+              setHandle('your_brand');
+              Alert.alert('Channel Activated', 'Instagram DM channel has been set to active.');
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.manualBtnText}>Quick Connect with Store Number</Text>
+            <Text style={styles.manualVerifyText}>Mark as Connected (Direct API)</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -269,19 +271,19 @@ const styles = StyleSheet.create({
     padding: 22,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#DCFCE7',
+    borderColor: '#FCE7F3',
     marginBottom: 16,
-    shadowColor: '#25D366',
+    shadowColor: '#E1306C',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 10,
     elevation: 2,
   },
-  whatsappIconCircle: {
+  igIconCircle: {
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#25D366',
+    backgroundColor: '#E1306C',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
@@ -303,12 +305,12 @@ const styles = StyleSheet.create({
   connectedPillRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#FDF2F8',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#FBCFE8',
   },
   greenPulseDot: {
     width: 8,
@@ -317,16 +319,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     marginRight: 8,
   },
-  connectedPhoneText: {
+  connectedHandleText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#15803D',
+    color: '#BE185D',
   },
   connectMetaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#25D366',
+    backgroundColor: '#E1306C',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 12,
@@ -401,6 +403,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     marginVertical: 14,
   },
+  keywordInput: {
+    marginTop: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+    color: '#0F172A',
+  },
   disconnectBtn: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -415,7 +428,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  manualBtn: {
+  manualVerifyBtn: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
@@ -424,7 +437,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
   },
-  manualBtnText: {
+  manualVerifyText: {
     color: '#475569',
     fontSize: 12,
     fontWeight: '700',
