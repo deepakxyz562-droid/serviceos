@@ -124,7 +124,26 @@ export function CommerceView() {
   // Khata (Udhaar) State
   const [khataList, setKhataList] = useState<any[]>([]);
   const [khataReceivable, setKhataReceivable] = useState(0);
+  const [khataSuppliers, setKhataSuppliers] = useState<any[]>([]);
+  const [khataPayable, setKhataPayable] = useState(0);
   const [khataLoading, setKhataLoading] = useState(false);
+  // Khata CRUD modals
+  const [khataPaymentModal, setKhataPaymentModal] = useState<{ entry: any } | null>(null);
+  const [khataUdhaarModal, setKhataUdhaarModal] = useState(false);
+  const [khataSupplierPayModal, setKhataSupplierPayModal] = useState<{ entry: any } | null>(null);
+  // Khata form state
+  const [khataPayAmount, setKhataPayAmount] = useState('');
+  const [khataPayMethod, setKhataPayMethod] = useState<'CASH' | 'UPI'>('CASH');
+  const [khataPayNote, setKhataPayNote] = useState('');
+  const [khataPaySubmitting, setKhataPaySubmitting] = useState(false);
+  const [khataUdhaarPhone, setKhataUdhaarPhone] = useState('');
+  const [khataUdhaarName, setKhataUdhaarName] = useState('');
+  const [khataUdhaarAmount, setKhataUdhaarAmount] = useState('');
+  const [khataUdhaarNote, setKhataUdhaarNote] = useState('');
+  const [khataUdhaarSubmitting, setKhataUdhaarSubmitting] = useState(false);
+  const [khataSupplierPayAmount, setKhataSupplierPayAmount] = useState('');
+  const [khataSupplierPayMethod, setKhataSupplierPayMethod] = useState<'CASH' | 'UPI'>('CASH');
+  const [khataSupplierPaySubmitting, setKhataSupplierPaySubmitting] = useState(false);
 
   // Day Book State
   const [dayBookData, setDayBookData] = useState<any>({
@@ -221,6 +240,9 @@ export function CommerceView() {
   const [billingDiscount, setBillingDiscount] = useState<string>('0');
   const [billingNotes, setBillingNotes] = useState('');
   const [billingSubmitting, setBillingSubmitting] = useState(false);
+  // Per-row loading flags for Mark-Paid + Delete actions on billing cards.
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [deletingBillingId, setDeletingBillingId] = useState<string | null>(null);
 
   // Customer Receipt & Kitchen Order Ticket (KOT) Modal State
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
@@ -271,14 +293,20 @@ export function CommerceView() {
   const loadCommerceData = async () => {
     try {
       setLoading(true);
-      const [dashRes, configRes] = await Promise.all([
+      const [dashRes, configRes, ordersRes] = await Promise.all([
         authFetch('/api/commerce/dashboard').then((r) => r.json()).catch(() => ({})),
         authFetch('/api/commerce/config').then((r) => r.json()).catch(() => ({})),
+        // Fetch the FULL orders list (the dashboard only returns the 10 most
+        // recent). This fixes the "orders tab only shows top 10" bug.
+        authFetch('/api/commerce/orders').then((r) => r.json()).catch(() => ({})),
       ]);
 
       if (dashRes.overview) {
         setStats(dashRes.overview);
-        const incomingOrders: any[] = dashRes.recentOrders || [];
+
+        // Use the full orders list from /api/commerce/orders (not just
+        // dashRes.recentOrders which is capped at 10).
+        const incomingOrders: any[] = ordersRes.orders || dashRes.recentOrders || [];
         setOrders(incomingOrders);
 
         // Auto-print check for newly arrived orders
@@ -406,8 +434,13 @@ export function CommerceView() {
     setKhataLoading(true);
     try {
       const res = await authFetch('/api/commerce/khata').then((r) => r.json());
-      if (res.records) setKhataList(res.records);
-      if (res.summary) setKhataReceivable(res.summary.totalReceivable || 0);
+      // API returns { summary, customers, suppliers } — NOT { records, summary.totalReceivable }
+      if (Array.isArray(res.customers)) setKhataList(res.customers);
+      if (Array.isArray(res.suppliers)) setKhataSuppliers(res.suppliers);
+      if (res.summary) {
+        setKhataReceivable(res.summary.totalAapkoMilega || 0);
+        setKhataPayable(res.summary.totalAapkoDenaHai || 0);
+      }
     } catch {
       toast.error('Failed to load customer khata');
     } finally {
@@ -596,17 +629,138 @@ export function CommerceView() {
   };
 
   const handleSendKhataWhatsApp = (entry: any) => {
-    const phone = (entry.customerPhone || '').replace(/\D/g, '');
+    // The API pre-builds a whatsappReminderUrl with the full reminder text + UPI link.
+    // Use it directly if present; otherwise build from entry.phone + entry.name.
+    if (entry.whatsappReminderUrl) {
+      window.open(entry.whatsappReminderUrl, '_blank');
+      return;
+    }
+    const phone = (entry.phone || '').replace(/\D/g, '');
     const amount = Number(entry.balance || 0).toFixed(2);
     const storeName = auth?.tenant?.name || 'Store';
     const upiLink = upiId
       ? `upi://pay?pa=${upiId}&pn=${encodeURIComponent(storeName)}&am=${amount}`
       : '';
-    const text = `Namaste ${entry.customerName || 'Customer'},\nThis is a polite reminder from *${storeName}*.\nYour outstanding balance is *₹${amount}*.\n${upiLink ? `\nTap to pay instantly via UPI: ${upiLink}\n` : ''}\nThank you!`;
+    const text = `Namaste ${entry.name || 'Customer'},\nThis is a polite reminder from *${storeName}*.\nYour outstanding balance is *₹${amount}*.\n${upiLink ? `\nTap to pay instantly via UPI: ${upiLink}\n` : ''}\nThank you!`;
     const waUrl = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(waUrl, '_blank');
+  };
+
+  // ── Khata CRUD: Record Payment (GOT_PAYMENT) ─────────────────────────
+  const handleOpenKhataPayment = (entry: any) => {
+    setKhataPaymentModal({ entry });
+    setKhataPayAmount(String(entry.balance || ''));
+    setKhataPayMethod('CASH');
+    setKhataPayNote('');
+  };
+
+  const handleRecordKhataPayment = async () => {
+    if (!khataPaymentModal) return;
+    const amt = parseFloat(khataPayAmount);
+    if (!amt || amt <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+    setKhataPaySubmitting(true);
+    try {
+      const res = await authFetch('/api/commerce/khata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'GOT_PAYMENT',
+          customerPhone: khataPaymentModal.entry.phone,
+          amount: amt,
+          paymentMethod: khataPayMethod,
+          note: khataPayNote,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to record payment');
+      toast.success(`Payment of ₹${amt.toFixed(2)} recorded ✓`);
+      setKhataPaymentModal(null);
+      loadKhata();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to record payment');
+    } finally {
+      setKhataPaySubmitting(false);
+    }
+  };
+
+  // ── Khata CRUD: Give Udhaar (GAVE_UDHAAR) ───────────────────────────
+  const handleGiveUdhaar = async () => {
+    const phone = khataUdhaarPhone.replace(/\D/g, '');
+    const amt = parseFloat(khataUdhaarAmount);
+    if (!phone || !amt || amt <= 0) {
+      toast.error('Please enter customer phone and a valid amount');
+      return;
+    }
+    setKhataUdhaarSubmitting(true);
+    try {
+      const res = await authFetch('/api/commerce/khata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'GAVE_UDHAAR',
+          customerPhone: phone,
+          customerName: khataUdhaarName || 'Udhaar Customer',
+          amount: amt,
+          note: khataUdhaarNote,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to record udhaar');
+      toast.success(`Udhaar of ₹${amt.toFixed(2)} recorded ✓`);
+      setKhataUdhaarModal(false);
+      setKhataUdhaarPhone('');
+      setKhataUdhaarName('');
+      setKhataUdhaarAmount('');
+      setKhataUdhaarNote('');
+      loadKhata();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to record udhaar');
+    } finally {
+      setKhataUdhaarSubmitting(false);
+    }
+  };
+
+  // ── Khata CRUD: Pay Supplier (PAID_SUPPLIER) ────────────────────────
+  const handleOpenSupplierPay = (entry: any) => {
+    setKhataSupplierPayModal({ entry });
+    setKhataSupplierPayAmount(String(entry.balance || ''));
+    setKhataSupplierPayMethod('CASH');
+  };
+
+  const handlePaySupplier = async () => {
+    if (!khataSupplierPayModal) return;
+    const amt = parseFloat(khataSupplierPayAmount);
+    if (!amt || amt <= 0) {
+      toast.error('Please enter a valid payment amount');
+      return;
+    }
+    setKhataSupplierPaySubmitting(true);
+    try {
+      const res = await authFetch('/api/commerce/khata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'PAID_SUPPLIER',
+          supplierId: khataSupplierPayModal.entry.supplierId,
+          amount: amt,
+          paymentMethod: khataSupplierPayMethod,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to record supplier payment');
+      toast.success(`Supplier payment of ₹${amt.toFixed(2)} recorded ✓`);
+      setKhataSupplierPayModal(null);
+      loadKhata();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to record supplier payment');
+    } finally {
+      setKhataSupplierPaySubmitting(false);
+    }
   };
 
   const handleAddExpense = async () => {
@@ -768,6 +922,66 @@ export function CommerceView() {
     window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
+  // Mark an invoice as fully paid — POSTs a single AiPayment equal to the
+  // outstanding balance. The pay endpoint handles status transition (PAID /
+  // PARTIALLY_PAID) automatically, so the frontend just needs to refresh.
+  const handleMarkInvoicePaid = async (inv: any) => {
+    if (!inv?.id) return;
+    const balance = Math.max(0, Number(inv.balance ?? inv.total ?? 0));
+    if (balance <= 0) {
+      toast.info('This invoice already has no outstanding balance.');
+      return;
+    }
+    if (!confirm(`Mark invoice ${inv.number} as PAID (₹${balance.toFixed(2)})?`)) return;
+    setMarkingPaidId(inv.id);
+    try {
+      const res = await authFetch(`/api/quote-flow/invoices/${inv.id}/pay`, {
+        method: 'POST',
+        body: JSON.stringify({ amount: balance, method: 'MANUAL' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to record payment');
+      }
+      toast.success(`Marked PAID ✓ (${inv.number})`);
+      loadBilling();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not mark invoice as paid.');
+    } finally {
+      setMarkingPaidId(null);
+    }
+  };
+
+  // Delete an invoice or quote (with cascade — items + payments removed by
+  // the database via onDelete: Cascade). Confirm before sending DELETE.
+  const handleDeleteBilling = async (
+    item: any,
+    type: 'INVOICE' | 'QUOTE'
+  ) => {
+    if (!item?.id) return;
+    const label = type === 'INVOICE' ? 'invoice' : 'estimate';
+    const upperLabel = type === 'INVOICE' ? 'Invoice' : 'Estimate';
+    if (!confirm(`Are you sure you want to delete ${label} ${item.number}? This cannot be undone.`)) return;
+    setDeletingBillingId(item.id);
+    try {
+      const url =
+        type === 'INVOICE'
+          ? `/api/quote-flow/invoices/${item.id}`
+          : `/api/quote-flow/quotes/${item.id}`;
+      const res = await authFetch(url, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to delete ${label}`);
+      }
+      toast.success(`${upperLabel} ${item.number} deleted`);
+      loadBilling();
+    } catch (err: any) {
+      toast.error(err?.message || `Could not delete ${label}.`);
+    } finally {
+      setDeletingBillingId(null);
+    }
+  };
+
   const openOrderDetail = async (orderId: string) => {
     setOrderModalLoading(true);
     setSelectedOrder(null);
@@ -789,56 +1003,60 @@ export function CommerceView() {
   // Background polling for real-time kitchen orders & auto-print
   useEffect(() => {
     const timer = setInterval(() => {
-      authFetch('/api/commerce/dashboard')
-        .then((r) => r.json())
-        .then((dashRes) => {
-          if (dashRes.recentOrders && Array.isArray(dashRes.recentOrders)) {
-            const incoming: any[] = dashRes.recentOrders;
+      Promise.all([
+        authFetch('/api/commerce/dashboard').then((r) => r.json()).catch(() => ({})),
+        authFetch('/api/commerce/orders').then((r) => r.json()).catch(() => ({})),
+      ])
+        .then(([dashRes, ordersRes]) => {
+          // Use the full orders list from /api/commerce/orders (not just
+          // dashRes.recentOrders which is capped at 10).
+          const incoming: any[] = ordersRes.orders || dashRes.recentOrders || [];
+          if (Array.isArray(incoming) && incoming.length > 0) {
             setOrders(incoming);
-            if (dashRes.overview) setStats(dashRes.overview);
+          }
+          if (dashRes.overview) setStats(dashRes.overview);
 
-            if (!isInitialOrderFetchRef.current) {
-              const newOrders = incoming.filter((o: any) => !seenOrderIdsRef.current.has(o.id));
-              if (newOrders.length > 0) {
-                newOrders.forEach((newOrder: any) => {
-                  seenOrderIdsRef.current.add(newOrder.id);
-                  toast.info(`🛎️ New Order #${newOrder.id.slice(-6).toUpperCase()} received!`);
+          if (!isInitialOrderFetchRef.current) {
+            const newOrders = incoming.filter((o: any) => !seenOrderIdsRef.current.has(o.id));
+            if (newOrders.length > 0) {
+              newOrders.forEach((newOrder: any) => {
+                seenOrderIdsRef.current.add(newOrder.id);
+                toast.info(`🛎️ New Order #${newOrder.id.slice(-6).toUpperCase()} received!`);
 
-                  const bInfo: BusinessPrintInfo = {
-                    name: auth?.tenant?.name || 'Local Store',
-                    address: auth?.tenant?.address || undefined,
-                    phone: auth?.tenant?.phone || undefined,
-                    gstin: gstin || undefined,
-                    billFooter: billFooterText || undefined,
-                  };
-                  const pData: PrintOrderData = {
-                    orderNumber: newOrder.id.slice(-6).toUpperCase(),
-                    orderType: newOrder.deliveryType || 'TAKEOUT',
-                    tableNumber: newOrder.deliveryAddress?.includes('Table')
-                      ? newOrder.deliveryAddress.replace(/[^0-9]/g, '')
-                      : undefined,
-                    customerName: newOrder.customerName,
-                    customerPhone: newOrder.customerPhone,
-                    createdAt: newOrder.createdAt,
-                    items: (newOrder.items || []).map((it: any) => ({
-                      name: it.name,
-                      qty: it.qty,
-                      price: it.price,
-                      amount: it.amount || it.price * it.qty,
-                    })),
-                    total: Number(newOrder.total || 0),
-                    paymentMethod: newOrder.paymentMethod,
-                    paymentStatus: newOrder.paymentStatus,
-                    notes: newOrder.notes,
-                  };
+                const bInfo: BusinessPrintInfo = {
+                  name: auth?.tenant?.name || 'Local Store',
+                  address: auth?.tenant?.address || undefined,
+                  phone: auth?.tenant?.phone || undefined,
+                  gstin: gstin || undefined,
+                  billFooter: billFooterText || undefined,
+                };
+                const pData: PrintOrderData = {
+                  orderNumber: newOrder.id.slice(-6).toUpperCase(),
+                  orderType: newOrder.deliveryType || 'TAKEOUT',
+                  tableNumber: newOrder.deliveryAddress?.includes('Table')
+                    ? newOrder.deliveryAddress.replace(/[^0-9]/g, '')
+                    : undefined,
+                  customerName: newOrder.customerName,
+                  customerPhone: newOrder.customerPhone,
+                  createdAt: newOrder.createdAt,
+                  items: (newOrder.items || []).map((it: any) => ({
+                    name: it.name,
+                    qty: it.qty,
+                    price: it.price,
+                    amount: it.amount || it.price * it.qty,
+                  })),
+                  total: Number(newOrder.total || 0),
+                  paymentMethod: newOrder.paymentMethod,
+                  paymentStatus: newOrder.paymentStatus,
+                  notes: newOrder.notes,
+                };
 
-                  handleAutoPrintNewOrder(pData, bInfo, printerConfig);
-                });
-              }
-            } else {
-              incoming.forEach((o: any) => seenOrderIdsRef.current.add(o.id));
-              isInitialOrderFetchRef.current = false;
+                handleAutoPrintNewOrder(pData, bInfo, printerConfig);
+              });
             }
+          } else {
+            incoming.forEach((o: any) => seenOrderIdsRef.current.add(o.id));
+            isInitialOrderFetchRef.current = false;
           }
         })
         .catch(() => {});
@@ -873,7 +1091,7 @@ export function CommerceView() {
     if (order.customerPhone) {
       const cleanPhone = String(order.customerPhone).replace(/\D/g, '');
       const orderNum = order.id.slice(-6).toUpperCase();
-      const locationText = order.deliveryType === 'dine_in'
+      const locationText = String(order.deliveryType || '').toUpperCase() === 'DINE_IN'
         ? (order.deliveryAddress || 'your table')
         : 'Counter 1';
       const storeName = auth?.tenant?.name || 'Kitchen';
@@ -926,7 +1144,11 @@ export function CommerceView() {
       };
       const discountsToSave = customDiscounts || discounts;
 
-      await authFetch('/api/commerce/config', {
+      // Capture the current state for optimistic rollback if the save fails.
+      const prevCatalog = catalog;
+      const prevTables = tables;
+
+      const response = await authFetch('/api/commerce/config', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -939,6 +1161,15 @@ export function CommerceView() {
           greetingMessage: greetingMessage || null,
         }),
       });
+
+      const res = await response.json();
+      if (!response.ok) {
+        // Rollback optimistic state changes.
+        setCatalog(prevCatalog);
+        setTables(prevTables);
+        throw new Error(res?.error || `Failed to save settings (${response.status})`);
+      }
+
       toast.success('Configuration saved!');
       loadCommerceData();
     } catch (err: any) {
@@ -1321,17 +1552,24 @@ export function CommerceView() {
       toast.error('Please add items to cart');
       return;
     }
+    if (!posCustomerPhone.trim()) {
+      toast.error('Customer phone is required');
+      return;
+    }
     setPosSubmitting(true);
     try {
-      const total = posCart.reduce((sum, it) => sum + it.price * it.qty, 0);
-      const res = await authFetch('/api/commerce/orders', {
+      // Apply tax + service charge from Settings (was ignoring them — POS total
+      // was just the raw subtotal, mismatching the receipt math).
+      const subtotal = posCart.reduce((sum, it) => sum + it.price * it.qty, 0);
+      const taxAmount = taxRate > 0 ? (subtotal * Number(taxRate)) / 100 : 0;
+      const serviceChargeAmount = serviceChargeRate > 0 ? (subtotal * Number(serviceChargeRate)) / 100 : 0;
+      const total = subtotal + taxAmount + serviceChargeAmount;
+      const response = await authFetch('/api/commerce/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: posCustomerName || 'Walk-in Guest',
-          customerPhone: posCustomerPhone || 'Walk-in',
-          status: 'CONFIRMED',
-          paymentStatus: 'PAID',
+          customerPhone: posCustomerPhone,
           paymentMethod: posPaymentMethod,
           deliveryType: posOrderType.toLowerCase(),
           deliveryAddress: posTableNumber ? `Table #${posTableNumber}` : null,
@@ -1339,10 +1577,15 @@ export function CommerceView() {
           items: posCart.map((i) => ({ name: i.name, qty: i.qty, price: i.price, amount: i.price * i.qty })),
           total,
         }),
-      }).then((r) => r.json());
+      });
 
-      if (res.order || res.id) {
-        toast.success('Walk-in POS Order Created!');
+      const res = await response.json();
+      if (!response.ok) {
+        throw new Error(res?.error || `Failed to create order (${response.status})`);
+      }
+
+      if (res.order) {
+        toast.success(`POS Order Created ✓ (₹${total.toFixed(2)})`);
         setPosCart([]);
         setPosCustomerName('');
         setPosCustomerPhone('');
@@ -1350,13 +1593,10 @@ export function CommerceView() {
         loadCommerceData();
         setActiveTab('orders');
       } else {
-        // Fallback simulate or notify
-        toast.success('POS Order recorded successfully');
-        setPosCart([]);
-        loadCommerceData();
+        throw new Error('Server returned no order in the response');
       }
-    } catch {
-      toast.error('Failed to submit POS order');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to submit POS order');
     } finally {
       setPosSubmitting(false);
     }
@@ -1643,16 +1883,16 @@ export function CommerceView() {
                   <span>Pending Action</span>
                   <Clock className="h-4 w-4" />
                 </div>
-                <div className="text-2xl font-black text-stone-900 mt-2">{stats.pendingOrders || 0}</div>
+                <div className="text-2xl font-black text-stone-900 mt-2">{stats.pendingPayment || stats.pendingOrders || 0}</div>
                 <div className="text-[11px] text-amber-600 mt-0.5">Awaiting confirmation</div>
               </div>
               <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-4 shadow-2xs">
                 <div className="flex items-center justify-between text-purple-700 text-xs font-bold uppercase">
-                  <span>Confirmed & Preparing</span>
+                  <span>New Orders</span>
                   <TrendingUp className="h-4 w-4" />
                 </div>
-                <div className="text-2xl font-black text-stone-900 mt-2">{stats.confirmedOrders || 0}</div>
-                <div className="text-[11px] text-purple-600 mt-0.5">In fulfillment / Kitchen</div>
+                <div className="text-2xl font-black text-stone-900 mt-2">{stats.newOrders || stats.confirmedOrders || 0}</div>
+                <div className="text-[11px] text-purple-600 mt-0.5">Pending status</div>
               </div>
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs">
                 <div className="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase">
@@ -1661,7 +1901,7 @@ export function CommerceView() {
                 </div>
                 <div className="text-2xl font-black text-stone-900 mt-2">
                   {currencySymbol}
-                  {(stats.revenue || 0).toLocaleString()}
+                  {(stats.totalRevenue || stats.revenue || 0).toLocaleString()}
                 </div>
                 <div className="text-[11px] text-emerald-600 mt-0.5">Completed & Paid</div>
               </div>
@@ -2349,13 +2589,40 @@ export function CommerceView() {
 
                 {/* Total & Checkout Button */}
                 <div className="pt-2 border-t border-stone-200">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm font-bold text-stone-700">Total Payable</span>
-                    <span className="text-xl font-black text-stone-900">
-                      {currencySymbol}
-                      {posCart.reduce((sum, it) => sum + it.price * it.qty, 0).toFixed(2)}
-                    </span>
-                  </div>
+                  {(() => {
+                    const posSubtotal = posCart.reduce((sum, it) => sum + it.price * it.qty, 0);
+                    const posTax = taxRate > 0 ? (posSubtotal * Number(taxRate)) / 100 : 0;
+                    const posServiceCharge = serviceChargeRate > 0 ? (posSubtotal * Number(serviceChargeRate)) / 100 : 0;
+                    const posGrandTotal = posSubtotal + posTax + posServiceCharge;
+                    return (
+                      <div className="space-y-1 mb-3">
+                        {taxRate > 0 && (
+                          <div className="flex justify-between text-[11px] text-stone-500">
+                            <span>Subtotal</span>
+                            <span>{currencySymbol}{posSubtotal.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {taxRate > 0 && (
+                          <div className="flex justify-between text-[11px] text-stone-500">
+                            <span>{taxName || 'Tax'} ({taxRate}%)</span>
+                            <span>+{currencySymbol}{posTax.toFixed(2)}</span>
+                          </div>
+                        )}
+                        {serviceChargeRate > 0 && (
+                          <div className="flex justify-between text-[11px] text-stone-500">
+                            <span>Service Charge ({serviceChargeRate}%)</span>
+                            <span>+{currencySymbol}{posServiceCharge.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1 border-t border-stone-100">
+                          <span className="text-sm font-bold text-stone-700">Total Payable</span>
+                          <span className="text-xl font-black text-stone-900">
+                            {currencySymbol}{posGrandTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <Button
                     onClick={submitPosOrder}
                     disabled={posSubmitting || posCart.length === 0}
@@ -3752,10 +4019,16 @@ export function CommerceView() {
                 </p>
               </div>
 
-              {/* Total Aapko Milega Badge */}
-              <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-right shadow-2xs">
-                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Aapko Milega (Receivable)</div>
-                <div className="text-2xl font-black text-amber-900 mt-0.5">₹{khataReceivable.toFixed(2)}</div>
+              {/* Total Aapko Milega + Aapko Dena Hai Badges */}
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-right shadow-2xs">
+                  <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Aapko Milega (Receivable)</div>
+                  <div className="text-2xl font-black text-amber-900 mt-0.5">₹{khataReceivable.toFixed(2)}</div>
+                </div>
+                <div className="rounded-xl border border-red-300 bg-red-50 px-5 py-3 text-right shadow-2xs">
+                  <div className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Aapko Dena Hai (Payable)</div>
+                  <div className="text-2xl font-black text-red-900 mt-0.5">₹{khataPayable.toFixed(2)}</div>
+                </div>
               </div>
             </div>
 
@@ -3763,9 +4036,19 @@ export function CommerceView() {
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-stone-900">Credit Ledger</h3>
-                <span className="text-xs text-stone-400 font-medium">
-                  {khataList.length} Customer{khataList.length === 1 ? '' : 's'} with Credit
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-stone-400 font-medium">
+                    {khataList.length} Customer{khataList.length === 1 ? '' : 's'} with Credit
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={() => setKhataUdhaarModal(true)}
+                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs h-8 gap-1.5"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Give Udhaar
+                  </Button>
+                </div>
               </div>
 
               {khataLoading ? (
@@ -3782,16 +4065,22 @@ export function CommerceView() {
                   {khataList.map((entry: any, i: number) => (
                     <div key={i} className="p-4 flex flex-wrap items-center justify-between gap-3 bg-white hover:bg-stone-50 transition">
                       <div>
-                        <div className="font-bold text-stone-900 text-sm">{entry.customerName || 'Customer'}</div>
-                        <div className="text-stone-500 font-mono text-[11px] mt-0.5">{entry.customerPhone}</div>
-                        {entry.lastTransaction && (
+                        <div className="font-bold text-stone-900 text-sm">{entry.name || 'Customer'}</div>
+                        <div className="text-stone-500 font-mono text-[11px] mt-0.5">{entry.phone}</div>
+                        {entry.oldestPendingDate && (
                           <div className="text-[10px] text-stone-400 mt-1">
-                            Last entry: {new Date(entry.lastTransaction).toLocaleDateString()}
+                            Oldest pending: {new Date(entry.oldestPendingDate).toLocaleDateString()}
+                            {entry.daysPending > 0 && ` · ${entry.daysPending} day${entry.daysPending === 1 ? '' : 's'} overdue`}
+                          </div>
+                        )}
+                        {entry.unpaidOrdersCount > 0 && (
+                          <div className="text-[10px] text-amber-600 mt-0.5">
+                            {entry.unpaidOrdersCount} unpaid order{entry.unpaidOrdersCount === 1 ? '' : 's'}
                           </div>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="text-[10px] uppercase font-bold text-red-600">Pending Due</div>
                           <div className="text-base font-black text-red-700">₹{Number(entry.balance || 0).toFixed(2)}</div>
@@ -3799,11 +4088,22 @@ export function CommerceView() {
 
                         <Button
                           size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenKhataPayment(entry)}
+                          disabled={khataPaySubmitting}
+                          className="font-bold text-xs h-8 gap-1.5 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          Record Payment
+                        </Button>
+
+                        <Button
+                          size="sm"
                           onClick={() => handleSendKhataWhatsApp(entry)}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5"
                         >
                           <Send className="h-3 w-3" />
-                          Send WhatsApp Reminder
+                          WhatsApp
                         </Button>
                       </div>
                     </div>
@@ -3811,6 +4111,267 @@ export function CommerceView() {
                 </div>
               )}
             </div>
+
+            {/* Suppliers Khata Ledger (Aapko Dena Hai) */}
+            {khataSuppliers.length > 0 && (
+              <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-stone-900">Supplier Dues (Aapko Dena Hai)</h3>
+                  <span className="text-xs text-stone-400 font-medium">
+                    {khataSuppliers.length} Supplier{khataSuppliers.length === 1 ? '' : 's'} with Dues
+                  </span>
+                </div>
+
+                <div className="divide-y divide-stone-100 rounded-xl border border-stone-200 overflow-hidden text-xs">
+                  {khataSuppliers.map((entry: any, i: number) => (
+                    <div key={i} className="p-4 flex flex-wrap items-center justify-between gap-3 bg-white hover:bg-stone-50 transition">
+                      <div>
+                        <div className="font-bold text-stone-900 text-sm">{entry.supplierName || 'Supplier'}</div>
+                        {entry.supplierPhone && (
+                          <div className="text-stone-500 font-mono text-[11px] mt-0.5">{entry.supplierPhone}</div>
+                        )}
+                        {entry.oldestPendingDate && (
+                          <div className="text-[10px] text-stone-400 mt-1">
+                            Oldest PO: {new Date(entry.oldestPendingDate).toLocaleDateString()}
+                            {entry.daysPending > 0 && ` · ${entry.daysPending} day${entry.daysPending === 1 ? '' : 's'} pending`}
+                          </div>
+                        )}
+                        {entry.outstandingOrdersCount > 0 && (
+                          <div className="text-[10px] text-red-600 mt-0.5">
+                            {entry.outstandingOrdersCount} outstanding PO{entry.outstandingOrdersCount === 1 ? '' : 's'}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-[10px] uppercase font-bold text-red-600">Payable</div>
+                          <div className="text-base font-black text-red-700">₹{Number(entry.balance || 0).toFixed(2)}</div>
+                        </div>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenSupplierPay(entry)}
+                          disabled={khataSupplierPaySubmitting}
+                          className="font-bold text-xs h-8 gap-1.5 border-blue-300 text-blue-700 hover:bg-blue-50"
+                        >
+                          <DollarSign className="h-3 w-3" />
+                          Pay Supplier
+                        </Button>
+
+                        {entry.whatsappReminderUrl && (
+                          <Button
+                            size="sm"
+                            onClick={() => window.open(entry.whatsappReminderUrl, '_blank')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5"
+                          >
+                            <Send className="h-3 w-3" />
+                            WhatsApp
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Khata: Record Payment Modal ── */}
+            {khataPaymentModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-stone-900">Record Payment</h3>
+                    <button onClick={() => setKhataPaymentModal(null)} className="text-stone-400 hover:text-stone-600">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-sm text-stone-600">
+                    <span className="font-semibold text-stone-900">{khataPaymentModal.entry.name}</span>
+                    <span className="text-stone-400 mx-2">·</span>
+                    <span className="font-mono text-xs">{khataPaymentModal.entry.phone}</span>
+                    <span className="text-stone-400 mx-2">·</span>
+                    <span className="text-red-600 font-bold">Due: ₹{Number(khataPaymentModal.entry.balance || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Amount Received (₹)</label>
+                      <Input
+                        type="number"
+                        value={khataPayAmount}
+                        onChange={(e) => setKhataPayAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Payment Method</label>
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => setKhataPayMethod('CASH')}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border ${khataPayMethod === 'CASH' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'border-stone-200 text-stone-500'}`}
+                        >
+                          💵 Cash
+                        </button>
+                        <button
+                          onClick={() => setKhataPayMethod('UPI')}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border ${khataPayMethod === 'UPI' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'border-stone-200 text-stone-500'}`}
+                        >
+                          ⚡ UPI
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Note (optional)</label>
+                      <Input
+                        value={khataPayNote}
+                        onChange={(e) => setKhataPayNote(e.target.value)}
+                        placeholder="e.g. Partial payment, full settlement..."
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setKhataPaymentModal(null)} disabled={khataPaySubmitting} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleRecordKhataPayment}
+                      disabled={khataPaySubmitting}
+                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {khataPaySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Record Payment'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Khata: Give Udhaar Modal ── */}
+            {khataUdhaarModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-stone-900">Give Udhaar (Credit Sale)</h3>
+                    <button onClick={() => setKhataUdhaarModal(false)} className="text-stone-400 hover:text-stone-600">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Customer Phone *</label>
+                      <Input
+                        value={khataUdhaarPhone}
+                        onChange={(e) => setKhataUdhaarPhone(e.target.value)}
+                        placeholder="+91 9876543210"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Customer Name</label>
+                      <Input
+                        value={khataUdhaarName}
+                        onChange={(e) => setKhataUdhaarName(e.target.value)}
+                        placeholder="e.g. Ramesh Kumar"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Amount (₹) *</label>
+                      <Input
+                        type="number"
+                        value={khataUdhaarAmount}
+                        onChange={(e) => setKhataUdhaarAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Note (optional)</label>
+                      <Input
+                        value={khataUdhaarNote}
+                        onChange={(e) => setKhataUdhaarNote(e.target.value)}
+                        placeholder="e.g. 2kg rice, 1L oil..."
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setKhataUdhaarModal(false)} disabled={khataUdhaarSubmitting} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleGiveUdhaar}
+                      disabled={khataUdhaarSubmitting}
+                      className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      {khataUdhaarSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Record Udhaar'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Khata: Pay Supplier Modal ── */}
+            {khataSupplierPayModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-stone-900">Pay Supplier</h3>
+                    <button onClick={() => setKhataSupplierPayModal(null)} className="text-stone-400 hover:text-stone-600">
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <div className="space-y-1 text-sm text-stone-600">
+                    <span className="font-semibold text-stone-900">{khataSupplierPayModal.entry.supplierName}</span>
+                    <span className="text-stone-400 mx-2">·</span>
+                    <span className="text-red-600 font-bold">Payable: ₹{Number(khataSupplierPayModal.entry.balance || 0).toFixed(2)}</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Amount to Pay (₹)</label>
+                      <Input
+                        type="number"
+                        value={khataSupplierPayAmount}
+                        onChange={(e) => setKhataSupplierPayAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Payment Method</label>
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => setKhataSupplierPayMethod('CASH')}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border ${khataSupplierPayMethod === 'CASH' ? 'bg-blue-50 border-blue-400 text-blue-700' : 'border-stone-200 text-stone-500'}`}
+                        >
+                          💵 Cash
+                        </button>
+                        <button
+                          onClick={() => setKhataSupplierPayMethod('UPI')}
+                          className={`flex-1 py-2 rounded-lg text-xs font-bold border ${khataSupplierPayMethod === 'UPI' ? 'bg-blue-50 border-blue-400 text-blue-700' : 'border-stone-200 text-stone-500'}`}
+                        >
+                          ⚡ UPI/Bank
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setKhataSupplierPayModal(null)} disabled={khataSupplierPaySubmitting} className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handlePaySupplier}
+                      disabled={khataSupplierPaySubmitting}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {khataSupplierPaySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Record Payment'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -3832,7 +4393,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-2xs">
                 <div className="text-xs font-bold text-blue-700 uppercase">Today's Sales</div>
                 <div className="text-2xl font-black text-stone-900 mt-2">
-                  ₹{Number(dayBookData.totalSales || stats.revenue || 0).toFixed(2)}
+                  ₹{Number(dayBookData.totalSales || stats.totalRevenue || stats.revenue || 0).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-blue-600 mt-0.5">Orders + POS</div>
               </div>
@@ -3840,7 +4401,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs">
                 <div className="text-xs font-bold text-emerald-700 uppercase">Total Cash Inflow</div>
                 <div className="text-2xl font-black text-emerald-900 mt-2">
-                  ₹{Number(dayBookData.totalInflow || stats.revenue || 0).toFixed(2)}
+                  ₹{Number(dayBookData.totalInflow || stats.totalRevenue || stats.revenue || 0).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-emerald-600 mt-0.5">Cash collected</div>
               </div>
@@ -3856,7 +4417,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-2xs">
                 <div className="text-xs font-black text-amber-800 uppercase tracking-wide">Cash in Hand</div>
                 <div className="text-2xl font-black text-amber-900 mt-2">
-                  ₹{Number(dayBookData.cashInHand || (stats.revenue || 0)).toFixed(2)}
+                  ₹{Number(dayBookData.cashInHand || (stats.totalRevenue || stats.revenue || 0)).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-amber-700 mt-0.5">Physical Cash Drawer</div>
               </div>
@@ -4091,6 +4652,35 @@ export function CommerceView() {
                             <Send className="h-3.5 w-3.5" />
                             Share on WhatsApp
                           </Button>
+                          {!isPaid && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleMarkInvoicePaid(inv)}
+                              disabled={markingPaidId === inv.id}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 gap-1.5"
+                            >
+                              {markingPaidId === inv.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              )}
+                              {markingPaidId === inv.id ? 'Marking...' : 'Mark Paid'}
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteBilling(inv, 'INVOICE')}
+                            disabled={deletingBillingId === inv.id}
+                            className="text-xs font-bold gap-1.5 h-8 text-red-600 border-red-300 hover:bg-red-50"
+                          >
+                            {deletingBillingId === inv.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     );
@@ -4163,6 +4753,20 @@ export function CommerceView() {
                             Convert to Invoice
                           </Button>
                         )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeleteBilling(q, 'QUOTE')}
+                          disabled={deletingBillingId === q.id}
+                          className="text-xs font-bold gap-1.5 h-8 text-red-600 border-red-300 hover:bg-red-50"
+                        >
+                          {deletingBillingId === q.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Delete
+                        </Button>
                       </div>
                     </div>
                   );

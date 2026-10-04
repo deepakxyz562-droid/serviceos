@@ -21,7 +21,7 @@ export async function GET(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    let conversation = null;
+    let conversation: { messages: any; collectedFields: any } | null = null;
     if (order.conversationId) {
       const conv = await db.gptformConversationState.findUnique({
         where: { id: order.conversationId },
@@ -79,7 +79,14 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({ order: updated });
+    return NextResponse.json({
+      order: {
+        ...updated,
+        // Parse itemsJson → items array so the frontend order detail modal
+        // doesn't lose line items after a status/payment update.
+        items: JSON.parse(updated.itemsJson || '[]'),
+      },
+    });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

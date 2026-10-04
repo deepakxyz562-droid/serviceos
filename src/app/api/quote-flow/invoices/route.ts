@@ -80,18 +80,30 @@ export async function POST(req: Request) {
 
     let targetCustomerId = body.customerId;
     if (!targetCustomerId) {
-      let defaultCust = await db.aiCustomer.findFirst({
-        where: { businessId: business.id },
-      });
-      if (!defaultCust) {
-        defaultCust = await db.aiCustomer.create({
-          data: {
-            businessId: business.id,
-            name: 'Valued Client',
-          },
+      const custName = body.customerName || 'Walk-in Customer';
+      const custPhone = body.customerPhone ? String(body.customerPhone).replace(/\D/g, '') : null;
+      // Find an existing customer by phone (preferred) or name, else create a new one.
+      // This preserves the customer's identity so invoices/quotes attach to a real
+      // AiCustomer record (instead of a generic "Valued Client"), and enables
+      // WhatsApp deep-links like wa.me/<phone>?text=...
+      let existing = custPhone
+        ? await db.aiCustomer.findFirst({ where: { businessId: business.id, phone: custPhone } })
+        : await db.aiCustomer.findFirst({ where: { businessId: business.id, name: custName } });
+      if (existing) {
+        // Refresh name/phone if the caller supplied newer info.
+        if (body.customerName && existing.name !== custName) {
+          existing = await db.aiCustomer.update({
+            where: { id: existing.id },
+            data: { name: custName, phone: custPhone || existing.phone },
+          });
+        }
+        targetCustomerId = existing.id;
+      } else {
+        const newCust = await db.aiCustomer.create({
+          data: { businessId: business.id, name: custName, phone: custPhone },
         });
+        targetCustomerId = newCust.id;
       }
-      targetCustomerId = defaultCust.id;
     }
 
     const updatedBiz = await db.aiBusiness.update({
