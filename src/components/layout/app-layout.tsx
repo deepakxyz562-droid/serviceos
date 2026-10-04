@@ -557,9 +557,11 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     viewId === 'dispatch' ||
     viewId === 'formBuilder' ||
     viewId === 'agentStudio' ||
-    viewId === 'chatbotBuilder';
+    viewId === 'chatbotBuilder' ||
+    viewId === 'commerce' ||
+    viewId === 'quoteFlow';
 
-  // Canvas, Omnichannel, Live Dispatch, Form Builder, and Chatbot Studio views need full-height flex layout.
+  // Canvas, Omnichannel, Live Dispatch, Form Builder, Chatbot Studio, Commerce and QuoteFlow views need full-height flex layout.
   const isCanvas = currentView === 'canvas';
   const isFullHeight =
     isCanvas ||
@@ -567,7 +569,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     currentView === 'dispatch' ||
     currentView === 'formBuilder' ||
     currentView === 'agentStudio' ||
-    currentView === 'chatbotBuilder';
+    currentView === 'chatbotBuilder' ||
+    currentView === 'commerce' ||
+    currentView === 'quoteFlow';
 
   // ─── Full-takeover console: SuperAdmin owns the entire viewport ─────────
   // The superadmin shell has its OWN top bar + left sidebar + bottom status

@@ -1423,154 +1423,23 @@ export function CommerceView() {
 
   return (
     <div className="flex h-full flex-col bg-stone-50 overflow-hidden">
-      {/* Top Header & Navigation Bar */}
-      <div className="border-b border-stone-200 bg-white px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-xs">
+      {/* Top Header Bar */}
+      <div className="border-b border-stone-200 bg-white px-6 py-3 flex items-center justify-between gap-4 shrink-0 shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
             <Store className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-stone-900">Commerce & Store Hub</h1>
+              <h1 className="text-lg font-bold text-stone-900">Commerce &amp; Store Hub</h1>
               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
-                Take.app & Tidio Suite
+                Take.app &amp; Vyapar Suite
               </Badge>
             </div>
             <p className="text-xs text-stone-500">
-              WhatsApp Storefront • Catalog • Dine-in QR • POS • Omnichannel Orders
+              WhatsApp Storefront • Catalog • Dine-in QR • POS • Billing &amp; Khata
             </p>
           </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs font-semibold">
-          <button
-            onClick={() => setActiveTab('orders')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-              activeTab === 'orders' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Package className="h-3.5 w-3.5 text-blue-600" />
-            Live Orders
-            {orders.length > 0 && (
-              <span className="ml-1 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.2 text-[10px] font-bold">
-                {orders.length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-              activeTab === 'catalog' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <ShoppingCart className="h-3.5 w-3.5 text-emerald-600" />
-            Products & Menu ({catalog.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('pos')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-              activeTab === 'pos' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <CreditCard className="h-3.5 w-3.5 text-purple-600" />
-            POS Register
-          </button>
-          <button
-            onClick={() => setActiveTab('dineIn')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-              activeTab === 'dineIn' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <QrCode className="h-3.5 w-3.5 text-amber-600" />
-            Dine-In QR ({tables.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('kds')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
-              activeTab === 'kds' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <ChefHat className="h-3.5 w-3.5 text-orange-600" />
-            Kitchen KDS
-            {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length > 0 && (
-              <span className="ml-1 rounded-full bg-orange-100 text-orange-700 px-1.5 py-0.2 text-[10px] font-bold">
-                {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'templates' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            Templates
-          </button>
-          <button
-            onClick={() => setActiveTab('promotions')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'promotions' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Tag className="h-3.5 w-3.5 text-amber-600" />
-            Promotions
-          </button>
-          <button
-            onClick={() => setActiveTab('domain')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'domain' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Globe className="h-3.5 w-3.5 text-purple-600" />
-            Custom Domain
-          </button>
-          <button
-            onClick={() => setActiveTab('khata')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'khata' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <BookOpen className="h-3.5 w-3.5 text-amber-700" />
-            Khata (Udhaar)
-          </button>
-          <button
-            onClick={() => setActiveTab('daybook')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'daybook' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
-            Day Book
-          </button>
-          <button
-            onClick={() => setActiveTab('closing')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'closing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Receipt className="h-3.5 w-3.5 text-blue-600" />
-            Closing
-          </button>
-          <button
-            onClick={() => setActiveTab('billing')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'billing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <FileText className="h-3.5 w-3.5 text-indigo-600" />
-            Billing & GST
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'settings' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Store className="h-3.5 w-3.5 text-stone-600" />
-            Settings
-          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -1621,11 +1490,144 @@ export function CommerceView() {
         </div>
       </div>
 
+      {/* 100% Full-Width Tab Navigation Bar */}
+      <div className="w-full border-b border-stone-200 bg-stone-50/80 px-6 py-2.5 shrink-0 overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1.5 w-full min-w-max bg-stone-100/90 p-1.5 rounded-xl border border-stone-200 text-xs font-semibold">
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'orders' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Package className="h-3.5 w-3.5 text-blue-600" />
+            Live Orders
+            {orders.length > 0 && (
+              <span className="ml-1 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.2 text-[10px] font-bold">
+                {orders.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('catalog')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'catalog' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <ShoppingCart className="h-3.5 w-3.5 text-emerald-600" />
+            Products &amp; Menu ({catalog.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('pos')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'pos' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <CreditCard className="h-3.5 w-3.5 text-purple-600" />
+            POS Register
+          </button>
+          <button
+            onClick={() => setActiveTab('dineIn')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'dineIn' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <QrCode className="h-3.5 w-3.5 text-amber-600" />
+            Dine-In QR ({tables.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('kds')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'kds' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <ChefHat className="h-3.5 w-3.5 text-orange-600" />
+            Kitchen KDS
+            {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length > 0 && (
+              <span className="ml-1 rounded-full bg-orange-100 text-orange-700 px-1.5 py-0.2 text-[10px] font-bold">
+                {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'templates' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+            Templates
+          </button>
+          <button
+            onClick={() => setActiveTab('promotions')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'promotions' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Tag className="h-3.5 w-3.5 text-amber-600" />
+            Promotions
+          </button>
+          <button
+            onClick={() => setActiveTab('domain')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'domain' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5 text-purple-600" />
+            Custom Domain
+          </button>
+          <button
+            onClick={() => setActiveTab('khata')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'khata' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5 text-amber-700" />
+            Khata (Udhaar)
+          </button>
+          <button
+            onClick={() => setActiveTab('daybook')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'daybook' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
+            Day Book
+          </button>
+          <button
+            onClick={() => setActiveTab('closing')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'closing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Receipt className="h-3.5 w-3.5 text-blue-600" />
+            Closing
+          </button>
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'billing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5 text-indigo-600" />
+            Billing &amp; GST
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'settings' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Store className="h-3.5 w-3.5 text-stone-600" />
+            Settings
+          </button>
+        </div>
+      </div>
+
       {/* Main View Body */}
       <div className="flex-1 overflow-y-auto p-6">
         {/* ======================= TAB 1: LIVE ORDERS ======================= */}
         {activeTab === 'orders' && (
-          <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="space-y-6 w-full">
             {/* Stats Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-2xs">
@@ -1824,7 +1826,7 @@ export function CommerceView() {
 
         {/* ======================= TAB 2: PRODUCTS & MENU ======================= */}
         {activeTab === 'catalog' && (
-          <div className="space-y-6 max-w-6xl mx-auto">
+          <div className="space-y-6 w-full">
             {/* Header & Actions Bar */}
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-100">
@@ -2204,7 +2206,7 @@ export function CommerceView() {
 
         {/* ======================= TAB 3: POS CASHIER REGISTER ======================= */}
         {activeTab === 'pos' && (
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left: Product Picker Grid */}
             <div className="lg:col-span-7 space-y-4">
               <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs">
@@ -2370,7 +2372,7 @@ export function CommerceView() {
 
         {/* ======================= TAB 4: DINE-IN TABLE MANAGEMENT & QR ======================= */}
         {activeTab === 'dineIn' && (
-          <div className="max-w-6xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-100">
                 <div>
@@ -2584,7 +2586,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: KITCHEN DISPLAY SYSTEM (KDS KANBAN) ======================= */}
         {activeTab === 'kds' && (
-          <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="space-y-6 w-full">
             {/* KDS Header & Quick Controls */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-stone-200 shadow-xs">
               <div>
@@ -3010,7 +3012,7 @@ export function CommerceView() {
 
         {/* ======================= TAB 5: BILLING & DAILY CLOSING (Z-REPORT) ======================= */}
         {activeTab === 'closing' && (
-          <div className="max-w-5xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             <div className="rounded-2xl border border-stone-200 bg-white p-6 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-stone-100">
                 <div>
@@ -3190,7 +3192,7 @@ export function CommerceView() {
 
         {/* ======================= TAB 5: STORE SETTINGS & PRESETS ======================= */}
         {activeTab === 'settings' && (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             {/* Quick Templates Banner */}
             <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-5 shadow-xs">
               <div className="flex items-center gap-2 mb-2">
@@ -3320,7 +3322,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: INDUSTRY TEMPLATES ======================= */}
         {activeTab === 'templates' && (
-          <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="space-y-6 w-full">
             <div>
               <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-emerald-600" />
@@ -3438,7 +3440,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: PROMOTIONS & COUPONS ======================= */}
         {activeTab === 'promotions' && (
-          <div className="space-y-6 max-w-5xl mx-auto">
+          <div className="space-y-6 w-full">
             <div>
               <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
                 <Tag className="h-5 w-5 text-amber-600" />
@@ -3640,7 +3642,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: CUSTOM DOMAIN ======================= */}
         {activeTab === 'domain' && (
-          <div className="space-y-6 max-w-4xl mx-auto">
+          <div className="space-y-6 w-full">
             <div>
               <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
                 <Globe className="h-5 w-5 text-purple-600" />
@@ -3738,7 +3740,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: KHATA (UDHAAR) ======================= */}
         {activeTab === 'khata' && (
-          <div className="space-y-6 max-w-6xl mx-auto">
+          <div className="space-y-6 w-full">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
@@ -3814,7 +3816,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: DAY BOOK & EXPENSES ======================= */}
         {activeTab === 'daybook' && (
-          <div className="space-y-6 max-w-6xl mx-auto">
+          <div className="space-y-6 w-full">
             <div>
               <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-emerald-700" />
@@ -3915,7 +3917,7 @@ export function CommerceView() {
 
         {/* ======================= TAB: BILLING & GST INVOICES (mobile billing.tsx port) ======================= */}
         {activeTab === 'billing' && (
-          <div className="space-y-6 max-w-7xl mx-auto">
+          <div className="space-y-6 w-full">
             {/* Header + actions */}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>

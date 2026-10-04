@@ -58,7 +58,7 @@ export function ItemsScreen() {
   }
 
   return (
-    <div className="mx-auto max-w-md px-5 pt-6 pb-24 space-y-4">
+    <div className="w-full max-w-5xl mx-auto px-5 pt-6 pb-24 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-stone-900">Items</h1>

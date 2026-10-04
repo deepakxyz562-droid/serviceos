@@ -22,7 +22,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-stone-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
-      <div className="mx-auto flex max-w-md items-center justify-around px-2 pb-2 pt-2">
+      <div className="mx-auto flex w-full max-w-4xl items-center justify-around px-2 pb-2 pt-2">
         {navTabs.map(({ id, label, Icon }) => {
           const active =
             activeTab === id ||
