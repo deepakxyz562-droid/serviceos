@@ -9,13 +9,9 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Animated,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest, ApiError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
@@ -53,17 +49,22 @@ export function FloatingCopilot() {
   ]);
   chatHistoryRef.current = chatHistory;
 
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handleOpen = async () => {
     await hapticFeedback.medium();
-    scale.value = withSpring(0.92, {}, () => {
-      scale.value = withSpring(1);
-    });
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 0.92,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+    ]).start();
     setModalOpen(true);
   };
 
@@ -194,20 +195,18 @@ export function FloatingCopilot() {
     <>
       {/* Floating Action Button */}
       <Animated.View
-        style={[
-          animatedStyle,
-          {
-            position: 'absolute',
-            bottom: 85,
-            right: 20,
-            zIndex: 50,
-          },
-        ]}
+        style={{
+          transform: [{ scale: scaleAnim }],
+          position: 'absolute',
+          bottom: 85,
+          right: 20,
+          zIndex: 50,
+        }}
       >
         <TouchableOpacity
           onPress={handleOpen}
           activeOpacity={0.85}
-          className="size-14 rounded-full bg-gradient-to-tr bg-emerald-500 items-center justify-center shadow-2xl shadow-emerald-500/50 border-2 border-emerald-300/40"
+          className="size-14 rounded-full bg-emerald-500 items-center justify-center shadow-2xl shadow-emerald-500/50 border-2 border-emerald-300/40"
         >
           <Ionicons name="sparkles" size={24} color="#022C22" />
         </TouchableOpacity>
