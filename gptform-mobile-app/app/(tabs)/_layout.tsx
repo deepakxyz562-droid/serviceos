@@ -35,19 +35,9 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
+            title: 'Today',
             tabBarIcon: ({ color, focused }) => (
               <MaterialIcons name="dashboard" size={24} color={color} />
-            ),
-          }}
-        />
-
-        <Tabs.Screen
-          name="inbox"
-          options={{
-            title: 'Inbox',
-            tabBarIcon: ({ color, focused }) => (
-              <MaterialIcons name="chat" size={24} color={color} />
             ),
           }}
         />
@@ -58,6 +48,26 @@ export default function TabsLayout() {
             title: 'Orders',
             tabBarIcon: ({ color, focused }) => (
               <MaterialIcons name="shopping-bag" size={24} color={color} />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="billing"
+          options={{
+            title: 'Billing',
+            tabBarIcon: ({ color, focused }) => (
+              <MaterialIcons name="receipt-long" size={24} color={color} />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="customers"
+          options={{
+            title: 'Customers',
+            tabBarIcon: ({ color, focused }) => (
+              <MaterialIcons name="people" size={24} color={color} />
             ),
           }}
         />
@@ -76,6 +86,12 @@ export default function TabsLayout() {
         />
 
         {/* Hidden auxiliary tabs to prevent Expo Router routing warnings */}
+        <Tabs.Screen
+          name="inbox"
+          options={{
+            href: null,
+          }}
+        />
         <Tabs.Screen
           name="engage"
           options={{
