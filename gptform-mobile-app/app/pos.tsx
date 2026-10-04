@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
@@ -35,12 +36,21 @@ interface MenuItem {
   price: number;
   category?: string;
   description?: string;
+  sku?: string;
+  barcode?: string;
 }
 
 export default function MobilePosScreen() {
   const router = useRouter();
   const countryPack = useBlueprintStore((s) => s.countryPack);
   const currencySymbol = countryPack?.currency?.symbol || '₹';
+
+  const [permission, requestPermission] = useCameraPermissions();
+  const [showScannerModal, setShowScannerModal] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [scannedCooldown, setScannedCooldown] = useState(false);
+  const [scannerFeedback, setScannerFeedback] = useState<{ text: string; success: boolean } | null>(null);
+  const [manualBarcodeInput, setManualBarcodeInput] = useState('');
 
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -78,6 +88,8 @@ export default function MobilePosScreen() {
                   price: Number(it.price || 0),
                   category: it.category || 'General',
                   description: it.description || '',
+                  sku: it.sku || it.barcode || '',
+                  barcode: it.barcode || it.sku || '',
                 }))
               );
               setError(null);
@@ -96,6 +108,65 @@ export default function MobilePosScreen() {
     }
   };
 
+  const handleOpenScanner = async () => {
+    if (!permission?.granted) {
+      const res = await requestPermission();
+      if (!res.granted) {
+        Alert.alert(
+          'Camera Access Required',
+          'Camera permission is required to scan barcodes with your device camera.'
+        );
+        return;
+      }
+    }
+    setScannerFeedback(null);
+    setManualBarcodeInput('');
+    setShowScannerModal(true);
+  };
+
+  const processBarcode = (scannedCode: string) => {
+    const code = scannedCode.trim();
+    if (!code) return;
+
+    const matched = menu.find(
+      (m) =>
+        m.id.toLowerCase() === code.toLowerCase() ||
+        (m.sku && m.sku.toLowerCase() === code.toLowerCase()) ||
+        (m.barcode && m.barcode.toLowerCase() === code.toLowerCase()) ||
+        m.name.toLowerCase() === code.toLowerCase()
+    );
+
+    if (matched) {
+      addToCart(matched);
+      hapticFeedback.success();
+      setScannerFeedback({
+        text: `✓ Added ${matched.name} (${currencySymbol}${matched.price})`,
+        success: true,
+      });
+    } else {
+      hapticFeedback.warning();
+      setScannerFeedback({
+        text: `✕ No item found for barcode: "${code}"`,
+        success: false,
+      });
+    }
+  };
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scannedCooldown || !data) return;
+    setScannedCooldown(true);
+    processBarcode(data);
+    setTimeout(() => {
+      setScannedCooldown(false);
+    }, 1800);
+  };
+
+  const handleManualBarcodeSubmit = () => {
+    if (!manualBarcodeInput.trim()) return;
+    processBarcode(manualBarcodeInput);
+    setManualBarcodeInput('');
+  };
+
   useEffect(() => {
     loadMenu();
   }, []);
@@ -104,7 +175,12 @@ export default function MobilePosScreen() {
 
   const filteredMenu = menu.filter((item) => {
     const matchCat = selectedCategory === 'ALL' || (item.category || 'General') === selectedCategory;
-    const matchSearch = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const q = searchQuery.toLowerCase();
+    const matchSearch =
+      !searchQuery ||
+      item.name.toLowerCase().includes(q) ||
+      (item.sku && item.sku.toLowerCase().includes(q)) ||
+      (item.barcode && item.barcode.toLowerCase().includes(q));
     return matchCat && matchSearch;
   });
 
@@ -253,21 +329,32 @@ export default function MobilePosScreen() {
 
       {/* Main Body */}
       <View style={styles.mainContainer}>
-        {/* Search Bar */}
-        <View style={styles.searchBar}>
-          <Feather name="search" size={18} color="#64748b" />
-          <TextInput
-            placeholder="Search items by name..."
-            placeholderTextColor="#94a3b8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            style={styles.searchInput}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Feather name="x-circle" size={16} color="#94a3b8" />
-            </TouchableOpacity>
-          )}
+        {/* Search Bar + Barcode Scanner Trigger */}
+        <View style={styles.searchBarRow}>
+          <View style={styles.searchBar}>
+            <Feather name="search" size={18} color="#64748b" />
+            <TextInput
+              placeholder="Search by name, SKU, or barcode..."
+              placeholderTextColor="#94a3b8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              style={styles.searchInput}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Feather name="x-circle" size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+          </View>
+          <TouchableOpacity
+            onPress={handleOpenScanner}
+            style={styles.barcodeScanBtn}
+            activeOpacity={0.8}
+            accessibilityLabel="Scan Barcode"
+          >
+            <MaterialIcons name="qr-code-scanner" size={20} color="#ffffff" />
+            <Text style={styles.barcodeScanBtnText}>Scan</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Category Pills */}
@@ -755,6 +842,156 @@ export default function MobilePosScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Camera Barcode Scanner Modal */}
+      <Modal
+        visible={showScannerModal}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowScannerModal(false);
+          setTorchOn(false);
+        }}
+      >
+        <SafeAreaView style={styles.scannerModalSafe} edges={['top', 'bottom']}>
+          {/* Top Bar */}
+          <View style={styles.scannerHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <MaterialIcons name="qr-code-scanner" size={22} color="#ffffff" />
+              <View>
+                <Text style={styles.scannerTitle}>Barcode Scanner</Text>
+                <Text style={styles.scannerSub}>Align barcode within the target box</Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setTorchOn(!torchOn)}
+                style={[styles.scannerIconBtn, torchOn && styles.scannerIconBtnActive]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name={torchOn ? 'flash-on' : 'flash-off'}
+                  size={20}
+                  color={torchOn ? '#f59e0b' : '#ffffff'}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowScannerModal(false);
+                  setTorchOn(false);
+                }}
+                style={styles.scannerCloseBtn}
+                activeOpacity={0.7}
+              >
+                <Feather name="x" size={20} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Camera View Area */}
+          <View style={styles.cameraContainer}>
+            <CameraView
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              enableTorch={torchOn}
+              barcodeScannerSettings={{
+                barcodeTypes: [
+                  'qr',
+                  'ean13',
+                  'ean8',
+                  'upc_a',
+                  'upc_e',
+                  'code128',
+                  'code39',
+                  'code93',
+                  'codabar',
+                  'itf14',
+                  'datamatrix',
+                  'pdf417',
+                  'aztec',
+                ],
+              }}
+              onBarcodeScanned={scannedCooldown ? undefined : handleBarcodeScanned}
+            />
+
+            {/* Target Reticle / Viewfinder */}
+            <View style={styles.reticleOverlay} pointerEvents="none">
+              <View style={styles.reticleBox}>
+                <View style={[styles.reticleCorner, styles.reticleTopLeft]} />
+                <View style={[styles.reticleCorner, styles.reticleTopRight]} />
+                <View style={[styles.reticleCorner, styles.reticleBottomLeft]} />
+                <View style={[styles.reticleCorner, styles.reticleBottomRight]} />
+                <View style={styles.scannerLaser} />
+              </View>
+            </View>
+
+            {/* Live Scan Feedback Toast */}
+            {scannerFeedback && (
+              <View
+                style={[
+                  styles.scannerFeedbackToast,
+                  scannerFeedback.success ? styles.scannerFeedbackSuccess : styles.scannerFeedbackError,
+                ]}
+              >
+                <MaterialIcons
+                  name={scannerFeedback.success ? 'check-circle' : 'error'}
+                  size={18}
+                  color="#ffffff"
+                />
+                <Text style={styles.scannerFeedbackText}>{scannerFeedback.text}</Text>
+              </View>
+            )}
+
+            {/* Live Cart Counter Strip inside Scanner */}
+            <View style={styles.scannerCartBadge}>
+              <Text style={styles.scannerCartBadgeText}>
+                Cart: {totalItemCount} items · {currencySymbol}{total.toFixed(2)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Bottom Manual Barcode / SKU Input */}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.scannerBottomBar}
+          >
+            <View style={styles.manualInputRow}>
+              <TextInput
+                placeholder="Or type SKU / Barcode..."
+                placeholderTextColor="#94a3b8"
+                value={manualBarcodeInput}
+                onChangeText={setManualBarcodeInput}
+                onSubmitEditing={handleManualBarcodeSubmit}
+                style={styles.manualInput}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                onPress={handleManualBarcodeSubmit}
+                style={styles.manualSubmitBtn}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.manualSubmitBtnText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                setShowScannerModal(false);
+                setTorchOn(false);
+                if (cart.length > 0) {
+                  setShowCartModal(true);
+                }
+              }}
+              style={styles.scannerDoneBtn}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.scannerDoneBtnText}>
+                {cart.length > 0 ? `Review Cart (${totalItemCount} items)` : 'Done / Close'}
+              </Text>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -817,18 +1054,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  searchBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    marginHorizontal: 16,
-    marginTop: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     gap: 8,
+  },
+  barcodeScanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 12,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  barcodeScanBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   searchInput: {
     flex: 1,
@@ -1529,5 +1792,200 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 13,
     fontWeight: '700',
+  },
+  scannerModalSafe: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+  },
+  scannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#0f172a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  scannerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  scannerSub: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 1,
+  },
+  scannerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scannerIconBtnActive: {
+    backgroundColor: '#334155',
+  },
+  scannerCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#000000',
+    overflow: 'hidden',
+  },
+  reticleOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reticleBox: {
+    width: 250,
+    height: 250,
+    borderRadius: 16,
+    position: 'relative',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  reticleCorner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderColor: '#10b981',
+  },
+  reticleTopLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderTopLeftRadius: 12,
+  },
+  reticleTopRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderTopRightRadius: 12,
+  },
+  reticleBottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderBottomLeftRadius: 12,
+  },
+  reticleBottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderBottomRightRadius: 12,
+  },
+  scannerLaser: {
+    position: 'absolute',
+    top: '50%',
+    left: 12,
+    right: 12,
+    height: 2,
+    backgroundColor: '#10b981',
+    opacity: 0.8,
+  },
+  scannerFeedbackToast: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scannerFeedbackSuccess: {
+    backgroundColor: '#059669',
+  },
+  scannerFeedbackError: {
+    backgroundColor: '#dc2626',
+  },
+  scannerFeedbackText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+    flex: 1,
+  },
+  scannerCartBadge: {
+    position: 'absolute',
+    bottom: 16,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  scannerCartBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  scannerBottomBar: {
+    backgroundColor: '#0f172a',
+    padding: 16,
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+  },
+  manualInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  manualInput: {
+    flex: 1,
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 42,
+    color: '#ffffff',
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  manualSubmitBtn: {
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualSubmitBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  scannerDoneBtn: {
+    backgroundColor: '#10b981',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  scannerDoneBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

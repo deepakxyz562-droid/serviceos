@@ -11,7 +11,11 @@ import {
   Alert,
   Modal,
   Linking,
+  Share,
+  Platform,
 } from 'react-native';
+import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -295,6 +299,128 @@ export default function BillingScreen() {
     );
   });
 
+  const handleExportGstReport = async () => {
+    if (invoices.length === 0) {
+      Alert.alert('No Invoices', 'There are no GST invoices to export yet.');
+      return;
+    }
+    await hapticFeedback.medium();
+
+    const headers = [
+      'Invoice Number',
+      'Invoice Date',
+      'Customer Name',
+      'Customer Phone',
+      'Status',
+      'Taxable Value (₹)',
+      'GST Rate (%)',
+      'CGST (₹)',
+      'SGST (₹)',
+      'Total Tax (₹)',
+      'Total Invoice Value (₹)',
+      'Items Count',
+    ];
+
+    let totalTaxable = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalTax = 0;
+    let totalAmount = 0;
+
+    const rows = invoices.map((inv) => {
+      const taxable = Number(inv.subtotal || inv.total - (inv.tax || 0)) || 0;
+      const tax = Number(inv.tax || 0);
+      const rate = taxable > 0 ? Math.round((tax / taxable) * 100) : 18;
+      const cgst = tax / 2;
+      const sgst = tax / 2;
+      const total = Number(inv.total || 0);
+
+      totalTaxable += taxable;
+      totalCgst += cgst;
+      totalSgst += sgst;
+      totalTax += tax;
+      totalAmount += total;
+
+      return [
+        `"${inv.number}"`,
+        `"${new Date(inv.createdAt).toLocaleDateString('en-IN')}"`,
+        `"${(inv.customer?.name || 'Walk-in Client').replace(/"/g, '""')}"`,
+        `"${inv.customer?.phone || ''}"`,
+        `"${inv.status}"`,
+        taxable.toFixed(2),
+        `"${rate}%"`,
+        cgst.toFixed(2),
+        sgst.toFixed(2),
+        tax.toFixed(2),
+        total.toFixed(2),
+        inv.items?.length || 0,
+      ].join(',');
+    });
+
+    const summaryRow = [
+      '"TOTAL"',
+      '""',
+      '""',
+      '""',
+      '""',
+      totalTaxable.toFixed(2),
+      '""',
+      totalCgst.toFixed(2),
+      totalSgst.toFixed(2),
+      totalTax.toFixed(2),
+      totalAmount.toFixed(2),
+      '""',
+    ].join(',');
+
+    const csvContent = [headers.join(','), ...rows, summaryRow].join('\n');
+
+    if (Platform.OS === 'web') {
+      try {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `GSTR1_Tax_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        Alert.alert('Report Exported ✓', 'GSTR-1 tax report downloaded as CSV.');
+      } catch (err: any) {
+        Alert.alert('Export Error', err?.message || 'Failed to download CSV.');
+      }
+      return;
+    }
+
+    try {
+      const filename = `GSTR1_Tax_Report_${Date.now()}.csv`;
+      const file = new ExpoFile(Paths.cache, filename);
+      file.create();
+      file.write(csvContent);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export GSTR-1 Tax Report',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        await Share.share({
+          message: csvContent,
+          title: 'GSTR-1 Tax Report',
+        });
+      }
+    } catch (err: any) {
+      try {
+        await Share.share({
+          message: csvContent,
+          title: 'GSTR-1 Tax Report',
+        });
+      } catch (shareErr: any) {
+        Alert.alert('Export Error', err?.message || 'Could not export GST report.');
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
@@ -321,6 +447,14 @@ export default function BillingScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            onPress={handleExportGstReport}
+            style={[styles.refreshBtn, { backgroundColor: '#e0e7ff' }]}
+            activeOpacity={0.7}
+            accessibilityLabel="Export GSTR-1 Tax Report"
+          >
+            <MaterialIcons name="download" size={18} color="#4338ca" />
+          </TouchableOpacity>
           <TouchableOpacity
             onPress={() => router.push('/khata' as any)}
             style={[styles.refreshBtn, { backgroundColor: '#fef3c7' }]}
@@ -420,6 +554,32 @@ export default function BillingScreen() {
           </View>
         )}
       </View>
+
+      {/* GSTR-1 Tax Summary & 1-Click Export Banner */}
+      {tab === 'INVOICES' && (
+        <View style={styles.taxSummaryBanner}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <MaterialIcons name="fact-check" size={16} color="#4338ca" />
+              <Text style={styles.taxBannerTitle}>GSTR-1 Tax Summary</Text>
+              <View style={styles.taxCountBadge}>
+                <Text style={styles.taxCountBadgeText}>{invoices.length} Bills</Text>
+              </View>
+            </View>
+            <Text style={styles.taxBannerSub}>
+              Tax Collected: ₹{invoices.reduce((s, i) => s + (Number(i.tax) || 0), 0).toFixed(2)} (CGST ₹{(invoices.reduce((s, i) => s + (Number(i.tax) || 0), 0) / 2).toFixed(2)} + SGST ₹{(invoices.reduce((s, i) => s + (Number(i.tax) || 0), 0) / 2).toFixed(2)})
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={handleExportGstReport}
+            style={styles.exportCsvBtn}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="file-download" size={16} color="#ffffff" />
+            <Text style={styles.exportCsvBtnText}>Export CSV</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Search Input */}
       <View style={styles.searchBox}>
@@ -983,6 +1143,61 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0369a1',
     marginTop: 2,
+  },
+  taxSummaryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#eef2ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+    gap: 10,
+  },
+  taxBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#312e81',
+  },
+  taxCountBadge: {
+    backgroundColor: '#c7d2fe',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  taxCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#3730a3',
+  },
+  taxBannerSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4338ca',
+    marginTop: 2,
+  },
+  exportCsvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#4338ca',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#4338ca',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  exportCsvBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   searchBox: {
     flexDirection: 'row',

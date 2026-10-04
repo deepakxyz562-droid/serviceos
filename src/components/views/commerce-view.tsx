@@ -72,6 +72,9 @@ import {
   Smartphone,
   Link2,
   Building2,
+  Scan,
+  Camera,
+  Barcode,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -189,6 +192,14 @@ export function CommerceView() {
   const [posTableNumber, setPosTableNumber] = useState('');
   const [posOrderType, setPosOrderType] = useState<'DINE_IN' | 'TAKEOUT' | 'DELIVERY'>('DINE_IN');
   const [posSubmitting, setPosSubmitting] = useState(false);
+  const [posSearch, setPosSearch] = useState('');
+  const [posCategory, setPosCategory] = useState('ALL');
+  const [posScannerModalOpen, setPosScannerModalOpen] = useState(false);
+  const [posManualBarcode, setPosManualBarcode] = useState('');
+  const [posCameraActive, setPosCameraActive] = useState(false);
+  const [posCameraError, setPosCameraError] = useState<string | null>(null);
+  const posVideoRef = useRef<HTMLVideoElement | null>(null);
+  const posMediaStreamRef = useRef<MediaStream | null>(null);
 
   // Dynamic Dine-In Table Management State (Take.app Parity)
   const [tables, setTables] = useState<Array<{ id: string; name: string; capacity?: number; section?: string; status?: string }>>([
@@ -1572,6 +1583,239 @@ export function CommerceView() {
     );
   };
 
+  // Barcode Lookup & Cart Addition
+  const handleBarcodeLookupAndAdd = (barcodeRaw: string) => {
+    const code = barcodeRaw.trim();
+    if (!code) return;
+
+    const matched = catalog.find((item: any) =>
+      item.id?.toLowerCase() === code.toLowerCase() ||
+      (item.sku && item.sku.toLowerCase() === code.toLowerCase()) ||
+      (item.barcode && item.barcode.toLowerCase() === code.toLowerCase()) ||
+      item.name?.toLowerCase() === code.toLowerCase()
+    );
+
+    if (matched) {
+      addToPosCart(matched);
+      // Audio beep feedback
+      try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = 1200;
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.12);
+      } catch {}
+      toast.success(`✓ Scanned & Added: ${matched.name} (${currencySymbol}${matched.price})`);
+    } else {
+      toast.error(`✕ No catalog item matches barcode: "${code}"`);
+    }
+  };
+
+  // Hardware USB/Bluetooth Barcode Wedge Listener (Hardware Retail Scanners)
+  useEffect(() => {
+    if (activeTab !== 'pos') return;
+
+    let buffer = '';
+    let lastKeyTime = 0;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName;
+      const activeType = (document.activeElement as HTMLInputElement)?.type;
+      const isInput = activeTag === 'INPUT' && activeType !== 'button' && activeType !== 'submit';
+      const isTextarea = activeTag === 'TEXTAREA';
+
+      const now = Date.now();
+      const timeDiff = now - lastKeyTime;
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 2) {
+          handleBarcodeLookupAndAdd(buffer);
+          buffer = '';
+          if (!isInput && !isTextarea) e.preventDefault();
+        }
+        buffer = '';
+        return;
+      }
+
+      if (e.key.length === 1) {
+        if (timeDiff > 65 && buffer.length > 0) {
+          buffer = '';
+        }
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [activeTab, catalog, currencySymbol]);
+
+  // Web Camera Barcode Scanner Controls
+  const startCameraScanner = async () => {
+    setPosScannerModalOpen(true);
+    setPosCameraError(null);
+    setPosCameraActive(false);
+
+    try {
+      if (!navigator?.mediaDevices?.getUserMedia) {
+        throw new Error('Camera API is not supported on this browser or origin.');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      posMediaStreamRef.current = stream;
+      if (posVideoRef.current) {
+        posVideoRef.current.srcObject = stream;
+        await posVideoRef.current.play();
+        setPosCameraActive(true);
+      }
+    } catch (err: any) {
+      setPosCameraError(err?.message || 'Camera access denied or device not found.');
+    }
+  };
+
+  const stopCameraScanner = () => {
+    if (posMediaStreamRef.current) {
+      posMediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      posMediaStreamRef.current = null;
+    }
+    setPosCameraActive(false);
+    setPosScannerModalOpen(false);
+  };
+
+  // Continuous Camera Frame Scanner using BarcodeDetector
+  useEffect(() => {
+    if (!posCameraActive || !posVideoRef.current) return;
+
+    let active = true;
+    let detector: any = null;
+
+    if ('BarcodeDetector' in window) {
+      try {
+        detector = new (window as any).BarcodeDetector({
+          formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e'],
+        });
+      } catch {}
+    }
+
+    let lastDetected = '';
+    let cooldownUntil = 0;
+
+    const interval = setInterval(async () => {
+      if (!active || !posVideoRef.current || posVideoRef.current.readyState < 2) return;
+      const now = Date.now();
+      if (now < cooldownUntil) return;
+
+      if (detector) {
+        try {
+          const barcodes = await detector.detect(posVideoRef.current);
+          if (barcodes.length > 0) {
+            const raw = barcodes[0].rawValue;
+            if (raw && raw !== lastDetected) {
+              lastDetected = raw;
+              cooldownUntil = now + 1600;
+              handleBarcodeLookupAndAdd(raw);
+            }
+          }
+        } catch {}
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [posCameraActive, catalog]);
+
+  // 1-Click GST & Tax Summary Report Export (CSV)
+  const exportGstTaxReportCsv = () => {
+    if (invoices.length === 0) {
+      toast.error('No invoices found to export');
+      return;
+    }
+
+    const headers = [
+      'Invoice Number',
+      'Invoice Date',
+      'Customer Name',
+      'Customer Phone',
+      'Status',
+      'Taxable Value',
+      'GST Rate (%)',
+      'CGST',
+      'SGST',
+      'Total Tax',
+      'Total Invoice Value',
+      'Items Count',
+    ];
+
+    let totalTaxable = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalTax = 0;
+    let totalAmount = 0;
+
+    const rows = invoices.map((inv) => {
+      const taxable = Number(inv.subtotal || inv.total - (inv.tax || 0)) || 0;
+      const tax = Number(inv.tax || 0);
+      const rate = taxable > 0 ? Math.round((tax / taxable) * 100) : 18;
+      const cgst = tax / 2;
+      const sgst = tax / 2;
+      const total = Number(inv.total || 0);
+
+      totalTaxable += taxable;
+      totalCgst += cgst;
+      totalSgst += sgst;
+      totalTax += tax;
+      totalAmount += total;
+
+      return [
+        `"${inv.number}"`,
+        `"${new Date(inv.createdAt).toLocaleDateString()}"`,
+        `"${(inv.customer?.name || 'Walk-in Client').replace(/"/g, '""')}"`,
+        `"${inv.customer?.phone || ''}"`,
+        `"${inv.status}"`,
+        taxable.toFixed(2),
+        `"${rate}%"`,
+        cgst.toFixed(2),
+        sgst.toFixed(2),
+        tax.toFixed(2),
+        total.toFixed(2),
+        inv.items?.length || 0,
+      ].join(',');
+    });
+
+    const summaryRow = [
+      '"TOTAL"',
+      '""',
+      '""',
+      '""',
+      '""',
+      totalTaxable.toFixed(2),
+      '""',
+      totalCgst.toFixed(2),
+      totalSgst.toFixed(2),
+      totalTax.toFixed(2),
+      totalAmount.toFixed(2),
+      '""',
+    ].join(',');
+
+    const csvContent = [headers.join(','), ...rows, summaryRow].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `GSTR1_Tax_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${invoices.length} invoices to GSTR-1 CSV report!`);
+  };
+
   const submitPosOrder = async () => {
     if (posCart.length === 0) {
       toast.error('Please add items to cart');
@@ -2525,31 +2769,118 @@ export function CommerceView() {
             {/* Left: Product Picker Grid */}
             <div className="lg:col-span-7 space-y-4">
               <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-bold text-stone-900">Walk-In Menu Items</h3>
-                  <Badge variant="outline" className="text-xs font-bold">
-                    Tap to add to cart
-                  </Badge>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="text-base font-bold text-stone-900">Walk-In Menu Items</h3>
+                    <p className="text-[11px] text-stone-500">Tap items or scan barcode to add to cart</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 text-[10px] font-bold">
+                      ⚡ Hardware Wedge Scanner Ready
+                    </Badge>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {catalog.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => addToPosCart(item)}
-                      className="flex flex-col items-start p-3.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-blue-50/60 hover:border-blue-300 transition text-left group"
-                    >
-                      <span className="text-xs font-bold text-stone-900 group-hover:text-blue-700 line-clamp-1">
-                        {item.name}
-                      </span>
-                      <span className="text-[10px] text-stone-400 mt-0.5">{item.category || 'General'}</span>
-                      <span className="mt-2 text-sm font-black text-stone-900">
-                        {currencySymbol}{item.price}
-                      </span>
-                    </button>
-                  ))}
+                {/* Search Bar + Camera Scanner Trigger */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="relative flex-1">
+                    <Search className="h-4 w-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Input
+                      value={posSearch}
+                      onChange={(e) => setPosSearch(e.target.value)}
+                      placeholder="Search items by name, SKU, or barcode..."
+                      className="pl-9 text-xs h-9"
+                    />
+                    {posSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPosSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={startCameraScanner}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 gap-1.5 shrink-0"
+                  >
+                    <Camera className="h-4 w-4" />
+                    Scan Barcode
+                  </Button>
                 </div>
+
+                {/* Category Filter Pills */}
+                {Array.from(new Set(catalog.map((c: any) => c.category || 'General'))).length > 1 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-3 no-scrollbar">
+                    {['ALL', ...Array.from(new Set(catalog.map((c: any) => c.category || 'General')))].map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setPosCategory(cat)}
+                        className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap ${
+                          posCategory === cat
+                            ? 'bg-stone-900 text-white shadow-2xs'
+                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Items Grid */}
+                {catalog.filter((item: any) => {
+                  const matchCat = posCategory === 'ALL' || (item.category || 'General') === posCategory;
+                  const q = posSearch.toLowerCase();
+                  const matchSearch =
+                    !posSearch ||
+                    item.name?.toLowerCase().includes(q) ||
+                    (item.sku && item.sku.toLowerCase().includes(q)) ||
+                    (item.barcode && item.barcode.toLowerCase().includes(q)) ||
+                    item.id?.toLowerCase().includes(q);
+                  return matchCat && matchSearch;
+                }).length === 0 ? (
+                  <div className="py-12 text-center text-xs text-stone-400 border border-dashed border-stone-200 rounded-xl">
+                    <Search className="h-8 w-8 text-stone-300 mx-auto mb-2" />
+                    <p className="font-bold text-stone-600">No matching items found</p>
+                    <p className="mt-0.5 text-stone-400">Try a different search term or scan item barcode</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {catalog
+                      .filter((item: any) => {
+                        const matchCat = posCategory === 'ALL' || (item.category || 'General') === posCategory;
+                        const q = posSearch.toLowerCase();
+                        const matchSearch =
+                          !posSearch ||
+                          item.name?.toLowerCase().includes(q) ||
+                          (item.sku && item.sku.toLowerCase().includes(q)) ||
+                          (item.barcode && item.barcode.toLowerCase().includes(q)) ||
+                          item.id?.toLowerCase().includes(q);
+                        return matchCat && matchSearch;
+                      })
+                      .map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => addToPosCart(item)}
+                          className="flex flex-col items-start p-3.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-blue-50/60 hover:border-blue-300 transition text-left group"
+                        >
+                          <span className="text-xs font-bold text-stone-900 group-hover:text-blue-700 line-clamp-1">
+                            {item.name}
+                          </span>
+                          <span className="text-[10px] text-stone-400 mt-0.5">{item.category || 'General'}</span>
+                          <span className="mt-2 text-sm font-black text-stone-900">
+                            {currencySymbol}{item.price}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4569,6 +4900,15 @@ export function CommerceView() {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={exportGstTaxReportCsv}
+                  className="h-8 gap-1.5 text-xs font-bold border-stone-200 text-stone-700 hover:bg-stone-50"
+                >
+                  <Download className="h-3.5 w-3.5 text-emerald-600" />
+                  Export GSTR-1 CSV
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={loadBilling}
                   disabled={billingLoading}
                   className="h-8 gap-1.5 text-xs font-bold"
@@ -4611,19 +4951,51 @@ export function CommerceView() {
 
             {/* KPI Strip — switches based on sub-tab */}
             {billingSubTab === 'INVOICES' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs border-l-4 border-l-emerald-500">
-                  <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Collected (Paid)</div>
-                  <div className="text-xl font-black text-emerald-900 mt-1">{currencySymbol}{Number(invoiceOverview.paid || 0).toFixed(2)}</div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs border-l-4 border-l-emerald-500">
+                    <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Collected (Paid)</div>
+                    <div className="text-xl font-black text-emerald-900 mt-1">{currencySymbol}{Number(invoiceOverview.paid || 0).toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-2xs border-l-4 border-l-amber-500">
+                    <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Pending Balance</div>
+                    <div className="text-xl font-black text-amber-900 mt-1">{currencySymbol}{Number(invoiceOverview.unpaid || 0).toFixed(2)}</div>
+                  </div>
+                  <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 shadow-2xs border-l-4 border-l-red-500">
+                    <div className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Overdue Bills</div>
+                    <div className="text-xl font-black text-red-900 mt-1">{currencySymbol}{Number(invoiceOverview.overdue || 0).toFixed(2)}</div>
+                  </div>
                 </div>
-                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-2xs border-l-4 border-l-amber-500">
-                  <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Pending Balance</div>
-                  <div className="text-xl font-black text-amber-900 mt-1">{currencySymbol}{Number(invoiceOverview.unpaid || 0).toFixed(2)}</div>
-                </div>
-                <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 shadow-2xs border-l-4 border-l-red-500">
-                  <div className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Overdue Bills</div>
-                  <div className="text-xl font-black text-red-900 mt-1">{currencySymbol}{Number(invoiceOverview.overdue || 0).toFixed(2)}</div>
-                </div>
+
+                {/* GSTR-1 Tax Compliance & Turnover Summary Card */}
+                {invoices.length > 0 && (
+                  <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black">
+                        <Receipt className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black text-indigo-950 flex items-center gap-2">
+                          GSTR-1 Compliance &amp; Tax Turnover Summary
+                          <Badge className="bg-indigo-200 text-indigo-900 border-indigo-300 text-[10px] font-bold">
+                            {invoices.length} Bills
+                          </Badge>
+                        </div>
+                        <div className="text-[11px] text-indigo-700 mt-0.5">
+                          Taxable Turnover: {currencySymbol}{invoices.reduce((s, i) => s + (Number(i.subtotal || i.total - (i.tax || 0)) || 0), 0).toFixed(2)} • Total Tax: {currencySymbol}{invoices.reduce((s, i) => s + (Number(i.tax) || 0), 0).toFixed(2)} (CGST {currencySymbol}{(invoices.reduce((s, i) => s + (Number(i.tax) || 0), 0) / 2).toFixed(2)} + SGST {currencySymbol}{(invoices.reduce((s, i) => s + (Number(i.tax) || 0), 0) / 2).toFixed(2)})
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={exportGstTaxReportCsv}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold h-8 gap-1.5"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Export GSTR-1 CSV
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -5977,6 +6349,110 @@ export function CommerceView() {
                     <FileText className="h-3.5 w-3.5" />
                   )}
                   {billingFormType === 'INVOICE' ? 'Generate GST Invoice' : 'Save & Share Quotation'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= WEB POS CAMERA BARCODE SCANNER MODAL ======================= */}
+      {posScannerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-5 py-4 bg-stone-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-emerald-600/30 text-emerald-400">
+                  <Scan className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black">Camera Barcode Scanner</h3>
+                  <p className="text-[11px] text-stone-400">Hold product barcode or QR in front of camera</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={stopCameraScanner}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-stone-800 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Video Viewport with Viewfinder Reticle */}
+            <div className="relative bg-black h-72 flex items-center justify-center overflow-hidden">
+              <video
+                ref={posVideoRef}
+                className="w-full h-full object-cover"
+                autoPlay
+                playsInline
+                muted
+              />
+
+              {/* Viewfinder Target */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-56 h-56 border-2 border-emerald-400/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
+                  <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
+                  <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
+                  <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
+                  <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
+                  <div className="absolute top-1/2 left-2 right-2 h-0.5 bg-emerald-400 animate-pulse opacity-80" />
+                </div>
+              </div>
+
+              {posCameraError && (
+                <div className="absolute inset-0 bg-stone-900/90 flex flex-col items-center justify-center p-6 text-center">
+                  <AlertCircle className="h-8 w-8 text-amber-400 mb-2" />
+                  <p className="text-xs font-bold text-white mb-1">Camera Notice</p>
+                  <p className="text-[11px] text-stone-300 max-w-xs">{posCameraError}</p>
+                </div>
+              )}
+
+              {/* Live Cart Counter Strip inside Scanner */}
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-stone-900/85 backdrop-blur-xs text-white px-3.5 py-1 rounded-full text-xs font-bold border border-stone-700">
+                Cart: {posCart.reduce((s, it) => s + it.qty, 0)} items • {currencySymbol}{posCart.reduce((s, it) => s + it.price * it.qty, 0).toFixed(2)}
+              </div>
+            </div>
+
+            {/* Manual Code Input Bar */}
+            <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3">
+              <div className="flex items-center gap-2">
+                <Input
+                  value={posManualBarcode}
+                  onChange={(e) => setPosManualBarcode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && posManualBarcode.trim()) {
+                      handleBarcodeLookupAndAdd(posManualBarcode);
+                      setPosManualBarcode('');
+                    }
+                  }}
+                  placeholder="Or enter barcode / SKU number manually..."
+                  className="text-xs h-9 bg-white"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (posManualBarcode.trim()) {
+                      handleBarcodeLookupAndAdd(posManualBarcode);
+                      setPosManualBarcode('');
+                    }
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 shrink-0"
+                >
+                  Add
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-stone-500">
+                <span>Hardware wedge scanners work automatically anywhere in POS.</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={stopCameraScanner}
+                  className="text-xs font-bold h-7"
+                >
+                  Done Scanning
                 </Button>
               </div>
             </div>
