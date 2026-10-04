@@ -1,89 +1,19 @@
-<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0F172A" />
-      <stop offset="50%" stop-color="#090D16" />
-      <stop offset="100%" stop-color="#030712" />
-    </linearGradient>
-
-    <!-- Radial Glow Behind N -->
-    <radialGradient id="ambientGlow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.35" />
-      <stop offset="60%" stop-color="#10B981" stop-opacity="0.12" />
-      <stop offset="100%" stop-color="#090D16" stop-opacity="0" />
-    </radialGradient>
-
-    <!-- Left Pillar Gradient (Indigo -> Violet) -->
-    <linearGradient id="leftPillar" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#818CF8" />
-      <stop offset="100%" stop-color="#4F46E5" />
-    </linearGradient>
-
-    <!-- Diagonal Bridge Gradient (Electric Violet -> Cyan -> Emerald) -->
-    <linearGradient id="diagonalBridge" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC" />
-      <stop offset="45%" stop-color="#6366F1" />
-      <stop offset="75%" stop-color="#06B6D4" />
-      <stop offset="100%" stop-color="#10B981" />
-    </linearGradient>
-
-    <!-- Right Pillar Gradient (Emerald -> Teal) -->
-    <linearGradient id="rightPillar" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#34D399" />
-      <stop offset="100%" stop-color="#059669" />
-    </linearGradient>
-
-    <!-- Specular Highlight Overlay -->
-    <linearGradient id="highlightGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.4" />
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
-    </linearGradient>
-
-    <!-- Border Ring Glow -->
-    <linearGradient id="borderGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.6" />
-      <stop offset="50%" stop-color="#10B981" stop-opacity="0.4" />
-      <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0.1" />
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00965e" />
+      <stop offset="100%" stop-color="#0b8e5d" />
     </linearGradient>
   </defs>
-
-  <!-- Base Dark Canvas -->
-  <rect width="1024" height="1024" rx="224" fill="url(#bgGrad)" />
-
-  <!-- Ambient Glow Core -->
-  <circle cx="512" cy="512" r="420" fill="url(#ambientGlow)" />
-
-  <!-- Subtle Border Stroke -->
-  <rect x="8" y="8" width="1008" height="1008" rx="216" fill="none" stroke="url(#borderGlow)" stroke-width="6" />
-
-  <!-- Geometric Nuvora Mark Group -->
-  <g transform="translate(512, 512) scale(1.05) translate(-512, -512)">
-    <!-- Ambient Shadow Under Emblem -->
-    <path d="M 270,720 L 754,720" stroke="#000000" stroke-width="60" stroke-linecap="round" opacity="0.4" filter="blur(24px)" />
-
-    <!-- 1. Left Upright Pillar -->
-    <rect x="250" y="270" width="124" height="484" rx="44" fill="url(#leftPillar)" />
-    <!-- Highlight sheen on left pillar -->
-    <rect x="256" y="276" width="40" height="240" rx="20" fill="url(#highlightGrad)" />
-
-    <!-- 2. Dynamic Diagonal Prism Sweeping Down -->
-    <path d="M 280,280 L 374,270 L 774,700 L 680,754 Z"
-          fill="url(#diagonalBridge)" />
-
-    <!-- 3. Right Upright Pillar -->
-    <rect x="650" y="270" width="124" height="484" rx="44" fill="url(#rightPillar)" />
-    <!-- Highlight sheen on right pillar -->
-    <rect x="656" y="276" width="40" height="240" rx="20" fill="url(#highlightGrad)" />
-
-    <!-- 4. Overlapping Fusion Caps (gives high-end 3D ribbon depth) -->
-    <circle cx="312" cy="332" r="62" fill="url(#leftPillar)" />
-    <circle cx="712" cy="692" r="62" fill="url(#rightPillar)" />
-
-    <!-- 5. Floating Accent Star (Innovation & AI Copilot Spark) -->
-    <g transform="translate(760, 240)">
-      <path d="M 0,-24 Q 0,0 24,0 Q 0,0 0,24 Q 0,0 -24,0 Q 0,0 0,-24 Z" fill="#38BDF8" opacity="0.9" />
-      <circle cx="0" cy="0" r="6" fill="#FFFFFF" />
-    </g>
+  <!-- Squircle background -->
+  <rect width="512" height="512" rx="115" ry="115" fill="url(#bg)" />
+  <!-- White F mark: two parallel forward-leaning swooshes + dot -->
+  <g fill="#ffffff">
+    <!-- Upper swoosh (top bar) -->
+    <path d="M130,165 L390,120 L405,155 L145,200 Z" />
+    <!-- Lower swoosh (middle bar) -->
+    <path d="M140,255 L360,215 L375,250 L155,290 Z" />
+    <!-- Dot at bottom-left -->
+    <circle cx="135" cy="375" r="26" />
   </g>
 </svg>

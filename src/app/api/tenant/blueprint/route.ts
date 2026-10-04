@@ -1,26 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, verifyToken, verifyTokenWithGrace } from '@/lib/auth';
 import { resolveTenantBlueprint, getCountryPack } from '@/lib/blueprint';
 import type { TenantBlueprint, BusinessType, CountryCode, BusinessCapabilities } from '@/lib/blueprint';
 
+async function resolveUserFromRequest(request: NextRequest) {
+  let authUser = await getAuthUser();
+  if (!authUser) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      authUser = verifyToken(token) || verifyTokenWithGrace(token);
+    }
+  }
+  return authUser;
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    if (!authUser || !authUser.tenantId) {
+    const authUser = await resolveUserFromRequest(request);
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: authUser.tenantId },
-      select: {
-        id: true,
-        name: true,
-        settingsJson: true,
-        region: true,
-        onboardingCompleted: true,
-      },
-    });
+    let tenantId = authUser.tenantId;
+    if (!tenantId) {
+      const dbUser = await db.user.findUnique({
+        where: { id: authUser.id },
+        select: { tenantId: true },
+      });
+      tenantId = dbUser?.tenantId || null;
+    }
+
+    let tenant = tenantId
+      ? await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: {
+            id: true,
+            name: true,
+            settingsJson: true,
+            region: true,
+            onboardingCompleted: true,
+          },
+        })
+      : null;
+
+    if (!tenant) {
+      // If user has no tenant, resolve or create default tenant for their workspace
+      const userWithTenant = await db.user.findUnique({
+        where: { id: authUser.id },
+        include: { tenant: true },
+      });
+      if (userWithTenant?.tenant) {
+        tenant = userWithTenant.tenant;
+      }
+    }
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
@@ -42,8 +76,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    if (!authUser || !authUser.tenantId) {
+    const authUser = await resolveUserFromRequest(request);
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -55,9 +89,30 @@ export async function PATCH(request: NextRequest) {
       capabilities?: Partial<BusinessCapabilities>;
     };
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: authUser.tenantId },
-    });
+    let tenantId = authUser.tenantId;
+    if (!tenantId) {
+      const dbUser = await db.user.findUnique({
+        where: { id: authUser.id },
+        select: { tenantId: true },
+      });
+      tenantId = dbUser?.tenantId || null;
+    }
+
+    let tenant = tenantId
+      ? await db.tenant.findUnique({
+          where: { id: tenantId },
+        })
+      : null;
+
+    if (!tenant) {
+      const userWithTenant = await db.user.findUnique({
+        where: { id: authUser.id },
+        include: { tenant: true },
+      });
+      if (userWithTenant?.tenant) {
+        tenant = userWithTenant.tenant;
+      }
+    }
 
     if (!tenant) {
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
@@ -88,8 +143,8 @@ export async function PATCH(request: NextRequest) {
 
     settings.blueprint = updatedBlueprint;
 
-    // Persist into Tenant
-    const updatedTenant = await db.tenant.update({
+    // 1. Persist into Tenant
+    await db.tenant.update({
       where: { id: tenant.id },
       data: {
         settingsJson: JSON.stringify(settings),
@@ -98,23 +153,63 @@ export async function PATCH(request: NextRequest) {
       },
     });
 
-    // Also synchronize currency in GptformCommerceConfig if it exists
     const countryPack = getCountryPack(updatedBlueprint.country);
-    try {
-      const commerceConfig = await db.gptformCommerceConfig.findFirst({
-        where: { businessId: tenant.id },
+
+    // 2. Synchronize AiBusiness (used by Invoices, Quotes, Daybook, Khata)
+    let aiBiz = await db.aiBusiness.findFirst({
+      where: {
+        OR: [
+          { ownerId: authUser.id },
+          ...(tenant ? [{ tenantId: tenant.id }] : []),
+        ],
+      },
+    });
+
+    if (aiBiz) {
+      aiBiz = await db.aiBusiness.update({
+        where: { id: aiBiz.id },
+        data: {
+          currency: countryPack.currency.code,
+          currencySymbol: countryPack.currency.symbol,
+          ...(businessName ? { name: businessName } : {}),
+        },
       });
-      if (commerceConfig) {
-        await db.gptformCommerceConfig.update({
-          where: { id: commerceConfig.id },
+    }
+
+    // 3. Synchronize GptformCommerceConfig (used by POS register & Commerce catalog)
+    try {
+      const commerceConfigs = await db.gptformCommerceConfig.findMany({
+        where: {
+          OR: [
+            ...(aiBiz ? [{ businessId: aiBiz.id }] : []),
+            { businessId: tenant.id },
+            { businessId: authUser.id },
+          ],
+        },
+      });
+
+      if (commerceConfigs.length > 0) {
+        for (const cfg of commerceConfigs) {
+          await db.gptformCommerceConfig.update({
+            where: { id: cfg.id },
+            data: {
+              currency: countryPack.currency.code,
+              currencySymbol: countryPack.currency.symbol,
+            },
+          });
+        }
+      } else if (aiBiz) {
+        await db.gptformCommerceConfig.create({
           data: {
+            businessId: aiBiz.id,
+            catalogJson: '[]',
+            fieldsJson: '[]',
             currency: countryPack.currency.code,
             currencySymbol: countryPack.currency.symbol,
           },
         });
       }
     } catch (e) {
-      // Non-fatal if commerce config does not exist yet
       console.warn('Could not sync commerce config currency:', e);
     }
 

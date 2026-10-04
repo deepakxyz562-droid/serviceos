@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -41,18 +41,11 @@ import {
   Stethoscope,
   Briefcase,
   LayoutGrid,
-  MapPin,
-  Globe,
-  Search,
-  CheckCircle2,
-  Plus,
-  AlertCircle,
 } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -67,7 +60,6 @@ interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any) => void;
   onBackToLanding?: () => void;
   initialTab?: string;
-  selectedPlan?: string | null;
 }
 
 // Business auth tab state
@@ -131,24 +123,11 @@ const formVariants = {
   exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
 };
 
-export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedPlan }: AuthPageProps) {
+export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
 
-  // Business Login/Register state
-  const [businessTab, setBusinessTab] = useState<BusinessTab>(
-    initialTab === 'register' || initialTab === 'signup' ? 'register' : 'login'
-  );
-
-  const activePlan = selectedPlan || (typeof window !== 'undefined' ? sessionStorage.getItem('selected_plan') : null);
-
-  useEffect(() => {
-    if (initialTab === 'register' || initialTab === 'signup') {
-      setBusinessTab('register');
-    } else if (initialTab === 'login' || initialTab === 'signin') {
-      setBusinessTab('login');
-    }
-  }, [initialTab]);
-
+  // Business Login state
+  const [businessTab, setBusinessTab] = useState<BusinessTab>('login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
@@ -159,115 +138,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
   const [regBusinessName, setRegBusinessName] = useState('');
   const [regIndustry, setRegIndustry] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regCity, setRegCity] = useState('');
-  const [regWebsite, setRegWebsite] = useState('');
-  // ── Business match state ──
-  // After the user types their business name + city (debounced), we call
-  // /api/business/match to check if an unclaimed marketplace listing already
-  // exists for this business. If matches are found, we show a "We found a
-  // possible match" card with [This is my business] / [Create a new business]
-  // buttons. This prevents duplicate businesses on the marketplace.
-  const [businessMatches, setBusinessMatches] = useState<Array<{
-    tenantId: string;
-    name: string;
-    slug: string;
-    industry: string | null;
-    city: string | null;
-    phone: string | null;
-    website: string | null;
-    address: string | null;
-    matchScore: number;
-  }>>([]);
-  const [isSearchingMatches, setIsSearchingMatches] = useState(false);
-  const [matchDismissed, setMatchDismissed] = useState(false);
-
-  // ── Debounced business match search ──────────────────────────────────
-  // After the user types their business name + city (and stops typing for
-  // 600ms), we call /api/business/match to check for existing unclaimed
-  // marketplace listings. This is the inline (option a) approach: the match
-  // card appears BEFORE the user clicks "Create Account", so they can claim
-  // an existing listing instead of creating a duplicate.
-  useEffect(() => {
-    // Reset the dismissed flag if the user changes their business name or city.
-    setMatchDismissed(false);
-    // Need at least 3 chars of business name + a city to search meaningfully.
-    if (regBusinessName.trim().length < 3 || regCity.trim().length < 2) {
-      setBusinessMatches([]);
-      return;
-    }
-    if (matchDismissed) return;
-
-    const debounce = setTimeout(async () => {
-      setIsSearchingMatches(true);
-      try {
-        const res = await fetch('/api/business/match', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: regBusinessName.trim(),
-            city: regCity.trim(),
-            phone: regPhone.trim() || undefined,
-            website: regWebsite.trim() || undefined,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setBusinessMatches(Array.isArray(data.matches) ? data.matches : []);
-        } else {
-          setBusinessMatches([]);
-        }
-      } catch {
-        // Non-blocking — if the match endpoint is down, we just don't show
-        // the match card. The user can still register normally.
-        setBusinessMatches([]);
-      } finally {
-        setIsSearchingMatches(false);
-      }
-    }, 600);
-
-    return () => clearTimeout(debounce);
-  }, [regBusinessName, regCity, regPhone, regWebsite, matchDismissed]);
-
-  // ── Claim an existing listing ────────────────────────────────────────
-  // When the user clicks "This is my business" on a match, we DON'T create a
-  // new tenant. Instead, we redirect them to the marketplace listing page
-  // where the existing ClaimBusinessBanner flow takes over (phone OTP / Google
-  // Business verification / document upload). The listing's claim flow will
-  // create the tenant-user link + set claimed=true on completion.
-  //
-  // The canonical marketplace listing URL is /{industry}/{city}/{slug} —
-  // NOT /marketplace/{slug}/{city} (which 404s). The match endpoint returns
-  // the tenant's actual `slug` + `industry` + `city` so we build the correct
-  // URL from the DB values (not by slugifying the name, which can drift).
-  const handleClaimMatch = (match: {
-    slug: string;
-    industry: string | null;
-    city: string | null;
-    name: string;
-  }) => {
-    // Build the canonical 3-segment marketplace listing URL.
-    // Industry: the match endpoint returns the tenant.industry value (e.g.
-    // "plumbing", "hvac", "electrical"). The [companySlug] route segment
-    // accepts the raw industry slug.
-    const industrySlug = match.industry || 'services';
-    const citySlug = (match.city || 'unknown')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    // `slug` comes from the DB — it's the tenant's canonical slug, not a
-    // name-derived one. Use it directly.
-    const businessSlug = match.slug;
-    const claimUrl = `/${industrySlug}/${citySlug}/${businessSlug}?claim=true`;
-    // Show a toast explaining what's happening, then redirect.
-    toast.success('Great! Let\'s verify you own this business.', {
-      description: 'Redirecting you to the claim flow...',
-    });
-    // Use window.location for a full-page navigation (not Next router) so the
-    // marketplace listing page loads fresh + the ClaimBusinessModal opens.
-    setTimeout(() => {
-      window.location.href = claimUrl;
-    }, 800);
-  };
 
   // ─── Business Login Handler ───
   const handleBusinessLogin = async (e: React.FormEvent) => {
@@ -285,12 +155,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.code === 'EMAIL_NOT_VERIFIED') {
-          setPendingEmail(loginEmail);
-          setVerificationSent(true);
-          toast.error('Please verify your email before logging in. A new link can be resent below.');
-          return;
-        }
         toast.error(data.error || 'Login failed');
         return;
       }
@@ -306,32 +170,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
       toast.error('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const [verificationSent, setVerificationSent] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState('');
-  const [isResending, setIsResending] = useState(false);
-
-  const handleResendEmail = async () => {
-    if (!pendingEmail) return;
-    setIsResending(true);
-    try {
-      const res = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: pendingEmail }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to resend verification email');
-      } else {
-        toast.success('Verification email resent! Please check your inbox.');
-      }
-    } catch {
-      toast.error('Could not resend email. Please try again.');
-    } finally {
-      setIsResending(false);
     }
   };
 
@@ -358,9 +196,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
           businessName: regBusinessName,
           industry: regIndustry,
           phone: regPhone,
-          city: regCity,
-          website: regWebsite,
-          plan: activePlan || undefined,
         }),
       });
       const data = await res.json();
@@ -368,17 +203,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
         toast.error(data.error || 'Registration failed');
         return;
       }
-      
-      // If email verification is required (standard email/password signup),
-      // DO NOT log the user in or write dummy auth to localStorage.
-      // Show the dedicated "Check your email" screen.
-      if (data.emailVerificationRequired) {
-        setPendingEmail(regEmail);
-        setVerificationSent(true);
-        toast.success('Account created! Please check your email to activate your account.');
-        return;
-      }
-
       localStorage.setItem('fieseros_auth', JSON.stringify({
         isAuthenticated: true,
         user: data.user,
@@ -386,6 +210,22 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
         token: data.token,
       }));
       toast.success('Account created successfully!');
+      // Email verification notification — shown alongside the success toast.
+      // Uses a custom toast with a close (X) button so the user can dismiss it.
+      setTimeout(() => {
+        toast(
+          "We've sent you an email with a link to confirm your address.",
+          {
+            description: 'Check your inbox and click the confirmation link to verify your account.',
+            duration: 10000,
+            icon: '📧',
+            action: {
+              label: '✕',
+              onClick: () => {},
+            },
+          }
+        );
+      }, 500);
       onAuthSuccess(data.user, data.tenant);
     } catch {
       toast.error('Something went wrong. Please try again.');
@@ -394,113 +234,32 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
     }
   };
 
-  const triggerGoogleAuth = (mode: 'login' | 'register') => {
-    let effectivePlan = activePlan || selectedPlan;
-    let effectiveRedirect = '';
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      if (!effectivePlan) {
-        effectivePlan = params.get('plan') || sessionStorage.getItem('selected_plan') || null;
-      }
-      effectiveRedirect = params.get('redirect') || '';
-    }
-    const query = new URLSearchParams({
-      mode,
-      XTransformPort: '3000',
-    });
-    if (effectivePlan) query.set('plan', effectivePlan);
-    if (effectiveRedirect) query.set('redirect', effectiveRedirect);
-    window.location.href = `/api/auth/google?${query.toString()}`;
-  };
-
   // ─── Render: Business Tab Content ───
   const renderBusinessContent = () => (
     <div className="w-full">
-      {verificationSent ? (
-        <motion.div
-          key="biz-verify"
-          variants={formVariants}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          className="text-center py-6 space-y-5"
+      {/* Business Tabs: Sign In / Create Account */}
+      <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
+        <button
+          onClick={() => setBusinessTab('login')}
+          className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
+            businessTab === 'login'
+              ? 'bg-white shadow-sm text-slate-900'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
         >
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
-            <Mail className="h-8 w-8" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold text-slate-900">Check Your Email</h3>
-            <p className="text-sm text-slate-600 max-w-sm mx-auto">
-              We&apos;ve sent a verification link to <strong className="text-slate-900">{pendingEmail}</strong>. Please click the link in your email to confirm your account and start your onboarding.
-            </p>
-          </div>
-          <div className="pt-2 space-y-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResendEmail}
-              disabled={isResending}
-              className="w-full h-10 border-slate-200 text-slate-700"
-            >
-              {isResending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Resend Verification Email
-            </Button>
-            <button
-              type="button"
-              onClick={() => {
-                setVerificationSent(false);
-                setBusinessTab('login');
-              }}
-              className="text-xs text-slate-500 hover:text-slate-700 font-medium"
-            >
-              Back to Sign In
-            </button>
-          </div>
-        </motion.div>
-      ) : (
-        <>
-          {/* Selected Plan Banner (if coming from pricing or standalone landing page) */}
-          {activePlan && businessTab === 'register' && (
-            <div className="mb-4 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <Sparkles className="size-3.5 text-emerald-600 shrink-0" />
-                <span className="font-semibold text-emerald-800 dark:text-emerald-200">
-                  {activePlan === 'standalone_starter'
-                    ? 'Standalone Starter Plan ($10/mo)'
-                    : activePlan === 'standalone_business'
-                    ? 'Standalone Business Plan ($19/mo)'
-                    : `Selected Plan: ${activePlan}`}
-                </span>
-              </div>
-              <Badge variant="outline" className="text-[10px] bg-emerald-100/60 text-emerald-700 border-emerald-300">
-                14-Day Free Trial
-              </Badge>
-            </div>
-          )}
-
-          {/* Business Tabs: Sign In / Create Account */}
-          <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
-            <button
-              onClick={() => setBusinessTab('login')}
-              className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
-                businessTab === 'login'
-                  ? 'bg-white shadow-sm text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => setBusinessTab('register')}
-              className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
-                businessTab === 'register'
-                  ? 'bg-white shadow-sm text-slate-900'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
+          Sign In
+        </button>
+        <button
+          onClick={() => setBusinessTab('register')}
+          className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
+            businessTab === 'register'
+              ? 'bg-white shadow-sm text-slate-900'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          Create Account
+        </button>
+      </div>
 
       <AnimatePresence mode="wait">
         {businessTab === 'login' ? (
@@ -573,7 +332,14 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   type="button"
                   variant="outline"
                   className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
-                  onClick={() => triggerGoogleAuth('login')}
+                  onClick={() => {
+                    // Do NOT pass `window.location.origin` here — the server
+                    // derives the OAuth redirect URI from NEXT_PUBLIC_APP_URL
+                    // (canonical app URL) so login always round-trips through
+                    // fieseros.com, even if the user is browsing on a stale
+                    // serviceos.cc link or a parked alias domain.
+                    window.location.href = `/api/auth/google?mode=login&XTransformPort=3000`;
+                  }}
                 >
                   <GoogleIcon />
                   Continue with Google
@@ -656,129 +422,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 </div>
               </motion.div>
 
-              <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
-                <Label htmlFor="reg-city" className="text-slate-700">City</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input id="reg-city" type="text" placeholder="London" value={regCity} onChange={(e) => setRegCity(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="address-level2" />
-                </div>
-              </motion.div>
-
-              <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
-                <Label htmlFor="reg-website" className="text-slate-700">Website <span className="text-slate-400 font-normal">(optional)</span></Label>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input id="reg-website" type="url" placeholder="https://yourbusiness.com" value={regWebsite} onChange={(e) => setRegWebsite(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="url" />
-                </div>
-              </motion.div>
-
-              {/* ── Inline business match card ─────────────────────────────────── */}
-              {/* After the user types their business name + city (debounced 600ms),
-                  we call /api/business/match. If matches are found, we show a
-                  "We found a possible match" card with [This is my business] +
-                  [Create a new business] buttons. This prevents duplicate
-                  businesses on the marketplace. */}
-              {isSearchingMatches && (
-                <motion.div
-                  custom={8}
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500"
-                >
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Checking for existing businesses...
-                </motion.div>
-              )}
-
-              {!isSearchingMatches && businessMatches.length > 0 && !matchDismissed && (
-                <motion.div
-                  custom={8}
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3"
-                >
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-amber-900">
-                        We found {businessMatches.length === 1 ? 'a possible match' : `${businessMatches.length} possible matches`}
-                      </p>
-                      <p className="text-xs text-amber-700 mt-0.5">
-                        Is this your business? Claim it to avoid creating a duplicate.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Match list */}
-                  <div className="space-y-2">
-                    {businessMatches.slice(0, 3).map((match) => (
-                      <div
-                        key={match.tenantId}
-                        className="rounded-md border border-amber-200 bg-white p-3 space-y-2"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-slate-900 truncate">
-                              {match.name}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-slate-500">
-                              {match.city && (
-                                <span className="flex items-center gap-0.5">
-                                  <MapPin className="w-3 h-3" />
-                                  {match.city}
-                                </span>
-                              )}
-                              {match.phone && (
-                                <span className="flex items-center gap-0.5">
-                                  <Phone className="w-3 h-3" />
-                                  {match.phone}
-                                </span>
-                              )}
-                              {match.website && (
-                                <span className="flex items-center gap-0.5 truncate">
-                                  <Globe className="w-3 h-3" />
-                                  {match.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <span className="text-[10px] font-medium text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full shrink-0">
-                            {Math.round(match.matchScore * 100)}% match
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="w-full h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-                          onClick={() => handleClaimMatch(match)}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                          This is my business
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* "Create a new business" button */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="w-full h-8 border-amber-300 text-amber-700 hover:bg-amber-100 text-xs"
-                    onClick={() => {
-                      setMatchDismissed(true);
-                      setBusinessMatches([]);
-                    }}
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
-                    Create a new business instead
-                  </Button>
-                </motion.div>
-              )}
-
-              <motion.div custom={9} variants={fadeUp} initial="hidden" animate="visible" className="pt-1">
+              <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible" className="pt-1">
                 <Button type="submit" disabled={isLoading} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer">
                   {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</> : 'Create Account'}
                 </Button>
@@ -796,7 +440,11 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                   type="button"
                   variant="outline"
                   className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
-                  onClick={() => triggerGoogleAuth('register')}
+                  onClick={() => {
+                    // Do NOT pass `window.location.origin` here — see comment
+                    // on the login button above.
+                    window.location.href = `/api/auth/google?mode=register&XTransformPort=3000`;
+                  }}
                 >
                   <GoogleIcon />
                   Continue with Google
@@ -815,8 +463,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
           </motion.div>
         )}
       </AnimatePresence>
-        </>
-      )}
     </div>
   );
 
@@ -865,7 +511,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
               <Zap className="w-5 h-5 text-emerald-400" />
             </div>
             <span className="text-white text-xl font-bold tracking-tight">
-              Nuvora
+              Fieseros
             </span>
           </motion.div>
         </div>
@@ -878,9 +524,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.3, duration: 0.6 }}
             className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4"
           >
-            The Modern OS for{' '}
-            <span className="bg-gradient-to-r from-indigo-300 via-teal-200 to-emerald-300 bg-clip-text text-transparent">
-              Every Business
+            Operations OS for{' '}
+            <span className="bg-gradient-to-r from-emerald-300 to-teal-200 bg-clip-text text-transparent">
+              Service Businesses
             </span>
           </motion.h1>
           <motion.p
@@ -889,8 +535,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.4, duration: 0.6 }}
             className="text-slate-300 text-base xl:text-lg leading-relaxed"
           >
-            Your entire business, in one simple app. Point of sale, orders, invoices,
-            customer credit ledger, scheduling, and 24/7 AI copilot — tailored to your industry.
+            Streamline your operations, manage your team, and delight your
+            customers — all from one powerful platform built for service
+            businesses.
           </motion.p>
 
           {/* Feature bullets */}
@@ -901,9 +548,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             className="mt-8 space-y-3"
           >
             {[
-              'Adaptive POS register, orders & menu KOT',
-              'Tax invoices, quotes & customer credit ledger',
-              'WhatsApp storefront, scheduling & 24/7 AI copilot',
+              'Automated scheduling & dispatch',
+              'Real-time job tracking & updates',
+              'Customer management & invoicing',
             ].map((feature, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">

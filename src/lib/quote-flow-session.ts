@@ -1,4 +1,4 @@
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, verifyToken, verifyTokenWithGrace } from '@/lib/auth';
 import { db } from '@/lib/db';
 import jwt from 'jsonwebtoken';
 
@@ -24,11 +24,32 @@ export function verifyMobileToken(token: string): { uid: string; email: string }
 }
 
 /**
- * Resolves current user from ServiceOS web session (cookies)
- * OR mobile HMAC token in x-quoteflow-token header / ?token= query param.
+ * Resolves current user from:
+ * 1. Authorization: Bearer <jwt> header from request (mobile app)
+ * 2. ServiceOS web session (cookies via getAuthUser)
+ * 3. Mobile HMAC token in x-quoteflow-token header / ?token= query param.
  */
 export async function getQuoteFlowUser(req?: Request): Promise<QuoteFlowUser | null> {
-  // 1. Try web session first
+  // 1. Direct Bearer token inspection from req (primary path for mobile app API calls)
+  if (req) {
+    const authHeader = req.headers.get('authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      const bearerToken = authHeader.slice(7).trim();
+      if (bearerToken) {
+        const user = verifyToken(bearerToken) || verifyTokenWithGrace(bearerToken);
+        if (user?.id && user?.email) {
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name || undefined,
+            tenantId: user.tenantId || undefined,
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Try web session (cookies / next/headers)
   try {
     const webUser = await getAuthUser();
     if (webUser?.id && webUser?.email) {
@@ -43,7 +64,7 @@ export async function getQuoteFlowUser(req?: Request): Promise<QuoteFlowUser | n
     // Web session check may fail outside request context, proceed to token check
   }
 
-  // 2. Try mobile token from request if provided
+  // 3. Try legacy mobile token from request (x-quoteflow-token or ?token=)
   if (req) {
     let token = req.headers.get('x-quoteflow-token');
     if (!token) {

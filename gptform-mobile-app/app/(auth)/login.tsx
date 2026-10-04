@@ -70,14 +70,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleDemoSignIn = async () => {
-    await hapticFeedback.medium();
-    clearError();
-    setEmail('demo@fieseros.com');
-    setPassword('Demo1234!');
-    await login('demo@fieseros.com', 'Demo1234!');
-  };
-
   const handleGoogleAuth = async () => {
     await hapticFeedback.medium();
     await loginWithGoogle();
@@ -105,23 +97,6 @@ export default function LoginScreen() {
 
         {/* Auth Card */}
         <View style={styles.card}>
-          {/* Fast-Track Demo Preview Button */}
-          <TouchableOpacity
-            style={styles.demoBtn}
-            onPress={handleDemoSignIn}
-            disabled={isLoading}
-            activeOpacity={0.8}
-          >
-            <View style={styles.demoIconWrap}>
-              <Ionicons name="flash" size={16} color="#059669" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.demoBtnTitle}>1-Tap Demo Business Preview</Text>
-              <Text style={styles.demoBtnSubtitle}>Explore active POS, Orders & Khata instantly</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#10B981" />
-          </TouchableOpacity>
-
           {/* Segmented Mode Switcher */}
           <View style={styles.modeTabs}>
             <TouchableOpacity
@@ -482,36 +457,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
-  },
-  demoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#064E3B',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#059669',
-  },
-  demoIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#022C22',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  demoBtnTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#6EE7B7',
-  },
-  demoBtnSubtitle: {
-    fontSize: 11,
-    color: '#A7F3D0',
-    marginTop: 1,
   },
   modeTabs: {
     flexDirection: 'row',

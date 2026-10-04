@@ -235,8 +235,6 @@ const splashSvg = `
 </svg>
 `;
 
-const PUBLIC_DIR = path.join(__dirname, '../public');
-
 async function buildAssets() {
   console.log('Rendering Nuvora App Assets...');
 
@@ -265,37 +263,7 @@ async function buildAssets() {
     .toFile(path.join(ASSETS_DIR, 'favicon.png'));
   console.log('✔ Created mobile assets/favicon.png (48x48)');
 
-  // Web Public Assets
-  if (fs.existsSync(PUBLIC_DIR)) {
-    await sharp(Buffer.from(iconSvg))
-      .resize(512, 512)
-      .png({ quality: 100 })
-      .toFile(path.join(PUBLIC_DIR, 'brand-icon.png'));
-    console.log('✔ Created web public/brand-icon.png (512x512)');
-
-    await sharp(Buffer.from(iconSvg))
-      .resize(192, 192)
-      .png({ quality: 100 })
-      .toFile(path.join(PUBLIC_DIR, 'icon-192.png'));
-    console.log('✔ Created web public/icon-192.png (192x192)');
-
-    await sharp(Buffer.from(iconSvg))
-      .resize(512, 512)
-      .png({ quality: 100 })
-      .toFile(path.join(PUBLIC_DIR, 'icon-512.png'));
-    console.log('✔ Created web public/icon-512.png (512x512)');
-
-    await sharp(Buffer.from(iconSvg))
-      .resize(32, 32)
-      .png()
-      .toFile(path.join(PUBLIC_DIR, 'favicon.png'));
-    console.log('✔ Created web public/favicon.png (32x32)');
-
-    fs.writeFileSync(path.join(PUBLIC_DIR, 'icon.svg'), iconSvg.trim());
-    console.log('✔ Created web public/icon.svg');
-  }
-
-  console.log('All Nuvora branding assets successfully compiled!');
+  console.log('All Nuvora mobile branding assets successfully compiled into gptform-mobile-app/assets!');
 }
 
 buildAssets().catch((err) => {
