@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import {
+  TransactionalOrderPayload,
+  formatCustomerOrderConfirmation,
+  formatVendorNewOrderAlert,
+  dispatchTransactionalWhatsApp,
+} from '@/lib/whatsapp-transactional';
 
 export async function POST(req: NextRequest) {
   try {
@@ -174,12 +180,54 @@ export async function POST(req: NextRequest) {
       console.warn('Customer CRM auto-capture non-fatal warning:', crmErr);
     }
 
+    // 3. Automated Transactional WhatsApp Dispatch
+    let customerWhatsAppUrl = '';
+    let vendorWhatsAppUrl = '';
+    try {
+      const orderPayload: TransactionalOrderPayload = {
+        orderId: order.id,
+        orderNumber: order.id.slice(-6).toUpperCase(),
+        businessName: tenant?.name || 'Our Store',
+        businessPhone: tenant?.phone || '',
+        customerName: customerName || 'Valued Customer',
+        customerPhone: cleanPhone,
+        total: order.total,
+        items: (items || []).map((it: any) => ({
+          name: it.name || 'Item',
+          qty: Number(it.qty) || 1,
+          price: Number(it.price) || 0,
+        })),
+        deliveryType: deliveryType || 'delivery',
+        deliveryAddress: deliveryAddress || undefined,
+        paymentMethod: paymentMethod || 'CASH',
+        paymentStatus: initialPaymentStatus,
+        status: order.status,
+        storeSlug: resolvedBusinessId,
+      };
+
+      const custConf = formatCustomerOrderConfirmation(orderPayload);
+      const vendAlert = formatVendorNewOrderAlert(orderPayload);
+
+      customerWhatsAppUrl = custConf.whatsappUrl;
+      vendorWhatsAppUrl = vendAlert.whatsappUrl;
+
+      // Automated background notification dispatch
+      dispatchTransactionalWhatsApp(cleanPhone, custConf.messageText).catch(() => {});
+      if (tenant?.phone) {
+        dispatchTransactionalWhatsApp(tenant.phone, vendAlert.messageText).catch(() => {});
+      }
+    } catch (waErr) {
+      console.warn('Transactional WhatsApp non-fatal error:', waErr);
+    }
+
     return NextResponse.json({
       success: true,
       orderId: order.id,
       orderNumber: order.id.slice(-6).toUpperCase(),
       paymentStatus: initialPaymentStatus,
       trackingUrl: `/store/${resolvedBusinessId}/order/${order.id}`,
+      customerWhatsAppUrl,
+      vendorWhatsAppUrl,
     });
   } catch (err: any) {
     console.error('Failed to create public store order:', err);

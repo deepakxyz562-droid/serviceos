@@ -69,15 +69,35 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     ];
   }
 
-  // Parse extra billing & discount config from fieldsJson
+  // Parse extra billing, promotions & bannerText from fieldsJson
   let billingConfig: any = null;
   let discountsConfig: any[] = [];
+  let bannerText: string = '';
   if (config?.fieldsJson) {
     try {
       const parsedFields = JSON.parse(config.fieldsJson);
       if (parsedFields.billing) billingConfig = parsedFields.billing;
-      if (Array.isArray(parsedFields.discounts)) discountsConfig = parsedFields.discounts;
+      if (Array.isArray(parsedFields.promotions)) {
+        discountsConfig = parsedFields.promotions.map((p: any) => ({
+          code: p.code,
+          type: p.discountType === 'PERCENT' ? 'percentage' : 'fixed',
+          value: p.discountValue,
+          minOrder: p.minOrderValue,
+          label: p.description,
+        }));
+      } else if (Array.isArray(parsedFields.discounts)) {
+        discountsConfig = parsedFields.discounts;
+      }
+      if (typeof parsedFields.bannerText === 'string') {
+        bannerText = parsedFields.bannerText;
+      }
     } catch {}
+  }
+
+  // Fallback banner if none set
+  if (!bannerText && discountsConfig.length > 0) {
+    const first = discountsConfig[0];
+    bannerText = `🎉 Special Offer: Use code ${first.code} to get ${first.type === 'percentage' ? `${first.value}%` : `₹${first.value}`} OFF!`;
   }
 
   return (
@@ -90,6 +110,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       currencySymbol={config?.currencySymbol || '₹'}
       upiId={config?.upiId || ''}
       greeting={config?.greetingMessage || `Welcome to ${businessName}!`}
+      bannerText={bannerText}
       catalog={catalog}
       tableNumber={table || null}
       billing={billingConfig}

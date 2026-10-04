@@ -62,6 +62,7 @@ interface StoreClientProps {
   tableNumber: string | null;
   billing?: BillingConfig | null;
   discounts?: DiscountRule[];
+  bannerText?: string;
 }
 
 export function StoreClient({
@@ -73,6 +74,7 @@ export function StoreClient({
   currencySymbol,
   upiId,
   greeting,
+  bannerText,
   catalog,
   tableNumber,
   billing,
@@ -202,20 +204,40 @@ export function StoreClient({
 
   const grandTotal = taxType === 'inclusive' ? taxableAmount : taxableAmount + taxAmount + serviceChargeAmount;
 
-  const handleApplyPromo = () => {
+  const handleApplyPromo = async () => {
     setPromoError('');
     const code = promoCodeInput.trim().toUpperCase();
     if (!code) return;
     const match = discounts?.find((d) => d.code.toUpperCase() === code);
-    if (!match) {
-      setPromoError('Invalid coupon code');
+    if (match) {
+      if (match.minOrder && subtotal < match.minOrder) {
+        setPromoError(`Min order of ${currencySymbol}${match.minOrder} required for this coupon`);
+        return;
+      }
+      setAppliedDiscount(match);
       return;
     }
-    if (match.minOrder && subtotal < match.minOrder) {
-      setPromoError(`Min order of ${currencySymbol}${match.minOrder} required for this coupon`);
-      return;
+
+    try {
+      const res = await fetch('/api/public/store/promotions/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessSlug: businessId, code, cartTotal: subtotal }),
+      }).then((r) => r.json());
+
+      if (res.valid) {
+        setAppliedDiscount({
+          code: res.code,
+          type: 'fixed',
+          value: res.discountAmount,
+          label: res.description,
+        });
+      } else {
+        setPromoError(res.error || 'Invalid coupon code');
+      }
+    } catch {
+      setPromoError('Could not validate coupon code');
     }
-    setAppliedDiscount(match);
   };
 
   const handleCallWaiter = (action: 'WATER' | 'SERVER' | 'BILL') => {
@@ -357,6 +379,28 @@ export function StoreClient({
     <div className="min-h-screen bg-stone-100 flex justify-center text-stone-900 font-sans pb-28">
       {/* Mobile-first frame container */}
       <div className="w-full max-w-md bg-white min-h-screen shadow-md flex flex-col">
+        {/* Promotional Announcement Banner */}
+        {bannerText && (
+          <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="shrink-0 text-sm">📣</span>
+              <span className="truncate">{bannerText}</span>
+            </div>
+            {discounts && discounts.length > 0 && !appliedDiscount && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPromoCodeInput(discounts[0].code);
+                  setAppliedDiscount(discounts[0]);
+                }}
+                className="shrink-0 ml-2 px-2 py-0.5 rounded bg-white text-stone-900 text-[10px] font-black hover:bg-stone-100 transition shadow-2xs"
+              >
+                Apply
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Store Banner & Brand Header */}
         <div className="bg-stone-900 text-white p-5 pt-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-44 h-44 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />

@@ -438,6 +438,106 @@ export default function MoreScreen() {
             </View>
             <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
           </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/templates' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="storefront" size={22} color="#059669" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Industry Templates</Text>
+                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Kirana · Salon · Food</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>1-Tap prebuilt catalogs, prices & categories</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/promotions' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="local-offer" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Promotions & Coupons</Text>
+                  <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#b45309', fontSize: 10, fontWeight: '800' }}>Discounts</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Storefront promo banners & WhatsApp blasts</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/custom-domain' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="language" size={22} color="#8b5cf6" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Custom Domain</Text>
+                  <View style={{ backgroundColor: '#f3e8ff', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#7c3aed', fontSize: 10, fontWeight: '800' }}>White-Label</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Connect your own brand domain with free SSL</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/marketplace' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="travel-explore" size={22} color="#0284c7" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Local Store Directory</Text>
+                  <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>Discovery</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Explore verified local shops & in-app listing</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
         </View>
 
         {/* Grouped Menu Card 1: Team, Notifications, Appearance, Contact Us */}

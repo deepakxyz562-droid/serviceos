@@ -50,6 +50,11 @@ export const API_PATHS = {
   commerceInventory: '/api/commerce/inventory',
   commerceInvoices: '/api/quote-flow/invoices',
   commerceQuotes: '/api/quote-flow/quotes',
+  commerceTemplates: '/api/commerce/templates',
+  commercePromotions: '/api/commerce/promotions',
+  commerceCustomDomain: '/api/commerce/domain',
+  commerceDomainVerify: '/api/commerce/domain/verify',
+  storeDirectory: '/api/public/store/directory',
   ecommerceShopifySync: '/api/ecommerce/shopify/sync',
   ecommerceWooSync: '/api/ecommerce/woocommerce/sync',
 };
