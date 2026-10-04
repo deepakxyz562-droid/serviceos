@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { FormAgentData, DEFAULT_FORM_AGENT } from '@/features/forms/types/agent-types';
+import { FormAgentData } from '@/features/forms/types/agent-types';
 import { resolveAgentTheme } from '@/lib/theme/agent-theme';
 import { AgentDeviceSimulator } from '@/features/forms/components/agent-builder/agent-device-simulator';
 import { Loader2, AlertCircle, Sparkles, LayoutTemplate, Minimize2, Maximize2, ExternalLink } from 'lucide-react';
@@ -83,20 +83,19 @@ export default function PublicChatPage() {
           }
         }
 
-        // 3. Fallback default
-        setAgent({
-          ...DEFAULT_FORM_AGENT,
-          id: agentId || 'agent_ai',
-          slug: agentId || 'ai-assistant',
-          name: agentId.includes('dental') || agentId.includes('clara') ? 'Clara' : 'AI Assistant',
-          roleTitle: agentId.includes('dental') || agentId.includes('clara') ? 'Dental Appointment Assistant' : 'AI Intake Assistant',
-        });
+        // 3. Both API lookups failed → DO NOT fabricate a fake agent.
+        // Previously this branch synthesized a placeholder agent named
+        // "Clara" (or "AI Assistant"), which masked real "agent not
+        // found" errors and misled end users into thinking the agent
+        // existed. Now we leave `agent` null — the `!agent` render
+        // branch below shows an honest "Agent Unavailable" card with
+        // a support link instead of a fabricated chatbot UI.
+        // See worklog P8 for context.
+        setAgent(null);
       } catch {
-        setAgent({
-          ...DEFAULT_FORM_AGENT,
-          id: agentId || 'agent_ai',
-          slug: agentId || 'ai-assistant',
-        });
+        // Network / parse error: same handling — show the honest
+        // "Agent Unavailable" card rather than fabricating an agent.
+        setAgent(null);
       } finally {
         setLoading(false);
       }
@@ -127,10 +126,28 @@ export default function PublicChatPage() {
     if (isEmbed) return null;
     return (
       <div className="min-h-screen bg-slate-100 dark:bg-slate-900 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full text-center p-6 rounded-2xl shadow-sm">
-          <AlertCircle className="size-10 text-amber-500 mx-auto mb-3" />
-          <h2 className="text-lg font-bold">Agent Offline</h2>
-          <p className="text-xs text-muted-foreground mt-1">This AI agent is currently unavailable.</p>
+        <Card className="max-w-md w-full text-center p-8 rounded-2xl shadow-sm">
+          <div className="size-14 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="size-8 text-amber-600 dark:text-amber-400" />
+          </div>
+          <h2 className="text-lg font-bold">Agent Unavailable</h2>
+          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+            This AI agent is not available. The link may be incorrect, the agent
+            may have been unpublished, or it may be temporarily offline.
+          </p>
+          <p className="text-xs text-muted-foreground/80 mt-2 break-all">
+            Agent ID: <code className="font-mono text-foreground/70">{agentId || '(none)'}</code>
+          </p>
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-2">
+            <Button asChild size="sm" className="h-9">
+              <a href={`mailto:support@fieseros.com?subject=Agent%20Unavailable%20-%20${encodeURIComponent(agentId || '')}`}>
+                Contact Support
+              </a>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="h-9">
+              <a href="/">Back to Home</a>
+            </Button>
+          </div>
         </Card>
       </div>
     );

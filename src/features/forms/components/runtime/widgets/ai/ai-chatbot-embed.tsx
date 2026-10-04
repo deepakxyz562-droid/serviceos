@@ -21,19 +21,14 @@ interface AiChatbotEmbedValue {
   externalId?: string;
 }
 
-const PLACEHOLDER_REPLIES = [
-  'Thank you for your question. A live agent will follow up shortly.',
-  'I can help with that — please provide a bit more detail.',
-  'Got it. Let me check our knowledge base for you.',
-  'Could you clarify what you mean by that?',
-];
-
 export function AiChatbotEmbed({ value, onChange, config, disabled, field }: WidgetProps) {
   const botId = str(config.botId, '');
   const endpoint = str(config.endpoint, '/api/forms/ai/chatbot');
+  const formId = String((field as Record<string, unknown> | undefined)?.formId ?? '');
   const ariaLabel = str(field?.label, 'AI chatbot');
   const [input, setInput] = useState('');
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const existing = (value as Partial<AiChatbotEmbedValue> | undefined) ?? {};
@@ -47,29 +42,47 @@ export function AiChatbotEmbed({ value, onChange, config, disabled, field }: Wid
       const next: AiChatbotEmbedValue = {
         botId, messages: [], integrated: true,
         timestamp: new Date().toISOString(),
-        externalId: `bot_${botId}`,
       };
       onChange(next);
     }
      
   }, [botId]);
 
-  const send = () => {
+  const send = async () => {
     if (!input.trim() || disabled || pending) return;
-    const userMsg: ChatMessage = { role: 'user', content: input.trim(), ts: new Date().toISOString() };
+    const userText = input.trim();
+    const userMsg: ChatMessage = { role: 'user', content: userText, ts: new Date().toISOString() };
     const next = [...messages, userMsg];
     setMessages(next);
     setInput('');
     setPending(true);
-    // Phase 4: placeholder AI reply.
-    setTimeout(() => {
-      const reply = PLACEHOLDER_REPLIES[Math.floor(Math.random() * PLACEHOLDER_REPLIES.length)];
+    setError(null);
+
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userText,
+          history: next.map((m) => ({ role: m.role, content: m.content })),
+          botId,
+          formId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || `Request failed (${res.status})`);
+      }
+      const reply: string = data.reply || data.message || '';
       const aiMsg: ChatMessage = { role: 'assistant', content: reply, ts: new Date().toISOString() };
       const updated = [...next, aiMsg];
       setMessages(updated);
+      onChange({ botId, messages: updated, integrated: true, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      setError(err?.message || 'Failed to get a reply. Please try again.');
+    } finally {
       setPending(false);
-      onChange({ botId, messages: updated, integrated: true, timestamp: new Date().toISOString(), externalId: `bot_${botId}` });
-    }, 800);
+    }
   };
 
   return (
@@ -81,11 +94,10 @@ export function AiChatbotEmbed({ value, onChange, config, disabled, field }: Wid
               : <span className="ml-auto text-[10px] text-amber-600">no botId</span>}
       </div>
       <div ref={scrollRef} className="h-44 overflow-y-auto rounded-xl border border-border bg-muted/30 p-2 space-y-1.5">
-        {messages.length === 0 && !pending && (
+        {messages.length === 0 && !pending && !error && (
           <div className="h-full flex flex-col items-center justify-center text-center text-[11px] text-muted-foreground">
             <Sparkles className="size-4 mb-1 text-primary" />
             <p>Ask me anything about this form.</p>
-            <p className="text-[10px] mt-1 font-mono">POST {endpoint}</p>
           </div>
         )}
         {messages.map((m, i) => (
@@ -105,6 +117,13 @@ export function AiChatbotEmbed({ value, onChange, config, disabled, field }: Wid
             </div>
           </div>
         )}
+        {error && (
+          <div className="flex justify-start">
+            <div className="max-w-[90%] px-2.5 py-1.5 rounded-2xl rounded-bl-sm text-[11px] bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300">
+              {error}
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex gap-1.5">
         <Input
@@ -118,7 +137,7 @@ export function AiChatbotEmbed({ value, onChange, config, disabled, field }: Wid
         />
         <Button type="button" disabled={disabled || pending || !input.trim()} onClick={send}
           className="h-9 px-3 text-xs gap-1 shrink-0">
-          <Send className="size-3.5" /> Send
+          {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />} Send
         </Button>
       </div>
     </div>

@@ -3,10 +3,11 @@ import { Tabs } from 'expo-router';
 import { View, Platform, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
+import { FloatingCopilot } from '@/components/copilot/floating-copilot';
 
 export default function TabsLayout() {
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents="box-none">
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -94,6 +95,11 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+
+      {/* Floating Copilot overlay — sits above every tab screen, above the
+          tab bar. The component itself renders a position:absolute FAB at
+          bottom-right plus a slide-up Modal when tapped. */}
+      <FloatingCopilot />
     </View>
   );
 }

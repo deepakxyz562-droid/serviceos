@@ -21,24 +21,62 @@ export function MailchimpSubscribe({ value, onChange, config, disabled, field }:
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notConnected, setNotConnected] = useState(false);
   const existing = (value as Partial<MailchimpSubscribeValue> | undefined) ?? {};
 
-  const handleSubscribe = () => {
+  const handleSubscribe = async () => {
     if (disabled) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError('Please enter a valid email address.');
       return;
     }
-    setPending(true); setError(null);
-    setTimeout(() => {
+    setPending(true);
+    setError(null);
+    setNotConnected(false);
+
+    try {
+      const resp = await fetch('/api/integrations/mailchimp/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'subscribe',
+          email,
+          listId: listId || undefined,
+        }),
+      });
+
+      if (resp.status === 503) {
+        setNotConnected(true);
+        setPending(false);
+        return;
+      }
+
+      const data = (await resp.json().catch(() => ({}))) as {
+        externalId?: string;
+        status?: string;
+        listId?: string;
+        error?: string;
+      };
+
+      if (!resp.ok || !data.externalId) {
+        setError(data.error || `Failed to subscribe (${resp.status}).`);
+        setPending(false);
+        return;
+      }
+
       const next: MailchimpSubscribeValue = {
-        integrated: true, timestamp: new Date().toISOString(),
-        externalId: `mc_${Math.random().toString(36).slice(2, 10)}`,
-        email, listId: listId || 'default',
+        integrated: true,
+        timestamp: new Date().toISOString(),
+        externalId: data.externalId,
+        email,
+        listId: data.listId || listId || 'default',
       };
       onChange(next);
       setPending(false);
-    }, 600);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error subscribing via Mailchimp.');
+      setPending(false);
+    }
   };
 
   return (
@@ -52,6 +90,13 @@ export function MailchimpSubscribe({ value, onChange, config, disabled, field }:
         <div className="rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-800 p-2.5 flex items-center gap-2">
           <CheckCircle2 className="size-4 text-emerald-600" />
           <span className="text-[11px] text-emerald-700 dark:text-emerald-300">Subscribed to list.</span>
+        </div>
+      ) : notConnected ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-2.5 flex items-center gap-2">
+          <AlertCircle className="size-4 text-amber-600 shrink-0" />
+          <span className="text-[11px] text-amber-700 dark:text-amber-300">
+            Connect your Mailchimp account in <strong>Dashboard &gt; Integrations</strong> to capture subscribers.
+          </span>
         </div>
       ) : (
         <div className="space-y-1.5">

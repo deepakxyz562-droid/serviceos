@@ -329,15 +329,26 @@ const pipelineDisplayLabels: Record<string, string> = {
   lost: 'Lost',
 };
 
-// Sparkline data generators for KPI cards
-function generateSparkline(baseValue: number, trend: number): { value: number }[] {
-  const points: { value: number }[] = [];
-  for (let i = 0; i < 7; i++) {
-    const variance = (Math.random() - 0.4) * baseValue * 0.15;
-    const trendFactor = (trend / 100) * (i / 6) * baseValue * 0.3;
-    points.push({ value: Math.max(0, Math.round(baseValue + variance + trendFactor)) });
-  }
-  return points;
+// Build a sparkline series from a real trend array. The dashboard's
+// KPI sparklines used to be synthesized with `Math.random()` which
+// produced fake jiggly curves that misled users into thinking the
+// numbers were live. Now each sparkline is either:
+//   • powered by a real backend trend array (e.g. `stats.revenueTrend`
+//     for the Revenue card — `/api/dashboard/bootstrap` returns the
+//     last 6 months of real invoice revenue), or
+//   • empty (`[]`) for KPIs whose backend doesn't expose a trend yet
+//     (bookings, jobs, leads). An empty array renders as a flat
+//     placeholder rather than a fabricated curve.
+//
+// Empty is honest — it shows the user we don't have enough data for a
+// trend rather than inventing one.
+function trendToSparkline(
+  points: { revenue?: number; value?: number; count?: number }[] | undefined,
+): { value: number }[] {
+  if (!Array.isArray(points) || points.length === 0) return [];
+  return points.map((p) => ({
+    value: Number(p.revenue ?? p.value ?? p.count ?? 0),
+  }));
 }
 
 // ─── Sub-Components ──────────────────────────────────────────────────────────
@@ -419,6 +430,17 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
   // LazyKPISparkline so the call sites (inside the KPI cards) don't change.
   // The lazy version shows a Skeleton of the same size (h-8 w-20 = 32×80px)
   // while recharts downloads, so there's no CLS.
+  //
+  // Empty data (no real trend yet available for this KPI) renders a muted
+  // "—" placeholder of the same size, so the empty state reads as
+  // intentional ("no trend data") instead of looking like a broken chart.
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-8 w-20 flex items-center justify-center text-muted-foreground/40 text-xs">
+        —
+      </div>
+    );
+  }
   return <LazyKPISparkline data={data} color={color} />;
 }
 
@@ -712,14 +734,23 @@ export function DashboardView() {
     }));
   }, [stats?.leadSources]);
 
-  // Generate sparkline data for KPI cards (stable per render)
+  // Build sparkline data for KPI cards from REAL trend arrays.
+  //
+  // The dashboard's `/api/dashboard/bootstrap` endpoint returns
+  // `stats.revenueTrend` (last 6 months of real collected+pending invoice
+  // revenue). That powers the Revenue sparkline directly.
+  //
+  // The bookings / jobs / leads KPIs don't yet have a corresponding
+  // backend trend array — so we render an empty sparkline (the
+  // KPISparkline component renders a flat baseline for empty input)
+  // rather than fabricating a curve with `Math.random()`.
   const sparklines = useMemo(() => {
     if (!stats) return { bookings: [], revenue: [], leads: [], jobs: [] };
     return {
-      bookings: generateSparkline(8, 12),
-      revenue: generateSparkline(50000, stats.monthlyRevenue.trend),
-      leads: generateSparkline(30, stats.totalLeads.trend),
-      jobs: generateSparkline(20, 5),
+      bookings: [],
+      revenue: trendToSparkline(stats.revenueTrend),
+      leads: [],
+      jobs: [],
     };
   }, [stats]);
 

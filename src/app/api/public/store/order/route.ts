@@ -67,6 +67,8 @@ export async function POST(req: NextRequest) {
       .filter(Boolean)
       .join(' • ');
 
+    const initialPaymentStatus = paymentMethod === 'UPI' ? 'DETECTION_PENDING' : 'UNPAID';
+
     const order = await db.gptformCommerceOrder.create({
       data: {
         configId: resolvedConfigId,
@@ -80,15 +82,75 @@ export async function POST(req: NextRequest) {
         deliveryDate: deliveryDate || null,
         deliveryType: tableNumber ? 'dine_in' : deliveryType || 'delivery',
         notes: orderNotes || null,
-        paymentStatus: 'UNPAID',
+        paymentStatus: initialPaymentStatus,
         paymentMethod: paymentMethod || 'WHATSAPP_COD',
       },
     });
+
+    // CRM Auto-Capture: Upsert Customer in AI Business & Tenant CRM
+    try {
+      const aiBiz = await db.aiBusiness.findFirst({
+        where: { OR: [{ id: resolvedBusinessId }, { tenantId: resolvedBusinessId }] },
+      });
+      if (aiBiz) {
+        const existingAiCustomer = await db.aiCustomer.findFirst({
+          where: { businessId: aiBiz.id, phone: cleanPhone },
+        });
+        if (existingAiCustomer) {
+          await db.aiCustomer.update({
+            where: { id: existingAiCustomer.id },
+            data: {
+              name: customerName || existingAiCustomer.name,
+              address: deliveryAddress || existingAiCustomer.address,
+            },
+          });
+        } else {
+          await db.aiCustomer.create({
+            data: {
+              businessId: aiBiz.id,
+              phone: cleanPhone,
+              name: customerName || 'Store Guest',
+              address: deliveryAddress || null,
+              notes: `Captured via QR Store on ${new Date().toLocaleDateString()}`,
+            },
+          });
+        }
+      }
+
+      // Also upsert in tenant-level Customer if tenant exists
+      const existingCustomer = await db.customer.findFirst({
+        where: { phone: cleanPhone, tenantId: resolvedBusinessId },
+      });
+      if (existingCustomer) {
+        await db.customer.update({
+          where: { id: existingCustomer.id },
+          data: {
+            name: customerName || existingCustomer.name,
+            address: deliveryAddress || existingCustomer.address,
+            marketingConsent: body.whatsappConsent ?? true,
+          },
+        });
+      } else {
+        await db.customer.create({
+          data: {
+            tenantId: resolvedBusinessId,
+            phone: cleanPhone,
+            name: customerName || 'Store Guest',
+            address: deliveryAddress || null,
+            marketingConsent: body.whatsappConsent ?? true,
+            marketingConsentSource: 'store_qr',
+          },
+        });
+      }
+    } catch (crmErr) {
+      console.warn('Customer CRM auto-capture non-fatal warning:', crmErr);
+    }
 
     return NextResponse.json({
       success: true,
       orderId: order.id,
       orderNumber: order.id.slice(-6).toUpperCase(),
+      paymentStatus: initialPaymentStatus,
       trackingUrl: `/store/${resolvedBusinessId}/order/${order.id}`,
     });
   } catch (err: any) {
@@ -206,12 +268,15 @@ export async function PATCH(req: NextRequest) {
       updatedNotes = updatedNotes ? `${updatedNotes} • UTR: ${cleanUtr}` : `UTR: ${cleanUtr}`;
     }
 
+    const nextPaymentStatus =
+      paymentStatus || (cleanUtr ? 'DETECTION_PENDING' : undefined);
+
     const updated = await db.gptformCommerceOrder.update({
       where: { id: order.id },
       data: {
-        ...(cleanUtr ? { notes: updatedNotes } : {}),
-        ...(paymentStatus ? { paymentStatus } : {}),
-        ...(paymentMethod ? { paymentMethod } : {}),
+        ...(cleanUtr ? { notes: updatedNotes, paymentRef: cleanUtr } : {}),
+        ...(nextPaymentStatus ? { paymentStatus: nextPaymentStatus } : {}),
+        ...(paymentMethod ? { paymentMethod } : cleanUtr ? { paymentMethod: 'UPI' } : {}),
       },
     });
 

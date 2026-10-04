@@ -9,7 +9,6 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
-  Modal,
 } from 'react-native';
 import { Ionicons, Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/auth-store';
@@ -30,12 +29,7 @@ export default function LoginScreen() {
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  // Google Account Prompt State
-  const [googleModalVisible, setGoogleModalVisible] = useState(false);
-  const [googleInputEmail, setGoogleInputEmail] = useState('');
-  const [googleInputName, setGoogleInputName] = useState('');
-
-  const { login, register, loginWithGoogle, quickDemoLogin, isLoading, error, clearError } =
+  const { login, register, loginWithGoogle, isLoading, error, clearError } =
     useAuthStore();
 
   const handleSignIn = async () => {
@@ -52,23 +46,9 @@ export default function LoginScreen() {
 
   const handleGoogleAuth = async () => {
     await hapticFeedback.medium();
-    const success = await loginWithGoogle();
-    if (!success) {
-      // If browser OAuth was dismissed or server has no redirect, open direct Google Account prompt
-      setGoogleModalVisible(true);
-    }
-  };
-
-  const handleConfirmGoogleInput = async () => {
-    if (!googleInputEmail.trim()) return;
-    await hapticFeedback.success();
-    await loginWithGoogle(googleInputEmail.trim(), googleInputName.trim());
-    setGoogleModalVisible(false);
-  };
-
-  const handleDemoSignIn = async () => {
-    await hapticFeedback.medium();
-    await quickDemoLogin();
+    // Always goes through the backend OAuth flow. If the user dismisses the
+    // browser or auth fails, the store surfaces the real error.
+    await loginWithGoogle();
   };
 
   return (
@@ -334,15 +314,6 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* Demo Login Option */}
-          <TouchableOpacity
-            style={styles.demoLoginBtn}
-            onPress={handleDemoSignIn}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="flash-outline" size={14} color="#10B981" style={{ marginRight: 6 }} />
-            <Text style={styles.demoLoginText}>Demo Workspace Access (Deepak Chandra)</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Security badge */}
@@ -353,79 +324,6 @@ export default function LoginScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      {/* Google Sign In Account Details Modal */}
-      <Modal
-        visible={googleModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setGoogleModalVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.googleModalCard}>
-            <View style={styles.googleModalHeader}>
-              <View style={styles.googleGWrapper}>
-                <FontAwesome name="google" size={24} color="#EA4335" />
-              </View>
-              <Text style={styles.googleModalTitle}>Sign in with Google</Text>
-              <Text style={styles.googleModalSubtitle}>
-                Enter your Google Account email to authenticate and sync your AI workspace.
-              </Text>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.modalInputLabel}>Google Email Address</Text>
-              <View style={styles.modalInputRow}>
-                <Feather name="mail" size={18} color="#64748B" />
-                <TextInput
-                  value={googleInputEmail}
-                  onChangeText={setGoogleInputEmail}
-                  placeholder="your.email@gmail.com"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.modalTextInput}
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.modalInputLabel}>Your Name (Optional)</Text>
-              <View style={styles.modalInputRow}>
-                <Feather name="user" size={18} color="#64748B" />
-                <TextInput
-                  value={googleInputName}
-                  onChangeText={setGoogleInputName}
-                  placeholder="e.g. Deepak Chandra"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="words"
-                  style={styles.modalTextInput}
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.confirmGoogleBtn, !googleInputEmail.trim() && styles.submitBtnDisabled]}
-              onPress={handleConfirmGoogleInput}
-              disabled={!googleInputEmail.trim() || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#022C22" size="small" />
-              ) : (
-                <Text style={styles.confirmGoogleBtnText}>Continue with Google</Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelModalBtn}
-              onPress={() => setGoogleModalVisible(false)}
-            >
-              <Text style={styles.cancelModalText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -605,22 +503,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#022C22',
   },
-  demoLoginBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.2)',
-  },
-  demoLoginText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#34D399',
-  },
   securityRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -632,98 +514,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  googleModalCard: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  googleModalHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  googleGWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  googleModalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  googleModalSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  modalInputLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  modalInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 46,
-  },
-  modalTextInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-    marginLeft: 10,
-  },
-  confirmGoogleBtn: {
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  confirmGoogleBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#022C22',
-  },
-  cancelModalBtn: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelModalText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
   },
 });

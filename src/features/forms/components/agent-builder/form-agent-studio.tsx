@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FormAgentData,
   DEFAULT_FORM_AGENT,
@@ -73,30 +73,67 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 // Complete 16 Channels Matching Jotform Screenshot
+//
+// NOTE: The `badge` field used to be hardcoded to 'ACTIVE' for 10 of the 16
+// channels — that misled users into thinking all those channels were
+// already connected when in fact the studio hadn't checked. The real
+// per-channel connection state is fetched from
+// GET /api/forms/agents/[id]/channel-status (which reads authoritative DB
+// tables: CommunicationProvider for WhatsApp, IntegrationConnection for
+// Gmail, SocialAccount for Instagram/Messenger, PhoneNumber for SMS,
+// getActiveSubscription('AI_RECEPTIONIST') for the phone addon).
+//
+// The badge for each channel is now derived at render-time from that
+// fetched status — see `channelBadgeMap` below. Channels with no backend
+// status (chatbot, standalone, wordpress, presentation, voice, shopify,
+// agent_app, crm, canva, platforms) show no badge because there's no
+// real connection state to report.
 const CHANNELS_LIST: Array<{
   id: AgentChannelType;
   label: string;
   subtitle: string;
   icon: React.ElementType;
-  badge?: string;
+  /**
+   * Channels whose real connection state can be read from the
+   * `/api/forms/agents/[id]/channel-status` endpoint. Set to `true`
+   * for channels backed by a DB table; the render code looks up the
+   * live state and shows 'ACTIVE' or 'Connect' accordingly.
+   */
+  hasBackendStatus?: boolean;
 }> = [
-  { id: 'chatbot', label: 'CHATBOT', subtitle: 'Add interactive chatbot to your site', icon: MessageSquare, badge: 'ACTIVE' },
+  { id: 'chatbot', label: 'CHATBOT', subtitle: 'Add interactive chatbot to your site', icon: MessageSquare },
   { id: 'standalone', label: 'STANDALONE', subtitle: 'Direct agent link and social share', icon: Globe },
-  { id: 'instagram', label: 'INSTAGRAM AGENT', subtitle: 'Automate your Instagram DMs', icon: Instagram, badge: 'ACTIVE' },
-  { id: 'whatsapp', label: 'WHATSAPP AGENT', subtitle: 'Connect your WhatsApp account', icon: MessageCircle, badge: 'ACTIVE' },
-  { id: 'phone', label: 'PHONE AGENT', subtitle: 'Let your Agent answer calls', icon: Phone },
-  { id: 'gmail', label: 'GMAIL AGENT', subtitle: 'Let your agent create email drafts', icon: Mail, badge: 'ACTIVE' },
-  { id: 'wordpress', label: 'AI CHATBOT FOR WORDPRESS', subtitle: 'Let your AI agent engage site visitors', icon: Code, badge: 'ACTIVE' },
-  { id: 'presentation', label: 'PRESENTATION AGENT', subtitle: 'Let your agent present slides', icon: Presentation, badge: 'ACTIVE' },
-  { id: 'voice', label: 'VOICE AGENT', subtitle: 'Add voice Agent to your website', icon: Mic, badge: 'ACTIVE' },
-  { id: 'messenger', label: 'MESSENGER AGENT', subtitle: 'Connect your Facebook page', icon: MessageSquare, badge: 'ACTIVE' },
-  { id: 'shopify', label: 'SHOPIFY AGENT', subtitle: 'Let your Agent use your store data', icon: ShoppingBag, badge: 'ACTIVE' },
+  { id: 'instagram', label: 'INSTAGRAM AGENT', subtitle: 'Automate your Instagram DMs', icon: Instagram, hasBackendStatus: true },
+  { id: 'whatsapp', label: 'WHATSAPP AGENT', subtitle: 'Connect your WhatsApp account', icon: MessageCircle, hasBackendStatus: true },
+  { id: 'phone', label: 'PHONE AGENT', subtitle: 'Let your Agent answer calls', icon: Phone, hasBackendStatus: true },
+  { id: 'gmail', label: 'GMAIL AGENT', subtitle: 'Let your agent create email drafts', icon: Mail, hasBackendStatus: true },
+  { id: 'wordpress', label: 'AI CHATBOT FOR WORDPRESS', subtitle: 'Let your AI agent engage site visitors', icon: Code },
+  { id: 'presentation', label: 'PRESENTATION AGENT', subtitle: 'Let your agent present slides', icon: Presentation },
+  { id: 'voice', label: 'VOICE AGENT', subtitle: 'Add voice Agent to your website', icon: Mic },
+  { id: 'messenger', label: 'MESSENGER AGENT', subtitle: 'Connect your Facebook page', icon: MessageSquare, hasBackendStatus: true },
+  { id: 'shopify', label: 'SHOPIFY AGENT', subtitle: 'Let your Agent use your store data', icon: ShoppingBag },
   { id: 'agent_app', label: 'AGENT APP', subtitle: 'Share your AI Agent with an app', icon: Smartphone },
-  { id: 'sms', label: 'SMS AGENT', subtitle: 'Let your Agent send messages', icon: Send, badge: 'ACTIVE' },
-  { id: 'crm', label: 'Salesforce Agent', subtitle: 'Connect your agent to your CRM', icon: Layers, badge: 'ACTIVE' },
+  { id: 'sms', label: 'SMS AGENT', subtitle: 'Let your Agent send messages', icon: Send, hasBackendStatus: true },
+  { id: 'crm', label: 'Salesforce Agent', subtitle: 'Connect your agent to your CRM', icon: Layers },
   { id: 'canva', label: 'CANVA AI CHATBOT', subtitle: 'Add a chatbot into your Canva designs', icon: Sparkles },
   { id: 'platforms', label: 'PLATFORMS', subtitle: 'Add your Agent to other platforms', icon: LayoutTemplate },
 ];
+
+// ───────────────────────────────────────────────────────────────────────────
+// Real channel connection state — sourced from authoritative DB tables via
+// GET /api/forms/agents/[id]/channel-status (see
+// src/app/api/forms/agents/[id]/channel-status/route.ts). Used to derive
+// each channel's badge at render-time so users see real connection state
+// instead of a hardcoded 'ACTIVE' string.
+// ───────────────────────────────────────────────────────────────────────────
+interface ChannelStatusResponse {
+  whatsapp?: { connected: boolean; reason: string | null };
+  phone?: { addonActive: boolean; reason: string | null };
+  sms?: { connected: boolean };
+  instagram?: { connected: boolean; reason: string | null };
+  messenger?: { connected: boolean; reason: string | null };
+  gmail?: { connected: boolean; reason: string | null };
+}
 
 interface FormAgentStudioProps {
   initialAgent?: FormAgentData;
@@ -131,6 +168,70 @@ export function FormAgentStudio({
   const [isInstagramModalOpen, setIsInstagramModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
+
+  // ── Real channel connection state ──────────────────────────────────
+  // Fetches the authoritative per-channel connection state from the DB
+  // (CommunicationProvider for WhatsApp, IntegrationConnection for Gmail,
+  // SocialAccount for Instagram/Messenger, PhoneNumber for SMS,
+  // getActiveSubscription('AI_RECEPTIONIST') for the phone addon).
+  //
+  // We only fetch once an agent.id is available — the studio can be
+  // opened for a brand-new (unsaved) agent where there's no DB row yet,
+  // in which case there's nothing to look up and we skip the fetch.
+  //
+  // We also re-fetch when the WhatsApp / Instagram connect modals flip
+  // their `paired` flag locally (mirroring the Publish tab's pattern),
+  // so the badge updates immediately after a successful connection.
+  const [channelStatus, setChannelStatus] = useState<ChannelStatusResponse | null>(null);
+  useEffect(() => {
+    if (!agent.id) return;
+    let cancelled = false;
+    fetch(`/api/forms/agents/${encodeURIComponent(agent.id)}/channel-status`, {
+      credentials: 'include',
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: ChannelStatusResponse | null) => {
+        if (!cancelled && data) setChannelStatus(data);
+      })
+      .catch(() => {
+        /* silent — badge-less channel list is still usable */
+      });
+    return () => { cancelled = true; };
+  }, [
+    agent.id,
+    agent.channels?.whatsapp?.paired,
+    agent.channels?.instagram?.paired,
+  ]);
+
+  // Derive the badge for each channel from the fetched status.
+  //   • 'ACTIVE'   — channel is genuinely connected in the DB
+  //   • 'Connect'  — channel has a backend status record but isn't connected
+  //   • undefined  — channel has no backend status (no DB row to consult) →
+  //                  render no badge instead of fabricating one.
+  const channelBadgeMap = useMemo<Record<AgentChannelType, 'ACTIVE' | 'Connect' | undefined>>(
+    () => {
+      const s = channelStatus;
+      return {
+        chatbot: undefined,
+        standalone: undefined,
+        instagram: s?.instagram ? (s.instagram.connected ? 'ACTIVE' : 'Connect') : undefined,
+        whatsapp: s?.whatsapp ? (s.whatsapp.connected ? 'ACTIVE' : 'Connect') : undefined,
+        phone: s?.phone ? (s.phone.addonActive ? 'ACTIVE' : 'Connect') : undefined,
+        gmail: s?.gmail ? (s.gmail.connected ? 'ACTIVE' : 'Connect') : undefined,
+        wordpress: undefined,
+        presentation: undefined,
+        voice: undefined,
+        messenger: s?.messenger ? (s.messenger.connected ? 'ACTIVE' : 'Connect') : undefined,
+        shopify: undefined,
+        agent_app: undefined,
+        sms: s?.sms ? (s.sms.connected ? 'ACTIVE' : 'Connect') : undefined,
+        crm: undefined,
+        canva: undefined,
+        platforms: undefined,
+      } as Record<AgentChannelType, 'ACTIVE' | 'Connect' | undefined>;
+    },
+    [channelStatus],
+  );
 
   useEffect(() => {
     fetch('/api/forms')
@@ -508,6 +609,10 @@ export function FormAgentStudio({
               {CHANNELS_LIST.map((c) => {
                 const IconComponent = c.icon;
                 const isSelected = selectedChannel === c.id;
+                // Real per-channel connection state from the DB (or
+                // undefined for channels with no backend status). See
+                // channelBadgeMap above for the lookup logic.
+                const badge = channelBadgeMap[c.id];
                 return (
                   <button
                     key={c.id}
@@ -536,10 +641,22 @@ export function FormAgentStudio({
                       )}
                     />
                     <div className="space-y-0.5 flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <span className="text-[11px] font-bold leading-tight uppercase tracking-wide truncate">
                           {c.label}
                         </span>
+                        {badge && (
+                          <span
+                            className={cn(
+                              'text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0',
+                              badge === 'ACTIVE'
+                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                : 'bg-slate-700/60 text-slate-300 border border-slate-600/60',
+                            )}
+                          >
+                            {badge}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[10px] text-slate-400 leading-snug line-clamp-1">
                         {c.subtitle}

@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_PATHS } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
 
 interface DemoLead {
   id: string;
@@ -30,86 +30,39 @@ interface DemoLead {
   summary: string;
 }
 
-const MOCK_LEADS: DemoLead[] = [
-  {
-    id: 'lead-1',
-    name: 'John Smith',
-    phone: '+1 (512) 555-0192',
-    email: 'john.smith@gmail.com',
-    service: 'HVAC Compressor Repair',
-    source: 'ai_agent',
-    status: 'new',
-    estimatedValue: 850,
-    time: 'Today · 10:32 AM',
-    summary: 'Qualified by AI: 3-bedroom home, AC blowing warm air, wants technician tomorrow morning.',
-  },
-  {
-    id: 'lead-2',
-    name: 'Sarah Jones',
-    phone: '+1 (512) 555-0143',
-    email: 'sarah.j@outlook.com',
-    service: 'Dental Routine Checkup',
-    source: 'form',
-    status: 'new',
-    estimatedValue: 200,
-    time: 'Today · 09:15 AM',
-    summary: 'Submitted via Dental Consultation Form with preferred Friday afternoon slot.',
-  },
-  {
-    id: 'lead-3',
-    name: 'Michael Chang',
-    phone: '+1 (512) 555-0188',
-    email: 'm.chang@techcorp.com',
-    service: 'Roof Shingle Inspection',
-    source: 'ai_agent',
-    status: 'contacted',
-    estimatedValue: 3400,
-    time: 'Yesterday · 4:40 PM',
-    summary: 'Storm damage inspection request after hail storm. Quoted estimate range $3K-$4K.',
-  },
-  {
-    id: 'lead-4',
-    name: 'David Miller',
-    phone: '+1 (512) 555-0119',
-    email: 'david.m@yahoo.com',
-    service: 'Emergency Drain Unclogging',
-    source: 'chat',
-    status: 'won',
-    estimatedValue: 450,
-    time: 'Yesterday · 11:20 AM',
-    summary: 'Booked and paid $50 deposit via Stripe. Job completed.',
-  },
-];
-
 export default function LeadsScreen() {
   const [selectedStatus, setSelectedStatus] = useState<'new' | 'contacted' | 'won'>('new');
-  const [leads, setLeads] = useState<DemoLead[]>(MOCK_LEADS);
+  const [leads, setLeads] = useState<DemoLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchLeads = async () => {
     try {
+      setError(null);
       const res = await apiRequest<any>(API_PATHS.leads);
       const list = Array.isArray(res) ? res : res?.leads || [];
-      if (list.length > 0) {
-        setLeads(
-          list.map((it: any, idx: number) => ({
-            id: it.id || `lead-${idx}`,
-            name: it.name || it.customerName || 'Lead',
-            phone: it.phone || it.customerPhone || '',
-            email: it.email || it.customerEmail || '',
-            service: it.service || it.title || 'General Inquiry',
-            source: it.source || 'ai_agent',
-            status: (it.status === 'won' || it.status === 'contacted') ? it.status : 'new',
-            estimatedValue: Number(it.estimatedValue || it.value || 250),
-            time: it.createdAt ? new Date(it.createdAt).toLocaleDateString() : 'Recent',
-            summary: it.summary || it.notes || 'Inquiry captured by AI Assistant.',
-          }))
-        );
-        return;
-      }
-    } catch {}
-    setLeads(MOCK_LEADS);
+      const mapped: DemoLead[] = list.map((it: any, idx: number) => ({
+        id: it.id || `lead-${idx}`,
+        name: it.name || it.customerName || 'Lead',
+        phone: it.phone || it.customerPhone || '',
+        email: it.email || it.customerEmail || '',
+        service: it.service || it.title || 'General Inquiry',
+        source: it.source || 'ai_agent',
+        status: (it.status === 'won' || it.status === 'contacted') ? it.status : 'new',
+        estimatedValue: Number(it.estimatedValue || it.value || 0),
+        time: it.createdAt ? new Date(it.createdAt).toLocaleDateString() : 'Recent',
+        summary: it.summary || it.notes || 'Inquiry captured by AI Assistant.',
+      }));
+      setLeads(mapped);
+    } catch (err: any) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err?.message || 'We couldn\'t load your leads right now.';
+      setError(msg);
+      setLeads([]);
+    }
   };
 
   useEffect(() => {
@@ -201,6 +154,46 @@ export default function LeadsScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#10B981']} />}
           showsVerticalScrollIndicator={false}
         >
+        {/* Loading state */}
+        {loading && (
+          <View style={styles.stateWrap}>
+            <ActivityIndicator size="large" color="#10B981" />
+            <Text style={styles.stateText}>Loading leads…</Text>
+          </View>
+        )}
+
+        {/* Error state */}
+        {!loading && error && (
+          <View style={styles.errorWrap}>
+            <MaterialIcons name="cloud-off" size={40} color="#ef4444" style={{ marginBottom: 10 }} />
+            <Text style={styles.errorTitle}>Couldn't load leads</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                setLoading(true);
+                fetchLeads().finally(() => setLoading(false));
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.retryBtnText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Empty (no leads at all) state */}
+        {!loading && !error && leads.length === 0 && (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="assignment" size={40} color="#cbd5e1" style={{ marginBottom: 8 }} />
+            <Text style={styles.emptyTitle}>No leads yet</Text>
+            <Text style={styles.emptySubtitle}>AI will automatically capture and qualify incoming inquiries.</Text>
+          </View>
+        )}
+
+        {/* Loaded list / per-stage empty state */}
+        {!loading && !error && leads.length > 0 && (
+          <>
           {filteredLeads.map((lead) => (
             <View key={lead.id} style={styles.leadCard}>
               <TouchableOpacity
@@ -262,10 +255,12 @@ export default function LeadsScreen() {
             <View style={styles.emptyState}>
               <MaterialIcons name="assignment" size={40} color="#cbd5e1" style={{ marginBottom: 8 }} />
               <Text style={styles.emptyTitle}>No leads in this stage</Text>
-              <Text style={styles.emptySubtitle}>AI will automatically capture and qualify incoming inquiries.</Text>
+              <Text style={styles.emptySubtitle}>Try switching tabs above.</Text>
             </View>
           )}
-        </ScrollView>
+          </>
+        )}
+      </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -483,5 +478,44 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     marginTop: 4,
+  },
+  stateWrap: {
+    alignItems: 'center',
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+  },
+  stateText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 10,
+  },
+  errorWrap: {
+    alignItems: 'center',
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  retryBtn: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

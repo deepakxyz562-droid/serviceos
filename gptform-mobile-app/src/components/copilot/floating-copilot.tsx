@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import Animated, {
@@ -16,8 +17,12 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { hapticFeedback } from '@/lib/haptics';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
+import {
+  ExpoSpeechRecognitionModule,
+  useSpeechRecognitionEvent,
+} from 'expo-speech-recognition';
 
 const QUICK_PROMPTS = [
   'Show today’s leads',
@@ -31,12 +36,21 @@ export function FloatingCopilot() {
   const [prompt, setPrompt] = useState('');
   const [loading, setLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  // Stable per-session conversationId so the backend can thread messages.
+  const conversationIdRef = useRef<string | undefined>(undefined);
+  // Latest chatHistory reference, used to build the messages payload right
+  // before sending (avoids stale-closure issues inside handleSend).
+  const chatHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
+  // handleSendRef lets the speech-recognition event listener invoke the
+  // latest handleSend closure without re-subscribing on every render.
+  const handleSendRef = useRef<(text?: string) => void>(() => {});
   const [chatHistory, setChatHistory] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
     {
       role: 'assistant',
       text: 'Good morning! How can I assist with your forms, leads, or appointments today?',
     },
   ]);
+  chatHistoryRef.current = chatHistory;
 
   const scale = useSharedValue(1);
 
@@ -57,46 +71,121 @@ export function FloatingCopilot() {
     if (!textToSend || loading) return;
 
     await hapticFeedback.light();
-    setChatHistory((prev) => [...prev, { role: 'user', text: textToSend }]);
+
+    // Optimistic: append the user message immediately.
+    const priorHistory = chatHistoryRef.current;
+    const newHistory = [
+      ...priorHistory,
+      { role: 'user' as const, text: textToSend },
+    ];
+    setChatHistory(newHistory);
     setPrompt('');
     setLoading(true);
 
     try {
-      // In production calls /api/ai/copilot
-      // We also handle offline / smart instant answers
-      let reply = '';
-      if (textToSend.toLowerCase().includes('lead')) {
-        reply = 'You received 3 new leads today:\n• John Smith (HVAC Quote — $850)\n• Sarah Jones (Dental Consult)\n• Mike Taylor (Roofing Form)';
-      } else if (textToSend.toLowerCase().includes('book')) {
-        reply = 'You have 2 appointments scheduled for today:\n• 10:30 AM — AC Consultation (John Smith)\n• 14:00 PM — Dental Routine (Priya)';
-      } else if (textToSend.toLowerCase().includes('answer') || textToSend.toLowerCase().includes('question')) {
-        reply = 'Your AI agent was asked 1 question it couldn’t answer:\n"Do you service South Austin on Sundays?"\n\nWould you like to teach the agent this answer now?';
-      } else {
-        reply = 'I have noted your request and synchronized your CRM data with GPTForm Studio.';
-      }
+      // Build the messages payload expected by POST /api/ai/chat
+      // (must end with a user message). The backend system prompt is
+      // injected server-side — we only send the conversation history.
+      const messages = newHistory.map((m) => ({
+        role: m.role,
+        content: m.text,
+      }));
+
+      const res = await apiRequest<{ reply?: string; error?: string }>(
+        API_PATHS.aiChat,
+        {
+          method: 'POST',
+          body: {
+            messages,
+            conversationId: conversationIdRef.current,
+          },
+        },
+      );
+
+      const reply =
+        (res?.reply && res.reply.trim()) ||
+        res?.error ||
+        'I couldn’t generate a response. Please rephrase and try again.';
 
       setChatHistory((prev) => [...prev, { role: 'assistant', text: reply }]);
       await hapticFeedback.success();
-    } catch {
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : 'Sorry, I couldn’t reach the assistant. Please try again.';
       setChatHistory((prev) => [
         ...prev,
-        { role: 'assistant', text: 'Sorry, I couldn’t process that request. Please try again.' },
+        { role: 'assistant', text: `⚠️ ${msg}` },
       ]);
     } finally {
       setLoading(false);
     }
   };
+  handleSendRef.current = handleSend;
+
+  // expo-speech-recognition event listeners. They are no-ops on platforms
+  // where the native module is unavailable (e.g. web).
+  useSpeechRecognitionEvent('result', (event) => {
+    setIsRecording(false);
+    const transcript = event.results?.[0]?.transcript;
+    if (transcript && transcript.trim()) {
+      setPrompt(transcript);
+      handleSendRef.current(transcript);
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    setIsRecording(false);
+    console.warn('[copilot] speech recognition error:', event?.error, event?.message);
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsRecording(false);
+  });
 
   const toggleVoice = async () => {
     await hapticFeedback.medium();
+
+    // Web platform has no native speech recognition — surface a clear
+    // message instead of silently failing.
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Voice input unavailable',
+        'Speech recognition is only available on iOS and Android devices.',
+      );
+      return;
+    }
+
     if (isRecording) {
+      try { ExpoSpeechRecognitionModule.stop(); } catch {}
       setIsRecording(false);
-    } else {
+      return;
+    }
+
+    try {
+      const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert(
+          'Microphone permission required',
+          'Grant microphone access in Settings to use voice input.',
+        );
+        return;
+      }
       setIsRecording(true);
-      setTimeout(() => {
-        setIsRecording(false);
-        setPrompt('Show all leads from yesterday');
-      }, 2500);
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-US',
+        interimResults: false,
+        maxAlternatives: 1,
+        continuous: false,
+        requiresOnDeviceRecognition: false,
+      });
+    } catch (err) {
+      setIsRecording(false);
+      Alert.alert(
+        'Voice input failed',
+        err instanceof Error ? err.message : 'Please try again.',
+      );
     }
   };
 

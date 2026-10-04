@@ -208,17 +208,34 @@ export function OrderTrackerClient({
         body: JSON.stringify({
           orderId,
           utrNumber: utrInput.trim(),
+          paymentStatus: 'DETECTION_PENDING',
         }),
       });
       if (res.ok) {
         setUtrSuccess(true);
         setUtrInput('');
+        setOrder((prev) => ({ ...prev, paymentStatus: 'DETECTION_PENDING', paymentMethod: 'UPI' }));
       }
     } catch (err) {
       console.error('Failed to submit UTR', err);
     } finally {
       setSubmittingUtr(false);
     }
+  };
+
+  const handleNotifyPaidUpi = async () => {
+    try {
+      await fetch('/api/public/store/order', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          paymentStatus: 'DETECTION_PENDING',
+          paymentMethod: 'UPI',
+        }),
+      });
+      setOrder((prev) => ({ ...prev, paymentStatus: 'DETECTION_PENDING', paymentMethod: 'UPI' }));
+    } catch {}
   };
 
   const handleOpenWhatsApp = () => {
@@ -365,6 +382,96 @@ export function OrderTrackerClient({
                 PAID ✓
               </span>
             </div>
+          ) : order.paymentStatus === 'MATCHED' ? (
+            <div className="bg-emerald-50 border border-emerald-300 rounded-3xl p-5 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs animate-bounce">
+                    ✓
+                  </span>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/80 px-2 py-0.5 rounded-md">
+                      Payment Auto-Matched
+                    </span>
+                    <h3 className="text-sm font-black text-stone-900 mt-0.5">
+                      Amount: {currencySymbol}{order.total.toFixed(2)} Verified
+                    </h3>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg">
+                  Confirming...
+                </span>
+              </div>
+              <p className="text-xs text-emerald-900 font-medium bg-white/70 p-2.5 rounded-xl border border-emerald-200">
+                🔔 Payment notification detected on vendor terminal. Final verification in progress.
+              </p>
+            </div>
+          ) : order.paymentStatus === 'DETECTION_PENDING' ? (
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-md flex items-center gap-1.5 w-fit">
+                    <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping" />
+                    Auto-Matching Payment
+                  </span>
+                  <h3 className="text-sm font-black text-stone-900 mt-1">
+                    Amount: {currencySymbol}{order.total.toFixed(2)}
+                  </h3>
+                </div>
+                <span className="text-[11px] text-amber-800 font-bold bg-amber-100/90 px-2 py-1 rounded-lg">
+                  Listening ⚡
+                </span>
+              </div>
+
+              <div className="p-3 bg-white rounded-2xl border border-amber-200/80 space-y-2 text-xs">
+                <p className="font-semibold text-stone-800">
+                  Please complete payment in your UPI app:
+                </p>
+                <p className="text-[11px] text-stone-500">
+                  Once your payment goes through, the vendor's POS device auto-matches the notification and confirms your order.
+                </p>
+                {upiUri && (
+                  <a
+                    href={upiUri}
+                    className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" />
+                    <span>Open / Re-open UPI App</span>
+                  </a>
+                )}
+              </div>
+
+              {/* UTR Input in Detection Mode */}
+              <div className="pt-1">
+                <p className="text-[10px] font-bold text-stone-600 mb-1.5">
+                  Have UPI Ref / UTR number from receipt?
+                </p>
+                {utrSuccess ? (
+                  <div className="p-2 bg-emerald-100/80 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+                    <span>UTR submitted! Auto-matching against store device.</span>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmitUtr} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="12-digit UTR (e.g. 428198765432)"
+                      value={utrInput}
+                      onChange={(e) => setUtrInput(e.target.value)}
+                      maxLength={16}
+                      className="flex-1 px-3 py-1.5 text-xs font-mono rounded-xl bg-white border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!utrInput.trim() || submittingUtr}
+                      className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-black disabled:opacity-50 text-white text-xs font-bold transition shrink-0"
+                    >
+                      {submittingUtr ? '...' : 'Submit'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="bg-white border border-stone-200/90 rounded-3xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
@@ -385,6 +492,7 @@ export function OrderTrackerClient({
                 <div className="space-y-3 pt-1">
                   <a
                     href={upiUri}
+                    onClick={handleNotifyPaidUpi}
                     className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-98"
                   >
                     <Smartphone className="h-4 w-4" />
@@ -403,6 +511,14 @@ export function OrderTrackerClient({
                       />
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={handleNotifyPaidUpi}
+                    className="w-full py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition"
+                  >
+                    I have paid via UPI • Start Auto-Match
+                  </button>
                 </div>
               )}
 

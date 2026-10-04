@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_PATHS } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
 
 interface BookingItem {
   id: string;
@@ -78,107 +78,124 @@ const EVENT_TYPES: EventType[] = [
   },
 ];
 
-const INITIAL_BOOKINGS: BookingItem[] = [
-  {
-    id: 'b-1',
-    customerName: 'Sarah Jenkins',
-    phone: '+1 (415) 992-0192',
-    email: 'sarah.j@example.com',
-    service: 'Emergency Pipe Leak Repair',
-    time: 'Today · 10:00 AM',
-    dateKey: 'today',
-    duration: '45 min',
-    depositPaid: true,
-    amount: 50,
-    meetingType: 'in_person',
-    meetingLocation: '742 Evergreen Terrace, San Francisco, CA',
-    intakeAnswers: [
-      { question: 'What is the main issue?', answer: 'Pipe burst under kitchen sink, water leaking continuously.' },
-      { question: 'Can you locate main water shutoff?', answer: 'Yes, shut off main valve already.' },
-    ],
-    status: 'confirmed',
-  },
-  {
-    id: 'b-2',
-    customerName: 'Marcus Vance',
-    phone: '+1 (408) 552-3310',
-    email: 'm.vance@techcorp.com',
-    service: '30-Min Commercial HVAC Scoping',
-    time: 'Today · 2:30 PM',
-    dateKey: 'today',
-    duration: '30 min',
-    depositPaid: false,
-    amount: 0,
-    meetingType: 'video',
-    meetingLocation: 'https://meet.google.com/abc-wxyz-123',
-    intakeAnswers: [
-      { question: 'Building size?', answer: 'Approx 3,500 sq ft retail space with 2 rooftop units.' },
-      { question: 'Primary goal?', answer: 'Quarterly maintenance agreement and seasonal tune-up.' },
-    ],
-    status: 'confirmed',
-  },
-  {
-    id: 'b-3',
-    customerName: 'Elena Rostova',
-    phone: '+1 (650) 201-9988',
-    email: 'elena.rostova@gmail.com',
-    service: 'Dental Implant Consultation',
-    time: 'Tomorrow · 11:15 AM',
-    dateKey: 'tomorrow',
-    duration: '30 min',
-    depositPaid: true,
-    amount: 35,
-    meetingType: 'in_person',
-    meetingLocation: 'Suite 400, Medical Plaza, Palo Alto, CA',
-    intakeAnswers: [
-      { question: 'First-time patient?', answer: 'Yes, referred by Dr. Adams.' },
-      { question: 'Any dental insurance?', answer: 'Delta Dental Premier.' },
-    ],
-    status: 'confirmed',
-  },
-];
-
 export default function BookingsScreen() {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'event_types' | 'settings'>('upcoming');
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
   const [filterDate, setFilterDate] = useState<'all' | 'today' | 'tomorrow'>('all');
   const [autoConfirm, setAutoConfirm] = useState(true);
-  const [googleCalendarSync, setGoogleCalendarSync] = useState(true);
-  const [bookings, setBookings] = useState<BookingItem[]>(INITIAL_BOOKINGS);
+  const [googleCalendarSync, setGoogleCalendarSync] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [bookings, setBookings] = useState<BookingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchBookings = async () => {
     try {
+      setError(null);
       const res = await apiRequest<any>(API_PATHS.bookings);
       const list = Array.isArray(res) ? res : res?.bookings || [];
-      if (list.length > 0) {
-        setBookings(
-          list.map((it: any, idx: number) => ({
-            id: it.id || `b-${idx}`,
-            customerName: it.customerName || it.name || 'Customer',
-            phone: it.customerPhone || it.phone || '',
-            email: it.customerEmail || it.email || '',
-            service: it.serviceName || it.title || 'Consultation',
-            time: it.scheduledAt ? new Date(it.scheduledAt).toLocaleString() : 'Scheduled',
-            dateKey: 'today',
-            duration: it.duration || '30 min',
-            depositPaid: !!it.depositPaid,
-            amount: Number(it.price || it.amount || 0),
-            meetingType: (it.meetingType === 'video' || it.meetingType === 'phone') ? it.meetingType : 'in_person',
-            meetingLocation: it.location || 'Store / Office',
-            intakeAnswers: Array.isArray(it.answers) ? it.answers : [],
-            status: it.status || 'confirmed',
-          }))
-        );
-        return;
+      const mapped: BookingItem[] = list.map((it: any, idx: number) => {
+        const scheduled = it.scheduledAt ? new Date(it.scheduledAt) : null;
+        let dateKey: 'today' | 'tomorrow' | 'this_week' = 'this_week';
+        if (scheduled) {
+          const now = new Date();
+          const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const startTmr = new Date(startToday); startTmr.setDate(startTmr.getDate() + 1);
+          if (scheduled >= startToday && scheduled < startTmr) dateKey = 'today';
+          else if (scheduled >= startTmr && scheduled.getTime() < startTmr.getTime() + 24 * 3600 * 1000) dateKey = 'tomorrow';
+        }
+        return {
+          id: it.id || `b-${idx}`,
+          customerName: it.customerName || it.name || 'Customer',
+          phone: it.customerPhone || it.phone || '',
+          email: it.customerEmail || it.email || '',
+          service: it.serviceName || it.title || 'Consultation',
+          time: scheduled ? scheduled.toLocaleString() : 'Scheduled',
+          dateKey,
+          duration: it.duration ? `${it.duration} min` : '30 min',
+          depositPaid: !!it.depositPaid,
+          amount: Number(it.price || it.amount || 0),
+          meetingType: (it.meetingType === 'video' || it.meetingType === 'phone') ? it.meetingType : 'in_person',
+          meetingLocation: it.location || it.address || 'Store / Office',
+          intakeAnswers: Array.isArray(it.answers) ? it.answers : [],
+          status: it.status || 'confirmed',
+        };
+      });
+      setBookings(mapped);
+    } catch (err: any) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err?.message || 'We couldn\'t load your bookings right now.';
+      setError(msg);
+      setBookings([]);
+    }
+  };
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await apiRequest<{
+        autoConfirm?: boolean;
+        googleCalendarSync?: boolean;
+      }>(API_PATHS.bookingSettings);
+      if (typeof res.autoConfirm === 'boolean') setAutoConfirm(res.autoConfirm);
+      if (typeof res.googleCalendarSync === 'boolean') setGoogleCalendarSync(res.googleCalendarSync);
+    } catch {
+      // Non-fatal: defaults remain in place; toggles still work locally.
+    } finally {
+      setSettingsLoaded(true);
+    }
+  }, []);
+
+  const persistSetting = useCallback(
+    async (key: 'autoConfirm' | 'googleCalendarSync', value: boolean) => {
+      // Optimistic update is already applied by the caller (setAutoConfirm/
+      // setGoogleCalendarSync). We just POST to the backend and revert on
+      // failure with an Alert.
+      setSettingsSaving(true);
+      try {
+        const res = await apiRequest<{
+          autoConfirm?: boolean;
+          googleCalendarSync?: boolean;
+        }>(API_PATHS.bookingSettings, {
+          method: 'PATCH',
+          body: { [key]: value },
+        });
+        // Reconcile with the canonical server state.
+        if (typeof res.autoConfirm === 'boolean') setAutoConfirm(res.autoConfirm);
+        if (typeof res.googleCalendarSync === 'boolean') setGoogleCalendarSync(res.googleCalendarSync);
+      } catch (err: any) {
+        const msg =
+          err instanceof ApiError
+            ? err.message
+            : err?.message || 'Could not save your preference.';
+        // Revert the optimistic toggle.
+        if (key === 'autoConfirm') setAutoConfirm(!value);
+        if (key === 'googleCalendarSync') setGoogleCalendarSync(!value);
+        Alert.alert('Save failed', msg);
+      } finally {
+        setSettingsSaving(false);
       }
-    } catch {}
-    setBookings(INITIAL_BOOKINGS);
+    },
+    [],
+  );
+
+  const handleToggleAutoConfirm = async (val: boolean) => {
+    await hapticFeedback.light();
+    setAutoConfirm(val);
+    persistSetting('autoConfirm', val);
+  };
+
+  const handleToggleGoogleCalendarSync = async (val: boolean) => {
+    await hapticFeedback.light();
+    setGoogleCalendarSync(val);
+    persistSetting('googleCalendarSync', val);
   };
 
   useEffect(() => {
-    fetchBookings().finally(() => setLoading(false));
+    Promise.all([fetchBookings(), fetchSettings()]).finally(() => setLoading(false));
   }, []);
 
   const onRefresh = async () => {
@@ -287,63 +304,113 @@ export default function BookingsScreen() {
               ))}
             </View>
 
-            {filteredBookings.map((b) => (
-              <TouchableOpacity
-                key={b.id}
-                style={styles.bookingCard}
-                onPress={() => {
-                  hapticFeedback.light();
-                  setSelectedBooking(b);
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={styles.bookingCardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.bookingCustomer}>{b.customerName}</Text>
-                    <Text style={styles.bookingService}>{b.service}</Text>
-                  </View>
-                  <View style={styles.bookingStatusBadge}>
-                    <Text style={styles.bookingStatusText}>Confirmed</Text>
-                  </View>
-                </View>
+            {/* Loading */}
+            {loading && (
+              <View style={styles.stateWrap}>
+                <ActivityIndicator size="large" color="#10B981" />
+                <Text style={styles.stateText}>Loading appointments…</Text>
+              </View>
+            )}
 
-                <View style={styles.bookingDetailsRow}>
-                  <View style={styles.detailItem}>
-                    <MaterialIcons name="access-time" size={14} color="#64748b" style={{ marginRight: 4 }} />
-                    <Text style={styles.detailText}>{b.time} ({b.duration})</Text>
-                  </View>
-                  <View style={styles.detailItem}>
-                    <MaterialIcons
-                      name={b.meetingType === 'video' ? 'videocam' : b.meetingType === 'phone' ? 'phone' : 'place'}
-                      size={14}
-                      color="#64748b"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={styles.detailText}>
-                      {b.meetingType === 'video' ? 'Google Meet' : b.meetingType === 'phone' ? 'Phone' : 'In-Person'}
-                    </Text>
-                  </View>
-                </View>
+            {/* Error */}
+            {!loading && error && (
+              <View style={styles.errorWrap}>
+                <MaterialIcons name="cloud-off" size={40} color="#ef4444" style={{ marginBottom: 10 }} />
+                <Text style={styles.errorTitle}>Couldn't load bookings</Text>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => {
+                    hapticFeedback.light();
+                    setLoading(true);
+                    fetchBookings().finally(() => setLoading(false));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.retryBtnText}>Try again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-                {b.depositPaid && (
-                  <View style={styles.depositRow}>
-                    <MaterialIcons name="check-circle" size={14} color="#10b981" style={{ marginRight: 4 }} />
-                    <Text style={styles.depositText}>Deposit Paid: ${b.amount}</Text>
-                  </View>
-                )}
+            {/* Empty (no bookings at all) */}
+            {!loading && !error && bookings.length === 0 && (
+              <View style={styles.emptyWrap}>
+                <MaterialIcons name="event-available" size={48} color="#cbd5e1" style={{ marginBottom: 12 }} />
+                <Text style={styles.emptyTitle}>No appointments yet</Text>
+                <Text style={styles.emptySub}>New bookings from your calendar links and forms will appear here.</Text>
+              </View>
+            )}
 
-                <View style={styles.bookingFooter}>
-                  <Text style={styles.viewIntakeLink}>View Intake Details →</Text>
-                  <TouchableOpacity
-                    onPress={() => handleCall(b.phone)}
-                    style={styles.callIconBtn}
-                    activeOpacity={0.7}
-                  >
-                    <MaterialIcons name="phone" size={16} color="#10b981" />
-                  </TouchableOpacity>
+            {/* Loaded list / per-filter empty */}
+            {!loading && !error && bookings.length > 0 && (
+              <>
+              {filteredBookings.map((b) => (
+                <TouchableOpacity
+                  key={b.id}
+                  style={styles.bookingCard}
+                  onPress={() => {
+                    hapticFeedback.light();
+                    setSelectedBooking(b);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.bookingCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.bookingCustomer}>{b.customerName}</Text>
+                      <Text style={styles.bookingService}>{b.service}</Text>
+                    </View>
+                    <View style={styles.bookingStatusBadge}>
+                      <Text style={styles.bookingStatusText}>Confirmed</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.bookingDetailsRow}>
+                    <View style={styles.detailItem}>
+                      <MaterialIcons name="access-time" size={14} color="#64748b" style={{ marginRight: 4 }} />
+                      <Text style={styles.detailText}>{b.time} ({b.duration})</Text>
+                    </View>
+                    <View style={styles.detailItem}>
+                      <MaterialIcons
+                        name={b.meetingType === 'video' ? 'videocam' : b.meetingType === 'phone' ? 'phone' : 'place'}
+                        size={14}
+                        color="#64748b"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={styles.detailText}>
+                        {b.meetingType === 'video' ? 'Google Meet' : b.meetingType === 'phone' ? 'Phone' : 'In-Person'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {b.depositPaid && (
+                    <View style={styles.depositRow}>
+                      <MaterialIcons name="check-circle" size={14} color="#10b981" style={{ marginRight: 4 }} />
+                      <Text style={styles.depositText}>Deposit Paid: ${b.amount}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.bookingFooter}>
+                    <Text style={styles.viewIntakeLink}>View Intake Details →</Text>
+                    <TouchableOpacity
+                      onPress={() => handleCall(b.phone)}
+                      style={styles.callIconBtn}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialIcons name="phone" size={16} color="#10b981" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {filteredBookings.length === 0 && (
+                <View style={styles.emptyWrap}>
+                  <MaterialIcons name="event-busy" size={40} color="#cbd5e1" style={{ marginBottom: 8 }} />
+                  <Text style={styles.emptyTitle}>No appointments for this filter</Text>
+                  <Text style={styles.emptySub}>Try another date filter above.</Text>
                 </View>
-              </TouchableOpacity>
-            ))}
+              )}
+              </>
+            )}
           </ScrollView>
         )}
 
@@ -388,6 +455,12 @@ export default function BookingsScreen() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
+            {!settingsLoaded && (
+              <View style={styles.stateWrap}>
+                <ActivityIndicator size="small" color="#10B981" />
+                <Text style={styles.stateText}>Loading settings…</Text>
+              </View>
+            )}
             <View style={styles.settingsCard}>
               <View style={styles.settingsRow}>
                 <View style={{ flex: 1, marginRight: 12 }}>
@@ -396,7 +469,8 @@ export default function BookingsScreen() {
                 </View>
                 <Switch
                   value={autoConfirm}
-                  onValueChange={setAutoConfirm}
+                  onValueChange={handleToggleAutoConfirm}
+                  disabled={settingsSaving}
                   trackColor={{ false: '#cbd5e1', true: '#10b981' }}
                   thumbColor="#ffffff"
                 />
@@ -411,7 +485,8 @@ export default function BookingsScreen() {
                 </View>
                 <Switch
                   value={googleCalendarSync}
-                  onValueChange={setGoogleCalendarSync}
+                  onValueChange={handleToggleGoogleCalendarSync}
+                  disabled={settingsSaving}
                   trackColor={{ false: '#cbd5e1', true: '#3b82f6' }}
                   thumbColor="#ffffff"
                 />
@@ -842,5 +917,60 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  stateWrap: {
+    alignItems: 'center',
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+  },
+  stateText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 10,
+  },
+  errorWrap: {
+    alignItems: 'center',
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  retryBtn: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  emptyWrap: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
   },
 });

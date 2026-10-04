@@ -16,7 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
-import { API_BASE_URL, API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 interface DiningTable {
   id: string;
@@ -27,16 +28,11 @@ interface DiningTable {
 
 export default function MobileDineInQrScreen() {
   const router = useRouter();
-  const [tables, setTables] = useState<DiningTable[]>([
-    { id: 'tbl_1', name: 'Table 1', capacity: 4, section: 'Main Floor' },
-    { id: 'tbl_2', name: 'Table 2', capacity: 4, section: 'Main Floor' },
-    { id: 'tbl_3', name: 'Table 3', capacity: 2, section: 'Main Floor' },
-    { id: 'tbl_4', name: 'Table 4', capacity: 6, section: 'Patio' },
-    { id: 'tbl_5', name: 'VIP Lounge', capacity: 8, section: 'VIP' },
-  ]);
-  const [selectedTable, setSelectedTable] = useState<string>('Table 1');
-  const [storeSlug, setStoreSlug] = useState('demo-store');
-  const [loading, setLoading] = useState(false);
+  const [tables, setTables] = useState<DiningTable[]>([]);
+  const [selectedTable, setSelectedTable] = useState<string>('');
+  const [storeSlug, setStoreSlug] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [newTableName, setNewTableName] = useState('');
   const [newTableCapacity, setNewTableCapacity] = useState('4');
@@ -45,19 +41,37 @@ export default function MobileDineInQrScreen() {
   const fetchTables = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.config?.businessId) {
-          setStoreSlug(data.config.businessId);
-        }
-        if (data.config?.tables && Array.isArray(data.config.tables) && data.config.tables.length > 0) {
-          setTables(data.config.tables);
-          setSelectedTable(data.config.tables[0].name);
+      const data = await apiRequest<{ config: any }>(API_PATHS.commerceConfig);
+      const cfg = data.config;
+      if (cfg) {
+        if (cfg.businessId) setStoreSlug(cfg.businessId);
+        else if (cfg.storeSlug) setStoreSlug(cfg.storeSlug);
+
+        let tbls: DiningTable[] = [];
+        const parseTables = (raw: any): DiningTable[] => {
+          if (!raw) return [];
+          if (Array.isArray(raw)) return raw;
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        };
+        tbls = parseTables(cfg.dineInTablesJson) || parseTables(cfg.tablesJson) || (Array.isArray(cfg.tables) ? cfg.tables : []);
+        if (tbls.length > 0) {
+          setTables(tbls);
+          setSelectedTable(tbls[0].name);
+        } else {
+          setTables([]);
+          setSelectedTable('');
         }
       }
-    } catch {
-      // Keep defaults
+      setError(null);
+    } catch (err: any) {
+      setTables([]);
+      setSelectedTable('');
+      setError(err?.message || 'Unable to load your dine-in tables. Tap retry to try again.');
     } finally {
       setLoading(false);
     }
@@ -86,12 +100,13 @@ export default function MobileDineInQrScreen() {
 
     // Persist to backend
     try {
-      await fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`, {
+      await apiRequest(API_PATHS.commerceConfig, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tables: updated }),
+        body: { tables: updated },
       });
-    } catch {}
+    } catch (err: any) {
+      Alert.alert('Save Failed', err?.message || 'Could not save the new table to the server.');
+    }
   };
 
   const qrUrl = `https://fieseros.com/store/${storeSlug}?table=${encodeURIComponent(selectedTable)}`;
@@ -123,6 +138,40 @@ export default function MobileDineInQrScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.container}>
+        {/* Error / Loading Banner */}
+        {loading ? (
+          <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color="#059669" />
+          </View>
+        ) : error ? (
+          <View
+            style={{
+              width: '100%',
+              marginBottom: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              backgroundColor: '#fef2f2',
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: '#fecaca',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <MaterialIcons name="error-outline" size={16} color="#dc2626" />
+            <Text style={{ flex: 1, fontSize: 12, color: '#b91c1c', fontWeight: '600' }} numberOfLines={3}>
+              {error}
+            </Text>
+            <TouchableOpacity
+              onPress={fetchTables}
+              style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#dc2626', borderRadius: 6 }}
+            >
+              <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '700' }}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {/* Table Selector Pills */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionLabel}>Select Table ({tables.length} Tables)</Text>
@@ -138,52 +187,103 @@ export default function MobileDineInQrScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
-          {tables.map((tbl) => {
-            const active = selectedTable === tbl.name;
-            return (
-              <TouchableOpacity
-                key={tbl.id}
-                onPress={() => {
-                  hapticFeedback.light();
-                  setSelectedTable(tbl.name);
-                }}
-                style={[styles.pill, active && styles.pillActive]}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                  {tbl.name}
-                </Text>
+        {tables.length === 0 && !loading && !error ? (
+          <View
+            style={{
+              width: '100%',
+              backgroundColor: '#ffffff',
+              borderRadius: 20,
+              padding: 24,
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+            }}
+          >
+            <MaterialIcons name="restaurant" size={40} color="#cbd5e1" />
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a', marginTop: 10 }}>
+              No dine-in tables yet
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                color: '#64748b',
+                textAlign: 'center',
+                marginTop: 4,
+                marginBottom: 14,
+                lineHeight: 18,
+              }}
+            >
+              Add your first table to generate a scan-to-order QR code for your guests.
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setNewTableName('Table 1');
+                setAddModalOpen(true);
+              }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: '#059669',
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 10,
+              }}
+            >
+              <MaterialIcons name="add" size={16} color="#ffffff" />
+              <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '800' }}>Add Table</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pillsRow}>
+              {tables.map((tbl) => {
+                const active = selectedTable === tbl.name;
+                return (
+                  <TouchableOpacity
+                    key={tbl.id}
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setSelectedTable(tbl.name);
+                    }}
+                    style={[styles.pill, active && styles.pillActive]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                      {tbl.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* QR Code Card Display */}
+            <View style={styles.card}>
+              <View style={styles.tableBadge}>
+                <MaterialIcons name="restaurant" size={16} color="#059669" />
+                <Text style={styles.tableBadgeText}>{selectedTable.toUpperCase()}</Text>
+              </View>
+
+              <Text style={styles.cardTitle}>Scan to Order</Text>
+              <Text style={styles.cardSub}>
+                Guests scan with their phone camera to browse the menu and order directly to your kitchen.
+              </Text>
+
+              <View style={styles.qrBox}>
+                <Image source={{ uri: qrImageUri }} style={styles.qrImage} resizeMode="contain" />
+              </View>
+
+              <Text style={styles.urlText} numberOfLines={1}>
+                {qrUrl}
+              </Text>
+
+              <TouchableOpacity onPress={handleShare} style={styles.shareBtn} activeOpacity={0.8}>
+                <MaterialIcons name="share" size={18} color="#ffffff" />
+                <Text style={styles.shareBtnText}>Share Table Link</Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* QR Code Card Display */}
-        <View style={styles.card}>
-          <View style={styles.tableBadge}>
-            <MaterialIcons name="restaurant" size={16} color="#059669" />
-            <Text style={styles.tableBadgeText}>{selectedTable.toUpperCase()}</Text>
-          </View>
-
-          <Text style={styles.cardTitle}>Scan to Order</Text>
-          <Text style={styles.cardSub}>
-            Guests scan with their phone camera to browse the menu and order directly to your kitchen.
-          </Text>
-
-          <View style={styles.qrBox}>
-            <Image source={{ uri: qrImageUri }} style={styles.qrImage} resizeMode="contain" />
-          </View>
-
-          <Text style={styles.urlText} numberOfLines={1}>
-            {qrUrl}
-          </Text>
-
-          <TouchableOpacity onPress={handleShare} style={styles.shareBtn} activeOpacity={0.8}>
-            <MaterialIcons name="share" size={18} color="#ffffff" />
-            <Text style={styles.shareBtnText}>Share Table Link</Text>
-          </TouchableOpacity>
-        </View>
+            </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Add Table Modal */}

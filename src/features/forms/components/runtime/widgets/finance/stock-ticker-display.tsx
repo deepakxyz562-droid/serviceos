@@ -43,18 +43,16 @@ function fetchMockQuote(symbol: string): Promise<Quote> {
         reject(new Error(`No mock quote for ${symbol.toUpperCase()}. Try AAPL, GOOGL, TSLA, MSFT, NVDA.`));
         return;
       }
-      // Slight jitter so refresh shows movement.
-      const jitter = (Math.random() - 0.5) * 0.5;
-      const price = +(base.price + jitter).toFixed(2);
-      const change = +(price - base.prevClose).toFixed(2);
-      const changePercent = +((change / base.prevClose) * 100).toFixed(2);
+      // NOTE: Previously this branch added `(Math.random() - 0.5) * 0.5`
+      // jitter to the price on every refresh — fabricating fake
+      // intraday movement that misled users into thinking the widget
+      // was hitting a live market-data feed. The jitter has been
+      // removed (P8): the mock quote now returns the SAME static
+      // price on every refresh, and the badge below explicitly says
+      // "DEMO DATA" when no `config.apiKey` is set so users know the
+      // numbers are not real. See P8 worklog for context.
       resolve({
         ...base,
-        price,
-        change,
-        changePercent,
-        high: Math.max(base.high, price),
-        low: Math.min(base.low, price),
         symbol: symbol.toUpperCase(),
         timestamp: new Date().toISOString(),
       });
@@ -124,7 +122,7 @@ export function StockTickerDisplay({ value, onChange, config, disabled, field }:
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-black tracking-tight">{quote?.symbol ?? symbol}</span>
             <Badge variant="outline" className="text-[8px] py-0">
-              {apiKey ? 'LIVE' : 'DELAYED'}
+              {apiKey ? 'LIVE' : 'DEMO DATA'}
             </Badge>
           </div>
           <Button type="button" variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={refresh} disabled={disabled || loading} aria-label="Refresh quote">
@@ -164,7 +162,11 @@ export function StockTickerDisplay({ value, onChange, config, disabled, field }:
       </div>
 
       {error && quote && <p className="text-[10px] text-amber-600">{error}</p>}
-      {!apiKey && <p className="text-[10px] text-muted-foreground">Mock data — set <code>config.apiKey</code> for live quotes.</p>}
+      {!apiKey && (
+        <p className="text-[10px] text-muted-foreground">
+          Demo data — connect a market data provider in settings to show live quotes.
+        </p>
+      )}
     </div>
   );
 }

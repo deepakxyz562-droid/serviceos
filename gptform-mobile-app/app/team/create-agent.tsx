@@ -9,10 +9,13 @@ import {
   StyleSheet,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 const VERTICAL_PRESETS = [
   {
@@ -48,6 +51,16 @@ const VERTICAL_PRESETS = [
 const TONES = ['Professional', 'Friendly', 'Casual', 'Empathetic', 'Sales'];
 const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Spanish'];
 
+// Map UI tone labels to the backend voiceTone enum
+function mapVoiceTone(tone: string): 'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic' {
+  const t = tone.toLowerCase();
+  if (t === 'professional') return 'professional';
+  if (t === 'sales') return 'sales';
+  if (t === 'empathetic') return 'empathetic';
+  if (t === 'medical') return 'medical';
+  return 'friendly'; // Casual and unknown collapse to friendly
+}
+
 export default function CreateAgentScreen() {
   const [selectedPreset, setSelectedPreset] = useState<string>('dental');
   const [agentName, setAgentName] = useState('Dental Receptionist');
@@ -71,26 +84,80 @@ export default function CreateAgentScreen() {
       Alert.alert('Agent Name', 'Please provide a name for your AI employee.');
       return;
     }
+
     await hapticFeedback.success();
     setIsCreating(true);
 
-    setTimeout(() => {
-      setIsCreating(false);
+    const selectedPresetObj =
+      VERTICAL_PRESETS.find((p) => p.id === selectedPreset) || VERTICAL_PRESETS[0];
+
+    const payload = {
+      name: agentName.trim(),
+      roleTitle: selectedPresetObj.title,
+      voiceTone: mapVoiceTone(selectedTone),
+      statusText: 'Online',
+      welcomeGreeting:
+        goalPrompt.trim() ||
+        `Hi! I'm ${agentName.trim()}. How can I help you today?`,
+      greetingSubtitle: `${selectedTone} · ${selectedLang}`,
+      // Extra config stored in configJson by the backend
+      language: selectedLang,
+      tone: selectedTone,
+      vertical: selectedPresetObj.id,
+      industry: selectedPresetObj.title,
+    };
+
+    try {
+      const res = await apiRequest<{ success?: boolean; agent?: { id?: string } }>(
+        API_PATHS.agents,
+        {
+          method: 'POST',
+          body: payload,
+        }
+      );
+
+      const newAgentId = res?.agent?.id;
+
       Alert.alert(
         'Agent Created! 🎉',
         `${agentName} is ready and deployed across your channels.`,
-        [
-          {
-            text: 'Train with Knowledge',
-            onPress: () => router.replace('/team/train-agent'),
-          },
-          {
-            text: 'Go to Team',
-            onPress: () => router.replace('/team'),
-          },
-        ]
+        newAgentId
+          ? [
+              {
+                text: 'Train with Knowledge',
+                onPress: () =>
+                  router.replace({
+                    pathname: '/team/train-agent',
+                    params: { id: newAgentId },
+                  } as any),
+              },
+              {
+                text: 'Go to Team',
+                onPress: () => router.replace('/team'),
+              },
+            ]
+          : [
+              {
+                text: 'Train with Knowledge',
+                onPress: () => router.replace('/team/train-agent'),
+              },
+              {
+                text: 'Go to Team',
+                onPress: () => router.replace('/team'),
+              },
+            ]
       );
-    }, 1200);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Failed to create agent. Please try again.';
+      Alert.alert('Could not create agent', message);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -197,7 +264,11 @@ export default function CreateAgentScreen() {
           onPress={handleCreate}
           activeOpacity={0.85}
         >
-          <MaterialIcons name="auto-awesome" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+          {isCreating ? (
+            <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+          ) : (
+            <MaterialIcons name="auto-awesome" size={20} color="#ffffff" style={{ marginRight: 8 }} />
+          )}
           <Text style={styles.createBtnText}>
             {isCreating ? 'Deploying AI Employee...' : 'Create AI Employee'}
           </Text>

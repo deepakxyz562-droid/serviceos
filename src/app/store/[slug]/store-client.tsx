@@ -101,6 +101,33 @@ export function StoreClient({
   const [promoError, setPromoError] = useState('');
   const [callServerSuccess, setCallServerSuccess] = useState(false);
   const [whatsappUpdatesOptIn, setWhatsappUpdatesOptIn] = useState(true);
+  const [isReturningCustomer, setIsReturningCustomer] = useState(false);
+
+  // Restore customer from device localStorage on QR scan / page load
+  React.useEffect(() => {
+    try {
+      const saved = localStorage.getItem('gptform_store_customer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.phone) {
+          setCustomerPhone(parsed.phone);
+          if (parsed.name) setCustomerName(parsed.name);
+          if (parsed.address) setDeliveryAddress(parsed.address);
+          setIsReturningCustomer(true);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const handleResetCustomer = () => {
+    setCustomerName('');
+    setCustomerPhone('');
+    setDeliveryAddress('');
+    setIsReturningCustomer(false);
+    try {
+      localStorage.removeItem('gptform_store_customer');
+    } catch {}
+  };
 
   // Categories
   const categories = useMemo(() => {
@@ -207,8 +234,8 @@ export function StoreClient({
     setTimeout(() => setCallServerSuccess(false), 4000);
   };
 
-  // Checkout via WhatsApp
-  const handleCheckout = async (method: 'WHATSAPP' | 'UPI') => {
+  // Checkout via WhatsApp, UPI, or Counter COD
+  const handleCheckout = async (method: 'WHATSAPP' | 'UPI' | 'COD') => {
     if (cartItems.length === 0) return;
     if (!customerPhone.trim()) {
       alert('Please enter your phone / WhatsApp number so we can confirm your order.');
@@ -243,8 +270,23 @@ export function StoreClient({
           taxAmount,
           total: grandTotal,
           paymentMethod: method === 'UPI' ? 'UPI' : 'WHATSAPP_COD',
+          whatsappConsent: whatsappUpdatesOptIn,
         }),
       }).then((r) => r.json());
+
+      // Persist customer profile to device localStorage for 1-tap re-ordering
+      try {
+        localStorage.setItem(
+          'gptform_store_customer',
+          JSON.stringify({
+            name: customerName.trim(),
+            phone: customerPhone.trim(),
+            address: deliveryAddress.trim(),
+            lastOrderAt: new Date().toISOString(),
+          })
+        );
+        setIsReturningCustomer(true);
+      } catch {}
 
       const orderNumber = res.orderNumber || (res.orderId ? res.orderId.slice(-6).toUpperCase() : 'NEW');
 
@@ -354,6 +396,26 @@ export function StoreClient({
             </div>
           )}
           <p className="text-xs text-stone-300 mt-2 font-medium">{greeting}</p>
+
+          {isReturningCustomer && customerPhone && (
+            <div className="mt-3 bg-emerald-500/20 border border-emerald-400/40 rounded-xl px-3 py-2 text-xs flex items-center justify-between text-emerald-100">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-emerald-400 text-stone-950 font-black flex items-center justify-center text-[10px]">
+                  ✓
+                </span>
+                <span>
+                  Welcome back{customerName ? <strong className="text-white font-bold">, {customerName}</strong> : ''}!
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleResetCustomer}
+                className="text-[10px] text-emerald-300 hover:text-white underline cursor-pointer"
+              >
+                Not you?
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Search & Category Filter Bar */}
@@ -630,6 +692,29 @@ export function StoreClient({
                 )}
 
                 {/* Customer Details */}
+                {isReturningCustomer && customerPhone && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px]">
+                        ✓
+                      </span>
+                      <div>
+                        <p className="font-bold text-stone-900 leading-tight">
+                          {customerName ? `${customerName}` : 'Recognized Customer'}
+                        </p>
+                        <p className="text-[10px] text-stone-500 font-mono">Auto-filled: {customerPhone}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResetCustomer}
+                      className="text-[10px] text-stone-400 hover:text-stone-700 underline font-medium"
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"

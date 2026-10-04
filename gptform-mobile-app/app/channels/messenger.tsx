@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,23 @@ import {
   Alert,
   Linking,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_BASE_URL, API_PATHS } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
+
+type MessengerConfig = {
+  pageName?: string;
+  pageId?: string;
+  aiAutoResponder?: boolean;
+  greetingMessage?: string;
+  triggerKeywords?: string;
+  leadCaptureEnabled?: boolean;
+  takeoverAlerts?: boolean;
+};
 
 export default function MessengerChannelScreen() {
   const router = useRouter();
@@ -27,6 +38,15 @@ export default function MessengerChannelScreen() {
     'Hi there! Thanks for reaching out. How can our team and AI assistant help you today?'
   );
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [persistingConfig, setPersistingConfig] = useState(false);
+
+  // Mirror of server-side config. The UI edits a subset (pageName + toggle +
+  // greeting) but we round-trip the rest so the web dashboard's settings
+  // (triggerKeywords, leadCaptureEnabled, takeoverAlerts, pageId) are
+  // preserved when the mobile app saves a toggle change.
+  const configRef = useRef<MessengerConfig>({});
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     apiRequest<any[]>(API_PATHS.channels)
@@ -34,15 +54,88 @@ export default function MessengerChannelScreen() {
         if (Array.isArray(channels)) {
           const fb = channels.find((c) => c.type === 'messenger' || c.channel === 'messenger');
           if (fb) {
+            const cfg: MessengerConfig = (fb.config && typeof fb.config === 'object') ? fb.config : {};
+            configRef.current = cfg;
             setIsConnected(!!fb.connected || fb.status === 'active');
-            if (fb.config?.pageName) setPageName(fb.config.pageName);
-            if (fb.config?.greetingMessage) setGreetingMessage(fb.config.greetingMessage);
+            if (typeof cfg.pageName === 'string') setPageName(cfg.pageName);
+            if (typeof cfg.greetingMessage === 'string') setGreetingMessage(cfg.greetingMessage);
+            if (typeof cfg.aiAutoResponder === 'boolean') setAiAutoResponder(cfg.aiAutoResponder);
           }
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const buildConfig = useCallback((): MessengerConfig => {
+    return {
+      ...configRef.current,
+      pageName,
+      aiAutoResponder,
+      greetingMessage,
+    };
+  }, [pageName, aiAutoResponder, greetingMessage]);
+
+  const persistConfig = useCallback(
+    async (overrides?: Partial<MessengerConfig> & { connected?: boolean; status?: string }) => {
+      const mergedConfig: MessengerConfig = { ...buildConfig(), ...(overrides || {}) };
+      configRef.current = mergedConfig;
+      const connected = overrides?.connected ?? isConnected;
+      const status = overrides?.status ?? (connected ? 'active' : 'inactive');
+      setPersistingConfig(true);
+      try {
+        await apiRequest(API_PATHS.channels, {
+          method: 'POST',
+          body: {
+            channel: 'messenger',
+            type: 'messenger',
+            name: 'Messenger',
+            provider: 'meta',
+            connected,
+            status,
+            config: mergedConfig,
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : 'Failed to save Messenger settings.';
+        Alert.alert('Save Failed', msg);
+      } finally {
+        setPersistingConfig(false);
+      }
+    },
+    [buildConfig, isConnected]
+  );
+
+  const connectMessenger = useCallback(async () => {
+    setSubmitting(true);
+    try {
+      const config: MessengerConfig = { ...buildConfig() };
+      configRef.current = config;
+      await apiRequest(API_PATHS.channels, {
+        method: 'POST',
+        body: {
+          channel: 'messenger',
+          type: 'messenger',
+          name: 'Messenger',
+          provider: 'meta',
+          connected: true,
+          status: 'active',
+          config,
+        },
+      });
+      setIsConnected(true);
+      hapticFeedback.success();
+      Alert.alert(
+        'Messenger Connected',
+        'Your Facebook Messenger channel has been activated. If you have not yet completed the Meta OAuth in your web dashboard, please do so to enable live page-message auto-reply.'
+      );
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to connect Messenger. Please try again.';
+      Alert.alert('Connection Failed', msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [buildConfig]);
 
   const handleConnectFacebook = () => {
     hapticFeedback.medium();
@@ -60,6 +153,12 @@ export default function MessengerChannelScreen() {
             });
           },
         },
+        {
+          text: 'Mark Connected',
+          onPress: () => {
+            connectMessenger();
+          },
+        },
       ]
     );
   };
@@ -67,6 +166,16 @@ export default function MessengerChannelScreen() {
   const handleToggleAutoResponder = (val: boolean) => {
     hapticFeedback.light();
     setAiAutoResponder(val);
+    persistConfig({ aiAutoResponder: val });
+  };
+
+  const handleGreetingChange = (val: string) => {
+    setGreetingMessage(val);
+    // Debounce text-input persistence to avoid one POST per keystroke
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      persistConfig({ greetingMessage: val });
+    }, 700);
   };
 
   const handleDisconnect = () => {
@@ -79,9 +188,30 @@ export default function MessengerChannelScreen() {
         {
           text: 'Disconnect',
           style: 'destructive',
-          onPress: () => {
-            setIsConnected(false);
-            setPageName('');
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              await apiRequest(API_PATHS.channels, {
+                method: 'POST',
+                body: {
+                  channel: 'messenger',
+                  type: 'messenger',
+                  name: 'Messenger',
+                  provider: 'meta',
+                  connected: false,
+                  status: 'inactive',
+                  config: buildConfig(),
+                },
+              });
+              setIsConnected(false);
+              setPageName('');
+              configRef.current = {};
+            } catch (err) {
+              const msg = err instanceof ApiError ? err.message : 'Failed to disconnect Messenger. Please try again.';
+              Alert.alert('Disconnect Failed', msg);
+            } finally {
+              setSubmitting(false);
+            }
           },
         },
       ]
@@ -119,6 +249,11 @@ export default function MessengerChannelScreen() {
               <Text style={styles.connectedPageText}>
                 {pageName ? pageName : 'Facebook Page'} · Active & Synced
               </Text>
+            </View>
+          ) : submitting ? (
+            <View style={styles.submittingRow}>
+              <ActivityIndicator size="small" color="#0084FF" />
+              <Text style={styles.submittingText}>Connecting…</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -177,7 +312,7 @@ export default function MessengerChannelScreen() {
             <TextInput
               style={styles.greetingInput}
               value={greetingMessage}
-              onChangeText={setGreetingMessage}
+              onChangeText={handleGreetingChange}
               multiline
               numberOfLines={3}
             />
@@ -187,24 +322,37 @@ export default function MessengerChannelScreen() {
         {/* Actions */}
         {isConnected ? (
           <TouchableOpacity
-            style={styles.disconnectBtn}
+            style={[styles.disconnectBtn, submitting && { opacity: 0.6 }]}
             onPress={handleDisconnect}
+            disabled={submitting}
             activeOpacity={0.8}
           >
-            <Text style={styles.disconnectBtnText}>Disconnect Messenger Channel</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#E11D48" />
+            ) : (
+              <Text style={styles.disconnectBtnText}>Disconnect Messenger Channel</Text>
+            )}
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.manualVerifyBtn}
-            onPress={() => {
-              setIsConnected(true);
-              setPageName('Main Facebook Page');
-              Alert.alert('Channel Activated', 'Facebook Messenger channel has been marked as active.');
-            }}
+            style={[styles.manualVerifyBtn, submitting && { opacity: 0.6 }]}
+            onPress={connectMessenger}
+            disabled={submitting}
             activeOpacity={0.8}
           >
-            <Text style={styles.manualVerifyText}>Mark as Connected (Direct API)</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#475569" />
+            ) : (
+              <Text style={styles.manualVerifyText}>Mark as Connected (Direct API)</Text>
+            )}
           </TouchableOpacity>
+        )}
+
+        {persistingConfig && (
+          <View style={styles.savingRow}>
+            <ActivityIndicator size="small" color="#64748B" />
+            <Text style={styles.savingText}>Saving settings…</Text>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -419,5 +567,28 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 12,
     fontWeight: '700',
+  },
+  submittingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  submittingText: {
+    fontSize: 12,
+    color: '#0084FF',
+    fontWeight: '700',
+  },
+  savingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  savingText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
   },
 });

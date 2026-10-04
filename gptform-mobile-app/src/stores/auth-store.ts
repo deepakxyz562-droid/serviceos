@@ -18,13 +18,12 @@ interface AuthState {
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
   register: (name: string, email: string, password: string, companyName?: string) => Promise<boolean>;
-  loginWithGoogle: (email?: string, name?: string) => Promise<boolean>;
-  quickDemoLogin: () => Promise<void>;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   tenant: null,
   token: null,
@@ -131,134 +130,91 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         });
         return true;
       }
-      throw new Error('Registration failed');
+      throw new Error('Registration failed. Please try again.');
     } catch (err: any) {
-      // Fallback for seamless registration if offline or test backend
-      const newUser: SubscriberUser = {
-        id: `usr_${Date.now()}`,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        role: 'Owner',
-        phone: null,
-        avatar: null,
-      };
-      const newTenant: SubscriberTenant = {
-        id: `tenant_${Date.now()}`,
-        name: companyName?.trim() || `${name.trim()}'s Workspace`,
-        slug: 'workspace',
-        industry: 'Technology',
-        plan: 'Starter',
-      };
-      const generatedToken = `jwt_${Date.now()}`;
-      await setTokens(generatedToken);
-      await setStoredUserData({ user: newUser, tenant: newTenant });
-
-      set({
-        token: generatedToken,
-        user: newUser,
-        tenant: newTenant,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      });
-      return true;
-    }
-  },
-
-  loginWithGoogle: async (realEmail?: string, realName?: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      let finalEmail = realEmail?.trim();
-      let finalName = realName?.trim();
-      let token = `google_oauth_${Date.now()}`;
-
-      // If not passed explicitly, attempt browser-based Google OAuth redirect
-      if (!finalEmail) {
-        const Linking = require('expo-linking');
-        const redirectUrl = Linking.createURL('auth-callback');
-        const authUrl = `${API_BASE_URL}/api/auth/google?mode=mobile&redirect=${encodeURIComponent(redirectUrl)}`;
-
-        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-
-        if (result.type === 'success' && result.url) {
-          const parsed = Linking.parse(result.url);
-          finalEmail = (parsed.queryParams?.email as string) || '';
-          finalName = (parsed.queryParams?.name as string) || '';
-          token = (parsed.queryParams?.token as string) || token;
-        }
-      }
-
-      if (!finalEmail) {
-        set({ isLoading: false });
-        return false;
-      }
-
-      const googleUser: SubscriberUser = {
-        id: `usr_google_${Date.now()}`,
-        name: finalName || finalEmail.split('@')[0],
-        email: finalEmail.toLowerCase(),
-        role: 'Owner',
-        phone: null,
-        avatar: null,
-      };
-
-      const googleTenant: SubscriberTenant = {
-        id: `tenant_google_${Date.now()}`,
-        name: `${googleUser.name}'s Workspace`,
-        slug: 'workspace',
-        industry: 'Services',
-        plan: 'Professional',
-      };
-
-      await setTokens(token);
-      await setStoredUserData({ user: googleUser, tenant: googleTenant });
-
-      set({
-        token,
-        user: googleUser,
-        tenant: googleTenant,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      });
-      return true;
-    } catch (err: any) {
+      // Surface the real error to the user. Do NOT fabricate a local account.
       set({
         isLoading: false,
-        error: err.message || 'Google sign-in could not be completed.',
+        error: err.message || 'Registration failed. Please check your details and try again.',
       });
       return false;
     }
   },
 
-  quickDemoLogin: async () => {
-    const demoUser: SubscriberUser = {
-      id: 'usr_deepak_01',
-      name: 'Deepak Chandra',
-      email: 'deepakxyz7890@gmail.com',
-      role: 'Owner',
-      phone: '+1 (555) 234-5678',
-      avatar: null,
-    };
-    const demoTenant: SubscriberTenant = {
-      id: 'tenant_gptform_01',
-      name: 'GPTForm Workspace',
-      slug: 'gptform',
-      industry: 'Technology',
-      plan: 'Enterprise',
-    };
-    const token = 'active_demo_session';
-    await setTokens(token);
-    await setStoredUserData({ user: demoUser, tenant: demoTenant });
+  loginWithGoogle: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      // Always go through the backend OAuth flow. The backend handles the real
+      // Google token exchange and returns a real session token. We never
+      // fabricate a user locally.
+      const Linking = require('expo-linking');
+      const redirectUrl = Linking.createURL('auth-callback');
+      const authUrl = `${API_BASE_URL}/api/auth/google?mode=mobile&redirect=${encodeURIComponent(redirectUrl)}`;
 
-    set({
-      user: demoUser,
-      tenant: demoTenant,
-      token,
-      isAuthenticated: true,
-      isLoading: false,
-      error: null,
-    });
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
+
+      if (result.type !== 'success' || !result.url) {
+        // User dismissed the browser or auth was cancelled
+        set({ isLoading: false });
+        return false;
+      }
+
+      const parsed = Linking.parse(result.url);
+      const token = parsed.queryParams?.token as string | undefined;
+      const refreshToken = parsed.queryParams?.refreshToken as string | undefined;
+
+      if (!token) {
+        const errMsg = (parsed.queryParams?.error as string) || 'Google sign-in did not return a session. Please try again.';
+        set({ isLoading: false, error: errMsg });
+        return false;
+      }
+
+      // Fetch the real user/tenant profile using the returned token
+      const profile = await apiRequest<{ user: SubscriberUser; tenant: SubscriberTenant }>(
+        '/api/auth/me',
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${token}` },
+          skipAuth: true,
+        }
+      ).catch(() => null);
+
+      // Fallback: derive minimal profile from query params if /me unavailable
+      const user: SubscriberUser = profile?.user || {
+        id: (parsed.queryParams?.userId as string) || `usr_${Date.now()}`,
+        name: (parsed.queryParams?.name as string) || '',
+        email: (parsed.queryParams?.email as string) || '',
+        role: 'Owner',
+        phone: null,
+        avatar: null,
+      };
+      const tenant: SubscriberTenant = profile?.tenant || {
+        id: (parsed.queryParams?.tenantId as string) || `tenant_${Date.now()}`,
+        name: (parsed.queryParams?.tenantName as string) || `${user.name}'s Workspace`,
+        slug: 'workspace',
+        industry: 'Services',
+        plan: 'Starter',
+      };
+
+      await setTokens(token, refreshToken);
+      await setStoredUserData({ user, tenant });
+
+      set({
+        token,
+        user,
+        tenant,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+      return true;
+    } catch (err: any) {
+      set({
+        isLoading: false,
+        error: err.message || 'Google sign-in could not be completed. Please try again.',
+      });
+      return false;
+    }
   },
 
   logout: async () => {

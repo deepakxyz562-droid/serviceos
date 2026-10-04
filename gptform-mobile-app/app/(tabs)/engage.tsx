@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,73 @@ import {
   StatusBar,
   StyleSheet,
   Share,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 type EngageFilter = 'browsing' | 'queued' | 'chatting' | 'supervised';
 
+interface ChatSession {
+  id: string;
+  visitorName?: string | null;
+  visitorPhone?: string | null;
+  visitorEmail?: string | null;
+  status?: string | null;
+  unreadCount?: number | null;
+  channel?: string | null;
+  lastMessageAt?: string | null;
+  createdAt?: string | null;
+  lastMessage?: { body?: string; senderType?: string } | null;
+  formName?: string | null;
+}
+
+function isEngaged(session: ChatSession): boolean {
+  if (typeof session.unreadCount === 'number' && session.unreadCount > 0) return true;
+  const status = (session.status || '').toLowerCase();
+  return status === 'active' || status === 'engaged' || status === 'claimed' || status === 'waiting_for_agent';
+}
+
+function initials(name?: string | null): string {
+  if (!name) return 'CU';
+  return name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'CU';
+}
+
 export default function EngageScreen() {
   const [activeFilter, setActiveFilter] = useState<EngageFilter>('chatting');
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSessions = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await apiRequest<{ sessions: ChatSession[] }>(API_PATHS.sessions);
+      const list = Array.isArray(res?.sessions) ? res.sessions : Array.isArray(res) ? (res as any) : [];
+      setSessions(list);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to load live visitors.';
+      setError(msg);
+      setSessions([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
 
   const handleShareLink = async () => {
     await hapticFeedback.light();
@@ -26,6 +84,16 @@ export default function EngageScreen() {
         message: 'Chat with our AI assistant here: https://fieseros.com/agent/support',
       });
     } catch {}
+  };
+
+  const engagedSessions = sessions.filter(isEngaged);
+  const chattingCount = engagedSessions.length;
+  const currentVisitor = engagedSessions[0];
+
+  const handleVisitorPress = () => {
+    if (!currentVisitor) return;
+    hapticFeedback.light();
+    router.push(`/chat/${currentVisitor.id}` as any);
   };
 
   return (
@@ -78,7 +146,7 @@ export default function EngageScreen() {
             }}
           >
             <Text style={[styles.filterPillText, activeFilter === 'chatting' && styles.filterPillTextActive]}>
-              Chatting (1)
+              Chatting ({chattingCount})
             </Text>
           </TouchableOpacity>
 
@@ -98,40 +166,100 @@ export default function EngageScreen() {
 
       {/* Content */}
       <View style={styles.contentWrap}>
-        {activeFilter === 'chatting' ? (
-          <ScrollView contentContainerStyle={styles.listContent}>
-            {/* Live Chatting Visitor Card (matches 18.35.51 (1).jpeg) */}
+        {loading ? (
+          <View style={styles.emptyContainer}>
+            <ActivityIndicator size="large" color="#0f172a" />
+            <Text style={[styles.emptySubtitle, { marginTop: 12 }]}>Loading live visitors…</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialIcons name="cloud-off" size={56} color="#94a3b8" />
+            </View>
+            <Text style={styles.emptyTitle}>Couldn't load visitors</Text>
+            <Text style={styles.emptySubtitle}>{error}</Text>
             <TouchableOpacity
-              style={styles.visitorCard}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/chat/session-urgent-1');
-              }}
-              activeOpacity={0.8}
+              style={styles.shareBtn}
+              onPress={() => { setLoading(true); fetchSessions(); }}
+              activeOpacity={0.85}
             >
-              <View style={styles.visitorCardLeft}>
-                <View style={styles.visitorAvatar}>
-                  <Text style={styles.visitorAvatarText}>EC</Text>
-                </View>
-                <View>
-                  <Text style={styles.visitorName}>Example Customer</Text>
-                  <View style={styles.visitorMetaRow}>
-                    <Text style={styles.visitorMeta}>External channel</Text>
-                    <Text style={styles.visitorMetaDot}>·</Text>
-                    <MaterialIcons name="person" size={13} color="#64748b" />
-                    <Text style={styles.visitorMeta}>You</Text>
+              <MaterialIcons name="refresh" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+              <Text style={styles.shareBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : activeFilter === 'chatting' ? (
+          chattingCount === 0 ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconCircle}>
+                <MaterialIcons name="account-circle" size={64} color="#94a3b8" />
+              </View>
+              <Text style={styles.emptyTitle}>No customers are currently engaged</Text>
+              <Text style={styles.emptySubtitle}>
+                Live visitor sessions will appear here.
+              </Text>
+              <TouchableOpacity
+                style={styles.shareBtn}
+                onPress={handleShareLink}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="share" size={18} color="#ffffff" style={{ marginRight: 8 }} />
+                <Text style={styles.shareBtnText}>Share chat link</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <ScrollView
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchSessions(); }} />
+              }
+            >
+              {/* Live Chatting Visitor Card (matches 18.35.51 (1).jpeg) */}
+              <TouchableOpacity
+                style={styles.visitorCard}
+                onPress={handleVisitorPress}
+                activeOpacity={0.8}
+              >
+                <View style={styles.visitorCardLeft}>
+                  <View style={styles.visitorAvatar}>
+                    <Text style={styles.visitorAvatarText}>
+                      {initials(currentVisitor?.visitorName)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.visitorName}>
+                      {currentVisitor?.visitorName || 'Anonymous Visitor'}
+                    </Text>
+                    <View style={styles.visitorMetaRow}>
+                      <Text style={styles.visitorMeta}>
+                        {currentVisitor?.channel || currentVisitor?.formName || 'External channel'}
+                      </Text>
+                      <Text style={styles.visitorMetaDot}>·</Text>
+                      {typeof currentVisitor?.unreadCount === 'number' && currentVisitor.unreadCount > 0 ? (
+                        <>
+                          <MaterialIcons name="notifications-active" size={13} color="#d97706" />
+                          <Text style={[styles.visitorMeta, { color: '#d97706', fontWeight: '700' }]}>
+                            {currentVisitor.unreadCount} unread
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <MaterialIcons name="person" size={13} color="#64748b" />
+                          <Text style={styles.visitorMeta}>Live</Text>
+                        </>
+                      )}
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <TouchableOpacity
-                onPress={() => hapticFeedback.light()}
-                style={styles.infoBtn}
-              >
-                <MaterialIcons name="info-outline" size={22} color="#1e293b" />
+                <TouchableOpacity
+                  onPress={() => hapticFeedback.light()}
+                  style={styles.infoBtn}
+                >
+                  <MaterialIcons name="info-outline" size={22} color="#1e293b" />
+                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
-          </ScrollView>
+            </ScrollView>
+          )
         ) : (
           /* Empty State (matches 18.35.52 (2).jpeg) */
           <View style={styles.emptyContainer}>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,13 @@ import {
   Switch,
   Alert,
   Share,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 interface FormItem {
   id: string;
@@ -25,57 +29,115 @@ interface FormItem {
   shareUrl: string;
 }
 
+function formatConversionRate(rate: any): string {
+  if (rate == null || rate === '') return '—';
+  if (typeof rate === 'number') {
+    if (rate <= 1) return `${(rate * 100).toFixed(1)}%`;
+    return `${rate.toFixed(1)}%`;
+  }
+  const s = String(rate);
+  if (!s.includes('%') && !isNaN(Number(s))) {
+    const n = Number(s);
+    if (n <= 1) return `${(n * 100).toFixed(1)}%`;
+    return `${n.toFixed(1)}%`;
+  }
+  return s;
+}
+
+function timeAgo(date: string | Date | null | undefined): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  const diff = Date.now() - d.getTime();
+  if (diff < 0) return 'Just now';
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+  return d.toLocaleDateString();
+}
+
+function mapApiFormToFormItem(f: any): FormItem {
+  const submissionsCount =
+    typeof f?.submissions === 'number'
+      ? f.submissions
+      : typeof f?.responseCount === 'number'
+        ? f.responseCount
+        : 0;
+  const shareUrl = f?.slug
+    ? `https://gptform.com/f/${f.slug}`
+    : f?.id
+      ? `https://gptform.com/f/${f.id}`
+      : '—';
+  return {
+    id: f.id,
+    title: f.name || f.title || 'Untitled Form',
+    type: f.type || 'Form',
+    submissionsCount,
+    conversionRate: formatConversionRate(f?.conversionRate),
+    active: f?.status === 'active',
+    lastSubmission: timeAgo(f?.updatedAt || f?.createdAt),
+    shareUrl,
+  };
+}
+
 export default function FormsListScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [forms, setForms] = useState<FormItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const [forms, setForms] = useState<FormItem[]>([
-    {
-      id: 'f-1',
-      title: 'Emergency Plumbing Intake & Quote Request',
-      type: 'Conversational Form',
-      submissionsCount: 142,
-      conversionRate: '38.4%',
-      active: true,
-      lastSubmission: '12m ago',
-      shareUrl: 'https://gptform.com/f/hydro-emergency-quote',
-    },
-    {
-      id: 'f-2',
-      title: 'Water Heater Diagnostic & Replacement Lead',
-      type: 'Multi-Step Diagnostic',
-      submissionsCount: 89,
-      conversionRate: '29.1%',
-      active: true,
-      lastSubmission: '2h ago',
-      shareUrl: 'https://gptform.com/f/water-heater-diagnostic',
-    },
-    {
-      id: 'f-3',
-      title: 'Commercial Maintenance Service Agreement',
-      type: 'B2B Intake',
-      submissionsCount: 23,
-      conversionRate: '19.5%',
-      active: false,
-      lastSubmission: 'Yesterday',
-      shareUrl: 'https://gptform.com/f/commercial-maintenance',
-    },
-    {
-      id: 'f-4',
-      title: 'Customer Satisfaction & Google Review Followup',
-      type: 'Feedback & NPS',
-      submissionsCount: 310,
-      conversionRate: '64.2%',
-      active: true,
-      lastSubmission: '3h ago',
-      shareUrl: 'https://gptform.com/f/customer-nps-survey',
-    },
-  ]);
+  const fetchForms = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await apiRequest<{ forms: any[] }>(API_PATHS.forms);
+      const list = Array.isArray(res?.forms) ? res.forms : Array.isArray(res) ? (res as any[]) : [];
+      setForms(list.map(mapApiFormToFormItem));
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to load forms.';
+      setError(msg);
+      setForms([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  const toggleFormActive = (id: string) => {
+  useEffect(() => {
+    fetchForms();
+  }, [fetchForms]);
+
+  const toggleFormActive = async (id: string) => {
+    const target = forms.find((f) => f.id === id);
+    if (!target || togglingId) return;
+    const next = !target.active;
+    setTogglingId(id);
+    // Optimistic update
     setForms((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, active: !f.active } : f))
+      prev.map((f) => (f.id === id ? { ...f, active: next } : f)),
     );
+    try {
+      // Backend PUT /api/forms/[id] reads body.status ('active' | 'inactive' | 'archived').
+      await apiRequest(API_PATHS.formDetail(id), {
+        method: 'PUT',
+        body: { status: next ? 'active' : 'inactive' },
+      });
+    } catch (err) {
+      // Revert on error
+      setForms((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, active: !next } : f)),
+      );
+      const msg = err instanceof ApiError ? err.message : 'Failed to update form status.';
+      Alert.alert('Update failed', msg);
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   const handleShare = async (form: FormItem) => {
@@ -148,71 +210,110 @@ export default function FormsListScreen() {
         )}
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {filtered.map((form) => (
-          <TouchableOpacity
-            key={form.id}
-            style={styles.formCard}
-            onPress={() => handleFormMenu(form)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.badgeRow}>
-                <View style={styles.typeBadge}>
-                  <Text style={styles.typeBadgeText}>{form.type}</Text>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchForms(); }} />
+        }
+      >
+        {loading ? (
+          <View style={styles.stateWrap}>
+            <ActivityIndicator size="large" color="#10B981" />
+            <Text style={styles.stateText}>Loading your forms…</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.stateWrap}>
+            <Feather name="cloud-off" size={42} color="#94A3B8" />
+            <Text style={styles.stateTitle}>Couldn’t load forms</Text>
+            <Text style={styles.stateText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() => { setLoading(true); fetchForms(); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filtered.length === 0 ? (
+          <View style={styles.stateWrap}>
+            <Feather name="file-text" size={42} color="#94A3B8" />
+            <Text style={styles.stateTitle}>
+              {searchQuery ? 'No matching forms' : 'No forms yet'}
+            </Text>
+            <Text style={styles.stateText}>
+              {searchQuery
+                ? 'Try a different search term.'
+                : 'Forms you create in GPTForm Studio Desktop will appear here.'}
+            </Text>
+          </View>
+        ) : (
+          filtered.map((form) => (
+            <TouchableOpacity
+              key={form.id}
+              style={styles.formCard}
+              onPress={() => handleFormMenu(form)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.badgeRow}>
+                  <View style={styles.typeBadge}>
+                    <Text style={styles.typeBadgeText}>{form.type}</Text>
+                  </View>
+                  <Switch
+                    value={form.active}
+                    onValueChange={() => toggleFormActive(form.id)}
+                    disabled={togglingId === form.id}
+                    trackColor={{ false: '#CBD5E1', true: '#10B981' }}
+                    style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                  />
                 </View>
-                <Switch
-                  value={form.active}
-                  onValueChange={() => toggleFormActive(form.id)}
-                  trackColor={{ false: '#CBD5E1', true: '#10B981' }}
-                  style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                />
-              </View>
-              <Text style={styles.formTitle}>{form.title}</Text>
-            </View>
-
-            {/* Metrics Row */}
-            <View style={styles.metricsContainer}>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricVal}>{form.submissionsCount}</Text>
-                <Text style={styles.metricLabel}>Submissions</Text>
+                <Text style={styles.formTitle}>{form.title}</Text>
               </View>
 
-              <View style={styles.metricDivider} />
+              {/* Metrics Row */}
+              <View style={styles.metricsContainer}>
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricVal}>{form.submissionsCount}</Text>
+                  <Text style={styles.metricLabel}>Submissions</Text>
+                </View>
 
-              <View style={styles.metricItem}>
-                <Text style={styles.metricVal}>{form.conversionRate}</Text>
-                <Text style={styles.metricLabel}>Conversion</Text>
+                <View style={styles.metricDivider} />
+
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricVal}>{form.conversionRate}</Text>
+                  <Text style={styles.metricLabel}>Conversion</Text>
+                </View>
+
+                <View style={styles.metricDivider} />
+
+                <View style={styles.metricItem}>
+                  <Text style={styles.metricVal}>{form.lastSubmission}</Text>
+                  <Text style={styles.metricLabel}>Last Active</Text>
+                </View>
               </View>
 
-              <View style={styles.metricDivider} />
+              {/* Actions */}
+              <View style={styles.actionsFooter}>
+                <TouchableOpacity
+                  style={styles.shareBtn}
+                  onPress={() => handleShare(form)}
+                >
+                  <Ionicons name="share-social-outline" size={16} color="#0F172A" style={{ marginRight: 6 }} />
+                  <Text style={styles.shareBtnText}>Share Link</Text>
+                </TouchableOpacity>
 
-              <View style={styles.metricItem}>
-                <Text style={styles.metricVal}>{form.lastSubmission}</Text>
-                <Text style={styles.metricLabel}>Last Active</Text>
+                <TouchableOpacity
+                  style={styles.inboxBtn}
+                  onPress={() => router.push('/(tabs)/inbox' as any)}
+                >
+                  <Ionicons name="chatbubbles-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+                  <Text style={styles.inboxBtnText}>View Chats</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-
-            {/* Actions */}
-            <View style={styles.actionsFooter}>
-              <TouchableOpacity
-                style={styles.shareBtn}
-                onPress={() => handleShare(form)}
-              >
-                <Ionicons name="share-social-outline" size={16} color="#0F172A" style={{ marginRight: 6 }} />
-                <Text style={styles.shareBtnText}>Share Link</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.inboxBtn}
-                onPress={() => router.push('/(tabs)/inbox' as any)}
-              >
-                <Ionicons name="chatbubbles-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
-                <Text style={styles.inboxBtnText}>View Chats</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        ))}
+            </TouchableOpacity>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -283,6 +384,38 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 16,
     paddingBottom: 40,
+  },
+  stateWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  stateTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 12,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  stateText: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryBtn: {
+    marginTop: 14,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   formCard: {
     backgroundColor: '#FFFFFF',

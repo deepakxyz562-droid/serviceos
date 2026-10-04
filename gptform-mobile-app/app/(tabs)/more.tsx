@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,21 +11,59 @@ import {
   Modal,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 export default function MoreScreen() {
   const { user, logout } = useAuthStore();
   const [acceptChats, setAcceptChats] = useState(true);
+  const [acceptChatsSaving, setAcceptChatsSaving] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [contactMessage, setContactMessage] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+
+  // Load the tenant-level chat-preference flag from the backend so the
+  // toggle reflects the persisted state instead of always defaulting to true.
+  const fetchAcceptChats = useCallback(async () => {
+    try {
+      const res = await apiRequest<{ acceptChats?: boolean }>(API_PATHS.bookingSettings);
+      if (typeof res.acceptChats === 'boolean') setAcceptChats(res.acceptChats);
+    } catch {
+      // Non-fatal: defaults remain in place; toggle still works locally.
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAcceptChats();
+  }, [fetchAcceptChats]);
 
   const handleToggleAcceptChats = async (val: boolean) => {
     await hapticFeedback.light();
     setAcceptChats(val);
+    if (acceptChatsSaving) return;
+    setAcceptChatsSaving(true);
+    try {
+      const res = await apiRequest<{ acceptChats?: boolean }>(
+        API_PATHS.bookingSettings,
+        { method: 'PATCH', body: { acceptChats: val } },
+      );
+      if (typeof res.acceptChats === 'boolean') setAcceptChats(res.acceptChats);
+    } catch (err: any) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err?.message || 'Could not save your preference.';
+      setAcceptChats(!val); // revert optimistic update
+      Alert.alert('Save failed', msg);
+    } finally {
+      setAcceptChatsSaving(false);
+    }
   };
 
   const handleLogout = () => {
@@ -47,10 +85,33 @@ export default function MoreScreen() {
       Alert.alert('Notice', 'Please type at least 20 characters.');
       return;
     }
-    await hapticFeedback.success();
-    Alert.alert('Sent', 'Your message has been sent to our support team.');
-    setContactModalVisible(false);
-    setContactMessage('');
+    if (contactSending) return;
+    setContactSending(true);
+    try {
+      await apiRequest<{ success?: boolean; message?: string }>(
+        API_PATHS.feedback,
+        {
+          method: 'POST',
+          body: {
+            message: contactMessage,
+            userId: user?.id,
+          },
+        },
+      );
+      await hapticFeedback.success();
+      Alert.alert('Sent', 'Your message has been sent to our support team.');
+      setContactModalVisible(false);
+      setContactMessage('');
+    } catch (err: any) {
+      await hapticFeedback.error();
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err?.message || 'We couldn\'t send your message right now. Please try again.';
+      Alert.alert('Send failed', msg);
+    } finally {
+      setContactSending(false);
+    }
   };
 
   return (
@@ -108,6 +169,7 @@ export default function MoreScreen() {
           <Switch
             value={acceptChats}
             onValueChange={handleToggleAcceptChats}
+            disabled={acceptChatsSaving}
             trackColor={{ false: '#cbd5e1', true: '#10b981' }}
             thumbColor="#ffffff"
           />
@@ -272,6 +334,31 @@ export default function MoreScreen() {
               <View>
                 <Text style={styles.menuLabel}>Dine-In Table QR</Text>
                 <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Table ordering QR code generator</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/customers' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="contacts" size={22} color="#10b981" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Customer CRM & Loyalty</Text>
+                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>QR Captured</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Customer lifetime spend, favorites & WhatsApp</Text>
               </View>
             </View>
             <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
@@ -457,10 +544,14 @@ export default function MoreScreen() {
 
               <TouchableOpacity
                 style={[styles.sendContactBtn, contactMessage.length < 20 && { opacity: 0.5 }]}
-                disabled={contactMessage.length < 20}
+                disabled={contactMessage.length < 20 || contactSending}
                 onPress={handleSendContact}
               >
-                <Text style={styles.sendContactText}>Send message</Text>
+                {contactSending ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.sendContactText}>Send message</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>

@@ -16,7 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
-import { API_BASE_URL, API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 interface CartItem {
   id: string;
@@ -48,50 +49,49 @@ export default function MobilePosScreen() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any | null>(null);
+  const [loadingMenu, setLoadingMenu] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadMenu = async () => {
+    setLoadingMenu(true);
+    try {
+      const d = await apiRequest<{ config: any }>(API_PATHS.commerceConfig);
+      const cfg = d.config;
+      if (cfg) {
+        if (cfg.upiId) setUpiId(cfg.upiId);
+        if (cfg.businessName) setBusinessName(cfg.businessName);
+        if (cfg.catalogJson) {
+          try {
+            const parsed = JSON.parse(cfg.catalogJson);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setMenu(
+                parsed.map((it: any, idx: number) => ({
+                  id: it.id || `item_${idx}`,
+                  name: it.name || 'Item',
+                  price: Number(it.price || 0),
+                  category: it.category || 'General',
+                  description: it.description || '',
+                }))
+              );
+              setError(null);
+              return;
+            }
+          } catch {}
+        }
+      }
+      // No catalog configured yet — show empty state (no fake fallback)
+      setMenu([]);
+      setError(null);
+    } catch (err: any) {
+      setMenu([]);
+      setError(err?.message || 'Unable to load your menu. Tap retry to try again.');
+    } finally {
+      setLoadingMenu(false);
+    }
+  };
 
   useEffect(() => {
-    // Load live catalog and merchant config
-    fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.config) {
-          if (d.config.upiId) setUpiId(d.config.upiId);
-          if (d.config.catalogJson) {
-            try {
-              const parsed = JSON.parse(d.config.catalogJson);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                setMenu(
-                  parsed.map((it: any, idx: number) => ({
-                    id: it.id || `item_${idx}`,
-                    name: it.name || 'Item',
-                    price: Number(it.price || 0),
-                    category: it.category || 'General',
-                    description: it.description || '',
-                  }))
-                );
-                return;
-              }
-            } catch {}
-          }
-        }
-        // Default sample fallback for instant use
-        setMenu([
-          { id: '1', name: 'Steamed Momos (6 pcs)', price: 80, category: 'Snacks' },
-          { id: '2', name: 'Fried Momos (6 pcs)', price: 90, category: 'Snacks' },
-          { id: '3', name: 'Paneer Kathi Roll', price: 110, category: 'Rolls' },
-          { id: '4', name: 'Chicken Egg Roll', price: 140, category: 'Rolls' },
-          { id: '5', name: 'Special Masala Chai', price: 25, category: 'Beverages' },
-          { id: '6', name: 'Cold Drink 500ml', price: 40, category: 'Beverages' },
-        ]);
-      })
-      .catch(() => {
-        setMenu([
-          { id: '1', name: 'Steamed Momos (6 pcs)', price: 80, category: 'Snacks' },
-          { id: '2', name: 'Fried Momos (6 pcs)', price: 90, category: 'Snacks' },
-          { id: '3', name: 'Paneer Kathi Roll', price: 110, category: 'Rolls' },
-          { id: '4', name: 'Chicken Egg Roll', price: 140, category: 'Rolls' },
-        ]);
-      });
+    loadMenu();
   }, []);
 
   const categories = ['ALL', ...Array.from(new Set(menu.map((m) => m.category || 'General')))];
@@ -173,16 +173,17 @@ export default function MobilePosScreen() {
 
     let savedId = `ord_${Date.now().toString().slice(-6)}`;
     try {
-      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceOrders}`, {
+      const d = await apiRequest<{ order?: { id?: string } }>(API_PATHS.commerceOrders, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(orderPayload),
+        body: orderPayload,
       });
-      if (res.ok) {
-        const d = await res.json();
-        if (d.order?.id) savedId = d.order.id;
-      }
-    } catch {}
+      if (d.order?.id) savedId = d.order.id;
+    } catch (err: any) {
+      setSavingOrder(false);
+      setShowQrModal(false);
+      Alert.alert('Order Save Failed', err?.message || 'Could not save order to server. Please retry.');
+      return;
+    }
 
     setSavingOrder(false);
     setShowQrModal(false);
@@ -271,29 +272,89 @@ export default function MobilePosScreen() {
             </ScrollView>
           )}
 
+          {/* Error / Loading Banner */}
+          {loadingMenu ? (
+            <View style={{ paddingVertical: 8, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#059669" />
+            </View>
+          ) : error ? (
+            <View
+              style={{
+                marginVertical: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                backgroundColor: '#fef2f2',
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: '#fecaca',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <MaterialIcons name="error-outline" size={14} color="#dc2626" />
+              <Text style={{ flex: 1, fontSize: 11, color: '#b91c1c', fontWeight: '600' }} numberOfLines={2}>
+                {error}
+              </Text>
+              <TouchableOpacity
+                onPress={loadMenu}
+                style={{ paddingHorizontal: 8, paddingVertical: 4, backgroundColor: '#dc2626', borderRadius: 6 }}
+              >
+                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '700' }}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           {/* Menu Items Grid */}
           <ScrollView contentContainerStyle={styles.menuGrid} showsVerticalScrollIndicator={false}>
-            {filteredMenu.map((item) => {
-              const inCart = cart.find((c) => c.id === item.id);
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  onPress={() => addToCart(item)}
-                  style={[styles.menuItem, inCart && styles.menuItemActive]}
-                  activeOpacity={0.7}
+            {filteredMenu.length === 0 ? (
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 24,
+                  width: '100%',
+                }}
+              >
+                <MaterialIcons name="restaurant-menu" size={36} color="#cbd5e1" />
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: '700',
+                    color: '#94a3b8',
+                    marginTop: 8,
+                    textAlign: 'center',
+                  }}
                 >
-                  {inCart && (
-                    <View style={styles.badgeQty}>
-                      <Text style={styles.badgeQtyText}>{inCart.qty}</Text>
-                    </View>
-                  )}
-                  <Text style={styles.menuItemName} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                  <Text style={styles.menuItemPrice}>₹{item.price}</Text>
-                </TouchableOpacity>
-              );
-            })}
+                  {error
+                    ? 'Could not load menu.'
+                    : 'No menu items yet. Add products in the Catalog screen.'}
+                </Text>
+              </View>
+            ) : (
+              filteredMenu.map((item) => {
+                const inCart = cart.find((c) => c.id === item.id);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => addToCart(item)}
+                    style={[styles.menuItem, inCart && styles.menuItemActive]}
+                    activeOpacity={0.7}
+                  >
+                    {inCart && (
+                      <View style={styles.badgeQty}>
+                        <Text style={styles.badgeQtyText}>{inCart.qty}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.menuItemName} numberOfLines={2}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.menuItemPrice}>₹{item.price}</Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </ScrollView>
         </View>
 

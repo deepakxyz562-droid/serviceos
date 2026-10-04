@@ -9,12 +9,20 @@ import {
   Linking,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
-import { API_BASE_URL, API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
+import {
+  matchNotificationToOrders,
+  submitPaymentMatch,
+  simulateIncomingUpiPayment,
+  ParsedUpiNotification,
+} from '@/lib/upi-notification-matcher';
 
 interface OrderItem {
   name: string;
@@ -45,77 +53,22 @@ export default function OrdersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'DELIVERED'>('ALL');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [matchedPrompt, setMatchedPrompt] = useState<{
+    order: Order;
+    parsed: ParsedUpiNotification;
+  } | null>(null);
+  const [submittingMatch, setSubmittingMatch] = useState(false);
 
   const fetchOrders = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceOrders}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.orders) {
-          setOrders(data.orders);
-          return;
-        }
-      }
-    } catch {
-      // Fallback sample data if offline/local dev
+      const data = await apiRequest<{ orders: Order[] }>(API_PATHS.commerceOrders);
+      setOrders(data.orders || []);
+      setError(null);
+    } catch (err: any) {
+      setOrders([]);
+      setError(err?.message || 'Unable to load orders. Pull to retry.');
     }
-
-    // High quality offline fallback items
-    setOrders([
-      {
-        id: 'ord_101',
-        customerName: 'Aarav Sharma',
-        customerPhone: '+919876543210',
-        status: 'PENDING',
-        total: 180,
-        deliveryType: 'dine_in',
-        deliveryAddress: 'Table #4',
-        paymentStatus: 'UNPAID',
-        paymentMethod: 'UPI',
-        notes: '[UTR: 428198765432] Less spicy please',
-        createdAt: new Date().toISOString(),
-        items: [
-          { name: 'Steamed Momos (6 pcs)', qty: 2, price: 80, amount: 160 },
-          { name: 'Special Masala Chai', qty: 1, price: 20, amount: 20 },
-        ],
-      },
-      {
-        id: 'ord_102',
-        customerName: 'Priya Patel',
-        customerPhone: '+919812345678',
-        status: 'CONFIRMED',
-        total: 420,
-        deliveryType: 'delivery',
-        deliveryAddress: 'Flat 402, Sunshine Apts, Bandra West',
-        paymentStatus: 'PAID',
-        paymentMethod: 'UPI',
-        notes: 'Call before arriving',
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        items: [
-          { name: 'Paneer Kathi Roll', qty: 2, price: 110, amount: 220 },
-          { name: 'Chicken Egg Roll', qty: 1, price: 140, amount: 140 },
-          { name: 'Cold Drink 500ml', qty: 1, price: 60, amount: 60 },
-        ],
-      },
-      {
-        id: 'ord_103',
-        customerName: 'Vikram Mehta',
-        customerPhone: '+919898765432',
-        status: 'READY',
-        total: 250,
-        deliveryType: 'takeout',
-        deliveryAddress: 'Counter 1',
-        paymentStatus: 'PAID',
-        paymentMethod: 'CASH',
-        notes: 'Extra green chutney',
-        createdAt: new Date(Date.now() - 7200000).toISOString(),
-        items: [
-          { name: 'Fried Momos (6 pcs)', qty: 2, price: 90, amount: 180 },
-          { name: 'Cold Drink 500ml', qty: 1, price: 40, amount: 40 },
-          { name: 'Special Masala Chai', qty: 1, price: 30, amount: 30 },
-        ],
-      },
-    ]);
   };
 
   useEffect(() => {
@@ -133,37 +86,133 @@ export default function OrdersScreen() {
     setUpdatingId(orderId);
     hapticFeedback.medium();
     try {
-      await fetch(`${API_BASE_URL}${API_PATHS.commerceOrderDetail(orderId)}`, {
+      await apiRequest(API_PATHS.commerceOrderDetail(orderId), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
+        body: { status: nextStatus },
       });
-    } catch {
-      // offline fallback
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
+      );
+    } catch (err: any) {
+      Alert.alert('Update failed', err?.message || 'Could not update order status.');
+    } finally {
+      setUpdatingId(null);
     }
-
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
-    );
-    setUpdatingId(null);
   };
 
   const handleMarkPaid = async (orderId: string) => {
     setUpdatingId(orderId);
     hapticFeedback.success();
     try {
-      await fetch(`${API_BASE_URL}${API_PATHS.commerceOrderDetail(orderId)}`, {
+      await apiRequest(API_PATHS.commerceOrderDetail(orderId), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentStatus: 'PAID' }),
+        body: { paymentStatus: 'PAID' },
       });
-    } catch {}
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, paymentStatus: 'PAID' } : o))
+      );
+      Alert.alert('Payment Verified', 'Order marked as PAID ✓');
+    } catch (err: any) {
+      Alert.alert('Update failed', err?.message || 'Could not mark order as paid.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, paymentStatus: 'PAID' } : o))
+  const handleConfirmMatchedPayment = async (orderId: string, utr?: string | null) => {
+    setUpdatingId(orderId);
+    await hapticFeedback.success();
+    try {
+      await apiRequest(API_PATHS.commerceOrderDetail(orderId), {
+        method: 'PATCH',
+        body: {
+          paymentStatus: 'PAID',
+          paymentMethod: 'UPI (Auto-Matched)',
+          ...(utr ? { paymentRef: utr } : {}),
+        },
+      });
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === orderId
+            ? { ...o, paymentStatus: 'PAID', paymentMethod: 'UPI (Auto-Matched)' }
+            : o
+        )
+      );
+      Alert.alert('Payment Verified ✓', 'UPI payment confirmed and marked as PAID.');
+    } catch (err: any) {
+      Alert.alert('Update failed', err?.message || 'Could not verify payment.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    const candidate = orders.find((o) =>
+      ['UNPAID', 'DETECTION_PENDING', 'PENDING'].includes(o.paymentStatus)
     );
-    setUpdatingId(null);
-    Alert.alert('Payment Verified', 'Order marked as PAID ✓');
+    if (!candidate) {
+      Alert.alert(
+        'No Open Orders',
+        'Place an order on the storefront or POS first, then tap Test Match to simulate an incoming PhonePe/GPay notification.'
+      );
+      return;
+    }
+
+    await hapticFeedback.medium();
+    const simulated = simulateIncomingUpiPayment(
+      candidate.total,
+      'PhonePe',
+      candidate.customerName || 'Rahul'
+    );
+
+    const matchRes = matchNotificationToOrders(simulated, orders);
+    if (matchRes.matchedOrder) {
+      setMatchedPrompt({
+        order: candidate,
+        parsed: simulated,
+      });
+    } else {
+      Alert.alert('No Match', `Simulated payment of ₹${simulated.amount} did not match any open order.`);
+    }
+  };
+
+  const handleAcceptPrompt = async () => {
+    if (!matchedPrompt) return;
+    setSubmittingMatch(true);
+    await hapticFeedback.success();
+    try {
+      const res = await submitPaymentMatch(
+        matchedPrompt.order.id,
+        matchedPrompt.parsed,
+        true // auto-confirm to PAID
+      );
+      if (res.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === matchedPrompt.order.id
+              ? {
+                  ...o,
+                  paymentStatus: 'PAID',
+                  paymentMethod: `UPI (${matchedPrompt.parsed.appSource})`,
+                  notes: `${o.notes || ''} • [Auto-Matched Ref: ${matchedPrompt.parsed.utr}]`.trim(),
+                }
+              : o
+          )
+        );
+        const orderIdShort = matchedPrompt.order.id.slice(-6).toUpperCase();
+        setMatchedPrompt(null);
+        Alert.alert(
+          'Payment Auto-Matched & Confirmed ✓',
+          `₹${matchedPrompt.parsed.amount} from ${matchedPrompt.parsed.payerName || 'customer'} matched to Order #${orderIdShort}.`
+        );
+      } else {
+        Alert.alert('Match failed', res.error || 'Could not verify match.');
+      }
+    } catch (err: any) {
+      Alert.alert('Match failed', err?.message || 'Could not process match.');
+    } finally {
+      setSubmittingMatch(false);
+    }
   };
 
   const alertCustomerReady = (order: Order) => {
@@ -241,14 +290,29 @@ export default function OrdersScreen() {
           <Text style={styles.subtitle}>Direct UPI, Cash & WhatsApp Kitchen</Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <TouchableOpacity
-            onPress={() => router.push('/pos')}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/customers' as any);
+            }}
+            style={styles.crmHeaderBtn}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="contacts" size={14} color="#059669" />
+            <Text style={styles.crmHeaderBtnText}>CRM</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/pos');
+            }}
             style={styles.posHeaderBtn}
             activeOpacity={0.8}
           >
-            <MaterialIcons name="point-of-sale" size={16} color="#ffffff" />
-            <Text style={styles.posHeaderBtnText}>POS Register</Text>
+            <MaterialIcons name="point-of-sale" size={15} color="#ffffff" />
+            <Text style={styles.posHeaderBtnText}>POS</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -259,6 +323,27 @@ export default function OrdersScreen() {
             <MaterialIcons name="refresh" size={18} color="#0f172a" />
           </TouchableOpacity>
         </View>
+      </View>
+
+      {/* UPI Auto-Match Live Strip */}
+      <View style={styles.upiStrip}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
+          <View style={styles.pulseDot} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.upiStripTitle}>UPI Auto-Match: Active</Text>
+            <Text style={styles.upiStripSub} numberOfLines={1}>
+              Listening for PhonePe, GPay, Paytm & SMS notifications
+            </Text>
+          </View>
+        </View>
+        <TouchableOpacity
+          onPress={handleSimulatePayment}
+          style={styles.testMatchBtn}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="bolt" size={13} color="#b45309" />
+          <Text style={styles.testMatchBtnText}>Test Match</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Filter Tabs */}
@@ -301,7 +386,22 @@ export default function OrdersScreen() {
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />}
         >
-          {filtered.length === 0 ? (
+          {error ? (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="error-outline" size={48} color="#f87171" />
+              <Text style={[styles.emptyTitle, { color: '#f87171' }]}>{error}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setError(null);
+                  setLoading(true);
+                  fetchOrders().finally(() => setLoading(false));
+                }}
+                style={{ marginTop: 12, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: '#059669', borderRadius: 10 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="shopping-bag" size={48} color="#cbd5e1" />
               <Text style={styles.emptyTitle}>No orders in this state</Text>
@@ -326,16 +426,34 @@ export default function OrdersScreen() {
                         <View
                           style={[
                             styles.payBadge,
-                            order.paymentStatus === 'PAID' ? styles.payBadgePaid : styles.payBadgeUnpaid,
+                            order.paymentStatus === 'PAID'
+                              ? styles.payBadgePaid
+                              : order.paymentStatus === 'MATCHED'
+                              ? styles.payBadgeMatched
+                              : order.paymentStatus === 'DETECTION_PENDING'
+                              ? styles.payBadgeDetecting
+                              : styles.payBadgeUnpaid,
                           ]}
                         >
                           <Text
                             style={[
                               styles.payBadgeText,
-                              order.paymentStatus === 'PAID' ? styles.payTextPaid : styles.payTextUnpaid,
+                              order.paymentStatus === 'PAID'
+                                ? styles.payTextPaid
+                                : order.paymentStatus === 'MATCHED'
+                                ? styles.payTextMatched
+                                : order.paymentStatus === 'DETECTION_PENDING'
+                                ? styles.payTextDetecting
+                                : styles.payTextUnpaid,
                             ]}
                           >
-                            {order.paymentStatus === 'PAID' ? 'PAID ✓' : 'UNPAID'}
+                            {order.paymentStatus === 'PAID'
+                              ? 'PAID ✓'
+                              : order.paymentStatus === 'MATCHED'
+                              ? 'MATCHED 🔔'
+                              : order.paymentStatus === 'DETECTION_PENDING'
+                              ? 'DETECTING ⚡'
+                              : 'UNPAID'}
                           </Text>
                         </View>
                       </View>
@@ -393,8 +511,50 @@ export default function OrdersScreen() {
                     </Text>
                   )}
 
-                  {/* Quick Payment Verification Row if Unpaid */}
-                  {order.paymentStatus !== 'PAID' && (
+                  {/* Quick Payment Verification Row if Not Paid */}
+                  {order.paymentStatus === 'MATCHED' ? (
+                    <View style={styles.matchedPayBanner}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <MaterialIcons name="notifications-active" size={16} color="#059669" />
+                          <Text style={styles.matchedPayTitle}>UPI Match Detected!</Text>
+                        </View>
+                        <Text style={styles.matchedPaySub}>
+                          ₹{order.total.toFixed(2)} received {utr ? `• Ref: ${utr}` : ''}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.confirmMatchedBtn}
+                        onPress={() => handleConfirmMatchedPayment(order.id, utr)}
+                        disabled={isUpdating}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="check" size={14} color="#ffffff" />
+                        <Text style={styles.confirmMatchedText}>Confirm</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : order.paymentStatus === 'DETECTION_PENDING' ? (
+                    <View style={styles.detectingPayBanner}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <MaterialIcons name="radar" size={16} color="#d97706" />
+                          <Text style={styles.detectingPayTitle}>Auto-Detecting UPI</Text>
+                        </View>
+                        <Text style={styles.detectingPaySub}>
+                          Listening for ₹{order.total.toFixed(2)} from customer app...
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.markPaidBtn}
+                        onPress={() => handleMarkPaid(order.id)}
+                        disabled={isUpdating}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialIcons name="check" size={14} color="#ffffff" />
+                        <Text style={styles.markPaidText}>Confirm</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : order.paymentStatus !== 'PAID' ? (
                     <View style={styles.verifyPayBanner}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.verifyPayTitle}>Payment Pending (₹{order.total.toFixed(2)})</Text>
@@ -410,7 +570,7 @@ export default function OrdersScreen() {
                         <Text style={styles.markPaidText}>Mark Paid</Text>
                       </TouchableOpacity>
                     </View>
-                  )}
+                  ) : null}
 
                   {/* Quick Action Buttons */}
                   <View style={styles.actionRow}>
@@ -525,6 +685,89 @@ export default function OrdersScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* UPI Match Confirmation Modal */}
+      <Modal
+        visible={!!matchedPrompt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMatchedPrompt(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <MaterialIcons name="notifications-active" size={28} color="#059669" />
+            </View>
+            <Text style={styles.modalTitle}>Incoming Payment Detected!</Text>
+            <Text style={styles.modalSubtitle}>
+              Auto-matched to open order on this POS device:
+            </Text>
+
+            {matchedPrompt && (
+              <View style={styles.modalDetailBox}>
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLabel}>App / Channel</Text>
+                  <Text style={styles.modalDetailVal}>
+                    {matchedPrompt.parsed.appSource}
+                  </Text>
+                </View>
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLabel}>Amount Detected</Text>
+                  <Text style={[styles.modalDetailVal, { color: '#059669', fontSize: 16, fontWeight: '900' }]}>
+                    ₹{matchedPrompt.parsed.amount.toFixed(2)}
+                  </Text>
+                </View>
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalDetailLabel}>Payer / Sender</Text>
+                  <Text style={styles.modalDetailVal}>
+                    {matchedPrompt.parsed.payerName || 'UPI Customer'}
+                  </Text>
+                </View>
+                {matchedPrompt.parsed.utr && (
+                  <View style={styles.modalDetailRow}>
+                    <Text style={styles.modalDetailLabel}>Ref / UTR</Text>
+                    <Text style={[styles.modalDetailVal, { fontFamily: 'monospace' }]}>
+                      {matchedPrompt.parsed.utr}
+                    </Text>
+                  </View>
+                )}
+                <View style={[styles.modalDetailRow, { borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 6, marginTop: 4 }]}>
+                  <Text style={styles.modalDetailLabel}>Matched Order</Text>
+                  <Text style={[styles.modalDetailVal, { fontWeight: '900' }]}>
+                    #{matchedPrompt.order.id.slice(-6).toUpperCase()} ({matchedPrompt.order.customerName || 'Guest'})
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                onPress={() => setMatchedPrompt(null)}
+                style={styles.modalCancelBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Dismiss</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleAcceptPrompt}
+                disabled={submittingMatch}
+                style={styles.modalConfirmBtn}
+                activeOpacity={0.8}
+              >
+                {submittingMatch ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="check-circle" size={16} color="#ffffff" />
+                    <Text style={styles.modalConfirmText}>Accept & Mark Paid</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -659,6 +902,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#ecfdf5',
     borderColor: '#a7f3d0',
   },
+  payBadgeMatched: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#6ee7b7',
+  },
+  payBadgeDetecting: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fcd34d',
+  },
   payBadgeUnpaid: {
     backgroundColor: '#fffbeb',
     borderColor: '#fde68a',
@@ -669,6 +920,12 @@ const styles = StyleSheet.create({
   },
   payTextPaid: {
     color: '#059669',
+  },
+  payTextMatched: {
+    color: '#047857',
+  },
+  payTextDetecting: {
+    color: '#b45309',
   },
   payTextUnpaid: {
     color: '#d97706',
@@ -894,5 +1151,220 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     maxWidth: 240,
+  },
+  crmHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  crmHeaderBtnText: {
+    color: '#059669',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  upiStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#fffbeb',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fef3c7',
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
+  upiStripTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  upiStripSub: {
+    fontSize: 10,
+    color: '#b45309',
+  },
+  testMatchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  testMatchBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#b45309',
+  },
+  matchedPayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#6ee7b7',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  matchedPayTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#065f46',
+  },
+  matchedPaySub: {
+    fontSize: 10,
+    color: '#047857',
+    marginTop: 1,
+  },
+  confirmMatchedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  confirmMatchedText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  detectingPayBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  detectingPayTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#92400e',
+  },
+  detectingPaySub: {
+    fontSize: 10,
+    color: '#b45309',
+    marginTop: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  modalDetailBox: {
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 6,
+    marginBottom: 16,
+  },
+  modalDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalDetailLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  modalDetailVal: {
+    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  modalConfirmBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  modalConfirmText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });

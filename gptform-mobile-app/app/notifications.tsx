@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,23 +9,175 @@ import {
   SafeAreaView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '@/stores/auth-store';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
+import { registerForPushNotifications } from '@/lib/notifications';
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
 
   const [sendNotifications, setSendNotifications] = useState(true);
   const [soundNotifications, setSoundNotifications] = useState(true);
   const [soundChoice, setSoundChoice] = useState('Default');
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [diagnosticRunning, setDiagnosticRunning] = useState(false);
 
-  const runDiagnostic = () => {
-    Alert.alert(
-      'Push Diagnostic',
-      '✅ Device Token: Registered\n✅ APNs / FCM: Connected\n✅ Background Fetch: Enabled\n\nAll notification channels are working properly!',
-      [{ text: 'OK' }]
-    );
+  /**
+   * Fetch the user's NotificationPreference row from the backend and seed
+   * the local switch state. Falls back silently to defaults on error.
+   */
+  const fetchPrefs = useCallback(async () => {
+    try {
+      const res = await apiRequest<{
+        pushEnabled?: boolean;
+        inAppEnabled?: boolean;
+        typePrefsJson?: string;
+      }>(API_PATHS.notificationPreferences);
+      const sendOn = res.pushEnabled !== false && res.inAppEnabled !== false;
+      setSendNotifications(sendOn);
+      if (typeof res.typePrefsJson === 'string' && res.typePrefsJson) {
+        try {
+          const tpr = JSON.parse(res.typePrefsJson) || {};
+          if (typeof tpr.soundEnabled === 'boolean') setSoundNotifications(tpr.soundEnabled);
+          if (typeof tpr.soundChoice === 'string' && tpr.soundChoice) setSoundChoice(tpr.soundChoice);
+        } catch {}
+      }
+    } catch {
+      // Non-fatal: defaults remain in place.
+    } finally {
+      setPrefsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchPrefs();
+  }, [fetchPrefs]);
+
+  /**
+   * Persist the send-notifications toggle to the backend by writing both
+   * `pushEnabled` and `inAppEnabled` (mirrors what the user sees: turning
+   * this off kills all app notifications). Optimistic + revert on error.
+   */
+  const handleToggleSendNotifications = async (val: boolean) => {
+    setSendNotifications(val);
+    if (prefsSaving) return;
+    setPrefsSaving(true);
+    try {
+      await apiRequest(API_PATHS.notificationPreferences, {
+        method: 'PUT',
+        body: { pushEnabled: val, inAppEnabled: val },
+      });
+    } catch (err: any) {
+      setSendNotifications(!val);
+      Alert.alert(
+        'Save failed',
+        err instanceof ApiError ? err.message : 'Could not save your preference.',
+      );
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  /**
+   * Persist the sound-notifications toggle by writing it into the
+   * NotificationPreference.typePrefsJson blob (merged with existing keys
+   * so we don't clobber other topic prefs).
+   */
+  const persistSoundPrefs = async (soundEnabled: boolean, soundChoiceStr?: string) => {
+    setPrefsSaving(true);
+    try {
+      const cur = await apiRequest<{ typePrefsJson?: string }>(
+        API_PATHS.notificationPreferences,
+      ).catch(() => ({ typePrefsJson: '{}' }));
+      let tpr: Record<string, any> = {};
+      try {
+        tpr = cur.typePrefsJson ? JSON.parse(cur.typePrefsJson) || {} : {};
+      } catch {}
+      tpr.soundEnabled = soundEnabled;
+      if (typeof soundChoiceStr === 'string') tpr.soundChoice = soundChoiceStr;
+      await apiRequest(API_PATHS.notificationPreferences, {
+        method: 'PUT',
+        body: { typePrefsJson: JSON.stringify(tpr) },
+      });
+    } catch (err: any) {
+      Alert.alert(
+        'Save failed',
+        err instanceof ApiError ? err.message : 'Could not save your preference.',
+      );
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  const handleToggleSoundNotifications = async (val: boolean) => {
+    setSoundNotifications(val);
+    await persistSoundPrefs(val, soundChoice);
+  };
+
+  const handleChooseSound = (choice: string) => {
+    setSoundChoice(choice);
+    persistSoundPrefs(soundNotifications, choice);
+  };
+
+  /**
+   * Real push-notification diagnostic.
+   *
+   * Calls `registerForPushNotifications()` (which requests iOS/Android
+   * permissions, fetches an Expo push token, and POSTs it to
+   * /api/notifications/push/subscribe), then surfaces the real result:
+   * success + token (truncated) on green, or the actual error string on
+   * red. Replaces the previous hardcoded "✅ Device Token: Registered /
+   * ✅ APNs / FCM: Connected / ✅ Background Fetch: Enabled" banner.
+   */
+  const runDiagnostic = async () => {
+    if (diagnosticRunning) return;
+    setDiagnosticRunning(true);
+    try {
+      let permStatus = 'unknown';
+      try {
+        // expo-notifications is conditionally imported inside notifications.ts
+        // (web falls back to a no-op). We can't reach `Notifications` directly
+        // here, so we rely on registerForPushNotifications to do the
+        // permission check internally and surface the result.
+        // This try/catch only runs if the module is reachable from this
+        // screen (e.g. via a require() shim).
+        const NotificationsModule = require('expo-notifications');
+        if (NotificationsModule?.getPermissionsAsync) {
+          const permRes = await NotificationsModule.getPermissionsAsync();
+          permStatus = permRes?.status || 'unknown';
+        }
+      } catch {}
+
+      const result = await registerForPushNotifications(user?.id);
+      if (result.success && result.token) {
+        Alert.alert(
+          '✅ Push Diagnostic Passed',
+          `Permission: ${permStatus}\nDevice Token: Registered\nToken: ${result.token.slice(0, 24)}…\nBackend subscription: Active\n\nPush notifications are working properly.`,
+          [{ text: 'OK' }],
+        );
+      } else {
+        Alert.alert(
+          '⚠️ Push Diagnostic Failed',
+          `Permission: ${permStatus}\nResult: ${result.error || 'Could not register for push notifications.'}\n\nPush notifications are NOT working on this device.`,
+          [{ text: 'OK' }],
+        );
+      }
+    } catch (err: any) {
+      Alert.alert(
+        '⚠️ Push Diagnostic Failed',
+        err?.message || 'An unexpected error occurred while running the diagnostic.',
+        [{ text: 'OK' }],
+      );
+    } finally {
+      setDiagnosticRunning(false);
+    }
   };
 
   const handleTopicPress = (topic: string) => {
@@ -60,6 +212,7 @@ export default function NotificationsScreen() {
         <TouchableOpacity
           style={styles.card}
           onPress={runDiagnostic}
+          disabled={diagnosticRunning}
           activeOpacity={0.7}
         >
           <View style={styles.troubleTextContainer}>
@@ -69,7 +222,11 @@ export default function NotificationsScreen() {
             </Text>
           </View>
           <View style={styles.troubleIconBadge}>
-            <Ionicons name="alert-circle" size={26} color="#DC2626" />
+            {diagnosticRunning ? (
+              <ActivityIndicator color="#DC2626" size="small" />
+            ) : (
+              <Ionicons name="alert-circle" size={26} color="#DC2626" />
+            )}
           </View>
         </TouchableOpacity>
 
@@ -104,7 +261,8 @@ export default function NotificationsScreen() {
             </View>
             <Switch
               value={sendNotifications}
-              onValueChange={setSendNotifications}
+              onValueChange={handleToggleSendNotifications}
+              disabled={!prefsLoaded || prefsSaving}
               trackColor={{ false: '#CBD5E1', true: '#10B981' }}
               thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
             />
@@ -121,7 +279,8 @@ export default function NotificationsScreen() {
             </View>
             <Switch
               value={soundNotifications}
-              onValueChange={setSoundNotifications}
+              onValueChange={handleToggleSoundNotifications}
+              disabled={!prefsLoaded || prefsSaving}
               trackColor={{ false: '#CBD5E1', true: '#10B981' }}
               thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
             />
@@ -133,9 +292,9 @@ export default function NotificationsScreen() {
             style={styles.rowPressable}
             onPress={() => {
               Alert.alert('Notification Sound', 'Choose notification ringtone:', [
-                { text: 'Default (Chime)', onPress: () => setSoundChoice('Default') },
-                { text: 'Ping', onPress: () => setSoundChoice('Ping') },
-                { text: 'Subtle Pulse', onPress: () => setSoundChoice('Subtle Pulse') },
+                { text: 'Default (Chime)', onPress: () => handleChooseSound('Default') },
+                { text: 'Ping', onPress: () => handleChooseSound('Ping') },
+                { text: 'Subtle Pulse', onPress: () => handleChooseSound('Subtle Pulse') },
                 { text: 'Cancel', style: 'cancel' },
               ]);
             }}

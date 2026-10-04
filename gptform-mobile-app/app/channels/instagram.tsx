@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,12 +10,23 @@ import {
   Alert,
   Linking,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_BASE_URL, API_PATHS } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
+
+type InstagramConfig = {
+  handle?: string;
+  pageName?: string;
+  aiAutoResponder?: boolean;
+  triggerKeywords?: string;
+  greetingMessage?: string;
+  leadCaptureEnabled?: boolean;
+  takeoverAlerts?: boolean;
+};
 
 export default function InstagramChannelScreen() {
   const router = useRouter();
@@ -26,6 +37,15 @@ export default function InstagramChannelScreen() {
   const [leadCaptureEnabled, setLeadCaptureEnabled] = useState(true);
   const [triggerKeywords, setTriggerKeywords] = useState('price, book, quote, order, help, appointment');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [persistingConfig, setPersistingConfig] = useState(false);
+
+  // Mirror of server-side config. The UI edits a subset (handle + 2 toggles +
+  // keyword input) but we round-trip the rest so the web dashboard's settings
+  // (greetingMessage, pageName, takeoverAlerts) are preserved when the mobile
+  // app saves a toggle change.
+  const configRef = useRef<InstagramConfig>({});
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Check real channel status
@@ -34,15 +54,90 @@ export default function InstagramChannelScreen() {
         if (Array.isArray(channels)) {
           const ig = channels.find((c) => c.type === 'instagram' || c.channel === 'instagram');
           if (ig) {
+            const cfg: InstagramConfig = (ig.config && typeof ig.config === 'object') ? ig.config : {};
+            configRef.current = cfg;
             setIsConnected(!!ig.connected || ig.status === 'active');
-            if (ig.config?.handle) setHandle(ig.config.handle);
-            if (ig.config?.triggerKeywords) setTriggerKeywords(ig.config.triggerKeywords);
+            if (typeof cfg.handle === 'string') setHandle(cfg.handle);
+            if (typeof cfg.triggerKeywords === 'string') setTriggerKeywords(cfg.triggerKeywords);
+            if (typeof cfg.aiAutoResponder === 'boolean') setAiAutoResponder(cfg.aiAutoResponder);
+            if (typeof cfg.leadCaptureEnabled === 'boolean') setLeadCaptureEnabled(cfg.leadCaptureEnabled);
           }
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const buildConfig = useCallback((): InstagramConfig => {
+    return {
+      ...configRef.current,
+      handle,
+      aiAutoResponder,
+      leadCaptureEnabled,
+      triggerKeywords,
+    };
+  }, [handle, aiAutoResponder, leadCaptureEnabled, triggerKeywords]);
+
+  const persistConfig = useCallback(
+    async (overrides?: Partial<InstagramConfig> & { connected?: boolean; status?: string }) => {
+      const mergedConfig: InstagramConfig = { ...buildConfig(), ...(overrides || {}) };
+      configRef.current = mergedConfig;
+      const connected = overrides?.connected ?? isConnected;
+      const status = overrides?.status ?? (connected ? 'active' : 'inactive');
+      setPersistingConfig(true);
+      try {
+        await apiRequest(API_PATHS.channels, {
+          method: 'POST',
+          body: {
+            channel: 'instagram',
+            type: 'instagram',
+            name: 'Instagram',
+            provider: 'meta',
+            connected,
+            status,
+            config: mergedConfig,
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : 'Failed to save Instagram settings.';
+        Alert.alert('Save Failed', msg);
+      } finally {
+        setPersistingConfig(false);
+      }
+    },
+    [buildConfig, isConnected]
+  );
+
+  const connectInstagram = useCallback(async () => {
+    setSubmitting(true);
+    try {
+      const config: InstagramConfig = { ...buildConfig() };
+      configRef.current = config;
+      await apiRequest(API_PATHS.channels, {
+        method: 'POST',
+        body: {
+          channel: 'instagram',
+          type: 'instagram',
+          name: 'Instagram',
+          provider: 'meta',
+          connected: true,
+          status: 'active',
+          config,
+        },
+      });
+      setIsConnected(true);
+      hapticFeedback.success();
+      Alert.alert(
+        'Instagram Connected',
+        'Your Instagram Direct channel has been activated. If you have not yet completed the Meta OAuth in your web dashboard, please do so to enable live DM auto-reply.'
+      );
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to connect Instagram. Please try again.';
+      Alert.alert('Connection Failed', msg);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [buildConfig]);
 
   const handleConnectInstagram = () => {
     hapticFeedback.medium();
@@ -63,18 +158,35 @@ export default function InstagramChannelScreen() {
             });
           },
         },
+        {
+          text: 'Mark Connected',
+          onPress: () => {
+            connectInstagram();
+          },
+        },
       ]
     );
   };
 
-  const handleToggleAutoResponder = async (val: boolean) => {
+  const handleToggleAutoResponder = (val: boolean) => {
     hapticFeedback.light();
     setAiAutoResponder(val);
+    persistConfig({ aiAutoResponder: val });
   };
 
-  const handleToggleLeadCapture = async (val: boolean) => {
+  const handleToggleLeadCapture = (val: boolean) => {
     hapticFeedback.light();
     setLeadCaptureEnabled(val);
+    persistConfig({ leadCaptureEnabled: val });
+  };
+
+  const handleKeywordsChange = (val: string) => {
+    setTriggerKeywords(val);
+    // Debounce text-input persistence to avoid one POST per keystroke
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      persistConfig({ triggerKeywords: val });
+    }, 700);
   };
 
   const handleDisconnect = () => {
@@ -87,9 +199,30 @@ export default function InstagramChannelScreen() {
         {
           text: 'Disconnect',
           style: 'destructive',
-          onPress: () => {
-            setIsConnected(false);
-            setHandle('');
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              await apiRequest(API_PATHS.channels, {
+                method: 'POST',
+                body: {
+                  channel: 'instagram',
+                  type: 'instagram',
+                  name: 'Instagram',
+                  provider: 'meta',
+                  connected: false,
+                  status: 'inactive',
+                  config: buildConfig(),
+                },
+              });
+              setIsConnected(false);
+              setHandle('');
+              configRef.current = {};
+            } catch (err) {
+              const msg = err instanceof ApiError ? err.message : 'Failed to disconnect Instagram. Please try again.';
+              Alert.alert('Disconnect Failed', msg);
+            } finally {
+              setSubmitting(false);
+            }
           },
         },
       ]
@@ -127,6 +260,11 @@ export default function InstagramChannelScreen() {
               <Text style={styles.connectedHandleText}>
                 {handle ? `@${handle}` : 'Instagram Professional'} · Active & Linked
               </Text>
+            </View>
+          ) : submitting ? (
+            <View style={styles.submittingRow}>
+              <ActivityIndicator size="small" color="#E1306C" />
+              <Text style={styles.submittingText}>Connecting…</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -202,7 +340,7 @@ export default function InstagramChannelScreen() {
             <TextInput
               style={styles.keywordInput}
               value={triggerKeywords}
-              onChangeText={setTriggerKeywords}
+              onChangeText={handleKeywordsChange}
               placeholder="e.g. price, book, menu, quote, appointment"
             />
           </View>
@@ -211,24 +349,37 @@ export default function InstagramChannelScreen() {
         {/* Actions */}
         {isConnected ? (
           <TouchableOpacity
-            style={styles.disconnectBtn}
+            style={[styles.disconnectBtn, submitting && { opacity: 0.6 }]}
             onPress={handleDisconnect}
+            disabled={submitting}
             activeOpacity={0.8}
           >
-            <Text style={styles.disconnectBtnText}>Disconnect Instagram Channel</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#E11D48" />
+            ) : (
+              <Text style={styles.disconnectBtnText}>Disconnect Instagram Channel</Text>
+            )}
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.manualVerifyBtn}
-            onPress={() => {
-              setIsConnected(true);
-              setHandle('your_brand');
-              Alert.alert('Channel Activated', 'Instagram DM channel has been set to active.');
-            }}
+            style={[styles.manualVerifyBtn, submitting && { opacity: 0.6 }]}
+            onPress={connectInstagram}
+            disabled={submitting}
             activeOpacity={0.8}
           >
-            <Text style={styles.manualVerifyText}>Mark as Connected (Direct API)</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#475569" />
+            ) : (
+              <Text style={styles.manualVerifyText}>Mark as Connected (Direct API)</Text>
+            )}
           </TouchableOpacity>
+        )}
+
+        {persistingConfig && (
+          <View style={styles.savingRow}>
+            <ActivityIndicator size="small" color="#64748B" />
+            <Text style={styles.savingText}>Saving settings…</Text>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -441,5 +592,28 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 12,
     fontWeight: '700',
+  },
+  submittingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  submittingText: {
+    fontSize: 12,
+    color: '#E1306C',
+    fontWeight: '700',
+  },
+  savingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  savingText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
   },
 });

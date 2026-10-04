@@ -43,7 +43,7 @@ export const SECRET_FIELD_KEYS = [
   'sharedSecret',        // CyberSource
   'passphrase',          // Payfast
   'authCode',            // CardPointe
-  'apiToken',            // Moneris
+  'apiToken',            // Moneris / Helcim
   'password',            // BlueSnap
   'merchantKey',         // PayU India
   'secretWord',          // Skrill
@@ -51,6 +51,10 @@ export const SECRET_FIELD_KEYS = [
   'merchantSalt',         // PayU India
   'apiSecret',            // iyzico
   'privateApiKey',        // Affirm
+  'pin',                  // Elavon (Converge ssl_pin)
+  'appToken',             // WePay (application token)
+  'token',                // PagSeguro (BR checkout token)
+  'apiLogin',             // PayU Latam (API login)
   'secret',               // generic
 ] as const;
 
@@ -104,10 +108,11 @@ const GATEWAY_ID_TO_PGC_GATEWAY: Record<string, string> = {
   coinbase_commerce: 'coinbase_commerce',
   // Regional / Phase 4
   dwolla: 'dwolla',
-  cielo: 'ciela',
+  cielo: 'cielo',
   mercado_pago: 'mercado_pago',
   pagseguro: 'pagseguro',
   redsys: 'redsys',
+  payu_latam: 'payu_latam',
   senangpay: 'senangpay',
   wepay: 'wepay',
   helcim: 'helcim',

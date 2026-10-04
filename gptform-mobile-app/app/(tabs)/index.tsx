@@ -11,29 +11,110 @@ import {
   Modal,
   TextInput,
   Switch,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
 import { hapticFeedback } from '@/lib/haptics';
-import { API_PATHS, API_BASE_URL } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
+import { apiRequest, ApiError } from '@/lib/api';
+
+interface DashboardStats {
+  totalLeads?: { count?: number; trend?: number } | number;
+  activeJobs?: { count?: number; totalJobs?: number } | number;
+  monthlyRevenue?: { amount?: number; collected?: number; pending?: number; trend?: number } | number;
+  todaysBookings?: number;
+  todaysJobs?: any[];
+  recentLeads?: any[];
+  recentJobs?: any[];
+}
+
+interface DashboardBootstrap {
+  stats?: DashboardStats;
+  employees?: any[];
+  unreadCount?: number;
+}
+
+interface ChatSession {
+  id: string;
+  visitorName?: string | null;
+  status?: string | null;
+  unreadCount?: number | null;
+  lastMessage?: any | null;
+}
+
+interface KnowledgeDoc {
+  id: string;
+  title: string;
+  sourceType?: string | null;
+}
+
+function num(v: any): number {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v === 'object') {
+    if (typeof v.count === 'number') return v.count;
+    if (typeof v.amount === 'number') return v.amount;
+    if (typeof v.totalJobs === 'number') return v.totalJobs;
+  }
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function formatCompact(n: number, prefix: string = ''): string {
+  if (!n) return `${prefix}0`;
+  if (n >= 1000) return `${prefix}${(n / 1000).toFixed(1)}k`;
+  return `${prefix}${n}`;
+}
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
   const [agent, setAgent] = useState<any | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activeSessions, setActiveSessions] = useState<ChatSession[]>([]);
+  const [unreadAttentionCount, setUnreadAttentionCount] = useState(0);
+  const [knowledgeDocs, setKnowledgeDocs] = useState<KnowledgeDoc[]>([]);
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackSent, setFeedbackSent] = useState(false);
-  const [isAiAnswering, setIsAiAnswering] = useState(true);
+  const [isAiAnswering] = useState(true);
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   useEffect(() => {
+    // 1. Agent (kept for the assistant card — name + persona).
     apiRequest<any>(API_PATHS.agents)
       .then((res) => {
         const list = Array.isArray(res) ? res : res?.agents || [];
-        if (list.length > 0) {
-          setAgent(list[0]);
-        }
+        if (list.length > 0) setAgent(list[0]);
+      })
+      .catch(() => {});
+
+    // 2. Dashboard bootstrap (KPIs).
+    apiRequest<DashboardBootstrap>(API_PATHS.dashboardBootstrap)
+      .then((res) => {
+        setStats(res?.stats || null);
+      })
+      .catch(() => {});
+
+    // 3. Chat sessions — drives the CONVERSATIONS metric + the "Chats Need Attention" banner.
+    apiRequest<{ sessions: ChatSession[] }>(API_PATHS.sessions)
+      .then((res) => {
+        const list = Array.isArray(res?.sessions) ? res.sessions : Array.isArray(res) ? (res as any) : [];
+        setActiveSessions(list);
+        const needsAttention = list.filter(
+          (s: ChatSession) =>
+            (typeof s.unreadCount === 'number' && s.unreadCount > 0) || s.status === 'waiting_for_agent',
+        ).length;
+        setUnreadAttentionCount(needsAttention);
+      })
+      .catch(() => {});
+
+    // 4. Knowledge documents — drives the Knowledge bar counts.
+    apiRequest<{ documents: KnowledgeDoc[] }>(API_PATHS.aiKnowledge)
+      .then((res) => {
+        const docs = Array.isArray(res?.documents) ? res.documents : Array.isArray(res) ? (res as any) : [];
+        setKnowledgeDocs(docs);
       })
       .catch(() => {});
   }, []);
@@ -49,13 +130,31 @@ export default function DashboardScreen() {
   };
 
   const submitFeedback = async () => {
+    if (submittingFeedback) return;
+    if (!feedbackText.trim()) {
+      Alert.alert('Notice', 'Please type a message before sending.');
+      return;
+    }
     await hapticFeedback.success();
-    setFeedbackSent(true);
-    setTimeout(() => {
-      setFeedbackSent(false);
-      setFeedbackModalVisible(false);
+    setSubmittingFeedback(true);
+    try {
+      await apiRequest(API_PATHS.feedback, {
+        method: 'POST',
+        body: { message: feedbackText, userId: user?.id },
+      });
+      setFeedbackSent(true);
       setFeedbackText('');
-    }, 1200);
+      Alert.alert('Thank you!', 'Your feedback has been sent to our team.');
+      setTimeout(() => {
+        setFeedbackSent(false);
+        setFeedbackModalVisible(false);
+      }, 800);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to send feedback. Please try again.';
+      Alert.alert('Send failed', msg);
+    } finally {
+      setSubmittingFeedback(false);
+    }
   };
 
   return (
@@ -185,18 +284,29 @@ export default function DashboardScreen() {
           {/* Knowledge Status Bar */}
           <View style={styles.knowledgeBar}>
             <View style={styles.knowledgeItem}>
-              <MaterialIcons name="check-circle" size={13} color="#10b981" style={{ marginRight: 4 }} />
-              <Text style={styles.knowledgeText}>Website: Synced</Text>
+              <MaterialIcons
+                name="check-circle"
+                size={13}
+                color={knowledgeDocs.some((d) => (d.sourceType || '').match(/crawl|website|url/i)) ? '#10b981' : '#94a3b8'}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.knowledgeText}>
+                Website: {knowledgeDocs.some((d) => (d.sourceType || '').match(/crawl|website|url/i)) ? 'Synced' : 'Not synced'}
+              </Text>
             </View>
             <View style={styles.knowledgeDivider} />
             <View style={styles.knowledgeItem}>
               <MaterialIcons name="description" size={13} color="#64748b" style={{ marginRight: 4 }} />
-              <Text style={styles.knowledgeText}>12 PDFs</Text>
+              <Text style={styles.knowledgeText}>
+                {knowledgeDocs.filter((d) => (d.sourceType || '').match(/file/i)).length} Files
+              </Text>
             </View>
             <View style={styles.knowledgeDivider} />
             <View style={styles.knowledgeItem}>
               <MaterialIcons name="help" size={13} color="#64748b" style={{ marginRight: 4 }} />
-              <Text style={styles.knowledgeText}>42 FAQs</Text>
+              <Text style={styles.knowledgeText}>
+                {knowledgeDocs.filter((d) => (d.sourceType || '').match(/manual|faq|text/i)).length} Articles
+              </Text>
             </View>
           </View>
 
@@ -229,29 +339,33 @@ export default function DashboardScreen() {
         </View>
 
         {/* ─── Urgent Human Takeover Alert Banner ─── */}
-        <TouchableOpacity
-          style={styles.takeoverAlertCard}
-          onPress={() => {
-            hapticFeedback.light();
-            router.push('/(tabs)/inbox');
-          }}
-          activeOpacity={0.8}
-        >
-          <View style={styles.takeoverLeft}>
-            <View style={styles.takeoverIconCircle}>
-              <MaterialIcons name="warning" size={20} color="#d97706" />
+        {unreadAttentionCount > 0 && (
+          <TouchableOpacity
+            style={styles.takeoverAlertCard}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/inbox');
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.takeoverLeft}>
+              <View style={styles.takeoverIconCircle}>
+                <MaterialIcons name="warning" size={20} color="#d97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.takeoverTitle}>
+                  {unreadAttentionCount} {unreadAttentionCount === 1 ? 'Chat Needs' : 'Chats Need'} Attention
+                </Text>
+                <Text style={styles.takeoverSubtitle}>
+                  {unreadAttentionCount} active {unreadAttentionCount === 1 ? 'session is' : 'sessions are'} waiting for a reply
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.takeoverTitle}>2 Chats Need Attention</Text>
-              <Text style={styles.takeoverSubtitle}>
-                WhatsApp visitor requested custom discount approval
-              </Text>
+            <View style={styles.takeoverActionPill}>
+              <Text style={styles.takeoverActionText}>Take Over →</Text>
             </View>
-          </View>
-          <View style={styles.takeoverActionPill}>
-            <Text style={styles.takeoverActionText}>Take Over →</Text>
-          </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        )}
 
         {/* ─── Today's AI Activity (Interactive Metrics) ─── */}
         <View style={styles.sectionHeadingRow}>
@@ -273,8 +387,8 @@ export default function DashboardScreen() {
               <Text style={styles.metricCardLabel}>CONVERSATIONS</Text>
               <MaterialIcons name="chat-bubble-outline" size={18} color="#2563eb" />
             </View>
-            <Text style={[styles.metricCardValue, { color: '#2563eb' }]}>28</Text>
-            <Text style={styles.metricCardFoot}>94% resolved by AI</Text>
+            <Text style={[styles.metricCardValue, { color: '#2563eb' }]}>{activeSessions.length}</Text>
+            <Text style={styles.metricCardFoot}>{activeSessions.length === 1 ? 'Active session' : 'Active sessions'}</Text>
           </TouchableOpacity>
 
           {/* Leads Qualified */}
@@ -290,8 +404,8 @@ export default function DashboardScreen() {
               <Text style={styles.metricCardLabel}>LEADS CAPTURED</Text>
               <MaterialIcons name="assignment-ind" size={18} color="#059669" />
             </View>
-            <Text style={[styles.metricCardValue, { color: '#059669' }]}>7</Text>
-            <Text style={styles.metricCardFoot}>Phone &amp; WhatsApp</Text>
+            <Text style={[styles.metricCardValue, { color: '#059669' }]}>{num(stats?.totalLeads)}</Text>
+            <Text style={styles.metricCardFoot}>All-time pipeline</Text>
           </TouchableOpacity>
 
           {/* Bookings Confirmed */}
@@ -307,18 +421,20 @@ export default function DashboardScreen() {
               <Text style={styles.metricCardLabel}>BOOKINGS</Text>
               <MaterialIcons name="event-available" size={18} color="#7c3aed" />
             </View>
-            <Text style={[styles.metricCardValue, { color: '#7c3aed' }]}>3</Text>
-            <Text style={styles.metricCardFoot}>Google Calendar sync</Text>
+            <Text style={[styles.metricCardValue, { color: '#7c3aed' }]}>{num(stats?.todaysBookings)}</Text>
+            <Text style={styles.metricCardFoot}>Scheduled today</Text>
           </TouchableOpacity>
 
-          {/* Response Time */}
+          {/* Monthly Revenue (replaces the fake AVG SPEED card) */}
           <View style={styles.metricCard}>
             <View style={styles.metricTopRow}>
-              <Text style={styles.metricCardLabel}>AVG SPEED</Text>
-              <MaterialIcons name="speed" size={18} color="#ea580c" />
+              <Text style={styles.metricCardLabel}>REVENUE (MO)</Text>
+              <MaterialIcons name="payments" size={18} color="#ea580c" />
             </View>
-            <Text style={[styles.metricCardValue, { color: '#ea580c' }]}>1.2s</Text>
-            <Text style={styles.metricCardFoot}>Instant response</Text>
+            <Text style={[styles.metricCardValue, { color: '#ea580c' }]}>
+              {formatCompact(num(stats?.monthlyRevenue), '$')}
+            </Text>
+            <Text style={styles.metricCardFoot}>Collected + pending</Text>
           </View>
         </View>
 

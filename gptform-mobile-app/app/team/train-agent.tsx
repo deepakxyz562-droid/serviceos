@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,13 @@ import {
   TextInput,
   Modal,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest, ApiError } from '@/lib/api';
 
 interface KnowledgeSource {
   id: string;
@@ -23,21 +26,103 @@ interface KnowledgeSource {
   lastUpdated: string;
 }
 
+interface KnowledgeDoc {
+  id: string;
+  title?: string;
+  sourceType?: 'manual' | 'file' | string;
+  charCount?: number;
+  chunkCount?: number;
+  status?: string;
+  createdAt?: string;
+}
+
+function formatRelative(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const diffMs = Date.now() - d.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return d.toLocaleDateString();
+}
+
+function docToSource(doc: KnowledgeDoc): KnowledgeSource {
+  const isFile = doc.sourceType === 'file';
+  const type: KnowledgeSource['type'] = isFile ? 'pdf' : 'faq';
+  const count = doc.chunkCount && doc.chunkCount > 0
+    ? `${doc.chunkCount} chunks`
+    : doc.charCount && doc.charCount > 0
+    ? `${doc.charCount.toLocaleString()} chars`
+    : '1 doc';
+  return {
+    id: doc.id,
+    type,
+    title: doc.title || 'Untitled document',
+    count,
+    lastUpdated: formatRelative(doc.createdAt),
+  };
+}
+
 export default function TrainAgentScreen() {
-  const [sources, setSources] = useState<KnowledgeSource[]>([
-    { id: 's0', type: 'products', title: 'WooCommerce & Shopify Catalog', count: 'Live sync', lastUpdated: 'Active' },
-    { id: 's1', type: 'website', title: 'Website Pages', count: '42 pages', lastUpdated: '3m ago' },
-    { id: 's2', type: 'faq', title: 'Curated FAQs', count: '37 Q&As', lastUpdated: '1h ago' },
-    { id: 's3', type: 'pdf', title: 'PDF Manuals & Pricing', count: '8 files', lastUpdated: 'Yesterday' },
-    { id: 's4', type: 'text', title: 'Service Policies & Hours', count: '12 docs', lastUpdated: '2d ago' },
-  ]);
+  const { id: agentId } = useLocalSearchParams<{ id?: string }>();
+  const [sources, setSources] = useState<KnowledgeSource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const [addModalType, setAddModalType] = useState<'website' | 'faq' | 'text' | null>(null);
   const [urlInput, setUrlInput] = useState('');
   const [faqQ, setFaqQ] = useState('');
   const [faqA, setFaqA] = useState('');
+  const [textTitle, setTextTitle] = useState('');
   const [textSnippet, setTextSnippet] = useState('');
   const [isScanning, setIsScanning] = useState(false);
+  const [isSavingFaq, setIsSavingFaq] = useState(false);
+  const [isSavingText, setIsSavingText] = useState(false);
+
+  const fetchSources = useCallback(async () => {
+    try {
+      setError(null);
+      const res = await apiRequest<{ documents?: KnowledgeDoc[] } | KnowledgeDoc[]>(
+        '/api/ai/knowledge'
+      );
+      const docs: KnowledgeDoc[] = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.documents)
+        ? res.documents
+        : [];
+      setSources(docs.map(docToSource));
+      const latest = docs
+        .map((d) => (d.createdAt ? new Date(d.createdAt).getTime() : 0))
+        .sort((a, b) => b - a)[0];
+      setLastUpdated(latest ? new Date(latest).toISOString() : null);
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Failed to load knowledge sources.';
+      setError(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSources().finally(() => setLoading(false));
+  }, [fetchSources]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    hapticFeedback.light();
+    await fetchSources();
+    setRefreshing(false);
+  }, [fetchSources]);
 
   const handleScanWebsite = async () => {
     if (!urlInput.trim()) {
@@ -46,24 +131,69 @@ export default function TrainAgentScreen() {
     }
     await hapticFeedback.light();
     setIsScanning(true);
+    try {
+      const res = await apiRequest<{
+        success?: boolean;
+        url?: string;
+        knowledge?: any;
+        error?: string;
+      }>('/api/ai/crawl-website', {
+        method: 'POST',
+        body: { url: urlInput.trim() },
+      });
 
-    setTimeout(async () => {
-      setIsScanning(false);
       await hapticFeedback.success();
+      const crawledUrl = res.url || urlInput.trim();
+      const hostname = (() => {
+        try {
+          return new URL(crawledUrl).hostname.replace(/^www\./, '');
+        } catch {
+          return crawledUrl.replace(/^https?:\/\//, '');
+        }
+      })();
+      const knowledge = res.knowledge || {};
+      const serviceCount = Array.isArray(knowledge.services) ? knowledge.services.length : 0;
+      const faqCount = Array.isArray(knowledge.faqs) ? knowledge.faqs.length : 0;
+      const businessName = knowledge.businessName || hostname;
+
+      // Optimistically add the crawled source to the local list so the user
+      // sees immediate feedback (the backend persists website crawls into a
+      // separate table that /api/ai/knowledge does not enumerate).
       setSources((prev) => [
-        ...prev,
         {
-          id: `s_${Date.now()}`,
+          id: `crawl_${Date.now()}`,
           type: 'website',
-          title: urlInput.replace(/^https?:\/\//, ''),
-          count: '24 pages scanned',
+          title: businessName,
+          count: serviceCount > 0 || faqCount > 0
+            ? `${serviceCount} services · ${faqCount} FAQs`
+            : 'Pages indexed',
           lastUpdated: 'Just now',
         },
+        ...prev,
       ]);
+      setLastUpdated(new Date().toISOString());
+
+      // Also pull fresh server state in case other docs were updated.
+      fetchSources().catch(() => undefined);
+
       setAddModalType(null);
       setUrlInput('');
-      Alert.alert('Training Complete 🚀', 'Agent successfully indexed your website content.');
-    }, 1500);
+      Alert.alert(
+        'Website Scanned ✅',
+        `Indexed "${businessName}"${serviceCount > 0 ? `\n${serviceCount} services detected` : ''}${faqCount > 0 ? `\n${faqCount} FAQs extracted` : ''}. Your AI agent will use this knowledge in chat.`
+      );
+    } catch (err) {
+      await hapticFeedback.error();
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Could not scan the website. Please try again.';
+      Alert.alert('Scan failed', message);
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const handleSaveFaq = async () => {
@@ -71,21 +201,194 @@ export default function TrainAgentScreen() {
       Alert.alert('FAQ', 'Please provide both question and answer.');
       return;
     }
-    await hapticFeedback.success();
-    setSources((prev) => [
-      ...prev,
-      {
-        id: `s_${Date.now()}`,
-        type: 'faq',
-        title: faqQ.trim(),
-        count: '1 FAQ added',
-        lastUpdated: 'Just now',
-      },
-    ]);
-    setAddModalType(null);
-    setFaqQ('');
-    setFaqA('');
-    Alert.alert('FAQ Added', 'AI Agent will immediately use this answer in chat conversations.');
+    await hapticFeedback.light();
+    setIsSavingFaq(true);
+    try {
+      const res = await apiRequest<{ document?: { id?: string; title?: string; chunkCount?: number } }>(
+        '/api/ai/knowledge',
+        {
+          method: 'POST',
+          body: {
+            title: faqQ.trim(),
+            text: `Q: ${faqQ.trim()}\nA: ${faqA.trim()}`,
+            sourceType: 'manual',
+          },
+        }
+      );
+
+      await hapticFeedback.success();
+      // Refresh server-side list so the new FAQ shows up with its true id.
+      await fetchSources();
+      setAddModalType(null);
+      setFaqQ('');
+      setFaqA('');
+      Alert.alert(
+        'FAQ Added',
+        res?.document?.chunkCount
+          ? `AI Agent indexed this answer (${res.document.chunkCount} chunks). It will be used immediately in chat.`
+          : 'AI Agent will immediately use this answer in chat conversations.'
+      );
+    } catch (err) {
+      await hapticFeedback.error();
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Could not save FAQ. Please try again.';
+      Alert.alert('Save failed', message);
+    } finally {
+      setIsSavingFaq(false);
+    }
+  };
+
+  const handleSaveText = async () => {
+    if (!textSnippet.trim()) {
+      Alert.alert('Plain Text', 'Please paste or type some text to ingest.');
+      return;
+    }
+    await hapticFeedback.light();
+    setIsSavingText(true);
+    try {
+      const title = textTitle.trim() || textSnippet.trim().slice(0, 60);
+      await apiRequest('/api/ai/knowledge', {
+        method: 'POST',
+        body: {
+          title,
+          text: textSnippet.trim(),
+          sourceType: 'manual',
+        },
+      });
+
+      await hapticFeedback.success();
+      await fetchSources();
+      setAddModalType(null);
+      setTextTitle('');
+      setTextSnippet('');
+      Alert.alert('Text Added', 'Plain-text knowledge ingested successfully.');
+    } catch (err) {
+      await hapticFeedback.error();
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Could not save text. Please try again.';
+      Alert.alert('Save failed', message);
+    } finally {
+      setIsSavingText(false);
+    }
+  };
+
+  const handleRefreshKnowledge = async () => {
+    hapticFeedback.light();
+    await fetchSources();
+  };
+
+  const renderLastUpdated = () => {
+    if (!lastUpdated) return 'No training data yet';
+    return `Last updated: ${formatRelative(lastUpdated)}`;
+  };
+
+  const renderSources = () => {
+    if (loading) {
+      return (
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color="#0f172a" />
+          <Text style={styles.stateText}>Loading knowledge sources…</Text>
+        </View>
+      );
+    }
+
+    if (error && sources.length === 0) {
+      return (
+        <View style={styles.stateContainer}>
+          <MaterialIcons name="cloud-off" size={32} color="#94a3b8" />
+          <Text style={styles.stateTitle}>Couldn't load sources</Text>
+          <Text style={styles.stateText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => {
+              hapticFeedback.light();
+              setLoading(true);
+              fetchSources().finally(() => setLoading(false));
+            }}
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (sources.length === 0) {
+      return (
+        <View style={styles.stateContainer}>
+          <MaterialIcons name="auto-stories" size={32} color="#94a3b8" />
+          <Text style={styles.stateTitle}>No knowledge sources yet</Text>
+          <Text style={styles.stateText}>
+            Scan your website or add FAQs to train your agent.
+          </Text>
+        </View>
+      );
+    }
+
+    return sources.map((item) => (
+      <View key={item.id} style={styles.sourceRow}>
+        <View style={styles.sourceLeft}>
+          <View
+            style={[
+              styles.sourceIconBox,
+              item.type === 'products' && { backgroundColor: '#f0fdf4' },
+              item.type === 'website' && { backgroundColor: '#eff6ff' },
+              item.type === 'faq' && { backgroundColor: '#ecfdf5' },
+              item.type === 'pdf' && { backgroundColor: '#fef2f2' },
+              item.type === 'text' && { backgroundColor: '#faf5ff' },
+            ]}
+          >
+            <MaterialIcons
+              name={
+                item.type === 'products'
+                  ? 'storefront'
+                  : item.type === 'website'
+                  ? 'public'
+                  : item.type === 'faq'
+                  ? 'help'
+                  : item.type === 'pdf'
+                  ? 'picture-as-pdf'
+                  : 'notes'
+              }
+              size={20}
+              color="#1e293b"
+            />
+          </View>
+          <View>
+            <Text style={styles.sourceTitle}>{item.title}</Text>
+            <Text style={styles.sourceSub}>
+              {item.count} · Updated {item.lastUpdated}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => {
+            hapticFeedback.light();
+            Alert.alert('Source', item.title, [
+              { text: 'Sync now' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: () =>
+                  setSources((prev) => prev.filter((s) => s.id !== item.id)),
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          }}
+          style={styles.sourceMoreBtn}
+        >
+          <MaterialIcons name="more-vert" size={20} color="#94a3b8" />
+        </TouchableOpacity>
+      </View>
+    ));
   };
 
   return (
@@ -106,13 +409,22 @@ export default function TrainAgentScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#10B981']}
+          />
+        }
+      >
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <View style={styles.heroTop}>
             <View>
               <Text style={styles.heroHeading}>Knowledge Base</Text>
-              <Text style={styles.heroSub}>Last trained 3 minutes ago · 99.2% accuracy</Text>
+              <Text style={styles.heroSub}>{renderLastUpdated()}</Text>
             </View>
             <View style={styles.sparkleCircle}>
               <MaterialIcons name="auto-awesome" size={22} color="#facc15" />
@@ -123,10 +435,7 @@ export default function TrainAgentScreen() {
           <View style={styles.heroActionsRow}>
             <TouchableOpacity
               style={styles.refreshBtn}
-              onPress={() => {
-                hapticFeedback.light();
-                Alert.alert('Refreshing', 'Re-syncing all knowledge sources in background...');
-              }}
+              onPress={handleRefreshKnowledge}
             >
               <MaterialIcons name="sync" size={16} color="#0f172a" style={{ marginRight: 6 }} />
               <Text style={styles.refreshBtnText}>Refresh Knowledge</Text>
@@ -175,22 +484,7 @@ export default function TrainAgentScreen() {
             <Text style={styles.gridItemSub}>Teach instant answers</Text>
           </TouchableOpacity>
 
-          {/* PDF */}
-          <TouchableOpacity
-            style={styles.addGridItem}
-            onPress={() => {
-              hapticFeedback.light();
-              Alert.alert('PDF Upload', 'Choose PDF or catalog from device storage.');
-            }}
-          >
-            <View style={[styles.gridIconCircle, { backgroundColor: '#fef2f2' }]}>
-              <MaterialIcons name="picture-as-pdf" size={24} color="#dc2626" />
-            </View>
-            <Text style={styles.gridItemTitle}>PDF Manual</Text>
-            <Text style={styles.gridItemSub}>Brochures & pricing</Text>
-          </TouchableOpacity>
-
-          {/* Text */}
+          {/* Plain Text */}
           <TouchableOpacity
             style={styles.addGridItem}
             onPress={() => {
@@ -223,64 +517,7 @@ export default function TrainAgentScreen() {
 
         {/* Existing Sources List */}
         <Text style={styles.sectionHeading}>Indexed Sources ({sources.length})</Text>
-        <View style={styles.sourcesList}>
-          {sources.map((item) => (
-            <View key={item.id} style={styles.sourceRow}>
-              <View style={styles.sourceLeft}>
-                <View
-                  style={[
-                    styles.sourceIconBox,
-                    item.type === 'products' && { backgroundColor: '#f0fdf4' },
-                    item.type === 'website' && { backgroundColor: '#eff6ff' },
-                    item.type === 'faq' && { backgroundColor: '#ecfdf5' },
-                    item.type === 'pdf' && { backgroundColor: '#fef2f2' },
-                    item.type === 'text' && { backgroundColor: '#faf5ff' },
-                  ]}
-                >
-                  <MaterialIcons
-                    name={
-                      item.type === 'products'
-                        ? 'storefront'
-                        : item.type === 'website'
-                        ? 'public'
-                        : item.type === 'faq'
-                        ? 'help'
-                        : item.type === 'pdf'
-                        ? 'picture-as-pdf'
-                        : 'notes'
-                    }
-                    size={20}
-                    color="#1e293b"
-                  />
-                </View>
-                <View>
-                  <Text style={styles.sourceTitle}>{item.title}</Text>
-                  <Text style={styles.sourceSub}>
-                    {item.count} · Updated {item.lastUpdated}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  hapticFeedback.light();
-                  Alert.alert('Source', item.title, [
-                    { text: 'Sync now' },
-                    {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: () => setSources((prev) => prev.filter((s) => s.id !== item.id)),
-                    },
-                    { text: 'Cancel', style: 'cancel' },
-                  ]);
-                }}
-                style={styles.sourceMoreBtn}
-              >
-                <MaterialIcons name="more-vert" size={20} color="#94a3b8" />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
+        <View style={styles.sourcesList}>{renderSources()}</View>
       </ScrollView>
 
       {/* Website Scan Modal */}
@@ -289,8 +526,11 @@ export default function TrainAgentScreen() {
           <View style={styles.sheetContent}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Scan Website</Text>
-              <TouchableOpacity onPress={() => setAddModalType(null)}>
-                <MaterialIcons name="close" size={22} color="#64748b" />
+              <TouchableOpacity
+                onPress={() => !isScanning && setAddModalType(null)}
+                disabled={isScanning}
+              >
+                <MaterialIcons name="close" size={22} color={isScanning ? '#cbd5e1' : '#64748b'} />
               </TouchableOpacity>
             </View>
 
@@ -304,15 +544,18 @@ export default function TrainAgentScreen() {
                 keyboardType="url"
                 value={urlInput}
                 onChangeText={setUrlInput}
+                editable={!isScanning}
               />
               <TouchableOpacity
                 style={[styles.modalActionBtn, isScanning && { opacity: 0.6 }]}
                 disabled={isScanning}
                 onPress={handleScanWebsite}
               >
-                <Text style={styles.modalActionBtnText}>
-                  {isScanning ? 'Scanning Pages (Found: 24)...' : 'Scan & Train Agent'}
-                </Text>
+                {isScanning ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.modalActionBtnText}>Scan & Train Agent</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -325,8 +568,11 @@ export default function TrainAgentScreen() {
           <View style={styles.sheetContent}>
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Add FAQ Question & Answer</Text>
-              <TouchableOpacity onPress={() => setAddModalType(null)}>
-                <MaterialIcons name="close" size={22} color="#64748b" />
+              <TouchableOpacity
+                onPress={() => !isSavingFaq && setAddModalType(null)}
+                disabled={isSavingFaq}
+              >
+                <MaterialIcons name="close" size={22} color={isSavingFaq ? '#cbd5e1' : '#64748b'} />
               </TouchableOpacity>
             </View>
 
@@ -338,6 +584,7 @@ export default function TrainAgentScreen() {
                 placeholderTextColor="#94a3b8"
                 value={faqQ}
                 onChangeText={setFaqQ}
+                editable={!isSavingFaq}
               />
 
               <Text style={[styles.inputLabel, { marginTop: 12 }]}>Answer</Text>
@@ -348,10 +595,71 @@ export default function TrainAgentScreen() {
                 multiline
                 value={faqA}
                 onChangeText={setFaqA}
+                editable={!isSavingFaq}
               />
 
-              <TouchableOpacity style={styles.modalActionBtn} onPress={handleSaveFaq}>
-                <Text style={styles.modalActionBtnText}>Save FAQ</Text>
+              <TouchableOpacity
+                style={[styles.modalActionBtn, isSavingFaq && { opacity: 0.6 }]}
+                disabled={isSavingFaq}
+                onPress={handleSaveFaq}
+              >
+                {isSavingFaq ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.modalActionBtnText}>Save FAQ</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Plain Text Modal */}
+      <Modal visible={addModalType === 'text'} transparent animationType="slide">
+        <View style={styles.sheetBackdrop}>
+          <View style={styles.sheetContent}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Add Plain Text</Text>
+              <TouchableOpacity
+                onPress={() => !isSavingText && setAddModalType(null)}
+                disabled={isSavingText}
+              >
+                <MaterialIcons name="close" size={22} color={isSavingText ? '#cbd5e1' : '#64748b'} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 18 }}>
+              <Text style={styles.inputLabel}>Title (optional)</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Cancellation Policy"
+                placeholderTextColor="#94a3b8"
+                value={textTitle}
+                onChangeText={setTextTitle}
+                editable={!isSavingText}
+              />
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Content</Text>
+              <TextInput
+                style={[styles.modalInput, { minHeight: 100, textAlignVertical: 'top' }]}
+                placeholder="Paste any policies, hours, or guidelines…"
+                placeholderTextColor="#94a3b8"
+                multiline
+                value={textSnippet}
+                onChangeText={setTextSnippet}
+                editable={!isSavingText}
+              />
+
+              <TouchableOpacity
+                style={[styles.modalActionBtn, isSavingText && { opacity: 0.6 }]}
+                disabled={isSavingText}
+                onPress={handleSaveText}
+              >
+                {isSavingText ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.modalActionBtnText}>Save Text</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -521,6 +829,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   sourceIconBox: {
     width: 36,
@@ -533,6 +842,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
+    flexShrink: 1,
   },
   sourceSub: {
     fontSize: 11,
@@ -593,6 +903,37 @@ const styles = StyleSheet.create({
   modalActionBtnText: {
     color: '#ffffff',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  stateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  stateTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 10,
+  },
+  stateText: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  retryBtn: {
+    marginTop: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#0f172a',
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
     fontWeight: '700',
   },
 });

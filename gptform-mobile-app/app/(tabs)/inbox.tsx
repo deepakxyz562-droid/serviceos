@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_PATHS } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
 
 type InboxFilter =
   | 'my_chats'
@@ -36,85 +36,46 @@ interface ChatItem {
   category?: string;
 }
 
-const SAMPLE_CHATS: ChatItem[] = [
-  {
-    id: 'session-urgent-1',
-    name: 'Aarav Sharma',
-    avatarText: 'AS',
-    lastMessage: 'Where is my order #B7C19D? Has it been shipped?',
-    timeAgo: '2 min',
-    unread: true,
-    channel: 'whatsapp',
-    category: 'order_status',
-  },
-  {
-    id: 'session-wa-2',
-    name: 'Rahul Verma',
-    avatarText: 'RV',
-    lastMessage: 'Do you have red velvet cake 1kg in stock today?',
-    timeAgo: '15 min',
-    unread: false,
-    channel: 'whatsapp',
-    category: 'products',
-  },
-  {
-    id: 'session-ig-3',
-    name: 'Priya Patel',
-    avatarText: 'PP',
-    lastMessage: 'Can you deliver to Bandra West? What are shipping charges?',
-    timeAgo: '1h',
-    unread: false,
-    channel: 'website',
-    category: 'shipping',
-  },
-  {
-    id: 'session-issue-4',
-    name: 'Kavita Singh',
-    avatarText: 'KS',
-    lastMessage: 'The cake arrived slightly damaged, can I get a replacement?',
-    timeAgo: '3h',
-    unread: true,
-    channel: 'whatsapp',
-    category: 'order_issues',
-  },
-];
-
 export default function InboxScreen() {
   const [activeFilter, setActiveFilter] = useState<InboxFilter>('my_chats');
-  const [chats, setChats] = useState<ChatItem[]>(SAMPLE_CHATS);
+  const [chats, setChats] = useState<ChatItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchChats = async () => {
     try {
+      setError(null);
       const res = await apiRequest<any>(API_PATHS.sessions);
       const list = Array.isArray(res) ? res : res?.sessions || [];
-      if (list.length > 0) {
-        setChats(
-          list.map((s: any, idx: number) => {
-            const name = s.visitorName || s.customerName || `Customer #${idx + 1}`;
-            const initials = name
-              .split(' ')
-              .map((w: string) => w[0])
-              .join('')
-              .slice(0, 2)
-              .toUpperCase();
-            return {
-              id: s.id,
-              name,
-              avatarText: initials || 'CU',
-              lastMessage: s.lastMessage || s.summary || 'Customer started a conversation',
-              timeAgo: s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
-              unread: !!s.unread || s.status === 'open',
-              channel: (s.channel === 'whatsapp' || s.channel === 'instagram') ? s.channel : 'website',
-              category: s.category || 'my_chats',
-            };
-          })
-        );
-        return;
-      }
-    } catch {}
-    setChats(SAMPLE_CHATS);
+      const mapped: ChatItem[] = list.map((s: any, idx: number) => {
+        const name = s.visitorName || s.customerName || `Customer #${idx + 1}`;
+        const initials = name
+          .split(' ')
+          .map((w: string) => w[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+        return {
+          id: s.id,
+          name,
+          avatarText: initials || 'CU',
+          lastMessage: s.lastMessage || s.summary || 'Customer started a conversation',
+          timeAgo: s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+          unread: !!s.unread || s.status === 'open',
+          channel: (s.channel === 'whatsapp' || s.channel === 'instagram') ? s.channel : 'website',
+          category: s.category || 'my_chats',
+        };
+      });
+      setChats(mapped);
+    } catch (err: any) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err?.message || 'We couldn\'t load your conversations right now.';
+      setError(msg);
+      setChats([]);
+    }
   };
 
   useEffect(() => {
@@ -206,8 +167,45 @@ export default function InboxScreen() {
             <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
           </TouchableOpacity>
 
+          {/* Loading spinner */}
+          {loading && (
+            <View style={styles.stateWrap}>
+              <ActivityIndicator size="large" color="#10B981" />
+              <Text style={styles.stateText}>Loading conversations…</Text>
+            </View>
+          )}
+
+          {/* Error banner */}
+          {!loading && error && (
+            <View style={styles.errorWrap}>
+              <MaterialIcons name="cloud-off" size={28} color="#ef4444" style={{ marginBottom: 8 }} />
+              <Text style={styles.errorTitle}>Couldn't load conversations</Text>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => {
+                  hapticFeedback.light();
+                  setLoading(true);
+                  fetchChats().finally(() => setLoading(false));
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.retryBtnText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Empty state (no chats at all) */}
+          {!loading && !error && chats.length === 0 && (
+            <View style={styles.emptyWrap}>
+              <MaterialIcons name="chat-bubble-outline" size={48} color="#cbd5e1" style={{ marginBottom: 12 }} />
+              <Text style={styles.emptyTitle}>No conversations yet</Text>
+              <Text style={styles.emptySub}>New chats from your website, WhatsApp, and other channels will appear here.</Text>
+            </View>
+          )}
+
           {/* Conversation List */}
-          {filteredChats.length > 0 ? (
+          {!loading && !error && chats.length > 0 && (filteredChats.length > 0 ? (
             filteredChats.map((chat) => (
               <TouchableOpacity
                 key={chat.id}
@@ -251,11 +249,11 @@ export default function InboxScreen() {
             ))
           ) : (
             <View style={styles.emptyWrap}>
-              <MaterialIcons name="chat-bubble-outline" size={48} color="#cbd5e1" style={{ marginBottom: 12 }} />
+              <MaterialIcons name="filter-list" size={40} color="#cbd5e1" style={{ marginBottom: 8 }} />
               <Text style={styles.emptyTitle}>No chats in this folder</Text>
-              <Text style={styles.emptySub}>Incoming chats from all channels will appear here.</Text>
+              <Text style={styles.emptySub}>Try another filter above.</Text>
             </View>
-          )}
+          ))}
         </ScrollView>
       </View>
     </SafeAreaView>
@@ -431,5 +429,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748b',
     textAlign: 'center',
+  },
+  stateWrap: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  stateText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 8,
+  },
+  errorWrap: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  retryBtn: {
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 22,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

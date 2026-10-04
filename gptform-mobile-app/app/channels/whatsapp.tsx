@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,28 @@ import {
   TextInput,
   Linking,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { API_BASE_URL, API_PATHS } from '@/lib/constants';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
+
+type WhatsAppConfig = {
+  phone?: string;
+  // Legacy key — older server rows stored the phone number under
+  // `phoneNumber` instead of `phone`. Kept here for read-side backward-compat.
+  phoneNumber?: string;
+  displayName?: string;
+  aiAutoResponder?: boolean;
+  takeoverAlerts?: boolean;
+  leadCaptureEnabled?: boolean;
+  triggerKeywords?: string;
+  greetingMessage?: string;
+};
 
 export default function WhatsAppChannelScreen() {
   const router = useRouter();
@@ -26,6 +42,18 @@ export default function WhatsAppChannelScreen() {
   const [isConnected, setIsConnected] = useState(false);
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false); // connect / disconnect in-flight
+  const [persistingConfig, setPersistingConfig] = useState(false); // toggle / text-input save in-flight
+
+  // Internal config mirrors what's stored server-side. The UI only edits a
+  // subset (phone + 2 toggles), but we still round-trip the rest so the web
+  // dashboard's settings (greeting, keywords, lead capture, displayName) are
+  // preserved when the mobile app persists a toggle change.
+  const configRef = useRef<WhatsAppConfig>({});
+
+  // Phone-entry modal (Android-compatible replacement for Alert.prompt)
+  const [phoneModalVisible, setPhoneModalVisible] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
 
   useEffect(() => {
     apiRequest<any[]>(API_PATHS.channels)
@@ -33,8 +61,14 @@ export default function WhatsAppChannelScreen() {
         if (Array.isArray(channels)) {
           const wa = channels.find((c) => c.type === 'whatsapp' || c.channel === 'whatsapp');
           if (wa) {
+            const cfg: WhatsAppConfig = (wa.config && typeof wa.config === 'object') ? wa.config : {};
+            configRef.current = cfg;
             setIsConnected(!!wa.connected || wa.status === 'active');
-            if (wa.config?.phoneNumber) setPhone(wa.config.phoneNumber);
+            // Backward-compat: server may store phone under either key
+            const storedPhone = cfg.phone ?? cfg.phoneNumber ?? '';
+            if (storedPhone) setPhone(storedPhone);
+            if (typeof cfg.aiAutoResponder === 'boolean') setAiAutoResponder(cfg.aiAutoResponder);
+            if (typeof cfg.takeoverAlerts === 'boolean') setTakeoverAlerts(cfg.takeoverAlerts);
           }
         }
       })
@@ -42,11 +76,98 @@ export default function WhatsAppChannelScreen() {
       .finally(() => setLoading(false));
   }, []);
 
+  const buildConfig = useCallback((): WhatsAppConfig => {
+    return {
+      ...configRef.current,
+      phone,
+      aiAutoResponder,
+      takeoverAlerts,
+    };
+  }, [phone, aiAutoResponder, takeoverAlerts]);
+
+  // Upsert the channel config to the backend. The route requires `channel` +
+  // `name`; we also send `type` / `provider` for forward-compat (ignored).
+  const persistConfig = useCallback(
+    async (overrides?: Partial<WhatsAppConfig> & { connected?: boolean; status?: string }) => {
+      const mergedConfig: WhatsAppConfig = { ...buildConfig(), ...(overrides || {}) };
+      // Mirror merged values into the ref so subsequent saves preserve them
+      configRef.current = mergedConfig;
+      const connected = overrides?.connected ?? isConnected;
+      const status = overrides?.status ?? (connected ? 'active' : 'inactive');
+      setPersistingConfig(true);
+      try {
+        await apiRequest(API_PATHS.channels, {
+          method: 'POST',
+          body: {
+            channel: 'whatsapp',
+            type: 'whatsapp',
+            name: 'WhatsApp',
+            provider: 'whatsapp',
+            connected,
+            status,
+            config: mergedConfig,
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : 'Failed to save WhatsApp settings.';
+        Alert.alert('Save Failed', msg);
+      } finally {
+        setPersistingConfig(false);
+      }
+    },
+    [buildConfig, isConnected]
+  );
+
+  const connectWhatsApp = useCallback(
+    async (phoneValue: string) => {
+      const trimmed = phoneValue.trim();
+      if (!trimmed) {
+        Alert.alert('Phone Required', 'Please enter your WhatsApp Business number with country code (e.g. +91 9876543210).');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const config: WhatsAppConfig = { ...buildConfig(), phone: trimmed };
+        configRef.current = config;
+        setPhone(trimmed);
+        await apiRequest(API_PATHS.channels, {
+          method: 'POST',
+          body: {
+            channel: 'whatsapp',
+            type: 'whatsapp',
+            name: 'WhatsApp',
+            provider: 'whatsapp',
+            connected: true,
+            status: 'active',
+            config,
+          },
+        });
+        setIsConnected(true);
+        setPhoneModalVisible(false);
+        setPhoneInput('');
+        hapticFeedback.success();
+        Alert.alert('WhatsApp Connected', `Your AI agent is now live on ${trimmed}.`);
+      } catch (err) {
+        const msg = err instanceof ApiError ? err.message : 'Failed to connect WhatsApp. Please try again.';
+        Alert.alert('Connection Failed', msg);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [buildConfig]
+  );
+
+  const openPhoneModal = useCallback(() => {
+    hapticFeedback.medium();
+    setPhoneInput(phone || '');
+    setPhoneModalVisible(true);
+  }, [phone]);
+
   const handleConnectMeta = () => {
     hapticFeedback.medium();
     Alert.alert(
       'Connect WhatsApp Business',
-      'Choose your preferred WhatsApp connection method:\n\n1. Meta Cloud API: Recommended for high-volume automated messaging.\n2. Business Phone Linking: Connect your existing WhatsApp Business number directly.',
+      'Choose your preferred WhatsApp connection method:\n\n1. Meta Cloud API: Recommended for high-volume automated messaging.\n2. Enter Phone Manually: Connect your existing WhatsApp Business number directly.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -61,21 +182,7 @@ export default function WhatsAppChannelScreen() {
         {
           text: 'Enter Phone Manually',
           onPress: () => {
-            Alert.prompt
-              ? Alert.prompt(
-                  'WhatsApp Phone Number',
-                  'Enter your business WhatsApp number with country code (e.g. +91 9876543210):',
-                  (val) => {
-                    if (val) {
-                      setPhone(val);
-                      setIsConnected(true);
-                    }
-                  }
-                )
-              : (() => {
-                  setPhone('+91 9876543210');
-                  setIsConnected(true);
-                })();
+            openPhoneModal();
           },
         },
       ]
@@ -92,9 +199,30 @@ export default function WhatsAppChannelScreen() {
         {
           text: 'Disconnect',
           style: 'destructive',
-          onPress: () => {
-            setIsConnected(false);
-            setPhone('');
+          onPress: async () => {
+            setSubmitting(true);
+            try {
+              await apiRequest(API_PATHS.channels, {
+                method: 'POST',
+                body: {
+                  channel: 'whatsapp',
+                  type: 'whatsapp',
+                  name: 'WhatsApp',
+                  provider: 'whatsapp',
+                  connected: false,
+                  status: 'inactive',
+                  config: buildConfig(),
+                },
+              });
+              setIsConnected(false);
+              setPhone('');
+              configRef.current = {};
+            } catch (err) {
+              const msg = err instanceof ApiError ? err.message : 'Failed to disconnect WhatsApp. Please try again.';
+              Alert.alert('Disconnect Failed', msg);
+            } finally {
+              setSubmitting(false);
+            }
           },
         },
       ]
@@ -134,6 +262,11 @@ export default function WhatsAppChannelScreen() {
               <Text style={styles.connectedPhoneText}>
                 {phone || 'WhatsApp Business'} · Active & Linked
               </Text>
+            </View>
+          ) : submitting ? (
+            <View style={styles.submittingRow}>
+              <ActivityIndicator size="small" color="#25D366" />
+              <Text style={styles.submittingText}>Connecting…</Text>
             </View>
           ) : (
             <TouchableOpacity
@@ -179,6 +312,7 @@ export default function WhatsAppChannelScreen() {
               onValueChange={(val) => {
                 hapticFeedback.light();
                 setAiAutoResponder(val);
+                persistConfig({ aiAutoResponder: val });
               }}
               trackColor={{ false: '#CBD5E1', true: '#25D366' }}
               thumbColor="#FFFFFF"
@@ -199,6 +333,7 @@ export default function WhatsAppChannelScreen() {
               onValueChange={(val) => {
                 hapticFeedback.light();
                 setTakeoverAlerts(val);
+                persistConfig({ takeoverAlerts: val });
               }}
               trackColor={{ false: '#CBD5E1', true: '#25D366' }}
               thumbColor="#FFFFFF"
@@ -209,26 +344,92 @@ export default function WhatsAppChannelScreen() {
         {/* Actions */}
         {isConnected ? (
           <TouchableOpacity
-            style={styles.disconnectBtn}
+            style={[styles.disconnectBtn, submitting && { opacity: 0.6 }]}
             onPress={handleDisconnect}
+            disabled={submitting}
             activeOpacity={0.8}
           >
-            <Text style={styles.disconnectBtnText}>Disconnect WhatsApp</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#E11D48" />
+            ) : (
+              <Text style={styles.disconnectBtnText}>Disconnect WhatsApp</Text>
+            )}
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.manualBtn}
-            onPress={() => {
-              setIsConnected(true);
-              setPhone('+91 9876543210');
-              Alert.alert('Channel Active', 'WhatsApp channel marked as connected.');
-            }}
+            style={[styles.manualBtn, submitting && { opacity: 0.6 }]}
+            onPress={openPhoneModal}
+            disabled={submitting}
             activeOpacity={0.8}
           >
-            <Text style={styles.manualBtnText}>Quick Connect with Store Number</Text>
+            {submitting ? (
+              <ActivityIndicator size="small" color="#475569" />
+            ) : (
+              <Text style={styles.manualBtnText}>Quick Connect with Store Number</Text>
+            )}
           </TouchableOpacity>
         )}
+
+        {persistingConfig && (
+          <View style={styles.savingRow}>
+            <ActivityIndicator size="small" color="#64748B" />
+            <Text style={styles.savingText}>Saving settings…</Text>
+          </View>
+        )}
       </ScrollView>
+
+      {/* Phone-Entry Modal (Android-compatible replacement for Alert.prompt) */}
+      <Modal
+        visible={phoneModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPhoneModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>WhatsApp Phone Number</Text>
+            <Text style={styles.modalSubtitle}>
+              Enter your business WhatsApp number with country code (e.g. +91 9876543210). Your AI agent will start responding on this number.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={phoneInput}
+              onChangeText={setPhoneInput}
+              placeholder="+91 9876543210"
+              placeholderTextColor="#94A3B8"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+            />
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setPhoneModalVisible(false)}
+                disabled={submitting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConnectBtn, submitting && { opacity: 0.6 }]}
+                onPress={() => connectWhatsApp(phoneInput)}
+                disabled={submitting}
+                activeOpacity={0.8}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConnectText}>Connect</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -428,5 +629,101 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 12,
     fontWeight: '700',
+  },
+  submittingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  submittingText: {
+    fontSize: 12,
+    color: '#25D366',
+    fontWeight: '700',
+  },
+  savingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  savingText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+    marginBottom: 14,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    marginBottom: 16,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalConnectBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#25D366',
+  },
+  modalConnectText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

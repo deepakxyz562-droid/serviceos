@@ -18,7 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
-import { API_BASE_URL, API_PATHS } from '@/lib/constants';
+import { apiRequest } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 export interface ProductItem {
   id: string;
@@ -37,6 +38,7 @@ export default function MobileCatalogScreen() {
   const [catalog, setCatalog] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,63 +67,25 @@ export default function MobileCatalogScreen() {
   const fetchCatalog = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.config?.catalogJson) {
-          const parsed = JSON.parse(data.config.catalogJson);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCatalog(parsed);
-            return;
-          }
+      const data = await apiRequest<{ config: any }>(API_PATHS.commerceConfig);
+      const cfg = data.config;
+      if (cfg?.catalogJson) {
+        const parsed = JSON.parse(cfg.catalogJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCatalog(parsed);
+          setError(null);
+          return;
         }
       }
-    } catch {
-      // offline fallback
+      // Empty catalog — show empty state, no fake fallback
+      setCatalog([]);
+      setError(null);
+    } catch (err: any) {
+      setCatalog([]);
+      setError(err?.message || 'Unable to load your catalog. Tap retry to try again.');
     } finally {
       setLoading(false);
     }
-
-    // Default fallback items if none found
-    setCatalog((prev) =>
-      prev.length > 0
-        ? prev
-        : [
-            {
-              id: '1',
-              name: 'Chocolate Truffle Cake 1kg',
-              price: 750,
-              category: 'Cakes',
-              description: 'Rich Belgian dark chocolate ganache layered sponge cake',
-              imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&q=80',
-              sku: 'CAKE-001',
-              isActive: true,
-              source: 'manual',
-            },
-            {
-              id: '2',
-              name: 'Artisan Sourdough Loaf',
-              price: 180,
-              category: 'Breads',
-              description: 'Slow-fermented artisan crust sourdough bread',
-              imageUrl: 'https://images.unsplash.com/photo-1589367920969-ab8e050bbb04?w=300&q=80',
-              sku: 'BRD-002',
-              isActive: true,
-              source: 'manual',
-            },
-            {
-              id: '3',
-              name: 'Signature Cappuccino',
-              price: 140,
-              category: 'Beverages',
-              description: 'Double shot espresso with silky micro-foamed milk',
-              imageUrl: 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=300&q=80',
-              sku: 'BEV-003',
-              isActive: true,
-              source: 'manual',
-            },
-          ]
-    );
   };
 
   useEffect(() => {
@@ -131,13 +95,12 @@ export default function MobileCatalogScreen() {
   const saveCatalogToBackend = async (updated: ProductItem[]) => {
     setSaving(true);
     try {
-      await fetch(`${API_BASE_URL}${API_PATHS.commerceConfig}`, {
+      await apiRequest(API_PATHS.commerceConfig, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ catalogJson: updated }),
+        body: { catalogJson: updated },
       });
-    } catch {
-      // offline
+    } catch (err: any) {
+      Alert.alert('Save Failed', err?.message || 'Could not save catalog changes to server.');
     } finally {
       setSaving(false);
     }
@@ -256,34 +219,28 @@ export default function MobileCatalogScreen() {
     hapticFeedback.medium();
 
     try {
-      const endpoint =
+      const path =
         syncProvider === 'shopify'
-          ? `${API_BASE_URL}${API_PATHS.ecommerceShopifySync}`
-          : `${API_BASE_URL}${API_PATHS.ecommerceWooSync}`;
+          ? API_PATHS.ecommerceShopifySync
+          : API_PATHS.ecommerceWooSync;
 
       const payload =
         syncProvider === 'shopify'
           ? { storeUrl: syncDomain.trim(), accessToken: syncToken.trim() }
           : { siteUrl: syncDomain.trim(), consumerKey: syncKey.trim(), consumerSecret: syncSecret.trim() };
 
-      const res = await fetch(endpoint, {
+      const resData = await apiRequest<{ message?: string; count?: number; error?: string }>(path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: payload,
       });
 
-      const resData = await res.json();
-      if (res.ok) {
-        hapticFeedback.success();
-        Alert.alert('Sync Successful', resData.message || `Successfully synced ${resData.count || 0} products.`);
-        setSyncModalVisible(false);
-        // Refresh catalog from backend
-        fetchCatalog();
-      } else {
-        Alert.alert('Sync Failed', resData.error || 'Could not synchronize products.');
-      }
+      hapticFeedback.success();
+      Alert.alert('Sync Successful', resData.message || `Successfully synced ${resData.count || 0} products.`);
+      setSyncModalVisible(false);
+      // Refresh catalog from backend
+      fetchCatalog();
     } catch (err: any) {
-      Alert.alert('Network Error', err?.message || 'Could not connect to sync service.');
+      Alert.alert('Sync Failed', err?.message || 'Could not synchronize products.');
     } finally {
       setIsSyncing(false);
     }
@@ -424,6 +381,36 @@ export default function MobileCatalogScreen() {
           </ScrollView>
         </View>
       )}
+
+      {/* Error Banner (list-load failure) */}
+      {!loading && error ? (
+        <View
+          style={{
+            marginHorizontal: 14,
+            marginBottom: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: '#fef2f2',
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: '#fecaca',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <MaterialIcons name="error-outline" size={16} color="#dc2626" />
+          <Text style={{ flex: 1, fontSize: 12, color: '#b91c1c', fontWeight: '600' }} numberOfLines={3}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            onPress={fetchCatalog}
+            style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#dc2626', borderRadius: 6 }}
+          >
+            <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '700' }}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Main List */}
       {loading ? (

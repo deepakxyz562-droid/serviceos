@@ -1740,10 +1740,782 @@ export async function POST(
       }
     }
 
+    // ─── Helcim (Canada — Helcim Pay hosted checkout session) ──────────────
+    // Helcim API v2: POST https://api.helcim.com/v2/checkout/session with
+    // `api-token: <token>` header. Response: { id, url, ... } → redirect.
+    // The Helcim API token is stored either as `apiToken` (preferred, matches
+    // Moneris convention) or as `secretKey` (legacy/generic).
+    if (gatewayId === 'helcim') {
+      const creds = await resolveFormCredentials(formId, 'helcim');
+      const apiToken = (creds?.apiToken as string) || (creds?.secretKey as string);
+      if (!apiToken) {
+        return NextResponse.json({ success: false, error: 'No Helcim credentials connected. Add your Helcim API Token in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const isLive = creds?.isLive !== false;
+      const txnId = `helcim_${formId}_${Date.now()}`;
+      try {
+        const invoiceNumber = `INV-${formId.slice(-8)}-${Date.now().toString().slice(-6)}`;
+        const res = await fetch('https://api.helcim.com/v2/checkout/session', {
+          method: 'POST',
+          headers: {
+            'api-token': apiToken,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: Number(amount).toFixed(2),
+            currency,
+            invoiceNumber,
+            ipAddress: '0.0.0.0',
+            ecommerce: true,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.url) {
+          return NextResponse.json({ success: false, error: `Helcim session creation failed: ${JSON.stringify(data?.errors || data) || res.statusText}`, gatewayId }, { status: 402 });
+        }
+        const checkoutUrl: string = data.url;
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'helcim', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'helcim' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Elavon (US, Converge — Hosted Payments Page session) ──────────────
+    // POST to /processxml.do with `ssl_merchant_id`, `ssl_user_id`, `ssl_pin`,
+    // and `xml` (form-urlencoded). The XML body uses <sslCreateSession>true</sslCreateSession>
+    // to create a hosted-checkout session. Response XML contains <ssl_session_id>.
+    // Then redirect the browser to /process.do?ssl_session_id=<session>.
+    if (gatewayId === 'elavon') {
+      const creds = await resolveFormCredentials(formId, 'elavon');
+      if (!creds?.merchantId || !creds?.userId || !creds?.pin) {
+        return NextResponse.json({ success: false, error: 'No Elavon (Converge) credentials connected. Add your Merchant ID, User ID, and PIN in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const merchantId = creds.merchantId as string;
+      const userId = creds.userId as string;
+      const pin = creds.pin as string;
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive
+        ? 'https://api.convergepay.com/VirtualMerchant/processxml.do'
+        : 'https://api.demo.convergepay.com/VirtualMerchantDemo/processxml.do';
+      const processRedirectBase = isLive
+        ? 'https://api.convergepay.com/VirtualMerchant/process.do'
+        : 'https://api.demo.convergepay.com/VirtualMerchantDemo/process.do';
+      const txnId = `elavon_${formId}_${Date.now()}`;
+      const invoiceNumber = `INV-${txnId.slice(-12)}`;
+      try {
+        const amountStr = Number(amount).toFixed(2);
+        const xmlBody = `<txn><sslCreateSession>true</sslCreateSession><sslTransactionType>ccsale</sslTransactionType><sslAmount>${amountStr}</sslAmount><sslMerchantID>${merchantId}</sslMerchantID><sslUserID>${userId}</sslUserID><sslPin>${pin}</sslPin><sslInvoiceNumber>${invoiceNumber}</sslInvoiceNumber><sslResult>0</sslResult><sslResultFormat>ASCII</sslResultFormat></txn>`;
+        const formBody = new URLSearchParams({
+          ssl_merchant_id: merchantId,
+          ssl_user_id: userId,
+          ssl_pin: pin,
+          xml: xmlBody,
+        });
+        const res = await fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formBody.toString(),
+        });
+        const xmlText = await res.text();
+        // Extract <ssl_session_id>...</ssl_session_id> from the XML response.
+        const sessionMatch = xmlText.match(/<ssl_session_id>([^<]+)<\/ssl_session_id>/i);
+        const errorCodeMatch = xmlText.match(/<errorCode>([^<]+)<\/errorCode>/i);
+        const errorMsgMatch = xmlText.match(/<errorMessage>([^<]+)<\/errorMessage>/i);
+        if (!sessionMatch) {
+          return NextResponse.json({ success: false, error: `Elavon session creation failed: ${errorCodeMatch?.[1] || ''} ${errorMsgMatch?.[1] || xmlText.slice(0, 200)}`, gatewayId }, { status: 402 });
+        }
+        const sessionId = sessionMatch[1];
+        const checkoutUrl = `${processRedirectBase}?ssl_session_id=${encodeURIComponent(sessionId)}`;
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'elavon', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'elavon' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── WePay (US — v4 checkout host-flow redirect) ──────────────────────
+    // POST https://stage.wepayapis.com/v4/checkout (stage) or
+    //      https://wepayapis.com/v4/checkout (prod)
+    // Headers: App-Id, App-Token, Authorization: Bearer <access_token>.
+    // Body: { amount, currency, type, payer, redirect_uri, callback_uri, fee }.
+    // Response: { host_flow_url } → redirect URL.
+    if (gatewayId === 'wepay') {
+      const creds = await resolveFormCredentials(formId, 'wepay');
+      if (!creds?.appId || !creds?.appToken || !creds?.accessToken) {
+        return NextResponse.json({ success: false, error: 'No WePay credentials connected. Add your App ID, App Token, and Access Token in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const appId = creds.appId as string;
+      const appToken = creds.appToken as string;
+      const accessToken = creds.accessToken as string;
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive ? 'https://wepayapis.com' : 'https://stage.wepayapis.com';
+      const txnId = `wepay_${formId}_${Date.now()}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      try {
+        // WePay amount is in cents (smallest currency unit).
+        const amountCents = Math.round(Number(amount) * 100);
+        const res = await fetch(`${apiBase}/v4/checkout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'App-Id': appId,
+            'App-Token': appToken,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            amount: amountCents,
+            currency,
+            type: 'payment',
+            payer: {
+              email: customer?.email || 'customer@example.com',
+              name: customer?.name || 'Customer',
+            },
+            redirect_uri: appUrl ? `${appUrl}/form/${formId}?payment=success` : undefined,
+            callback_uri: appUrl ? `${appUrl}/api/payments/webhooks/wepay` : undefined,
+            fee: { app_fee: 0, fee_payer: 'payer' },
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.host_flow_url) {
+          return NextResponse.json({ success: false, error: `WePay checkout creation failed: ${JSON.stringify(data?.error || data) || res.statusText}`, gatewayId }, { status: 402 });
+        }
+        const checkoutUrl: string = data.host_flow_url;
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: String(data.checkout_id || txnId), paymentMethod: 'wepay', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: String(data.checkout_id || txnId), checkoutUrl, paymentStatus: 'pending', gateway: 'wepay' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Dwolla (US ACH — Checkout host-flow redirect) ────────────────────
+    // POST https://api-sandbox.dwolla.com/checkout (sandbox) or
+    //      https://api.dwolla.com/checkout (live)
+    // Headers: Authorization: Bearer <token>, Content-Type: application/vnd.dwolla.v1.hal+json
+    // Body: { name, amount: { value, currency }, redirect, notes }
+    // Response: { links: { 'checkout-host': { href } } }
+    // If no accessToken, fetch one via client_credentials grant.
+    if (gatewayId === 'dwolla') {
+      const creds = await resolveFormCredentials(formId, 'dwolla');
+      if (!creds?.clientId || !creds?.clientSecret) {
+        if (!creds?.accessToken) {
+          return NextResponse.json({ success: false, error: 'No Dwolla credentials connected. Add your Client ID, Client Secret (and optionally Access Token) in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+        }
+      }
+      const clientId = creds?.clientId as string | undefined;
+      const clientSecret = creds?.clientSecret as string | undefined;
+      let accessToken = creds?.accessToken as string | undefined;
+      const isLive = creds?.isLive !== false;
+      const apiBase = isLive ? 'https://api.dwolla.com' : 'https://api-sandbox.dwolla.com';
+      const txnId = `dwolla_${formId}_${Date.now()}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      try {
+        // If no access token, fetch one via OAuth2 client_credentials.
+        if (!accessToken && clientId && clientSecret) {
+          const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+          const tokenRes = await fetch(`${apiBase}/token`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${auth}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({ grant_type: 'client_credentials' }).toString(),
+          });
+          const tokenData = await tokenRes.json().catch(() => null);
+          if (!tokenRes.ok || !tokenData?.access_token) {
+            return NextResponse.json({ success: false, error: `Dwolla token fetch failed: ${JSON.stringify(tokenData) || tokenRes.statusText}`, gatewayId }, { status: 402 });
+          }
+          accessToken = tokenData.access_token;
+        }
+        if (!accessToken) {
+          return NextResponse.json({ success: false, error: 'No Dwolla access token available (provide accessToken or clientId+clientSecret).', gatewayId }, { status: 503 });
+        }
+        const res = await fetch(`${apiBase}/checkout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/vnd.dwolla.v1.hal+json',
+            'Accept': 'application/vnd.dwolla.v1.hal+json',
+          },
+          body: JSON.stringify({
+            name: `Form payment - ${formId}`,
+            amount: { value: Number(amount).toFixed(2), currency: currency || 'USD' },
+            redirect: appUrl ? `${appUrl}/form/${formId}?payment=success` : undefined,
+            notes: `Form ${formId} payment`,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          return NextResponse.json({ success: false, error: `Dwolla checkout creation failed: ${JSON.stringify(data) || res.statusText}`, gatewayId }, { status: 402 });
+        }
+        const checkoutUrl: string | undefined = data?.links?.['checkout-host']?.href;
+        if (!checkoutUrl) {
+          return NextResponse.json({ success: false, error: `Dwolla response missing checkout-host link: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'dwolla', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'dwolla' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── SenangPay (Malaysia — standalone redirect via POST form) ─────────
+    // SenangPay uses a hosted checkout that accepts a signed POST form. The
+    // backend computes the HMAC-SHA256 hash over (secretKey + detail +
+    // amount + order_id) and returns the checkoutUrl + formData. The widget
+    // builds a hidden auto-submitting form to redirect the customer.
+    if (gatewayId === 'senangpay') {
+      const creds = await resolveFormCredentials(formId, 'senangpay');
+      if (!creds?.merchantId || !creds?.secretKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'No SenangPay credentials connected. Add your Merchant ID and Secret Key in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      const merchantId = creds.merchantId as string;
+      const secretKey = creds.secretKey as string;
+      const isLive = creds.isLive !== false;
+      const host = isLive ? 'https://app.senangpay.my' : 'https://sandbox.senangpay.my';
+      const orderId = `form_${formId}_${Date.now()}`;
+      const detail = `Form payment - ${formId}`;
+      const amountStr = Number(amount).toFixed(2);
+      try {
+        const crypto = await import('crypto');
+        // SenangPay spec: hash = HMAC-SHA256(key=secretKey,
+        //   message=secretKey + detail + amount + order_id) → hex.
+        const hashInput = `${secretKey}${detail}${amountStr}${orderId}`;
+        const hash = crypto.createHmac('sha256', secretKey).update(hashInput).digest('hex');
+        const checkoutUrl = `${host}/payment/${merchantId}`;
+        const formData = {
+          detail,
+          amount: amountStr,
+          order_id: orderId,
+          hash,
+          name: customer?.name || 'Customer',
+          email: customer?.email || '',
+          phone: customer?.phone || '',
+        };
+        if (formResponseId) {
+          await db.formResponse.update({
+            where: { id: formResponseId },
+            data: {
+              paymentStatus: 'pending',
+              transactionId: orderId,
+              paymentMethod: 'senangpay',
+              paymentAmount: Number(amount),
+              paymentCurrency: currency,
+              paymentGatewayId: gatewayId,
+            },
+          }).catch(() => { /* DB might be unavailable */ });
+        }
+        return NextResponse.json({
+          success: true,
+          transactionId: orderId,
+          checkoutUrl,
+          formData,
+          paymentStatus: 'pending',
+          gateway: 'senangpay',
+        });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── PayPal Pro / Payflow Pro (US — direct card via NVP API) ─────────
+    // PayPal Pro uses the Payflow NVP gateway. The widget is expected to
+    // pass `paymentMethodId` formatted as 'ACCT:EXPDATE:CVV2' (tokenized via
+    // PayPal HostedFields, similar to Stripe Elements). We POST a TRXTYPE=S
+    // (Sale) request and parse RESULT/PNREF/RESPMSG from the NVP response.
+    //
+    // Credential mapping (resolver returns generic names):
+    //   USER    ← apiKey (or `user` fallback)
+    //   PWD     ← secretKey (or `pwd` fallback)
+    //   VENDOR  ← merchantId (or `vendor` fallback)
+    //   PARTNER ← partner (default 'PayPal')
+    if (gatewayId === 'paypal_pro') {
+      const creds = await resolveFormCredentials(formId, 'paypal_pro');
+      const user = (creds?.apiKey as string) || (creds?.user as string) || '';
+      const pwd = (creds?.secretKey as string) || (creds?.pwd as string) || '';
+      const vendor = (creds?.merchantId as string) || (creds?.vendor as string) || '';
+      const partner = (creds?.partner as string) || 'PayPal';
+      if (!user || !pwd || !vendor) {
+        return NextResponse.json({
+          success: false,
+          error: 'No PayPal Pro credentials connected. Add your USER, VENDOR, PARTNER, and PWD in the form inspector or in Dashboard > Settings > Payments.',
+          gatewayId,
+        }, { status: 503 });
+      }
+      // We require a card token. Without HostedFields SDK wired on the
+      // frontend, the widget can't pass one — surface a clear, honest error.
+      const tokenParts = String(paymentMethodId || '').split(':');
+      if (tokenParts.length < 3 || !tokenParts[0] || !tokenParts[1] || !tokenParts[2]) {
+        return NextResponse.json({
+          success: false,
+          error: 'PayPal Pro requires card details tokenized via PayPal Hosted Fields (PCI-DSS SAQ-A). The widget must pass paymentMethodId formatted as ACCT:EXPDATE:CVV2. Raw card data is never accepted by this server.',
+          gatewayId,
+        }, { status: 400 });
+      }
+      const [acct, expdate, cvv2] = tokenParts;
+      const isLive = creds.isLive !== false;
+      const apiBase = isLive
+        ? 'https://payflowpro.paypal.com'
+        : 'https://pilot-payflowpro.paypal.com';
+      const invnum = `form_${formId}_${Date.now()}`;
+      try {
+        const params = new URLSearchParams({
+          USER: user,
+          VENDOR: vendor,
+          PARTNER: partner,
+          PWD: pwd,
+          TRXTYPE: 'S',   // Sale (auth + capture)
+          TENDER: 'C',    // Credit card
+          AMT: Number(amount).toFixed(2),
+          ACCT: acct,
+          EXPDATE: expdate,
+          CVV2: cvv2,
+          INVNUM: invnum,
+          FREIGHTAMT: '0',
+        });
+        const res = await fetch(apiBase, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+        const text = await res.text();
+        // Parse NVP response (key=value&key=value...).
+        const parsed: Record<string, string> = {};
+        for (const pair of text.split('&')) {
+          const idx = pair.indexOf('=');
+          const k = idx === -1 ? pair : pair.slice(0, idx);
+          const v = idx === -1 ? '' : pair.slice(idx + 1);
+          parsed[k] = decodeURIComponent(v.replace(/\+/g, ' '));
+        }
+        const result = parsed.RESULT;
+        const pnref = parsed.PNREF;
+        const respmsg = parsed.RESPMSG || 'Unknown PayPal Pro error';
+        if (result === '0' && pnref) {
+          if (formResponseId) {
+            await db.formResponse.update({
+              where: { id: formResponseId },
+              data: {
+                paymentStatus: 'succeeded',
+                transactionId: pnref,
+                paymentMethod: 'paypal_pro',
+                paymentAmount: Number(amount),
+                paymentCurrency: currency,
+                paymentGatewayId: gatewayId,
+                paidAt: new Date(),
+              },
+            }).catch(() => { /* DB might be unavailable */ });
+          }
+          return NextResponse.json({
+            success: true,
+            transactionId: pnref,
+            paymentStatus: 'succeeded',
+            gateway: 'paypal_pro',
+          });
+        }
+        return NextResponse.json({
+          success: false,
+          error: `PayPal Pro declined the payment: ${respmsg} (RESULT=${result || 'n/a'})`,
+          gatewayId,
+        }, { status: 402 });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Redsys (Spain — HMAC-SHA256 signed redirect) ──────────────────────
+    // Redsys hosted payment page (realizarPago). The backend builds the
+    // Ds_MerchantParameters (base64 JSON) + Ds_Signature (HMAC-SHA256 with
+    // the base64-decoded merchant secret as the key) and returns a `redirect`
+    // object. The widget builds a hidden form and POSTs it to Redsys.
+    if (gatewayId === 'redsys') {
+      const creds = await resolveFormCredentials(formId, 'redsys');
+      if (!creds?.merchantCode || !creds?.secretKey) {
+        return NextResponse.json({ success: false, error: 'No Redsys credentials connected. Add your Merchant Code (merchantCode) and Secret Key (secretKey) in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const merchantCode = creds.merchantCode as string;
+      const terminal = (creds.terminal as string) || '1';
+      const secretKey = creds.secretKey as string;
+      const isLive = creds.isLive !== false;
+      const crypto = await import('crypto');
+      const txnId = `redsys_${formId}_${Date.now()}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).padEnd(12, '0');
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      // ISO 4217 alpha → numeric code mapping (subset for supported currencies).
+      const currencyNumeric: Record<string, string> = {
+        EUR: '978', USD: '840', GBP: '826', CHF: '756', JPY: '392',
+        CAD: '124', AUD: '036', MXN: '484', BRL: '986', COP: '170',
+        PEN: '604', CLP: '152', ARS: '032', UYU: '858', PYG: '600',
+        BOB: '068', CNY: '156',
+      };
+      const dsCurrency = currencyNumeric[String(currency).toUpperCase()] || '978';
+      // Amount in smallest currency unit (cents). JPY has no minor units.
+      const amountMinor = String(currency).toUpperCase() === 'JPY'
+        ? Math.round(Number(amount))
+        : Math.round(Number(amount) * 100);
+      try {
+        const order: Record<string, string> = {
+          DS_MERCHANT_AMOUNT: String(amountMinor),
+          DS_MERCHANT_CURRENCY: dsCurrency,
+          DS_MERCHANT_MERCHANTCODE: merchantCode,
+          DS_MERCHANT_TERMINAL: terminal,
+          DS_MERCHANT_ORDER: txnId,
+          DS_MERCHANT_TRANSACTIONTYPE: '0', // 0 = autorización
+          DS_MERCHANT_CONSUMERLANGUAGE: '002', // Spanish
+          DS_MERCHANT_PRODUCTDESCRIPTION: `Form payment - ${formId}`,
+        };
+        if (appUrl) {
+          order.DS_MERCHANT_URLOK = `${appUrl}/form/${formId}?payment=success`;
+          order.DS_MERCHANT_URLKO = `${appUrl}/form/${formId}?payment=cancelled`;
+          order.DS_MERCHANT_MERCHANTURL = `${appUrl}/api/payments/webhook/redsys`;
+        }
+        const merchantParamsB64 = Buffer.from(JSON.stringify(order), 'utf8').toString('base64');
+        // The Redsys secret key is the base64-encoded raw HMAC key.
+        let keyBuf: Buffer;
+        try {
+          keyBuf = Buffer.from(secretKey, 'base64');
+        } catch {
+          keyBuf = Buffer.from(secretKey, 'utf8');
+        }
+        const signature = crypto.createHmac('sha256', keyBuf).update(merchantParamsB64).digest('base64');
+        const actionUrl = isLive
+          ? 'https://sis.redsys.es/sis/realizarPago'
+          : 'https://sis-t.redsys.es:25443/sis/realizarPago';
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'redsys', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({
+          success: true,
+          transactionId: txnId,
+          paymentStatus: 'pending',
+          gateway: 'redsys',
+          redirect: {
+            url: actionUrl,
+            method: 'POST',
+            params: {
+              Ds_SignatureVersion: 'HMAC_SHA256_V1',
+              Ds_MerchantParameters: merchantParamsB64,
+              Ds_Signature: signature,
+            },
+          },
+        });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Mercado Pago (LATAM — Checkout Pro hosted redirect) ───────────────
+    // POST https://api.mercadopago.com/checkout/preferences with Bearer token.
+    // Response: { init_point } (live) or { sandbox_init_point } (test) →
+    // checkoutUrl the widget window.location.href's to.
+    if (gatewayId === 'mercado_pago') {
+      const creds = await resolveFormCredentials(formId, 'mercado_pago');
+      if (!creds?.accessToken) {
+        return NextResponse.json({ success: false, error: 'No Mercado Pago credentials connected. Add your Access Token (accessToken) in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const accessToken = creds.accessToken as string;
+      const isLive = creds.isLive !== false;
+      const txnId = `mp_${formId}_${Date.now()}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      try {
+        const preferenceBody: Record<string, unknown> = {
+          items: [{
+            title: `Form payment - ${formId}`,
+            quantity: 1,
+            currency_id: String(currency).toUpperCase(),
+            unit_price: Number(Number(amount).toFixed(2)),
+          }],
+          back_urls: {
+            success: appUrl ? `${appUrl}/form/${formId}?payment=success` : undefined,
+            pending: appUrl ? `${appUrl}/form/${formId}?payment=pending` : undefined,
+            failure: appUrl ? `${appUrl}/form/${formId}?payment=cancelled` : undefined,
+          },
+          auto_return: 'approved',
+          external_reference: txnId,
+          metadata: { formId, formResponseId: formResponseId || '', gatewayId },
+        };
+        if (customer?.email) preferenceBody.payer = { email: customer.email };
+        const res = await fetch('https://api.mercadopago.com/checkout/preferences', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(preferenceBody),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || (!data?.init_point && !data?.sandbox_init_point)) {
+          return NextResponse.json({ success: false, error: `Mercado Pago preference creation failed: ${JSON.stringify(data) || res.statusText}`, gatewayId }, { status: 402 });
+        }
+        const checkoutUrl: string | undefined = isLive
+          ? (data?.init_point as string) || (data?.sandbox_init_point as string)
+          : (data?.sandbox_init_point as string) || (data?.init_point as string);
+        if (!checkoutUrl) {
+          return NextResponse.json({ success: false, error: `Mercado Pago response missing init_point: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'mercado_pago', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'mercado_pago' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── Cielo (Brazil — Cielo Checkout hosted page) ───────────────────────
+    // POST https://cieloecommerce.cielo.com.br/api/public/v1/orders with
+    // MerchantId header. Response: { settings: [{ value: "<checkout-url>" }] }.
+    if (gatewayId === 'cielo') {
+      const creds = await resolveFormCredentials(formId, 'cielo');
+      if (!creds?.merchantId) {
+        return NextResponse.json({ success: false, error: 'No Cielo credentials connected. Add your Merchant ID (merchantId) and Merchant Key (merchantKey) in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const merchantId = creds.merchantId as string;
+      const isLive = creds.isLive !== false;
+      const txnId = `cielo_${formId}_${Date.now()}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      try {
+        const amountMinor = Math.round(Number(amount) * 100);
+        const apiBase = 'https://cieloecommerce.cielo.com.br';
+        const orderBody: Record<string, unknown> = {
+          OrderNumber: txnId.slice(0, 50),
+          SoftDescriptor: 'FormPayment',
+          Cart: {
+            Items: [{
+              Name: `Form payment - ${formId}`,
+              Description: `Form payment - ${formId}`,
+              UnitPrice: amountMinor,
+              Quantity: 1,
+              Type: 'Digital',
+            }],
+          },
+          Shipping: null,
+          Payment: {
+            MaxNumberOfInstallments: 1,
+            Amount: amountMinor,
+            Currency: 'BRL',
+          },
+          Options: {
+            ReturnUrl: appUrl ? `${appUrl}/form/${formId}?payment=success` : undefined,
+          },
+        };
+        if (customer?.email) {
+          orderBody.Customer = { Email: customer.email };
+        }
+        const res = await fetch(`${apiBase}/api/public/v1/orders`, {
+          method: 'POST',
+          headers: {
+            'MerchantId': merchantId,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(orderBody),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          return NextResponse.json({ success: false, error: `Cielo checkout creation failed: ${JSON.stringify(data) || res.statusText}`, gatewayId }, { status: 402 });
+        }
+        // The hosted checkout URL is in settings[].value where Key == 'CheckoutUrl'.
+        const settings: Array<{ Key?: string; Value?: string }> | undefined = data?.settings;
+        const checkoutUrlEntry = settings?.find((s) => s?.Key === 'CheckoutUrl' || s?.Key === 'PaymentLink');
+        const checkoutUrl: string | undefined =
+          checkoutUrlEntry?.Value
+          || (typeof settings?.[0]?.Value === 'string' ? settings[0].Value : undefined)
+          || data?.url
+          || undefined;
+        if (!checkoutUrl) {
+          return NextResponse.json({ success: false, error: `Cielo response missing checkout URL: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'cielo', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'cielo' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── PagSeguro (Brazil — Checkout redirect v2) ─────────────────────────
+    // POST https://ws.pagseguro.uol.com.br/v2/checkout (live) or
+    //      https://ws.sandbox.pagseguro.uol.com.br/v2/checkout (sandbox)
+    // with email + token query params and a form-encoded body.
+    // Response: <checkout><code>...</code></checkout> → redirect URL.
+    if (gatewayId === 'pagseguro') {
+      const creds = await resolveFormCredentials(formId, 'pagseguro');
+      if (!creds?.email || !creds?.token) {
+        return NextResponse.json({ success: false, error: 'No PagSeguro credentials connected. Add your account email and token in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const email = creds.email as string;
+      const token = creds.token as string;
+      const isLive = creds.isLive !== false;
+      const txnId = `pagseguro_${formId}_${Date.now()}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      try {
+        const apiBase = isLive
+          ? 'https://ws.pagseguro.uol.com.br'
+          : 'https://ws.sandbox.pagseguro.uol.com.br';
+        const params = new URLSearchParams({
+          email,
+          token,
+          currency: 'BRL',
+          itemId1: '1',
+          itemDescription1: `Form payment - ${formId}`,
+          itemAmount1: Number(amount).toFixed(2),
+          itemQuantity1: '1',
+          itemWeight1: '0',
+          reference: txnId,
+          senderName: customer?.name || 'Comprador',
+          senderEmail: customer?.email || 'comprador@sandbox.pagseguro.com.br',
+          redirectURL: appUrl ? `${appUrl}/form/${formId}?payment=success` : '',
+          notificationURL: appUrl ? `${appUrl}/api/payments/webhook/pagseguro` : '',
+        });
+        const res = await fetch(`${apiBase}/v2/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          return NextResponse.json({ success: false, error: `PagSeguro checkout creation failed: ${text}`, gatewayId }, { status: 402 });
+        }
+        // Parse the XML response: <checkout><code>...</code></checkout>
+        const codeMatch = text.match(/<code>([^<]+)<\/code>/);
+        const code = codeMatch?.[1];
+        if (!code) {
+          return NextResponse.json({ success: false, error: `PagSeguro response missing checkout code: ${text}`, gatewayId }, { status: 402 });
+        }
+        const checkoutHost = isLive
+          ? 'https://pagseguro.uol.com.br'
+          : 'https://sandbox.pagseguro.uol.com.br';
+        const checkoutUrl = `${checkoutHost}/v2/checkout/payment.html?code=${code}`;
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: txnId, paymentMethod: 'pagseguro', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'pagseguro' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
+    // ─── PayU Latam (LATAM — hosted redirect via SUBMIT_TRANSACTION) ────────
+    // POST https://sandbox.api.payulatam.com/payments-api/4.0/service.cgi
+    // (test) or https://api.payulatam.com/... (live). JSON body with command
+    // 'SUBMIT_TRANSACTION' and MD5 signature. Response:
+    // transactionResponse.extraParameters.URL_PAYMENT — redirect URL.
+    if (gatewayId === 'payu_latam') {
+      const creds = await resolveFormCredentials(formId, 'payu_latam');
+      if (!creds?.apiKey || !creds?.apiLogin || !creds?.merchantId || !creds?.accountId) {
+        return NextResponse.json({ success: false, error: 'No PayU Latam credentials connected. Add your apiKey, apiLogin, merchantId and accountId in the form inspector or Dashboard > Settings > Payments.', gatewayId }, { status: 503 });
+      }
+      const apiKey = creds.apiKey as string;
+      const apiLogin = creds.apiLogin as string;
+      const merchantId = creds.merchantId as string;
+      const accountId = creds.accountId as string;
+      const isLive = creds.isLive !== false;
+      const crypto = await import('crypto');
+      const txnId = `payulatam_${formId}_${Date.now()}`;
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+      const refCode = txnId;
+      const amountStr = Number(amount).toFixed(2);
+      const currencyUpper = String(currency).toUpperCase();
+      try {
+        // PayU signature: MD5("~" + apiKey + "~" + merchantId + "~" + refCode + "~" + amount + "~" + currency)
+        const sigInput = `~${apiKey}~${merchantId}~${refCode}~${amountStr}~${currencyUpper}`;
+        const signature = crypto.createHash('md5').update(sigInput, 'utf8').digest('hex');
+        const apiBase = isLive
+          ? 'https://api.payulatam.com'
+          : 'https://sandbox.api.payulatam.com';
+        const paymentCountry = currencyUpper === 'BRL' ? 'BR'
+          : currencyUpper === 'MXN' ? 'MX'
+          : currencyUpper === 'ARS' ? 'AR'
+          : currencyUpper === 'COP' ? 'CO'
+          : currencyUpper === 'PEN' ? 'PE'
+          : currencyUpper === 'CLP' ? 'CL'
+          : 'BR';
+        const reqBody: Record<string, unknown> = {
+          language: 'en',
+          command: 'SUBMIT_TRANSACTION',
+          merchant: { apiKey, apiLogin },
+          transaction: {
+            order: {
+              accountId,
+              referenceCode: refCode,
+              description: `Form payment - ${formId}`,
+              language: 'en',
+              signature,
+              merchantId,
+              additionalValues: {
+                TX_VALUE: { value: amountStr, currency: currencyUpper },
+              },
+            },
+            payer: {
+              fullName: customer?.name || 'Customer',
+              emailAddress: customer?.email || 'noreply@example.com',
+            },
+            type: 'AUTHORIZATION_AND_CAPTURE',
+            paymentMethod: null,
+            paymentCountry,
+            deviceSessionId: `sess_${txnId}`,
+            ipAddress: '127.0.0.1',
+            cookie: `cookie_${txnId}`,
+            extraParameters: { RESPONSE_URL: appUrl ? `${appUrl}/form/${formId}?payment=success` : '' },
+          },
+          test: !isLive,
+        };
+        if (appUrl) {
+          (reqBody.transaction as Record<string, unknown>).order = {
+            ...((reqBody.transaction as Record<string, unknown>).order as Record<string, unknown>),
+            notifyUrl: `${appUrl}/api/payments/webhook/payu_latam`,
+          };
+        }
+        const res = await fetch(`${apiBase}/payments-api/4.0/service.cgi`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(reqBody),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          return NextResponse.json({ success: false, error: `PayU Latam transaction creation failed: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        // Resolve the redirect URL from transactionResponse.extraParameters.
+        // PayU uses both "URL_PAYMENT" and "URL" depending on the response variant.
+        const extra: Record<string, unknown> | undefined = data?.transactionResponse?.extraParameters;
+        const checkoutUrl: string | undefined =
+          (extra && typeof extra.URL_PAYMENT === 'string' ? extra.URL_PAYMENT : undefined)
+          || (extra && typeof extra.URL === 'string' ? extra.URL : undefined)
+          || (extra && typeof extra.BANK_URL === 'string' ? extra.BANK_URL : undefined)
+          || undefined;
+        const payuTxId: string | undefined = data?.transactionResponse?.transactionId;
+        if (!checkoutUrl) {
+          return NextResponse.json({ success: false, error: `PayU Latam response missing redirect URL: ${JSON.stringify(data)}`, gatewayId }, { status: 402 });
+        }
+        if (formResponseId) {
+          await db.formResponse.update({ where: { id: formResponseId }, data: { paymentStatus: 'pending', transactionId: payuTxId || txnId, paymentMethod: 'payu_latam', paymentAmount: Number(amount), paymentCurrency: currency, paymentGatewayId: gatewayId } }).catch(() => {});
+        }
+        return NextResponse.json({ success: true, transactionId: payuTxId || txnId, checkoutUrl, paymentStatus: 'pending', gateway: 'payu_latam' });
+      } catch (e: any) {
+        return NextResponse.json({ success: false, error: e.message, gatewayId }, { status: 402 });
+      }
+    }
+
     // ─── Other gateways ─────────────────────────────────────────────────────
     return NextResponse.json({
       success: false,
-      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay, braintree, cybersource, bluepay, eway, bluesnap, moneris, cardpointe, paysafe, sensepass, skrill, two_checkout, paymentwall, worldpay_uk, coinbase_commerce, affirm, klarna, apple_pay, google_pay, venmo, cash_app_pay, payfast, iyzico.`,
+      error: `Gateway '${gatewayId}' is not yet implemented for direct charges. Supported: stripe_* (stripe_elements, stripe_checkout, stripe_ach), paypal_*, razorpay_*, square_payments, authorize_net, echeck_net, chargify, mollie, payu_india, gocardless, afterpay, clearpay, braintree, cybersource, bluepay, eway, bluesnap, moneris, cardpointe, paysafe, sensepass, skrill, two_checkout, paymentwall, worldpay_uk, coinbase_commerce, affirm, klarna, apple_pay, google_pay, venmo, cash_app_pay, payfast, iyzico, helcim, elavon, wepay, dwolla, senangpay, paypal_pro, redsys, mercado_pago, cielo, pagseguro, payu_latam.`,
       gatewayId,
     }, { status: 501 });
   } catch (error: any) {

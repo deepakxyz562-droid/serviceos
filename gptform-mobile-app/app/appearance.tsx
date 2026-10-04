@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,52 @@ import {
   SafeAreaView,
   StatusBar,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { storageGetItem, storageSetItem, STORAGE_KEYS } from '@/lib/storage';
 
 type ThemeOption = 'system' | 'light' | 'dark';
 
 export default function AppearanceScreen() {
   const [selectedTheme, setSelectedTheme] = useState<ThemeOption>('system');
+  const [loaded, setLoaded] = useState(false);
+
+  // On mount, load the saved theme (default to 'system' when none stored).
+  // Uses expo-secure-store on native + localStorage fallback on web — no
+  // new npm deps. The actual NativeWind theme wiring is out of scope for
+  // this pass; we persist the selection so it survives restarts and a
+  // future theme-provider can read it.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const stored = await storageGetItem(STORAGE_KEYS.theme);
+      if (cancelled) return;
+      if (stored === 'system' || stored === 'light' || stored === 'dark') {
+        setSelectedTheme(stored);
+      }
+      setLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persistTheme = useCallback(async (t: ThemeOption) => {
+    try {
+      await storageSetItem(STORAGE_KEYS.theme, t);
+    } catch {
+      // Non-fatal: state is already updated; persistence failure shouldn't
+      // block the user from interacting with the toggle.
+    }
+  }, []);
 
   const handleSelectTheme = (t: ThemeOption) => {
     hapticFeedback.light();
     setSelectedTheme(t);
+    persistTheme(t);
   };
 
   return (
@@ -39,6 +72,11 @@ export default function AppearanceScreen() {
       </View>
 
       <View style={styles.content}>
+        {!loaded && (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="small" color="#10B981" />
+          </View>
+        )}
         {/* System Theme Option */}
         <TouchableOpacity
           style={[styles.themeOption, selectedTheme === 'system' && styles.themeOptionActive]}
@@ -116,6 +154,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     gap: 8,
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    paddingVertical: 8,
   },
   themeOption: {
     flexDirection: 'row',

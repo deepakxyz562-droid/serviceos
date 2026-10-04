@@ -1,83 +1,159 @@
 'use client';
 
+/**
+ * Elavon (Converge) — REAL Hosted Payments Page integration.
+ *
+ * Calls /api/forms/[id]/charge which creates a Converge Hosted Payments
+ * session via /processxml.do (sslCreateSession XML request). Returns a
+ * `checkoutUrl` — the customer is redirected to Converge's hosted page.
+ *
+ * In testMode (or when credentials are not set), falls back to a clearly
+ * marked simulated-payment UI so users can preview the form without charging.
+ */
 import React, { useState } from 'react';
-import { ExternalLink, Loader2, ShieldCheck, CreditCard } from 'lucide-react';
+import { Lock, ShieldCheck, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle, DialogTrigger,
-} from '@/components/ui/dialog';
+import { PaymentGatewayHeader } from './payment-gateway-header';
 import type { WidgetProps } from '../widget-props';
 
 interface ElavonValue {
-  status: 'idle' | 'pending_redirect' | 'succeeded';
+  status: 'idle' | 'pending_redirect' | 'succeeded' | 'error';
   amount: number;
   currency: string;
   gatewayId: string;
   transactionId?: string;
+  checkoutUrl?: string;
+  simulated?: boolean;
+  errorMessage?: string;
 }
 
 export function Elavon({ value, onChange, config, disabled, field }: WidgetProps) {
   const amount = Number(config.amount ?? 89);
   const currency = String(config.currency ?? 'USD');
+  const testMode = Boolean(config.testMode ?? true);
+  const merchantId = String(config.merchantId ?? '');
+  const userId = String(config.userId ?? '');
+  const pin = String(config.pin ?? '');
+  const formId = String((field as Record<string, unknown> | undefined)?.formId ?? '');
   const label = String(field?.label ?? 'Elavon');
-  const [open, setOpen] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const current = (value as Partial<ElavonValue> | undefined) ?? {};
-  const status = current.status ?? 'idle';
+  const currencySymbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$';
+  const canGoLive = !testMode && Boolean(merchantId) && Boolean(userId) && Boolean(pin) && Boolean(formId);
 
-  const handleConfirm = () => {
+  const handlePay = async () => {
+    if (disabled) return;
     setProcessing(true);
-    setTimeout(() => {
-      const next: ElavonValue = {
-        status: 'pending_redirect', amount, currency, gatewayId: 'elavon',
-        transactionId: `el_${Math.random().toString(36).slice(2, 14)}`,
-      };
-      onChange(next);
+    setErrorMsg(null);
+
+    if (testMode || !canGoLive) {
+      setTimeout(() => {
+        setProcessing(false);
+        onChange({
+          status: 'pending_redirect', amount, currency, gatewayId: 'elavon',
+          transactionId: `sim_elavon_${Date.now()}`,
+          checkoutUrl: 'https://api.demo.convergepay.com/VirtualMerchantDemo/simulated',
+          simulated: true,
+        } as ElavonValue);
+      }, 700);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/forms/${formId}/charge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gatewayId: 'elavon', amount, currency,
+          customer: { name: 'Customer' },
+        }),
+      });
+      const data = await res.json();
       setProcessing(false);
-      setOpen(false);
-    }, 700);
+      if (data.success && data.checkoutUrl) {
+        onChange({
+          status: 'pending_redirect', amount, currency, gatewayId: 'elavon',
+          transactionId: data.transactionId, checkoutUrl: data.checkoutUrl,
+        } as ElavonValue);
+        window.location.href = data.checkoutUrl;
+      } else {
+        setErrorMsg(data.error || 'Elavon payment initiation failed.');
+      }
+    } catch (e: unknown) {
+      setProcessing(false);
+      setErrorMsg(e instanceof Error ? e.message : String(e));
+    }
   };
+
+  const currentValue = value as ElavonValue | undefined;
+  const done = currentValue?.status === 'pending_redirect' && currentValue.transactionId;
 
   return (
     <div className="space-y-3" aria-label={label}>
-      <div className="flex items-center gap-2 mb-1">
-        <div className="size-7 rounded-md bg-[#0033a0] text-white flex items-center justify-center">
-          <CreditCard className="size-4" />
+      <PaymentGatewayHeader
+        gatewayId="elavon"
+        amount={amount}
+        currency={currency}
+        currencySymbol={currencySymbol}
+        testMode={testMode || !canGoLive}
+        label={label}
+      />
+
+      {!testMode && (!merchantId || !userId || !pin) && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2 flex items-start gap-2">
+          <AlertCircle className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-tight">
+            Live mode requires <strong>Elavon Merchant ID, User ID, and PIN</strong>.
+            Add them in the inspector under <em>API Credentials</em>.
+          </p>
         </div>
-        <span className="text-xs font-bold">Elavon</span>
-        {status === 'pending_redirect' && (
-          <span className="ml-auto text-[10px] text-amber-600">Pending redirect</span>
-        )}
+      )}
+
+      <div className="rounded-xl border border-border bg-muted/30 p-3 text-center space-y-1">
+        <ExternalLink className="size-6 mx-auto text-[#0033a0]" />
+        <p className="text-xs font-semibold">Converge Hosted Payments</p>
+        <p className="text-[11px] text-muted-foreground">US Bank processor — global acquiring, EMV &amp; tokenization</p>
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        US Bank-owned processor — global acquiring in 30+ countries, EMV &amp; tokenization.
-      </p>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button type="button" disabled={disabled}
-            className="w-full h-10 bg-[#0033a0] hover:bg-[#002780] text-white font-bold text-xs rounded-xl gap-1.5">
-            Pay {amount.toFixed(2)} {currency} with Elavon
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Redirect to Elavon?</DialogTitle>
-            <DialogDescription className="text-xs">
-              You will be redirected to Elavon to complete payment of <strong>{amount.toFixed(2)} {currency}</strong>.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={processing} className="text-xs">Cancel</Button>
-            <Button type="button" onClick={handleConfirm} disabled={processing} className="bg-[#0033a0] hover:bg-[#002780] text-white text-xs gap-1">
-              {processing ? <Loader2 className="size-3.5 animate-spin" /> : <ExternalLink className="size-3.5" />} Continue
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+      {done && (
+        <div className="text-[11px] text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 dark:text-emerald-300 rounded-lg p-2 border border-emerald-200 dark:border-emerald-800/60">
+          {currentValue?.simulated
+            ? `Test payment created — Ref: ${currentValue?.transactionId} (no real charge)`
+            : `Payment created — Ref: ${currentValue?.transactionId}`}
+          {currentValue?.checkoutUrl && !currentValue?.simulated && (
+            <a href={currentValue.checkoutUrl} target="_blank" rel="noopener noreferrer" className="ml-1 underline">
+              Open Elavon ↗
+            </a>
+          )}
+        </div>
+      )}
+
+      {errorMsg && (
+        <p className="text-[11px] text-rose-600 dark:text-rose-400 flex items-center gap-1">
+          <AlertCircle className="size-3" /> {errorMsg}
+        </p>
+      )}
+
+      <Button
+        type="button"
+        disabled={disabled || processing}
+        onClick={handlePay}
+        className="w-full h-10 bg-[#0033a0] hover:bg-[#002780] text-white font-bold text-xs rounded-xl gap-1.5"
+      >
+        {processing ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <>
+            <Lock className="size-3.5" /> Pay {currencySymbol}{amount.toFixed(2)} with Elavon
+          </>
+        )}
+      </Button>
+
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1"><ShieldCheck className="size-3 text-emerald-600" /> US Bank</span>
+        <span className="flex items-center gap-1">
+          <ShieldCheck className="size-3 text-emerald-600" /> US Bank • PCI L1
+        </span>
         <span className="font-mono">Elavon</span>
       </div>
     </div>

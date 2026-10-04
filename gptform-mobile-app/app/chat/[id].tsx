@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,29 +8,23 @@ import {
   StatusBar,
   StyleSheet,
   TextInput,
-  Image,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
+// ── UI message shape (preserves the existing layout's variants) ──────────────
 interface Message {
   id: string;
   sender: 'ai' | 'visitor' | 'agent' | 'system' | 'note';
   text?: string;
   time?: string;
   avatarText?: string;
-  orderCard?: {
-    id: string;
-    total: string;
-    time: string;
-  };
-  productCard?: {
-    title: string;
-    imageUrl: string;
-  };
   noteData?: {
     title: string;
     bullets: string[];
@@ -38,55 +32,24 @@ interface Message {
   };
 }
 
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: 'm1',
-    sender: 'system',
-    orderCard: {
-      id: '#863',
-      total: '$2,799.00',
-      time: 'Custom · 07:30 PM',
-    },
-  },
-  {
-    id: 'm2',
-    sender: 'agent',
-    text: "Got everything I need. I'll email you the order summary.",
-    time: '07:30 PM',
-    avatarText: 'D',
-  },
-  {
-    id: 'm3',
-    sender: 'visitor',
-    text: 'Thanks!',
-    time: '07:30 PM',
-    avatarText: 'EC',
-  },
-  {
-    id: 'm4',
-    sender: 'system',
-    text: 'Chat archived due to 15 minutes of inactivity · 12:55 PM',
-  },
-  {
-    id: 'm5',
-    sender: 'note',
-    noteData: {
-      title: 'E-bike Purchase',
-      bullets: [
-        'Customer choosing first e-bike',
-        'Rides in city and gravel',
-        'Request for custom fit',
-        'Agent connects with Laura for fitting',
-      ],
-      footer: 'Previous thread summary · Internal note · 12:55 PM',
-    },
-  },
-  {
-    id: 'm6',
-    sender: 'system',
-    text: 'Reopened - by agent · 06:30 PM',
-  },
-];
+// ── Backend message shape (from /api/chat/sessions/[id]/messages) ────────────
+interface ApiMessage {
+  id: string;
+  sessionId: string;
+  senderType: 'visitor' | 'admin' | 'system' | 'agent' | string;
+  senderName?: string | null;
+  body: string;
+  createdAt: string;
+  readAt?: string | null;
+}
+
+interface ApiSession {
+  id: string;
+  visitorName?: string | null;
+  visitorPhone?: string | null;
+  visitorEmail?: string | null;
+  status: string;
+}
 
 const CANNED_REPLIES = [
   "I'm still on it. Please bear with me.",
@@ -95,36 +58,164 @@ const CANNED_REPLIES = [
   "Our support hours are 9 AM to 6 PM Monday to Friday.",
 ];
 
+const initialsFrom = (name?: string | null, fallback = 'V'): string => {
+  if (!name) return fallback;
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return fallback;
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const formatTime = (iso?: string | null): string => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+};
+
+const mapApiMessage = (m: ApiMessage): Message => {
+  if (m.senderType === 'system') {
+    return {
+      id: m.id,
+      sender: 'system',
+      text: m.body,
+      time: formatTime(m.createdAt),
+    };
+  }
+  if (m.senderType === 'admin') {
+    return {
+      id: m.id,
+      sender: 'agent',
+      text: m.body,
+      time: formatTime(m.createdAt),
+      avatarText: initialsFrom(m.senderName, 'A'),
+    };
+  }
+  // visitor (and any unknown sender falls back to visitor bubble)
+  return {
+    id: m.id,
+    sender: 'visitor',
+    text: m.body,
+    time: formatTime(m.createdAt),
+    avatarText: 'V',
+  };
+};
+
 export default function ChatDetailScreen() {
-  const { id } = useLocalSearchParams();
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const sessionId = Array.isArray(id) ? id[0] : id;
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [inputMode, setInputMode] = useState<'message' | 'note'>('message');
   const [inputText, setInputText] = useState('');
   const [cannedModalVisible, setCannedModalVisible] = useState(false);
-  const [isAiPaused, setIsAiPaused] = useState(true);
+  // isAiPaused === true  → agent has taken over (AI paused, session claimed)
+  // isAiPaused === false → AI is actively responding
+  const [isAiPaused, setIsAiPaused] = useState(false);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [visitorName, setVisitorName] = useState<string>('Visitor');
+
+  const fetchMessages = useCallback(async () => {
+    if (!sessionId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [msgRes, sessRes] = await Promise.all([
+        apiRequest<{ messages: ApiMessage[] }>(API_PATHS.sessionMessages(sessionId)),
+        apiRequest<{ sessions: ApiSession[] }>(API_PATHS.sessions, {
+          params: { status: 'all' },
+        }).catch(() => null),
+      ]);
+
+      setMessages((msgRes.messages || []).map(mapApiMessage));
+
+      if (sessRes?.sessions) {
+        const current = sessRes.sessions.find((s) => s.id === sessionId);
+        if (current) {
+          if (current.visitorName) setVisitorName(current.visitorName);
+          // 'claimed' means an agent has taken over → AI is paused
+          setIsAiPaused(current.status === 'claimed');
+        }
+      }
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message || `Failed to load chat (${err.statusCode})`
+          : 'Failed to load chat';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    const text = inputText.trim();
+    if (!text || sending) return;
     await hapticFeedback.light();
 
-    const newMsg: Message = {
-      id: `m_${Date.now()}`,
-      sender: inputMode === 'note' ? 'note' : 'agent',
-      text: inputMode === 'message' ? inputText.trim() : undefined,
-      time: 'Just now',
-      avatarText: 'D',
-      noteData:
-        inputMode === 'note'
-          ? {
-              title: 'Internal Note',
-              bullets: [inputText.trim()],
-              footer: `Added by agent · Just now`,
-            }
-          : undefined,
-    };
+    // Note mode stays local (internal note, not delivered to visitor).
+    if (inputMode === 'note') {
+      const noteMsg: Message = {
+        id: `note_${Date.now()}`,
+        sender: 'note',
+        noteData: {
+          title: 'Internal Note',
+          bullets: [text],
+          footer: `Added by agent · Just now`,
+        },
+      };
+      setMessages((prev) => [...prev, noteMsg]);
+      setInputText('');
+      return;
+    }
 
-    setMessages((prev) => [...prev, newMsg]);
+    const tempId = `m_${Date.now()}`;
+    const optimistic: Message = {
+      id: tempId,
+      sender: 'agent',
+      text,
+      time: 'Just now',
+      avatarText: 'A',
+    };
+    setMessages((prev) => [...prev, optimistic]);
     setInputText('');
+    setSending(true);
+
+    try {
+      const res = await apiRequest<{ message: ApiMessage }>(
+        API_PATHS.sessionMessages(sessionId!),
+        { method: 'POST', body: { body: text } }
+      );
+      // Replace optimistic message with the canonical one returned by the API.
+      setMessages((prev) =>
+        prev.map((m) => (m.id === tempId ? mapApiMessage(res.message) : m))
+      );
+      // Sending an admin reply implicitly claims the session → AI paused.
+      setIsAiPaused(true);
+    } catch (err) {
+      // Revert optimistic append on failure.
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      const message =
+        err instanceof ApiError
+          ? err.message || 'Failed to send message'
+          : 'Failed to send message';
+      Alert.alert('Send failed', message);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSelectCanned = (reply: string) => {
@@ -132,11 +223,75 @@ export default function ChatDetailScreen() {
     setCannedModalVisible(false);
   };
 
+  const handleTakeOver = async () => {
+    if (!sessionId) return;
+    await hapticFeedback.medium();
+    try {
+      await apiRequest(API_PATHS.claimSession(sessionId), { method: 'POST' });
+      setIsAiPaused(true);
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : 'Failed to take over chat';
+      Alert.alert('Action failed', message);
+    }
+  };
+
+  const handleResumeAi = async () => {
+    if (!sessionId) return;
+    await hapticFeedback.medium();
+    try {
+      await apiRequest(API_PATHS.claimSession(sessionId) + '?action=hand_back_to_bot', {
+        method: 'POST',
+      });
+      setIsAiPaused(false);
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : 'Failed to resume AI';
+      Alert.alert('Action failed', message);
+    }
+  };
+
+  const handleAssignChat = async () => {
+    // Wired to claim for now (assigns to the current agent).
+    await handleTakeOver();
+  };
+
+  const handleCloseChat = async () => {
+    if (!sessionId || closing) return;
+    setClosing(true);
+    try {
+      await apiRequest(API_PATHS.closeSession(sessionId), { method: 'POST' });
+      await hapticFeedback.success();
+      router.back();
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : 'Failed to close chat';
+      Alert.alert('Close failed', message);
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const showChatOptions = () => {
+    hapticFeedback.light();
+    Alert.alert('Chat Options', `Options for ${visitorName}`, [
+      {
+        text: isAiPaused ? 'Resume AI Agent' : 'Pause AI Agent',
+        onPress: () => (isAiPaused ? handleResumeAi() : handleTakeOver()),
+      },
+      { text: 'Assign Chat', onPress: handleAssignChat },
+      { text: 'Close Chat', style: 'destructive', onPress: handleCloseChat },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const avatarInitials = initialsFrom(visitorName, 'V');
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header (matches 18.35.51 (2).jpeg) */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -148,11 +303,15 @@ export default function ChatDetailScreen() {
 
         <View style={styles.headerCustomerWrap}>
           <View style={styles.customerAvatar}>
-            <Text style={styles.customerAvatarText}>EC</Text>
+            <Text style={styles.customerAvatarText}>{avatarInitials}</Text>
           </View>
           <View>
-            <Text style={styles.customerName}>Example Customer</Text>
-            <Text style={styles.customerStatus}>Left website</Text>
+            <Text style={styles.customerName} numberOfLines={1}>
+              {visitorName}
+            </Text>
+            <Text style={styles.customerStatus}>
+              {loading ? 'Loading…' : error ? 'Failed to load' : 'Live chat'}
+            </Text>
           </View>
         </View>
 
@@ -166,21 +325,7 @@ export default function ChatDetailScreen() {
           >
             <MaterialIcons name="note-add" size={22} color="#0f172a" />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            onPress={() => {
-              hapticFeedback.light();
-              Alert.alert('Chat Options', 'Options for Example Customer', [
-                {
-                  text: isAiPaused ? 'Resume AI Agent' : 'Pause AI Agent',
-                  onPress: () => setIsAiPaused(!isAiPaused),
-                },
-                { text: 'Assign Chat' },
-                { text: 'Close Chat', style: 'destructive' },
-                { text: 'Cancel', style: 'cancel' },
-              ]);
-            }}
-          >
+          <TouchableOpacity style={styles.headerIconBtn} onPress={showChatOptions}>
             <MaterialIcons name="more-vert" size={22} color="#0f172a" />
           </TouchableOpacity>
         </View>
@@ -196,12 +341,11 @@ export default function ChatDetailScreen() {
         </Text>
         <TouchableOpacity
           style={styles.aiTogglePill}
-          onPress={() => {
-            hapticFeedback.medium();
-            setIsAiPaused(!isAiPaused);
-          }}
+          onPress={isAiPaused ? handleResumeAi : handleTakeOver}
         >
-          <Text style={styles.aiTogglePillText}>{isAiPaused ? 'Resume AI' : 'Take Over'}</Text>
+          <Text style={styles.aiTogglePillText}>
+            {isAiPaused ? 'Resume AI' : 'Take Over'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -211,86 +355,85 @@ export default function ChatDetailScreen() {
         contentContainerStyle={styles.messagesContent}
         showsVerticalScrollIndicator={false}
       >
-        {messages.map((item) => {
-          if (item.sender === 'system') {
-            if (item.orderCard) {
+        {loading ? (
+          <View style={styles.stateWrap}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={styles.stateText}>Loading messages…</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.stateWrap}>
+            <Text style={styles.stateText}>{error}</Text>
+            <TouchableOpacity style={styles.retryBtn} onPress={fetchMessages}>
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : messages.length === 0 ? (
+          <View style={styles.stateWrap}>
+            <Text style={styles.stateText}>No messages yet. Say hello 👋</Text>
+          </View>
+        ) : (
+          messages.map((item) => {
+            if (item.sender === 'system') {
               return (
-                <View key={item.id} style={styles.orderEventWrap}>
-                  <View style={styles.orderEventHeader}>
-                    <MaterialIcons name="local-mall" size={16} color="#16a34a" style={{ marginRight: 6 }} />
-                    <Text style={styles.orderEventTitle}>
-                      Order {item.orderCard.id} placed. Total: {item.orderCard.total}
-                    </Text>
-                  </View>
-                  <Text style={styles.orderEventTime}>{item.orderCard.time}</Text>
-                  <TouchableOpacity
-                    style={styles.viewOrderBtn}
-                    onPress={() => Alert.alert('Order #863', 'Total: $2,799.00\nCustomer: Example Customer')}
-                  >
-                    <Text style={styles.viewOrderBtnText}>View order</Text>
-                  </TouchableOpacity>
+                <View key={item.id} style={styles.systemTimelineRow}>
+                  <Text style={styles.systemTimelineText}>{item.text}</Text>
                 </View>
               );
             }
-            return (
-              <View key={item.id} style={styles.systemTimelineRow}>
-                <Text style={styles.systemTimelineText}>{item.text}</Text>
-              </View>
-            );
-          }
 
-          if (item.sender === 'note' && item.noteData) {
-            return (
-              <View key={item.id} style={styles.noteCardWrap}>
-                <View style={styles.noteCard}>
-                  <View style={styles.noteTitleRow}>
-                    <MaterialIcons name="reply" size={18} color="#b45309" style={{ transform: [{ scaleX: -1 }] }} />
-                    <Text style={styles.noteTitleText}>{item.noteData.title}</Text>
+            if (item.sender === 'note' && item.noteData) {
+              return (
+                <View key={item.id} style={styles.noteCardWrap}>
+                  <View style={styles.noteCard}>
+                    <View style={styles.noteTitleRow}>
+                      <MaterialIcons name="reply" size={18} color="#b45309" style={{ transform: [{ scaleX: -1 }] }} />
+                      <Text style={styles.noteTitleText}>{item.noteData.title}</Text>
+                    </View>
+                    {item.noteData.bullets.map((b, idx) => (
+                      <Text key={idx} style={styles.noteBulletText}>
+                        • {b}
+                      </Text>
+                    ))}
+                    <Text style={styles.noteFooterText}>{item.noteData.footer}</Text>
                   </View>
-                  {item.noteData.bullets.map((b, idx) => (
-                    <Text key={idx} style={styles.noteBulletText}>
-                      • {b}
-                    </Text>
-                  ))}
-                  <Text style={styles.noteFooterText}>{item.noteData.footer}</Text>
-                </View>
-                <View style={styles.noteAvatarCircle}>
-                  <MaterialIcons name="auto-awesome" size={14} color="#a855f7" />
-                </View>
-              </View>
-            );
-          }
-
-          if (item.sender === 'agent') {
-            return (
-              <View key={item.id} style={styles.agentMsgRow}>
-                <View style={styles.agentBubble}>
-                  <Text style={styles.agentMsgText}>{item.text}</Text>
-                  <View style={styles.msgMetaRow}>
-                    <Text style={styles.agentTimeText}>{item.time}</Text>
-                    <MaterialIcons name="done-all" size={14} color="#1e293b" />
+                  <View style={styles.noteAvatarCircle}>
+                    <MaterialIcons name="auto-awesome" size={14} color="#a855f7" />
                   </View>
                 </View>
-                <View style={styles.agentAvatarCircle}>
-                  <Text style={styles.agentAvatarText}>{item.avatarText || 'D'}</Text>
+              );
+            }
+
+            if (item.sender === 'agent') {
+              return (
+                <View key={item.id} style={styles.agentMsgRow}>
+                  <View style={styles.agentBubble}>
+                    <Text style={styles.agentMsgText}>{item.text}</Text>
+                    <View style={styles.msgMetaRow}>
+                      <Text style={styles.agentTimeText}>{item.time}</Text>
+                      <MaterialIcons name="done-all" size={14} color="#1e293b" />
+                    </View>
+                  </View>
+                  <View style={styles.agentAvatarCircle}>
+                    <Text style={styles.agentAvatarText}>{item.avatarText || 'A'}</Text>
+                  </View>
+                </View>
+              );
+            }
+
+            // Visitor Message
+            return (
+              <View key={item.id} style={styles.visitorMsgRow}>
+                <View style={styles.visitorAvatarCircle}>
+                  <Text style={styles.visitorAvatarText}>{item.avatarText || 'V'}</Text>
+                </View>
+                <View style={styles.visitorBubble}>
+                  <Text style={styles.visitorMsgText}>{item.text}</Text>
+                  <Text style={styles.visitorTimeText}>{item.time}</Text>
                 </View>
               </View>
             );
-          }
-
-          // Visitor Message
-          return (
-            <View key={item.id} style={styles.visitorMsgRow}>
-              <View style={styles.visitorAvatarCircle}>
-                <Text style={styles.visitorAvatarText}>{item.avatarText || 'EC'}</Text>
-              </View>
-              <View style={styles.visitorBubble}>
-                <Text style={styles.visitorMsgText}>{item.text}</Text>
-                <Text style={styles.visitorTimeText}>{item.time}</Text>
-              </View>
-            </View>
-          );
-        })}
+          })
+        )}
 
         {/* Tags Row */}
         <View style={styles.tagsContainer}>
@@ -321,7 +464,7 @@ export default function ChatDetailScreen() {
         ))}
       </ScrollView>
 
-      {/* Bottom Dual Mode Input Box (matches 18.35.51 (2).jpeg) */}
+      {/* Bottom Dual Mode Input Box */}
       <View style={styles.bottomBar}>
         {/* Message vs Note Switcher */}
         <View style={styles.modeTabsRow}>
@@ -379,8 +522,8 @@ export default function ChatDetailScreen() {
           />
 
           <TouchableOpacity
-            style={[styles.sendBtn, !inputText.trim() && { opacity: 0.4 }]}
-            disabled={!inputText.trim()}
+            style={[styles.sendBtn, (!inputText.trim() || sending) && { opacity: 0.4 }]}
+            disabled={!inputText.trim() || sending}
             onPress={sendMessage}
           >
             <MaterialIcons name="arrow-upward" size={20} color="#ffffff" />
@@ -398,7 +541,7 @@ export default function ChatDetailScreen() {
         <View style={styles.sheetBackdrop}>
           <View style={styles.sheetCard}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>Canned Responses (#)</Text>
+              <Text style={styles.sheetTitle}>Canned Responses ({CANNED_REPLIES.length})</Text>
               <TouchableOpacity onPress={() => setCannedModalVisible(false)}>
                 <MaterialIcons name="close" size={22} color="#64748b" />
               </TouchableOpacity>
@@ -517,35 +660,28 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 24,
   },
-  orderEventWrap: {
+  stateWrap: {
     alignItems: 'center',
-    marginVertical: 12,
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
-  orderEventHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  stateText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 8,
+    textAlign: 'center',
   },
-  orderEventTitle: {
+  retryBtn: {
+    marginTop: 12,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
-    color: '#15803d',
-  },
-  orderEventTime: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  viewOrderBtn: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  viewOrderBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0f172a',
   },
   systemTimelineRow: {
     alignItems: 'center',

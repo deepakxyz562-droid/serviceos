@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,15 @@ import {
   StatusBar,
   StyleSheet,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
 import { hapticFeedback } from '@/lib/haptics';
+import { apiRequest, ApiError } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
 
 interface TeamMember {
   id: string;
@@ -25,50 +29,80 @@ interface TeamMember {
   isAi?: boolean;
 }
 
-const AI_BOTS: TeamMember[] = [
-  {
-    id: 'ai-receptionist',
-    name: 'AI agent',
-    subtitle: 'Website · Instagram · WhatsApp',
+interface AgentRow {
+  id: string;
+  name?: string;
+  roleTitle?: string;
+  statusText?: string;
+  voiceTone?: string;
+  greetingSubtitle?: string;
+}
+
+function mapAgentToMember(agent: AgentRow): TeamMember {
+  const statusText = (agent.statusText || 'Online').toLowerCase();
+  const status: TeamMember['status'] =
+    statusText === 'online' || statusText === 'active' || statusText === 'ready'
+      ? 'online'
+      : statusText === 'offline' || statusText === 'disabled'
+      ? 'offline'
+      : 'busy';
+  const subtitle =
+    agent.roleTitle || agent.greetingSubtitle || agent.voiceTone
+      ? agent.roleTitle ||
+        agent.greetingSubtitle ||
+        `${agent.voiceTone || 'friendly'} tone`
+      : 'AI Employee';
+  return {
+    id: agent.id,
+    name: agent.name || 'AI Agent',
+    subtitle,
     badge: 'AI Agent',
     avatarType: 'ai',
-    status: 'online',
+    status,
     isAi: true,
-  },
-  {
-    id: 'bot-instagram',
-    name: 'Instagram',
-    subtitle: 'DM Automation & Comment triggers',
-    badge: 'Chatbot',
-    avatarType: 'instagram',
-    initial: 'I',
-    status: 'busy',
-    isAi: true,
-  },
-  {
-    id: 'bot-sms',
-    name: 'SMS',
-    subtitle: 'Twilio SMS Gateway',
-    badge: 'Chatbot',
-    avatarType: 'sms',
-    initial: 'S',
-    status: 'busy',
-    isAi: true,
-  },
-  {
-    id: 'bot-whatsapp',
-    name: 'WhatsApp message',
-    subtitle: 'Cloud API Business Number',
-    badge: 'Chatbot',
-    avatarType: 'whatsapp',
-    initial: 'W',
-    status: 'busy',
-    isAi: true,
-  },
-];
+  };
+}
 
 export default function TeamScreen() {
   const { user } = useAuthStore();
+  const [agents, setAgents] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAgents = useCallback(async () => {
+    try {
+      setError(null);
+      const res = await apiRequest<{ agents?: AgentRow[] } | AgentRow[]>(
+        API_PATHS.agents
+      );
+      const list: AgentRow[] = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.agents)
+        ? res.agents
+        : [];
+      setAgents(list.map(mapAgentToMember));
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Failed to load team agents.';
+      setError(message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAgents().finally(() => setLoading(false));
+  }, [fetchAgents]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    hapticFeedback.light();
+    await fetchAgents();
+    setRefreshing(false);
+  }, [fetchAgents]);
 
   const ownerMember: TeamMember = {
     id: user?.id || 'owner',
@@ -80,7 +114,7 @@ export default function TeamScreen() {
     status: 'online',
   };
 
-  const teamList = [ownerMember, ...AI_BOTS];
+  const teamList: TeamMember[] = [ownerMember, ...agents];
 
   const handleMemberPress = (member: TeamMember) => {
     hapticFeedback.light();
@@ -88,7 +122,11 @@ export default function TeamScreen() {
       Alert.alert(member.name, 'Manage AI Employee', [
         {
           text: 'Train Knowledge Base',
-          onPress: () => router.push('/team/train-agent'),
+          onPress: () =>
+            router.push({
+              pathname: '/team/train-agent',
+              params: { id: member.id },
+            } as any),
         },
         {
           text: 'Configure Agent',
@@ -103,6 +141,127 @@ export default function TeamScreen() {
     } else {
       Alert.alert('Owner', `${member.name} (${member.subtitle})`);
     }
+  };
+
+  const renderBody = () => {
+    if (loading) {
+      return (
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" color="#0f172a" />
+          <Text style={styles.stateText}>Loading your AI team…</Text>
+        </View>
+      );
+    }
+
+    if (error) {
+      return (
+        <View style={styles.stateContainer}>
+          <MaterialIcons name="cloud-off" size={36} color="#94a3b8" />
+          <Text style={styles.stateTitle}>Couldn't load team</Text>
+          <Text style={styles.stateText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => {
+              hapticFeedback.light();
+              setLoading(true);
+              fetchAgents().finally(() => setLoading(false));
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (agents.length === 0) {
+      return (
+        <View style={styles.stateContainer}>
+          <MaterialIcons name="smart-toy" size={36} color="#94a3b8" />
+          <Text style={styles.stateTitle}>No AI agents yet</Text>
+          <Text style={styles.stateText}>
+            Tap the + button to create your first AI employee.
+          </Text>
+        </View>
+      );
+    }
+
+    return teamList.map((member) => (
+      <TouchableOpacity
+        key={member.id}
+        style={styles.memberRow}
+        onPress={() => handleMemberPress(member)}
+        activeOpacity={0.75}
+      >
+        {/* Avatar */}
+        <View style={styles.avatarWrap}>
+          {member.avatarType === 'ai' ? (
+            <View style={styles.aiAvatarCircle}>
+              <MaterialIcons name="auto-awesome" size={22} color="#facc15" />
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.initialAvatarCircle,
+                member.avatarType === 'instagram' && { backgroundColor: '#3b82f6' },
+                member.avatarType === 'sms' && { backgroundColor: '#2563eb' },
+                member.avatarType === 'whatsapp' && { backgroundColor: '#8b5cf6' },
+                member.avatarType === 'initial' && { backgroundColor: '#ca8a04' },
+              ]}
+            >
+              <Text style={styles.initialText}>{member.initial || 'D'}</Text>
+            </View>
+          )}
+
+          {/* Status dot */}
+          <View
+            style={[
+              styles.statusDot,
+              member.status === 'online'
+                ? { backgroundColor: '#10b981' }
+                : member.status === 'busy'
+                ? { backgroundColor: '#f59e0b' }
+                : { backgroundColor: '#ef4444' },
+            ]}
+          />
+        </View>
+
+        {/* Info */}
+        <View style={styles.infoCol}>
+          <Text style={styles.memberName}>{member.name}</Text>
+          {member.subtitle ? (
+            <Text style={styles.memberSub} numberOfLines={1}>
+              {member.subtitle}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Badge */}
+        <View
+          style={[
+            styles.badgeWrap,
+            member.badge === 'Owner'
+              ? styles.ownerBadge
+              : member.badge === 'AI Agent'
+              ? styles.aiBadge
+              : styles.botBadge,
+          ]}
+        >
+          <Text
+            style={[
+              styles.badgeText,
+              member.badge === 'Owner'
+                ? styles.ownerBadgeText
+                : member.badge === 'AI Agent'
+                ? styles.aiBadgeText
+                : styles.botBadgeText,
+            ]}
+          >
+            {member.badge}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    ));
   };
 
   return (
@@ -131,81 +290,20 @@ export default function TeamScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {teamList.map((member) => (
-          <TouchableOpacity
-            key={member.id}
-            style={styles.memberRow}
-            onPress={() => handleMemberPress(member)}
-            activeOpacity={0.75}
-          >
-            {/* Avatar */}
-            <View style={styles.avatarWrap}>
-              {member.avatarType === 'ai' ? (
-                <View style={styles.aiAvatarCircle}>
-                  <MaterialIcons name="auto-awesome" size={22} color="#facc15" />
-                </View>
-              ) : (
-                <View
-                  style={[
-                    styles.initialAvatarCircle,
-                    member.avatarType === 'instagram' && { backgroundColor: '#3b82f6' },
-                    member.avatarType === 'sms' && { backgroundColor: '#2563eb' },
-                    member.avatarType === 'whatsapp' && { backgroundColor: '#8b5cf6' },
-                    member.avatarType === 'initial' && { backgroundColor: '#ca8a04' },
-                  ]}
-                >
-                  <Text style={styles.initialText}>{member.initial || 'D'}</Text>
-                </View>
-              )}
-
-              {/* Status dot */}
-              <View
-                style={[
-                  styles.statusDot,
-                  member.status === 'online'
-                    ? { backgroundColor: '#10b981' }
-                    : { backgroundColor: '#ef4444' },
-                ]}
-              />
-            </View>
-
-            {/* Info */}
-            <View style={styles.infoCol}>
-              <Text style={styles.memberName}>{member.name}</Text>
-              {member.subtitle ? (
-                <Text style={styles.memberSub} numberOfLines={1}>
-                  {member.subtitle}
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Badge */}
-            <View
-              style={[
-                styles.badgeWrap,
-                member.badge === 'Owner'
-                  ? styles.ownerBadge
-                  : member.badge === 'AI Agent'
-                  ? styles.aiBadge
-                  : styles.botBadge,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  member.badge === 'Owner'
-                    ? styles.ownerBadgeText
-                    : member.badge === 'AI Agent'
-                    ? styles.aiBadgeText
-                    : styles.botBadgeText,
-                ]}
-              >
-                {member.badge}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          (loading || error || agents.length === 0) && styles.scrollContentCentered,
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#10B981']}
+          />
+        }
+      >
+        {renderBody()}
       </ScrollView>
     </SafeAreaView>
   );
@@ -236,6 +334,42 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
+  },
+  scrollContentCentered: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  stateContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 32,
+  },
+  stateTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginTop: 12,
+  },
+  stateText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 6,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  retryBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#0f172a',
+  },
+  retryBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   memberRow: {
     flexDirection: 'row',
