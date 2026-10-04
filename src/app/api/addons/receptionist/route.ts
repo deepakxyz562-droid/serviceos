@@ -17,8 +17,11 @@ import {
 export async function GET() {
   try {
     const user = await getAuthUser();
-    if (!user || !user.tenantId) {
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    if (!user.tenantId) {
+      return NextResponse.json({ receptionist: null });
     }
 
     const receptionist = await getReceptionistForTenant(user.tenantId);
@@ -41,8 +44,11 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !user.tenantId) {
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    if (!user.tenantId) {
+      return NextResponse.json({ error: 'Company link required to create receptionist' }, { status: 403 });
     }
     if (user.role !== 'owner') {
       return NextResponse.json({ error: 'Only owners can create AI Receptionist' }, { status: 403 });

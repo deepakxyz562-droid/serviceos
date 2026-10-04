@@ -24,13 +24,18 @@ export default function RootLayout() {
   // of expiry). This keeps the session alive for returning users without them
   // ever seeing the login screen — as long as the token is within the 90-day
   // absolute session window.
+  const prevAuthRef = React.useRef<boolean | null>(null);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       const prev = appStateRef.current;
       appStateRef.current = nextAppState;
       // App came back to the foreground from background/inactive.
       if (prev.match(/inactive|background/) && nextAppState === 'active') {
-        bootstrap();
+        // If not authenticated, try to restore session
+        if (!useAuthStore.getState().isAuthenticated) {
+          bootstrap();
+        }
       }
     });
     return () => {
@@ -40,12 +45,17 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!isBooted) return;
-    if (isAuthenticated) {
-      router.replace('/(tabs)');
-      // Register for push notifications
-      registerForPushNotifications(user?.id);
-    } else {
-      router.replace('/(auth)/login');
+    const prevAuth = prevAuthRef.current;
+    prevAuthRef.current = isAuthenticated;
+
+    // Only navigate when auth state actually transitions (initial boot, login, or explicit logout)
+    if (prevAuth === null || prevAuth !== isAuthenticated) {
+      if (isAuthenticated) {
+        router.replace('/(tabs)');
+        registerForPushNotifications(user?.id);
+      } else {
+        router.replace('/(auth)/login');
+      }
     }
   }, [isBooted, isAuthenticated, user?.id]);
 

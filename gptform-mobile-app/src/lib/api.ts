@@ -89,16 +89,29 @@ export async function apiRequest<T = any>(
       if (retryResponse.ok) {
         return (await retryResponse.json()) as T;
       }
-      // Retry failed — could be a genuine 401 (token rejected after refresh)
-      // OR a transient error. Only clear on a definitive 401.
+      // If the retry returns 401 after a successful token refresh, the session is VALID,
+      // but this specific endpoint is rejecting access (e.g. role, tenant, or plan restriction).
+      // NEVER clearTokens() here! Doing so would nuke the valid session across the entire app.
       if (retryResponse.status === 401) {
-        await clearTokens();
-        throw new ApiError('Session expired. Please sign in again.', 401);
+        let errData: any = {};
+        try {
+          errData = await retryResponse.json();
+        } catch {}
+        throw new ApiError(
+          errData.error || errData.message || 'Access denied for this feature.',
+          401,
+          errData
+        );
       }
       // Non-401 retry failure — surface the actual status, don't clear session.
+      let retryErrData: any = {};
+      try {
+        retryErrData = await retryResponse.json();
+      } catch {}
       throw new ApiError(
-        `Request failed with status ${retryResponse.status}`,
+        retryErrData.error || retryErrData.message || `Request failed with status ${retryResponse.status}`,
         retryResponse.status,
+        retryErrData
       );
     }
 

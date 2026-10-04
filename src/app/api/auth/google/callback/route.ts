@@ -343,10 +343,28 @@ export async function GET(request: NextRequest) {
       state.redirect?.startsWith('quoteflow://') ||
       state.redirect?.startsWith('exp://');
 
-    const buildMobileSuccessUrl = (token: string, email: string, name: string) => {
+    const buildMobileSuccessUrl = (
+      token: string,
+      email: string,
+      name: string,
+      userId?: string,
+      tenantId?: string | null,
+      role?: string,
+      refreshToken?: string,
+      tenantName?: string | null
+    ) => {
       const target = state.redirect || 'quoteflow://auth-callback';
       const sep = target.includes('?') ? '&' : '?';
-      return `${target}${sep}token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}`;
+      const params = new URLSearchParams();
+      params.set('token', token);
+      params.set('refreshToken', refreshToken || token);
+      params.set('email', email);
+      params.set('name', name || '');
+      if (userId) params.set('userId', userId);
+      if (tenantId) params.set('tenantId', tenantId);
+      if (tenantName) params.set('tenantName', tenantName);
+      if (role) params.set('role', role);
+      return `${target}${sep}${params.toString()}`;
     };
 
     // Exchange code for tokens
@@ -424,6 +442,23 @@ export async function GET(request: NextRequest) {
           tenantId: tenant.id,
           workspaceId: workspace.id,
         });
+        await getOrCreateBusinessForUser(existingUser.id, tenant.id, existingUser.name || 'My Business');
+
+        if (isMobileMode) {
+          return NextResponse.redirect(
+            buildMobileSuccessUrl(
+              newToken,
+              existingUser.email,
+              existingUser.name || '',
+              existingUser.id,
+              tenant.id,
+              existingUser.role,
+              newToken,
+              tenant.name
+            )
+          );
+        }
+
         const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
         const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
         response.cookies.set({
@@ -436,8 +471,18 @@ export async function GET(request: NextRequest) {
       await getOrCreateBusinessForUser(existingUser.id, existingUser.tenantId || undefined, existingUser.name || 'My Business');
 
       if (isMobileMode) {
-        const mobileToken = signMobileToken(existingUser.id, existingUser.email);
-        return NextResponse.redirect(buildMobileSuccessUrl(mobileToken, existingUser.email, existingUser.name || ''));
+        return NextResponse.redirect(
+          buildMobileSuccessUrl(
+            token,
+            existingUser.email,
+            existingUser.name || '',
+            existingUser.id,
+            existingUser.tenantId,
+            existingUser.role,
+            token,
+            existingUser.tenant?.name
+          )
+        );
       }
 
       const isStandalone = existingUser.tenant?.signupMode === 'standalone' || existingUser.tenant?.plan === 'standalone_starter' || existingUser.tenant?.plan === 'standalone_business';
@@ -488,8 +533,18 @@ export async function GET(request: NextRequest) {
     await getOrCreateBusinessForUser(tempUser.id, tenant.id, tempUser.name || 'My Business');
 
     if (isMobileMode) {
-      const mobileToken = signMobileToken(tempUser.id, tempUser.email);
-      return NextResponse.redirect(buildMobileSuccessUrl(mobileToken, tempUser.email, tempUser.name || ''));
+      return NextResponse.redirect(
+        buildMobileSuccessUrl(
+          token,
+          tempUser.email,
+          tempUser.name || '',
+          tempUser.id,
+          tenant.id,
+          tempUser.role,
+          token,
+          tenant.name
+        )
+      );
     }
 
     const baseUrl = getBaseUrl(request);

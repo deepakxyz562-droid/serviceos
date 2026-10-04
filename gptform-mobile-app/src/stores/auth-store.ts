@@ -181,32 +181,45 @@ export const useAuthStore = create<AuthState>((set) => ({
       const token = await getToken();
       const stored = await getStoredUserData();
       if (token && stored?.user) {
-        // Decode the JWT `exp` claim and proactively refresh if the token
-        // is expired (or within 1 hour of expiry). The backend accepts
-        // tokens expired within a 7-day grace window (signature validated).
-        // This fixes the "session expires every time" bug: a returning user
-        // with an expired-but-grace-eligible token gets silently refreshed
-        // instead of being kicked to the login screen on the first API call.
-        const sessionValid = await ensureValidSession();
-        if (sessionValid) {
-          const refreshedToken = await getToken();
-          set({
-            user: stored.user,
-            tenant: stored.tenant || null,
-            token: refreshedToken || token,
-            isAuthenticated: true,
-            isBooted: true,
+        // Immediately restore authenticated state to prevent UI flicker and force-logouts
+        set({
+          user: stored.user,
+          tenant: stored.tenant || null,
+          token,
+          isAuthenticated: true,
+          isBooted: true,
+        });
+
+        // Background validate / refresh session non-blockingly
+        ensureValidSession()
+          .then(async (sessionValid) => {
+            if (!sessionValid) {
+              const currentToken = await getToken();
+              if (!currentToken) {
+                set({
+                  user: null,
+                  tenant: null,
+                  token: null,
+                  isAuthenticated: false,
+                  isBooted: true,
+                });
+              }
+            } else {
+              const refreshedToken = await getToken();
+              const freshStored = await getStoredUserData();
+              set((prev) => ({
+                ...prev,
+                token: refreshedToken || prev.token,
+                user: freshStored?.user || prev.user,
+                tenant: freshStored?.tenant || prev.tenant,
+                isAuthenticated: true,
+                isBooted: true,
+              }));
+            }
+          })
+          .catch(() => {
+            // Network or transient error during background check — keep session active!
           });
-        } else {
-          // Refresh failed (token forged / beyond 90-day absolute max).
-          set({
-            user: null,
-            tenant: null,
-            token: null,
-            isAuthenticated: false,
-            isBooted: true,
-          });
-        }
       } else {
         set({
           user: null,
@@ -217,13 +230,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         });
       }
     } catch {
-      set({
-        user: null,
-        tenant: null,
-        token: null,
-        isAuthenticated: false,
+      // In case of storage read issue, do not log out if already authenticated
+      set((prev) => ({
+        ...prev,
         isBooted: true,
-      });
+      }));
     }
   },
 
@@ -342,12 +353,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       ).catch(() => null);
 
-      // Fallback: derive minimal profile from query params if /me unavailable
+      // Fallback: derive profile from query params if /me unavailable
       const user: SubscriberUser = profile?.user || {
         id: (parsed.queryParams?.userId as string) || `usr_${Date.now()}`,
         name: (parsed.queryParams?.name as string) || '',
         email: (parsed.queryParams?.email as string) || '',
-        role: 'Owner',
+        role: ((parsed.queryParams?.role as string) || 'owner') as any,
         phone: null,
         avatar: null,
       };
@@ -359,7 +370,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         plan: 'Starter',
       };
 
-      await setTokens(token, refreshToken);
+      await setTokens(token, refreshToken || token);
       await setStoredUserData({ user, tenant });
 
       set({

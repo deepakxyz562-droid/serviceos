@@ -92,15 +92,21 @@ export async function GET(req: NextRequest) {
   try {
     const { business } = await requireQuoteFlowBusiness(req);
 
-    const row = await db.customDomain.findFirst({
-      where: {
-        OR: [
-          { businessId: business.id },
-          ...(business.tenantId ? [{ tenantId: business.tenantId }] : []),
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    let row: any = null;
+    try {
+      row = await db.customDomain.findFirst({
+        where: {
+          OR: [
+            { businessId: business.id },
+            ...(business.tenantId ? [{ tenantId: business.tenantId }] : []),
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (dbErr) {
+      console.warn('[commerce/domain] CustomDomain query failed (schema cache or table missing):', dbErr);
+      row = null;
+    }
 
     const defaultCnameTarget = process.env.NEXT_PUBLIC_CNAME_TARGET || 'cname.fieseros.com';
 
@@ -271,6 +277,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'This domain is already claimed by another store.' },
         { status: 409 }
+      );
+    }
+    if (e?.message?.includes('PGRST205') || e?.message?.includes('Could not find the table')) {
+      return NextResponse.json(
+        { error: 'Custom domain support is being provisioned. Please check back shortly.' },
+        { status: 503 }
       );
     }
     console.error('Failed to configure custom domain:', e);
