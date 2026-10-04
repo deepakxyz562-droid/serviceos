@@ -87,6 +87,34 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Inventory Auto-Depletion: Decrement stock for ordered items
+    try {
+      if (config && config.catalogJson) {
+        const catalog = JSON.parse(config.catalogJson);
+        if (Array.isArray(catalog)) {
+          let catalogChanged = false;
+          for (const it of items) {
+            const pIdx = catalog.findIndex(
+              (p: any) => p.id === it.productId || p.name === it.name
+            );
+            if (pIdx !== -1) {
+              const currentStock = typeof catalog[pIdx].stock === 'number' ? catalog[pIdx].stock : 50;
+              catalog[pIdx].stock = Math.max(0, currentStock - (Number(it.qty) || 1));
+              catalogChanged = true;
+            }
+          }
+          if (catalogChanged) {
+            await db.gptformCommerceConfig.update({
+              where: { id: config.id },
+              data: { catalogJson: JSON.stringify(catalog) },
+            });
+          }
+        }
+      }
+    } catch (invErr) {
+      console.warn('Inventory auto-depletion non-fatal warning:', invErr);
+    }
+
     // CRM Auto-Capture: Upsert Customer in AI Business & Tenant CRM
     try {
       const aiBiz = await db.aiBusiness.findFirst({

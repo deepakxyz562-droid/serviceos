@@ -25,10 +25,11 @@ import {
 } from 'expo-speech-recognition';
 
 const QUICK_PROMPTS = [
-  'Show today’s leads',
-  'Who booked appointments this week?',
-  'What questions couldn’t my AI answer?',
-  'Draft follow-ups to new inquiries',
+  'Who owes me money (Udhaar dues)?',
+  'Today’s sales and drawer cash',
+  'Which items are low in stock?',
+  'Show today’s leads & bookings',
+  'Draft follow-ups to pending customers',
 ];
 
 export function FloatingCopilot() {

@@ -31,9 +31,20 @@ export function HomeScreen() {
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [daybook, setDaybook] = useState<any | null>(null);
+  const [khata, setKhata] = useState<any | null>(null);
+
   useEffect(() => {
-    Promise.all([api<{ quotes: any[] }>("/api/quotes"), api<{ invoices: any[] }>("/api/invoices")])
-      .then(([q, inv]) => {
+    Promise.all([
+      api<{ quotes: any[] }>("/api/quotes"),
+      api<{ invoices: any[] }>("/api/invoices"),
+      api<any>("/api/commerce/daybook").catch(() => null),
+      api<any>("/api/commerce/khata").catch(() => null),
+    ])
+      .then(([q, inv, dbData, khataData]) => {
+        if (dbData?.summary) setDaybook(dbData.summary);
+        if (khataData?.summary) setKhata(khataData.summary);
+
         const items: RecentItem[] = [
           ...(q.quotes || []).map((x: any) => ({
             id: x.id,
@@ -105,6 +116,45 @@ export function HomeScreen() {
           <Plus className="h-5 w-5 text-stone-400" />
         </div>
       </button>
+
+      {/* Daily Business Pulse & Cash Drawer */}
+      <div className="mb-4 rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-stone-900">Today&apos;s Business Pulse</span>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200/60">
+            Day Book Live
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-stone-50 p-2.5">
+            <div className="text-[10px] font-bold text-stone-500 uppercase">Today Sales</div>
+            <div className="mt-0.5 text-sm font-black text-stone-900">
+              ₹{daybook?.totalSales?.toFixed(2) || "0.00"}
+            </div>
+            <div className="text-[9px] text-stone-400">{daybook?.ordersCount || 0} orders</div>
+          </div>
+
+          <div className="rounded-xl bg-emerald-50/60 p-2.5 border border-emerald-100">
+            <div className="text-[10px] font-bold text-emerald-800 uppercase">Drawer Cash</div>
+            <div className="mt-0.5 text-sm font-black text-emerald-700">
+              ₹{daybook?.netCashInHand?.toFixed(2) || "0.00"}
+            </div>
+            <div className="text-[9px] text-emerald-600/80">In hand</div>
+          </div>
+
+          <div className="rounded-xl bg-amber-50/60 p-2.5 border border-amber-100">
+            <div className="text-[10px] font-bold text-amber-800 uppercase">Aapko Milega</div>
+            <div className="mt-0.5 text-sm font-black text-amber-700">
+              ₹{khata?.totalAapkoMilega?.toFixed(2) || "0.00"}
+            </div>
+            <div className="text-[9px] text-amber-600/80">{khata?.customersWithDuesCount || 0} dues</div>
+          </div>
+        </div>
+      </div>
 
       {/* 2026 CORE: 4 Omni-Input Quick Actions */}
       <div className="mb-6 rounded-2xl border border-stone-200/80 bg-white p-3.5 shadow-2xs">

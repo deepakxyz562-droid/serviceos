@@ -44,6 +44,12 @@ export const API_PATHS = {
   commerceOrderDetail: (id: string) => `/api/commerce/orders/${id}`,
   commerceCustomers: '/api/commerce/customers',
   commerceMatchPayment: '/api/commerce/orders/match-payment',
+  commerceExpenses: '/api/commerce/expenses',
+  commerceDaybook: '/api/commerce/daybook',
+  commerceKhata: '/api/commerce/khata',
+  commerceInventory: '/api/commerce/inventory',
+  commerceInvoices: '/api/quote-flow/invoices',
+  commerceQuotes: '/api/quote-flow/quotes',
   ecommerceShopifySync: '/api/ecommerce/shopify/sync',
   ecommerceWooSync: '/api/ecommerce/woocommerce/sync',
 };

@@ -80,6 +80,8 @@ export default function DashboardScreen() {
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isAiAnswering] = useState(true);
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [daybookSummary, setDaybookSummary] = useState<any | null>(null);
+  const [khataSummary, setKhataSummary] = useState<any | null>(null);
 
   useEffect(() => {
     // 1. Agent (kept for the assistant card — name + persona).
@@ -115,6 +117,19 @@ export default function DashboardScreen() {
       .then((res) => {
         const docs = Array.isArray(res?.documents) ? res.documents : Array.isArray(res) ? (res as any) : [];
         setKnowledgeDocs(docs);
+      })
+      .catch(() => {});
+
+    // 5. Daybook & Khata summaries for Business Pulse
+    apiRequest<any>(API_PATHS.commerceDaybook)
+      .then((res) => {
+        if (res?.summary) setDaybookSummary(res.summary);
+      })
+      .catch(() => {});
+
+    apiRequest<any>(API_PATHS.commerceKhata)
+      .then((res) => {
+        if (res?.summary) setKhataSummary(res.summary);
       })
       .catch(() => {});
   }, []);
@@ -366,6 +381,113 @@ export default function DashboardScreen() {
             </View>
           </TouchableOpacity>
         )}
+
+        {/* ─── Today's Business Pulse (Dukaan + Vyapar) ─── */}
+        <View style={styles.businessPulseCard}>
+          <View style={styles.businessPulseHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.pulseTitle}>Today's Business Pulse</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/expenses' as any);
+              }}
+            >
+              <Text style={styles.pulseViewAll}>Day Book &gt;</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.pulseGrid}>
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/(tabs)/orders' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>TODAY SALES</Text>
+              <Text style={styles.pulseStatValue}>₹{daybookSummary?.totalSales?.toFixed(2) || '0.00'}</Text>
+              <Text style={styles.pulseStatSub}>{daybookSummary?.ordersCount || 0} orders</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/expenses' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>DRAWER CASH</Text>
+              <Text style={[styles.pulseStatValue, { color: '#059669' }]}>
+                ₹{daybookSummary?.netCashInHand?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.pulseStatSub}>Cash in hand</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/khata' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>AAPKO MILEGA</Text>
+              <Text style={[styles.pulseStatValue, { color: '#d97706' }]}>
+                ₹{khataSummary?.totalAapkoMilega?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.pulseStatSub}>{khataSummary?.customersWithDuesCount || 0} dues</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Commerce Action Pills */}
+          <View style={styles.pulseActionRow}>
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/pos' as any);
+              }}
+            >
+              <MaterialIcons name="point-of-sale" size={14} color="#059669" />
+              <Text style={styles.pulseActionBtnText}>+ POS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/khata' as any);
+              }}
+            >
+              <MaterialIcons name="menu-book" size={14} color="#d97706" />
+              <Text style={styles.pulseActionBtnText}>+ Khata</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/expenses' as any);
+              }}
+            >
+              <MaterialIcons name="account-balance-wallet" size={14} color="#dc2626" />
+              <Text style={styles.pulseActionBtnText}>+ Expense</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/billing' as any);
+              }}
+            >
+              <MaterialIcons name="receipt-long" size={14} color="#2563eb" />
+              <Text style={styles.pulseActionBtnText}>+ GST Bill</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* ─── Today's AI Activity (Interactive Metrics) ─── */}
         <View style={styles.sectionHeadingRow}>
@@ -859,5 +981,94 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#475569',
+  },
+  businessPulseCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  businessPulseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#059669',
+  },
+  pulseTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  pulseViewAll: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  pulseGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  pulseStatBox: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  pulseStatLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.4,
+  },
+  pulseStatValue: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginTop: 2,
+  },
+  pulseStatSub: {
+    fontSize: 9,
+    color: '#94a3b8',
+    marginTop: 1,
+  },
+  pulseActionRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  pulseActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingVertical: 7,
+  },
+  pulseActionBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0f172a',
   },
 });

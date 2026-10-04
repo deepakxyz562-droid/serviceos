@@ -363,6 +363,81 @@ export default function MoreScreen() {
             </View>
             <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
           </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/khata' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="menu-book" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Customer Khata (Udhaar)</Text>
+                  <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#b45309', fontSize: 10, fontWeight: '800' }}>Aapko Milega</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Credit tracking & WhatsApp UPI payment links</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/expenses' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="account-balance-wallet" size={22} color="#059669" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Day Book & Expenses</Text>
+                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Cash Drawer</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Daily cash in hand, expenses & net profit</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
+
+          <View style={styles.rowDivider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/billing' as any);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={styles.menuLeft}>
+              <MaterialIcons name="receipt-long" size={22} color="#0284c7" style={{ marginRight: 14 }} />
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.menuLabel}>Billing & GST Invoices</Text>
+                  <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                    <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>Estimates</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Quick GST bills, quotations & WhatsApp PDF share</Text>
+              </View>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+          </TouchableOpacity>
         </View>
 
         {/* Grouped Menu Card 1: Team, Notifications, Appearance, Contact Us */}
