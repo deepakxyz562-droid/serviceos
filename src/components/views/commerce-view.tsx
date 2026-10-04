@@ -95,7 +95,7 @@ export function CommerceView() {
     | 'billing'
     | 'settings'
   >('orders');
-  const auth = useAppStore((s) => s.auth);
+  const { auth, blueprint, countryPack } = useAppStore();
 
   // Industry Templates State
   const [templatesList, setTemplatesList] = useState<any[]>([]);
@@ -215,7 +215,7 @@ export function CommerceView() {
   const [billFooterText, setBillFooterText] = useState<string>('Thank you for dining with us! Please visit again.');
   const [discounts, setDiscounts] = useState<Array<{ code: string; type: 'percentage' | 'fixed'; value: number; minOrder?: number; label?: string }>>([
     { code: 'WELCOME10', type: 'percentage', value: 10, minOrder: 200, label: '10% Off' },
-    { code: 'FLAT50', type: 'fixed', value: 50, minOrder: 500, label: '₹50 Flat Off' },
+    { code: 'FLAT50', type: 'fixed', value: 50, minOrder: 500, label: '50 Flat Off' },
   ]);
 
   // Billing & GST Invoices State (mobile billing.tsx port — Task P2B-BILLING)
@@ -480,6 +480,31 @@ export function CommerceView() {
       setBillingLoading(false);
     }
   };
+
+  // Business Blueprint Adaptive Capabilities
+  const businessType = blueprint?.businessType || 'retail';
+  const caps = blueprint?.capabilities;
+
+  const showDineIn = businessType === 'restaurant' || !!caps?.dining || !!caps?.tables;
+  const showKds = businessType === 'restaurant' || !!caps?.kitchenKot;
+  const showPos = caps ? !!caps.posRegister : true;
+  const showClosing = showPos || showDineIn;
+  const showKhata = caps ? !!caps.customerCredit : true;
+  const showDaybook = caps ? !!caps.expenses : true;
+  const showBilling = caps ? !!caps.invoicing : true;
+  const showPromotions = caps ? (!!caps.onlineStore || !!caps.orders || !!caps.loyalty) : true;
+  const showDomain = caps ? !!caps.customDomain : true;
+
+  // Auto-redirect if active tab is not supported by current business blueprint
+  useEffect(() => {
+    if (activeTab === 'dineIn' && !showDineIn) setActiveTab('orders');
+    else if (activeTab === 'kds' && !showKds) setActiveTab('orders');
+    else if (activeTab === 'pos' && !showPos) setActiveTab('orders');
+    else if (activeTab === 'closing' && !showClosing) setActiveTab('orders');
+    else if (activeTab === 'khata' && !showKhata) setActiveTab('orders');
+    else if (activeTab === 'daybook' && !showDaybook) setActiveTab('orders');
+    else if (activeTab === 'billing' && !showBilling) setActiveTab('orders');
+  }, [activeTab, showDineIn, showKds, showPos, showClosing, showKhata, showDaybook, showBilling]);
 
   useEffect(() => {
     if (activeTab === 'templates') loadTemplates();
@@ -1627,9 +1652,21 @@ export function CommerceView() {
     return matchesSearch && matchesCategory;
   });
 
-  const currencySymbol = config?.currencySymbol || '₹';
+  const currencySymbol = countryPack?.currency?.symbol || config?.currencySymbol || '$';
   const businessSlug = auth?.tenant?.slug || auth?.user?.id || 'demo';
   const publicStoreUrl = typeof window !== 'undefined' ? `${window.location.origin}/store/${businessSlug}` : `/store/${businessSlug}`;
+
+  // Adaptive Tab Labels based on Business Model & Country Pack
+  const catalogLabel = businessType === 'restaurant'
+    ? 'Menu & Items'
+    : businessType === 'services' || businessType === 'salon'
+    ? 'Services Catalog'
+    : 'Products & Menu';
+
+  const khataLabel = countryPack?.vocabulary?.customerCredit || 'Khata (Udhaar)';
+  const billingLabel = countryPack?.vocabulary?.invoice
+    ? `${countryPack.vocabulary.invoice} & Billing`
+    : (countryPack?.countryCode === 'IN' ? 'Billing & GST' : 'Billing & Invoices');
 
   // Billing live-computed totals (mirrors mobile billing.tsx modal math)
   const billingSubtotal = billingItems.reduce(
@@ -1677,7 +1714,11 @@ export function CommerceView() {
               </Badge>
             </div>
             <p className="text-xs text-stone-500">
-              WhatsApp Storefront • Catalog • Dine-in QR • POS • Billing &amp; Khata
+              {businessType === 'restaurant'
+                ? 'Online Menu • Dine-in QR • POS & Kitchen KDS • Billing & Ledger'
+                : businessType === 'services' || businessType === 'salon'
+                ? 'Services Catalog • Appointments & Bookings • Invoicing & Ledger'
+                : 'Storefront • Product Catalog • POS Register • Invoicing & Ledger'}
             </p>
           </div>
         </div>
@@ -1747,6 +1788,7 @@ export function CommerceView() {
               </span>
             )}
           </button>
+
           <button
             onClick={() => setActiveTab('catalog')}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
@@ -1754,40 +1796,110 @@ export function CommerceView() {
             }`}
           >
             <ShoppingCart className="h-3.5 w-3.5 text-emerald-600" />
-            Products &amp; Menu ({catalog.length})
+            {catalogLabel} ({catalog.length})
           </button>
-          <button
-            onClick={() => setActiveTab('pos')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'pos' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <CreditCard className="h-3.5 w-3.5 text-purple-600" />
-            POS Register
-          </button>
-          <button
-            onClick={() => setActiveTab('dineIn')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'dineIn' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <QrCode className="h-3.5 w-3.5 text-amber-600" />
-            Dine-In QR ({tables.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('kds')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'kds' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <ChefHat className="h-3.5 w-3.5 text-orange-600" />
-            Kitchen KDS
-            {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length > 0 && (
-              <span className="ml-1 rounded-full bg-orange-100 text-orange-700 px-1.5 py-0.2 text-[10px] font-bold">
-                {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length}
-              </span>
-            )}
-          </button>
+
+          {showPos && (
+            <button
+              onClick={() => setActiveTab('pos')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'pos' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <CreditCard className="h-3.5 w-3.5 text-purple-600" />
+              POS Register
+            </button>
+          )}
+
+          {showDineIn && (
+            <button
+              onClick={() => setActiveTab('dineIn')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'dineIn' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <QrCode className="h-3.5 w-3.5 text-amber-600" />
+              Dine-In QR ({tables.length})
+            </button>
+          )}
+
+          {showKds && (
+            <button
+              onClick={() => setActiveTab('kds')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'kds' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <ChefHat className="h-3.5 w-3.5 text-orange-600" />
+              Kitchen KDS
+              {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length > 0 && (
+                <span className="ml-1 rounded-full bg-orange-100 text-orange-700 px-1.5 py-0.2 text-[10px] font-bold">
+                  {orders.filter((o) => o.status === 'PENDING' || o.status === 'CONFIRMED' || o.status === 'PREPARING').length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {showClosing && (
+            <button
+              onClick={() => setActiveTab('closing')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'closing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Receipt className="h-3.5 w-3.5 text-blue-600" />
+              Closing
+            </button>
+          )}
+
+          {showKhata && (
+            <button
+              onClick={() => setActiveTab('khata')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'khata' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5 text-amber-700" />
+              {khataLabel}
+            </button>
+          )}
+
+          {showDaybook && (
+            <button
+              onClick={() => setActiveTab('daybook')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'daybook' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
+              Day Book
+            </button>
+          )}
+
+          {showBilling && (
+            <button
+              onClick={() => setActiveTab('billing')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'billing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5 text-indigo-600" />
+              {billingLabel}
+            </button>
+          )}
+
+          {showPromotions && (
+            <button
+              onClick={() => setActiveTab('promotions')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'promotions' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Tag className="h-3.5 w-3.5 text-amber-600" />
+              Promotions
+            </button>
+          )}
+
           <button
             onClick={() => setActiveTab('templates')}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
@@ -1797,60 +1909,19 @@ export function CommerceView() {
             <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
             Templates
           </button>
-          <button
-            onClick={() => setActiveTab('promotions')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'promotions' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Tag className="h-3.5 w-3.5 text-amber-600" />
-            Promotions
-          </button>
-          <button
-            onClick={() => setActiveTab('domain')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'domain' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Globe className="h-3.5 w-3.5 text-purple-600" />
-            Custom Domain
-          </button>
-          <button
-            onClick={() => setActiveTab('khata')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'khata' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <BookOpen className="h-3.5 w-3.5 text-amber-700" />
-            Khata (Udhaar)
-          </button>
-          <button
-            onClick={() => setActiveTab('daybook')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'daybook' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <DollarSign className="h-3.5 w-3.5 text-emerald-700" />
-            Day Book
-          </button>
-          <button
-            onClick={() => setActiveTab('closing')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'closing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Receipt className="h-3.5 w-3.5 text-blue-600" />
-            Closing
-          </button>
-          <button
-            onClick={() => setActiveTab('billing')}
-            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
-              activeTab === 'billing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <FileText className="h-3.5 w-3.5 text-indigo-600" />
-            Billing &amp; GST
-          </button>
+
+          {showDomain && (
+            <button
+              onClick={() => setActiveTab('domain')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
+                activeTab === 'domain' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Globe className="h-3.5 w-3.5 text-purple-600" />
+              Custom Domain
+            </button>
+          )}
+
           <button
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition whitespace-nowrap ${
@@ -1897,7 +1968,11 @@ export function CommerceView() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs">
                 <div className="flex items-center justify-between text-emerald-700 text-xs font-bold uppercase">
                   <span>Total Revenue</span>
-                  <IndianRupee className="h-4 w-4" />
+                  {countryPack?.currency?.code === 'INR' ? (
+                    <IndianRupee className="h-4 w-4" />
+                  ) : (
+                    <DollarSign className="h-4 w-4" />
+                  )}
                 </div>
                 <div className="text-2xl font-black text-stone-900 mt-2">
                   {currencySymbol}
@@ -4023,11 +4098,11 @@ export function CommerceView() {
               <div className="flex items-center gap-3">
                 <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-3 text-right shadow-2xs">
                   <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Aapko Milega (Receivable)</div>
-                  <div className="text-2xl font-black text-amber-900 mt-0.5">₹{khataReceivable.toFixed(2)}</div>
+                  <div className="text-2xl font-black text-amber-900 mt-0.5">{currencySymbol}{khataReceivable.toFixed(2)}</div>
                 </div>
                 <div className="rounded-xl border border-red-300 bg-red-50 px-5 py-3 text-right shadow-2xs">
                   <div className="text-[10px] font-bold text-red-700 uppercase tracking-wider">Aapko Dena Hai (Payable)</div>
-                  <div className="text-2xl font-black text-red-900 mt-0.5">₹{khataPayable.toFixed(2)}</div>
+                  <div className="text-2xl font-black text-red-900 mt-0.5">{currencySymbol}{khataPayable.toFixed(2)}</div>
                 </div>
               </div>
             </div>
@@ -4083,7 +4158,7 @@ export function CommerceView() {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="text-[10px] uppercase font-bold text-red-600">Pending Due</div>
-                          <div className="text-base font-black text-red-700">₹{Number(entry.balance || 0).toFixed(2)}</div>
+                          <div className="text-base font-black text-red-700">{currencySymbol}{Number(entry.balance || 0).toFixed(2)}</div>
                         </div>
 
                         <Button
@@ -4146,7 +4221,7 @@ export function CommerceView() {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="text-[10px] uppercase font-bold text-red-600">Payable</div>
-                          <div className="text-base font-black text-red-700">₹{Number(entry.balance || 0).toFixed(2)}</div>
+                          <div className="text-base font-black text-red-700">{currencySymbol}{Number(entry.balance || 0).toFixed(2)}</div>
                         </div>
 
                         <Button
@@ -4192,11 +4267,11 @@ export function CommerceView() {
                     <span className="text-stone-400 mx-2">·</span>
                     <span className="font-mono text-xs">{khataPaymentModal.entry.phone}</span>
                     <span className="text-stone-400 mx-2">·</span>
-                    <span className="text-red-600 font-bold">Due: ₹{Number(khataPaymentModal.entry.balance || 0).toFixed(2)}</span>
+                    <span className="text-red-600 font-bold">Due: {currencySymbol}{Number(khataPaymentModal.entry.balance || 0).toFixed(2)}</span>
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs font-bold text-stone-500 uppercase">Amount Received (₹)</label>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Amount Received ({currencySymbol})</label>
                       <Input
                         type="number"
                         value={khataPayAmount}
@@ -4278,7 +4353,7 @@ export function CommerceView() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-stone-500 uppercase">Amount (₹) *</label>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Amount ({currencySymbol}) *</label>
                       <Input
                         type="number"
                         value={khataUdhaarAmount}
@@ -4326,11 +4401,11 @@ export function CommerceView() {
                   <div className="space-y-1 text-sm text-stone-600">
                     <span className="font-semibold text-stone-900">{khataSupplierPayModal.entry.supplierName}</span>
                     <span className="text-stone-400 mx-2">·</span>
-                    <span className="text-red-600 font-bold">Payable: ₹{Number(khataSupplierPayModal.entry.balance || 0).toFixed(2)}</span>
+                    <span className="text-red-600 font-bold">Payable: {currencySymbol}{Number(khataSupplierPayModal.entry.balance || 0).toFixed(2)}</span>
                   </div>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-xs font-bold text-stone-500 uppercase">Amount to Pay (₹)</label>
+                      <label className="text-xs font-bold text-stone-500 uppercase">Amount to Pay ({currencySymbol})</label>
                       <Input
                         type="number"
                         value={khataSupplierPayAmount}
@@ -4393,7 +4468,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-2xs">
                 <div className="text-xs font-bold text-blue-700 uppercase">Today's Sales</div>
                 <div className="text-2xl font-black text-stone-900 mt-2">
-                  ₹{Number(dayBookData.totalSales || stats.totalRevenue || stats.revenue || 0).toFixed(2)}
+                  {currencySymbol}{Number(dayBookData.totalSales || stats.totalRevenue || stats.revenue || 0).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-blue-600 mt-0.5">Orders + POS</div>
               </div>
@@ -4401,7 +4476,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs">
                 <div className="text-xs font-bold text-emerald-700 uppercase">Total Cash Inflow</div>
                 <div className="text-2xl font-black text-emerald-900 mt-2">
-                  ₹{Number(dayBookData.totalInflow || stats.totalRevenue || stats.revenue || 0).toFixed(2)}
+                  {currencySymbol}{Number(dayBookData.totalInflow || stats.totalRevenue || stats.revenue || 0).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-emerald-600 mt-0.5">Cash collected</div>
               </div>
@@ -4409,7 +4484,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 shadow-2xs">
                 <div className="text-xs font-bold text-red-700 uppercase">Total Outflows</div>
                 <div className="text-2xl font-black text-red-900 mt-2">
-                  ₹{Number(dayBookData.totalOutflow || 0).toFixed(2)}
+                  {currencySymbol}{Number(dayBookData.totalOutflow || 0).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-red-600 mt-0.5">Daily expenses</div>
               </div>
@@ -4417,7 +4492,7 @@ export function CommerceView() {
               <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 shadow-2xs">
                 <div className="text-xs font-black text-amber-800 uppercase tracking-wide">Cash in Hand</div>
                 <div className="text-2xl font-black text-amber-900 mt-2">
-                  ₹{Number(dayBookData.cashInHand || (stats.totalRevenue || stats.revenue || 0)).toFixed(2)}
+                  {currencySymbol}{Number(dayBookData.cashInHand || (stats.totalRevenue || stats.revenue || 0)).toFixed(2)}
                 </div>
                 <div className="text-[11px] text-amber-700 mt-0.5">Physical Cash Drawer</div>
               </div>
@@ -4428,7 +4503,7 @@ export function CommerceView() {
               <h3 className="text-base font-bold text-stone-900">+ Record Daily Store Expense</h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold text-stone-600">Expense Amount (₹) *</label>
+                  <label className="text-[11px] font-bold text-stone-600">Expense Amount ({currencySymbol}) *</label>
                   <Input
                     type="number"
                     value={newExpenseAmt}
@@ -5788,7 +5863,7 @@ export function CommerceView() {
                         inputMode="numeric"
                         value={it.unitPrice ? String(it.unitPrice) : ''}
                         onChange={(e) => updateBillingItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        placeholder="₹ Rate"
+                        placeholder={`${currencySymbol} Rate`}
                         className="col-span-2 text-xs h-9 text-right"
                       />
                       <Input

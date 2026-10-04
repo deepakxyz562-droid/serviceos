@@ -19,6 +19,7 @@ import {
   Download,
   MessageSquare,
   Sparkles,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,8 @@ import { MessageDrawer } from '@/components/layout/message-drawer';
 import { AiAssistantDrawer } from '@/components/layout/ai-assistant-drawer';
 import { OfflineStatusBar } from '@/components/shared/offline-status-bar';
 import { authFetch } from '@/lib/api';
+import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
+import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -154,6 +157,8 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     searchQuery,
     setSearchQuery,
     auth,
+    blueprint,
+    countryPack,
   } = useAppStore();
 
   const { resolvedTheme, setTheme } = useTheme();
@@ -177,6 +182,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false);
   const [messageDrawerOpen, setMessageDrawerOpen] = useState(false);
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const [blueprintWizardOpen, setBlueprintWizardOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin');
@@ -379,6 +385,51 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate min-w-0">
         {viewLabels[currentView] || 'Dashboard'}
       </h1>
+
+      {/* ─── Business Type & Currency Switcher Chip ────────────────────── */}
+      <button
+        type="button"
+        onClick={() => setBlueprintWizardOpen(true)}
+        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/80 hover:bg-indigo-100/90 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 text-xs font-semibold text-indigo-900 dark:text-indigo-200 transition shadow-2xs group shrink-0 cursor-pointer"
+        title="Configure Business Type & Currency"
+      >
+        <span className="text-sm leading-none">
+          {blueprint?.businessType === 'restaurant'
+            ? '🍽️'
+            : blueprint?.businessType === 'retail'
+            ? '🛍️'
+            : blueprint?.businessType === 'services'
+            ? '🔧'
+            : blueprint?.businessType === 'salon'
+            ? '💇'
+            : blueprint?.businessType === 'grocery'
+            ? '🏪'
+            : blueprint?.businessType === 'wholesale'
+            ? '📦'
+            : '🏢'}
+        </span>
+        <span className="capitalize">
+          {blueprint?.businessType
+            ? (BUSINESS_TYPE_LABELS[blueprint.businessType] || blueprint.businessType.replace('_', ' '))
+            : 'Adaptive Profile'}
+        </span>
+        <span className="text-indigo-300 dark:text-indigo-600">·</span>
+        <span>
+          {countryPack?.flag || '🇺🇸'} {countryPack?.currency?.code || 'USD'} ({countryPack?.currency?.symbol || '$'})
+        </span>
+        <ChevronDown className="size-3 text-indigo-500 group-hover:translate-y-0.5 transition-transform" />
+      </button>
+
+      <button
+        type="button"
+        onClick={() => setBlueprintWizardOpen(true)}
+        className="sm:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-[11px] font-bold text-indigo-900 dark:text-indigo-200 shrink-0 cursor-pointer"
+        title="Change Currency & Business Profile"
+      >
+        <span>{countryPack?.flag || '🇺🇸'}</span>
+        <span>{countryPack?.currency?.symbol || '$'}</span>
+        <ChevronDown className="size-2.5 text-indigo-500" />
+      </button>
 
       {!isCanvas && (
         <>
@@ -644,6 +695,12 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         </kbd>
       </button>
     )}
+
+    {/* ─── Business Blueprint & Currency Wizard Modal ─────────────────── */}
+    <BusinessBlueprintWizard
+      open={blueprintWizardOpen}
+      onOpenChange={setBlueprintWizardOpen}
+    />
     </>
   );
 }

@@ -136,7 +136,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Store & Merchant OS',
     items: [
       { view: 'commerce', label: 'Orders & Storefront', icon: ShoppingBag, badge: 'STORE' },
-      { view: 'quoteFlow', label: 'Billing & Khata (5-Tab)', icon: Receipt, badge: 'VYAPAR' },
     ],
   },
   {
@@ -248,7 +247,6 @@ const standaloneNavSections: NavSection[] = [
     title: 'Commerce & Orders',
     items: [
       { view: 'commerce', label: 'Orders & Store', icon: ShoppingBag, badge: 'STORE' },
-      { view: 'quoteFlow', label: 'Billing & Khata (5-Tab)', icon: Receipt, badge: 'VYAPAR' },
     ],
   },
   {
@@ -356,7 +354,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Store & Merchant OS',
     items: [
       { view: 'commerce', label: 'Orders & Storefront', icon: ShoppingBag, badge: 'STORE' },
-      { view: 'quoteFlow', label: 'Billing & Khata (5-Tab)', icon: Receipt, badge: 'VYAPAR' },
     ],
   },
   {
@@ -685,12 +682,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           ...section,
           items: section.items
             .map((item) => {
-              if (item.view === 'quoteFlow' && countryPack?.vocabulary) {
-                return {
-                  ...item,
-                  label: `${countryPack.vocabulary.invoice || 'Billing'} & ${countryPack.vocabulary.customerCredit || 'Khata'}`,
-                };
-              }
               if (item.view === 'customers' && countryPack?.vocabulary?.customers) {
                 return {
                   ...item,
