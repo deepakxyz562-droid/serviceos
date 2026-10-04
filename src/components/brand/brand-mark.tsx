@@ -14,6 +14,7 @@
  */
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
+import { BRAND } from '@/lib/brand';
 
 export interface BrandMarkProps {
   /** Pixel size for both width & height. Default 32. */
@@ -28,7 +29,7 @@ export interface BrandMarkProps {
 export function BrandMark({
   size = 32,
   className,
-  alt = 'Fieseros',
+  alt = BRAND.name,
   unoptimized = false,
 }: BrandMarkProps) {
   return (
@@ -77,7 +78,7 @@ export function BrandLogo({
           )}
           style={{ fontSize }}
         >
-          Fieseros
+          {BRAND.name}
         </span>
       )}
     </span>

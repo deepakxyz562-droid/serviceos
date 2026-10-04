@@ -865,7 +865,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
               <Zap className="w-5 h-5 text-emerald-400" />
             </div>
             <span className="text-white text-xl font-bold tracking-tight">
-              Fieseros
+              Nuvora
             </span>
           </motion.div>
         </div>
@@ -878,9 +878,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.3, duration: 0.6 }}
             className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4"
           >
-            Operations OS for{' '}
-            <span className="bg-gradient-to-r from-emerald-300 to-teal-200 bg-clip-text text-transparent">
-              Service Businesses
+            The Modern OS for{' '}
+            <span className="bg-gradient-to-r from-indigo-300 via-teal-200 to-emerald-300 bg-clip-text text-transparent">
+              Every Business
             </span>
           </motion.h1>
           <motion.p
@@ -889,9 +889,8 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.4, duration: 0.6 }}
             className="text-slate-300 text-base xl:text-lg leading-relaxed"
           >
-            Streamline your operations, manage your team, and delight your
-            customers — all from one powerful platform built for service
-            businesses.
+            Your entire business, in one simple app. Point of sale, orders, invoices,
+            customer credit ledger, scheduling, and 24/7 AI copilot — tailored to your industry.
           </motion.p>
 
           {/* Feature bullets */}
@@ -902,9 +901,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             className="mt-8 space-y-3"
           >
             {[
-              'Automated scheduling & dispatch',
-              'Real-time job tracking & updates',
-              'Customer management & invoicing',
+              'Adaptive POS register, orders & menu KOT',
+              'Tax invoices, quotes & customer credit ledger',
+              'WhatsApp storefront, scheduling & 24/7 AI copilot',
             ].map((feature, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">

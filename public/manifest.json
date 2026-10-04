@@ -1,12 +1,12 @@
 {
-  "name": "Fieseros Marketplace",
-  "short_name": "Fieseros",
-  "description": "Post a service request, get 3 free bids from verified local pros, compare and book.",
-  "start_url": "/requests",
+  "name": "Nuvora — Business Management OS",
+  "short_name": "Nuvora",
+  "description": "Your entire business, in one simple app. Point of sale, orders, invoices, khata ledger, scheduling, and AI copilot.",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f8fafc",
-  "theme_color": "#059669",
+  "background_color": "#080C14",
+  "theme_color": "#4F46E5",
   "icons": [
     {
       "src": "/icon-192.png",

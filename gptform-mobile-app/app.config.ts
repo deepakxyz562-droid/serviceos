@@ -11,27 +11,31 @@ export default ({ config }: ConfigContext): any => ({
   slug: 'nuvora',
   version: '1.0.0',
   orientation: 'portrait',
+  icon: './assets/icon.png',
   scheme: SCHEME,
   userInterfaceStyle: 'automatic',
   splash: {
+    image: './assets/splash.png',
     resizeMode: 'contain',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#080C14',
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.gptform.app',
+    bundleIdentifier: 'com.nuvora.app',
     infoPlist: {
-      NSMicrophoneUsageDescription: 'GPTForm uses microphone access for voice dictation and natural language AI Copilot commands.',
-      NSCameraUsageDescription: 'GPTForm uses camera access to capture profile images and form attachments.',
-      NSPhotoLibraryUsageDescription: 'GPTForm uses photo library access to upload form assets.',
-      NSUserNotificationsUsageDescription: 'GPTForm sends instant notifications for new leads, urgent chat takeovers, and booking requests.',
+      CFBundleDisplayName: 'Nuvora',
+      NSMicrophoneUsageDescription: 'Nuvora uses microphone access for voice dictation and natural language AI Copilot commands.',
+      NSCameraUsageDescription: 'Nuvora uses camera access to capture profile images and form attachments.',
+      NSPhotoLibraryUsageDescription: 'Nuvora uses photo library access to upload form assets.',
+      NSUserNotificationsUsageDescription: 'Nuvora sends instant notifications for new orders, customer payments, leads, and booking requests.',
       ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
-    package: 'com.gptform.app',
+    package: 'com.nuvora.app',
     adaptiveIcon: {
-      backgroundColor: '#0F172A',
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: '#080C14',
     },
     permissions: [
       'android.permission.RECORD_AUDIO',
@@ -42,6 +46,7 @@ export default ({ config }: ConfigContext): any => ({
   web: {
     bundler: 'metro',
     output: 'static',
+    favicon: './assets/favicon.png',
   },
   plugins: [
     'expo-router',

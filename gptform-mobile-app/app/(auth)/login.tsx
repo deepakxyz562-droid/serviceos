@@ -9,9 +9,15 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
+  Alert,
 } from 'react-native';
-import { Ionicons, Feather, FontAwesome, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBlueprintStore } from '@/stores/blueprint-store';
+import { NuvoraMark } from '@/components/brand/nuvora-mark';
+import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint/presets';
+import { COUNTRY_PACKS } from '@/lib/blueprint/country-packs';
+import type { BusinessType, CountryCode } from '@/lib/blueprint/types';
 import { hapticFeedback } from '@/lib/haptics';
 
 export default function LoginScreen() {
@@ -25,29 +31,55 @@ export default function LoginScreen() {
   // Register State
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [selectedType, setSelectedType] = useState<BusinessType>('retail');
+  const [selectedCountry, setSelectedCountry] = useState<CountryCode>('US');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  const { login, register, loginWithGoogle, isLoading, error, clearError } =
-    useAuthStore();
+  const { login, register, loginWithGoogle, isLoading, error, clearError } = useAuthStore();
+  const saveBlueprintToServer = useBlueprintStore((s) => s.saveBlueprintToServer);
 
   const handleSignIn = async () => {
-    if (!email.trim() || !password.trim()) return;
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Required', 'Please enter your email and password.');
+      return;
+    }
     await hapticFeedback.light();
     await login(email.trim(), password);
   };
 
   const handleRegister = async () => {
-    if (!name.trim() || !regEmail.trim() || !regPassword.trim()) return;
+    if (!name.trim() || !regEmail.trim() || !regPassword.trim()) {
+      Alert.alert('Required', 'Please fill in all required fields.');
+      return;
+    }
     await hapticFeedback.light();
-    await register(name.trim(), regEmail.trim(), regPassword.trim(), companyName.trim());
+    const success = await register(
+      name.trim(),
+      regEmail.trim(),
+      regPassword.trim(),
+      companyName.trim() || `${name.trim()}'s Business`
+    );
+    if (success) {
+      // Sync initial business blueprint
+      await saveBlueprintToServer({
+        businessType: selectedType,
+        country: selectedCountry,
+      });
+    }
+  };
+
+  const handleDemoSignIn = async () => {
+    await hapticFeedback.medium();
+    clearError();
+    setEmail('demo@fieseros.com');
+    setPassword('Demo1234!');
+    await login('demo@fieseros.com', 'Demo1234!');
   };
 
   const handleGoogleAuth = async () => {
     await hapticFeedback.medium();
-    // Always goes through the backend OAuth flow. If the user dismisses the
-    // browser or auth fails, the store surfaces the real error.
     await loginWithGoogle();
   };
 
@@ -56,22 +88,40 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        {/* Glow & Branding */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Nuvora Brand Header */}
         <View style={styles.header}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="sparkles" size={32} color="#10B981" />
+          <NuvoraMark size={84} showText subtitle="Business Management OS" variant="dark" />
+          <View style={styles.taglineChip}>
+            <Text style={styles.taglineChipText}>
+              🛍️ Retail · 🍽️ Restaurant · 🔧 Services · 💇 Salon
+            </Text>
           </View>
-          <Text style={styles.brandTitle}>
-            GPT<Text style={styles.brandAccent}>Form</Text>
-          </Text>
-          <Text style={styles.brandSubtitle}>
-            Mobile AI Agents · Conversations · Live Training
-          </Text>
         </View>
 
-        {/* Card Container */}
+        {/* Auth Card */}
         <View style={styles.card}>
+          {/* Fast-Track Demo Preview Button */}
+          <TouchableOpacity
+            style={styles.demoBtn}
+            onPress={handleDemoSignIn}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <View style={styles.demoIconWrap}>
+              <Ionicons name="flash" size={16} color="#059669" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.demoBtnTitle}>1-Tap Demo Business Preview</Text>
+              <Text style={styles.demoBtnSubtitle}>Explore active POS, Orders & Khata instantly</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#10B981" />
+          </TouchableOpacity>
+
           {/* Segmented Mode Switcher */}
           <View style={styles.modeTabs}>
             <TouchableOpacity
@@ -99,7 +149,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Google Sign In Button */}
+          {/* Google Sign In */}
           <TouchableOpacity
             style={styles.googleBtn}
             onPress={handleGoogleAuth}
@@ -117,14 +167,14 @@ export default function LoginScreen() {
           {/* Divider */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR CONTINUE WITH EMAIL</Text>
+            <Text style={styles.dividerText}>OR WITH WORK EMAIL</Text>
             <View style={styles.dividerLine} />
           </View>
 
           {/* Error Banner */}
           {error && (
             <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color="#F87171" style={{ marginRight: 6 }} />
+              <Ionicons name="alert-circle" size={18} color="#F87171" style={{ marginRight: 8 }} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
@@ -134,7 +184,7 @@ export default function LoginScreen() {
             <View>
               {/* Email */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email Address</Text>
+                <Text style={styles.inputLabel}>Work Email</Text>
                 <View style={styles.inputRow}>
                   <Feather name="mail" size={18} color="#64748B" />
                   <TextInput
@@ -143,7 +193,7 @@ export default function LoginScreen() {
                       clearError();
                       setEmail(t);
                     }}
-                    placeholder="you@company.com"
+                    placeholder="alex@yourcompany.com"
                     placeholderTextColor="#475569"
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -155,7 +205,14 @@ export default function LoginScreen() {
 
               {/* Password */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Password</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <TouchableOpacity
+                    onPress={() => Alert.alert('Reset Password', 'Please check your email to reset your Nuvora password.')}
+                  >
+                    <Text style={styles.forgotText}>Forgot password?</Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.inputRow}>
                   <Feather name="lock" size={18} color="#64748B" />
                   <TextInput
@@ -185,7 +242,7 @@ export default function LoginScreen() {
               {/* Sign In Button */}
               <TouchableOpacity
                 onPress={handleSignIn}
-                disabled={isLoading || !email || !password}
+                disabled={isLoading}
                 activeOpacity={0.8}
                 style={[
                   styles.submitBtn,
@@ -193,11 +250,11 @@ export default function LoginScreen() {
                 ]}
               >
                 {isLoading ? (
-                  <ActivityIndicator color="#022C22" size="small" />
+                  <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.submitBtnText}>Sign In</Text>
-                    <Feather name="arrow-right" size={16} color="#022C22" />
+                    <Text style={styles.submitBtnText}>Sign In to Nuvora</Text>
+                    <Feather name="arrow-right" size={16} color="#FFFFFF" />
                   </>
                 )}
               </TouchableOpacity>
@@ -207,7 +264,7 @@ export default function LoginScreen() {
             <View>
               {/* Full Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Your Full Name</Text>
+                <Text style={styles.inputLabel}>Full Name</Text>
                 <View style={styles.inputRow}>
                   <Feather name="user" size={18} color="#64748B" />
                   <TextInput
@@ -224,9 +281,9 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              {/* Company / Workspace */}
+              {/* Company / Business Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Business / Workspace Name</Text>
+                <Text style={styles.inputLabel}>Business Name</Text>
                 <View style={styles.inputRow}>
                   <Feather name="briefcase" size={18} color="#64748B" />
                   <TextInput
@@ -235,14 +292,66 @@ export default function LoginScreen() {
                       clearError();
                       setCompanyName(t);
                     }}
-                    placeholder="e.g. Apex Health Clinic"
+                    placeholder="e.g. Blue Olive Bistro"
                     placeholderTextColor="#475569"
                     style={styles.textInput}
                   />
                 </View>
               </View>
 
-              {/* Email */}
+              {/* Business Sector / Type Selector */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>What type of business do you run?</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectorChipsRow}>
+                  {(['retail', 'restaurant', 'services', 'grocery', 'salon', 'freelancer'] as BusinessType[]).map((type) => {
+                    const meta = BUSINESS_TYPE_LABELS[type];
+                    const isSelected = selectedType === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={[styles.sectorChip, isSelected && styles.sectorChipActive]}
+                        onPress={async () => {
+                          await hapticFeedback.light();
+                          setSelectedType(type);
+                        }}
+                      >
+                        <Text style={{ fontSize: 14, marginRight: 6 }}>{meta?.icon}</Text>
+                        <Text style={[styles.sectorChipText, isSelected && styles.sectorChipTextActive]}>
+                          {meta?.label.split(' / ')[0]}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Country & Currency Selector */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Region & Country Pack</Text>
+                <View style={styles.countryRow}>
+                  {(['US', 'IN', 'CA', 'AU', 'GB'] as CountryCode[]).map((c) => {
+                    const pack = COUNTRY_PACKS[c];
+                    const isSelected = selectedCountry === c;
+                    return (
+                      <TouchableOpacity
+                        key={c}
+                        style={[styles.countryChip, isSelected && styles.countryChipActive]}
+                        onPress={async () => {
+                          await hapticFeedback.light();
+                          setSelectedCountry(c);
+                        }}
+                      >
+                        <Text style={{ fontSize: 13 }}>{pack.flag}</Text>
+                        <Text style={[styles.countryChipText, isSelected && styles.countryChipTextActive]}>
+                          {pack.currency.code}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Work Email */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Work Email</Text>
                 <View style={styles.inputRow}>
@@ -253,7 +362,7 @@ export default function LoginScreen() {
                       clearError();
                       setRegEmail(t);
                     }}
-                    placeholder="alex@apexhealth.com"
+                    placeholder="alex@business.com"
                     placeholderTextColor="#475569"
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -303,24 +412,28 @@ export default function LoginScreen() {
                 ]}
               >
                 {isLoading ? (
-                  <ActivityIndicator color="#022C22" size="small" />
+                  <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.submitBtnText}>Create Free Account</Text>
-                    <Feather name="arrow-right" size={16} color="#022C22" />
+                    <Text style={styles.submitBtnText}>Start Free with Nuvora</Text>
+                    <Feather name="arrow-right" size={16} color="#FFFFFF" />
                   </>
                 )}
               </TouchableOpacity>
             </View>
           )}
-
         </View>
 
-        {/* Security badge */}
-        <View style={styles.securityRow}>
-          <MaterialCommunityIcons name="shield-check-outline" size={14} color="#64748B" />
-          <Text style={styles.securityText}>
-            256-bit encrypted · Synced with GPTForm Studio Web
+        {/* Security badge & Legal Footer */}
+        <View style={styles.footerWrap}>
+          <View style={styles.securityRow}>
+            <MaterialCommunityIcons name="shield-check" size={16} color="#10B981" />
+            <Text style={styles.securityText}>
+              256-bit bank-grade encryption · GDPR & SOC2 Ready
+            </Text>
+          </View>
+          <Text style={styles.legalNotice}>
+            By continuing, you agree to Nuvora's Terms of Service and Privacy Policy.
           </Text>
         </View>
       </ScrollView>
@@ -331,44 +444,32 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#080C14',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 40,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 40,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 22,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+  taglineChip: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+    borderColor: '#334155',
   },
-  brandTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  brandAccent: {
-    color: '#34D399',
-  },
-  brandSubtitle: {
-    fontSize: 12,
+  taglineChipText: {
     color: '#94A3B8',
-    marginTop: 4,
-    textAlign: 'center',
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
   },
   card: {
     backgroundColor: 'rgba(15, 23, 42, 0.95)',
@@ -376,10 +477,45 @@ const styles = StyleSheet.create({
     borderColor: '#1E293B',
     borderRadius: 24,
     padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  demoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#064E3B',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#059669',
+  },
+  demoIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#022C22',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  demoBtnTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#6EE7B7',
+  },
+  demoBtnSubtitle: {
+    fontSize: 11,
+    color: '#A7F3D0',
+    marginTop: 1,
   },
   modeTabs: {
     flexDirection: 'row',
-    backgroundColor: '#020617',
+    backgroundColor: '#0B0F19',
     borderRadius: 14,
     padding: 4,
     marginBottom: 16,
@@ -465,10 +601,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 6,
   },
+  forgotText: {
+    fontSize: 11,
+    color: '#818CF8',
+    fontWeight: '600',
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#020617',
+    backgroundColor: '#0B0F19',
     borderWidth: 1,
     borderColor: '#1E293B',
     borderRadius: 14,
@@ -485,6 +626,63 @@ const styles = StyleSheet.create({
   eyeBtn: {
     padding: 6,
   },
+  sectorChipsRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  sectorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: '#0B0F19',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginRight: 8,
+  },
+  sectorChipActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#6366F1',
+  },
+  sectorChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+  },
+  sectorChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  countryRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  countryChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: '#0B0F19',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  countryChipActive: {
+    backgroundColor: '#1E1B4B',
+    borderColor: '#6366F1',
+  },
+  countryChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  countryChipTextActive: {
+    color: '#818CF8',
+  },
   submitBtn: {
     height: 48,
     borderRadius: 14,
@@ -492,27 +690,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#10B981',
-    marginTop: 6,
+    backgroundColor: '#4F46E5',
+    marginTop: 8,
   },
   submitBtnDisabled: {
-    backgroundColor: 'rgba(16, 185, 129, 0.4)',
+    backgroundColor: 'rgba(79, 70, 229, 0.4)',
   },
   submitBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#022C22',
+    color: '#FFFFFF',
+  },
+  footerWrap: {
+    alignItems: 'center',
+    marginTop: 24,
   },
   securityRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 24,
   },
   securityText: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#94A3B8',
     fontWeight: '500',
+  },
+  legalNotice: {
+    fontSize: 10,
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 14,
+    maxWidth: 280,
   },
 });

@@ -24,20 +24,20 @@
 
 export const BRAND = {
   /** Display name shown in UI, headers, titles. */
-  name: 'Fieseros',
+  name: 'Nuvora',
 
   /** Root domain (no protocol, no subdomain). */
-  domain: 'fieseros.com',
+  domain: 'nuvora.app',
 
   /** Full origin URL with protocol. Used for metadataBase, canonical, OG. */
-  url: 'https://fieseros.com',
+  url: 'https://nuvora.app',
 
   /** Marketing tagline. */
-  tagline: 'The Operating System for Service Businesses',
+  tagline: 'Your Entire Business, in One Simple App',
 
   /** Short description for meta tags. */
   description:
-    'Fieseros is the all-in-one operating system for field service and trade businesses. The platform combines CRM, scheduling, dispatch, invoicing, payments, a verified service-provider marketplace, and a 24/7 AI Receptionist for HVAC, plumbing, electrical, cleaning, and landscaping contractors.',
+    'Nuvora is the modern business management OS with adaptive POS register, WhatsApp storefront, orders, invoicing, khata ledger, scheduling, and 24/7 AI voice receptionist. It adapts to your industry.',
 
   /** Super-admin subdomain label (prepended to root domain). */
   adminSubdomain: 'admin',

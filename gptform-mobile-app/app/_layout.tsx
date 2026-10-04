@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { registerForPushNotifications, setupNotificationListeners } from '@/lib/notifications';
 
+import { NuvoraSplash } from '@/components/brand/nuvora-splash';
+
 export default function RootLayout() {
   const { isBooted, isAuthenticated, user, bootstrap } = useAuthStore();
   const appStateRef = useRef(AppState.currentState);
@@ -59,11 +61,7 @@ export default function RootLayout() {
   }, []);
 
   if (!isBooted) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#0F172A', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#10B981" />
-      </View>
-    );
+    return <NuvoraSplash statusMessage="Loading Nuvora..." />;
   }
 
   return (
