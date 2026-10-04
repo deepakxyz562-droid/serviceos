@@ -132,6 +132,13 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Store & Merchant OS',
+    items: [
+      { view: 'commerce', label: 'Orders & Storefront', icon: ShoppingBag, badge: 'STORE' },
+      { view: 'quoteFlow', label: 'Billing & Khata (5-Tab)', icon: Receipt, badge: 'VYAPAR' },
+    ],
+  },
+  {
     title: 'CRM',
     items: [
       // Pipeline is the primary sales view — a Deal-based drag-and-drop
@@ -180,7 +187,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'formBuilder', label: 'Forms', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
       { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
-      { view: 'commerce', label: 'Orders & Store', icon: ShoppingBag, badge: 'STORE' },
     ],
   },
   {
@@ -241,6 +247,7 @@ const standaloneNavSections: NavSection[] = [
     title: 'Commerce & Orders',
     items: [
       { view: 'commerce', label: 'Orders & Store', icon: ShoppingBag, badge: 'STORE' },
+      { view: 'quoteFlow', label: 'Billing & Khata (5-Tab)', icon: Receipt, badge: 'VYAPAR' },
     ],
   },
   {

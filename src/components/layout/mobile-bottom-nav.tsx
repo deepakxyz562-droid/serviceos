@@ -17,6 +17,8 @@ import {
   Bot,
   FileInput,
   CalendarCheck,
+  ShoppingBag,
+  Receipt,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { checkMenuAccess } from '@/components/layout/upgrade-modal';
@@ -29,17 +31,23 @@ interface MobileNavItem {
 }
 
 const ownerNavCandidates: MobileNavItem[] = [
-  { view: 'dashboard', label: 'Home', icon: LayoutDashboard },
+  { view: 'dashboard', label: 'Today', icon: LayoutDashboard },
+  { view: 'commerce', label: 'Orders', icon: ShoppingBag },
+  { view: 'quoteFlow', label: 'Billing', icon: Receipt },
+  { view: 'customers', label: 'Customers', icon: Users },
   { view: 'jobs', label: 'Jobs', icon: Briefcase },
-  { view: 'aiAssistant', label: 'AI Copilot', icon: Sparkles },
   { view: 'omnichannel', label: 'Inbox', icon: RadioTower },
+  { view: 'aiAssistant', label: 'AI Copilot', icon: Sparkles },
   { view: 'contacts', label: 'People', icon: Users },
   { view: 'calendar', label: 'Calendar', icon: Calendar },
   { view: 'leads', label: 'Leads', icon: Target },
 ];
 
 const standaloneNavCandidates: MobileNavItem[] = [
-  { view: 'formsDashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { view: 'formsDashboard', label: 'Today', icon: LayoutDashboard },
+  { view: 'commerce', label: 'Orders', icon: ShoppingBag },
+  { view: 'quoteFlow', label: 'Billing', icon: Receipt },
+  { view: 'customers', label: 'Customers', icon: Users },
   { view: 'formBuilder', label: 'Forms', icon: FileInput },
   { view: 'agentStudio', label: 'AI Agent', icon: Bot },
   { view: 'booking', label: 'Bookings', icon: CalendarCheck },

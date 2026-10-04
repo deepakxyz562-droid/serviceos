@@ -141,6 +141,25 @@ export default function PromotionsScreen() {
     }
   };
 
+  const [loadingStarters, setLoadingStarters] = useState(false);
+
+  const handleLoadStarters = async () => {
+    setLoadingStarters(true);
+    await hapticFeedback.medium();
+    try {
+      await apiRequest(API_PATHS.commercePromotions, {
+        method: 'POST',
+        body: { action: 'LOAD_STARTER_COUPONS' },
+      });
+      Alert.alert('Starter Coupons Added ✓', 'WELCOME50 and FESTIVE15 are now active on your storefront.');
+      fetchPromotions();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not load starter coupons.');
+    } finally {
+      setLoadingStarters(false);
+    }
+  };
+
   const handleDeleteCoupon = (coupon: Coupon) => {
     Alert.alert(
       'Delete Coupon',
@@ -278,6 +297,21 @@ export default function PromotionsScreen() {
               <Text style={styles.emptySub}>
                 Create discount codes like WELCOME50 to attract new buyers and boost repeat orders.
               </Text>
+              <TouchableOpacity
+                onPress={handleLoadStarters}
+                disabled={loadingStarters}
+                activeOpacity={0.8}
+                style={styles.loadStartersBtn}
+              >
+                {loadingStarters ? (
+                  <ActivityIndicator size="small" color="#059669" />
+                ) : (
+                  <>
+                    <MaterialIcons name="auto-awesome" size={15} color="#059669" style={{ marginRight: 6 }} />
+                    <Text style={styles.loadStartersText}>Load Starter Coupons</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           ) : (
             coupons.map((c) => (
@@ -667,6 +701,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 16,
+  },
+  loadStartersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(5, 150, 105, 0.2)',
+  },
+  loadStartersText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
   },
   modalOverlay: {
     flex: 1,

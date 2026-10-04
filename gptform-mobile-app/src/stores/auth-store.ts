@@ -6,6 +6,112 @@ import { API_PATHS, API_BASE_URL } from '@/lib/constants';
 import { clearPushToken } from '@/lib/notifications';
 import * as WebBrowser from 'expo-web-browser';
 
+/**
+ * Decode a JWT payload (without verification — the backend verifies the
+ * signature on every API call; here we only need the `exp` / `originalIat`
+ * claims to decide whether to proactively refresh).
+ */
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    // React Native has no atob() for base64url — manually decode.
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json =
+      typeof globalThis.atob === 'function'
+        ? globalThis.atob(b64)
+        : (function () {
+            // Minimal base64 decoder for React Native environments without atob.
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+            let str = b64;
+            let output = '';
+            for (let bc = 0, bs: any, buffer: any, i = 0;
+              (buffer = str.charAt(i++)) &&
+              ~bs && (bc = bc % 4 ? bc * 64 + bs : bs);
+              buffer && (bs = chars.indexOf(buffer))
+            ) {
+              if (bc % 4) output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)));
+            }
+            return output;
+          })();
+    // Handle UTF-8 characters in the payload.
+    const decoded = decodeURIComponent(
+      Array.prototype.map
+        .call(json, (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    );
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Proactively refresh the session token if it's expired (or close to it).
+ * The backend `/api/auth/refresh` accepts tokens expired within a 7-day
+ * grace window (signature always validated). Returns true if the session
+ * is valid (either the token was still good, or a refresh succeeded).
+ */
+async function ensureValidSession(): Promise<boolean> {
+  const token = await getToken();
+  if (!token) return false;
+
+  const payload = decodeJwtPayload(token);
+  if (!payload) return false;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const exp = typeof payload.exp === 'number' ? payload.exp : undefined;
+
+  // If the token is still valid (not expired) AND not within 1 hour of
+  // expiry, no refresh needed.
+  if (exp !== undefined && exp - nowSec > 3600) {
+    return true;
+  }
+
+  // Token is expired OR expiring within 1 hour → proactive refresh.
+  // Check the absolute session max (originalIat) before bothering the server.
+  const originalIat = typeof payload.originalIat === 'number' ? payload.originalIat : undefined;
+  if (originalIat !== undefined) {
+    const sessionAgeDays = (nowSec - originalIat) / 86400;
+    if (sessionAgeDays > 90) {
+      // Beyond 90-day absolute max — can't refresh, must re-authenticate.
+      await clearTokens();
+      return false;
+    }
+  }
+
+  try {
+    const refreshToken = await (await import('@/lib/auth')).getRefreshToken();
+    if (!refreshToken) return false;
+    const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) {
+      await clearTokens();
+      return false;
+    }
+    const data = await res.json();
+    if (data?.token) {
+      await setTokens(data.token, data.refreshToken || data.token);
+      // Refresh stored user/tenant in case the backend returned updated profile.
+      if (data?.user) {
+        await setStoredUserData({
+          user: data.user,
+          tenant: data.tenant || (await getStoredUserData())?.tenant || null,
+        });
+      }
+      return true;
+    }
+    await clearTokens();
+    return false;
+  } catch {
+    await clearTokens();
+    return false;
+  }
+}
+
 interface AuthState {
   user: SubscriberUser | null;
   tenant: SubscriberTenant | null;
@@ -37,13 +143,32 @@ export const useAuthStore = create<AuthState>((set) => ({
       const token = await getToken();
       const stored = await getStoredUserData();
       if (token && stored?.user) {
-        set({
-          user: stored.user,
-          tenant: stored.tenant || null,
-          token,
-          isAuthenticated: true,
-          isBooted: true,
-        });
+        // Decode the JWT `exp` claim and proactively refresh if the token
+        // is expired (or within 1 hour of expiry). The backend accepts
+        // tokens expired within a 7-day grace window (signature validated).
+        // This fixes the "session expires every time" bug: a returning user
+        // with an expired-but-grace-eligible token gets silently refreshed
+        // instead of being kicked to the login screen on the first API call.
+        const sessionValid = await ensureValidSession();
+        if (sessionValid) {
+          const refreshedToken = await getToken();
+          set({
+            user: stored.user,
+            tenant: stored.tenant || null,
+            token: refreshedToken || token,
+            isAuthenticated: true,
+            isBooted: true,
+          });
+        } else {
+          // Refresh failed (token forged / beyond 90-day absolute max).
+          set({
+            user: null,
+            tenant: null,
+            token: null,
+            isAuthenticated: false,
+            isBooted: true,
+          });
+        }
       } else {
         set({
           user: null,

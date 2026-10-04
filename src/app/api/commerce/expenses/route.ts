@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
         number: e.number,
         amount: e.amount,
         category: e.category,
+        paymentMethod: e.paymentMethod || 'CASH',
         description: e.description,
         notes: e.notes,
         date: e.expenseDate,
@@ -83,6 +84,10 @@ export async function POST(req: NextRequest) {
 
     const tenantScope = business.tenantId || business.id;
     const expenseDate = date ? new Date(date) : new Date();
+    const validPaymentMethods = ['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE'];
+    const normalizedPaymentMethod = validPaymentMethods.includes(String(paymentMethod).toUpperCase())
+      ? String(paymentMethod).toUpperCase()
+      : 'CASH';
 
     const count = await db.expense.count({
       where: {
@@ -102,8 +107,8 @@ export async function POST(req: NextRequest) {
         amount: parsedAmount,
         currency: business.currency || 'INR',
         category: category || 'General',
+        paymentMethod: normalizedPaymentMethod,
         description: description || 'Operating Expense',
-        notes: `Paid via ${paymentMode}`,
         expenseDate,
         status: 'approved',
       },
@@ -116,6 +121,7 @@ export async function POST(req: NextRequest) {
         number: expense.number,
         amount: expense.amount,
         category: expense.category,
+        paymentMethod: expense.paymentMethod,
         description: expense.description,
         notes: expense.notes,
         date: expense.expenseDate,

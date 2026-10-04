@@ -38,24 +38,22 @@ function getJwtSecret(): string {
   return 'fieseros-saas-dev-secret-key';
 }
 const TOKEN_NAME = 'fieseros_session';
-const TOKEN_EXPIRY = '7d';
+const TOKEN_EXPIRY = '30d';
 
 /**
- * Absolute session maximum lifetime (30 days).
+ * Absolute session maximum lifetime (90 days).
  *
- * SESSION POLICY (Phase Security-2):
- *   - Access JWT: 7-day sliding window (refresh extends it)
- *   - Absolute maximum: 30 days from the ORIGINAL login (embedded as `originalIat`)
- *   - After 30 days: user must re-authenticate, regardless of activity
+ * SESSION POLICY (updated for "stay logged in" UX):
+ *   - Access JWT: 30-day sliding window (refresh extends it)
+ *   - Absolute maximum: 90 days from the ORIGINAL login (embedded as `originalIat`)
+ *   - After 90 days: user must re-authenticate, regardless of activity
  *
- * This prevents unbounded sliding sessions while still giving active users
- * a seamless experience (they stay logged in for up to 30 days as long as
- * they use the app at least once per 7 days).
- *
- * The `originalIat` claim is set at login and preserved across refreshes.
- * The refresh endpoint rejects tokens where `now - originalIat > 30 days`.
+ * This gives active users a seamless experience — they stay logged in for up
+ * to 90 days as long as they use the app at least once per 30 days. The
+ * `originalIat` claim is set at login and preserved across refreshes.
+ * The refresh endpoint rejects tokens where `now - originalIat > 90 days`.
  */
-export const ABSOLUTE_SESSION_MAX_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+export const ABSOLUTE_SESSION_MAX_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 export interface AuthUser {
   id: string;
@@ -141,6 +139,68 @@ export function verifyToken(token: string): AuthUser | null {
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
     return decoded;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Grace-window refresh verifier.
+ *
+ * A standard `verifyToken()` rejects any expired JWT. That's correct for
+ * API auth, but it makes the refresh endpoint useless: by the time the
+ * access token has expired and the client calls `/api/auth/refresh`,
+ * `jwt.verify` throws → refresh returns 401 → user is force-logged-out.
+ *
+ * This helper accepts a token that is either:
+ *   - Currently valid (signature OK + not expired), OR
+ *   - Recently expired (signature OK + `exp` within the last `graceMs`).
+ *
+ * It first verifies the signature WITHOUT checking expiry (using
+ * `jwt.verify` with `ignoreExpiration: true`), then manually checks that
+ * `now - exp <= graceMs`. If the token is older than the grace window it's
+ * rejected (user must re-authenticate).
+ *
+ * SECURITY:
+ *   - The signature is ALWAYS validated. A forged token can never refresh.
+ *   - Only the expiry check is relaxed, and only within the grace window.
+ *   - The absolute session max (originalIat) is still enforced separately
+ *     by the refresh route.
+ *
+ * @param token   The JWT to verify.
+ * @param graceMs Grace window in milliseconds (default: 7 days). A token
+ *                expired more than `graceMs` ago is rejected.
+ */
+export function verifyTokenWithGrace(
+  token: string,
+  graceMs: number = 7 * 24 * 60 * 60 * 1000, // 7 days
+): AuthUser | null {
+  try {
+    // Verify signature but ignore expiry — we check it manually below.
+    const decoded = jwt.verify(token, getJwtSecret(), {
+      ignoreExpiration: true,
+    }) as AuthUser & { exp?: number; iat?: number };
+
+    if (!decoded || !decoded.id) return null;
+
+    const exp = decoded.exp;
+
+    if (exp === undefined) {
+      // No expiry claim — treat as valid (some legacy tokens may lack it).
+      return decoded;
+    }
+
+    const expMs = exp * 1000;
+    const ageMs = Date.now() - expMs;
+
+    // If the token hasn't expired yet, it's valid.
+    if (ageMs <= 0) return decoded;
+
+    // Token is expired — allow only if within the grace window.
+    if (ageMs <= graceMs) return decoded;
+
+    // Expired beyond the grace window — reject.
+    return null;
   } catch {
     return null;
   }
@@ -303,7 +363,7 @@ export const COOKIE_OPTIONS = {
   secure: false, // Caddy handles HTTPS termination
   sameSite: 'lax' as const,
   path: '/',
-  maxAge: 60 * 60 * 24 * 7, // 7 days
+  maxAge: 60 * 60 * 24 * 30, // 30 days — matches TOKEN_EXPIRY so sessions persist
   domain: getCookieDomain(), // '.fieseros.com' in prod, undefined in dev
 };
 

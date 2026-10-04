@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
 
+export const runtime = 'nodejs';
+
 /**
  * GET /api/commerce/khata
  * Customer Udhaar & Receivables Ledger
@@ -12,6 +14,20 @@ export async function GET(req: NextRequest) {
     const { business } = await requireQuoteFlowBusiness(req);
     const { searchParams } = new URL(req.url);
     const search = searchParams.get('search')?.toLowerCase().trim();
+
+    // 0. Fetch the commerce config to resolve the merchant's configured UPI ID
+    // (used for WhatsApp payment reminders). Falls back to business.phone only
+    // when the merchant hasn't configured a UPI ID.
+    const commerceConfig = await db.gptformCommerceConfig.findFirst({
+      where: {
+        OR: [
+          { businessId: business.id },
+          ...(business.tenantId ? [{ businessId: business.tenantId }] : []),
+        ],
+      },
+      select: { upiId: true },
+    });
+    const merchantUpiId = commerceConfig?.upiId || business.phone || '';
 
     // 1. Fetch all orders for this business
     const orders = await db.gptformCommerceOrder.findMany({
@@ -95,7 +111,13 @@ export async function GET(req: NextRequest) {
       c.daysPending = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 
       const greeting = c.name !== 'Customer' ? `Dear ${c.name}` : 'Hello';
-      const text = `${greeting}, a friendly reminder from *${business.name}*:\n\nYou have an outstanding balance of *₹${c.balance.toFixed(2)}* across ${c.unpaidOrdersCount} order(s).\n\nPlease tap here to clear your payment via UPI: upi://pay?pa=${encodeURIComponent(business.phone || '')}&pn=${encodeURIComponent(business.name)}&am=${c.balance.toFixed(2)}&cu=INR\n\nThank you for your business!`;
+      const upiLink = merchantUpiId
+        ? `upi://pay?pa=${encodeURIComponent(merchantUpiId)}&pn=${encodeURIComponent(business.name)}&am=${c.balance.toFixed(2)}&cu=INR`
+        : '';
+      const paymentLine = upiLink
+        ? `Please tap here to clear your payment via UPI: ${upiLink}`
+        : `Please contact us to clear your outstanding balance.`;
+      const text = `${greeting}, a friendly reminder from *${business.name}*:\n\nYou have an outstanding balance of *₹${c.balance.toFixed(2)}* across ${c.unpaidOrdersCount} order(s).\n\n${paymentLine}\n\nThank you for your business!`;
 
       c.whatsappReminderText = text;
       c.whatsappReminderUrl = `https://wa.me/${c.phone}?text=${encodeURIComponent(text)}`;
@@ -115,13 +137,100 @@ export async function GET(req: NextRequest) {
     // Sort by largest balance descending
     customers.sort((a, b) => b.balance - a.balance);
 
+    // ── Supplier side ("Aapko Dena Hai" — Payables) ───────────────────────
+    // Outstanding purchase orders (draft/sent/partial) represent money the
+    // merchant owes suppliers. Received/cancelled POs are settled.
+    const outstandingPurchaseOrders = await db.purchaseOrder.findMany({
+      where: {
+        OR: [
+          { tenantId: business.id },
+          ...(business.tenantId ? [{ tenantId: business.tenantId }] : []),
+        ],
+        status: { in: ['draft', 'sent', 'partial'] },
+      },
+      include: {
+        supplier: { select: { id: true, name: true, phone: true, email: true } },
+      },
+      orderBy: { orderDate: 'asc' },
+      take: 500,
+    }).catch(() => []);
+
+    interface SupplierDue {
+      supplierId: string;
+      supplierName: string;
+      supplierPhone?: string | null;
+      supplierEmail?: string | null;
+      balance: number;
+      outstandingOrdersCount: number;
+      outstandingOrders: Array<{ id: string; poNumber: string | null; total: number; orderDate: Date }>;
+      oldestPendingDate: Date;
+      daysPending: number;
+      whatsappReminderText: string;
+      whatsappReminderUrl: string;
+    }
+
+    const supplierMap = new Map<string, SupplierDue>();
+    let totalAapkoDenaHai = 0;
+
+    for (const po of outstandingPurchaseOrders) {
+      const supplierKey = po.supplierId || po.supplier?.id || 'unknown';
+      const supplierName = po.supplier?.name || 'Unknown Supplier';
+      if (!supplierMap.has(supplierKey)) {
+        supplierMap.set(supplierKey, {
+          supplierId: supplierKey,
+          supplierName,
+          supplierPhone: po.supplier?.phone || null,
+          supplierEmail: po.supplier?.email || null,
+          balance: 0,
+          outstandingOrdersCount: 0,
+          outstandingOrders: [],
+          oldestPendingDate: po.orderDate,
+          daysPending: 0,
+          whatsappReminderText: '',
+          whatsappReminderUrl: '',
+        });
+      }
+      const entry = supplierMap.get(supplierKey)!;
+      entry.balance += Number(po.totalAmount) || 0;
+      entry.outstandingOrdersCount += 1;
+      entry.outstandingOrders.push({
+        id: po.id,
+        poNumber: po.poNumber,
+        total: Number(po.totalAmount) || 0,
+        orderDate: po.orderDate,
+      });
+      if (new Date(po.orderDate) < new Date(entry.oldestPendingDate)) {
+        entry.oldestPendingDate = po.orderDate;
+      }
+    }
+
+    const suppliers = Array.from(supplierMap.values()).map((s) => {
+      totalAapkoDenaHai += s.balance;
+      const diffMsSup = now - new Date(s.oldestPendingDate).getTime();
+      s.daysPending = Math.max(0, Math.floor(diffMsSup / (1000 * 60 * 60 * 24)));
+
+      const cleanSupPhone = (s.supplierPhone || '').replace(/\D/g, '');
+      const supGreeting = s.supplierName !== 'Unknown Supplier' ? `Dear ${s.supplierName}` : 'Hello';
+      const supText = `${supGreeting}, a reminder from *${business.name}*:\n\nWe have an outstanding payable of *₹${s.balance.toFixed(2)}* across ${s.outstandingOrdersCount} purchase order(s).\n\nWe will process your payment shortly. Thank you for your continued supply.`;
+      s.whatsappReminderText = supText;
+      s.whatsappReminderUrl = cleanSupPhone
+        ? `https://wa.me/${cleanSupPhone}?text=${encodeURIComponent(supText)}`
+        : '';
+
+      return { ...s, balance: Number(s.balance.toFixed(2)) };
+    });
+
+    suppliers.sort((a, b) => b.balance - a.balance);
+
     return NextResponse.json({
       summary: {
         totalAapkoMilega: Number(totalAapkoMilega.toFixed(2)),
         customersWithDuesCount: customers.length,
-        totalAapkoDenaHai: 0, // Supplier dues placeholder (can be expanded with Purchase Orders)
+        totalAapkoDenaHai: Number(totalAapkoDenaHai.toFixed(2)),
+        suppliersWithDuesCount: suppliers.length,
       },
       customers,
+      suppliers,
     });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
@@ -140,9 +249,79 @@ export async function POST(req: NextRequest) {
   try {
     const { business } = await requireQuoteFlowBusiness(req);
     const body = await req.json();
-    const { customerPhone, customerName, type = 'GOT_PAYMENT', amount, note, paymentMethod = 'CASH' } = body;
+    const { customerPhone, customerName, type = 'GOT_PAYMENT', amount, note, paymentMethod = 'CASH', supplierId, purchaseOrderId } = body;
 
     const parsedAmount = Number(amount);
+
+    // Supplier payment: marks a purchase order as received/paid.
+    // Required: supplierId (or purchaseOrderId) + positive amount.
+    if (type === 'PAID_SUPPLIER') {
+      if (!parsedAmount || parsedAmount <= 0) {
+        return NextResponse.json({ error: 'A positive amount is required' }, { status: 400 });
+      }
+      const poId = purchaseOrderId || supplierId; // if supplierId is actually a PO id
+      if (!poId) {
+        return NextResponse.json({ error: 'purchaseOrderId is required to record a supplier payment' }, { status: 400 });
+      }
+
+      // Find the oldest outstanding PO for this tenant that belongs to the
+      // supplier (or matches the id directly).
+      const outstandingPOs = await db.purchaseOrder.findMany({
+        where: {
+          OR: [
+            { tenantId: business.id },
+            ...(business.tenantId ? [{ tenantId: business.tenantId }] : []),
+          ],
+          ...(supplierId && !purchaseOrderId ? { supplierId } : {}),
+          ...(purchaseOrderId ? { id: purchaseOrderId } : {}),
+          status: { in: ['draft', 'sent', 'partial'] },
+        },
+        orderBy: { orderDate: 'asc' },
+      }).catch(() => []);
+
+      if (outstandingPOs.length === 0) {
+        return NextResponse.json({ error: 'No outstanding purchase orders found for this supplier' }, { status: 404 });
+      }
+
+      let remainingSup = parsedAmount;
+      const settledPOIds: string[] = [];
+
+      for (const po of outstandingPOs) {
+        if (remainingSup <= 0) break;
+        if (remainingSup >= Number(po.totalAmount)) {
+          await db.purchaseOrder.update({
+            where: { id: po.id },
+            data: {
+              status: 'received',
+              receivedDate: new Date(),
+              notes: `${po.notes || ''} • [Paid via Khata: ₹${po.totalAmount} on ${new Date().toLocaleDateString()}]`.trim(),
+            },
+          }).catch(() => {});
+          remainingSup -= Number(po.totalAmount);
+          settledPOIds.push(po.id);
+        } else {
+          // Partial payment — keep status as 'partial'
+          await db.purchaseOrder.update({
+            where: { id: po.id },
+            data: {
+              status: 'partial',
+              notes: `${po.notes || ''} • [Partial Khata Payment: ₹${remainingSup} via ${paymentMethod}]`.trim(),
+            },
+          }).catch(() => {});
+          remainingSup = 0;
+          settledPOIds.push(po.id);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        type: 'PAID_SUPPLIER',
+        amount: parsedAmount,
+        settledPOsCount: settledPOIds.length,
+        message: `Successfully recorded supplier payment of ₹${parsedAmount.toFixed(2)}.`,
+      });
+    }
+
     if (!customerPhone || !parsedAmount || parsedAmount <= 0) {
       return NextResponse.json({ error: 'Customer phone and positive amount are required' }, { status: 400 });
     }
@@ -197,10 +376,30 @@ export async function POST(req: NextRequest) {
         message: `Successfully recorded payment of ₹${parsedAmount.toFixed(2)} from ${cleanPhone}.`,
       });
     } else {
-      // GAVE_UDHAAR: Creates a manual Khata order record
+      // GAVE_UDHAAR: Creates a manual Khata order record.
+      //
+      // `configId` is a real FK to `GptformCommerceConfig.id` (Cascade). The
+      // legacy `'khata-ledger'` literal violated that FK in Postgres. Resolve
+      // the merchant's real commerce config here, creating a fresh one if the
+      // merchant has none yet, and use its id.
+      let config = await db.gptformCommerceConfig.findFirst({
+        where: { businessId: business.id },
+      });
+      if (!config) {
+        config = await db.gptformCommerceConfig.create({
+          data: {
+            businessId: business.id,
+            catalogJson: '[]',
+            fieldsJson: '[]',
+            currency: 'INR',
+            currencySymbol: '₹',
+          },
+        });
+      }
+
       const order = await db.gptformCommerceOrder.create({
         data: {
-          configId: 'khata-ledger',
+          configId: config.id,
           businessId: business.id,
           customerPhone: cleanPhone,
           customerName: customerName || 'Udhaar Customer',

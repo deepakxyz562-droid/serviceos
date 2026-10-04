@@ -28,9 +28,11 @@ interface CnameRecord {
 
 interface DomainConfig {
   domain: string;
-  status: 'PENDING_DNS' | 'VERIFIED' | 'SSL_ACTIVE';
+  status: 'PENDING_DNS' | 'PENDING' | 'DNS_VERIFIED' | 'MISMATCH' | 'VERIFIED' | 'SSL_ACTIVE';
   cnameRecord: CnameRecord;
   verifiedAt?: string;
+  lastVerifiedAt?: string;
+  lastError?: string | null;
 }
 
 interface DomainResponse {
@@ -107,16 +109,26 @@ export default function CustomDomainScreen() {
       const res = await apiRequest<{
         verified: boolean;
         domain: string;
+        status: string;
         message: string;
+        error?: string;
       }>(API_PATHS.commerceDomainVerify, {
         method: 'POST',
       });
 
-      await hapticFeedback.success();
-      Alert.alert('Domain Verified! 🎉', res.message);
+      if (res.verified) {
+        await hapticFeedback.success();
+        Alert.alert('DNS Verified ✓', res.message);
+      } else {
+        await hapticFeedback.light();
+        Alert.alert(
+          'Verification Pending',
+          res.error || res.message || 'DNS record not yet resolved. Please retry after your registrar propagates the CNAME.'
+        );
+      }
       fetchDomain();
     } catch (err: any) {
-      Alert.alert('Verification Pending', err?.message || 'DNS record not yet resolved.');
+      Alert.alert('Verification Pending', err?.message || 'DNS record not yet resolved. Please retry in a few minutes.');
     } finally {
       setVerifying(false);
     }
@@ -131,7 +143,15 @@ export default function CustomDomainScreen() {
   };
 
   const domainConfig = data?.domainConfig;
-  const isVerified = domainConfig?.status === 'VERIFIED';
+  const isVerified = domainConfig?.status === 'DNS_VERIFIED' || domainConfig?.status === 'VERIFIED' || domainConfig?.status === 'SSL_ACTIVE';
+  const isMismatch = domainConfig?.status === 'MISMATCH';
+  const statusLabel = isVerified
+    ? 'DNS VERIFIED ✓'
+    : isMismatch
+    ? 'CNAME MISMATCH'
+    : domainConfig?.domain
+    ? 'DNS PENDING'
+    : 'NOT CONFIGURED';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -203,7 +223,7 @@ export default function CustomDomainScreen() {
                     isVerified ? styles.statusBadgeTextGreen : styles.statusBadgeTextAmber,
                   ]}
                 >
-                  {isVerified ? 'VERIFIED ✓' : 'DNS PENDING'}
+                  {statusLabel}
                 </Text>
               </View>
             </View>
@@ -211,7 +231,7 @@ export default function CustomDomainScreen() {
             {isVerified ? (
               <View style={styles.verifiedRow}>
                 <Text style={styles.verifiedText}>
-                  🔒 SSL certificate active. Customers can now place orders directly on your domain.
+                  DNS verified — your domain correctly points to our servers. SSL certificate provisioning completes automatically within a few minutes. Customers can now place orders directly on your domain.
                 </Text>
                 <TouchableOpacity
                   onPress={() => Linking.openURL(`https://${domainConfig.domain}`)}
@@ -220,6 +240,12 @@ export default function CustomDomainScreen() {
                   <MaterialIcons name="open-in-new" size={14} color="#059669" />
                   <Text style={styles.openWebText}>Open Storefront</Text>
                 </TouchableOpacity>
+              </View>
+            ) : isMismatch ? (
+              <View style={styles.verifiedRow}>
+                <Text style={[styles.verifiedText, { color: '#b91c1c' }]}>
+                  Your domain's CNAME points to the wrong target. Update it to point to {domainConfig?.cnameRecord?.pointsTo || 'cname.serviceos.com'} and tap "Verify & Connect" again.
+                </Text>
               </View>
             ) : (
               <Text style={styles.pendingText}>

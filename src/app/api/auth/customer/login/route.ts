@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
       secure: COOKIE_OPTIONS.secure,
       sameSite: COOKIE_OPTIONS.sameSite,
       path: COOKIE_OPTIONS.path,
-      maxAge: 60 * 60 * 24, // 24 hours for customers
+      maxAge: 60 * 60 * 24 * 30, // 30 days — matches merchant session
     });
 
     return NextResponse.json({

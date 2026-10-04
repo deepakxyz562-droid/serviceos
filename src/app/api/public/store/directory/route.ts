@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
+export const runtime = 'nodejs';
+
 export interface ListedStore {
   id: string;
   name: string;
@@ -18,7 +20,13 @@ export interface ListedStore {
 
 /**
  * GET /api/public/store/directory
- * Local store directory / marketplace listing
+ * Local store directory / marketplace listing.
+ *
+ * Returns ONLY real tenants from the DB (no mocked / sample stores).
+ * Ratings are computed from the `Review` model when present (otherwise 0),
+ * delivery time / item count are pulled from real config / catalog data,
+ * and tenants without a logo fall back to an empty string (no Unsplash
+ * hot-linking) so the UI can render its own neutral placeholder.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -52,81 +60,41 @@ export async function GET(req: NextRequest) {
 
     const configMap = new Map(configs.map((c) => [c.businessId, c]));
 
-    // Sample fallback stores for realistic marketplace directory
-    const sampleStores: ListedStore[] = [
-      {
-        id: 'store-1',
-        name: 'Sharma Kirana & Supermart',
-        slug: 'sharma-kirana',
-        category: 'Kirana',
-        description: 'Fresh groceries, Aashirvaad Atta, pulses, oils & daily staples',
-        bannerUrl: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=600&q=80',
-        address: 'MG Road, Sector 14',
-        rating: 4.8,
-        deliveryTime: '25-35 mins',
-        isOpen: true,
-        itemCount: 45,
-        featuredItems: ['Chakki Atta', 'Basmati Rice', 'Pure Ghee'],
-      },
-      {
-        id: 'store-2',
-        name: 'Looks Unisex Salon & Spa',
-        slug: 'looks-salon',
-        category: 'Salon',
-        description: 'Haircuts, styling, beard grooming, O3+ facials & head massage',
-        bannerUrl: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=600&q=80',
-        address: 'Commercial Complex, 2nd Floor',
-        rating: 4.9,
-        deliveryTime: 'Slot Booking',
-        isOpen: true,
-        itemCount: 18,
-        featuredItems: ['Men Haircut', 'Beard Trim', 'Glow Facial'],
-      },
-      {
-        id: 'store-3',
-        name: 'Dawat Cafe & Biryani House',
-        slug: 'dawat-cafe',
-        category: 'Restaurant',
-        description: 'Hyderabadi Dum Biryani, Paneer Butter Masala, Momos & Shakes',
-        bannerUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80',
-        address: 'Food Street, Near Metro Pillar 124',
-        rating: 4.7,
-        deliveryTime: '20-30 mins',
-        isOpen: true,
-        itemCount: 32,
-        featuredItems: ['Dum Biryani', 'Paneer Tikka', 'Cold Coffee'],
-      },
-      {
-        id: 'store-4',
-        name: 'Anaya Ethnic Boutique',
-        slug: 'anaya-boutique',
-        category: 'Fashion',
-        description: 'Trending cotton kurtis, Chanderi sarees, denim & party wear',
-        bannerUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
-        address: 'Fashion Avenue, Shop 12',
-        rating: 4.6,
-        deliveryTime: 'Same Day Delivery',
-        isOpen: true,
-        itemCount: 28,
-        featuredItems: ['Cotton Kurti', 'Silk Saree', 'Denim Jeans'],
-      },
-      {
-        id: 'store-5',
-        name: 'Sweet Tooth Artisan Bakery',
-        slug: 'sweet-tooth',
-        category: 'Bakery',
-        description: 'Dutch chocolate cakes, eggless pastries, sourdough & cookies',
-        bannerUrl: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=600&q=80',
-        address: 'Bakehouse Corner, Main Market',
-        rating: 4.9,
-        deliveryTime: '30-45 mins',
-        isOpen: true,
-        itemCount: 24,
-        featuredItems: ['Chocolate Truffle', 'Cheesecake', 'Garlic Bread'],
-      },
-    ];
+    // 2. Compute average rating per tenant from the `Review` model.
+    //    Review model: rating Int, tenantId String?, status String @default("published")
+    //    Only count published reviews (filter out pending/hidden).
+    const tenantIds = tenants.map((t) => t.id);
+    const reviewAgg: Array<{ tenantId: string; _avg: { rating: number | null }; _count: number }> = [];
+    if (tenantIds.length > 0) {
+      try {
+        const grouped = await db.review.groupBy({
+          by: ['tenantId'],
+          where: {
+            tenantId: { in: tenantIds },
+            status: 'published',
+          },
+          _avg: { rating: true },
+          _count: { _all: true },
+        });
+        // groupBy returns tenantId as string | null; cast to the typed shape above.
+        for (const g of grouped as any[]) {
+          reviewAgg.push({
+            tenantId: String(g.tenantId),
+            _avg: { rating: g._avg?.rating ?? null },
+            _count: g._count?._all ?? 0,
+          });
+        }
+      } catch (revErr) {
+        // If the Review model is unavailable / query fails, fall back to rating: 0.
+        console.warn('store/directory: Review aggregation failed, defaulting rating to 0:', revErr);
+      }
+    }
+    const ratingMap = new Map<string, number>();
+    for (const r of reviewAgg) {
+      ratingMap.set(r.tenantId, r._avg.rating ? Math.round(r._avg.rating * 10) / 10 : 0);
+    }
 
-    // Merge live DB stores
+    // 3. Build the real DB-backed store list (no fake samples merged in).
     const dbStores: ListedStore[] = tenants.map((t) => {
       const cfg = configMap.get(t.id);
       let cat = 'General';
@@ -136,11 +104,33 @@ export async function GET(req: NextRequest) {
       else if (ind.includes('grocery') || ind.includes('kirana')) cat = 'Kirana';
 
       let items: any[] = [];
+      let fields: any = {};
       if (cfg?.catalogJson) {
         try {
           items = JSON.parse(cfg.catalogJson);
         } catch {}
       }
+      if (cfg?.fieldsJson) {
+        try {
+          const parsed = JSON.parse(cfg.fieldsJson);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            fields = parsed;
+          } else if (Array.isArray(parsed)) {
+            // Some configs store fields as an array of {id,label,...}; check each entry.
+            for (const f of parsed) {
+              if (f && typeof f === 'object' && typeof f.deliveryTime === 'string') {
+                fields.deliveryTime = f.deliveryTime;
+                break;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      const deliveryTime =
+        typeof fields.deliveryTime === 'string' && fields.deliveryTime.trim()
+          ? fields.deliveryTime.trim()
+          : 'Varies';
 
       return {
         id: t.id,
@@ -148,17 +138,21 @@ export async function GET(req: NextRequest) {
         slug: t.slug || t.id,
         category: cat,
         description: `${cat} store with instant WhatsApp ordering and live tracking`,
-        bannerUrl: t.logo || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=600&q=80',
+        // Neutral placeholder: empty string when the tenant has no real logo.
+        // (Do NOT hot-link Unsplash images — UI renders its own fallback.)
+        bannerUrl: t.logo || '',
         address: [t.address, t.city].filter(Boolean).join(', ') || 'Local Store',
-        rating: 4.8,
-        deliveryTime: 'Immediate',
+        rating: ratingMap.get(t.id) ?? 0,
+        deliveryTime,
         isOpen: cfg ? cfg.isActive : true,
-        itemCount: items.length || 10,
-        featuredItems: items.slice(0, 3).map((i) => i.name),
+        // Real catalog count only — no fabricated fallback.
+        itemCount: Array.isArray(items) ? items.length : 0,
+        featuredItems: Array.isArray(items) ? items.slice(0, 3).map((i) => i.name).filter(Boolean) : [],
       };
     });
 
-    const allStores = [...dbStores, ...sampleStores];
+    // No sampleStores are merged in — `allStores` is the real DB list only.
+    const allStores = dbStores;
 
     const filtered = allStores.filter((s) => {
       const matchesCategory =

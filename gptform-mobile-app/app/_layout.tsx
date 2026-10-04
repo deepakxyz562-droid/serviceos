@@ -1,17 +1,38 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '@/stores/auth-store';
 import { registerForPushNotifications, setupNotificationListeners } from '@/lib/notifications';
 
 export default function RootLayout() {
   const { isBooted, isAuthenticated, user, bootstrap } = useAuthStore();
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     bootstrap();
   }, []);
+
+  // Proactive session refresh on app foreground. When the app returns to the
+  // foreground (from backgrounded), re-run bootstrap() which decodes the JWT
+  // `exp` and calls /api/auth/refresh if the token is expired (or within 1h
+  // of expiry). This keeps the session alive for returning users without them
+  // ever seeing the login screen — as long as the token is within the 90-day
+  // absolute session window.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const prev = appStateRef.current;
+      appStateRef.current = nextAppState;
+      // App came back to the foreground from background/inactive.
+      if (prev.match(/inactive|background/) && nextAppState === 'active') {
+        bootstrap();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [bootstrap]);
 
   useEffect(() => {
     if (!isBooted) return;

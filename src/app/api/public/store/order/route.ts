@@ -7,6 +7,8 @@ import {
   dispatchTransactionalWhatsApp,
 } from '@/lib/whatsapp-transactional';
 
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -31,6 +33,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Hoist `tenant` so it stays in scope for the WhatsApp dispatch block
+    // later in the handler. Previously it was declared with `const` *inside*
+    // the `if (!config)` branch, so whenever a config already existed (the
+    // common case) `tenant` was undefined and the vendor alert was silently
+    // skipped.
+    let tenant: any = null;
+
     // Resolve or find config
     let config = await db.gptformCommerceConfig.findFirst({
       where: {
@@ -39,8 +48,8 @@ export async function POST(req: NextRequest) {
     });
 
     if (!config) {
-      // Find tenant
-      const tenant = await db.tenant.findFirst({
+      // Find tenant — assign to the outer `tenant` so it remains in scope.
+      tenant = await db.tenant.findFirst({
         where: { OR: [{ id: businessId || '' }, { slug: businessId || '' }] },
       });
       if (tenant) {
@@ -63,6 +72,20 @@ export async function POST(req: NextRequest) {
 
     const resolvedBusinessId = config?.businessId || businessId || 'default';
     const resolvedConfigId = config?.id || 'default-config';
+
+    // Fallback tenant lookup: if a pre-existing config short-circuited the
+    // `if (!config)` branch above, `tenant` is still null. Look it up now so
+    // the vendor WhatsApp alert can fire whenever `tenant.phone` exists.
+    if (!tenant && resolvedBusinessId && resolvedBusinessId !== 'default') {
+      try {
+        tenant = await db.tenant.findFirst({
+          where: { OR: [{ id: resolvedBusinessId }, { slug: resolvedBusinessId }] },
+        });
+      } catch (tenantLookupErr) {
+        console.warn('order route: tenant fallback lookup failed:', tenantLookupErr);
+        tenant = null;
+      }
+    }
 
     const cleanPhone = String(customerPhone).replace(/\D/g, '');
 
@@ -93,7 +116,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Inventory Auto-Depletion: Decrement stock for ordered items
+    // Inventory Auto-Depletion: Decrement stock for ordered items.
+    //
+    // Two layers run here, both wrapped in try/catch so a stock-write
+    // failure never blocks order placement:
+    //
+    //   1. Legacy catalogJson decrement (kept for backward compat with
+    //      the catalog UI that still reads stock from the JSON blob).
+    //      Default stock for un-metered products is now 0 (was 50 — see
+    //      audit Section B #8). Un-tracked products simply don't decrement.
+    //
+    //   2. Real InventoryItem decrement (atomic) + StockTransaction
+    //      audit row + LowStockAlert reactivation. This is the source of
+    //      truth going forward (Phase 2 migration).
     try {
       if (config && config.catalogJson) {
         const catalog = JSON.parse(config.catalogJson);
@@ -104,7 +139,10 @@ export async function POST(req: NextRequest) {
               (p: any) => p.id === it.productId || p.name === it.name
             );
             if (pIdx !== -1) {
-              const currentStock = typeof catalog[pIdx].stock === 'number' ? catalog[pIdx].stock : 50;
+              // Honest default: 0 for un-metered products. Do NOT silently
+              // mask zero-stock with 50 units (the legacy magic number).
+              const currentStock =
+                typeof catalog[pIdx].stock === 'number' ? catalog[pIdx].stock : 0;
               catalog[pIdx].stock = Math.max(0, currentStock - (Number(it.qty) || 1));
               catalogChanged = true;
             }
@@ -118,7 +156,90 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch (invErr) {
-      console.warn('Inventory auto-depletion non-fatal warning:', invErr);
+      console.warn('Inventory auto-depletion non-fatal warning (catalogJson):', invErr);
+    }
+
+    // Real InventoryItem decrement — atomic, with audit row + low-stock alert.
+    // Non-blocking: failures are logged but never abort the order.
+    try {
+      for (const it of items) {
+        const invItem = await db.inventoryItem.findFirst({
+          where: {
+            tenantId: resolvedBusinessId,
+            OR: [
+              { sku: it.productId || it.sku || undefined },
+              { name: it.name || undefined },
+            ],
+          },
+        });
+        if (!invItem) continue;
+
+        const qty = Math.max(1, Number(it.qty) || 1);
+        await db.inventoryItem.update({
+          where: { id: invItem.id },
+          data: {
+            totalStock: { decrement: qty },
+            availableStock: { decrement: qty },
+          },
+        });
+        await db.stockTransaction.create({
+          data: {
+            tenantId: resolvedBusinessId,
+            inventoryItemId: invItem.id,
+            type: 'sale',
+            direction: 'out',
+            quantity: qty,
+            unitCost: invItem.salePrice,
+            totalCost: qty * invItem.salePrice,
+            reference: 'store_order',
+            referenceId: order.id,
+            notes: `Order ${order.id.slice(-6).toUpperCase()}`,
+          },
+        });
+
+        // Re-fetch the updated row to evaluate low-stock state.
+        const updatedInv = await db.inventoryItem.findUnique({
+          where: { id: invItem.id },
+        });
+        if (
+          updatedInv &&
+          updatedInv.reorderLevel > 0 &&
+          updatedInv.availableStock <= updatedInv.reorderLevel
+        ) {
+          // Create or reactivate an alert (no unique constraint on
+          // inventoryItemId — use findFirst + upsert-by-hand).
+          const existingAlert = await db.lowStockAlert.findFirst({
+            where: {
+              inventoryItemId: invItem.id,
+              status: { in: ['active', 'acknowledged'] },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (existingAlert) {
+            await db.lowStockAlert.update({
+              where: { id: existingAlert.id },
+              data: {
+                currentStock: updatedInv.availableStock,
+                reorderLevel: updatedInv.reorderLevel,
+                status: 'active',
+                resolvedAt: null,
+              },
+            });
+          } else {
+            await db.lowStockAlert.create({
+              data: {
+                tenantId: resolvedBusinessId,
+                inventoryItemId: invItem.id,
+                currentStock: updatedInv.availableStock,
+                reorderLevel: updatedInv.reorderLevel,
+                status: 'active',
+              },
+            });
+          }
+        }
+      }
+    } catch (invErr) {
+      console.warn('Inventory auto-depletion non-fatal warning (InventoryItem):', invErr);
     }
 
     // CRM Auto-Capture: Upsert Customer in AI Business & Tenant CRM
@@ -211,10 +332,17 @@ export async function POST(req: NextRequest) {
       customerWhatsAppUrl = custConf.whatsappUrl;
       vendorWhatsAppUrl = vendAlert.whatsappUrl;
 
-      // Automated background notification dispatch
-      dispatchTransactionalWhatsApp(cleanPhone, custConf.messageText).catch(() => {});
+      // Automated background notification dispatch.
+      // Fire-and-forget for latency, but surface dispatch failures via
+      // console.warn so a misconfigured WABA token doesn't vanish silently
+      // (the dispatch itself also persists a WhatsAppMessageAction row).
+      dispatchTransactionalWhatsApp(cleanPhone, custConf.messageText).catch((e) =>
+        console.warn('[whatsapp dispatch] customer failed:', e)
+      );
       if (tenant?.phone) {
-        dispatchTransactionalWhatsApp(tenant.phone, vendAlert.messageText).catch(() => {});
+        dispatchTransactionalWhatsApp(tenant.phone, vendAlert.messageText).catch((e) =>
+          console.warn('[whatsapp dispatch] vendor failed:', e)
+        );
       }
     } catch (waErr) {
       console.warn('Transactional WhatsApp non-fatal error:', waErr);

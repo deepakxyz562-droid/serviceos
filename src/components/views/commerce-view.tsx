@@ -77,6 +77,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 
 export function CommerceView() {
   const [activeTab, setActiveTab] = useState<
@@ -91,6 +92,7 @@ export function CommerceView() {
     | 'daybook'
     | 'kds'
     | 'closing'
+    | 'billing'
     | 'settings'
   >('orders');
   const auth = useAppStore((s) => s.auth);
@@ -196,6 +198,29 @@ export function CommerceView() {
     { code: 'WELCOME10', type: 'percentage', value: 10, minOrder: 200, label: '10% Off' },
     { code: 'FLAT50', type: 'fixed', value: 50, minOrder: 500, label: '₹50 Flat Off' },
   ]);
+
+  // Billing & GST Invoices State (mobile billing.tsx port — Task P2B-BILLING)
+  const [billingSubTab, setBillingSubTab] = useState<'INVOICES' | 'QUOTES'>('INVOICES');
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [quotes, setQuotes] = useState<any[]>([]);
+  const [invoiceOverview, setInvoiceOverview] = useState<{ paid: number; unpaid: number; overdue: number }>({ paid: 0, unpaid: 0, overdue: 0 });
+  const [quoteOverview, setQuoteOverview] = useState<{ accepted: number; pending: number; draft: number }>({ accepted: 0, pending: 0, draft: 0 });
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [billingSearch, setBillingSearch] = useState('');
+
+  // Billing Create-Form Modal State
+  const [billingModalOpen, setBillingModalOpen] = useState(false);
+  const [billingFormType, setBillingFormType] = useState<'INVOICE' | 'QUOTE'>('INVOICE');
+  const [billingCustomerName, setBillingCustomerName] = useState('');
+  const [billingCustomerPhone, setBillingCustomerPhone] = useState('');
+  const [billingItems, setBillingItems] = useState<Array<{ description: string; qty: number; unitPrice: number; hsnCode?: string }>>([
+    { description: '', qty: 1, unitPrice: 0, hsnCode: '' },
+  ]);
+  const [billingTaxRate, setBillingTaxRate] = useState<number>(18);
+  const [billingDiscount, setBillingDiscount] = useState<string>('0');
+  const [billingNotes, setBillingNotes] = useState('');
+  const [billingSubmitting, setBillingSubmitting] = useState(false);
 
   // Customer Receipt & Kitchen Order Ticket (KOT) Modal State
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
@@ -399,12 +424,37 @@ export function CommerceView() {
     }
   };
 
+  // Billing & GST Invoices loader (uses authFetch for 401-refresh)
+  const loadBilling = async () => {
+    setBillingLoading(true);
+    setBillingError(null);
+    try {
+      const [invRes, quoteRes] = await Promise.all([
+        authFetch('/api/quote-flow/invoices')
+          .then((r) => r.json())
+          .catch(() => ({ invoices: [], overview: { paid: 0, unpaid: 0, overdue: 0 } })),
+        authFetch('/api/quote-flow/quotes')
+          .then((r) => r.json())
+          .catch(() => ({ quotes: [], overview: { accepted: 0, pending: 0, draft: 0 } })),
+      ]);
+      setInvoices(invRes.invoices || []);
+      if (invRes.overview) setInvoiceOverview(invRes.overview);
+      setQuotes(quoteRes.quotes || []);
+      if (quoteRes.overview) setQuoteOverview(quoteRes.overview);
+    } catch (err: any) {
+      setBillingError(err?.message || 'Unable to load billing data.');
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'templates') loadTemplates();
     if (activeTab === 'promotions') loadPromotions();
     if (activeTab === 'domain') loadDomain();
     if (activeTab === 'khata') loadKhata();
     if (activeTab === 'daybook') loadDayBook();
+    if (activeTab === 'billing') loadBilling();
   }, [activeTab]);
 
   // Actions for Merchant OS Modules
@@ -590,6 +640,132 @@ export function CommerceView() {
     } finally {
       setSavingExpense(false);
     }
+  };
+
+  // ============ Billing & GST Invoices Actions (mobile billing.tsx port) ============
+
+  const openBillingForm = (type: 'INVOICE' | 'QUOTE') => {
+    setBillingFormType(type);
+    setBillingCustomerName('');
+    setBillingCustomerPhone('');
+    setBillingItems([{ description: '', qty: 1, unitPrice: 0, hsnCode: '' }]);
+    setBillingTaxRate(18);
+    setBillingDiscount('0');
+    setBillingNotes('');
+    setBillingModalOpen(true);
+  };
+
+  const addBillingItemRow = () => {
+    setBillingItems([...billingItems, { description: '', qty: 1, unitPrice: 0, hsnCode: '' }]);
+  };
+
+  const removeBillingItemRow = (idx: number) => {
+    if (billingItems.length <= 1) return;
+    setBillingItems(billingItems.filter((_, i) => i !== idx));
+  };
+
+  const updateBillingItem = (idx: number, field: 'description' | 'qty' | 'unitPrice' | 'hsnCode', val: any) => {
+    const updated = [...billingItems];
+    updated[idx] = { ...updated[idx], [field]: val };
+    setBillingItems(updated);
+  };
+
+  const handleSubmitBilling = async () => {
+    const validItems = billingItems.filter((i) => i.description.trim() && Number(i.unitPrice) > 0);
+    if (validItems.length === 0) {
+      toast.error('Please add at least one item with description and price.');
+      return;
+    }
+    setBillingSubmitting(true);
+    try {
+      const payload: any = {
+        customerName: billingCustomerName.trim() || 'Client',
+        customerPhone: billingCustomerPhone.trim(),
+        taxRate: billingTaxRate,
+        discountValue: parseFloat(billingDiscount) || 0,
+        discountType: 'AMOUNT',
+        notes: billingNotes.trim(),
+        items: validItems.map((i) => ({
+          description: i.description.trim(),
+          qty: Number(i.qty) || 1,
+          unitPrice: Number(i.unitPrice) || 0,
+          hsnCode: i.hsnCode?.trim() || undefined,
+        })),
+        status: billingFormType === 'INVOICE' ? 'UNPAID' : 'SENT',
+      };
+      const url = billingFormType === 'INVOICE'
+        ? '/api/quote-flow/invoices'
+        : '/api/quote-flow/quotes';
+      const res = await authFetch(url, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || `Failed to create ${billingFormType === 'INVOICE' ? 'invoice' : 'estimate'}`);
+      }
+      toast.success(billingFormType === 'INVOICE' ? 'GST Invoice created ✓' : 'Estimate created ✓');
+      setBillingModalOpen(false);
+      loadBilling();
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not save document.');
+    } finally {
+      setBillingSubmitting(false);
+    }
+  };
+
+  // 1-tap convert Quote -> Invoice: POST invoice with fromQuoteId, then PATCH quote to ACCEPTED
+  const handleConvertQuoteToInvoice = async (quote: any) => {
+    if (!confirm(`Convert Estimate ${quote.number} into an official GST Invoice?`)) return;
+    try {
+      const derivedTaxRate = quote.subtotal ? (Number(quote.tax || 0) / quote.subtotal) * 100 : 0;
+      const createRes = await authFetch('/api/quote-flow/invoices', {
+        method: 'POST',
+        body: JSON.stringify({
+          customerId: quote.customer?.id,
+          fromQuoteId: quote.id,
+          taxRate: Math.round(derivedTaxRate * 100) / 100,
+          discountValue: Number(quote.discount || 0),
+          items: (quote.items || []).map((i: any) => ({
+            description: i.description,
+            qty: i.qty,
+            unitPrice: i.unitPrice,
+            hsnCode: i.hsnCode,
+          })),
+          status: 'UNPAID',
+        }),
+      });
+      if (!createRes.ok) {
+        const e = await createRes.json().catch(() => ({}));
+        throw new Error(e?.error || 'Failed to create invoice from quote');
+      }
+      // Mark source quote as ACCEPTED (non-fatal if this fails — invoice was already created)
+      const patchRes = await authFetch(`/api/quote-flow/quotes/${quote.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'ACCEPTED' }),
+      });
+      if (!patchRes.ok) {
+        console.warn('[billing] quote PATCH to ACCEPTED failed', await patchRes.text().catch(() => ''));
+      }
+      toast.success('Converted to GST Invoice ✓');
+      setBillingSubTab('INVOICES');
+      loadBilling();
+    } catch (err: any) {
+      toast.error(err?.message || 'Conversion failed');
+    }
+  };
+
+  // Share invoice / quote via WhatsApp (opens wa.me link in new tab)
+  const handleShareBillingWhatsApp = (item: any, isInvoice: boolean) => {
+    const docName = isInvoice ? 'GST Invoice' : 'Quotation Estimate';
+    const clientName = item.customer?.name || 'Customer';
+    const total = Number(item.total || 0).toFixed(2);
+    const text = `Hello ${clientName},\n\nPlease find your ${docName} #${item.number} for the amount of ₹${total}.\n\nThank you for your business!`;
+    const cleanPhone = (item.customer?.phone || '').replace(/\D/g, '');
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
+      : `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
   };
 
   const openOrderDetail = async (orderId: string) => {
@@ -1215,6 +1391,36 @@ export function CommerceView() {
   const businessSlug = auth?.tenant?.slug || auth?.user?.id || 'demo';
   const publicStoreUrl = typeof window !== 'undefined' ? `${window.location.origin}/store/${businessSlug}` : `/store/${businessSlug}`;
 
+  // Billing live-computed totals (mirrors mobile billing.tsx modal math)
+  const billingSubtotal = billingItems.reduce(
+    (s, i) => s + (Number(i.qty) || 0) * (Number(i.unitPrice) || 0),
+    0
+  );
+  const billingDiscountAmt = parseFloat(billingDiscount) || 0;
+  const billingTaxable = Math.max(0, billingSubtotal - billingDiscountAmt);
+  const billingTaxAmt = (billingTaxable * billingTaxRate) / 100;
+  const billingGrandTotal = billingTaxable + billingTaxAmt;
+
+  const filteredInvoices = invoices.filter((inv) => {
+    if (!billingSearch) return true;
+    const q = billingSearch.toLowerCase();
+    return (
+      inv.number?.toLowerCase().includes(q) ||
+      inv.customer?.name?.toLowerCase().includes(q) ||
+      (inv.items || []).some((it: any) => it.description?.toLowerCase().includes(q))
+    );
+  });
+
+  const filteredQuotes = quotes.filter((qq) => {
+    if (!billingSearch) return true;
+    const s = billingSearch.toLowerCase();
+    return (
+      qq.number?.toLowerCase().includes(s) ||
+      qq.customer?.name?.toLowerCase().includes(s) ||
+      (qq.items || []).some((it: any) => it.description?.toLowerCase().includes(s))
+    );
+  });
+
   return (
     <div className="flex h-full flex-col bg-stone-50 overflow-hidden">
       {/* Top Header & Navigation Bar */}
@@ -1346,6 +1552,15 @@ export function CommerceView() {
           >
             <Receipt className="h-3.5 w-3.5 text-blue-600" />
             Closing
+          </button>
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition whitespace-nowrap ${
+              activeTab === 'billing' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5 text-indigo-600" />
+            Billing & GST
           </button>
           <button
             onClick={() => setActiveTab('settings')}
@@ -3697,6 +3912,263 @@ export function CommerceView() {
             </div>
           </div>
         )}
+
+        {/* ======================= TAB: BILLING & GST INVOICES (mobile billing.tsx port) ======================= */}
+        {activeTab === 'billing' && (
+          <div className="space-y-6 max-w-7xl mx-auto">
+            {/* Header + actions */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-indigo-600" />
+                  Billing & GST Invoices
+                </h2>
+                <p className="text-xs text-stone-500 mt-1">
+                  Create GST invoices &amp; estimates, share on WhatsApp, and convert approved quotes to invoices in 1 click.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={loadBilling}
+                  disabled={billingLoading}
+                  className="h-8 gap-1.5 text-xs font-bold"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${billingLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => openBillingForm(billingSubTab === 'INVOICES' ? 'INVOICE' : 'QUOTE')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-8 gap-1.5"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {billingSubTab === 'INVOICES' ? 'Create GST Invoice' : 'Create Estimate'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Segmented control: GST Invoices | Estimates */}
+            <div className="inline-flex items-center bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs font-semibold">
+              <button
+                onClick={() => setBillingSubTab('INVOICES')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                  billingSubTab === 'INVOICES' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                GST Invoices ({invoices.length})
+              </button>
+              <button
+                onClick={() => setBillingSubTab('QUOTES')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition ${
+                  billingSubTab === 'QUOTES' ? 'bg-white text-stone-900 shadow-xs font-bold' : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <FileText className="h-3.5 w-3.5 text-blue-600" />
+                Estimates / Quotes ({quotes.length})
+              </button>
+            </div>
+
+            {/* KPI Strip — switches based on sub-tab */}
+            {billingSubTab === 'INVOICES' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs border-l-4 border-l-emerald-500">
+                  <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Collected (Paid)</div>
+                  <div className="text-xl font-black text-emerald-900 mt-1">{currencySymbol}{Number(invoiceOverview.paid || 0).toFixed(2)}</div>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-2xs border-l-4 border-l-amber-500">
+                  <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Pending Balance</div>
+                  <div className="text-xl font-black text-amber-900 mt-1">{currencySymbol}{Number(invoiceOverview.unpaid || 0).toFixed(2)}</div>
+                </div>
+                <div className="rounded-xl border border-red-200 bg-red-50/70 p-4 shadow-2xs border-l-4 border-l-red-500">
+                  <div className="text-[10px] font-bold text-red-700 uppercase tracking-wide">Overdue Bills</div>
+                  <div className="text-xl font-black text-red-900 mt-1">{currencySymbol}{Number(invoiceOverview.overdue || 0).toFixed(2)}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-2xs border-l-4 border-l-emerald-500">
+                  <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wide">Accepted Quotes</div>
+                  <div className="text-xl font-black text-emerald-900 mt-1">{currencySymbol}{Number(quoteOverview.accepted || 0).toFixed(2)}</div>
+                </div>
+                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-2xs border-l-4 border-l-amber-500">
+                  <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wide">Pending Approval</div>
+                  <div className="text-xl font-black text-amber-900 mt-1">{currencySymbol}{Number(quoteOverview.pending || 0).toFixed(2)}</div>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-2xs border-l-4 border-l-blue-500">
+                  <div className="text-[10px] font-bold text-blue-700 uppercase tracking-wide">Draft Quotes</div>
+                  <div className="text-xl font-black text-blue-900 mt-1">{currencySymbol}{Number(quoteOverview.draft || 0).toFixed(2)}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Search */}
+            <div className="relative max-w-md">
+              <Search className="h-4 w-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Input
+                value={billingSearch}
+                onChange={(e) => setBillingSearch(e.target.value)}
+                placeholder="Search by invoice #, client name, or item..."
+                className="pl-9 text-xs font-medium h-9"
+              />
+            </div>
+
+            {/* Content: Loading / Error / Empty / List */}
+            {billingLoading ? (
+              <div className="rounded-2xl border border-stone-200 bg-white p-12 text-center">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-600 mx-auto" />
+                <p className="text-xs text-stone-400 mt-2">Loading billing records...</p>
+              </div>
+            ) : billingError ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-12 text-center">
+                <AlertCircle className="h-8 w-8 text-red-500 mx-auto" />
+                <p className="text-sm font-bold text-red-700 mt-2">{billingError}</p>
+                <Button size="sm" variant="outline" onClick={loadBilling} className="mt-4 text-xs font-bold">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry
+                </Button>
+              </div>
+            ) : billingSubTab === 'INVOICES' ? (
+              filteredInvoices.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
+                  <Receipt className="h-10 w-10 text-stone-300 mx-auto" />
+                  <h3 className="text-base font-bold text-stone-700 mt-2">No GST Invoices Yet</h3>
+                  <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto">
+                    Create your first professional invoice with 1 tap. GST tax rates and totals compute automatically.
+                  </p>
+                  <Button size="sm" onClick={() => openBillingForm('INVOICE')} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 gap-1.5">
+                    <Plus className="h-3.5 w-3.5" /> Create First Invoice
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {filteredInvoices.map((inv: any) => {
+                    const isPaid = Number(inv.balance || 0) <= 0 || inv.status === 'PAID';
+                    return (
+                      <div key={inv.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-black text-stone-900 font-mono">{inv.number}</span>
+                              <Badge className={
+                                isPaid
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold'
+                                  : 'bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-bold'
+                              }>
+                                {isPaid ? 'PAID ✓' : 'UNPAID'}
+                              </Badge>
+                              {inv.fromQuoteId && (
+                                <Badge variant="outline" className="text-[9px] font-bold bg-blue-50 text-blue-700 border-blue-200">
+                                  From Quote
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-stone-600 mt-1">{inv.customer?.name || 'Walk-in Client'}</div>
+                            {inv.customer?.phone && (
+                              <div className="text-[10px] text-stone-400 font-mono mt-0.5">{inv.customer.phone}</div>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="text-base font-black text-stone-900">{currencySymbol}{Number(inv.total || 0).toFixed(2)}</div>
+                            <div className="text-[10px] text-stone-400 mt-0.5">
+                              {new Date(inv.createdAt).toLocaleDateString()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-3 rounded-lg bg-stone-50 p-2.5 text-[11px] text-stone-600 truncate">
+                          {(inv.items || []).map((i: any) => `${i.description} × ${i.qty}`).join(' • ')}
+                        </div>
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleShareBillingWhatsApp(inv, true)}
+                            className="text-xs font-bold gap-1.5 h-8 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                            Share on WhatsApp
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : filteredQuotes.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-stone-300 bg-white p-12 text-center">
+                <FileText className="h-10 w-10 text-stone-300 mx-auto" />
+                <h3 className="text-base font-bold text-stone-700 mt-2">No Quotations / Estimates</h3>
+                <p className="text-xs text-stone-500 mt-1 max-w-md mx-auto">
+                  Send price estimates to clients on WhatsApp. Convert them into GST invoices in 1 click once approved.
+                </p>
+                <Button size="sm" onClick={() => openBillingForm('QUOTE')} className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 gap-1.5">
+                  <Plus className="h-3.5 w-3.5" /> Create First Estimate
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {filteredQuotes.map((q: any) => {
+                  const isAccepted = q.status === 'ACCEPTED';
+                  return (
+                    <div key={q.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-black text-stone-900 font-mono">{q.number}</span>
+                            <Badge className={
+                              isAccepted
+                                ? 'bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold'
+                                : q.status === 'DRAFT'
+                                ? 'bg-stone-100 text-stone-700 border-stone-200 text-[10px] font-bold'
+                                : 'bg-blue-100 text-blue-700 border-blue-200 text-[10px] font-bold'
+                            }>
+                              {q.status}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-stone-600 mt-1">{q.customer?.name || 'Potential Client'}</div>
+                          {q.customer?.phone && (
+                            <div className="text-[10px] text-stone-400 font-mono mt-0.5">{q.customer.phone}</div>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="text-base font-black text-stone-900">{currencySymbol}{Number(q.total || 0).toFixed(2)}</div>
+                          <div className="text-[10px] text-stone-400 mt-0.5">
+                            {new Date(q.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 rounded-lg bg-stone-50 p-2.5 text-[11px] text-stone-600 truncate">
+                        {(q.items || []).map((i: any) => `${i.description} × ${i.qty}`).join(' • ')}
+                      </div>
+                      <div className="mt-3 flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleShareBillingWhatsApp(q, false)}
+                          className="text-xs font-bold gap-1.5 h-8 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          WhatsApp Estimate
+                        </Button>
+                        {!isAccepted && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleConvertQuoteToInvoice(q)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold h-8 gap-1.5"
+                          >
+                            <ArrowRight className="h-3.5 w-3.5" />
+                            Convert to Invoice
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Selected Order Slide-Over / Modal */}
@@ -4621,6 +5093,209 @@ export function CommerceView() {
                 >
                   <Printer className="h-3.5 w-3.5 text-emerald-400" />
                   {receiptType === 'KOT' ? 'Print KOT (Thermal)' : 'Print Bill (Thermal)'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= BILLING CREATE MODAL (Invoice / Quote) ======================= */}
+      {billingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <div>
+                <span className="text-[10px] font-mono font-bold uppercase text-stone-400">
+                  {billingFormType === 'INVOICE' ? 'New Document' : 'New Quotation'}
+                </span>
+                <h3 className="text-lg font-black text-stone-900">
+                  {billingFormType === 'INVOICE' ? 'Create New GST Invoice' : 'Create Quotation / Estimate'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBillingModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Customer info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Customer / Client Name</label>
+                  <Input
+                    value={billingCustomerName}
+                    onChange={(e) => setBillingCustomerName(e.target.value)}
+                    placeholder="e.g. Rahul Sharma"
+                    className="mt-1 text-xs font-medium h-9"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Customer WhatsApp / Mobile</label>
+                  <Input
+                    inputMode="tel"
+                    value={billingCustomerPhone}
+                    onChange={(e) => setBillingCustomerPhone(e.target.value)}
+                    placeholder="10-digit mobile number"
+                    className="mt-1 text-xs font-medium h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Line Items */}
+              <div className="rounded-xl border border-stone-200 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-stone-700 uppercase">Line Items</h4>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={addBillingItemRow}
+                    className="text-[11px] font-bold h-7 gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                  >
+                    <Plus className="h-3 w-3" /> Add Item
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {billingItems.map((it, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <Input
+                        value={it.description}
+                        onChange={(e) => updateBillingItem(idx, 'description', e.target.value)}
+                        placeholder="Item description / Service"
+                        className="col-span-5 text-xs h-9"
+                      />
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={String(it.qty)}
+                        onChange={(e) => updateBillingItem(idx, 'qty', parseFloat(e.target.value) || 1)}
+                        placeholder="Qty"
+                        className="col-span-2 text-xs h-9 text-center"
+                      />
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        value={it.unitPrice ? String(it.unitPrice) : ''}
+                        onChange={(e) => updateBillingItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                        placeholder="₹ Rate"
+                        className="col-span-2 text-xs h-9 text-right"
+                      />
+                      <Input
+                        value={it.hsnCode || ''}
+                        onChange={(e) => updateBillingItem(idx, 'hsnCode', e.target.value)}
+                        placeholder="HSN"
+                        className="col-span-2 text-xs h-9 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeBillingItemRow(idx)}
+                        disabled={billingItems.length <= 1}
+                        className="col-span-1 h-9 rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                        aria-label={`Remove item ${idx + 1}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* GST Tax Rate */}
+              <div>
+                <label className="text-[11px] font-bold text-stone-600">GST Tax Rate (%)</label>
+                <div className="mt-1 flex gap-2">
+                  {[0, 5, 12, 18, 28].map((rate) => (
+                    <button
+                      key={rate}
+                      type="button"
+                      onClick={() => setBillingTaxRate(rate)}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold transition border ${
+                        billingTaxRate === rate
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                          : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      {rate}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Discount + Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Discount ({currencySymbol})</label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    value={billingDiscount}
+                    onChange={(e) => setBillingDiscount(e.target.value)}
+                    placeholder="0.00"
+                    className="mt-1 text-xs font-medium h-9"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-stone-600">Notes (optional)</label>
+                  <Input
+                    value={billingNotes}
+                    onChange={(e) => setBillingNotes(e.target.value)}
+                    placeholder="Notes for customer"
+                    className="mt-1 text-xs font-medium h-9"
+                  />
+                </div>
+              </div>
+
+              {/* Live Computed Summary */}
+              <div className="rounded-xl bg-stone-50 border border-stone-200 p-4 space-y-1.5 text-xs">
+                <div className="flex justify-between text-stone-600">
+                  <span>Subtotal</span>
+                  <span className="font-bold">{currencySymbol}{billingSubtotal.toFixed(2)}</span>
+                </div>
+                {billingDiscountAmt > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Discount</span>
+                    <span className="font-bold">-{currencySymbol}{billingDiscountAmt.toFixed(2)}</span>
+                  </div>
+                )}
+                {billingTaxRate > 0 && (
+                  <div className="flex justify-between text-stone-600">
+                    <span>GST ({billingTaxRate}%)</span>
+                    <span className="font-bold">+{currencySymbol}{billingTaxAmt.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm pt-2 border-t border-dashed border-stone-300 text-stone-900">
+                  <span className="font-black">Grand Total</span>
+                  <span className="font-black">{currencySymbol}{billingGrandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBillingModalOpen(false)}
+                  className="text-xs font-bold h-9"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSubmitBilling}
+                  disabled={billingSubmitting}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-9 gap-1.5"
+                >
+                  {billingSubmitting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  {billingFormType === 'INVOICE' ? 'Generate GST Invoice' : 'Save & Share Quotation'}
                 </Button>
               </div>
             </div>

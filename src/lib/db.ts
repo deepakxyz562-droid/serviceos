@@ -5,7 +5,11 @@ import { shouldUseSupabaseDB, supabaseDb } from './supabase-db'
 // PrismaClient singleton needs to be recreated. Without this, the global
 // singleton keeps the OLD client (missing new fields/models) even after
 // `prisma db push` regenerates the @prisma/client package.
-const PRISMA_SCHEMA_VERSION = '2026-09-20-esign'
+//
+// 2026-09-22-p2-migration: added `CustomDomain` model + the commerce Phase 2
+// migration routes now use `db.promotion`, `db.coupon`, `db.inventoryItem`,
+// `db.stockTransaction`, `db.lowStockAlert`, `db.customDomain` directly.
+const PRISMA_SCHEMA_VERSION = '2026-09-22-p2-migration'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
-  verifyToken,
+  verifyTokenWithGrace,
   generateToken,
   COOKIE_OPTIONS,
   ABSOLUTE_SESSION_MAX_MS,
@@ -14,15 +14,18 @@ import { logger, withRequestId } from '@/lib/logger';
  * POST /api/auth/refresh
  * ======================
  *
- * Exchange a valid (or recently-expired) JWT for a fresh 7-day JWT.
+ * Exchange a valid (or recently-expired) JWT for a fresh 30-day JWT.
  *
- * SESSION POLICY (Phase Security-2):
- *   - 7-day sliding window: a valid JWT can be refreshed to get a new 7-day JWT
- *   - 30-day absolute maximum: the `originalIat` claim is preserved across
- *     refreshes. If `now - originalIat > 30 days`, the refresh is rejected
+ * SESSION POLICY (updated for "stay logged in" UX):
+ *   - 30-day sliding window: a valid JWT can be refreshed to get a new 30-day JWT.
+ *   - Grace window: tokens expired within the last 7 days are ALSO accepted
+ *     for refresh (so a user who comes back after the 30-day JWT expires
+ *     doesn't get force-logged-out). The signature is always validated.
+ *   - 90-day absolute maximum: the `originalIat` claim is preserved across
+ *     refreshes. If `now - originalIat > 90 days`, the refresh is rejected
  *     and the user must re-authenticate.
  *   - This prevents unbounded sliding sessions while giving active users
- *     a seamless experience.
+ *     a seamless experience — they stay logged in for up to 90 days.
  *
  * SECURITY:
  *   - The refresh endpoint NEVER accepts user ID, tenant ID, role, or
@@ -37,7 +40,7 @@ import { logger, withRequestId } from '@/lib/logger';
  *
  * RESPONSE:
  *   - 200: `{ "token": "<new jwt>", "refreshToken": "<same new jwt>" }`
- *   - 401: token missing/invalid/expired >7d/disabled user/absolute max exceeded
+ *   - 401: token missing/invalid/signature forged/expired >7d grace/disabled user/absolute max exceeded
  *
  * RATE LIMITED via authLimiter (prevents brute-force token guessing).
  */
@@ -79,13 +82,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 3. Verify the old token ───────────────────────────────────────
-    // We use verifyToken which checks the signature + expiry.
-    // If the token is expired (>7d), jwt.verify throws and we return 401.
-    // This means the user must refresh BEFORE the 7-day window expires.
-    // (For a more lenient grace-period refresh, we'd use jwt.decode + check
-    //  expiry manually — but that weakens security. Strict is better here.)
-    const decoded = verifyToken(oldToken);
+    // ── 3. Verify the old token (with grace window) ───────────────────
+    // We use `verifyTokenWithGrace` so recently-expired tokens can still be
+    // refreshed. The signature is ALWAYS validated — only the expiry check
+    // is relaxed within a 7-day grace window. This fixes the "session expires
+    // every time" bug: a user who returns after the 30-day JWT expires (but
+    // within 7 days of expiry) gets silently refreshed instead of force-
+    // logged-out.
+    const decoded = verifyTokenWithGrace(oldToken);
     if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid or expired token', code: 'INVALID_TOKEN' },
@@ -93,9 +97,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 4. Check absolute session maximum (30 days) ───────────────────
+    // ── 4. Check absolute session maximum (90 days) ───────────────────
     // The originalIat claim is set at login and preserved across refreshes.
-    // If the session is older than 30 days, reject even if the JWT is valid.
+    // If the session is older than 90 days, reject even if the JWT is valid.
     const originalIat =
       typeof (decoded as Record<string, unknown>).originalIat === 'number'
         ? ((decoded as Record<string, unknown>).originalIat as number)
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
       if (sessionAgeMs > ABSOLUTE_SESSION_MAX_MS) {
         log.info(
           { userId: decoded.id, sessionAgeDays: Math.floor(sessionAgeMs / (24 * 60 * 60 * 1000)) },
-          'auth/refresh: session exceeded 30-day absolute maximum — re-authentication required',
+          'auth/refresh: session exceeded 90-day absolute maximum — re-authentication required',
         );
         return NextResponse.json(
           {

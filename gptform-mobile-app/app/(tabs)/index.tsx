@@ -82,6 +82,7 @@ export default function DashboardScreen() {
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [daybookSummary, setDaybookSummary] = useState<any | null>(null);
   const [khataSummary, setKhataSummary] = useState<any | null>(null);
+  const [lowStockCount, setLowStockCount] = useState<number>(0);
 
   useEffect(() => {
     // 1. Agent (kept for the assistant card — name + persona).
@@ -130,6 +131,18 @@ export default function DashboardScreen() {
     apiRequest<any>(API_PATHS.commerceKhata)
       .then((res) => {
         if (res?.summary) setKhataSummary(res.summary);
+      })
+      .catch(() => {});
+
+    // 6. Inventory low-stock alerts
+    apiRequest<any>(API_PATHS.commerceInventory)
+      .then((res) => {
+        if (Array.isArray(res?.lowStockAlerts)) {
+          setLowStockCount(res.lowStockAlerts.length);
+        } else if (Array.isArray(res?.items)) {
+          const low = res.items.filter((it: any) => (it.stock ?? it.availableStock ?? 0) <= (it.reorderLevel ?? 5)).length;
+          setLowStockCount(low);
+        }
       })
       .catch(() => {});
   }, []);
@@ -186,15 +199,188 @@ export default function DashboardScreen() {
             <Text style={styles.greetingTitle}>
               Hi, {user?.name ? user.name.split(' ')[0] : 'there'}!
             </Text>
-            <Text style={styles.greetingSubtitle}>AI Employee Command Center</Text>
+            <Text style={styles.greetingSubtitle}>Today's Business &amp; Store Pulse</Text>
           </View>
           <View style={styles.liveStatusPill}>
             <View style={styles.livePulseDot} />
-            <Text style={styles.liveStatusText}>AI Live 24/7</Text>
+            <Text style={styles.liveStatusText}>Store Live</Text>
           </View>
         </View>
 
-        {/* ─── Hero: Your AI Assistant Card ─── */}
+        {/* ─── Hero: Ask AI Voice Copilot Bar ─── */}
+        <TouchableOpacity
+          style={styles.aiVoiceBar}
+          onPress={() => {
+            hapticFeedback.light();
+            router.push('/receptionist' as any);
+          }}
+          activeOpacity={0.85}
+        >
+          <View style={styles.aiVoiceMicCircle}>
+            <MaterialIcons name="mic" size={18} color="#ffffff" />
+          </View>
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.aiVoiceTitle}>Ask AI Staff / Voice Copilot</Text>
+            <Text style={styles.aiVoiceSub} numberOfLines={1}>
+              &quot;Who hasn&apos;t paid me?&quot; / &quot;Make ₹500 bill&quot;
+            </Text>
+          </View>
+          <View style={styles.aiVoiceBadge}>
+            <Text style={styles.aiVoiceBadgeText}>AI VOICE</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ─── Today's Business Pulse (Dukaan + Vyapar) ─── */}
+        <View style={styles.businessPulseCard}>
+          <View style={styles.businessPulseHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.pulseTitle}>Today's Business Pulse</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/expenses' as any);
+              }}
+            >
+              <Text style={styles.pulseViewAll}>Day Book &gt;</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.pulseGrid}>
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/(tabs)/orders' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>TODAY SALES</Text>
+              <Text style={styles.pulseStatValue}>₹{daybookSummary?.totalSales?.toFixed(2) || '0.00'}</Text>
+              <Text style={styles.pulseStatSub}>{daybookSummary?.ordersCount || 0} orders</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/expenses' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>DRAWER CASH</Text>
+              <Text style={[styles.pulseStatValue, { color: '#059669' }]}>
+                ₹{daybookSummary?.netCashInHand?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.pulseStatSub}>Cash in hand</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/khata' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>AAPKO MILEGA</Text>
+              <Text style={[styles.pulseStatValue, { color: '#d97706' }]}>
+                ₹{khataSummary?.totalAapkoMilega?.toFixed(2) || '0.00'}
+              </Text>
+              <Text style={styles.pulseStatSub}>{khataSummary?.customersWithDuesCount || 0} dues</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseStatBox}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/catalog' as any);
+              }}
+            >
+              <Text style={styles.pulseStatLabel}>LOW STOCK</Text>
+              <Text style={[styles.pulseStatValue, { color: lowStockCount > 0 ? '#dc2626' : '#059669' }]}>
+                {lowStockCount}
+              </Text>
+              <Text style={styles.pulseStatSub}>{lowStockCount > 0 ? 'Reorder needed' : 'All in stock'}</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Commerce Action Pills */}
+          <View style={styles.pulseActionRow}>
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/pos' as any);
+              }}
+            >
+              <MaterialIcons name="point-of-sale" size={14} color="#059669" />
+              <Text style={styles.pulseActionBtnText}>+ POS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/(tabs)/billing' as any);
+              }}
+            >
+              <MaterialIcons name="receipt-long" size={14} color="#2563eb" />
+              <Text style={styles.pulseActionBtnText}>+ GST Bill</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/khata' as any);
+              }}
+            >
+              <MaterialIcons name="menu-book" size={14} color="#d97706" />
+              <Text style={styles.pulseActionBtnText}>+ Khata</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.pulseActionBtn}
+              onPress={() => {
+                hapticFeedback.light();
+                router.push('/expenses' as any);
+              }}
+            >
+              <MaterialIcons name="account-balance-wallet" size={14} color="#dc2626" />
+              <Text style={styles.pulseActionBtnText}>+ Expense</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ─── Urgent Human Takeover Alert Banner ─── */}
+        {unreadAttentionCount > 0 && (
+          <TouchableOpacity
+            style={styles.takeoverAlertCard}
+            onPress={() => {
+              hapticFeedback.light();
+              router.push('/(tabs)/inbox');
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.takeoverLeft}>
+              <View style={styles.takeoverIconCircle}>
+                <MaterialIcons name="warning" size={20} color="#d97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.takeoverTitle}>
+                  {unreadAttentionCount} {unreadAttentionCount === 1 ? 'Chat Needs' : 'Chats Need'} Attention
+                </Text>
+                <Text style={styles.takeoverSubtitle}>
+                  {unreadAttentionCount} active {unreadAttentionCount === 1 ? 'session is' : 'sessions are'} waiting for a reply
+                </Text>
+              </View>
+            </View>
+            <View style={styles.takeoverActionPill}>
+              <Text style={styles.takeoverActionText}>Take Over →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* ─── AI Employee & Channels Assistant Card ─── */}
         <View style={styles.assistantCard}>
           <View style={styles.assistantCardHeader}>
             <View style={styles.assistantAvatarWrap}>
@@ -349,142 +535,6 @@ export default function DashboardScreen() {
             >
               <MaterialIcons name="forum" size={18} color="#0f172a" style={{ marginRight: 6 }} />
               <Text style={styles.conversationsBtnText}>View Chats</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ─── Urgent Human Takeover Alert Banner ─── */}
-        {unreadAttentionCount > 0 && (
-          <TouchableOpacity
-            style={styles.takeoverAlertCard}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/(tabs)/inbox');
-            }}
-            activeOpacity={0.8}
-          >
-            <View style={styles.takeoverLeft}>
-              <View style={styles.takeoverIconCircle}>
-                <MaterialIcons name="warning" size={20} color="#d97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.takeoverTitle}>
-                  {unreadAttentionCount} {unreadAttentionCount === 1 ? 'Chat Needs' : 'Chats Need'} Attention
-                </Text>
-                <Text style={styles.takeoverSubtitle}>
-                  {unreadAttentionCount} active {unreadAttentionCount === 1 ? 'session is' : 'sessions are'} waiting for a reply
-                </Text>
-              </View>
-            </View>
-            <View style={styles.takeoverActionPill}>
-              <Text style={styles.takeoverActionText}>Take Over →</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* ─── Today's Business Pulse (Dukaan + Vyapar) ─── */}
-        <View style={styles.businessPulseCard}>
-          <View style={styles.businessPulseHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={styles.pulseDot} />
-              <Text style={styles.pulseTitle}>Today's Business Pulse</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/expenses' as any);
-              }}
-            >
-              <Text style={styles.pulseViewAll}>Day Book &gt;</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.pulseGrid}>
-            <TouchableOpacity
-              style={styles.pulseStatBox}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/(tabs)/orders' as any);
-              }}
-            >
-              <Text style={styles.pulseStatLabel}>TODAY SALES</Text>
-              <Text style={styles.pulseStatValue}>₹{daybookSummary?.totalSales?.toFixed(2) || '0.00'}</Text>
-              <Text style={styles.pulseStatSub}>{daybookSummary?.ordersCount || 0} orders</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.pulseStatBox}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/expenses' as any);
-              }}
-            >
-              <Text style={styles.pulseStatLabel}>DRAWER CASH</Text>
-              <Text style={[styles.pulseStatValue, { color: '#059669' }]}>
-                ₹{daybookSummary?.netCashInHand?.toFixed(2) || '0.00'}
-              </Text>
-              <Text style={styles.pulseStatSub}>Cash in hand</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.pulseStatBox}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/khata' as any);
-              }}
-            >
-              <Text style={styles.pulseStatLabel}>AAPKO MILEGA</Text>
-              <Text style={[styles.pulseStatValue, { color: '#d97706' }]}>
-                ₹{khataSummary?.totalAapkoMilega?.toFixed(2) || '0.00'}
-              </Text>
-              <Text style={styles.pulseStatSub}>{khataSummary?.customersWithDuesCount || 0} dues</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Quick Commerce Action Pills */}
-          <View style={styles.pulseActionRow}>
-            <TouchableOpacity
-              style={styles.pulseActionBtn}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/pos' as any);
-              }}
-            >
-              <MaterialIcons name="point-of-sale" size={14} color="#059669" />
-              <Text style={styles.pulseActionBtnText}>+ POS</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.pulseActionBtn}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/khata' as any);
-              }}
-            >
-              <MaterialIcons name="menu-book" size={14} color="#d97706" />
-              <Text style={styles.pulseActionBtnText}>+ Khata</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.pulseActionBtn}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/expenses' as any);
-              }}
-            >
-              <MaterialIcons name="account-balance-wallet" size={14} color="#dc2626" />
-              <Text style={styles.pulseActionBtnText}>+ Expense</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.pulseActionBtn}
-              onPress={() => {
-                hapticFeedback.light();
-                router.push('/billing' as any);
-              }}
-            >
-              <MaterialIcons name="receipt-long" size={14} color="#2563eb" />
-              <Text style={styles.pulseActionBtnText}>+ GST Bill</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -690,6 +740,52 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#059669',
+  },
+  aiVoiceBar: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  aiVoiceMicCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aiVoiceTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  aiVoiceSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  aiVoiceBadge: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  aiVoiceBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#2563eb',
   },
   assistantCard: {
     backgroundColor: '#ffffff',
@@ -1019,11 +1115,13 @@ const styles = StyleSheet.create({
   },
   pulseGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
   },
   pulseStatBox: {
-    flex: 1,
+    width: '48%',
+    flexGrow: 1,
     backgroundColor: '#f8fafc',
     borderRadius: 12,
     padding: 10,

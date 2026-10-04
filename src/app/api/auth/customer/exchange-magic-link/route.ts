@@ -190,7 +190,7 @@ export async function POST(request: Request) {
       secure: COOKIE_OPTIONS.secure,
       sameSite: COOKIE_OPTIONS.sameSite,
       path: COOKIE_OPTIONS.path,
-      maxAge: 60 * 60 * 24, // 24 hours for customers
+      maxAge: 60 * 60 * 24 * 30, // 30 days — matches merchant session
     })
 
     // ── 7. Update lastLoginAt (fire-and-forget) ──────────────────────────
