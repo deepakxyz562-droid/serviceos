@@ -352,6 +352,13 @@ const superadminNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Store & Merchant OS',
+    items: [
+      { view: 'commerce', label: 'Orders & Storefront', icon: ShoppingBag, badge: 'STORE' },
+      { view: 'quoteFlow', label: 'Billing & Khata (5-Tab)', icon: Receipt, badge: 'VYAPAR' },
+    ],
+  },
+  {
     title: 'CRM',
     items: [
       { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },

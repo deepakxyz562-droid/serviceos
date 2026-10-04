@@ -518,8 +518,8 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     'creatorProfile', 'creatorOffers',
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'formsAnalytics', 'chatbotBuilder',
-    // Bookings & Calendar
-    'booking', 'calendar', 'commerce',
+    // Bookings, Calendar & Storefront
+    'booking', 'calendar', 'commerce', 'quoteFlow',
     // System & Integrations
     'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
   ]), []);

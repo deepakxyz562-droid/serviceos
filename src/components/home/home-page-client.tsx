@@ -63,7 +63,7 @@ const ClaimCompletion = dynamic(
 );
 
 import { useAppStore } from '@/store/app-store';
-import { authFetch, removeToken } from '@/lib/client-auth';
+import { authFetch, removeToken, refreshSession } from '@/lib/client-auth';
 
 type UnauthView = 'landing' | 'auth';
 
@@ -410,7 +410,24 @@ export default function HomePageClient() {
         clearAuthAndCache();
         return;
       }
-      // Non-200 (e.g. 401) — same treatment: don't trust stale localStorage.
+      // Non-200 (e.g. 401) — try silent refresh first before clearing auth
+      const refreshed = await refreshSession();
+      if (refreshed) {
+        const retryRes = await authFetch('/api/auth/me?XTransformPort=3000');
+        if (retryRes.ok) {
+          const retryData = await retryRes.json();
+          if (retryData.user) {
+            setAuth({
+              isAuthenticated: true,
+              user: retryData.user,
+              tenant: retryData.tenant || null,
+            });
+            return;
+          }
+        }
+      }
+
+      // If refresh failed, only clear if we are genuinely unauthorized
       if (typeof window !== 'undefined') {
         try {
           localStorage.removeItem('fieseros_auth');

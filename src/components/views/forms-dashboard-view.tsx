@@ -27,6 +27,10 @@ import {
   Send,
   Mic,
   MicOff,
+  ShoppingCart,
+  Package,
+  Users,
+  FileText,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -382,6 +386,64 @@ export function FormsDashboardView() {
           <Button className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer" onClick={() => setCurrentView('formBuilder')}>
             <Plus className="w-4 h-4 mr-1" />
             Create Form
+          </Button>
+        </div>
+      </div>
+
+      {/* ─── Store & Merchant OS Quick Access Hub ─── */}
+      <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
+            <ShoppingCart className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-stone-900 dark:text-stone-100">Store &amp; Merchant Hub</span>
+              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-300 text-[10px] font-bold">
+                Vyapar &amp; Take.app
+              </Badge>
+            </div>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+              WhatsApp Store • Live Orders • POS Cashier • GST Billing • Khata Udhaar • Day Book
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setCurrentView('commerce')}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <Package className="h-3.5 w-3.5" />
+            Live Orders
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setCurrentView('commerce')}
+            variant="outline"
+            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5 text-emerald-600" />
+            POS Cashier
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setCurrentView('quoteFlow')}
+            variant="outline"
+            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
+          >
+            <FileText className="h-3.5 w-3.5 text-blue-600" />
+            GST Billing
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setCurrentView('quoteFlow')}
+            variant="outline"
+            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
+          >
+            <Users className="h-3.5 w-3.5 text-amber-600" />
+            Khata (Udhaar)
           </Button>
         </div>
       </div>

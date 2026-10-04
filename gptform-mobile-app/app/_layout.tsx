@@ -200,20 +200,6 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen
-            name="billing"
-            options={{
-              headerShown: false,
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
-            name="customers"
-            options={{
-              headerShown: false,
-              animation: 'slide_from_right',
-            }}
-          />
-          <Stack.Screen
             name="pos"
             options={{
               headerShown: false,

@@ -1,2 +1,6 @@
-import CustomersScreen from './(tabs)/customers';
-export default CustomersScreen;
+import React from 'react';
+import { Redirect } from 'expo-router';
+
+export default function CustomersRedirect() {
+  return <Redirect href="/(tabs)/customers" />;
+}

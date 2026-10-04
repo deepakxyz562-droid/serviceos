@@ -1,2 +1,6 @@
-import BillingScreen from './(tabs)/billing';
-export default BillingScreen;
+import React from 'react';
+import { Redirect } from 'expo-router';
+
+export default function BillingRedirect() {
+  return <Redirect href="/(tabs)/billing" />;
+}

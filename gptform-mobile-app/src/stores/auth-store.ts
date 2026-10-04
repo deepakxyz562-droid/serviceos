@@ -15,32 +15,44 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    // React Native has no atob() for base64url — manually decode.
-    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const json =
-      typeof globalThis.atob === 'function'
-        ? globalThis.atob(b64)
-        : (function () {
-            // Minimal base64 decoder for React Native environments without atob.
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-            let str = b64;
-            let output = '';
-            for (let bc = 0, bs: any, buffer: any, i = 0;
-              (buffer = str.charAt(i++)) &&
-              ~bs && (bc = bc % 4 ? bc * 64 + bs : bs);
-              buffer && (bs = chars.indexOf(buffer))
-            ) {
-              if (bc % 4) output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)));
-            }
-            return output;
-          })();
-    // Handle UTF-8 characters in the payload.
-    const decoded = decodeURIComponent(
-      Array.prototype.map
-        .call(json, (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join(''),
-    );
-    return JSON.parse(decoded);
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = b64.length % 4;
+    if (pad) {
+      b64 += '='.repeat(4 - pad);
+    }
+    let json = '';
+    if (typeof globalThis.atob === 'function') {
+      try {
+        json = globalThis.atob(b64);
+      } catch {
+        json = '';
+      }
+    }
+    if (!json) {
+      // Minimal base64 decoder for React Native environments without atob.
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+      let str = b64;
+      let output = '';
+      for (let bc = 0, bs: any, buffer: any, i = 0;
+        (buffer = str.charAt(i++)) &&
+        ~bs && (bc = bc % 4 ? bc * 64 + bs : bs);
+        buffer && (bs = chars.indexOf(buffer))
+      ) {
+        if (bc % 4) output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)));
+      }
+      json = output;
+    }
+    if (!json) return null;
+    try {
+      const decoded = decodeURIComponent(
+        Array.prototype.map
+          .call(json, (c: string) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(decoded);
+    } catch {
+      return JSON.parse(json);
+    }
   } catch {
     return null;
   }
@@ -50,26 +62,25 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
  * Proactively refresh the session token if it's expired (or close to it).
  * The backend `/api/auth/refresh` accepts tokens expired within a 7-day
  * grace window (signature always validated). Returns true if the session
- * is valid (either the token was still good, or a refresh succeeded).
+ * is valid (either the token was still good, or a refresh succeeded, or offline).
  */
 async function ensureValidSession(): Promise<boolean> {
   const token = await getToken();
   if (!token) return false;
 
   const payload = decodeJwtPayload(token);
-  if (!payload) return false;
+  // If payload could not be decoded locally, do NOT wipe the session — keep active
+  if (!payload) return true;
 
   const nowSec = Math.floor(Date.now() / 1000);
   const exp = typeof payload.exp === 'number' ? payload.exp : undefined;
 
-  // If the token is still valid (not expired) AND not within 1 hour of
-  // expiry, no refresh needed.
+  // If the token is still valid (not expired) AND not within 1 hour of expiry, no refresh needed.
   if (exp !== undefined && exp - nowSec > 3600) {
     return true;
   }
 
-  // Token is expired OR expiring within 1 hour → proactive refresh.
-  // Check the absolute session max (originalIat) before bothering the server.
+  // Check the absolute session max (90 days).
   const originalIat = typeof payload.originalIat === 'number' ? payload.originalIat : undefined;
   if (originalIat !== undefined) {
     const sessionAgeDays = (nowSec - originalIat) / 86400;
@@ -80,35 +91,47 @@ async function ensureValidSession(): Promise<boolean> {
     }
   }
 
+  // Token is expired OR expiring within 1 hour → attempt proactive refresh.
   try {
     const refreshToken = await (await import('@/lib/auth')).getRefreshToken();
-    if (!refreshToken) return false;
+    const tokenToUse = refreshToken || token;
+    if (!tokenToUse) return false;
+
     const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokenToUse}`,
+      },
+      body: JSON.stringify({ refreshToken: tokenToUse, token: tokenToUse }),
     });
-    if (!res.ok) {
-      await clearTokens();
-      return false;
-    }
-    const data = await res.json();
-    if (data?.token) {
-      await setTokens(data.token, data.refreshToken || data.token);
-      // Refresh stored user/tenant in case the backend returned updated profile.
-      if (data?.user) {
-        await setStoredUserData({
-          user: data.user,
-          tenant: data.tenant || (await getStoredUserData())?.tenant || null,
-        });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.token) {
+        await setTokens(data.token, data.refreshToken || data.token);
+        // Refresh stored user/tenant in case the backend returned updated profile.
+        if (data?.user) {
+          await setStoredUserData({
+            user: data.user,
+            tenant: data.tenant || (await getStoredUserData())?.tenant || null,
+          });
+        }
+        return true;
       }
-      return true;
+    } else if (res.status === 401) {
+      const err = await res.json().catch(() => ({}));
+      // Only clear if the server authoritatively rejected the token beyond grace period
+      if (err?.code === 'INVALID_TOKEN' || err?.code === 'SESSION_EXPIRED') {
+        await clearTokens();
+        return false;
+      }
     }
-    await clearTokens();
-    return false;
+    // If server returned another status (e.g. 500, 502, rate limited), do NOT log out the user!
+    return true;
   } catch {
-    await clearTokens();
-    return false;
+    // Network offline / fetch timeout — keep user logged in with cached session!
+    return true;
   }
 }
 

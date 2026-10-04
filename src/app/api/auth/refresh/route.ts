@@ -55,10 +55,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // ── 2. Extract the token (mobile body OR web cookie) ──────────────
+    // ── 2. Extract the token (mobile body, Authorization header, OR web cookie) ──
     let oldToken: string | undefined;
 
-    // Try JSON body first (mobile app sends { refreshToken: "..." })
+    // Try JSON body first (mobile app sends { refreshToken: "..." } or { token: "..." })
     let body: Record<string, unknown> | null = null;
     try {
       body = (await request.json()) as Record<string, unknown>;
@@ -68,12 +68,22 @@ export async function POST(request: NextRequest) {
     }
 
     const bodyToken =
-      typeof body?.refreshToken === 'string' ? body.refreshToken : undefined;
+      typeof body?.refreshToken === 'string' && body.refreshToken
+        ? body.refreshToken
+        : typeof body?.token === 'string' && body.token
+        ? body.token
+        : undefined;
+
+    // Authorization header fallback (Bearer <jwt>)
+    const authHeader = request.headers.get('authorization');
+    const headerToken = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : undefined;
 
     // Cookie fallback (web — the login route sets fieseros_session cookie)
     const cookieToken = request.cookies.get('fieseros_session')?.value;
 
-    oldToken = bodyToken || cookieToken;
+    oldToken = bodyToken || headerToken || cookieToken;
 
     if (!oldToken) {
       return NextResponse.json(

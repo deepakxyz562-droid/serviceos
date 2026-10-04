@@ -84,21 +84,40 @@ export function authHeaders(custom?: Record<string, string>): Record<string, str
 // 401s all calling /api/auth/refresh at the same time.
 let refreshInFlight: Promise<boolean> | null = null;
 
-async function refreshSession(): Promise<boolean> {
+export async function refreshSession(): Promise<boolean> {
   if (refreshInFlight) return refreshInFlight;
 
   refreshInFlight = (async () => {
     try {
+      const currentToken = getToken();
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
+        },
+        body: JSON.stringify({
+          refreshToken: currentToken || '',
+          token: currentToken || '',
+        }),
       });
       if (!res.ok) return false;
       const data = await res.json();
       if (data?.token) {
         setToken(data.token);
+        // Also keep fieseros_auth JSON object updated with the fresh token
+        if (typeof window !== 'undefined') {
+          try {
+            const raw = localStorage.getItem('fieseros_auth');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              parsed.token = data.token;
+              if (data.user) parsed.user = data.user;
+              localStorage.setItem('fieseros_auth', JSON.stringify(parsed));
+            }
+          } catch {}
+        }
         return true;
       }
       return false;
