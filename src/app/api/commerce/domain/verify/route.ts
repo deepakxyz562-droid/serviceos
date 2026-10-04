@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     const domainToVerify = row.domain;
-    const expectedTarget = (row.expectedCnameTarget || 'cname.serviceos.com').toLowerCase().trim();
+    const expectedTarget = (row.expectedCnameTarget || 'cname.fieseros.com').toLowerCase().trim();
     let resolvedTarget = '';
     let dnsError: string | null = null;
 

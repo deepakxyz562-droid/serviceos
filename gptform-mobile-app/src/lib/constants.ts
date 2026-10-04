@@ -1,10 +1,10 @@
 import { Platform } from 'react-native';
 
 export const BRAND = {
-  name: 'GPTForm',
-  tagline: 'Never miss a customer, lead, or booking',
-  primaryColor: '#10B981', // Emerald 500
-  accentColor: '#0F172A',  // Slate 900
+  name: 'Nuvora',
+  tagline: 'Your Entire Business, in One Simple App',
+  primaryColor: '#4F46E5', // Indigo 600 (Nuvora brand)
+  accentColor: '#080C14',  // Obsidian slate
 };
 
 // Default backend API base URL

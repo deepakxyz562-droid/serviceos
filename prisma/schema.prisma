@@ -9251,7 +9251,7 @@ model CustomDomain {
   tenantId            String?
   businessId          String?
   configId            String?  // -> GptformCommerceConfig.id (loose link; not an FK to avoid migration friction)
-  expectedCnameTarget String   @default("cname.serviceos.com")
+  expectedCnameTarget String   @default("cname.fieseros.com")
   status              String   @default("PENDING")  // PENDING | DNS_VERIFIED | MISMATCH | SSL_ACTIVE | DISABLED
   verifiedAt          DateTime?
   lastVerifiedAt      DateTime?

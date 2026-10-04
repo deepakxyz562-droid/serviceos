@@ -272,8 +272,8 @@ export function CommerceView() {
     try {
       setLoading(true);
       const [dashRes, configRes] = await Promise.all([
-        fetch('/api/commerce/dashboard').then((r) => r.json()).catch(() => ({})),
-        fetch('/api/commerce/config').then((r) => r.json()).catch(() => ({})),
+        authFetch('/api/commerce/dashboard').then((r) => r.json()).catch(() => ({})),
+        authFetch('/api/commerce/config').then((r) => r.json()).catch(() => ({})),
       ]);
 
       if (dashRes.overview) {
@@ -375,7 +375,7 @@ export function CommerceView() {
   // Data Loaders for Merchant OS Modules
   const loadTemplates = async () => {
     try {
-      const res = await fetch('/api/commerce/templates').then((r) => r.json());
+      const res = await authFetch('/api/commerce/templates').then((r) => r.json());
       if (res.templates) setTemplatesList(res.templates);
     } catch {
       toast.error('Failed to load industry templates');
@@ -384,7 +384,7 @@ export function CommerceView() {
 
   const loadPromotions = async () => {
     try {
-      const res = await fetch('/api/commerce/promotions').then((r) => r.json());
+      const res = await authFetch('/api/commerce/promotions').then((r) => r.json());
       if (res.coupons) setCouponsList(res.coupons);
       if (res.banner) setAnnouncementBanner(res.banner);
     } catch {
@@ -394,7 +394,7 @@ export function CommerceView() {
 
   const loadDomain = async () => {
     try {
-      const res = await fetch('/api/commerce/domain').then((r) => r.json());
+      const res = await authFetch('/api/commerce/domain').then((r) => r.json());
       setDomainRecord(res);
       if (res.domain) setCustomDomainInput(res.domain);
     } catch {
@@ -405,7 +405,7 @@ export function CommerceView() {
   const loadKhata = async () => {
     setKhataLoading(true);
     try {
-      const res = await fetch('/api/commerce/khata').then((r) => r.json());
+      const res = await authFetch('/api/commerce/khata').then((r) => r.json());
       if (res.records) setKhataList(res.records);
       if (res.summary) setKhataReceivable(res.summary.totalReceivable || 0);
     } catch {
@@ -417,7 +417,7 @@ export function CommerceView() {
 
   const loadDayBook = async () => {
     try {
-      const res = await fetch('/api/commerce/daybook').then((r) => r.json());
+      const res = await authFetch('/api/commerce/daybook').then((r) => r.json());
       if (res.dayBook) setDayBookData(res.dayBook);
     } catch {
       toast.error('Failed to load day book');
@@ -462,7 +462,7 @@ export function CommerceView() {
     if (!confirm('Apply this industry template? This will seed your store with prebuilt products, categories, and prices.')) return;
     setApplyingTemplateId(templateId);
     try {
-      const res = await fetch('/api/commerce/templates', {
+      const res = await authFetch('/api/commerce/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId, replaceExisting: false }),
@@ -488,7 +488,7 @@ export function CommerceView() {
     }
     setSavingCoupon(true);
     try {
-      const res = await fetch('/api/commerce/promotions', {
+      const res = await authFetch('/api/commerce/promotions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -518,7 +518,7 @@ export function CommerceView() {
   const handleDeleteCoupon = async (code: string) => {
     if (!confirm(`Delete coupon ${code}?`)) return;
     try {
-      const res = await fetch('/api/commerce/promotions', {
+      const res = await authFetch('/api/commerce/promotions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'DELETE_COUPON', code }),
@@ -535,7 +535,7 @@ export function CommerceView() {
   const handleSaveBanner = async () => {
     setSavingBanner(true);
     try {
-      const res = await fetch('/api/commerce/promotions', {
+      const res = await authFetch('/api/commerce/promotions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'UPDATE_BANNER', banner: announcementBanner }),
@@ -560,7 +560,7 @@ export function CommerceView() {
     }
     setSavingDomain(true);
     try {
-      const res = await fetch('/api/commerce/domain', {
+      const res = await authFetch('/api/commerce/domain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customDomain: customDomainInput.trim() }),
@@ -581,7 +581,7 @@ export function CommerceView() {
   const handleVerifyDomain = async () => {
     setVerifyingDomain(true);
     try {
-      const res = await fetch('/api/commerce/domain/verify', { method: 'POST' }).then((r) => r.json());
+      const res = await authFetch('/api/commerce/domain/verify', { method: 'POST' }).then((r) => r.json());
       if (res.verified) {
         toast.success('Domain verified and connected successfully!');
       } else {
@@ -617,7 +617,7 @@ export function CommerceView() {
     }
     setSavingExpense(true);
     try {
-      const res = await fetch('/api/commerce/expenses', {
+      const res = await authFetch('/api/commerce/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -774,7 +774,7 @@ export function CommerceView() {
     setSelectedConversation(null);
     setShowConversation(false);
     try {
-      const res = await fetch(`/api/commerce/orders/${orderId}`).then((r) => r.json());
+      const res = await authFetch(`/api/commerce/orders/${orderId}`).then((r) => r.json());
       if (res.order) {
         setSelectedOrder(res.order);
         setSelectedConversation(res.conversation);
@@ -789,7 +789,7 @@ export function CommerceView() {
   // Background polling for real-time kitchen orders & auto-print
   useEffect(() => {
     const timer = setInterval(() => {
-      fetch('/api/commerce/dashboard')
+      authFetch('/api/commerce/dashboard')
         .then((r) => r.json())
         .then((dashRes) => {
           if (dashRes.recentOrders && Array.isArray(dashRes.recentOrders)) {
@@ -850,7 +850,7 @@ export function CommerceView() {
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdatingOrder(true);
     try {
-      const res = await fetch(`/api/commerce/orders/${orderId}`, {
+      const res = await authFetch(`/api/commerce/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -888,7 +888,7 @@ export function CommerceView() {
   const markOrderPaid = async (orderId: string) => {
     setUpdatingOrder(true);
     try {
-      const res = await fetch(`/api/commerce/orders/${orderId}`, {
+      const res = await authFetch(`/api/commerce/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ paymentStatus: 'PAID' }),
@@ -926,7 +926,7 @@ export function CommerceView() {
       };
       const discountsToSave = customDiscounts || discounts;
 
-      await fetch('/api/commerce/config', {
+      await authFetch('/api/commerce/config', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1223,7 +1223,7 @@ export function CommerceView() {
     setIsSyncing(true);
     try {
       if (syncProvider === 'shopify') {
-        const res = await fetch('/api/ecommerce/shopify/sync', {
+        const res = await authFetch('/api/ecommerce/shopify/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ storeUrl: syncDomain.trim(), accessToken: syncToken.trim() }),
@@ -1237,7 +1237,7 @@ export function CommerceView() {
           toast.error(data.error || 'Failed to sync Shopify products');
         }
       } else if (syncProvider === 'woocommerce') {
-        const res = await fetch('/api/ecommerce/woocommerce/sync', {
+        const res = await authFetch('/api/ecommerce/woocommerce/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1273,7 +1273,7 @@ export function CommerceView() {
       const formData = new FormData();
       formData.append('file', csvFile);
 
-      const res = await fetch('/api/commerce/products/import', {
+      const res = await authFetch('/api/commerce/products/import', {
         method: 'POST',
         body: formData,
       });
@@ -1324,7 +1324,7 @@ export function CommerceView() {
     setPosSubmitting(true);
     try {
       const total = posCart.reduce((sum, it) => sum + it.price * it.qty, 0);
-      const res = await fetch('/api/commerce/orders', {
+      const res = await authFetch('/api/commerce/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3705,7 +3705,7 @@ export function CommerceView() {
                   <div className="grid grid-cols-4 p-2.5 font-mono text-[11px] text-stone-800 items-center">
                     <span className="font-bold text-purple-700">CNAME</span>
                     <span>{customDomainInput.split('.')[0] || 'shop'}</span>
-                    <span className="truncate">cname.serviceos.app</span>
+                    <span className="truncate">cname.fieseros.com</span>
                     <span>Automatic / 300</span>
                   </div>
                 </div>

@@ -23,7 +23,7 @@ export interface CustomDomainConfig {
  * Compute the CNAME record instructions for a given domain. The host part is
  * the subdomain segment (or '@' for the apex). `pointsTo` is the platform's
  * expected CNAME target — pulled from env or defaulting to
- * `cname.serviceos.com`.
+ * `cname.fieseros.com`.
  */
 function buildCnameRecord(domain: string, expectedTarget: string) {
   const parts = domain.split('.');
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    const defaultCnameTarget = process.env.NEXT_PUBLIC_CNAME_TARGET || 'cname.serviceos.com';
+    const defaultCnameTarget = process.env.NEXT_PUBLIC_CNAME_TARGET || 'cname.fieseros.com';
 
     const domainConfig: CustomDomainConfig = row
       ? customDomainToConfig(row)
@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const expectedCnameTarget = process.env.NEXT_PUBLIC_CNAME_TARGET || 'cname.serviceos.com';
+    const expectedCnameTarget = process.env.NEXT_PUBLIC_CNAME_TARGET || 'cname.fieseros.com';
 
     // Upsert by domain (globally @unique). On create, attach the merchant
     // identity. On update, reset status to PENDING so the merchant must

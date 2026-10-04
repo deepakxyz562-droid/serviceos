@@ -61,8 +61,23 @@ export async function apiRequest<T = any>(
   });
 
   if (response.status === 401 && !skipAuth) {
-    // Attempt automatic single-flight refresh
-    const refreshed = await attemptTokenRefresh();
+    // Attempt automatic single-flight refresh.
+    // IMPORTANT: only clear the session on a genuine auth rejection.
+    // A transient error (network, 5xx, rate limit) must NOT nuke the session —
+    // the token may still be valid and the user should be able to retry.
+    let refreshed: boolean;
+    try {
+      refreshed = await attemptTokenRefresh();
+    } catch {
+      // Transient refresh failure (network / 5xx / 429). Do NOT clear tokens.
+      // Surface the original 401 so the caller can show a retry affordance.
+      throw new ApiError(
+        'Unable to reach the server. Please check your connection and try again.',
+        401,
+        { transient: true },
+      );
+    }
+
     if (refreshed) {
       const newToken = await getToken();
       reqHeaders['Authorization'] = `Bearer ${newToken}`;
@@ -74,7 +89,20 @@ export async function apiRequest<T = any>(
       if (retryResponse.ok) {
         return (await retryResponse.json()) as T;
       }
+      // Retry failed — could be a genuine 401 (token rejected after refresh)
+      // OR a transient error. Only clear on a definitive 401.
+      if (retryResponse.status === 401) {
+        await clearTokens();
+        throw new ApiError('Session expired. Please sign in again.', 401);
+      }
+      // Non-401 retry failure — surface the actual status, don't clear session.
+      throw new ApiError(
+        `Request failed with status ${retryResponse.status}`,
+        retryResponse.status,
+      );
     }
+
+    // Refresh was authoritatively rejected (returned false) — token is dead.
     await clearTokens();
     throw new ApiError('Session expired. Please sign in again.', 401);
   }
@@ -100,6 +128,18 @@ export async function apiRequest<T = any>(
 
 let refreshPromise: Promise<boolean> | null = null;
 
+/**
+ * Refresh outcome:
+ *   - `true`  → refresh succeeded, new token stored
+ *   - `false` → refresh authoritatively REJECTED the token (401 with a fatal
+ *               code like INVALID_TOKEN / ABSOLUTE_MAX_EXCEEDED / USER_DISABLED).
+ *               Caller should clear the session.
+ *   - throws  → refresh failed due to a TRANSIENT error (network, 5xx, rate
+ *               limit). Caller should NOT clear the session — the token may
+ *               still be valid, and a single failed commerce API call must not
+ *               nuke the whole session. Let the caller surface the error and
+ *               let the user retry.
+ */
 async function attemptTokenRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
 
@@ -120,10 +160,22 @@ async function attemptTokenRefresh(): Promise<boolean> {
           await setTokens(data.token, data.refreshToken || data.token);
           return true;
         }
+        return false;
       }
-      return false;
-    } catch {
-      return false;
+
+      if (res.status === 401) {
+        // Authoritative rejection — token is genuinely dead.
+        return false;
+      }
+
+      // Any other status (500, 502, 503, 429, timeout) is a TRANSIENT error.
+      // Do NOT treat it as an auth failure — throw so the caller knows not
+      // to clear the session.
+      throw new Error(`refresh_transient_${res.status}`);
+    } catch (err: any) {
+      // Network failure / fetch rejection — transient, NOT an auth rejection.
+      if (err?.message?.startsWith('refresh_transient_')) throw err;
+      throw new Error('refresh_transient_network');
     } finally {
       refreshPromise = null;
     }

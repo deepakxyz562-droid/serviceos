@@ -26,11 +26,16 @@ export const BRAND = {
   /** Display name shown in UI, headers, titles. */
   name: 'Nuvora',
 
-  /** Root domain (no protocol, no subdomain). */
-  domain: 'nuvora.app',
+  /** Root domain (no protocol, no subdomain).
+   *
+   * PRODUCTION: fieseros.com. The cookie domain + Caddy TLS + DNS all point
+   * here. Switching to nuvora.app requires DNS + cert + Caddy config FIRST,
+   * otherwise the browser silently rejects the `fieseros_session` cookie
+   * (domain mismatch) and web users can never log in. */
+  domain: 'fieseros.com',
 
   /** Full origin URL with protocol. Used for metadataBase, canonical, OG. */
-  url: 'https://nuvora.app',
+  url: 'https://fieseros.com',
 
   /** Marketing tagline. */
   tagline: 'Your Entire Business, in One Simple App',

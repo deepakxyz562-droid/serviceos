@@ -121,8 +121,23 @@ async function ensureValidSession(): Promise<boolean> {
       }
     } else if (res.status === 401) {
       const err = await res.json().catch(() => ({}));
-      // Only clear if the server authoritatively rejected the token beyond grace period
-      if (err?.code === 'INVALID_TOKEN' || err?.code === 'SESSION_EXPIRED') {
+      // The refresh endpoint emits these codes when it authoritatively
+      // rejects the token. On any of these, the session is genuinely dead —
+      // clear it so the user sees the login screen on the next navigation
+      // instead of a cascade of 401s from every commerce API call.
+      //   MISSING_TOKEN          — no token in the request body/cookie
+      //   INVALID_TOKEN          — signature forged or expired beyond grace
+      //   ABSOLUTE_MAX_EXCEEDED  — session older than 90 days
+      //   USER_DISABLED          — account deactivated in the DB
+      //   SESSION_EXPIRED        — (legacy alias, same as ABSOLUTE_MAX_EXCEEDED)
+      const fatalCodes = new Set([
+        'MISSING_TOKEN',
+        'INVALID_TOKEN',
+        'ABSOLUTE_MAX_EXCEEDED',
+        'USER_DISABLED',
+        'SESSION_EXPIRED',
+      ]);
+      if (err?.code && fatalCodes.has(err.code)) {
         await clearTokens();
         return false;
       }
