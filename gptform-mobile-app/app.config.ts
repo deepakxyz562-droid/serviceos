@@ -1,14 +1,14 @@
 import type { ExpoConfig, ConfigContext } from 'expo/config';
 
-const APP_NAME = 'Chatbot';
-const FULL_STORE_TITLE = 'Chatbot - AI Agent & Live Chat';
-const SCHEME = 'chatbot';
+const APP_NAME = 'Nuvora';
+const FULL_STORE_TITLE = 'Nuvora — Business Management';
+const SCHEME = 'nuvora';
 
 export default ({ config }: ConfigContext): any => ({
   ...config,
   name: APP_NAME,
-  description: 'Build an AI chatbot for your business. Train it on your website & PDFs, connect WhatsApp, Instagram and live chat, and capture leads.',
-  slug: 'chatbot',
+  description: 'Your entire business, in one simple app. Point of sale, orders, khata, scheduling, and AI receptionist tailored for your industry.',
+  slug: 'nuvora',
   version: '1.0.0',
   orientation: 'portrait',
   scheme: SCHEME,

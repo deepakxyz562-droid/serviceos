@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ViewType } from '@/types/workflow';
+import type { TenantBlueprint, CountryPack, BusinessCapabilities } from '@/lib/blueprint';
+import { resolveTenantBlueprint, getCountryPack } from '@/lib/blueprint';
 
 // Re-export ViewType as ActiveView for backward compatibility
 export type ActiveView = ViewType;
@@ -26,6 +28,12 @@ interface AppState {
   setAuth: (auth: AuthState) => void;
   setAuthHydrated: (hydrated: boolean) => void;
   clearAuth: () => void;
+
+  // Business Blueprint & Country Pack
+  blueprint: TenantBlueprint | null;
+  countryPack: CountryPack;
+  setBlueprint: (bp: TenantBlueprint) => void;
+  updateCapabilities: (caps: Partial<BusinessCapabilities>) => void;
 
   // Active view (primary naming)
   activeView: ActiveView;
@@ -191,9 +199,36 @@ export const useAppStore = create<AppState>()(
   // Auth
   auth: initialAuthState,
   authHydrated: false,
-  setAuth: (auth: AuthState) => set({ auth }),
+  setAuth: (auth: AuthState) => {
+    const bp = auth?.tenant ? resolveTenantBlueprint(auth.tenant) : null;
+    const cp = bp ? getCountryPack(bp.country) : getCountryPack('US');
+    set({
+      auth,
+      ...(bp ? { blueprint: bp, countryPack: cp } : {}),
+    });
+  },
   setAuthHydrated: (hydrated: boolean) => set({ authHydrated: hydrated }),
-  clearAuth: () => set({ auth: initialAuthState, authHydrated: true }),
+  clearAuth: () => set({ auth: initialAuthState, authHydrated: true, blueprint: null, countryPack: getCountryPack('US') }),
+
+  // Business Blueprint & Country Pack
+  blueprint: null,
+  countryPack: getCountryPack('US'),
+  setBlueprint: (blueprint: TenantBlueprint) => set({
+    blueprint,
+    countryPack: getCountryPack(blueprint.country),
+  }),
+  updateCapabilities: (caps: Partial<BusinessCapabilities>) => set((state) => {
+    if (!state.blueprint) return {};
+    return {
+      blueprint: {
+        ...state.blueprint,
+        capabilities: {
+          ...state.blueprint.capabilities,
+          ...caps,
+        },
+      },
+    };
+  }),
 
   // Active view — both naming conventions point to the same state.
   // Auto-close the global Create Form/AI Agent wizard on view change so the
@@ -299,6 +334,7 @@ export const useAppStore = create<AppState>()(
         // it's still valid because the view exists in the catalog.
         currentView: state.currentView,
         activeView: state.activeView,
+        blueprint: state.blueprint,
       }),
       // Don't persist the session-bound fields. clearAuth sets authHydrated=true
       // so the auth re-check in MarketplaceHeader runs once.

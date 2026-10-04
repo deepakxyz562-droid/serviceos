@@ -16,12 +16,24 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBlueprintStore } from '@/stores/blueprint-store';
+import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint/presets';
+import { COUNTRY_PACKS } from '@/lib/blueprint/country-packs';
+import type { CountryCode, BusinessType } from '@/lib/blueprint/types';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest, ApiError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
 
 export default function MoreScreen() {
   const { user, logout } = useAuthStore();
+  const blueprint = useBlueprintStore((s) => s.blueprint);
+  const countryPack = useBlueprintStore((s) => s.countryPack);
+  const bType = (blueprint?.businessType || 'other') as BusinessType;
+  const activeMeta = BUSINESS_TYPE_LABELS[bType] || BUSINESS_TYPE_LABELS.other;
+  const cCode = (countryPack?.code || 'GLOBAL') as CountryCode;
+  const activeCountry = COUNTRY_PACKS[cCode] || COUNTRY_PACKS.GLOBAL;
+  const capabilities = blueprint?.capabilities;
+
   const [acceptChats, setAcceptChats] = useState(true);
   const [acceptChatsSaving, setAcceptChatsSaving] = useState(false);
   const [contactModalVisible, setContactModalVisible] = useState(false);
@@ -160,6 +172,38 @@ export default function MoreScreen() {
           <MaterialIcons name="chevron-right" size={24} color="#94a3b8" />
         </TouchableOpacity>
 
+        {/* Business Profile & Adaptive Capabilities Card */}
+        <TouchableOpacity
+          style={styles.blueprintCard}
+          onPress={() => {
+            hapticFeedback.light();
+            router.push('/blueprint-setup' as any);
+          }}
+          activeOpacity={0.8}
+        >
+          <View style={styles.blueprintLeft}>
+            <View style={styles.blueprintIconCircle}>
+              <Text style={{ fontSize: 22 }}>{activeMeta?.icon || '🏢'}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.blueprintTitle}>
+                  {activeMeta?.label || 'Business Setup'}
+                </Text>
+                <View style={styles.blueprintPill}>
+                  <Text style={styles.blueprintPillText}>
+                    {activeCountry?.flag} {activeCountry?.currency?.code} ({activeCountry?.currency?.symbol})
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.blueprintSubtitle}>
+                {countryPack?.name || 'Adaptive Setup'} · Tap to change type & features
+              </Text>
+            </View>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color="#6366f1" />
+        </TouchableOpacity>
+
         {/* Accept Chats Card */}
         <View style={styles.toggleCard}>
           <View style={styles.toggleLeft}>
@@ -203,294 +247,360 @@ export default function MoreScreen() {
           <MaterialIcons name="chevron-right" size={22} color="#8b5cf6" />
         </TouchableOpacity>
 
-        {/* Leads & Bookings Card */}
+        {/* Leads & Bookings Card (shown if leads or bookings capability enabled) */}
+        {(capabilities?.leads || capabilities?.calendarBooking) && (
+          <View style={styles.groupedCard}>
+            {capabilities?.leads && (
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/(tabs)/leads' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="assignment-ind" size={22} color="#10b981" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Leads & Pipeline</Text>
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>AI Qualified</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Customer contacts, estimates & status</Text>
+                  </View>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+
+            {capabilities?.leads && capabilities?.calendarBooking && <View style={styles.rowDivider} />}
+
+            {capabilities?.calendarBooking && (
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/(tabs)/bookings' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="event-available" size={22} color="#3b82f6" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Bookings & Calendar</Text>
+                      <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#2563eb', fontSize: 10, fontWeight: '800' }}>2-Way Sync</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Appointments, Google Meet & intake</Text>
+                  </View>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Business Modules (Dukaan / Take.app / Vyapar style suite, capability-gated) */}
         <View style={styles.groupedCard}>
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/(tabs)/leads' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="assignment-ind" size={22} color="#10b981" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Leads & Pipeline</Text>
-                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>AI Qualified</Text>
+          {/* Orders */}
+          {(capabilities?.orders || capabilities?.onlineStore) && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/(tabs)/orders' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="shopping-bag" size={22} color="#059669" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Orders & Store</Text>
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Live</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>WhatsApp & Storefront order stream</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Customer contacts, estimates & status</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/(tabs)/bookings' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="event-available" size={22} color="#3b82f6" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Bookings & Calendar</Text>
-                  <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#2563eb', fontSize: 10, fontWeight: '800' }}>2-Way Sync</Text>
+          {/* Catalog & Inventory */}
+          {(capabilities?.inventory || capabilities?.posRegister || capabilities?.onlineStore) && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/catalog' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="restaurant-menu" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
+                  <View>
+                    <Text style={styles.menuLabel}>Products & Catalog</Text>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Manage catalog items, prices & stock</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Appointments, Google Meet & intake</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-        </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-        {/* Commerce & Store Management Card (Take.app + Tidio Suite) */}
-        <View style={styles.groupedCard}>
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/(tabs)/orders' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="shopping-bag" size={22} color="#059669" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Orders & Store</Text>
-                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Live</Text>
+          {/* POS Cashier Register */}
+          {capabilities?.posRegister && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/pos' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="point-of-sale" size={22} color="#8b5cf6" style={{ marginRight: 14 }} />
+                  <View>
+                    <Text style={styles.menuLabel}>POS Cashier Register</Text>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Fast walk-in customer checkout</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>WhatsApp & Storefront order stream</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/catalog' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="restaurant-menu" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
-              <View>
-                <Text style={styles.menuLabel}>Products & Catalog</Text>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Manage menu items, prices & stock</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/pos' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="point-of-sale" size={22} color="#8b5cf6" style={{ marginRight: 14 }} />
-              <View>
-                <Text style={styles.menuLabel}>POS Cashier Register</Text>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Fast walk-in customer checkout</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/dine-in-qr' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="qr-code-2" size={22} color="#0284c7" style={{ marginRight: 14 }} />
-              <View>
-                <Text style={styles.menuLabel}>Dine-In Table QR</Text>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Table ordering QR code generator</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
-
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/customers' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="contacts" size={22} color="#10b981" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Customer CRM & Loyalty</Text>
-                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>QR Captured</Text>
+          {/* Dine-In Table QR (Strictly for Restaurants / Cafes / Bars) */}
+          {(capabilities?.dining || capabilities?.tables) && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/dine-in-qr' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="qr-code-2" size={22} color="#0284c7" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Dine-In Table QR</Text>
+                      <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>Restaurant</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Table ordering QR code generator</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Customer lifetime spend, favorites & WhatsApp</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/khata' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="menu-book" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Customer Khata (Udhaar)</Text>
-                  <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#b45309', fontSize: 10, fontWeight: '800' }}>Aapko Milega</Text>
+          {/* Customer CRM */}
+          {capabilities?.customers && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/customers' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="contacts" size={22} color="#10b981" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Customer CRM & Loyalty</Text>
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Captured</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Customer lifetime spend & contact directory</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Credit tracking & WhatsApp UPI payment links</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/expenses' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="account-balance-wallet" size={22} color="#059669" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Day Book & Expenses</Text>
-                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Cash Drawer</Text>
+          {/* Customer Khata / Credit Ledger (Country Pack localized) */}
+          {capabilities?.customerCredit && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/khata' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="menu-book" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>
+                        {countryPack?.vocabulary?.customerCredit || 'Customer Credit Ledger'}
+                      </Text>
+                      <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#b45309', fontSize: 10, fontWeight: '800' }}>
+                          {countryPack?.code === 'IN' ? 'Aapko Milega' : 'Receivables'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                      {countryPack?.code === 'IN'
+                        ? 'Credit tracking & WhatsApp UPI payment links'
+                        : 'Credit balances, payment terms & customer reminders'}
+                    </Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Daily cash in hand, expenses & net profit</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/billing' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="receipt-long" size={22} color="#0284c7" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Billing & GST Invoices</Text>
-                  <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>Estimates</Text>
+          {/* Day Book & Expenses */}
+          {capabilities?.expenses && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/expenses' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="account-balance-wallet" size={22} color="#059669" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Day Book & Expenses</Text>
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Cash Drawer</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Daily cash in hand, expenses & net balance</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Quick GST bills, quotations & WhatsApp PDF share</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/templates' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="storefront" size={22} color="#059669" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Industry Templates</Text>
-                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Kirana · Salon · Food</Text>
+          {/* Billing & Invoices (Country Pack localized) */}
+          {capabilities?.invoicing && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/billing' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="receipt-long" size={22} color="#0284c7" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>
+                        {countryPack?.vocabulary?.invoice || 'Billing'} & Estimates
+                      </Text>
+                      <View style={{ backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>
+                          {countryPack?.tax?.label || 'Tax'}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                      Quick {countryPack?.tax?.label || 'tax'} invoices, estimates & PDF share
+                    </Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>1-Tap prebuilt catalogs, prices & categories</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
-
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => {
-              hapticFeedback.light();
-              router.push('/promotions' as any);
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.menuLeft}>
-              <MaterialIcons name="local-offer" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.menuLabel}>Promotions & Coupons</Text>
-                  <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
-                    <Text style={{ color: '#b45309', fontSize: 10, fontWeight: '800' }}>Discounts</Text>
+          {/* Industry Templates */}
+          {(capabilities?.inventory || capabilities?.posRegister) && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/templates' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="storefront" size={22} color="#059669" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Industry Catalogs</Text>
+                      <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#059669', fontSize: 10, fontWeight: '800' }}>Prebuilt</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>1-Tap catalogs, prices & categories for your sector</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Storefront promo banners & WhatsApp blasts</Text>
-              </View>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
-          </TouchableOpacity>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-          <View style={styles.rowDivider} />
+          {/* Promotions & Coupons */}
+          {(capabilities?.onlineStore || capabilities?.posRegister) && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => {
+                  hapticFeedback.light();
+                  router.push('/promotions' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuLeft}>
+                  <MaterialIcons name="local-offer" size={22} color="#f59e0b" style={{ marginRight: 14 }} />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.menuLabel}>Promotions & Coupons</Text>
+                      <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 }}>
+                        <Text style={{ color: '#b45309', fontSize: 10, fontWeight: '800' }}>Discounts</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Storefront promo banners & customer discount codes</Text>
+                  </View>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
+          {/* Custom Domain */}
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => {
@@ -516,6 +626,7 @@ export default function MoreScreen() {
 
           <View style={styles.rowDivider} />
 
+          {/* Local Directory */}
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => {
@@ -533,7 +644,7 @@ export default function MoreScreen() {
                     <Text style={{ color: '#0284c7', fontSize: 10, fontWeight: '800' }}>Discovery</Text>
                   </View>
                 </View>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Explore verified local shops & in-app listing</Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Explore verified businesses & listings</Text>
               </View>
             </View>
             <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
@@ -679,8 +790,8 @@ export default function MoreScreen() {
 
         {/* App Version Footer */}
         <View style={styles.footerWrap}>
-          <Text style={styles.footerLogo}>text</Text>
-          <Text style={styles.footerVersion}>v2.44.3-080 · GPTForm Mobile</Text>
+          <Text style={styles.footerLogo}>Nuvora</Text>
+          <Text style={styles.footerVersion}>v2.44.3 · Business Management</Text>
         </View>
       </ScrollView>
 
@@ -830,6 +941,61 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     marginTop: 1,
+  },
+  blueprintCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f5f3ff',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e0e7ff',
+  },
+  blueprintLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  blueprintIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#4f46e5',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  blueprintTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1e1b4b',
+  },
+  blueprintPill: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  blueprintPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4338ca',
+  },
+  blueprintSubtitle: {
+    fontSize: 11,
+    color: '#6366f1',
+    marginTop: 2,
   },
   toggleCard: {
     flexDirection: 'row',

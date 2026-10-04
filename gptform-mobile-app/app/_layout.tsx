@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 import { registerForPushNotifications, setupNotificationListeners } from '@/lib/notifications';
 
 export default function RootLayout() {
@@ -12,6 +13,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     bootstrap();
+    useBlueprintStore.getState().init();
   }, []);
 
   // Proactive session refresh on app foreground. When the app returns to the
@@ -243,6 +245,13 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="marketplace"
+            options={{
+              headerShown: false,
+              animation: 'slide_from_right',
+            }}
+          />
+          <Stack.Screen
+            name="blueprint-setup"
             options={{
               headerShown: false,
               animation: 'slide_from_right',

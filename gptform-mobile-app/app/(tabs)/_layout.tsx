@@ -4,8 +4,22 @@ import { View, Platform, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { FloatingCopilot } from '@/components/copilot/floating-copilot';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 
 export default function TabsLayout() {
+  const blueprint = useBlueprintStore((s) => s.blueprint);
+  const countryPack = useBlueprintStore((s) => s.countryPack);
+
+  const isServiceBusiness =
+    blueprint?.businessType === 'services' ||
+    blueprint?.businessType === 'freelancer' ||
+    (!blueprint?.capabilities?.orders && !!blueprint?.capabilities?.leads);
+
+  const showBookingsTab =
+    isServiceBusiness ||
+    blueprint?.businessType === 'salon' ||
+    (!blueprint?.capabilities?.orders && !!blueprint?.capabilities?.calendarBooking);
+
   return (
     <View style={styles.container} pointerEvents="box-none">
       <Tabs
@@ -36,18 +50,43 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: 'Today',
-            tabBarIcon: ({ color, focused }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialIcons name="dashboard" size={24} color={color} />
             ),
           }}
         />
 
+        {/* Tab 2: Orders (for retail/restaurant/grocery/online) OR Leads (for service/freelancer) */}
         <Tabs.Screen
           name="orders"
           options={{
-            title: 'Orders',
-            tabBarIcon: ({ color, focused }) => (
+            href: isServiceBusiness ? null : undefined,
+            title: blueprint?.businessType === 'restaurant' ? 'Orders & KOT' : 'Orders',
+            tabBarIcon: ({ color }) => (
               <MaterialIcons name="shopping-bag" size={24} color={color} />
+            ),
+          }}
+        />
+
+        <Tabs.Screen
+          name="leads"
+          options={{
+            href: isServiceBusiness ? undefined : null,
+            title: 'Leads',
+            tabBarIcon: ({ color }) => (
+              <MaterialIcons name="assignment-ind" size={24} color={color} />
+            ),
+          }}
+        />
+
+        {/* Tab 3: Calendar / Bookings (for service/salon) OR Billing */}
+        <Tabs.Screen
+          name="bookings"
+          options={{
+            href: showBookingsTab ? undefined : null,
+            title: 'Calendar',
+            tabBarIcon: ({ color }) => (
+              <MaterialIcons name="event-available" size={24} color={color} />
             ),
           }}
         />
@@ -55,23 +94,26 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="billing"
           options={{
-            title: 'Billing',
-            tabBarIcon: ({ color, focused }) => (
+            title: countryPack?.vocabulary?.invoice || 'Billing',
+            tabBarIcon: ({ color }) => (
               <MaterialIcons name="receipt-long" size={24} color={color} />
             ),
           }}
         />
 
+        {/* Tab 4: Customers / Clients */}
         <Tabs.Screen
           name="customers"
           options={{
+            href: showBookingsTab ? null : undefined,
             title: 'Customers',
-            tabBarIcon: ({ color, focused }) => (
+            tabBarIcon: ({ color }) => (
               <MaterialIcons name="people" size={24} color={color} />
             ),
           }}
         />
 
+        {/* Tab 5: More */}
         <Tabs.Screen
           name="more"
           options={{
@@ -85,7 +127,7 @@ export default function TabsLayout() {
           }}
         />
 
-        {/* Hidden auxiliary tabs to prevent Expo Router routing warnings */}
+        {/* Auxiliary tabs */}
         <Tabs.Screen
           name="inbox"
           options={{
@@ -98,23 +140,9 @@ export default function TabsLayout() {
             href: null,
           }}
         />
-        <Tabs.Screen
-          name="leads"
-          options={{
-            href: null,
-          }}
-        />
-        <Tabs.Screen
-          name="bookings"
-          options={{
-            href: null,
-          }}
-        />
       </Tabs>
 
-      {/* Floating Copilot overlay — sits above every tab screen, above the
-          tab bar. The component itself renders a position:absolute FAB at
-          bottom-right plus a slide-up Modal when tapped. */}
+      {/* Floating Copilot overlay */}
       <FloatingCopilot />
     </View>
   );

@@ -103,6 +103,7 @@ import {
 import { toast } from 'sonner';
 import { openUpgradeModal, checkMenuAccess } from '@/components/layout/upgrade-modal';
 import { resolvePlanTierClient, PLAN_DISPLAY_NAMES } from '@/lib/plan-features';
+import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
 
@@ -527,8 +528,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     setMobileSidebarOpen,
     setPendingCreate,
     auth,
+    blueprint,
+    countryPack,
   } = useAppStore();
 
+  const [blueprintWizardOpen, setBlueprintWizardOpen] = useState(false);
   const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
   // User-explicit overrides of each section's collapsed state. The effective
   // collapsed state is derived: override wins if present, otherwise the
@@ -673,8 +677,45 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       }
     }
 
+    // Capability-based dynamic navigation filtering
+    const capabilities = blueprint?.capabilities;
+    if (capabilities && !isSuperAdmin && !isListingOnly) {
+      sections = sections
+        .map((section) => ({
+          ...section,
+          items: section.items
+            .map((item) => {
+              if (item.view === 'quoteFlow' && countryPack?.vocabulary) {
+                return {
+                  ...item,
+                  label: `${countryPack.vocabulary.invoice || 'Billing'} & ${countryPack.vocabulary.customerCredit || 'Khata'}`,
+                };
+              }
+              if (item.view === 'customers' && countryPack?.vocabulary?.customers) {
+                return {
+                  ...item,
+                  label: countryPack.vocabulary.customers,
+                };
+              }
+              return item;
+            })
+            .filter((item) => {
+              if (item.view === 'dispatch' && !capabilities.dispatch) return false;
+              if (item.view === 'inventory' && !capabilities.inventory) return false;
+              if (item.view === 'booking' && !capabilities.bookings) return false;
+              if (item.view === 'jobs' && !capabilities.jobs) return false;
+              if (item.view === 'recurringJobs' && !capabilities.jobs) return false;
+              if (item.view === 'commerce' && !capabilities.orders && !capabilities.onlineStore) return false;
+              if (item.view === 'salesPipeline' && !capabilities.quotes && !capabilities.leads) return false;
+              if (item.view === 'expenses' && !capabilities.expenses) return false;
+              return true;
+            }),
+        }))
+        .filter((section) => section.items.length > 0);
+    }
+
     return sections;
-  }, [isSuperAdmin, isEmployee, isListingOnly, isStandalone, disabledMenus, auth.tenant]);
+  }, [isSuperAdmin, isEmployee, isListingOnly, isStandalone, disabledMenus, auth.tenant, blueprint, countryPack]);
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);
@@ -955,6 +996,45 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </button>
       )}
 
+      {/* Adaptive Blueprint Setup Button (Expanded mode only) */}
+      {isExpandedMode && !isSuperAdmin && !isListingOnly && (
+        <div className="px-3 pb-2 pt-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setBlueprintWizardOpen(true)}
+            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-indigo-50/70 hover:bg-indigo-100/70 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50 border border-indigo-200/50 dark:border-indigo-800/40 text-left transition-colors text-xs group"
+            title="Configure business type, modules & country pack"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm">
+                {blueprint?.businessType === 'restaurant'
+                  ? '🍽️'
+                  : blueprint?.businessType === 'retail'
+                  ? '🛍️'
+                  : blueprint?.businessType === 'services'
+                  ? '🔧'
+                  : blueprint?.businessType === 'salon'
+                  ? '💇'
+                  : blueprint?.businessType === 'grocery'
+                  ? '🏪'
+                  : '🏢'}
+              </span>
+              <div className="truncate">
+                <span className="font-semibold text-slate-800 dark:text-slate-200 block truncate">
+                  {blueprint?.businessType
+                    ? blueprint.businessType.charAt(0).toUpperCase() + blueprint.businessType.slice(1).replace('_', ' ')
+                    : 'Adaptive Profile'}
+                </span>
+                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 block -mt-0.5">
+                  {countryPack?.countryCode || 'US'} · Customize
+                </span>
+              </div>
+            </div>
+            <Sparkles className="size-3 text-indigo-600 dark:text-indigo-400 shrink-0 group-hover:rotate-12 transition-transform" />
+          </button>
+        </div>
+      )}
+
       <Separator className="bg-sidebar-border" />
 
       {/* User Section */}
@@ -1017,6 +1097,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       </div>
 
+      <BusinessBlueprintWizard
+        open={blueprintWizardOpen}
+        onOpenChange={setBlueprintWizardOpen}
+      />
     </div>
   );
 }
