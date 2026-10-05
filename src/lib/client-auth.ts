@@ -46,6 +46,34 @@ export function removeToken(): void {
 }
 
 /**
+ * Universal client logout utility.
+ * Clears cookies via the server logout API, removes client tokens/storage,
+ * and navigates to the landing page with ?logout=1.
+ */
+export async function performClientLogout(): Promise<void> {
+  try {
+    await fetch('/api/auth/logout?XTransformPort=3000', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    // Non-fatal if offline
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem('fieseros_auth');
+      localStorage.removeItem('fieseros_token');
+      sessionStorage.removeItem('fieseros_session');
+    } catch {
+      // ignore
+    }
+    // Navigate to /?logout=1 to trigger clean client reset
+    window.location.href = '/?logout=1';
+  }
+}
+
+/**
  * Build headers for an authenticated API request.
  * Includes the Bearer token if available, plus any custom headers.
  */

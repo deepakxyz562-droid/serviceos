@@ -19,16 +19,37 @@ import {
   CalendarCheck,
   ShoppingBag,
   Receipt,
+  ShoppingCart,
+  UtensilsCrossed,
+  ChefHat,
+  Store,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { checkMenuAccess } from '@/components/layout/upgrade-modal';
 import { resolvePlanTierClient } from '@/lib/plan-features';
+import { getMobileNavTabsForBlueprint } from '@/lib/blueprint';
 
 interface MobileNavItem {
   view: ViewType;
+  tab?: string;
   label: string;
   icon: React.ElementType;
 }
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  ShoppingBag,
+  ShoppingCart,
+  UtensilsCrossed,
+  ChefHat,
+  Calendar,
+  Users,
+  Briefcase,
+  Package,
+  Store,
+  FileText: Receipt,
+};
 
 const ownerNavCandidates: MobileNavItem[] = [
   { view: 'dashboard', label: 'Today', icon: LayoutDashboard },
@@ -63,8 +84,12 @@ const superadminNavItems: MobileNavItem[] = [
   { view: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export function MobileBottomNav() {
-  const { currentView, setCurrentView, toggleMobileSidebar, auth } = useAppStore();
+export interface MobileBottomNavProps {
+  onLogout?: () => void;
+}
+
+export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
+  const { currentView, setCurrentView, toggleMobileSidebar, auth, blueprint } = useAppStore();
 
   // null = "still loading visibility config" — prevents the flash-of-all-menus
   // bug on mobile (mirrors sidebar.tsx). Empty array [] = "loaded, nothing disabled".
@@ -96,14 +121,6 @@ export function MobileBottomNav() {
     return () => { cancelled = true; };
   }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin]);
 
-  // Pick the first 4 non-disabled, accessible candidates so the nav stays a
-  // consistent width. Both HIDDEN (paid users below tier — item removed) and
-  // LOCKED (trial users — item shown with lock in the sidebar's "More" drawer)
-  // items are skipped from the 4-slot bottom nav bar — the bar is too small
-  // for a lock icon UX, and locked items still appear in the sidebar Sheet
-  // opened via the "More" button below.
-  // While loading (null), render empty placeholders so the nav bar doesn't
-  // flash all items before the disabled set is applied.
   const planTier = resolvePlanTierClient(
     auth.tenant?.plan || 'starter',
     auth.tenant?.planStatus || 'active'
@@ -114,16 +131,26 @@ export function MobileBottomNav() {
     ((auth.tenant as any)?.signupMode === 'standalone' ||
      (auth.tenant as any)?.plan === 'standalone_starter' ||
      (auth.tenant as any)?.plan === 'standalone_business' ||
+     (auth.tenant as any)?.productType === 'forms' ||
+     (auth.workspace as any)?.productType === 'forms' ||
+     (auth.tenant as any)?.productType === 'gptform' ||
+     (auth.workspace as any)?.productType === 'gptform' ||
      String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
      (auth.user as any)?.role === 'standalone_user' ||
-     ['formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments', 'creatorProfile', 'creatorOffers'].includes(currentView));
+     ['formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments', 'creatorProfile', 'creatorOffers', 'commerce'].includes(currentView));
+
+  const dynamicBlueprintTabs = getMobileNavTabsForBlueprint(blueprint);
+  const standaloneNavItems: MobileNavItem[] = dynamicBlueprintTabs.map((t) => ({
+    view: t.view as ViewType,
+    tab: t.tab,
+    label: t.label,
+    icon: ICON_MAP[t.iconName] || LayoutDashboard,
+  }));
 
   const navItems: MobileNavItem[] = isSuperAdmin
     ? superadminNavItems
     : isStandaloneTenant
-      ? standaloneNavCandidates
-          .filter((item) => !(disabledMenus || []).includes(item.view))
-          .slice(0, 4)
+      ? standaloneNavItems
       : disabledMenus === null
         ? []  // loading — render no items (just the More button) to prevent flash
         : ownerNavCandidates
@@ -146,8 +173,14 @@ export function MobileBottomNav() {
 
           return (
             <button
-              key={item.view}
-              onClick={() => setCurrentView(item.view)}
+              key={`${item.view}-${item.tab || ''}`}
+              onClick={() => {
+                if (item.tab && typeof window !== 'undefined') {
+                  sessionStorage.setItem('nuvora_commerce_tab', item.tab);
+                  window.dispatchEvent(new CustomEvent('nuvora_switch_commerce_tab', { detail: item.tab }));
+                }
+                setCurrentView(item.view);
+              }}
               className={cn(
                 'flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors',
                 'touch-target min-w-[48px]',

@@ -19,6 +19,7 @@ import {
   Mail,
   User,
   Layers,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,8 +28,10 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
+import { performClientLogout } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
 import { CURRENCIES, currencyMap, formatCurrency, resolveEffectiveCurrency, detectGeoCurrency } from '@/lib/currency-resolver';
 import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
@@ -600,6 +603,36 @@ export function GptFormSettingsView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ─── Account & Session (Mobile & Desktop Logout) ─── */}
+      <div className="pt-6 border-t border-border mt-8 max-w-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border bg-card shadow-2xs">
+          <div className="flex items-center gap-3">
+            <Avatar className="size-10">
+              <AvatarFallback className="bg-emerald-600 text-white font-semibold text-xs">
+                {auth.user?.name ? auth.user.name.slice(0, 2).toUpperCase() : 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <div className="font-semibold text-sm text-foreground truncate">
+                {auth.user?.name || 'Account Owner'}
+              </div>
+              <div className="text-xs text-muted-foreground truncate">
+                {auth.user?.email || 'Logged in'}
+              </div>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void performClientLogout()}
+            className="gap-2 shrink-0 border-red-200 text-red-600 hover:text-red-700 hover:bg-red-50 dark:border-red-900/40 dark:text-red-400 dark:hover:bg-red-950/40 font-semibold cursor-pointer"
+          >
+            <LogOut className="size-4" />
+            Sign Out
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

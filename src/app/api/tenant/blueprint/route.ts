@@ -82,8 +82,9 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { businessType, businessName, country, capabilities } = body as {
+    const { businessType, salesChannels, businessName, country, capabilities } = body as {
       businessType?: BusinessType;
+      salesChannels?: import('@/lib/blueprint').SalesChannel[];
       businessName?: string;
       country?: CountryCode;
       capabilities?: Partial<BusinessCapabilities>;
@@ -131,6 +132,7 @@ export async function PATCH(request: NextRequest) {
 
     const updatedBlueprint: TenantBlueprint = {
       businessType: businessType || currentBlueprint.businessType,
+      salesChannels: salesChannels || currentBlueprint.salesChannels,
       businessName: businessName || currentBlueprint.businessName || tenant.name,
       country: country || currentBlueprint.country,
       capabilities: {

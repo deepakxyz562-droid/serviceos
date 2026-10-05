@@ -661,7 +661,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
             is not hidden behind the fixed nav. Since both <main> and the nav
             use `bg-background`, the padding area is the same color as the nav
             — no visible gap when content is shorter than the viewport. */}
-        {!isAgentStudioTakeover && <MobileBottomNav />}
+        {!isAgentStudioTakeover && <MobileBottomNav onLogout={onLogout} />}
       </div>
 
       {/* Web Push enrolment for tenant admins — auto-subscribes when

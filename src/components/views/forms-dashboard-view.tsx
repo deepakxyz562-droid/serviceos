@@ -31,6 +31,13 @@ import {
   Package,
   Users,
   FileText,
+  UtensilsCrossed,
+  ChefHat,
+  Store,
+  SlidersHorizontal,
+  Briefcase,
+  AlertTriangle,
+  ArrowUpRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +46,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { TemplatePickerDialog } from '@/features/forms/components/builder/template-picker-dialog';
+import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
+import { BUSINESS_TYPE_LABELS, SALES_CHANNEL_INFO } from '@/lib/blueprint';
 import type { FormTemplate } from '@/lib/forms/templates';
 
 interface FormsDashboardStats {
@@ -123,11 +132,17 @@ const DASHBOARD_QUICK_STARTERS = [
 ];
 
 export function FormsDashboardView() {
-  const setCurrentView = useAppStore((s) => s.setCurrentView);
-  const openCreateFormWizard = useAppStore((s) => s.openCreateFormWizard);
+  const { auth, blueprint, countryPack, setCurrentView, openCreateFormWizard } = useAppStore();
   const [stats, setStats] = useState<FormsDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [blueprintWizardOpen, setBlueprintWizardOpen] = useState(false);
+  const [commerceStats, setCommerceStats] = useState<{
+    sales?: number;
+    ordersCount?: number;
+    lowStockCount?: number;
+    khataReceivable?: number;
+  }>({});
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -283,6 +298,31 @@ export function FormsDashboardView() {
           }
         })
         .catch(() => {});
+
+      authFetch('/api/commerce/daybook')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d?.dayBook) {
+            setCommerceStats((prev) => ({
+              ...prev,
+              sales: Number(d.dayBook.totalSales) || 0,
+              ordersCount: Number(d.dayBook.orderCount) || 0,
+            }));
+          }
+        })
+        .catch(() => {});
+
+      authFetch('/api/commerce/khata')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d?.receivable !== undefined) {
+            setCommerceStats((prev) => ({
+              ...prev,
+              khataReceivable: Number(d.receivable) || 0,
+            }));
+          }
+        })
+        .catch(() => {});
     })();
     return () => { cancelled = true; };
   }, []);
@@ -303,149 +343,396 @@ export function FormsDashboardView() {
     );
   }
 
-  const kpiCards = [
-    {
-      label: 'Total Forms',
-      value: stats?.totalForms ?? 0,
-      icon: FileInput,
-      color: 'text-emerald-600',
-      onClick: () => setCurrentView('formBuilder'),
-    },
-    {
-      label: 'Submissions',
-      value: stats?.totalSubmissions ?? 0,
-      icon: Inbox,
-      color: 'text-blue-600',
-      onClick: () => setCurrentView('formSubmissions'),
-    },
-    {
-      label: 'Appointments',
-      value: stats?.totalBookings ?? 0,
-      icon: Calendar,
-      color: 'text-purple-600',
-      badge: 'Calendly Engine',
-      badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-      onClick: () => setCurrentView('formAppointments'),
-    },
-    {
-      label: 'Live Chat',
-      value: stats?.activeChatsCount ?? 0,
-      icon: MessageSquare,
-      color: 'text-emerald-600',
-      badge: (stats?.waitingChatsCount ?? 0) > 0 ? `${stats?.waitingChatsCount} Waiting` : 'Text.com',
-      badgeClass:
-        (stats?.waitingChatsCount ?? 0) > 0
-          ? 'bg-amber-500 text-white font-bold animate-pulse'
-          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      onClick: () => setCurrentView('liveChat'),
-    },
-    {
-      label: 'Conversion Rate',
-      value: `${(stats?.conversionRate ?? 0).toFixed(1)}%`,
-      icon: TrendingUp,
-      color: 'text-amber-600',
-    },
-    {
-      label: 'Active Forms',
-      value: stats?.activeForms ?? 0,
-      icon: FileInput,
-      color: 'text-emerald-600',
-    },
-  ];
+  const businessType = blueprint?.businessType || 'retail';
+  const channels = blueprint?.salesChannels || ['in_store'];
+  const currency = countryPack?.currency?.symbol || '$';
+  const typeMeta = BUSINESS_TYPE_LABELS[businessType] || BUSINESS_TYPE_LABELS.retail;
+  const businessName = blueprint?.businessName || auth?.tenant?.name || 'My Business';
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+
+  const openCommerceTab = (tab: string) => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('nuvora_commerce_tab', tab);
+      window.dispatchEvent(new CustomEvent('nuvora_switch_commerce_tab', { detail: tab }));
+    }
+    setCurrentView('commerce');
+  };
+
+  // Vertical-specific Adaptive KPI Cards
+  const getAdaptiveKpis = () => {
+    if (businessType === 'restaurant') {
+      return [
+        {
+          label: "Today's Sales",
+          value: `${currency}${Number(commerceStats.sales || 0).toLocaleString()}`,
+          sub: 'Dine-in, Takeaway & Delivery',
+          icon: ShoppingCart,
+          color: 'text-emerald-600',
+          onClick: () => openCommerceTab('orders'),
+        },
+        {
+          label: 'Active Orders',
+          value: commerceStats.ordersCount ?? 0,
+          sub: 'Live kitchen & counter',
+          icon: Package,
+          color: 'text-blue-600',
+          onClick: () => openCommerceTab('orders'),
+        },
+        {
+          label: 'Tables & Floor',
+          value: 'Table QR',
+          sub: 'Dine-in tables',
+          icon: UtensilsCrossed,
+          color: 'text-amber-600',
+          onClick: () => openCommerceTab('dineIn'),
+        },
+        {
+          label: 'Kitchen KDS',
+          value: 'Live Tickets',
+          sub: 'Kitchen queue',
+          icon: ChefHat,
+          color: 'text-purple-600',
+          onClick: () => openCommerceTab('kds'),
+        },
+      ];
+    }
+
+    if (businessType === 'salon') {
+      return [
+        {
+          label: "Today's Bookings",
+          value: stats?.totalBookings ?? 0,
+          sub: 'Scheduled appointments',
+          icon: Calendar,
+          color: 'text-purple-600',
+          onClick: () => setCurrentView('booking'),
+        },
+        {
+          label: 'Service Sales',
+          value: `${currency}${Number(commerceStats.sales || 0).toLocaleString()}`,
+          sub: 'Walk-ins & billed services',
+          icon: ShoppingCart,
+          color: 'text-emerald-600',
+          onClick: () => openCommerceTab('pos'),
+        },
+        {
+          label: 'Client Inquiries',
+          value: stats?.totalSubmissions ?? 0,
+          sub: 'Online booking requests',
+          icon: FileInput,
+          color: 'text-blue-600',
+          onClick: () => setCurrentView('formSubmissions'),
+        },
+        {
+          label: 'AI Receptionist',
+          value: (stats?.activeChatsCount ?? 0) > 0 ? `${stats?.activeChatsCount} Active` : 'Ready',
+          sub: '24/7 call & booking AI',
+          icon: PhoneCall,
+          color: 'text-amber-600',
+          onClick: () => setCurrentView('aiReceptionist'),
+        },
+      ];
+    }
+
+    if (businessType === 'services') {
+      return [
+        {
+          label: 'Active Jobs & Orders',
+          value: commerceStats.ordersCount ?? stats?.totalSubmissions ?? 0,
+          sub: 'Dispatched & scheduled',
+          icon: Briefcase,
+          color: 'text-blue-600',
+          onClick: () => openCommerceTab('orders'),
+        },
+        {
+          label: 'Appointments',
+          value: stats?.totalBookings ?? 0,
+          sub: 'Service visits today',
+          icon: Calendar,
+          color: 'text-purple-600',
+          onClick: () => setCurrentView('booking'),
+        },
+        {
+          label: 'Revenue Collected',
+          value: `${currency}${Number(commerceStats.sales || 0).toLocaleString()}`,
+          sub: 'Invoices & payments',
+          icon: FileText,
+          color: 'text-emerald-600',
+          onClick: () => openCommerceTab('billing'),
+        },
+        {
+          label: 'Lead Requests',
+          value: stats?.totalSubmissions ?? 0,
+          sub: 'Intake inquiries',
+          icon: FileInput,
+          color: 'text-amber-600',
+          onClick: () => setCurrentView('formSubmissions'),
+        },
+      ];
+    }
+
+    if (businessType === 'online_store') {
+      return [
+        {
+          label: "Today's Orders",
+          value: commerceStats.ordersCount ?? 0,
+          sub: 'Website checkouts',
+          icon: ShoppingBag,
+          color: 'text-emerald-600',
+          onClick: () => openCommerceTab('orders'),
+        },
+        {
+          label: 'Store Revenue',
+          value: `${currency}${Number(commerceStats.sales || 0).toLocaleString()}`,
+          sub: 'Online checkout revenue',
+          icon: ShoppingCart,
+          color: 'text-blue-600',
+          onClick: () => openCommerceTab('orders'),
+        },
+        {
+          label: 'Conversion Rate',
+          value: `${(stats?.conversionRate ?? 0).toFixed(1)}%`,
+          sub: 'Visitor conversion',
+          icon: TrendingUp,
+          color: 'text-purple-600',
+        },
+        {
+          label: 'AI Chat Leads',
+          value: stats?.activeChatsCount ?? 0,
+          sub: '24/7 web assistant',
+          icon: MessageSquare,
+          color: 'text-amber-600',
+          onClick: () => setCurrentView('liveChat'),
+        },
+      ];
+    }
+
+    // Default / Retail / Kirana / Grocery
+    return [
+      {
+        label: "Today's Sales",
+        value: `${currency}${Number(commerceStats.sales || 0).toLocaleString()}`,
+        sub: 'Counter & digital payments',
+        icon: ShoppingCart,
+        color: 'text-emerald-600',
+        onClick: () => openCommerceTab('pos'),
+      },
+      {
+        label: 'Total Orders',
+        value: commerceStats.ordersCount ?? stats?.totalSubmissions ?? 0,
+        sub: 'In-store & WhatsApp orders',
+        icon: Package,
+        color: 'text-blue-600',
+        onClick: () => openCommerceTab('orders'),
+      },
+      {
+        label: countryPack?.vocabulary?.customerCredit || 'Khata (Udhaar)',
+        value: `${currency}${Number(commerceStats.khataReceivable || 0).toLocaleString()}`,
+        sub: 'Customer balance due',
+        icon: Users,
+        color: 'text-amber-600',
+        onClick: () => openCommerceTab('khata'),
+      },
+      {
+        label: 'Forms & Leads',
+        value: stats?.totalSubmissions ?? 0,
+        sub: 'Inquiries captured',
+        icon: FileInput,
+        color: 'text-purple-600',
+        onClick: () => setCurrentView('formSubmissions'),
+      },
+    ];
+  };
+
+  const kpiCards = getAdaptiveKpis();
 
   return (
     <div className="space-y-6 w-full p-4 md:p-6 lg:p-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Blueprint Feature Customization Modal */}
+      <BusinessBlueprintWizard
+        open={blueprintWizardOpen}
+        onOpenChange={setBlueprintWizardOpen}
+      />
+
+      {/* Dynamic Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">AI Forms Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Build intelligent forms, train your AI agent, and capture leads — all in one place.
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-black tracking-tight">{greeting}, {businessName} 👋</h1>
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-300 font-bold text-xs gap-1 py-0.5">
+              <span>{typeMeta.icon}</span>
+              <span>{typeMeta.label}</span>
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            {businessType === 'restaurant' && 'Active tables, live kitchen queue, and restaurant orders for today.'}
+            {businessType === 'salon' && "Today's scheduled appointments, walk-ins, and client service sales."}
+            {businessType === 'services' && "Today's active jobs, upcoming appointments, and pending estimates."}
+            {businessType === 'online_store' && 'Storefront visitors, online orders, and customer conversations.'}
+            {(businessType === 'retail' || businessType === 'grocery') && "Today's counter sales, order queue, stock, and customer ledger."}
+            {businessType === 'wholesale' && 'Wholesale sales orders, bulk inventory, and customer receivables.'}
+            {businessType === 'other' && 'Workflows, forms, AI agents, and daily business operations.'}
           </p>
         </div>
+
         <div className="flex gap-2 flex-wrap items-center">
           <Button
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs h-9 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
+            variant="outline"
+            size="sm"
+            onClick={() => setBlueprintWizardOpen(true)}
+            className="rounded-xl text-xs font-bold gap-1.5 h-9 border-stone-300 hover:border-emerald-500 cursor-pointer"
+          >
+            <SlidersHorizontal className="size-3.5 text-emerald-600" />
+            <span>Customize Features</span>
+          </Button>
+
+          <Button
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 rounded-xl shadow-xs gap-1.5 cursor-pointer"
             onClick={() => openCreateFormWizard('form')}
           >
-            <Sparkles className="size-4" />
+            <Sparkles className="size-3.5" />
             <span>AI Form Wizard</span>
           </Button>
+
           <Button
             variant="outline"
+            size="sm"
             className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer"
             onClick={() => setCurrentView('agentStudio')}
           >
-            <Bot className="size-4 text-blue-600" />
+            <Bot className="size-3.5 text-blue-600" />
             <span>AI Agent Studio</span>
-          </Button>
-          <Button variant="outline" className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer" onClick={() => setTemplatePickerOpen(true)}>
-            <LayoutGrid className="w-4 h-4 mr-1 text-slate-600" />
-            Browse Templates
-          </Button>
-          <Button className="h-9 rounded-xl text-xs font-semibold gap-1.5 cursor-pointer" onClick={() => setCurrentView('formBuilder')}>
-            <Plus className="w-4 h-4 mr-1" />
-            Create Form
           </Button>
         </div>
       </div>
 
-      {/* ─── Store & Merchant OS Quick Access Hub ─── */}
-      <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
-            <ShoppingCart className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-stone-900 dark:text-stone-100">Store &amp; Merchant Hub</span>
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-300 text-[10px] font-bold">
-                Vyapar &amp; Take.app
-              </Badge>
-            </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-              WhatsApp Store • Live Orders • POS Cashier • GST Billing • Khata Udhaar • Day Book
-            </p>
-          </div>
+      {/* Dynamic 1-Tap Quick Actions Bar */}
+      <div className="rounded-2xl border border-border bg-card p-3 sm:p-4 shadow-2xs">
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+            ⚡ Quick Actions for {typeMeta.label}
+          </span>
+          <span className="text-[11px] text-muted-foreground font-medium hidden sm:inline">1-tap operational shortcuts</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            onClick={() => setCurrentView('commerce')}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 shadow-2xs cursor-pointer"
-          >
-            <Package className="h-3.5 w-3.5" />
-            Live Orders
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setCurrentView('commerce')}
-            variant="outline"
-            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
-          >
-            <Plus className="h-3.5 w-3.5 text-emerald-600" />
-            POS Cashier
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setCurrentView('quoteFlow')}
-            variant="outline"
-            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
-          >
-            <FileText className="h-3.5 w-3.5 text-blue-600" />
-            GST Billing
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setCurrentView('quoteFlow')}
-            variant="outline"
-            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
-          >
-            <Users className="h-3.5 w-3.5 text-amber-600" />
-            Khata (Udhaar)
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          {businessType === 'restaurant' && (
+            <>
+              <Button size="sm" onClick={() => openCommerceTab('pos')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 rounded-lg cursor-pointer">
+                <ShoppingCart className="size-3.5" /> + New Order (POS)
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('dineIn')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <UtensilsCrossed className="size-3.5 text-amber-600" /> Open Tables
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('kds')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <ChefHat className="size-3.5 text-purple-600" /> Kitchen KDS
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('orders')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Package className="size-3.5 text-blue-600" /> Live Orders
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('catalog')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Store className="size-3.5 text-stone-600" /> QR Digital Menu
+              </Button>
+            </>
+          )}
+
+          {businessType === 'salon' && (
+            <>
+              <Button size="sm" onClick={() => setCurrentView('booking')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 rounded-lg cursor-pointer">
+                <Calendar className="size-3.5" /> + New Appointment
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('pos')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <ShoppingCart className="size-3.5 text-emerald-600" /> + Walk-in Sale
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCurrentView('customers')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Users className="size-3.5 text-blue-600" /> Client List
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('catalog')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Package className="size-3.5 text-purple-600" /> Services &amp; Products
+              </Button>
+            </>
+          )}
+
+          {businessType === 'services' && (
+            <>
+              <Button size="sm" onClick={() => openCommerceTab('orders')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 rounded-lg cursor-pointer">
+                <Briefcase className="size-3.5" /> + New Job
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCurrentView('booking')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Calendar className="size-3.5 text-purple-600" /> + Schedule Visit
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('billing')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <FileText className="size-3.5 text-blue-600" /> + Create Estimate / Quote
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCurrentView('customers')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Users className="size-3.5 text-amber-600" /> Customers
+              </Button>
+            </>
+          )}
+
+          {businessType === 'online_store' && (
+            <>
+              <Button size="sm" onClick={() => openCommerceTab('catalog')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 rounded-lg cursor-pointer">
+                <Store className="size-3.5" /> + Add Product
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('orders')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Package className="size-3.5 text-blue-600" /> View Orders
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCurrentView('agentStudio')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Bot className="size-3.5 text-purple-600" /> AI Web Agent
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCurrentView('formBuilder')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <FileInput className="size-3.5 text-amber-600" /> Intake Forms
+              </Button>
+            </>
+          )}
+
+          {businessType !== 'restaurant' && businessType !== 'salon' && businessType !== 'services' && businessType !== 'online_store' && (
+            <>
+              <Button size="sm" onClick={() => openCommerceTab('pos')} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 rounded-lg cursor-pointer">
+                <ShoppingCart className="size-3.5" /> + New Sale (POS)
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('orders')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Package className="size-3.5 text-blue-600" /> Live Orders
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('catalog')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Store className="size-3.5 text-purple-600" /> + Add Stock / Product
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('khata')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <Users className="size-3.5 text-amber-600" /> {countryPack?.vocabulary?.customerCredit || 'Khata (Udhaar)'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openCommerceTab('billing')} className="font-bold text-xs h-8 gap-1.5 rounded-lg border-stone-300 cursor-pointer">
+                <FileText className="size-3.5 text-emerald-600" /> GST / Invoices
+              </Button>
+            </>
+          )}
         </div>
+      </div>
+
+      {/* Adaptive KPI Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {kpiCards.map((kpi) => (
+          <Card
+            key={kpi.label}
+            className={cn('cursor-pointer transition-shadow hover:shadow-md border-border/80', kpi.onClick ? '' : 'cursor-default')}
+            onClick={kpi.onClick}
+          >
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                {kpi.label}
+              </CardTitle>
+              <kpi.icon className={cn('w-4 h-4', kpi.color)} />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-black text-foreground">{kpi.value}</div>
+              {kpi.sub && (
+                <p className="text-[11px] text-muted-foreground mt-0.5">{kpi.sub}</p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* ── INTENT-FIRST AI HERO: DESCRIBE WHAT YOU WANT TO CREATE ── */}
@@ -721,34 +1008,6 @@ export function FormsDashboardView() {
           </div>
         </div>
       )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        {kpiCards.map((kpi) => (
-          <Card
-            key={kpi.label}
-            className={cn('cursor-pointer transition-shadow hover:shadow-md', kpi.onClick ? '' : 'cursor-default')}
-            onClick={kpi.onClick}
-          >
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <div className="flex items-center gap-1.5">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {kpi.label}
-                </CardTitle>
-                {kpi.badge && (
-                  <span className={cn('text-[9px] font-bold px-1 py-0.5 rounded', kpi.badgeClass || 'bg-purple-500/10 text-purple-600 dark:text-purple-400')}>
-                    {kpi.badge}
-                  </span>
-                )}
-              </div>
-              <kpi.icon className={cn('w-4 h-4', kpi.color)} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{kpi.value}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       {/* AI Agent + Knowledge Status */}
       <div className="grid md:grid-cols-2 gap-4">

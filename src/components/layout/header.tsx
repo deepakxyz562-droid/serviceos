@@ -43,6 +43,7 @@ import { OfflineStatusBar } from '@/components/shared/offline-status-bar';
 import { authFetch } from '@/lib/api';
 import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
 import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint';
+import { performClientLogout } from '@/lib/client-auth';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -654,9 +655,11 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              className="cursor-pointer gap-2"
-              onClick={onLogout}
-              disabled={!onLogout}
+              className="cursor-pointer gap-2 text-red-600 focus:text-red-600"
+              onClick={() => {
+                if (onLogout) onLogout();
+                else void performClientLogout();
+              }}
             >
               <LogOut className="size-4" />
               Log out

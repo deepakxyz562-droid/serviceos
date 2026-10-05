@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
 import {
   ThermalPrinterModal,
-  ThermalPrinterConfig,
+  type ThermalPrinterConfig,
 } from '@/components/commerce/thermal-printer-modal';
 import {
   printKOT,
@@ -17,8 +17,8 @@ import {
 import {
   activeBluetoothPrinter,
   activeUsbPrinter,
-  PrintOrderData,
-  BusinessPrintInfo,
+  type PrintOrderData,
+  type BusinessPrintInfo,
 } from '@/lib/hardware/escpos-printer';
 import {
   Package,
@@ -85,7 +85,7 @@ import { authFetch } from '@/lib/client-auth';
 import {
   generateGstInvoiceHtml,
   numberToWords,
-  GstStoreInfo,
+  type GstStoreInfo,
 } from '@/lib/billing/gst-invoice-helper';
 
 export function CommerceView() {
@@ -103,7 +103,25 @@ export function CommerceView() {
     | 'closing'
     | 'billing'
     | 'settings'
-  >('orders');
+  >(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('nuvora_commerce_tab');
+      if (saved && ['orders', 'catalog', 'pos', 'dineIn', 'templates', 'promotions', 'domain', 'khata', 'daybook', 'kds', 'closing', 'billing', 'settings'].includes(saved)) {
+        return saved as any;
+      }
+    }
+    return 'orders';
+  });
+
+  useEffect(() => {
+    const handleTabSwitch = (e: any) => {
+      if (e.detail && typeof e.detail === 'string') {
+        setActiveTab(e.detail as any);
+      }
+    };
+    window.addEventListener('nuvora_switch_commerce_tab', handleTabSwitch);
+    return () => window.removeEventListener('nuvora_switch_commerce_tab', handleTabSwitch);
+  }, []);
   const { auth, blueprint, countryPack } = useAppStore();
 
   // Industry Templates State
@@ -181,6 +199,10 @@ export function CommerceView() {
   const [deliveryAreas, setDeliveryAreas] = useState('');
   const [greetingMessage, setGreetingMessage] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
+
+  const currencySymbol = countryPack?.currency?.symbol || config?.currencySymbol || '$';
+  const businessSlug = auth?.tenant?.slug || auth?.user?.id || 'demo';
+  const publicStoreUrl = typeof window !== 'undefined' ? `${window.location.origin}/store/${businessSlug}` : `/store/${businessSlug}`;
 
   // Selected Order Modal State
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
@@ -2064,10 +2086,6 @@ export function CommerceView() {
     return matchesSearch && matchesCategory;
   });
 
-  const currencySymbol = countryPack?.currency?.symbol || config?.currencySymbol || '$';
-  const businessSlug = auth?.tenant?.slug || auth?.user?.id || 'demo';
-  const publicStoreUrl = typeof window !== 'undefined' ? `${window.location.origin}/store/${businessSlug}` : `/store/${businessSlug}`;
-
   // Adaptive Tab Labels based on Business Model & Country Pack
   const catalogLabel = businessType === 'restaurant'
     ? 'Menu & Items'
@@ -2078,7 +2096,7 @@ export function CommerceView() {
   const khataLabel = countryPack?.vocabulary?.customerCredit || 'Khata (Udhaar)';
   const billingLabel = countryPack?.vocabulary?.invoice
     ? `${countryPack.vocabulary.invoice} & Billing`
-    : (countryPack?.countryCode === 'IN' ? 'Billing & GST' : 'Billing & Invoices');
+    : (countryPack?.code === 'IN' ? 'Billing & GST' : 'Billing & Invoices');
 
   // Billing live-computed totals (mirrors mobile billing.tsx modal math)
   const billingSubtotal = billingItems.reduce(

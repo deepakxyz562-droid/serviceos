@@ -33,10 +33,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
-import type { BusinessType, CountryCode, BusinessCapabilities } from '@/lib/blueprint';
+import type { BusinessType, CountryCode, BusinessCapabilities, SalesChannel } from '@/lib/blueprint';
 import {
   BUSINESS_TYPE_LABELS,
   COUNTRY_PACKS,
+  SALES_CHANNEL_INFO,
+  DEFAULT_CHANNELS_FOR_BUSINESS_TYPE,
+  resolveBlueprintCapabilities,
   getCapabilitiesForBusinessType,
   getCountryPack,
 } from '@/lib/blueprint';
@@ -60,6 +63,16 @@ const BUSINESS_TYPES: BusinessType[] = [
   'other',
 ];
 
+const ALL_SALES_CHANNELS: SalesChannel[] = [
+  'in_store',
+  'online',
+  'whatsapp',
+  'dine_in',
+  'delivery',
+  'at_location',
+  'b2b',
+];
+
 const COUNTRIES: CountryCode[] = ['US', 'CA', 'AU', 'IN', 'GB', 'GLOBAL'];
 
 export function BusinessBlueprintWizard({
@@ -73,6 +86,11 @@ export function BusinessBlueprintWizard({
   const [selectedType, setSelectedType] = useState<BusinessType>(
     blueprint?.businessType || 'retail'
   );
+  const [selectedChannels, setSelectedChannels] = useState<SalesChannel[]>(
+    blueprint?.salesChannels && blueprint.salesChannels.length > 0
+      ? blueprint.salesChannels
+      : (DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[blueprint?.businessType || 'retail'] || ['in_store'])
+  );
   const [businessName, setBusinessName] = useState<string>(
     blueprint?.businessName || auth?.tenant?.name || auth?.tenant?.companyName || ''
   );
@@ -80,7 +98,7 @@ export function BusinessBlueprintWizard({
     blueprint?.country || 'US'
   );
   const [capabilities, setCapabilities] = useState<BusinessCapabilities>(
-    blueprint?.capabilities || getCapabilitiesForBusinessType('retail')
+    blueprint?.capabilities || resolveBlueprintCapabilities('retail', ['in_store', 'whatsapp'])
   );
   const [saving, setSaving] = useState(false);
 
@@ -88,7 +106,18 @@ export function BusinessBlueprintWizard({
 
   const handleSelectType = (type: BusinessType) => {
     setSelectedType(type);
-    setCapabilities(getCapabilitiesForBusinessType(type));
+    const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[type] || ['in_store'];
+    setSelectedChannels(channels);
+    setCapabilities(resolveBlueprintCapabilities(type, channels));
+  };
+
+  const toggleChannel = (channel: SalesChannel) => {
+    const updated = selectedChannels.includes(channel)
+      ? selectedChannels.filter((c) => c !== channel)
+      : [...selectedChannels, channel];
+    const finalChannels = updated.length > 0 ? updated : [channel];
+    setSelectedChannels(finalChannels);
+    setCapabilities(resolveBlueprintCapabilities(selectedType, finalChannels, capabilities));
   };
 
   const toggleCapability = (key: keyof BusinessCapabilities) => {
@@ -106,6 +135,7 @@ export function BusinessBlueprintWizard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           businessType: selectedType,
+          salesChannels: selectedChannels,
           businessName: businessName.trim() || undefined,
           country: selectedCountry,
           capabilities,
@@ -145,18 +175,18 @@ export function BusinessBlueprintWizard({
           </div>
 
           <DialogTitle className="text-xl sm:text-2xl font-black tracking-tight text-foreground">
-            {step === 1 && 'What type of business do you run?'}
-            {step === 2 && 'Where is your business located?'}
-            {step === 3 && 'What do you want to manage?'}
+            {step === 1 && 'Step 1 — What is your business?'}
+            {step === 2 && 'Step 2 — How do you sell?'}
+            {step === 3 && 'Step 3 — Location & Active Modules'}
           </DialogTitle>
 
           <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
             {step === 1 &&
-              'Nuvora dynamically configures its navigation and tools so you only see what matters.'}
+              'Choose your industry. Nuvora will tailor the vocabulary and default tools.'}
             {step === 2 &&
-              'We automatically tailor currencies, tax rules, and payments to your geography.'}
+              'Select all the channels you use to sell. This configures your POS, catalog, and ordering.'}
             {step === 3 &&
-              'Turn modules on or off anytime. You can change these preferences later in Settings.'}
+              'Review your operating country, tax pack, and toggle active workspace modules.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -172,7 +202,7 @@ export function BusinessBlueprintWizard({
                   onClick={() => handleSelectType(type)}
                   className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
                     isSelected
-                      ? 'border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20'
+                      ? 'border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20 shadow-xs'
                       : 'border-border/70 hover:border-slate-300 bg-card hover:bg-slate-50/50 dark:hover:bg-slate-900/40'
                   }`}
                 >
@@ -196,84 +226,87 @@ export function BusinessBlueprintWizard({
           </div>
         )}
 
-        {/* STEP 2: LOCATION & GEOGRAPHY */}
+        {/* STEP 2: HOW DO YOU SELL (SALES CHANNELS) */}
         {step === 2 && (
-          <div className="space-y-5 py-4">
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Business Name
-              </Label>
-              <Input
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="e.g. Blue River Bakery, Peak Plumbing"
-                className="h-11 rounded-xl text-sm"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Operating Country & Tax Pack
-              </Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                {COUNTRIES.map((c) => {
-                  const pack = COUNTRY_PACKS[c];
-                  const isSelected = selectedCountry === c;
-                  return (
-                    <div
-                      key={c}
-                      onClick={() => setSelectedCountry(c)}
-                      className={`p-3 rounded-2xl border-2 cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20'
-                          : 'border-border/70 hover:border-slate-300 bg-card'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{pack.flag}</span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold truncate">{pack.name}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {pack.currency.code} ({pack.currency.symbol})
-                          </p>
-                        </div>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {ALL_SALES_CHANNELS.map((ch) => {
+                const info = SALES_CHANNEL_INFO[ch];
+                const isSelected = selectedChannels.includes(ch);
+                return (
+                  <div
+                    key={ch}
+                    onClick={() => toggleChannel(ch)}
+                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                      isSelected
+                        ? 'border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/20 shadow-xs'
+                        : 'border-border/70 hover:border-slate-300 bg-card hover:bg-slate-50/50 dark:hover:bg-slate-900/40'
+                    }`}
+                  >
+                    <span className="text-2xl shrink-0 mt-0.5">{info.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-foreground">
+                          {info.label}
+                        </span>
+                        {isSelected && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        )}
                       </div>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {info.description}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Live Country Preview Card */}
-            <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-foreground">
-                <span>{countryPack.flag}</span>
-                <span>Configured for {countryPack.name}</span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] text-muted-foreground">
-                <div>
-                  <span className="font-semibold text-foreground">Currency:</span>{' '}
-                  {countryPack.currency.code} ({countryPack.currency.symbol})
-                </div>
-                <div>
-                  <span className="font-semibold text-foreground">Tax Model:</span>{' '}
-                  {countryPack.tax.label} ({countryPack.tax.defaultRate}%)
-                </div>
-                <div>
-                  <span className="font-semibold text-foreground">Credit Ledger:</span>{' '}
-                  {countryPack.vocabulary.customerCredit}
-                </div>
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* STEP 3: CAPABILITIES CHECKLIST */}
+        {/* STEP 3: LOCATION & CAPABILITIES CHECKLIST */}
         {step === 3 && (
-          <div className="space-y-4 py-4">
-            <p className="text-xs text-muted-foreground">
-              Based on your selection (<strong>{BUSINESS_TYPE_LABELS[selectedType].label}</strong>), we have recommended the essential modules below. You can customize them now or toggle them anytime later:
-            </p>
+          <div className="space-y-5 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Business Name
+                </Label>
+                <Input
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="e.g. Blue River Bakery, Peak Plumbing"
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Country &amp; Tax Model
+                </Label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {COUNTRIES.map((c) => {
+                    const pack = COUNTRY_PACKS[c];
+                    const isSelected = selectedCountry === c;
+                    return (
+                      <button
+                        type="button"
+                        key={c}
+                        onClick={() => setSelectedCountry(c)}
+                        className={`p-1.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-emerald-600 bg-emerald-50 text-emerald-900 font-bold dark:bg-emerald-950/40 dark:text-emerald-300'
+                            : 'border-border/80 bg-card hover:bg-muted text-xs'
+                        }`}
+                      >
+                        <span className="text-base mr-1">{pack.flag}</span>
+                        <span className="text-xs">{c}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
               {/* Commerce & Sales */}

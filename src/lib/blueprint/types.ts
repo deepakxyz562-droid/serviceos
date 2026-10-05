@@ -10,6 +10,15 @@ export type BusinessType =
   | 'manufacturing'
   | 'other';
 
+export type SalesChannel =
+  | 'in_store'
+  | 'online'
+  | 'whatsapp'
+  | 'dine_in'
+  | 'delivery'
+  | 'at_location'
+  | 'b2b';
+
 export interface BusinessCapabilities {
   // Commerce & Storefront
   onlineStore: boolean;
@@ -42,7 +51,10 @@ export interface BusinessCapabilities {
   customers: boolean;
   loyalty: boolean;
   marketingBlasts: boolean;
+  whatsapp: boolean;
   aiReceptionist: boolean;
+  aiAgent: boolean;
+  forms: boolean;
   customDomain: boolean;
 }
 
@@ -93,6 +105,7 @@ export interface CountryPack {
 
 export interface TenantBlueprint {
   businessType: BusinessType;
+  salesChannels?: SalesChannel[];
   businessName?: string;
   country: CountryCode;
   capabilities: BusinessCapabilities;

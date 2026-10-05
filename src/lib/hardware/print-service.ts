@@ -8,7 +8,15 @@ import {
   BusinessPrintInfo,
   PaperWidth,
 } from './escpos-printer';
-import { ThermalPrinterConfig } from '@/components/commerce/thermal-printer-modal';
+
+export interface ThermalPrinterConfig {
+  connectionType: 'bluetooth' | 'usb' | 'browser';
+  deviceName: string;
+  paperWidth: PaperWidth;
+  autoPrintEnabled: boolean;
+  autoPrintTarget: 'KOT' | 'RECEIPT' | 'BOTH';
+  soundAlertEnabled: boolean;
+}
 
 export const DEFAULT_PRINTER_CONFIG: ThermalPrinterConfig = {
   connectionType: 'browser',

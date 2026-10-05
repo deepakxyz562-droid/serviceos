@@ -1,5 +1,5 @@
-import type { TenantBlueprint, BusinessType, CountryCode, BusinessCapabilities } from './types';
-import { getCapabilitiesForBusinessType } from './presets';
+import type { TenantBlueprint, BusinessType, CountryCode, BusinessCapabilities, SalesChannel } from './types';
+import { resolveBlueprintCapabilities, DEFAULT_CHANNELS_FOR_BUSINESS_TYPE } from './presets';
 import { getCountryPack } from './country-packs';
 
 export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
@@ -18,20 +18,20 @@ export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
   if (settings.blueprint && typeof settings.blueprint === 'object') {
     const bp = settings.blueprint;
     const businessType: BusinessType = bp.businessType || 'services';
+    const salesChannels: SalesChannel[] = Array.isArray(bp.salesChannels) && bp.salesChannels.length > 0
+      ? bp.salesChannels
+      : (DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[businessType] || ['in_store']);
     const country: CountryCode = bp.country || 'US';
-    const defaults = getCapabilitiesForBusinessType(businessType);
-    const capabilities: BusinessCapabilities = {
-      ...defaults,
-      ...(bp.capabilities || {}),
-    };
+    const capabilities = resolveBlueprintCapabilities(businessType, salesChannels, bp.capabilities);
 
     return {
       businessType,
+      salesChannels,
       businessName: bp.businessName || tenant?.name || tenant?.companyName,
       country,
       capabilities,
       configuredAt: bp.configuredAt || new Date().toISOString(),
-      version: bp.version || 1,
+      version: bp.version || 2,
     };
   }
 
@@ -68,14 +68,16 @@ export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
     inferredType = 'grocery';
   }
 
-  const defaultCapabilities = getCapabilitiesForBusinessType(inferredType);
+  const defaultChannels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[inferredType] || ['in_store'];
+  const defaultCapabilities = resolveBlueprintCapabilities(inferredType, defaultChannels);
 
   return {
     businessType: inferredType,
+    salesChannels: defaultChannels,
     businessName: tenant?.name || tenant?.companyName,
     country: inferredCountry,
     capabilities: defaultCapabilities,
     configuredAt: new Date().toISOString(),
-    version: 1,
+    version: 2,
   };
 }

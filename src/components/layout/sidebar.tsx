@@ -75,6 +75,9 @@ import {
   FileInput,
   MessageSquare,
   Inbox,
+  UtensilsCrossed,
+  ChefHat,
+  ShoppingCart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -104,6 +107,8 @@ import { toast } from 'sonner';
 import { openUpgradeModal, checkMenuAccess } from '@/components/layout/upgrade-modal';
 import { resolvePlanTierClient, PLAN_DISPLAY_NAMES } from '@/lib/plan-features';
 import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
+import { getStandaloneNavSectionsForBlueprint } from '@/lib/blueprint';
+import { performClientLogout } from '@/lib/client-auth';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
 
@@ -112,6 +117,7 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: string;
+  tab?: string;
 }
 
 interface NavSection {
@@ -264,6 +270,33 @@ const standaloneNavSections: NavSection[] = [
     ],
   },
 ];
+
+const ICON_MAP: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  Bot,
+  PhoneCall,
+  FileInput,
+  ShoppingBag,
+  RadioTower,
+  Inbox,
+  CalendarCheck,
+  Calendar,
+  Share2,
+  BarChart3,
+  CreditCard,
+  Settings,
+  Receipt,
+  Users,
+  FileText,
+  Store,
+  Globe,
+  Package,
+  UtensilsCrossed,
+  ChefHat,
+  ShoppingCart,
+  Briefcase,
+  Zap,
+};
 
 const employeeNavSections: NavSection[] = [
   {
@@ -516,6 +549,23 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   const [blueprintWizardOpen, setBlueprintWizardOpen] = useState(false);
   const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+  const [currentCommerceTab, setCurrentCommerceTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('nuvora_commerce_tab') || 'pos';
+    }
+    return 'pos';
+  });
+
+  useEffect(() => {
+    const handleCommerceTab = (e: any) => {
+      if (e.detail && typeof e.detail === 'string') {
+        setCurrentCommerceTab(e.detail);
+      }
+    };
+    window.addEventListener('nuvora_switch_commerce_tab', handleCommerceTab);
+    return () => window.removeEventListener('nuvora_switch_commerce_tab', handleCommerceTab);
+  }, []);
+
   // User-explicit overrides of each section's collapsed state. The effective
   // collapsed state is derived: override wins if present, otherwise the
   // section's `defaultCollapsed` flag applies. This avoids a setState-in-effect
@@ -622,8 +672,18 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       // menu-visibility filtering (the fixed set is already final).
       return listingOnlyNavSections;
     } else if (isStandalone) {
-      // Standalone AI & Forms tenants get the focused suite nav
-      return standaloneNavSections;
+      // Standalone AI & Forms tenants get dynamic blueprint-driven 3-layer nav
+      const dynamicSections = getStandaloneNavSectionsForBlueprint(blueprint);
+      return dynamicSections.map((sec) => ({
+        title: sec.title,
+        items: sec.items.map((it) => ({
+          view: it.view as ViewType,
+          label: it.label,
+          icon: ICON_MAP[it.iconName] || ShoppingBag,
+          badge: it.badge,
+          tab: it.tab,
+        })),
+      }));
     } else if (isEmployee) {
       sections = employeeNavSections;
     } else {
@@ -693,7 +753,14 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     return sections;
   }, [isSuperAdmin, isEmployee, isListingOnly, isStandalone, disabledMenus, auth.tenant, blueprint, countryPack]);
 
-  const handleNavClick = (view: ViewType) => {
+  const handleNavClick = (view: ViewType, tab?: string) => {
+    if (tab) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('nuvora_commerce_tab', tab);
+        window.dispatchEvent(new CustomEvent('nuvora_switch_commerce_tab', { detail: tab }));
+      }
+      setCurrentCommerceTab(tab);
+    }
     setCurrentView(view);
     if (isMobile) setMobileSidebarOpen(false);
   };
@@ -708,7 +775,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon;
-    const isActive = currentView === item.view;
+    const isActive = item.tab
+      ? currentView === item.view && currentCommerceTab === item.tab
+      : item.view === 'commerce'
+      ? currentView === 'commerce' && (!currentCommerceTab || currentCommerceTab === 'pos' || currentCommerceTab === 'orders')
+      : currentView === item.view;
 
     // ── Plan-gated access (trial=LOCK, paid=HIDE) ─────────────────────────
     // Behaviour matrix per spec:
@@ -741,7 +812,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       const tooltipText = `🔒 Available on ${minPlanDisplay} plan and above — Click to upgrade`;
       const lockedButton = (
         <button
-          key={item.view}
+          key={item.tab ? `${item.view}-${item.tab}` : item.view}
           type="button"
           aria-disabled="true"
           title={tooltipText}
@@ -780,8 +851,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
     return (
       <button
-        key={item.view}
-        onClick={() => handleNavClick(item.view)}
+        key={item.tab ? `${item.view}-${item.tab}` : item.view}
+        onClick={() => handleNavClick(item.view, item.tab)}
         onMouseEnter={() => prefetchView(item.view)}
         onFocus={() => prefetchView(item.view)}
         className={cn(
@@ -943,7 +1014,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                           : item.label;
 
                       return (
-                        <Tooltip key={item.view}>
+                        <Tooltip key={item.tab ? `${item.view}-${item.tab}` : item.view}>
                           <TooltipTrigger asChild>
                             {renderNavItem(item)}
                           </TooltipTrigger>
@@ -1044,24 +1115,31 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
             </p>
           </div>
         )}
-        {isExpandedMode && onLogout && (
+        {!isMobile && leftSidebarOpen && (
           <Button
             variant="ghost"
             size="icon"
-            className="text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70 h-8 w-8 shrink-0"
-            onClick={onLogout}
+            className="text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 h-8 w-8 shrink-0 transition-colors"
+            title="Log out"
+            onClick={() => {
+              if (onLogout) onLogout();
+              else void performClientLogout();
+            }}
           >
             <LogOut className="size-4" />
           </Button>
         )}
-        {!isMobile && !leftSidebarOpen && onLogout && (
+        {!isMobile && !leftSidebarOpen && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70 h-8 w-8 shrink-0 absolute bottom-3 right-1"
-                onClick={onLogout}
+                className="text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 h-8 w-8 shrink-0 absolute bottom-3 right-1"
+                onClick={() => {
+                  if (onLogout) onLogout();
+                  else void performClientLogout();
+                }}
               >
                 <LogOut className="size-4" />
               </Button>
@@ -1072,6 +1150,24 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           </Tooltip>
         )}
       </div>
+
+      {/* Dedicated full-width Mobile Logout Button */}
+      {isMobile && (
+        <div className="px-3 pb-3 pt-0 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (onLogout) onLogout();
+              else void performClientLogout();
+            }}
+            className="w-full flex items-center justify-center gap-2 h-10 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40 border-red-200/80 dark:border-red-900/40 transition-colors shadow-2xs"
+          >
+            <LogOut className="size-4" />
+            <span>Sign Out</span>
+          </Button>
+        </div>
+      )}
 
       <BusinessBlueprintWizard
         open={blueprintWizardOpen}
