@@ -186,6 +186,19 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const queryClient = useQueryClient();
 
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin');
+  const isEmployee = auth.user?.role === 'employee';
+  const isStandalone =
+    !isSuperAdmin &&
+    !isEmployee &&
+    (!auth.user?.tenantId ||
+     (auth.tenant as any)?.signupMode === 'standalone' ||
+     (auth.tenant as any)?.plan === 'standalone_starter' ||
+     (auth.tenant as any)?.plan === 'standalone_business' ||
+     (auth.tenant as any)?.productType === 'forms' ||
+     (auth.workspace as any)?.productType === 'forms' ||
+     String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
+     (auth.user as any)?.role === 'standalone_user');
+
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   // Global Command+K / Ctrl+K keyboard shortcut to toggle AI Copilot Drawer
@@ -386,40 +399,44 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         {viewLabels[currentView] || 'Dashboard'}
       </h1>
 
-      {/* ─── Business Type & Currency Switcher Chip ────────────────────── */}
-      <button
-        type="button"
-        onClick={() => setBlueprintWizardOpen(true)}
-        className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/80 hover:bg-indigo-100/90 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 text-xs font-semibold text-indigo-900 dark:text-indigo-200 transition shadow-2xs group shrink-0 cursor-pointer"
-        title="Configure Business Type & Currency"
-      >
-        <span className="text-sm leading-none">
-          {blueprint?.businessType && BUSINESS_TYPE_LABELS[blueprint.businessType]?.icon
-            ? BUSINESS_TYPE_LABELS[blueprint.businessType].icon
-            : '🏢'}
-        </span>
-        <span className="capitalize">
-          {blueprint?.businessType
-            ? (BUSINESS_TYPE_LABELS[blueprint.businessType]?.label || blueprint.businessType.replace('_', ' '))
-            : 'Adaptive Profile'}
-        </span>
-        <span className="text-indigo-300 dark:text-indigo-600">·</span>
-        <span>
-          {countryPack?.flag || '🇺🇸'} {countryPack?.currency?.code || 'USD'} ({countryPack?.currency?.symbol || '$'})
-        </span>
-        <ChevronDown className="size-3 text-indigo-500 group-hover:translate-y-0.5 transition-transform" />
-      </button>
+      {/* ─── Business Type & Currency Switcher Chip (GPTForm/Nuvora Standalone mode only) ─── */}
+      {isStandalone && (
+        <>
+          <button
+            type="button"
+            onClick={() => setBlueprintWizardOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/80 hover:bg-indigo-100/90 dark:bg-indigo-950/40 dark:hover:bg-indigo-950/70 text-xs font-semibold text-indigo-900 dark:text-indigo-200 transition shadow-2xs group shrink-0 cursor-pointer"
+            title="Configure Business Type & Currency"
+          >
+            <span className="text-sm leading-none">
+              {blueprint?.businessType && BUSINESS_TYPE_LABELS[blueprint.businessType]?.icon
+                ? BUSINESS_TYPE_LABELS[blueprint.businessType].icon
+                : '🏢'}
+            </span>
+            <span className="capitalize">
+              {blueprint?.businessType
+                ? (BUSINESS_TYPE_LABELS[blueprint.businessType]?.label || blueprint.businessType.replace('_', ' '))
+                : 'Adaptive Profile'}
+            </span>
+            <span className="text-indigo-300 dark:text-indigo-600">·</span>
+            <span>
+              {countryPack?.flag || '🇺🇸'} {countryPack?.currency?.code || 'USD'} ({countryPack?.currency?.symbol || '$'})
+            </span>
+            <ChevronDown className="size-3 text-indigo-500 group-hover:translate-y-0.5 transition-transform" />
+          </button>
 
-      <button
-        type="button"
-        onClick={() => setBlueprintWizardOpen(true)}
-        className="sm:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-[11px] font-bold text-indigo-900 dark:text-indigo-200 shrink-0 cursor-pointer"
-        title="Change Currency & Business Profile"
-      >
-        <span>{countryPack?.flag || '🇺🇸'}</span>
-        <span>{countryPack?.currency?.symbol || '$'}</span>
-        <ChevronDown className="size-2.5 text-indigo-500" />
-      </button>
+          <button
+            type="button"
+            onClick={() => setBlueprintWizardOpen(true)}
+            className="sm:hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-[11px] font-bold text-indigo-900 dark:text-indigo-200 shrink-0 cursor-pointer"
+            title="Change Currency & Business Profile"
+          >
+            <span>{countryPack?.flag || '🇺🇸'}</span>
+            <span>{countryPack?.currency?.symbol || '$'}</span>
+            <ChevronDown className="size-2.5 text-indigo-500" />
+          </button>
+        </>
+      )}
 
       {!isCanvas && (
         <>

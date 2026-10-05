@@ -197,6 +197,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
+      { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],
   },
@@ -396,6 +397,7 @@ const superadminNavSections: NavSection[] = [
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
+      { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],
   },
@@ -970,8 +972,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </button>
       )}
 
-      {/* Adaptive Blueprint Setup Button (Expanded mode only) */}
-      {isExpandedMode && !isSuperAdmin && !isListingOnly && (
+      {/* Adaptive Blueprint Setup Button (GPTForm/Nuvora Standalone mode only) */}
+      {isExpandedMode && isStandalone && (
         <div className="px-3 pb-2 pt-1 shrink-0">
           <button
             type="button"
