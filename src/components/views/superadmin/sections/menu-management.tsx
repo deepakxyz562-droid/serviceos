@@ -72,11 +72,11 @@ const DEFAULT_CATALOG: { key: string; label: string; section: string }[] = MENU_
 );
 
 // Section display metadata — ordered to match the sidebar layout (Overview →
-// CRM → Operations → Marketing → Inbox & Automation → AI Receptionist →
+// CRM → Operations → Marketing → AI & Forms → Inbox & Automation → AI Receptionist →
 // Finance → Setup & Admin).
 const SECTION_ORDER = [
   'Overview', 'CRM', 'Operations', 'Marketing',
-  'Inbox & Automation', 'AI Receptionist', 'Finance', 'Setup & Admin',
+  'AI & Forms', 'Inbox & Automation', 'AI Receptionist', 'Finance', 'Setup & Admin',
 ] as const;
 
 // Color tint per section — same palette family used by the rest of the
@@ -86,6 +86,7 @@ const SECTION_TINT: Record<string, { dot: string; badge: string }> = {
   'CRM':                  { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
   'Operations':           { dot: 'bg-orange-500',  badge: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
   'Marketing':            { dot: 'bg-amber-500',   badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+  'AI & Forms':           { dot: 'bg-indigo-500',  badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' },
   'Inbox & Automation':   { dot: 'bg-violet-500',  badge: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
   'AI Receptionist':      { dot: 'bg-fuchsia-500', badge: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/20' },
   'Finance':              { dot: 'bg-teal-500',    badge: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' },

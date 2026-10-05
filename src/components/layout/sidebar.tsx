@@ -389,6 +389,7 @@ const superadminNavSections: NavSection[] = [
       { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'variables', label: 'Variables', icon: Variable },
+      { view: 'socialMedia', label: 'Social Media', icon: Share2 },
     ],
   },
   {

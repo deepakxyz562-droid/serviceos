@@ -203,6 +203,6 @@ export type ViewType =
   // Help & Support Center
   | 'helpCenter' | 'helpTicketDetail' | 'helpAdminTickets' | 'helpAdminTicketDetail' | 'helpAdminKB' | 'helpAdminCategories' | 'helpAdminAnnouncements'
   // Social Publishing (Engine 1)
-  | 'socialAccounts' | 'postComposer' | 'postsList' | 'socialAnalytics'
+  | 'socialMedia' | 'socialAccounts' | 'postComposer' | 'postsList' | 'socialAnalytics'
   // Super Admin
   | 'superadmin';

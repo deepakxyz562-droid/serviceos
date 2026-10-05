@@ -85,6 +85,10 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   // Marketing Templates — hidden (merged into Campaigns).
   { key: 'marketingTemplates', label: 'Marketing Templates', icon: 'MessageSquare', section: 'Marketing', sortOrder: 36 },
 
+  // ─── AI & Forms ──────────────────────────────────────────────────────
+  { key: 'formBuilder', label: 'Forms', icon: 'FileInput', section: 'AI & Forms', sortOrder: 38 },
+  { key: 'agentStudio', label: 'AI Agent Studio', icon: 'Bot', section: 'AI & Forms', sortOrder: 39 },
+
   // ─── Inbox & Automation ──────────────────────────────────────────────
   { key: 'omnichannel', label: 'Omnichannel Inbox', icon: 'RadioTower', section: 'Inbox & Automation', sortOrder: 40 },
   { key: 'liveChat', label: 'Live Chat', icon: 'MessageSquare', section: 'Inbox & Automation', sortOrder: 41, minPlan: 'growth', upgradeDescription: 'Real-time live chat with website visitors and customers directly from your dashboard.' },
@@ -93,20 +97,9 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'Inbox & Automation', sortOrder: 44, minPlan: 'growth', upgradeDescription: 'Automate business processes — job assignments, reminders, follow-ups, and multi-step actions.' },
   { key: 'workflowAutomations', label: 'Automations', icon: 'GitBranch', section: 'Inbox & Automation', sortOrder: 45 },
   { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'Inbox & Automation', sortOrder: 46 },
-  { key: 'formBuilder', label: 'AI Forms', icon: 'FileInput', section: 'Inbox & Automation', sortOrder: 47 },
-  { key: 'variables', label: 'Variables', icon: 'Variable', section: 'Inbox & Automation', sortOrder: 48 },
-  { key: 'executions', label: 'Executions', icon: 'Activity', section: 'Inbox & Automation', sortOrder: 49 },
-
-  // ─── Social Publishing (moved here from a separate 'Content' section) ──
-  // Social Publishing (Engine 1) — unified multi-platform publishing
-  // infrastructure. The 6 platform adapters (FB, IG, GBP, LinkedIn,
-  // Pinterest, X) plug into a shared publisher orchestrator.
-  // MOVED into 'Inbox & Automation' so all customer-facing communication
-  // lives in one place. The old 'Content' section is now empty/removed.
-  { key: 'socialAccounts', label: 'Social Accounts', icon: 'Plug', section: 'Inbox & Automation', sortOrder: 50 },
-  { key: 'postComposer', label: 'Create Post', icon: 'PenSquare', section: 'Inbox & Automation', sortOrder: 51, minPlan: 'growth', upgradeDescription: 'Compose and publish posts to Facebook, Instagram, LinkedIn, Pinterest, X, and Google Business from one place.' },
-  { key: 'postsList', label: 'Posts', icon: 'FileText', section: 'Inbox & Automation', sortOrder: 52, minPlan: 'growth', upgradeDescription: 'View, schedule, and manage all your social posts across platforms.' },
-  { key: 'socialAnalytics', label: 'Social Analytics', icon: 'BarChart3', section: 'Inbox & Automation', sortOrder: 53, minPlan: 'growth', upgradeDescription: 'Unified engagement metrics across all your social platforms.' },
+  { key: 'variables', label: 'Variables', icon: 'Variable', section: 'Inbox & Automation', sortOrder: 47 },
+  { key: 'executions', label: 'Executions', icon: 'Activity', section: 'Inbox & Automation', sortOrder: 48 },
+  { key: 'socialMedia', label: 'Social Media', icon: 'Share2', section: 'Inbox & Automation', sortOrder: 49, minPlan: 'growth', upgradeDescription: 'Compose, schedule, publish, and track posts across Facebook, Instagram, LinkedIn, Pinterest, X, and Google Business.' },
 
   // ─── AI Receptionist ─────────────────────────────────────────────────
   // Phase 9.8: AI Receptionist is a separate commercial addon (purchased via Creem),
