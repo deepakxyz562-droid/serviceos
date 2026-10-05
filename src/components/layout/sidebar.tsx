@@ -133,12 +133,6 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'Store & Merchant OS',
-    items: [
-      { view: 'commerce', label: 'Orders & Storefront', icon: ShoppingBag, badge: 'STORE' },
-    ],
-  },
-  {
     title: 'CRM',
     items: [
       // Pipeline is the primary sales view — a Deal-based drag-and-drop
@@ -186,7 +180,6 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'formBuilder', label: 'Forms', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
-      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
     ],
   },
   {
@@ -204,8 +197,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
-      { view: 'quoteFlow', label: 'AI Quotes & Invoices', icon: Sparkles, badge: 'AI' },
-      { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],
   },
@@ -351,12 +342,6 @@ const superadminNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'Store & Merchant OS',
-    items: [
-      { view: 'commerce', label: 'Orders & Storefront', icon: ShoppingBag, badge: 'STORE' },
-    ],
-  },
-  {
     title: 'CRM',
     items: [
       { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
@@ -392,9 +377,8 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'AI & Forms',
     items: [
-      { view: 'formBuilder', label: 'AI Forms', icon: FileInput },
-      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
-      { view: 'aiReceptionist', label: 'AI Receptionist', icon: PhoneCall },
+      { view: 'formBuilder', label: 'Forms', icon: FileInput },
+      { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
     ],
   },
   {
@@ -411,8 +395,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
-      { view: 'quoteFlow', label: 'AI Quotes & Invoices', icon: Sparkles, badge: 'AI' },
-      { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],
   },

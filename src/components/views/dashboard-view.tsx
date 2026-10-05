@@ -845,73 +845,18 @@ export function DashboardView() {
         <div className="flex items-center gap-2.5">
           <Button
             size="sm"
-            onClick={() => useAppStore.getState().openCreateFormWizard('form')}
-            className="bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 text-white font-bold text-xs h-9 px-3.5 rounded-xl shadow-md shadow-emerald-600/20 gap-1.5 cursor-pointer"
+            onClick={() => {
+              useAppStore.getState().setPendingCreate('job');
+              setActiveView('jobs');
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-3.5 rounded-xl shadow-xs gap-1.5 cursor-pointer"
           >
-            <Sparkles className="size-3.5" />
-            <span>AI Form Wizard</span>
+            <Plus className="size-3.5" />
+            <span>New Job</span>
           </Button>
           <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
             <Zap className="size-3 mr-1" /> Live
           </Badge>
-        </div>
-      </div>
-
-      {/* ─── Store & Merchant OS Quick Access Hub ─── */}
-      <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
-            <ShoppingCart className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-stone-900 dark:text-stone-100">Store &amp; Merchant Hub</span>
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-300 text-[10px] font-bold">
-                Vyapar &amp; Take.app
-              </Badge>
-            </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-              WhatsApp Store • Live Orders • POS Cashier • GST Billing • Khata Udhaar • Day Book
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            onClick={() => setActiveView('commerce')}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 gap-1.5 shadow-2xs cursor-pointer"
-          >
-            <Package className="h-3.5 w-3.5" />
-            Live Orders
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setActiveView('commerce')}
-            variant="outline"
-            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
-          >
-            <Plus className="h-3.5 w-3.5 text-emerald-600" />
-            POS Cashier
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setActiveView('quoteFlow')}
-            variant="outline"
-            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
-          >
-            <FileText className="h-3.5 w-3.5 text-blue-600" />
-            GST Billing
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setActiveView('quoteFlow')}
-            variant="outline"
-            className="border-stone-200 dark:border-stone-700 hover:bg-stone-50 text-stone-700 dark:text-stone-200 font-bold text-xs h-8 gap-1.5 cursor-pointer"
-          >
-            <Users className="h-3.5 w-3.5 text-amber-600" />
-            Khata (Udhaar)
-          </Button>
         </div>
       </div>
 

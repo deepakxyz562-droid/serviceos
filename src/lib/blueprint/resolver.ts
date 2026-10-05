@@ -17,7 +17,7 @@ export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
   // 1. Explicit blueprint saved in tenant settings
   if (settings.blueprint && typeof settings.blueprint === 'object') {
     const bp = settings.blueprint;
-    const businessType: BusinessType = bp.businessType || 'retail';
+    const businessType: BusinessType = bp.businessType || 'services';
     const country: CountryCode = bp.country || 'US';
     const defaults = getCapabilitiesForBusinessType(businessType);
     const capabilities: BusinessCapabilities = {
@@ -36,7 +36,7 @@ export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
   }
 
   // 2. Intelligent inference for pre-existing tenants
-  let inferredType: BusinessType = 'retail';
+  let inferredType: BusinessType = 'services';
   let inferredCountry: CountryCode = 'US';
 
   // Check country clues
