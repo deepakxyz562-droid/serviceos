@@ -13,12 +13,14 @@ const patchSchema = z.object({
   discountType: z.enum(['AMOUNT', 'PERCENT']).optional(),
   taxRate: z.number().optional(),
   pdfTemplate: z.string().optional(),
+  paymentMethod: z.string().optional(),
   items: z
     .array(
       z.object({
         description: z.string().min(1),
         qty: z.number().positive(),
         unitPrice: z.number().min(0),
+        hsnCode: z.string().optional().nullable(),
       })
     )
     .optional(),
@@ -117,9 +119,36 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               description: item.description,
               qty: item.qty,
               unitPrice: item.unitPrice,
+              hsnCode: item.hsnCode || null,
             },
           });
         }
+      }
+
+      if (parsed.data.status === 'PAID') {
+        const currentItems = await tx.aiInvoiceItem.findMany({ where: { invoiceId: id } });
+        const invData = await tx.aiInvoice.findUnique({ where: { id } });
+        const comp = computeTotals(
+          currentItems.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
+          invData?.discountValue || 0,
+          invData?.discountType || 'AMOUNT',
+          invData?.taxRate || 0,
+          business.currency
+        );
+        const existingPayments = await tx.aiPayment.findMany({ where: { invoiceId: id } });
+        const alreadyPaid = existingPayments.reduce((s, p) => s + p.amount, 0);
+        const diff = Math.max(0, comp.total - alreadyPaid);
+        if (diff > 0) {
+          await tx.aiPayment.create({
+            data: {
+              invoiceId: id,
+              amount: diff,
+              method: parsed.data.paymentMethod || 'CASH',
+            },
+          });
+        }
+      } else if (parsed.data.status === 'UNPAID') {
+        await tx.aiPayment.deleteMany({ where: { invoiceId: id } });
       }
 
       return tx.aiInvoice.findUnique({

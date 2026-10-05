@@ -75,12 +75,18 @@ import {
   Scan,
   Camera,
   Barcode,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import {
+  generateGstInvoiceHtml,
+  numberToWords,
+  GstStoreInfo,
+} from '@/lib/billing/gst-invoice-helper';
 
 export function CommerceView() {
   const [activeTab, setActiveTab] = useState<
@@ -255,6 +261,25 @@ export function CommerceView() {
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [deletingBillingId, setDeletingBillingId] = useState<string | null>(null);
 
+  // Vyapar-Grade Billing State (Detail Preview, Edit, Payment Mode, Brand Settings)
+  const [selectedBillingInvoice, setSelectedBillingInvoice] = useState<any | null>(null);
+  const [editingBillingInvoice, setEditingBillingInvoice] = useState<any | null>(null);
+  const [billingPaymentModalInvoice, setBillingPaymentModalInvoice] = useState<any | null>(null);
+  const [billingPaymentMode, setBillingPaymentMode] = useState<string>('CASH');
+  const [billingPaymentSubmitting, setBillingPaymentSubmitting] = useState(false);
+  const [billingBrandModalOpen, setBillingBrandModalOpen] = useState(false);
+  const [webStoreInfo, setWebStoreInfo] = useState<GstStoreInfo>({
+    businessName: 'Business Store',
+    logoUrl: '',
+    signatureUrl: '',
+    gstin: '',
+    address: '',
+    phone: '',
+    email: '',
+    upiId: '',
+    billFooter: '1. Goods once sold will not be taken back.\n2. Interest @18% p.a. charged on overdue payments.',
+  });
+
   // Customer Receipt & Kitchen Order Ticket (KOT) Modal State
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptType, setReceiptType] = useState<'CUSTOMER_BILL' | 'KOT'>('CUSTOMER_BILL');
@@ -399,6 +424,17 @@ export function CommerceView() {
         if (c.discounts && Array.isArray(c.discounts)) {
           setDiscounts(c.discounts);
         }
+        setWebStoreInfo((prev) => ({
+          ...prev,
+          businessName: c.storeName || auth?.tenant?.name || prev.businessName,
+          gstin: c.billing?.gstin || c.gstin || prev.gstin,
+          upiId: c.upiId || prev.upiId,
+          phone: c.phone || auth?.tenant?.phone || prev.phone,
+          email: c.email || prev.email,
+          address: c.address || auth?.tenant?.address || prev.address,
+          logoUrl: c.logoUrl || prev.logoUrl,
+          signatureUrl: c.signatureUrl || prev.signatureUrl,
+        }));
       }
     } catch (err: any) {
       console.error('Failed to load commerce data:', err);
@@ -835,6 +871,7 @@ export function CommerceView() {
   // ============ Billing & GST Invoices Actions (mobile billing.tsx port) ============
 
   const openBillingForm = (type: 'INVOICE' | 'QUOTE') => {
+    setEditingBillingInvoice(null);
     setBillingFormType(type);
     setBillingCustomerName('');
     setBillingCustomerPhone('');
@@ -842,6 +879,29 @@ export function CommerceView() {
     setBillingTaxRate(18);
     setBillingDiscount('0');
     setBillingNotes('');
+    setBillingModalOpen(true);
+  };
+
+  const handleOpenEditBillingInvoice = (inv: any) => {
+    setEditingBillingInvoice(inv);
+    setBillingFormType('INVOICE');
+    setBillingCustomerName(inv.customer?.name || '');
+    setBillingCustomerPhone(inv.customer?.phone || '');
+    setBillingItems(
+      inv.items && inv.items.length > 0
+        ? inv.items.map((i: any) => ({
+            description: i.description,
+            qty: Number(i.qty) || 1,
+            unitPrice: Number(i.unitPrice) || 0,
+            hsnCode: i.hsnCode || '',
+          }))
+        : [{ description: '', qty: 1, unitPrice: 0, hsnCode: '' }]
+    );
+    const sub = inv.subtotal || inv.total - (inv.tax || 0);
+    const rate = sub > 0 && inv.tax ? Math.round((inv.tax / sub) * 100) : 18;
+    setBillingTaxRate(rate);
+    setBillingDiscount(String(inv.discount || 0));
+    setBillingNotes(inv.notes || '');
     setBillingModalOpen(true);
   };
 
@@ -868,39 +928,147 @@ export function CommerceView() {
     }
     setBillingSubmitting(true);
     try {
-      const payload: any = {
-        customerName: billingCustomerName.trim() || 'Client',
-        customerPhone: billingCustomerPhone.trim(),
-        taxRate: billingTaxRate,
-        discountValue: parseFloat(billingDiscount) || 0,
-        discountType: 'AMOUNT',
-        notes: billingNotes.trim(),
-        items: validItems.map((i) => ({
-          description: i.description.trim(),
-          qty: Number(i.qty) || 1,
-          unitPrice: Number(i.unitPrice) || 0,
-          hsnCode: i.hsnCode?.trim() || undefined,
-        })),
-        status: billingFormType === 'INVOICE' ? 'UNPAID' : 'SENT',
-      };
-      const url = billingFormType === 'INVOICE'
-        ? '/api/quote-flow/invoices'
-        : '/api/quote-flow/quotes';
-      const res = await authFetch(url, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || `Failed to create ${billingFormType === 'INVOICE' ? 'invoice' : 'estimate'}`);
+      const lineItems = validItems.map((i) => ({
+        description: i.description.trim(),
+        qty: Number(i.qty) || 1,
+        unitPrice: Number(i.unitPrice) || 0,
+        hsnCode: i.hsnCode?.trim() || undefined,
+      }));
+
+      if (editingBillingInvoice) {
+        // Edit existing invoice
+        const res = await authFetch(`/api/quote-flow/invoices/${editingBillingInvoice.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            taxRate: billingTaxRate,
+            discountValue: parseFloat(billingDiscount) || 0,
+            discountType: 'AMOUNT',
+            notes: billingNotes.trim(),
+            items: lineItems,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || 'Failed to update invoice');
+        }
+        toast.success(`Invoice #${editingBillingInvoice.number} updated ✓`);
+        if (selectedBillingInvoice?.id === editingBillingInvoice.id && data?.invoice) {
+          setSelectedBillingInvoice(data.invoice);
+        }
+        setEditingBillingInvoice(null);
+      } else {
+        const payload: any = {
+          customerName: billingCustomerName.trim() || 'Client',
+          customerPhone: billingCustomerPhone.trim(),
+          taxRate: billingTaxRate,
+          discountValue: parseFloat(billingDiscount) || 0,
+          discountType: 'AMOUNT',
+          notes: billingNotes.trim(),
+          items: lineItems,
+          status: billingFormType === 'INVOICE' ? 'UNPAID' : 'SENT',
+        };
+        const url = billingFormType === 'INVOICE'
+          ? '/api/quote-flow/invoices'
+          : '/api/quote-flow/quotes';
+        const res = await authFetch(url, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || `Failed to create ${billingFormType === 'INVOICE' ? 'invoice' : 'estimate'}`);
+        }
+        toast.success(billingFormType === 'INVOICE' ? 'GST Invoice created ✓' : 'Estimate created ✓');
       }
-      toast.success(billingFormType === 'INVOICE' ? 'GST Invoice created ✓' : 'Estimate created ✓');
+
       setBillingModalOpen(false);
       loadBilling();
     } catch (err: any) {
       toast.error(err?.message || 'Could not save document.');
     } finally {
       setBillingSubmitting(false);
+    }
+  };
+
+  const handlePrintWebInvoice = (inv: any) => {
+    try {
+      const html = generateGstInvoiceHtml(inv, webStoreInfo, currencySymbol);
+      const printWin = window.open('', '_blank');
+      if (printWin) {
+        printWin.document.open();
+        printWin.document.write(html);
+        printWin.document.close();
+        printWin.focus();
+        setTimeout(() => {
+          printWin.print();
+        }, 300);
+      } else {
+        toast.error('Please allow popups to print/export invoice.');
+      }
+    } catch (e: any) {
+      toast.error('Print error: ' + (e?.message || 'Failed'));
+    }
+  };
+
+  const handleToggleWebPayment = (inv: any) => {
+    const isPaid = Number(inv.balance || 0) <= 0 || inv.status === 'PAID';
+    if (isPaid) {
+      if (!confirm(`Revert invoice #${inv.number} status to UNPAID?`)) return;
+      authFetch(`/api/quote-flow/invoices/${inv.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'UNPAID' }),
+      })
+        .then((r) => r.json())
+        .then(() => {
+          toast.success(`Invoice #${inv.number} marked as UNPAID`);
+          if (selectedBillingInvoice?.id === inv.id) {
+            setSelectedBillingInvoice({
+              ...selectedBillingInvoice,
+              status: 'UNPAID',
+              balance: selectedBillingInvoice.total,
+              paidAmount: 0,
+            });
+          }
+          loadBilling();
+        })
+        .catch(() => toast.error('Failed to update status'));
+    } else {
+      setBillingPaymentModalInvoice(inv);
+      setBillingPaymentMode('CASH');
+    }
+  };
+
+  const handleConfirmWebPayment = async () => {
+    if (!billingPaymentModalInvoice) return;
+    setBillingPaymentSubmitting(true);
+    try {
+      const res = await authFetch(`/api/quote-flow/invoices/${billingPaymentModalInvoice.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'PAID',
+          paymentMethod: billingPaymentMode,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to record payment');
+      toast.success(
+        `Invoice #${billingPaymentModalInvoice.number} marked as PAID via ${billingPaymentMode} ✓`
+      );
+      if (selectedBillingInvoice?.id === billingPaymentModalInvoice.id) {
+        setSelectedBillingInvoice({
+          ...selectedBillingInvoice,
+          status: 'PAID',
+          balance: 0,
+          paidAmount: selectedBillingInvoice.total,
+          paymentMethod: billingPaymentMode,
+        });
+      }
+      setBillingPaymentModalInvoice(null);
+      loadBilling();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to record payment');
+    } finally {
+      setBillingPaymentSubmitting(false);
     }
   };
 
@@ -4986,14 +5154,25 @@ export function CommerceView() {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={exportGstTaxReportCsv}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold h-8 gap-1.5"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Export GSTR-1 CSV
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setBillingBrandModalOpen(true)}
+                        className="text-xs font-bold h-8 gap-1.5 border-indigo-200 text-indigo-900 hover:bg-indigo-100"
+                      >
+                        <Building2 className="h-3.5 w-3.5" />
+                        Store Branding
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={exportGstTaxReportCsv}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold h-8 gap-1.5"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Export GSTR-1 CSV
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -5056,78 +5235,116 @@ export function CommerceView() {
                   {filteredInvoices.map((inv: any) => {
                     const isPaid = Number(inv.balance || 0) <= 0 || inv.status === 'PAID';
                     return (
-                      <div key={inv.id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-black text-stone-900 font-mono">{inv.number}</span>
-                              <Badge className={
-                                isPaid
-                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold'
-                                  : 'bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-bold'
-                              }>
-                                {isPaid ? 'PAID ✓' : 'UNPAID'}
-                              </Badge>
-                              {inv.fromQuoteId && (
-                                <Badge variant="outline" className="text-[9px] font-bold bg-blue-50 text-blue-700 border-blue-200">
-                                  From Quote
-                                </Badge>
+                      <div
+                        key={inv.id}
+                        className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs hover:border-indigo-300 transition flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-black text-stone-900 font-mono">{inv.number}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleWebPayment(inv)}
+                                  className="cursor-pointer"
+                                  title="Click to toggle Paid/Unpaid"
+                                >
+                                  <Badge className={
+                                    isPaid
+                                      ? 'bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold hover:bg-emerald-200'
+                                      : 'bg-amber-100 text-amber-700 border-amber-200 text-[10px] font-bold hover:bg-amber-200'
+                                  }>
+                                    {isPaid ? 'PAID ✓' : 'UNPAID • TAP TO PAY'}
+                                  </Badge>
+                                </button>
+                                {inv.fromQuoteId && (
+                                  <Badge variant="outline" className="text-[9px] font-bold bg-blue-50 text-blue-700 border-blue-200">
+                                    From Quote
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-stone-600 mt-1 font-semibold">
+                                {inv.customer?.name || 'Walk-in Client'}
+                                {inv.customer?.gstin ? ` • GSTIN: ${inv.customer.gstin}` : ''}
+                              </div>
+                              {inv.customer?.phone && (
+                                <div className="text-[10px] text-stone-400 font-mono mt-0.5">{inv.customer.phone}</div>
                               )}
                             </div>
-                            <div className="text-xs text-stone-600 mt-1">{inv.customer?.name || 'Walk-in Client'}</div>
-                            {inv.customer?.phone && (
-                              <div className="text-[10px] text-stone-400 font-mono mt-0.5">{inv.customer.phone}</div>
-                            )}
-                          </div>
-                          <div className="text-right shrink-0">
-                            <div className="text-base font-black text-stone-900">{currencySymbol}{Number(inv.total || 0).toFixed(2)}</div>
-                            <div className="text-[10px] text-stone-400 mt-0.5">
-                              {new Date(inv.createdAt).toLocaleDateString()}
+                            <div className="text-right shrink-0">
+                              <div className="text-base font-black text-stone-900">{currencySymbol}{Number(inv.total || 0).toFixed(2)}</div>
+                              <div className="text-[10px] text-stone-400 mt-0.5">
+                                {new Date(inv.createdAt).toLocaleDateString()}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="mt-3 rounded-lg bg-stone-50 p-2.5 text-[11px] text-stone-600 truncate">
-                          {(inv.items || []).map((i: any) => `${i.description} × ${i.qty}`).join(' • ')}
-                        </div>
-                        <div className="mt-3 flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleShareBillingWhatsApp(inv, true)}
-                            className="text-xs font-bold gap-1.5 h-8 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                          <div
+                            onClick={() => setSelectedBillingInvoice(inv)}
+                            className="mt-3 rounded-lg bg-stone-50 p-2.5 text-[11px] text-stone-600 truncate cursor-pointer hover:bg-stone-100"
+                            title="Click to preview A4 GST Tax Invoice"
                           >
-                            <Send className="h-3.5 w-3.5" />
-                            Share on WhatsApp
-                          </Button>
-                          {!isPaid && (
+                            {(inv.items || []).map((i: any) => `${i.description} × ${i.qty}`).join(' • ')}
+                          </div>
+                        </div>
+
+                        {/* Vyapar Quick Action Bar */}
+                        <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <Button
                               size="sm"
-                              onClick={() => handleMarkInvoicePaid(inv)}
-                              disabled={markingPaidId === inv.id}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 gap-1.5"
+                              variant="outline"
+                              onClick={() => setSelectedBillingInvoice(inv)}
+                              className="text-xs font-bold gap-1 h-7 border-stone-200 hover:bg-stone-50"
                             >
-                              {markingPaidId === inv.id ? (
+                              <Eye className="h-3.5 w-3.5 text-indigo-600" />
+                              View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePrintWebInvoice(inv)}
+                              className="text-xs font-bold gap-1 h-7 border-stone-200 hover:bg-stone-50 text-stone-700"
+                            >
+                              <Printer className="h-3.5 w-3.5 text-blue-600" />
+                              Print / PDF
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenEditBillingInvoice(inv)}
+                              className="text-xs font-bold gap-1 h-7 border-stone-200 hover:bg-stone-50 text-amber-700"
+                            >
+                              <Edit3 className="h-3.5 w-3.5 text-amber-600" />
+                              Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleShareBillingWhatsApp(inv, true)}
+                              className="text-xs font-bold gap-1 h-7 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              WhatsApp
+                            </Button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleDeleteBilling(inv, 'INVOICE')}
+                              disabled={deletingBillingId === inv.id}
+                              className="text-xs font-bold gap-1 h-7 text-red-600 border-red-200 hover:bg-red-50 p-2"
+                              title="Delete Invoice"
+                            >
+                              {deletingBillingId === inv.id ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               )}
-                              {markingPaidId === inv.id ? 'Marking...' : 'Mark Paid'}
                             </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDeleteBilling(inv, 'INVOICE')}
-                            disabled={deletingBillingId === inv.id}
-                            className="text-xs font-bold gap-1.5 h-8 text-red-600 border-red-300 hover:bg-red-50"
-                          >
-                            {deletingBillingId === inv.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                            Delete
-                          </Button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -6349,6 +6566,516 @@ export function CommerceView() {
                     <FileText className="h-3.5 w-3.5" />
                   )}
                   {billingFormType === 'INVOICE' ? 'Generate GST Invoice' : 'Save & Share Quotation'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= VYAPAR-GRADE A4 GST TAX INVOICE PREVIEW MODAL ======================= */}
+      {selectedBillingInvoice && (() => {
+        const inv = selectedBillingInvoice;
+        const isPaid = Number(inv.balance || 0) <= 0 || inv.status === 'PAID';
+        const taxable = Number(inv.subtotal || inv.total - (inv.tax || 0)) || 0;
+        const tax = Number(inv.tax || 0);
+        const cgst = tax / 2;
+        const sgst = tax / 2;
+        const discount = Number(inv.discount || 0);
+        const total = Number(inv.total || 0);
+        const effectiveRate = taxable > 0 ? Math.round((tax / taxable) * 100) : 18;
+        const halfRate = (effectiveRate / 2).toFixed(1).replace('.0', '');
+        const upiLink = webStoreInfo.upiId
+          ? `upi://pay?pa=${encodeURIComponent(webStoreInfo.upiId)}&pn=${encodeURIComponent(webStoreInfo.businessName || 'Store')}&am=${total.toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
+          : '';
+        const qrUrl = upiLink
+          ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiLink)}`
+          : '';
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+            <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl border border-stone-200 max-h-[92vh] flex flex-col overflow-hidden">
+              {/* Modal Top Bar */}
+              <div className="flex items-center justify-between border-b border-stone-200 px-6 py-3.5 bg-stone-50 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Receipt className="h-5 w-5 text-indigo-600" />
+                  <div>
+                    <h3 className="text-sm font-black text-stone-900">
+                      Tax Invoice #{inv.number}
+                    </h3>
+                    <p className="text-[10px] text-stone-500">
+                      Vyapar-grade GST Compliant Format • Original for Recipient
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handlePrintWebInvoice(inv)}
+                    className="text-xs font-bold gap-1.5 h-8 text-stone-700 hover:bg-white"
+                  >
+                    <Printer className="h-3.5 w-3.5 text-blue-600" />
+                    Print / PDF
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setSelectedBillingInvoice(null);
+                      handleOpenEditBillingInvoice(inv);
+                    }}
+                    className="text-xs font-bold gap-1.5 h-8 text-amber-700 hover:bg-white"
+                  >
+                    <Edit3 className="h-3.5 w-3.5 text-amber-600" />
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleShareBillingWhatsApp(inv, true)}
+                    className="text-xs font-bold gap-1.5 h-8 text-emerald-700 hover:bg-emerald-50 border-emerald-300"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    WhatsApp
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBillingInvoice(null)}
+                    className="p-1 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-200 ml-2"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable A4 Document View */}
+              <div className="flex-1 overflow-y-auto p-6 bg-stone-100 flex justify-center">
+                <div className="w-full max-w-3xl bg-white rounded-xl shadow-md border border-stone-200 p-8 text-stone-900 space-y-6">
+                  {/* Header Row */}
+                  <div className="flex justify-between items-start border-b-2 border-indigo-600 pb-5">
+                    <div>
+                      {webStoreInfo.logoUrl && (
+                        <img
+                          src={webStoreInfo.logoUrl}
+                          alt="Store Logo"
+                          className="h-12 max-w-[160px] object-contain mb-2"
+                        />
+                      )}
+                      <h1 className="text-xl font-black text-indigo-950">
+                        {webStoreInfo.businessName || 'Business Store'}
+                      </h1>
+                      {webStoreInfo.gstin && (
+                        <div className="text-xs font-bold text-stone-700 mt-0.5">
+                          GSTIN: {webStoreInfo.gstin}
+                        </div>
+                      )}
+                      {webStoreInfo.address && (
+                        <div className="text-xs text-stone-500 mt-0.5 max-w-md">{webStoreInfo.address}</div>
+                      )}
+                      {webStoreInfo.phone && (
+                        <div className="text-xs text-stone-500">Phone: {webStoreInfo.phone}</div>
+                      )}
+                      {webStoreInfo.email && (
+                        <div className="text-xs text-stone-500">Email: {webStoreInfo.email}</div>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      <div className="inline-block bg-indigo-600 text-white font-black text-xs px-3 py-1 rounded tracking-wider uppercase">
+                        TAX INVOICE
+                      </div>
+                      <div className="text-[10px] text-stone-400 font-bold uppercase mt-1">
+                        Original for Recipient
+                      </div>
+                      <div className="text-base font-black font-mono text-stone-900 mt-2">
+                        {inv.number}
+                      </div>
+                      <div className="text-xs text-stone-500">
+                        Date: {new Date(inv.createdAt).toLocaleDateString('en-IN')}
+                      </div>
+                      {inv.dueDate && (
+                        <div className="text-xs text-stone-500">
+                          Due: {new Date(inv.dueDate).toLocaleDateString('en-IN')}
+                        </div>
+                      )}
+                      <div className="mt-2">
+                        <span
+                          className={`inline-block border-2 font-black text-xs px-2.5 py-0.5 rounded tracking-wide ${
+                            isPaid
+                              ? 'border-emerald-600 text-emerald-600 bg-emerald-50'
+                              : 'border-amber-600 text-amber-600 bg-amber-50'
+                          }`}
+                        >
+                          {isPaid ? 'PAID ✓' : 'PAYMENT DUE'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer and Supply Two-Column Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="rounded-lg border border-stone-200 bg-stone-50/60 p-3.5 text-xs space-y-1">
+                      <div className="text-[10px] font-black uppercase text-indigo-600 border-b border-stone-200 pb-1 mb-1.5">
+                        Billed To (Customer)
+                      </div>
+                      <div className="font-black text-sm text-stone-900">{inv.customer?.name || 'Walk-in Client'}</div>
+                      {inv.customer?.phone && <div>Phone: {inv.customer.phone}</div>}
+                      {inv.customer?.email && <div>Email: {inv.customer.email}</div>}
+                      {inv.customer?.address && <div>Address: {inv.customer.address}</div>}
+                      {inv.customer?.gstin && (
+                        <div className="font-bold text-stone-900 mt-1">Customer GSTIN: {inv.customer.gstin}</div>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-stone-200 bg-stone-50/60 p-3.5 text-xs space-y-1">
+                      <div className="text-[10px] font-black uppercase text-indigo-600 border-b border-stone-200 pb-1 mb-1.5">
+                        Invoice &amp; Supply Details
+                      </div>
+                      <div><strong>Invoice #:</strong> {inv.number}</div>
+                      <div><strong>Status:</strong> {inv.status || (isPaid ? 'PAID' : 'UNPAID')}</div>
+                      {inv.paymentMethod && <div><strong>Payment Mode:</strong> {inv.paymentMethod}</div>}
+                      <div><strong>Place of Supply:</strong> Intra-State (CGST + SGST)</div>
+                      <div><strong>Reverse Charge:</strong> No</div>
+                    </div>
+                  </div>
+
+                  {/* Itemized Table */}
+                  <div className="rounded-lg border border-stone-200 overflow-hidden text-xs">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-indigo-600 text-white font-bold text-[10px] uppercase">
+                          <th className="p-2 text-center w-8">#</th>
+                          <th className="p-2 text-left">Item Description</th>
+                          <th className="p-2 text-center w-16">HSN/SAC</th>
+                          <th className="p-2 text-center w-12">Qty</th>
+                          <th className="p-2 text-right w-20">Rate</th>
+                          <th className="p-2 text-right w-20">Taxable</th>
+                          <th className="p-2 text-right w-20">CGST</th>
+                          <th className="p-2 text-right w-20">SGST</th>
+                          <th className="p-2 text-right w-24">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(inv.items || []).map((it: any, idx: number) => {
+                          const itemQty = Number(it.qty) || 1;
+                          const itemRate = Number(it.unitPrice) || 0;
+                          const itemAmount = itemQty * itemRate;
+                          const itemCgst = itemAmount * (effectiveRate / 200);
+                          const itemSgst = itemCgst;
+                          const itemTot = itemAmount + itemCgst + itemSgst;
+
+                          return (
+                            <tr key={idx} className={idx % 2 === 1 ? 'bg-stone-50' : 'bg-white'}>
+                              <td className="p-2 text-center text-stone-400 border-t border-stone-100">{idx + 1}</td>
+                              <td className="p-2 font-bold text-stone-900 border-t border-stone-100">{it.description || 'Item'}</td>
+                              <td className="p-2 text-center font-mono text-[11px] text-stone-500 border-t border-stone-100">{it.hsnCode || '—'}</td>
+                              <td className="p-2 text-center border-t border-stone-100">{itemQty}</td>
+                              <td className="p-2 text-right border-t border-stone-100">{currencySymbol}{itemRate.toFixed(2)}</td>
+                              <td className="p-2 text-right border-t border-stone-100">{currencySymbol}{itemAmount.toFixed(2)}</td>
+                              <td className="p-2 text-right text-stone-600 border-t border-stone-100">{currencySymbol}{itemCgst.toFixed(2)}</td>
+                              <td className="p-2 text-right text-stone-600 border-t border-stone-100">{currencySymbol}{itemSgst.toFixed(2)}</td>
+                              <td className="p-2 text-right font-black text-stone-900 border-t border-stone-100">{currencySymbol}{itemTot.toFixed(2)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Totals Breakdown */}
+                  <div className="flex justify-end">
+                    <div className="w-72 space-y-1.5 text-xs">
+                      <div className="flex justify-between text-stone-600">
+                        <span>Taxable Subtotal</span>
+                        <span className="font-bold text-stone-900">{currencySymbol}{taxable.toFixed(2)}</span>
+                      </div>
+                      {discount > 0 && (
+                        <div className="flex justify-between text-emerald-700">
+                          <span>Special Discount</span>
+                          <span className="font-bold">-{currencySymbol}{discount.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-stone-600">
+                        <span>CGST ({halfRate}%)</span>
+                        <span className="font-bold text-stone-900">{currencySymbol}{cgst.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-stone-600">
+                        <span>SGST ({halfRate}%)</span>
+                        <span className="font-bold text-stone-900">{currencySymbol}{sgst.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm font-black p-2 rounded bg-indigo-50 border-y-2 border-indigo-600 text-indigo-950">
+                        <span>Total Invoice Value</span>
+                        <span>{currencySymbol}{total.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-stone-600 pt-1">
+                        <span>Amount Paid</span>
+                        <span className={`font-bold ${isPaid ? 'text-emerald-700' : 'text-stone-900'}`}>
+                          {currencySymbol}{isPaid ? total.toFixed(2) : (Number(inv.paidAmount) || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      {!isPaid && (
+                        <div className="flex justify-between text-amber-700 font-bold">
+                          <span>Balance Due</span>
+                          <span className="font-black">{currencySymbol}{total.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Amount in words */}
+                  <div className="rounded-lg bg-stone-100 p-2.5 text-xs italic text-stone-700">
+                    <strong>Total in Words:</strong> {numberToWords(total)}
+                  </div>
+
+                  {/* Footer with UPI QR & Signature Stamp */}
+                  <div className="pt-4 border-t border-stone-200 flex justify-between items-end gap-6">
+                    <div className="flex items-start gap-4">
+                      {qrUrl && (
+                        <div className="text-center">
+                          <img
+                            src={qrUrl}
+                            alt="UPI QR"
+                            className="h-24 w-24 p-1 rounded-lg border border-stone-300 bg-white"
+                          />
+                          <div className="text-[9px] font-bold text-stone-500 mt-1">Scan &amp; Pay via UPI</div>
+                        </div>
+                      )}
+                      <div className="text-[11px] text-stone-500 max-w-xs space-y-1">
+                        <div className="font-bold text-stone-700 uppercase text-[10px]">Terms &amp; Conditions</div>
+                        <div className="whitespace-pre-line leading-relaxed">
+                          {webStoreInfo.billFooter || '1. Goods once sold will not be taken back.\n2. Interest @18% p.a. charged on overdue payments.'}
+                        </div>
+                        {inv.notes && (
+                          <div className="mt-2 text-stone-600"><strong>Notes:</strong> {inv.notes}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-center w-52">
+                      {webStoreInfo.signatureUrl ? (
+                        <img
+                          src={webStoreInfo.signatureUrl}
+                          alt="Signature"
+                          className="h-12 max-w-[140px] mx-auto object-contain mb-1"
+                        />
+                      ) : (
+                        <div className="h-10" />
+                      )}
+                      <div className="border-t border-stone-800 pt-1 text-xs font-bold text-stone-900">
+                        For {webStoreInfo.businessName || 'Business'}
+                      </div>
+                      <div className="text-[10px] text-stone-400">Authorized Signatory</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ======================= BILLING PAYMENT MODE MODAL ======================= */}
+      {billingPaymentModalInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-stone-200">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-black text-stone-900">Record Payment</h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Invoice #{billingPaymentModalInvoice.number} • {currencySymbol}{Number(billingPaymentModalInvoice.total || 0).toFixed(2)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBillingPaymentModalInvoice(null)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-stone-700">Select Payment Method</label>
+              {[
+                { id: 'CASH', label: 'Cash Payment', icon: IndianRupee },
+                { id: 'UPI', label: 'UPI / QR Code', icon: QrCode },
+                { id: 'BANK_TRANSFER', label: 'Bank Transfer / IMPS / NEFT', icon: Building2 },
+                { id: 'CARD', label: 'Credit / Debit Card', icon: CreditCard },
+              ].map((m) => {
+                const IconComponent = m.icon;
+                const isSelected = billingPaymentMode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setBillingPaymentMode(m.id)}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-xs font-bold transition cursor-pointer ${
+                      isSelected
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-900 shadow-xs'
+                        : 'border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <IconComponent className={`h-4 w-4 ${isSelected ? 'text-emerald-600' : 'text-stone-400'}`} />
+                      <span>{m.label}</span>
+                    </div>
+                    {isSelected && <Check className="h-4 w-4 text-emerald-600" />}
+                  </button>
+                );
+              })}
+
+              <Button
+                onClick={handleConfirmWebPayment}
+                disabled={billingPaymentSubmitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 mt-4 gap-1.5"
+              >
+                {billingPaymentSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Confirm &amp; Mark as Paid
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ======================= BILLING STORE BRANDING & GST SETTINGS MODAL ======================= */}
+      {billingBrandModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-stone-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-black text-stone-900">GST Store Branding</h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Configure store logo, GSTIN, UPI ID, terms, and signature stamp for invoices.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBillingBrandModalOpen(false)}
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-stone-700">Business / Store Name</label>
+                <Input
+                  value={webStoreInfo.businessName}
+                  onChange={(e) => setWebStoreInfo((p) => ({ ...p, businessName: e.target.value }))}
+                  placeholder="e.g. Nuvora Technologies Pvt Ltd"
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">GSTIN (Tax ID)</label>
+                  <Input
+                    value={webStoreInfo.gstin}
+                    onChange={(e) => setWebStoreInfo((p) => ({ ...p, gstin: e.target.value.toUpperCase() }))}
+                    placeholder="29ABCDE1234F1Z5"
+                    className="mt-1 text-xs font-mono uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-stone-700">UPI ID (for QR Code)</label>
+                  <Input
+                    value={webStoreInfo.upiId}
+                    onChange={(e) => setWebStoreInfo((p) => ({ ...p, upiId: e.target.value }))}
+                    placeholder="business@okaxis"
+                    className="mt-1 text-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700">Store Address</label>
+                <Input
+                  value={webStoreInfo.address}
+                  onChange={(e) => setWebStoreInfo((p) => ({ ...p, address: e.target.value }))}
+                  placeholder="Shop 4, MG Road, Bengaluru"
+                  className="mt-1 text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Phone</label>
+                  <Input
+                    value={webStoreInfo.phone}
+                    onChange={(e) => setWebStoreInfo((p) => ({ ...p, phone: e.target.value }))}
+                    placeholder="+91 9876543210"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Email</label>
+                  <Input
+                    value={webStoreInfo.email}
+                    onChange={(e) => setWebStoreInfo((p) => ({ ...p, email: e.target.value }))}
+                    placeholder="contact@store.com"
+                    className="mt-1 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Store Logo URL</label>
+                  <Input
+                    value={webStoreInfo.logoUrl}
+                    onChange={(e) => setWebStoreInfo((p) => ({ ...p, logoUrl: e.target.value }))}
+                    placeholder="https://... or data:image/..."
+                    className="mt-1 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-stone-700">Authorized Signature URL</label>
+                  <Input
+                    value={webStoreInfo.signatureUrl}
+                    onChange={(e) => setWebStoreInfo((p) => ({ ...p, signatureUrl: e.target.value }))}
+                    placeholder="https://... or data:image/..."
+                    className="mt-1 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-stone-700">Terms &amp; Bill Footer</label>
+                <textarea
+                  value={webStoreInfo.billFooter}
+                  onChange={(e) => setWebStoreInfo((p) => ({ ...p, billFooter: e.target.value }))}
+                  rows={2}
+                  placeholder="1. Goods once sold will not be taken back..."
+                  className="mt-1 w-full rounded-lg border border-stone-200 p-2 text-xs text-stone-900"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-stone-100">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBillingBrandModalOpen(false)}
+                  className="text-xs font-bold"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setBillingBrandModalOpen(false);
+                    toast.success('Store GST branding saved ✓');
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs"
+                >
+                  Save Branding
                 </Button>
               </div>
             </div>
