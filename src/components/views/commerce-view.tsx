@@ -226,6 +226,7 @@ export function CommerceView() {
   const [posManualBarcode, setPosManualBarcode] = useState('');
   const [posCameraActive, setPosCameraActive] = useState(false);
   const [posCameraError, setPosCameraError] = useState<string | null>(null);
+  const [posMobileCheckoutOpen, setPosMobileCheckoutOpen] = useState(false);
   const posVideoRef = useRef<HTMLVideoElement | null>(null);
   const posMediaStreamRef = useRef<MediaStream | null>(null);
 
@@ -2011,10 +2012,7 @@ export function CommerceView() {
       toast.error('Please add items to cart');
       return;
     }
-    if (!posCustomerPhone.trim()) {
-      toast.error('Customer phone is required');
-      return;
-    }
+    const finalPhone = posCustomerPhone.trim() || '9999999999';
     setPosSubmitting(true);
     try {
       // Apply tax + service charge from Settings (was ignoring them — POS total
@@ -2027,8 +2025,8 @@ export function CommerceView() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerName: posCustomerName || 'Walk-in Guest',
-          customerPhone: posCustomerPhone,
+          customerName: posCustomerName.trim() || 'Walk-in Guest',
+          customerPhone: finalPhone,
           paymentMethod: posPaymentMethod,
           deliveryType: posOrderType.toLowerCase(),
           deliveryAddress: posTableNumber ? `Table #${posTableNumber}` : null,
@@ -2044,11 +2042,12 @@ export function CommerceView() {
       }
 
       if (res.order) {
-        toast.success(`POS Order Created ✓ (₹${total.toFixed(2)})`);
+        toast.success(`POS Order Created ✓ (${currencySymbol}${total.toFixed(2)})`);
         setPosCart([]);
         setPosCustomerName('');
         setPosCustomerPhone('');
         setPosTableNumber('');
+        setPosMobileCheckoutOpen(false);
         loadCommerceData();
         setActiveTab('orders');
       } else {
@@ -3049,22 +3048,61 @@ export function CommerceView() {
                           item.id?.toLowerCase().includes(q);
                         return matchCat && matchSearch;
                       })
-                      .map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => addToPosCart(item)}
-                          className="flex flex-col items-start p-3.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-blue-50/60 hover:border-blue-300 transition text-left group"
-                        >
-                          <span className="text-xs font-bold text-stone-900 group-hover:text-blue-700 line-clamp-1">
-                            {item.name}
-                          </span>
-                          <span className="text-[10px] text-stone-400 mt-0.5">{item.category || 'General'}</span>
-                          <span className="mt-2 text-sm font-black text-stone-900">
-                            {currencySymbol}{item.price}
-                          </span>
-                        </button>
-                      ))}
+                      .map((item) => {
+                        const inCart = posCart.find((c) => c.id === item.id);
+                        const qty = inCart ? inCart.qty : 0;
+                        return (
+                          <div
+                            key={item.id}
+                            className={`flex flex-col justify-between p-3 rounded-xl border transition text-left relative ${
+                              qty > 0
+                                ? 'border-emerald-500 bg-emerald-50/50 shadow-2xs'
+                                : 'border-stone-200 bg-stone-50 hover:bg-emerald-50/30 hover:border-emerald-300'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => addToPosCart(item)}
+                              className="w-full text-left cursor-pointer"
+                            >
+                              <div className="flex items-start justify-between gap-1">
+                                <span className="text-xs font-bold text-stone-900 line-clamp-1">
+                                  {item.name}
+                                </span>
+                                {qty > 0 && (
+                                  <Badge className="bg-emerald-600 text-white font-black text-[9px] px-1.5 py-0 shrink-0">
+                                    {qty}
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-stone-400 mt-0.5 block">{item.category || 'General'}</span>
+                              <span className="mt-1.5 text-sm font-black text-stone-900 block">
+                                {currencySymbol}{item.price}
+                              </span>
+                            </button>
+
+                            {qty > 0 && (
+                              <div className="flex items-center justify-between w-full mt-2 pt-1.5 border-t border-emerald-200">
+                                <button
+                                  type="button"
+                                  onClick={() => updatePosQty(item.id, -1)}
+                                  className="w-6 h-6 rounded-md bg-white border border-stone-200 text-stone-700 font-black flex items-center justify-center hover:bg-stone-100 active:scale-90 text-xs shadow-2xs cursor-pointer"
+                                >
+                                  -
+                                </button>
+                                <span className="text-xs font-black text-emerald-800">{qty}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => addToPosCart(item)}
+                                  className="w-6 h-6 rounded-md bg-emerald-600 text-white font-black flex items-center justify-center hover:bg-emerald-700 active:scale-90 text-xs shadow-2xs cursor-pointer"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -3226,6 +3264,195 @@ export function CommerceView() {
                 </div>
               </div>
             </div>
+
+            {/* ── MOBILE STICKY CHECKOUT BAR (One-Handed POS) ── */}
+            {posCart.length > 0 && (
+              <div className="fixed bottom-16 left-0 right-0 z-30 lg:hidden px-4 py-3 bg-stone-900/95 backdrop-blur-md text-white border-t border-stone-800 shadow-2xl flex items-center justify-between gap-3 animate-in slide-in-from-bottom duration-200">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-stone-400 font-medium">
+                    {posCart.reduce((sum, it) => sum + it.qty, 0)} items in cart
+                  </div>
+                  <div className="text-base font-black text-white truncate">
+                    {currencySymbol}
+                    {(() => {
+                      const sub = posCart.reduce((s, it) => s + it.price * it.qty, 0);
+                      const tx = taxRate > 0 ? (sub * Number(taxRate)) / 100 : 0;
+                      const sc = serviceChargeRate > 0 ? (sub * Number(serviceChargeRate)) / 100 : 0;
+                      return (sub + tx + sc).toFixed(2);
+                    })()}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={() => setPosMobileCheckoutOpen(true)}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-9 px-4 rounded-xl shadow-md gap-1.5 cursor-pointer"
+                  >
+                    <span>Checkout</span>
+                    <ArrowRight className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── MOBILE CHECKOUT SLIDE-UP DRAWER ── */}
+            {posMobileCheckoutOpen && (
+              <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+                <div
+                  className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+                  onClick={() => setPosMobileCheckoutOpen(false)}
+                />
+                <div className="relative z-10 w-full max-h-[90vh] rounded-t-3xl bg-white p-5 pb-8 shadow-2xl overflow-y-auto animate-in slide-in-from-bottom duration-200 space-y-4">
+                  <div className="w-12 h-1.5 bg-stone-300 rounded-full mx-auto" />
+
+                  <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                    <div>
+                      <h3 className="text-base font-black text-stone-900">Current Register Bill</h3>
+                      <p className="text-[11px] text-stone-500">
+                        {posCart.reduce((s, it) => s + it.qty, 0)} items • 1-Handed Quick Pay
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPosMobileCheckoutOpen(false)}
+                      className="size-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-500 hover:text-stone-900 cursor-pointer"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+
+                  {/* Cart Items List */}
+                  <div className="max-h-48 overflow-y-auto space-y-2 py-1 border-b border-stone-100">
+                    {posCart.map((it) => (
+                      <div key={it.id} className="flex items-center justify-between text-xs py-1">
+                        <div className="flex-1 pr-2">
+                          <div className="font-bold text-stone-800">{it.name}</div>
+                          <div className="text-[10px] text-stone-400">{currencySymbol}{it.price} each</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updatePosQty(it.id, -1)}
+                            className="w-6 h-6 rounded-md bg-stone-100 text-stone-700 font-black flex items-center justify-center hover:bg-stone-200 cursor-pointer text-xs"
+                          >
+                            -
+                          </button>
+                          <span className="font-bold px-1 text-xs">{it.qty}</span>
+                          <button
+                            type="button"
+                            onClick={() => updatePosQty(it.id, 1)}
+                            className="w-6 h-6 rounded-md bg-emerald-600 text-white font-black flex items-center justify-center hover:bg-emerald-700 cursor-pointer text-xs"
+                          >
+                            +
+                          </button>
+                          <span className="w-14 text-right font-black text-stone-900 text-xs">
+                            {currencySymbol}{(it.price * it.qty).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Order Type & Details */}
+                  <div className="space-y-2.5 text-xs">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-stone-500 uppercase">Order Type</label>
+                        <select
+                          value={posOrderType}
+                          onChange={(e) => setPosOrderType(e.target.value as any)}
+                          className="w-full mt-1 rounded-lg border border-stone-200 p-2 text-xs font-bold bg-stone-50"
+                        >
+                          <option value="DINE_IN">🪑 Dine-In</option>
+                          <option value="TAKEOUT">🛍️ Takeout</option>
+                          <option value="DELIVERY">🚚 Delivery</option>
+                        </select>
+                      </div>
+                      {posOrderType === 'DINE_IN' && (
+                        <div>
+                          <label className="text-[10px] font-bold text-stone-500 uppercase">Table #</label>
+                          <Input
+                            placeholder="e.g. 4"
+                            value={posTableNumber}
+                            onChange={(e) => setPosTableNumber(e.target.value)}
+                            className="h-9 text-xs font-bold mt-1 bg-stone-50"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="Guest Name (Optional)"
+                        value={posCustomerName}
+                        onChange={(e) => setPosCustomerName(e.target.value)}
+                        className="h-9 text-xs bg-stone-50"
+                      />
+                      <Input
+                        placeholder="Phone (Optional)"
+                        value={posCustomerPhone}
+                        onChange={(e) => setPosCustomerPhone(e.target.value)}
+                        className="h-9 text-xs bg-stone-50"
+                      />
+                    </div>
+
+                    {/* Payment Method Selector */}
+                    <div>
+                      <label className="text-[10px] font-bold text-stone-500 uppercase">Payment Method</label>
+                      <div className="grid grid-cols-3 gap-2 mt-1">
+                        {(['CASH', 'UPI', 'CARD'] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setPosPaymentMethod(m)}
+                            className={`py-2 rounded-xl text-xs font-black transition border cursor-pointer ${
+                              posPaymentMethod === m
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            {m === 'CASH' && '💵 Cash'}
+                            {m === 'UPI' && '⚡ UPI / QR'}
+                            {m === 'CARD' && '💳 Card'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Total & Complete Button */}
+                  <div className="pt-2 border-t border-stone-200 space-y-3">
+                    {(() => {
+                      const posSubtotal = posCart.reduce((sum, it) => sum + it.price * it.qty, 0);
+                      const posTax = taxRate > 0 ? (posSubtotal * Number(taxRate)) / 100 : 0;
+                      const posServiceCharge = serviceChargeRate > 0 ? (posSubtotal * Number(serviceChargeRate)) / 100 : 0;
+                      const posGrandTotal = posSubtotal + posTax + posServiceCharge;
+                      return (
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <span className="text-xs text-stone-500 font-semibold block">Total Payable</span>
+                            <span className="text-[10px] text-stone-400">Includes taxes &amp; fees</span>
+                          </div>
+                          <span className="text-2xl font-black text-stone-900">
+                            {currencySymbol}{posGrandTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    <Button
+                      onClick={submitPosOrder}
+                      disabled={posSubmitting || posCart.length === 0}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black h-12 rounded-xl text-sm gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer"
+                    >
+                      {posSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                      <span>Complete &amp; Print Bill</span>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

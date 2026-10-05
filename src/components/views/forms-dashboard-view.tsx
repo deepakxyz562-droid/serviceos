@@ -38,6 +38,10 @@ import {
   Briefcase,
   AlertTriangle,
   ArrowUpRight,
+  ShoppingBag,
+  Wallet,
+  BellRing,
+  CheckCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -142,7 +146,11 @@ export function FormsDashboardView() {
     ordersCount?: number;
     lowStockCount?: number;
     khataReceivable?: number;
+    cashInHand?: number;
   }>({});
+  const [lowStockAlerts, setLowStockAlerts] = useState<Array<{ id: string; name: string; stock: number; minStock?: number }>>([]);
+  const [overdueKhataAlerts, setOverdueKhataAlerts] = useState<Array<{ name: string; phone: string; balance: number; daysPending: number; unpaidOrdersCount: number; whatsappReminderUrl?: string }>>([]);
+  const [pendingOrdersAlerts, setPendingOrdersAlerts] = useState<Array<{ id: string; customerName?: string; total: number; orderType?: string; itemsCount: number }>>([]);
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -307,7 +315,41 @@ export function FormsDashboardView() {
               ...prev,
               sales: Number(d.dayBook.totalSales) || 0,
               ordersCount: Number(d.dayBook.orderCount) || 0,
+              cashInHand: Number(d.dayBook.cashInHand) || 0,
             }));
+          }
+        })
+        .catch(() => {});
+
+      authFetch('/api/commerce/inventory')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && d) {
+            if (Array.isArray(d.lowStockItems)) {
+              setLowStockAlerts(d.lowStockItems.slice(0, 4));
+            }
+            setCommerceStats((prev) => ({
+              ...prev,
+              lowStockCount: Number(d.lowStockCount) || (d.lowStockItems?.length ?? 0),
+            }));
+          }
+        })
+        .catch(() => {});
+
+      authFetch('/api/commerce/orders')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!cancelled && Array.isArray(d?.orders)) {
+            const pending = d.orders.filter((o: any) => o.status === 'PENDING' || o.status === 'PREPARING');
+            setPendingOrdersAlerts(
+              pending.slice(0, 3).map((o: any) => ({
+                id: o.id,
+                customerName: o.customerName || 'Walk-in Customer',
+                total: Number(o.total) || 0,
+                orderType: o.orderType || 'ORDER',
+                itemsCount: Array.isArray(o.items) ? o.items.length : 1,
+              }))
+            );
           }
         })
         .catch(() => {});
@@ -320,6 +362,20 @@ export function FormsDashboardView() {
               ...prev,
               khataReceivable: Number(d.receivable) || 0,
             }));
+            if (Array.isArray(d.customers)) {
+              const topDues = d.customers
+                .filter((c: any) => Number(c.balance) > 0)
+                .slice(0, 3)
+                .map((c: any) => ({
+                  name: c.name || 'Customer',
+                  phone: c.phone || '',
+                  balance: Number(c.balance) || 0,
+                  daysPending: Number(c.daysPending) || 0,
+                  unpaidOrdersCount: Number(c.unpaidOrdersCount) || 1,
+                  whatsappReminderUrl: c.whatsappReminderUrl || '',
+                }));
+              setOverdueKhataAlerts(topDues);
+            }
           }
         })
         .catch(() => {});
@@ -710,6 +766,274 @@ export function FormsDashboardView() {
           )}
         </div>
       </div>
+
+      {/* ── DAILY PULSE HERO BAR (Mobile-First Financial & Operations Snapshot) ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/50 via-white to-transparent dark:from-emerald-950/20 dark:via-slate-900/40 p-3.5 shadow-2xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Today's Revenue</span>
+            <ShoppingCart className="size-3.5 text-emerald-600" />
+          </div>
+          <div className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+            {currency}{Number(commerceStats.sales || 0).toLocaleString()}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {commerceStats.ordersCount ?? 0} orders processed
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-50/50 via-white to-transparent dark:from-blue-950/20 dark:via-slate-900/40 p-3.5 shadow-2xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Cash in Hand</span>
+            <Wallet className="size-3.5 text-blue-600" />
+          </div>
+          <div className="text-xl font-black text-blue-700 dark:text-blue-400">
+            {currency}{Number(commerceStats.cashInHand || commerceStats.sales || 0).toLocaleString()}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Register till balance</p>
+        </div>
+
+        <div className="rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-50/50 via-white to-transparent dark:from-amber-950/20 dark:via-slate-900/40 p-3.5 shadow-2xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider">{countryPack?.vocabulary?.customerCredit || 'Khata Due'}</span>
+            <Users className="size-3.5 text-amber-600" />
+          </div>
+          <div className="text-xl font-black text-amber-700 dark:text-amber-400">
+            {currency}{Number(commerceStats.khataReceivable || 0).toLocaleString()}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Customer balance to collect</p>
+        </div>
+
+        <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-50/50 via-white to-transparent dark:from-purple-950/20 dark:via-slate-900/40 p-3.5 shadow-2xs">
+          <div className="flex items-center justify-between text-muted-foreground mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Inventory Health</span>
+            <Package className="size-3.5 text-purple-600" />
+          </div>
+          <div className="text-xl font-black text-foreground">
+            {(commerceStats.lowStockCount ?? 0) > 0 ? (
+              <span className="text-rose-600 dark:text-rose-400">{commerceStats.lowStockCount} Low</span>
+            ) : (
+              <span className="text-emerald-600 dark:text-emerald-400">All Stocked</span>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {(commerceStats.lowStockCount ?? 0) > 0 ? 'Requires re-ordering' : 'Optimal inventory levels'}
+          </p>
+        </div>
+      </div>
+
+      {/* ── ⚠️ NEEDS ATTENTION FEED (Critical Operational Actions) ── */}
+      {(() => {
+        const totalAttentionCount =
+          lowStockAlerts.length +
+          overdueKhataAlerts.length +
+          pendingOrdersAlerts.length +
+          ((stats?.waitingChatsCount ?? 0) > 0 ? 1 : 0);
+
+        if (totalAttentionCount === 0) {
+          return (
+            <div className="rounded-2xl border border-emerald-500/25 bg-emerald-50/40 dark:bg-emerald-950/20 p-4 flex items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="size-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <CheckCircle className="size-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                    All Systems Running Smoothly
+                  </h4>
+                  <p className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                    No low-stock warnings, overdue customer balances, or pending order escalations. You're set for today!
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openCommerceTab('pos')}
+                className="h-7 text-[11px] font-bold border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 shrink-0 cursor-pointer"
+              >
+                + Start Sale
+              </Button>
+            </div>
+          );
+        }
+
+        return (
+          <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/5 via-card to-card p-4 sm:p-5 shadow-2xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+                </span>
+                <h3 className="text-xs sm:text-sm font-black text-amber-950 dark:text-amber-200 tracking-tight flex items-center gap-2">
+                  <span>⚠️ Needs Attention Today</span>
+                  <Badge variant="outline" className="bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 text-[10px] font-black px-1.5 py-0">
+                    {totalAttentionCount} Action{totalAttentionCount > 1 ? 's' : ''}
+                  </Badge>
+                </h3>
+              </div>
+              <span className="text-[10px] text-muted-foreground font-semibold">Priority feed</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Overdue Khata Alerts */}
+              {overdueKhataAlerts.map((khata, idx) => (
+                <div
+                  key={`khata-${idx}`}
+                  className="rounded-xl border border-amber-300/70 bg-white dark:bg-slate-900/90 p-3 flex flex-col justify-between gap-2.5 shadow-2xs hover:border-amber-400 transition"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 text-[9px] font-black py-0">
+                          {countryPack?.vocabulary?.customerCredit || 'Khata'} Due
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          {khata.daysPending > 0 ? `${khata.daysPending}d pending` : 'Balance due'}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-foreground mt-1 truncate">
+                        {khata.name}
+                      </h4>
+                      <p className="text-sm font-black text-amber-600 dark:text-amber-400">
+                        {currency}{khata.balance.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
+                    {khata.whatsappReminderUrl ? (
+                      <Button
+                        size="sm"
+                        onClick={() => window.open(khata.whatsappReminderUrl, '_blank')}
+                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold h-7 gap-1 rounded-lg cursor-pointer"
+                      >
+                        <Send className="size-3" />
+                        <span>WhatsApp</span>
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openCommerceTab('khata')}
+                      className="flex-1 text-[11px] font-bold h-7 rounded-lg border-stone-300 dark:border-stone-700 cursor-pointer"
+                    >
+                      <span>Record Pay</span>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Low Stock Alerts */}
+              {lowStockAlerts.map((item) => (
+                <div
+                  key={`stock-${item.id}`}
+                  className="rounded-xl border border-rose-300/70 bg-white dark:bg-slate-900/90 p-3 flex flex-col justify-between gap-2.5 shadow-2xs hover:border-rose-400 transition"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 text-[9px] font-black py-0">
+                          Low Stock
+                        </Badge>
+                        <span className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">
+                          {item.stock} left
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-foreground mt-1 truncate">
+                        {item.name}
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground">
+                        Below minimum threshold ({item.minStock || 5} units)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 border-t border-border/50">
+                    <Button
+                      size="sm"
+                      onClick={() => openCommerceTab('catalog')}
+                      className="w-full bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold h-7 gap-1 rounded-lg cursor-pointer"
+                    >
+                      <Package className="size-3" />
+                      <span>+ Restock Item</span>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Pending Orders Alerts */}
+              {pendingOrdersAlerts.map((ord) => (
+                <div
+                  key={`pending-ord-${ord.id}`}
+                  className="rounded-xl border border-blue-300/70 bg-white dark:bg-slate-900/90 p-3 flex flex-col justify-between gap-2.5 shadow-2xs hover:border-blue-400 transition"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 text-[9px] font-black py-0">
+                          Pending Order
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          #{ord.id.slice(-4)}
+                        </span>
+                      </div>
+                      <h4 className="text-xs font-bold text-foreground mt-1 truncate">
+                        {ord.customerName}
+                      </h4>
+                      <p className="text-[11px] font-black text-blue-600 dark:text-blue-400">
+                        {currency}{ord.total.toFixed(2)} • {ord.itemsCount} item{ord.itemsCount > 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 border-t border-border/50">
+                    <Button
+                      size="sm"
+                      onClick={() => openCommerceTab(businessType === 'restaurant' ? 'kds' : 'orders')}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold h-7 gap-1 rounded-lg cursor-pointer"
+                    >
+                      <ShoppingBag className="size-3" />
+                      <span>{businessType === 'restaurant' ? 'View Kitchen Ticket' : 'Process Order'}</span>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Waiting Live Chat Escalation Card */}
+              {(stats?.waitingChatsCount ?? 0) > 0 && (
+                <div className="rounded-xl border border-amber-400 bg-white dark:bg-slate-900/90 p-3 flex flex-col justify-between gap-2.5 shadow-2xs hover:border-amber-500 transition">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-[9px] font-black py-0">
+                        Live Escalation
+                      </Badge>
+                    </div>
+                    <h4 className="text-xs font-bold text-foreground mt-1">
+                      {stats?.waitingChatsCount} Visitor Waiting for Human Help
+                    </h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Customer requested a human agent in website chat.
+                    </p>
+                  </div>
+
+                  <div className="pt-1 border-t border-border/50">
+                    <Button
+                      size="sm"
+                      onClick={() => setCurrentView('liveChat')}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold h-7 gap-1 rounded-lg cursor-pointer"
+                    >
+                      <MessageSquare className="size-3" />
+                      <span>Take Over Conversation</span>
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Adaptive KPI Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
