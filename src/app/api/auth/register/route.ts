@@ -161,6 +161,30 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Auto-create initial employee record for the owner so they appear in scheduling,
+    // dispatch, and team member management with role: 'owner'
+    if (!isStandalone) {
+      try {
+        await db.employee.create({
+          data: {
+            name: user.name,
+            email: user.email,
+            phone: user.phone || phone || '',
+            role: 'owner',
+            status: 'available',
+            userId: user.id,
+            workspaceId: workspace.id,
+            metadataJson: JSON.stringify({
+              preset: 'owner',
+              isOwner: true,
+            }),
+          },
+        });
+      } catch (empErr) {
+        console.warn('[Register] Failed to create initial employee record for owner:', empErr);
+      }
+    }
+
     // Create default subscription (starter plan, trial status, 14-day trial)
     // GUARD: only create if no subscription already exists for this tenant.
     // Previously this always called .create(), which could produce duplicate

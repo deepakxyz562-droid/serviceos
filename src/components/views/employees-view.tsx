@@ -46,6 +46,7 @@ import {
 } from '@/features/employees/components/employee-shared';
 import { EmployeeFormDialog } from '@/features/employees/components/employee-form-dialog';
 import { InviteResultDialog } from '@/features/employees/components/invite-result-dialog';
+import { InviteMemberPage } from '@/features/employees/components/invite-member-page';
 import { OverviewTab } from '@/features/employees/components/tabs/overview-tab';
 import { JobsTab } from '@/features/employees/components/tabs/jobs-tab';
 import { CalendarTab } from '@/features/employees/components/tabs/calendar-tab';
@@ -110,7 +111,7 @@ function getCompensationBadge(emp: Employee) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function EmployeesView() {
-  const { currentWorkspaceId, auth, pendingCreate, setPendingCreate } = useAppStore();
+  const { currentWorkspaceId, auth, countryPack, pendingCreate, setPendingCreate } = useAppStore();
   const queryClient = useQueryClient();
 
   // Pagination state (server-side). Default page size = 10.
@@ -124,6 +125,7 @@ export function EmployeesView() {
   const [listTab, setListTab] = useState<'list' | 'teams'>('list');
   const [tab, setTab] = useState<'employees' | 'timesheet'>('employees');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [isInvitingMember, setIsInvitingMember] = useState(false);
 
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -363,8 +365,7 @@ export function EmployeesView() {
   // ─── Consume cross-view "New Employee/User" signal ───────────────────────
   useEffect(() => {
     if (pendingCreate === 'employee' || pendingCreate === 'user') {
-      resetForm();
-      setShowAddDialog(true);
+      setIsInvitingMember(true);
       setPendingCreate(null);
     }
   }, [pendingCreate, setPendingCreate]);
@@ -493,7 +494,22 @@ export function EmployeesView() {
     setShowEditDialog(true);
   };
 
-  // ─── Render: Detail Mode ─────────────────────────────────────────────────
+  // ─── Render: Full-page Invite Member View ────────────────────────────────
+  if (isInvitingMember) {
+    return (
+      <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
+        <InviteMemberPage
+          onBack={() => setIsInvitingMember(false)}
+          onSaved={() => {
+            setIsInvitingMember(false);
+            fetchEmployees();
+          }}
+          currency={countryPack?.currencySymbol || '₹'}
+          workspaceId={currentWorkspaceId || auth?.user?.workspaceId || undefined}
+        />
+      </div>
+    );
+  }
 
   // ─── Render: Detail Mode ─────────────────────────────────────────────────
 
@@ -609,7 +625,7 @@ export function EmployeesView() {
             </div>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs hover:shadow-sm transition-all h-10 px-4 self-start sm:self-auto"
-              onClick={() => { resetForm(); setShowAddDialog(true); }}
+              onClick={() => setIsInvitingMember(true)}
             >
               <UserPlus className="size-4 mr-2" /> Add Employee
             </Button>
@@ -882,7 +898,7 @@ export function EmployeesView() {
                     : 'Add your first employee to start dispatching jobs, tracking timesheets, and managing payroll.'}
                 </p>
                 {!search && statusFilter === 'all' && roleFilter === 'all' && (
-                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white mt-4 font-semibold shadow-xs" onClick={() => { resetForm(); setShowAddDialog(true); }}>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700 text-white mt-4 font-semibold shadow-xs" onClick={() => setIsInvitingMember(true)}>
                     <UserPlus className="size-4 mr-1.5" /> Add Employee
                   </Button>
                 )}

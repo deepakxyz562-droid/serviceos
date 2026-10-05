@@ -70,6 +70,7 @@ export async function GET(
         logo: tenant.logo,
         phone: tenant.phone,
         email: tenant.email,
+        website: tenant.website,
         address: tenant.address,
         country: tenant.country,
         currency: tenant.currency,

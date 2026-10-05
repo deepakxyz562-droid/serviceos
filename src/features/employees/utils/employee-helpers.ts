@@ -71,9 +71,10 @@ export function formatTime(iso: string): string {
 // ─── Role / Status dropdown options ──────────────────────────────────────────
 
 export const ROLE_OPTIONS = [
-  { value: 'driver', label: 'Driver' },
-  { value: 'technician', label: 'Technician' },
+  { value: 'owner', label: 'Owner' },
   { value: 'manager', label: 'Manager' },
+  { value: 'technician', label: 'Technician' },
+  { value: 'driver', label: 'Driver' },
   { value: 'cleaner', label: 'Cleaner' },
   { value: 'installer', label: 'Installer' },
   { value: 'inspector', label: 'Inspector' },

@@ -48,6 +48,40 @@ async function _GET(request: NextRequest) {
       const effectiveWorkspaceId = authUser.workspaceId
       if (effectiveWorkspaceId) {
         where.workspaceId = effectiveWorkspaceId
+        // Backfill: ensure the registered owner appears as an employee in their team directory
+        if (authUser.role === 'owner' && authUser.id) {
+          try {
+            const existingOwnerEmp = await db.employee.findFirst({
+              where: {
+                workspaceId: effectiveWorkspaceId,
+                OR: [
+                  { userId: authUser.id },
+                  { email: authUser.email },
+                ],
+              },
+              select: { id: true },
+            });
+            if (!existingOwnerEmp) {
+              await db.employee.create({
+                data: {
+                  name: authUser.name || 'Owner',
+                  email: authUser.email,
+                  phone: authUser.phone || '',
+                  role: 'owner',
+                  status: 'available',
+                  userId: authUser.id,
+                  workspaceId: effectiveWorkspaceId,
+                  metadataJson: JSON.stringify({
+                    preset: 'owner',
+                    isOwner: true,
+                  }),
+                },
+              });
+            }
+          } catch {
+            // Non-blocking fallback
+          }
+        }
       } else if (authUser.tenantId) {
         // No workspaceId available, filter by tenant's workspaces
         const tenantWorkspaces = await db.workspace.findMany({
