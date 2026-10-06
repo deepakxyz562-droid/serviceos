@@ -319,7 +319,7 @@ export function InviteMemberPage({ onBack, onSaved }: InviteMemberPageProps) {
   };
 
   return (
-    <div className="space-y-6 pb-20 max-w-5xl mx-auto">
+    <div className="w-full space-y-6 pb-20">
       {/* ─── Sticky Header / Back Bar ───────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur-md z-20 py-2">
         <div className="flex items-center gap-3">
@@ -389,7 +389,7 @@ export function InviteMemberPage({ onBack, onSaved }: InviteMemberPageProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 pt-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="full_name" className="text-xs font-semibold">
                 Full name <span className="text-rose-500">*</span>
@@ -416,19 +416,19 @@ export function InviteMemberPage({ onBack, onSaved }: InviteMemberPageProps) {
                 className="h-9 text-sm"
               />
             </div>
-          </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="phone_number" className="text-xs font-semibold">
-              Mobile phone number (if applicable) <span className="text-rose-500">*</span>
-            </Label>
-            <Input
-              id="phone_number"
-              placeholder="+1 (555) 000-0000"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="h-9 text-sm max-w-sm"
-            />
+            <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+              <Label htmlFor="phone_number" className="text-xs font-semibold">
+                Mobile phone number (if applicable) <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="phone_number"
+                placeholder="+1 (555) 000-0000"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="h-9 text-sm"
+              />
+            </div>
           </div>
 
           <Separator className="my-2" />
