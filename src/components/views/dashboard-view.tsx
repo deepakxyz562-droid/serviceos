@@ -847,7 +847,7 @@ export function DashboardView() {
             size="sm"
             onClick={() => {
               useAppStore.getState().setPendingCreate('job');
-              setActiveView('jobs');
+              setCurrentView('jobs');
             }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-3.5 rounded-xl shadow-xs gap-1.5 cursor-pointer"
           >

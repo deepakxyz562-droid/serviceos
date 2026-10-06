@@ -184,8 +184,7 @@ export async function POST(request: NextRequest) {
       where: {
         tenantId: user.tenantId,
         status: { in: ['active', 'suspended', 'release_pending'] },
-        e164: { not: null },
-        NOT: { e164: '' },
+        number: { not: '' },
       },
     });
 
@@ -218,6 +217,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 4. Call Twilio to purchase (skip if already purchased) ──
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
+    const voiceWebhookUrl = appUrl ? `${appUrl}/api/voice/inbound` : undefined;
+    const smsWebhookUrl = appUrl ? `${appUrl}/api/sms/inbound` : undefined;
     let provisionedNumber;
     if (attempt.status === 'TWILIO_PURCHASED' || attempt.status === 'VAPI_IMPORTED') {
       // Resume: Twilio already purchased — use the existing providerSid
@@ -263,28 +265,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use the Twilio provider to buy the SPECIFIC number (not search + buy first)
-    // We need to call Twilio's IncomingPhoneNumbers API directly with the selected number
-    const { getTwilioTelephonyProvider } = await import('@/lib/twilio-telephony-provider');
-    const twilio = getTwilioTelephonyProvider();
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || '';
-    const voiceWebhookUrl = appUrl ? `${appUrl}/api/voice/inbound` : undefined;
-    const smsWebhookUrl = appUrl ? `${appUrl}/api/sms/inbound` : undefined;
-
-    let provisionedNumber;
-    try {
-      // Call the provider's provisionNumber with the EXACT E.164 the user
-      // selected from /api/addons/phones/search results. The provider MUST
-      // buy this specific number — not "first available" (Phase 8.6).
-      provisionedNumber = await provider.provisionNumber({
-        countryCode,
-        capabilities: ['sms', 'voice'],
-        friendlyName: friendlyName || `Fieseros Number`,
-        voiceWebhookUrl,
-        smsWebhookUrl,
-        phoneNumber: requestedE164,
-      });
+      try {
+        // Buy the exact E.164 number selected from the search results.
+        provisionedNumber = await provider.provisionNumber({
+          countryCode,
+          capabilities: ['sms', 'voice'],
+          friendlyName: friendlyName || 'Fieseros Number',
+          voiceWebhookUrl,
+          smsWebhookUrl,
+          phoneNumber: requestedE164,
+        });
 
       // Sanity check: the provider should have bought exactly what we asked
       // for. If it didn't (e.g. a race where another Twilio account grabbed
@@ -295,20 +285,20 @@ export async function POST(request: NextRequest) {
           `[phones/buy] purchased number ${provisionedNumber.e164} differs from requested ${requestedE164} — proceeding with the purchased number`,
         );
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Twilio purchase failed';
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Twilio purchase failed';
+        await db.phoneProvisioningAttempt.update({
+          where: { id: attempt.id },
+          data: { status: 'TWILIO_PURCHASE_FAILED', error: errorMessage, completedAt: new Date(), updatedAt: new Date() },
+        });
+        return NextResponse.json({ error: errorMessage }, { status: 502 });
+      }
+
+      // Mark saga: TWILIO_PURCHASED
       await db.phoneProvisioningAttempt.update({
         where: { id: attempt.id },
-        data: { status: 'TWILIO_PURCHASE_FAILED', error: errorMessage, completedAt: new Date(), updatedAt: new Date() },
+        data: { status: 'TWILIO_PURCHASED', twilioProviderSid: provisionedNumber.providerNumberId, updatedAt: new Date() },
       });
-      return NextResponse.json({ error: errorMessage }, { status: 502 });
-    }
-
-    // Mark saga: TWILIO_PURCHASED
-    await db.phoneProvisioningAttempt.update({
-      where: { id: attempt.id },
-      data: { status: 'TWILIO_PURCHASED', twilioProviderSid: provisionedNumber.providerNumberId, updatedAt: new Date() },
-    });
     } // end of else (fresh purchase)
 
     // ── 5. Phase 9A: Import the Twilio number into Vapi (skip if already imported) ──
@@ -360,7 +350,7 @@ export async function POST(request: NextRequest) {
           provider: 'VAPI',
           status: 'ACTIVE',
           agentVersion: {
-            receptionist: { tenantId: user.tenantId },
+            reception: { tenantId: user.tenantId },
           },
         },
         select: { externalAssistantId: true },
@@ -461,7 +451,7 @@ export async function POST(request: NextRequest) {
           where: { id: attempt.id },
           data: {
             status: 'SUCCESS',
-            providerSid: provisionedNumber.providerNumberId,
+            twilioProviderSid: provisionedNumber.providerNumberId,
             resultingPhoneNumberId: phoneNumber.id,
             completedAt: new Date(),
           },

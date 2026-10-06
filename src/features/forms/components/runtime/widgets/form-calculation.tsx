@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo } from 'react';
 import { Calculator } from 'lucide-react';
+import { evaluateArithmeticExpression } from '@/lib/arithmetic-expression';
 
 interface FormCalculationProps {
   formula?: string; // e.g. "([checkout] - [checkin]) * ([optionals] + 50)"
@@ -112,10 +113,8 @@ export function FormCalculation({
 
       if (!sanitized.trim()) return typeof value === 'number' ? value : 0;
 
-      // 4. Safe mathematical evaluation using a restricted scope.
-      const result = new Function(`"use strict"; return (${sanitized});`)();
-      const num = Number(result);
-      return isNaN(num) || !isFinite(num) ? (typeof value === 'number' ? value : 0) : num;
+      const num = evaluateArithmeticExpression(sanitized);
+      return num === null ? (typeof value === 'number' ? value : 0) : num;
     } catch {
       return typeof value === 'number' ? value : 0;
     }
@@ -163,4 +162,3 @@ export function FormCalculation({
 }
 
 export default FormCalculation;
-

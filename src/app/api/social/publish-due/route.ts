@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { publishPost } from '@/lib/social/publisher';
+import { verifySocialCronAuth } from '@/lib/social/cron-auth';
 
 /**
  * Publish-Due Cron Endpoint
  * -------------------------
- *   GET /api/social/publish-due?token=<SCHEDULE_TOKEN>
+ *   GET /api/social/publish-due
  *
  * Finds all SocialPosts where status='scheduled' AND scheduledAt <= now,
  * and publishes each via `publishPost()`. Designed to be called by an
@@ -13,10 +14,8 @@ import { publishPost } from '@/lib/social/publisher';
  * 1-5 minutes.
  *
  * AUTH:
- *   Token-protected via `?token=<SCHEDULE_TOKEN>`. The expected token is
- *   `process.env.SOCIAL_PUBLISH_TOKEN`. If unset, we generate a random
- *   dev-only token at server boot and log it once so the developer can
- *   grab it from the dev server output.
+ *   `Authorization: Bearer <SOCIAL_PUBLISH_TOKEN>` or
+ *   `x-social-publish-token: <SOCIAL_PUBLISH_TOKEN>`.
  *
  *   This is intentionally a separate token from CRON_SECRET — social
  *   publishing is a distinct blast radius (creates public posts on
@@ -26,41 +25,11 @@ import { publishPost } from '@/lib/social/publisher';
  *   { processed: N, succeeded: M, failed: K, errors: [...] }
  */
 
-// ─── Token resolution ──────────────────────────────────────────────────────
-
-let generatedDevToken: string | null = null;
-
-function getScheduleToken(): string {
-  if (process.env.SOCIAL_PUBLISH_TOKEN) {
-    return process.env.SOCIAL_PUBLISH_TOKEN;
-  }
-  // Dev-only: generate a stable random token so the developer can test
-  // the endpoint locally without setting an env var. Logged once at first
-  // call (not at module load — keeps `next build` quiet).
-  if (!generatedDevToken) {
-    generatedDevToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    console.warn(
-      '[api/social/publish-due] SOCIAL_PUBLISH_TOKEN not set — using generated dev token: ' +
-        generatedDevToken,
-    );
-  }
-  return generatedDevToken;
-}
-
 // ─── GET handler ───────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  // Auth check.
-  const { searchParams } = new URL(request.url);
-  const providedToken = searchParams.get('token');
-  const expectedToken = getScheduleToken();
-
-  if (!providedToken || providedToken !== expectedToken) {
-    return NextResponse.json(
-      { error: 'Unauthorized — invalid or missing token.' },
-      { status: 401 },
-    );
-  }
+  const authError = verifySocialCronAuth(request);
+  if (authError) return authError;
 
   try {
     // Find all due scheduled posts.

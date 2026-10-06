@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { uploadFile, STORAGE_BUCKETS } from '@/lib/supabase-storage';
-import { invalidateAuthCache } from '@/app/api/auth/me/route';
+import { invalidateAuthCache } from '@/lib/auth-me-cache';
 import { revalidatePublicBusiness } from '@/lib/public-business';
 
 const ALLOWED_MIME_TYPES = new Set([

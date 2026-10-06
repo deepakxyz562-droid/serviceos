@@ -8,11 +8,12 @@ export const metadata = {
   description: 'Track real-time proposal updates, compare Good/Better/Best packages, and book top local pros.',
 };
 
-export default function RequestTrackingPage({
+export default async function RequestTrackingPage({
   params,
 }: {
-  params: { publicSlug: string };
+  params: Promise<{ publicSlug: string }>;
 }) {
+  const { publicSlug } = await params;
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 flex flex-col">
       {/* Top Navbar */}
@@ -42,7 +43,7 @@ export default function RequestTrackingPage({
 
       {/* Main Tracker Container */}
       <main className="flex-1">
-        <CustomerRequestTracker publicSlug={params.publicSlug} />
+        <CustomerRequestTracker publicSlug={publicSlug} />
       </main>
 
       {/* Footer */}

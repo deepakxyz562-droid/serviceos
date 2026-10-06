@@ -119,7 +119,7 @@ export function generateToken(user: AuthUser, originalIat?: number): string {
  * Convenience alias for signing tokens from various auth providers (SAML, SSO, OAuth).
  */
 export function signToken(
-  user: { id?: string; userId?: string; email: string; name?: string; role: string; tenantId?: string | null; workspaceId?: string | null },
+  user: { id?: string; userId?: string; email: string; name?: string; role: string; tenantId?: string | null; workspaceId?: string | null; avatar?: string | null },
   originalIat?: number
 ): string {
   return generateToken(
@@ -130,6 +130,7 @@ export function signToken(
       role: user.role as any,
       tenantId: user.tenantId || null,
       workspaceId: user.workspaceId || null,
+      avatar: user.avatar || null,
     },
     originalIat
   );
@@ -225,7 +226,9 @@ export function verifyTokenWithGrace(
  * the realtime socket isn't connected. The call is non-blocking and never
  * throws; it's safe to call on every request.
  */
-export async function getAuthUser(): Promise<AuthUser | null> {
+export async function getAuthUser(
+  request?: { headers: { get(name: string): string | null } },
+): Promise<AuthUser | null> {
   try {
     let user: AuthUser | null = null;
 
@@ -238,8 +241,9 @@ export async function getAuthUser(): Promise<AuthUser | null> {
 
     // 2. Fallback: Check Authorization header (Bearer token)
     if (!user) {
-      const headersList = await headers();
-      const authHeader = headersList.get('authorization');
+      const authHeader = request
+        ? request.headers.get('authorization')
+        : (await headers()).get('authorization');
       if (authHeader?.startsWith('Bearer ')) {
         const bearerToken = authHeader.slice(7);
         user = verifyToken(bearerToken);
@@ -360,7 +364,7 @@ export function getAppUrl(request?: { headers: { get(name: string): string | nul
 export const COOKIE_OPTIONS = {
   name: TOKEN_NAME,
   httpOnly: true,
-  secure: false, // Caddy handles HTTPS termination
+  secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   path: '/',
   maxAge: 60 * 60 * 24 * 30, // 30 days — matches TOKEN_EXPIRY so sessions persist

@@ -69,6 +69,7 @@ import {
 import { toast } from 'sonner'
 
 import { cn } from '@/lib/utils'
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -1274,7 +1275,7 @@ function EmailTemplateCard({
           <div className="flex size-full items-center justify-center p-2">
             <div
               className="pointer-events-none w-full overflow-hidden text-[6px] leading-tight text-muted-foreground/60 line-clamp-6"
-              dangerouslySetInnerHTML={{ __html: template.htmlBody.slice(0, 500) }}
+              dangerouslySetInnerHTML={{ __html: sanitizeUserHtml(template.htmlBody.slice(0, 500)) }}
             />
           </div>
         ) : (
@@ -3772,7 +3773,7 @@ function BrandKitView() {
             <CardContent>
               <div className="rounded-md border bg-white p-4">
                 {brand.footerHtml ? (
-                  <div dangerouslySetInnerHTML={{ __html: brand.footerHtml }} />
+                  <div dangerouslySetInnerHTML={{ __html: sanitizeUserHtml(brand.footerHtml) }} />
                 ) : (
                   <p className="text-sm text-gray-400">Footer preview will appear here</p>
                 )}

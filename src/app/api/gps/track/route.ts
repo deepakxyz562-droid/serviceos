@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { getAuthUser } from '@/lib/auth';
 import { evaluateGeofenceArrival } from '@/lib/geofence-engine';
+import { canAdminAccessGpsEmployee } from '@/lib/gps-authorization';
 
 /**
  * GPS Tracking
@@ -230,6 +231,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
 
+    // Tenant check: ensure admins cannot submit GPS pings for employees in other tenants.
+    if (ADMIN_ROLES.includes(authUser.role) && !authUser.isSuperAdmin) {
+      const canAccess = await canAdminAccessGpsEmployee(authUser, employee, resolveTenantId);
+      if (!canAccess) {
+        return NextResponse.json(
+          { error: 'Forbidden: employee does not belong to your organization' },
+          { status: 403 },
+        );
+      }
+    }
+
     // ── Phase E-2: jobId ownership validation ──────────────────────────
     // If a jobId is supplied, verify it belongs to the same workspace as the
     // employee AND is assigned to this employee. Prevents a malicious client
@@ -413,7 +425,17 @@ export async function POST(request: NextRequest) {
           capturedAt: now.toISOString(),
           accuracy: accuracy ?? null,
         };
-        path.push(newPoint);
+
+        // Optimization: Deadband filter to prevent massive JSON churn when stationary.
+        // Append point if: first point, moved >= 10m, or >= 60s has passed since last point.
+        const lastPoint = path.length > 0 ? path[path.length - 1] : null;
+        const distFromLast = lastPoint ? haversineMeters(lastPoint.lat, lastPoint.lng, latitude, longitude) : 999;
+        const lastPointTime = lastPoint ? new Date(lastPoint.capturedAt).getTime() : 0;
+        const elapsedMs = now.getTime() - lastPointTime;
+
+        if (!lastPoint || distFromLast >= 10 || elapsedMs >= 60_000) {
+          path.push(newPoint);
+        }
 
         // Phase F-4: Cap pathJson length at 500 points (prune oldest).
         // Without this, a long shift (6h × 10s pings = ~2,160 points) would
@@ -432,12 +454,16 @@ export async function POST(request: NextRequest) {
         // Recompute distance (add the haversine distance from the previous endpoint).
         let newDistance = route.distanceMeters as number;
         if (route.endLat != null && route.endLng != null) {
-          newDistance += haversineMeters(
+          const deltaM = haversineMeters(
             route.endLat as number,
             route.endLng as number,
             latitude,
             longitude,
           );
+          // Only add delta if movement > 5m to filter GPS sensor noise
+          if (deltaM >= 5) {
+            newDistance += deltaM;
+          }
         } else if (route.startLat != null && route.startLng != null) {
           newDistance += haversineMeters(
             route.startLat as number,
@@ -611,7 +637,7 @@ export async function GET(request: NextRequest) {
     } else {
       // Admin: verify the target employee belongs to the same workspace/tenant.
       // Super-admins (platform-level) bypass this scope.
-      if (!authUser.isSuperAdmin && !(authUser.role === 'admin' && !authUser.tenantId)) {
+      if (!authUser.isSuperAdmin) {
         const empWhere: Record<string, unknown> = { id: employeeId };
         if (authUser.workspaceId) {
           empWhere.workspaceId = authUser.workspaceId;

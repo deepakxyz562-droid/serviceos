@@ -12,6 +12,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import * as LucideIcons from 'lucide-react';
 import { Star } from 'lucide-react';
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html';
 
 // ─── Video Widget ─────────────────────────────────────────────────────
 
@@ -189,8 +190,7 @@ export function SocialIconsWidget(props: { [key: string]: any }) {
 
 export function HtmlWidget(props: { [key: string]: any }) {
   const { html } = props;
-  // Basic sanitization: strip <script> tags
-  const sanitized = (html || '').replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '').replace(/\son\w+="[^"]*"/gi, '').replace(/\son\w+='[^']*'/gi, '').replace(/javascript:/gi, '');
+  const sanitized = sanitizeUserHtml(html);
   return <div className="w-full" dangerouslySetInnerHTML={{ __html: sanitized }} />;
 }
 

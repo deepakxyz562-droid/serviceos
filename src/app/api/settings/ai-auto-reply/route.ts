@@ -66,7 +66,7 @@ export interface AiAutoReplySettings {
 
 // ─── Defaults ───────────────────────────────────────────────────────────────
 
-export const DEFAULT_AI_AUTO_REPLY_SETTINGS: AiAutoReplySettings = {
+const DEFAULT_AI_AUTO_REPLY_SETTINGS: AiAutoReplySettings = {
   offline: {
     enabled: false,
     quietHoursStart: '22:00',

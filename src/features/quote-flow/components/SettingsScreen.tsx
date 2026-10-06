@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useSignOut } from "./AppProviders";
 import { LeftDrawer } from "./LeftDrawer";
+import { toast } from "sonner";
 
 export function SettingsScreen() {
   const business = useAppStore((s) => s.business);

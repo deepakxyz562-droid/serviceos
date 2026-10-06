@@ -8,14 +8,30 @@
  * For Android emulator, use http://10.0.2.2:3000 (maps to host's localhost).
  * For iOS simulator, use http://localhost:3000.
  */
+import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
-// Default to production cloud API (https://fieseros.com) so physical mobile devices can connect
-// Overridden by EXPO_PUBLIC_API_URL if specified in .env
+// Backend API base URL: In development, simulator uses localhost:3000 / 10.0.2.2:3000
+// In production, defaults to https://fieseros.com or EXPO_PUBLIC_API_URL
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://fieseros.com";
+  process.env.EXPO_PUBLIC_API_URL ||
+  (__DEV__
+    ? (Platform.OS === "android" ? "http://10.0.2.2:3000" : "http://localhost:3000")
+    : "https://fieseros.com");
 
 let cachedToken: string | null = null;
+const REQUEST_TIMEOUT_MS = 15_000;
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly payload: unknown,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 export async function loadToken() {
   if (cachedToken) return cachedToken;
@@ -53,13 +69,26 @@ export async function api<T = any>(
     "Content-Type": "application/json",
     ...(opts.headers as Record<string, string>),
   };
-  if (token) headers["x-quoteflow-token"] = token;
+  if (token) headers.Authorization = `Bearer ${token}`;
   const normalizedPath = normalizePath(path);
   const url = normalizedPath.startsWith("http") ? normalizedPath : `${API_BASE_URL}${normalizedPath}`;
-  const res = await fetch(url, {
-    ...opts,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...opts,
+      headers,
+      signal: opts.signal || controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ApiError("Request timed out. Please check your connection and try again.", 408, null);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   const text = await res.text();
   let data: any = null;
   try {
@@ -68,7 +97,8 @@ export async function api<T = any>(
     data = text;
   }
   if (!res.ok) {
-    throw new Error(data?.error || `Request failed: ${res.status}`);
+    if (res.status === 401) await clearToken();
+    throw new ApiError(data?.error || `Request failed: ${res.status}`, res.status, data);
   }
   return data as T;
 }

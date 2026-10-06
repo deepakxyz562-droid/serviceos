@@ -655,8 +655,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         setPlans(mapped);
         // Take currency from the first plan row (all rows share the same
         // currency in the seed). Falls back to USD if missing.
-        if (standalone[0]?.currency) {
-          setPlanCurrency(String(standalone[0].currency));
+        if (crmPlans[0]?.currency) {
+          setPlanCurrency(String(crmPlans[0].currency));
         }
       } catch (err) {
         // Network / parse error — keep FALLBACK_PLANS (already in state).

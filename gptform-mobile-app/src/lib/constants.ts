@@ -8,10 +8,13 @@ export const BRAND = {
 };
 
 // Default backend API base URL
-// In development, iOS simulator uses localhost:3000, Android uses 10.0.2.2:3000 or staging
+// In development, iOS simulator uses localhost:3000, Android uses 10.0.2.2:3000
+// In production, defaults to https://fieseros.com or EXPO_PUBLIC_API_URL
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
-  (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'https://fieseros.com');
+  (__DEV__
+    ? (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000')
+    : 'https://fieseros.com');
 
 export const API_PATHS = {
   login: '/api/auth/login',

@@ -578,16 +578,7 @@ function resolveUnitPrice(
     return 0;
   }
 
-  try {
-    // Use Function with the variable names as parameters so the expression
-    // can reference them by identifier — but we already substituted above,
-    // so we just evaluate the resulting numeric expression directly.
-    const fn = new Function(`"use strict"; return (${substituted});`) as () => number;
-    const result = fn();
-    return typeof result === 'number' && Number.isFinite(result) ? result : 0;
-  } catch {
-    return 0;
-  }
+  return evaluateArithmeticExpression(substituted) ?? 0;
 }
 
 /**
@@ -694,3 +685,4 @@ export function applyTemplate(
     termsAndConditions: substituteText(template.termsAndConditions, textVars),
   };
 }
+import { evaluateArithmeticExpression } from '@/lib/arithmetic-expression';

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { normalizeFormSchema } from '@/lib/forms/form-schema-types';
+import { normalizeFormSchema, type FormSchema } from '@/lib/forms/form-schema-types';
 import { stripSecretFields } from '@/lib/payments/credentials';
 
 /**

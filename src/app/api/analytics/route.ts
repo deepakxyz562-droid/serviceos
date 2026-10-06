@@ -4,7 +4,7 @@ import { getAuthUser } from '@/lib/auth'
 import { cache } from '@/lib/cache'
 
 // GET /api/analytics - Get analytics data
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser()
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Route to different metric handlers
-    let result: unknown
+    let result: NextResponse
     switch (metric) {
       case 'revenue_trends':
         result = await handleRevenueTrends(dateFilter, tenantFilter, workspaceFilter, groupBy)

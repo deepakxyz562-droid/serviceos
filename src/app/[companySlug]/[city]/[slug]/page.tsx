@@ -40,6 +40,7 @@ import {
   type LocalBusinessHours,
 } from '@/lib/seo/schemas'
 import { stripHtml } from '@/lib/seo/html-utils'
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html'
 import {
   mapIndustryToPluralSlug,
   resolveIndustryFromAnySlug,
@@ -762,7 +763,7 @@ export default async function PublicBusinessHubPage({
                         </summary>
                         <div
                           className="prose prose-sm dark:prose-invert max-w-none px-4 pb-4 pt-0 prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-emerald-700 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline prose-strong:text-foreground"
-                          dangerouslySetInnerHTML={{ __html: f.answer }}
+                          dangerouslySetInnerHTML={{ __html: sanitizeUserHtml(f.answer) }}
                         />
                       </details>
                     ))}

@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
           marketplaceOptIn: true,
           suspendedAt: null,
           country,
-          city: { not: null, not: '' },
+          AND: [{ city: { not: null } }, { city: { not: '' } }],
         };
 
         // 1. Total matching tenants (head + count=exact — works without aggregates)

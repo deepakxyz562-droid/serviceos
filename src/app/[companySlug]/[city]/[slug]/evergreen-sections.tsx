@@ -93,6 +93,7 @@ import {
   getLocationContextSentence,
 } from '@/lib/marketplace/location-context'
 import type { PublicServiceData } from '@/lib/public-business'
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html'
 
 // ── Shared prop type ────────────────────────────────────────────────────────
 
@@ -640,7 +641,7 @@ export function AboutBusiness({ business }: EvergreenProps) {
         </h2>
         <div
           className="prose prose-slate dark:prose-invert max-w-none prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-emerald-700 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline prose-strong:text-foreground prose-headings:text-foreground"
-          dangerouslySetInnerHTML={{ __html: business.description }}
+          dangerouslySetInnerHTML={{ __html: sanitizeUserHtml(business.description) }}
         />
       </section>
     )
@@ -1353,7 +1354,7 @@ export function PlatformFaqs({ business }: EvergreenProps) {
             </summary>
             <div
               className="prose prose-sm dark:prose-invert max-w-none px-4 pb-4 pt-0 prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-emerald-700 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline prose-strong:text-foreground"
-              dangerouslySetInnerHTML={{ __html: faq.answer }}
+              dangerouslySetInnerHTML={{ __html: sanitizeUserHtml(faq.answer) }}
             />
           </details>
         ))}

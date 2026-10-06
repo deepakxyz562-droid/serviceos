@@ -68,7 +68,7 @@ export default function UniversalAppPublicPage() {
     }, 600);
   };
 
-  if (loading || !project) {
+  if (!project) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-white">
         <div className="text-center space-y-3">

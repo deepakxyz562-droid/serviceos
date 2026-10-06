@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect } from 'react';
 import { useAppStore } from '@/features/quote-flow/store/app';
-import { api } from '@/features/quote-flow/lib/api';
+import { api, ApiError } from '@/features/quote-flow/lib/api';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const setAuthChecked = useAppStore((s) => s.setAuthChecked);
@@ -26,6 +26,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         }
       })
       .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) return;
         console.warn('[quote-flow] Auth check error:', err);
       });
   }, [setAuthChecked, setBusiness, setUser, openModal]);

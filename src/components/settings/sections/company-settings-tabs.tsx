@@ -31,6 +31,7 @@ import { MarketplaceSettings } from '@/components/settings/sections/marketplace-
 import { BusinessBlueprintWizard } from '@/components/onboarding/business-blueprint-wizard';
 import { performClientLogout } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
+import { cn } from '@/lib/utils';
 
 type CompanyTab = 'information' | 'branding' | 'brand-brain' | 'marketplace' | 'blueprint';
 

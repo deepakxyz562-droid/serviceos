@@ -21,7 +21,9 @@ export function useFormHistory<T>(initialPresent: T, options: UseFormHistoryOpti
     future: [],
   });
 
-  stateRef.current = { past, present, future };
+  useEffect(() => {
+    stateRef.current = { past, present, future };
+  }, [past, present, future]);
 
   const canUndo = past.length > 0;
   const canRedo = future.length > 0;

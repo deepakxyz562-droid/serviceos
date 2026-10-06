@@ -57,15 +57,6 @@ export function CustomerSelectModal({
   const [newGstin, setNewGstin] = useState("");
   const [savingNew, setSavingNew] = useState(false);
 
-  useEffect(() => {
-    if (visible) {
-      loadCustomers();
-    } else {
-      setIsAddingNew(false);
-      setSearch("");
-    }
-  }, [visible]);
-
   async function loadCustomers() {
     setLoading(true);
     try {
@@ -78,6 +69,15 @@ export function CustomerSelectModal({
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (visible) {
+      void loadCustomers();
+    } else {
+      setIsAddingNew(false);
+      setSearch("");
+    }
+  }, [visible]);
 
   const filteredCustomers = useMemo(() => {
     if (!search.trim()) return customers;

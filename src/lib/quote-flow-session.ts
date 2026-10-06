@@ -2,7 +2,17 @@ import { getAuthUser, verifyToken, verifyTokenWithGrace } from '@/lib/auth';
 import { db } from '@/lib/db';
 import jwt from 'jsonwebtoken';
 
-const MOBILE_TOKEN_SECRET = process.env.JWT_SECRET || 'quoteflow-mobile-auth-secret';
+function getMobileTokenSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'JWT_SECRET environment variable is required in production for QuoteFlow mobile authentication. ' +
+      'Set it in your production environment variables.'
+    );
+  }
+  return 'quoteflow-mobile-dev-secret';
+}
 
 export interface QuoteFlowUser {
   id: string;
@@ -12,12 +22,12 @@ export interface QuoteFlowUser {
 }
 
 export function signMobileToken(userId: string, email: string): string {
-  return jwt.sign({ uid: userId, email }, MOBILE_TOKEN_SECRET, { expiresIn: '90d' });
+  return jwt.sign({ uid: userId, email }, getMobileTokenSecret(), { expiresIn: '90d' });
 }
 
 export function verifyMobileToken(token: string): { uid: string; email: string } | null {
   try {
-    return jwt.verify(token, MOBILE_TOKEN_SECRET) as { uid: string; email: string };
+    return jwt.verify(token, getMobileTokenSecret()) as { uid: string; email: string };
   } catch {
     return null;
   }
@@ -27,7 +37,7 @@ export function verifyMobileToken(token: string): { uid: string; email: string }
  * Resolves current user from:
  * 1. Authorization: Bearer <jwt> header from request (mobile app)
  * 2. ServiceOS web session (cookies via getAuthUser)
- * 3. Mobile HMAC token in x-quoteflow-token header / ?token= query param.
+ * 3. Legacy mobile token in the x-quoteflow-token header.
  */
 export async function getQuoteFlowUser(req?: Request): Promise<QuoteFlowUser | null> {
   // 1. Direct Bearer token inspection from req (primary path for mobile app API calls)
@@ -44,6 +54,22 @@ export async function getQuoteFlowUser(req?: Request): Promise<QuoteFlowUser | n
             name: user.name || undefined,
             tenantId: user.tenantId || undefined,
           };
+        }
+
+        const mobilePayload = verifyMobileToken(bearerToken);
+        if (mobilePayload?.uid) {
+          const mobileUser = await db.user.findUnique({
+            where: { id: mobilePayload.uid },
+            select: { id: true, email: true, name: true, tenantId: true, isActive: true },
+          });
+          if (mobileUser?.isActive) {
+            return {
+              id: mobileUser.id,
+              email: mobileUser.email,
+              name: mobileUser.name || undefined,
+              tenantId: mobileUser.tenantId || undefined,
+            };
+          }
         }
       }
     }
@@ -64,24 +90,18 @@ export async function getQuoteFlowUser(req?: Request): Promise<QuoteFlowUser | n
     // Web session check may fail outside request context, proceed to token check
   }
 
-  // 3. Try legacy mobile token from request (x-quoteflow-token or ?token=)
+  // 3. Try the legacy mobile header while released clients migrate to Bearer.
   if (req) {
-    let token = req.headers.get('x-quoteflow-token');
-    if (!token) {
-      try {
-        const url = new URL(req.url);
-        token = url.searchParams.get('token') ?? null;
-      } catch {}
-    }
+    const token = req.headers.get('x-quoteflow-token');
 
     if (token) {
       const payload = verifyMobileToken(token);
       if (payload?.uid) {
         const user = await db.user.findUnique({
           where: { id: payload.uid },
-          select: { id: true, email: true, name: true, tenantId: true },
+          select: { id: true, email: true, name: true, tenantId: true, isActive: true },
         });
-        if (user) {
+        if (user?.isActive) {
           return {
             id: user.id,
             email: user.email,

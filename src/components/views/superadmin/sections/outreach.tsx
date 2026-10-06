@@ -53,6 +53,7 @@ import {
   formatDate, formatDateTime, timeAgo, formatNumber,
 } from '@/components/views/superadmin/_shared';
 import { wrapInMasterOutreachLayout } from '@/lib/email-templates/outreach-templates';
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -799,7 +800,7 @@ function ComposeTab() {
                       <div
                         className="w-full max-w-[600px] shadow-sm rounded-xl overflow-hidden bg-white text-slate-800"
                         dangerouslySetInnerHTML={{
-                          __html: renderedHtml
+                          __html: sanitizeUserHtml(renderedHtml)
                             || '<div style="padding: 24px; text-align: center; color: #64748b;">No template body.</div>',
                         }}
                       />
@@ -1099,6 +1100,31 @@ function previewRenderText(
 
 // ─── Tab 3: Sent (tenant selector + history table, no send button) ───────────
 
+const historyColumns: Column<CommunicationRow>[] = [
+  {
+    key: 'recipientEmail',
+    header: 'Recipient',
+    render: (row) => (
+      <div>
+        <div className="font-medium">{row.recipientName || row.recipientEmail}</div>
+        {row.recipientName && <div className="text-xs text-muted-foreground">{row.recipientEmail}</div>}
+      </div>
+    ),
+  },
+  { key: 'subject', header: 'Subject' },
+  {
+    key: 'status',
+    header: 'Status',
+    render: (row) => <Badge variant="outline">{row.status}</Badge>,
+  },
+  {
+    key: 'sentAt',
+    header: 'Sent',
+    render: (row) => formatDateTime(row.sentAt || row.createdAt),
+    hideOnMobile: true,
+  },
+];
+
 function SentTab() {
   const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [tenantsLoading, setTenantsLoading] = useState(true);
@@ -1294,7 +1320,11 @@ function StatTile({ label, value, ok }: { label: string; value: string; ok: bool
 
 // Column definitions for the suppressions DataTable.
 // Defined as a module-level constant so it doesn't get recreated on every render.
-const suppressionColumns: Column<SuppressionRow>[] = [
+function createSuppressionColumns(
+  onUnsuppress: (row: SuppressionRow) => void,
+  unsuppressingId: string | null,
+): Column<SuppressionRow>[] {
+  return [
   {
     key: 'email',
     header: 'Email',
@@ -1353,7 +1383,8 @@ const suppressionColumns: Column<SuppressionRow>[] = [
             variant="ghost"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => handleUnsuppressRow(r)}
+            onClick={() => onUnsuppress(r)}
+            disabled={unsuppressingId === r.id}
           >
             <RotateCcw className="size-3 mr-1" /> Unsuppress
           </Button>
@@ -1362,11 +1393,8 @@ const suppressionColumns: Column<SuppressionRow>[] = [
     ),
     className: 'w-32 text-right',
   },
-];
-
-// Placeholder — will be replaced by the actual handler in the component
-// (module-level const can't access component state, so we use a ref pattern)
-let handleUnsuppressRow: (row: SuppressionRow) => void = () => {};
+  ];
+}
 
 function SuppressionsTab() {
   const [showResolved, setShowResolved] = useState(false);
@@ -1389,7 +1417,7 @@ function SuppressionsTab() {
     fetchSuppressions();
   }, [fetchSuppressions]);
 
-  const handleUnsuppress = async (row: SuppressionRow) => {
+  const handleUnsuppress = useCallback(async (row: SuppressionRow) => {
     setUnsuppressingId(row.id);
     try {
       const params = new URLSearchParams({ email: row.email, XTransformPort: '3000' });
@@ -1409,11 +1437,12 @@ function SuppressionsTab() {
     } finally {
       setUnsuppressingId(null);
     }
-  };
+  }, [fetchSuppressions]);
 
-  // Wire the module-level placeholder to the actual handler so the
-  // column definition can call it from the DataTable's action button.
-  handleUnsuppressRow = handleUnsuppress;
+  const suppressionColumns = useMemo(
+    () => createSuppressionColumns(handleUnsuppress, unsuppressingId),
+    [handleUnsuppress, unsuppressingId],
+  );
 
   return (
     <div className="space-y-4">

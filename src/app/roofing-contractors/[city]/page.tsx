@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { db } from "@/lib/db";
+import { getContractorStaticCityParams } from "@/lib/seo/contractor-static-params";
 import {
   fetchContractorCityProviders,
   isKnownDirectoryCity,
@@ -32,22 +32,7 @@ export const revalidate = 300 // ISR: refresh contractor data every 5 min
 // the route still works at runtime via force-dynamic, just without ISR.
 export async function generateStaticParams() {
   try {
-    const tenants = await db.tenant.findMany({
-      where: {
-        publicProfileEnabled: true,
-        marketplaceOptIn: true,
-        suspendedAt: null,
-        OR: [
-          { industry: { equals: cfg.industryId } },
-          { businessCategoriesJson: { contains: `"${cfg.industryId}"` } },
-        ],
-      },
-      select: { city: true },
-    });
-    const cities = new Set(
-      tenants.map((t) => t.city).filter(Boolean).map((c) => slugifyCity(c)),
-    );
-    return Array.from(cities).map((city) => ({ city }));
+    return await getContractorStaticCityParams(cfg.industryId);
   } catch (err) {
     console.error("[contractors-city] generateStaticParams failed:", err);
     return [];

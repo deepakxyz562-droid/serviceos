@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { apiRequest, ApiError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
 import { registerForPushNotifications } from '@/lib/notifications';
+import * as Notifications from 'expo-notifications';
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -148,9 +149,8 @@ export default function NotificationsScreen() {
         // permission check internally and surface the result.
         // This try/catch only runs if the module is reachable from this
         // screen (e.g. via a require() shim).
-        const NotificationsModule = require('expo-notifications');
-        if (NotificationsModule?.getPermissionsAsync) {
-          const permRes = await NotificationsModule.getPermissionsAsync();
+        if (Notifications?.getPermissionsAsync) {
+          const permRes = await Notifications.getPermissionsAsync();
           permStatus = permRes?.status || 'unknown';
         }
       } catch {}

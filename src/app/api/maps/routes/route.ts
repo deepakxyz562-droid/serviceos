@@ -183,4 +183,3 @@ export async function GET(request: NextRequest) {
 
 // Re-export the polyline decoder for callers that need to decode pre-encoded
 // polylines (e.g. if a future caller fetches Google's raw response directly).
-export { decodePolyline };

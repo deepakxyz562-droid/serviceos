@@ -518,7 +518,6 @@ export const WIDGET_RUNTIME_MAP: Record<string, LazyWidget> = {
   ai_sentiment_analysis: w(() => import('./ai/ai-sentiment-analysis-v2')),
 
   // ─── Phase 4 — Utility Widgets (15) ───────────────────────────────────────
-  progress_bar_widget: w(() => import('./utility/progress-bar-widget')),
   page_break_widget: w(() => import('./utility/page-break-widget')),
   form_collapse_widget: w(() => import('./utility/form-collapse-widget')),
   save_and_resume_widget: w(() => import('./utility/save-and-resume')),

@@ -5,6 +5,7 @@ import { apiRequest } from '@/lib/api';
 import { API_PATHS, API_BASE_URL } from '@/lib/constants';
 import { clearPushToken } from '@/lib/notifications';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 
 /**
  * Decode a JWT payload (without verification — the backend verifies the
@@ -321,7 +322,6 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Always go through the backend OAuth flow. The backend handles the real
       // Google token exchange and returns a real session token. We never
       // fabricate a user locally.
-      const Linking = require('expo-linking');
       const redirectUrl = Linking.createURL('auth-callback');
       const authUrl = `${API_BASE_URL}/api/auth/google?mode=mobile&redirect=${encodeURIComponent(redirectUrl)}`;
 

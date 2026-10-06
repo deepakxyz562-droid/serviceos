@@ -61,8 +61,8 @@ import { trackingManager } from '@/lib/tracking-manager';
 // ── Constants ────────────────────────────────────────────────────────────
 
 export const LOCATION_TASK_NAME = 'fieseros-live-dispatch-tracking';
-export const GPS_INTERVAL_MS = 5_000; // 5s — responsive Uber-like live GPS tracking
-export const GPS_MIN_DISTANCE_M = 5; // 5m minimum movement between pings
+export const GPS_INTERVAL_MS = 10_000; // 10s — optimized live dispatch tracking (balanced battery & responsiveness)
+export const GPS_MIN_DISTANCE_M = 10; // 10m minimum movement between pings
 export const HEARTBEAT_INTERVAL_MS = 60_000; // 60s
 
 // ── Module-level background task definition ──────────────────────────────

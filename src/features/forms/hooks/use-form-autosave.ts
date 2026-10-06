@@ -22,7 +22,9 @@ export function useFormAutosave<T>(
   const isFirstRender = useRef(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  dataRef.current = data;
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   const storageKey = `fieseros_form_draft_${formId || 'new'}`;
 

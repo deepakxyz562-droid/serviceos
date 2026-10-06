@@ -543,7 +543,7 @@ async function handlePlainTextInbound(
     try {
       const commerceConfig = await db.gptformCommerceConfig.findFirst({
         where: {
-          businessId: tenant?.id || tenantId,
+          businessId: tenantId,
           isActive: true,
         },
       });

@@ -38,7 +38,7 @@ export interface WorkSettings {
   };
 }
 
-export const DEFAULT_WORK_SETTINGS: WorkSettings = {
+const DEFAULT_WORK_SETTINGS: WorkSettings = {
   quotes: {
     reminderEnabled: false,
     reminderDays: 3,

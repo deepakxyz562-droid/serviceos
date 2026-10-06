@@ -359,7 +359,7 @@ describe('checkSession onboardingView routing', () => {
 // ---------------------------------------------------------------------------
 
 describe('requireCrmTenant guard for standalone users', () => {
-  it('allows standalone tenant to access CRM endpoints without 403', async () => {
+  it('blocks standalone tenant from CRM endpoints', async () => {
     const { requireCrmTenant } = await import('@/lib/require-crm-tenant');
     mockGetAuthUser.mockResolvedValue({ id: 'user-1', tenantId: TENANT_ID });
     mockPrismaFindUnique.mockResolvedValue({
@@ -371,7 +371,10 @@ describe('requireCrmTenant guard for standalone users', () => {
 
     const req = new NextRequest('http://localhost/api/leads');
     const res = await requireCrmTenant(req);
-    expect(res).toBeNull();
+    expect(res).not.toBeNull();
+    expect(res?.status).toBe(403);
+    const data = await res?.json();
+    expect(data.code).toBe('STANDALONE_FORMS_NO_CRM');
   });
 
   it('blocks listing-only tenant with 403 and LISTING_ONLY_TENANT code', async () => {

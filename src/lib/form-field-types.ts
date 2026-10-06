@@ -249,15 +249,8 @@ export function evaluateCalculation(
   // Reject division by zero up front (cheap syntactic guard).
   if (/\/\s*0(?!\.\d)/.test(expr)) return null;
 
-  try {
-    const fn = new Function(`"use strict"; return (${expr});`);
-    const result = fn();
-    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
-    // Round to 4 decimal places to avoid float noise.
-    return Math.round(result * 10000) / 10000;
-  } catch {
-    return null;
-  }
+  const result = evaluateArithmeticExpression(expr);
+  return result === null ? null : Math.round(result * 10000) / 10000;
 }
 
 // ─── Scoring ──────────────────────────────────────────────────────────────
@@ -454,3 +447,4 @@ export function createField(type: FieldTypeName, label = ''): FormField {
       return base;
   }
 }
+import { evaluateArithmeticExpression } from '@/lib/arithmetic-expression';

@@ -74,7 +74,6 @@ const PUBLIC_TENANT_SELECT = {
   insuranceProvider: true,
   emergencyServiceAvailable: true,
   googlePlaceId: true,
-  website: true,
   // SEO-3 (review fix): expose latitude/longitude so the business profile
   // page can emit GeoCoordinates in the LocalBusiness JSON-LD. These fields
   // are nullable on the Tenant model — businesses without coordinates
@@ -596,7 +595,6 @@ async function buildPublicBusinessData(
     profileTier,
     canonicalUrl,
     googlePlaceId: tenant.googlePlaceId,
-    website: tenant.website,
     latitude: tenant.latitude,
     longitude: tenant.longitude,
   }

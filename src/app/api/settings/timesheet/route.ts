@@ -37,7 +37,7 @@ export interface TimesheetSettings {
   timerCategories: TimerCategory[];
 }
 
-export const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
+const DEFAULT_TIMESHEET_SETTINGS: TimesheetSettings = {
   durationFormat: 'hours_minutes',
   payrollPeriodStartDay: 0, // Sunday
   timerCategories: [

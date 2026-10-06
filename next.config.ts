@@ -113,27 +113,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // ─── A6 (JS Bundle Cache): Next.js build artifacts are content-hashed
-        // (e.g. /_next/static/chunks/abc123.js). The hash in the filename
-        // changes whenever the content changes, so the URL itself is the cache
-        // key. This means we can cache them aggressively (1 year) without
-        // ever serving stale content — when a new deploy ships, the new chunks
-        // have new hashes and browsers fetch them fresh.
-        //
-        // `immutable` is critical: it tells the browser to NOT even revalidate
-        // with a conditional GET (If-Modified-Since), which saves a full RTT
-        // per asset per page load. On a dashboard with 20+ chunks, this cuts
-        // ~2s off repeat-visit load time.
-        //
-        // We match both /_next/static/* (build artifacts) and /_next/media/*
-        // (optimized images). The /_next/static/* matcher is a prefix match
-        // so it covers /chunks/, /css/, /media/.
-        source: '/_next/static/:path*',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-        ],
-      },
-      {
         // ─── A3 (Image Cache): User-uploaded images served from /uploads/*
         // (provider logos, cover photos, gallery images). These are immutable
         // — once uploaded, the file at a given path never changes (new uploads
@@ -168,7 +147,7 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(self), interest-cohort=()' },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
-          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://maps.googleapis.com https://*.googleapis.com https://maps.gstatic.com https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: ws: wss: data: blob: https://maps.googleapis.com https://*.googleapis.com https://*.google.com https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' blob: https://maps.googleapis.com https://*.googleapis.com https://maps.gstatic.com https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: ws: wss: data: blob: https://maps.googleapis.com https://*.googleapis.com https://*.google.com https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" },
         ],
       },
       {
@@ -182,7 +161,7 @@ const nextConfig: NextConfig = {
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=*, microphone=*, geolocation=(self)' },
           { key: 'Access-Control-Allow-Origin', value: '*' },
-          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://maps.googleapis.com https://*.googleapis.com https://maps.gstatic.com https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: ws: wss: data: blob: https://maps.googleapis.com https://*.googleapis.com https://*.google.com https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'" },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' blob: https://maps.googleapis.com https://*.googleapis.com https://maps.gstatic.com https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com; worker-src 'self' blob:; child-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https: ws: wss: data: blob: https://maps.googleapis.com https://*.googleapis.com https://*.google.com https://cloudflareinsights.com; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.google.com https://maps.google.com; object-src 'none'; base-uri 'self'; form-action 'self'" },
         ],
       },
       {

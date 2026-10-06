@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import matter from "gray-matter";
+import { load as parseYaml } from "js-yaml";
 import readingTime from "reading-time";
 
 /**
@@ -27,6 +27,39 @@ import readingTime from "reading-time";
 
 const BLOG_DIR = path.join(process.cwd(), "content", "blog");
 const SITE_URL = "https://fieseros.com";
+
+interface ParsedFrontMatter {
+  data: Record<string, unknown>;
+  content: string;
+}
+
+export function parseMdxFrontMatter(raw: string): ParsedFrontMatter {
+  const normalized = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    return { data: {}, content: normalized };
+  }
+
+  const closingDelimiter = normalized.indexOf("\n---", 4);
+  if (closingDelimiter === -1) {
+    throw new Error("Frontmatter is missing its closing delimiter");
+  }
+
+  const delimiterEnd = closingDelimiter + 4;
+  const trailing = normalized.slice(delimiterEnd);
+  if (trailing && !trailing.startsWith("\n")) {
+    throw new Error("Frontmatter closing delimiter must be on its own line");
+  }
+
+  const parsed = parseYaml(normalized.slice(4, closingDelimiter));
+  if (parsed != null && (typeof parsed !== "object" || Array.isArray(parsed))) {
+    throw new Error("Frontmatter must be a YAML object");
+  }
+
+  return {
+    data: (parsed ?? {}) as Record<string, unknown>,
+    content: trailing.replace(/^\n/, ""),
+  };
+}
 
 export interface BlogPostMeta {
   slug: string;
@@ -63,7 +96,14 @@ function readPost(slug: string): BlogPostMeta | null {
   if (!fs.existsSync(fullPath)) return null;
 
   const raw = fs.readFileSync(fullPath, "utf8");
-  const { data, content } = matter(raw);
+  let parsed: ParsedFrontMatter;
+  try {
+    parsed = parseMdxFrontMatter(raw);
+  } catch (error) {
+    console.warn(`[blog] Skipping "${slug}.mdx" — invalid frontmatter.`, error);
+    return null;
+  }
+  const { data, content } = parsed;
 
   // Validate required frontmatter fields.
   const title = String(data.title ?? "").trim();

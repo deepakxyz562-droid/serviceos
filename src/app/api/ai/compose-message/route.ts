@@ -537,9 +537,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 7. Parse the JSON response.
-    let parsed: Partial<ComposeMessage> = {};
+    let parsed: Partial<ComposedMessage> = {};
     try {
-      parsed = extractJson<Partial<ComposeMessage>>(raw);
+      parsed = extractJson<Partial<ComposedMessage>>(raw);
     } catch {
       return NextResponse.json(
         { error: 'AI returned a response that could not be parsed as JSON.', raw: raw.slice(0, 500) },

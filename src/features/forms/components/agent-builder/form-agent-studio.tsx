@@ -71,6 +71,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 
 // Complete 16 Channels Matching Jotform Screenshot
 //
@@ -740,7 +741,7 @@ export function FormAgentStudio({
                 <div
                   className={cn(
                     'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
-                    isSidebar && isPushContent && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
+                    isSidebar && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
                   )}
                   style={
                     agent.style?.pageBackgroundStart && agent.style?.pageBackgroundEnd

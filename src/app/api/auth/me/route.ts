@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { cache } from '@/lib/cache';
+import { invalidateAuthCache } from '@/lib/auth-me-cache';
 
 // Cache /api/auth/me responses for 30s per user. This endpoint fires on
 // every page mount via useCurrentUser() — without caching, 1000 users
@@ -10,15 +11,6 @@ import { cache } from '@/lib/cache';
 // while cutting DB calls by ~90% on busy dashboards. Cache is busted on
 // logout (cookie cleared) and on profile updates via `invalidateAuthCache()`.
 const AUTH_ME_TTL = 30_000;
-
-export function invalidateAuthCache(userId?: string): void {
-  if (userId) {
-    cache.invalidate(`auth-me:${userId}`);
-    cache.invalidate(`auth-me:cust_${userId}`);
-  } else {
-    cache.invalidateByPrefix('auth-me:');
-  }
-}
 
 export async function GET() {
   try {

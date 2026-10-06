@@ -64,7 +64,7 @@ export interface FormField {
   helpText?: string;
   required?: boolean;
   defaultValue?: string | number | boolean;
-  options?: FieldOption[];
+  options?: Array<FieldOption | string>;
   stepId?: string;
   width?: 'full' | 'half' | 'third' | 'quarter';
   layoutColumn?: 'left' | 'right';
@@ -86,6 +86,7 @@ export interface FormField {
   labelEnabled?: boolean;
   readOnly?: boolean;
   description?: string;
+  kind?: string;
   // ─── P2: Elementor-style per-field styling ────────────────────────────────
   padding?: string;            // CSS padding, e.g. "12px 16px"
   fontSize?: string;           // CSS font-size, e.g. "15px" or "inherit"
@@ -116,7 +117,7 @@ export interface FormMediaPanel {
   enabled: boolean;
   position?: 'left' | 'right' | 'top';
   splitRatio?: '50-50' | '40-60' | '60-40' | '35-65' | '30-70';
-  mediaType: 'image' | 'video' | 'youtube' | 'vimeo' | 'map' | 'gradient' | 'testimonial';
+  mediaType?: 'image' | 'video' | 'youtube' | 'vimeo' | 'map' | 'gradient' | 'testimonial';
   mediaUrl?: string;
   videoEmbedUrl?: string;
   videoAutoplay?: boolean;
@@ -231,6 +232,7 @@ export interface FormActionSettings {
 
 export interface FormSchema {
   version: number;
+  isMultiStep?: boolean;
   steps: FormStep[];
   fields: FormField[];
   rules: ConditionalRule[];

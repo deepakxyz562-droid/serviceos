@@ -13,7 +13,7 @@ export interface SmsTopupPack {
   description: string;
 }
 
-export const SMS_TOPUP_PACKS: SmsTopupPack[] = [
+const SMS_TOPUP_PACKS: SmsTopupPack[] = [
   {
     id: '500_sms',
     name: '500 SMS Pack',

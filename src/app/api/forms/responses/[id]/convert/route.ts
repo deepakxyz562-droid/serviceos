@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { resolveTenantId } from '@/lib/api-auth';
 import { EventBus } from '@/lib/event-bus';
+import { checkLifetimeJobLimit, incrementTenantJobCount } from '@/lib/plan-gate';
 
 // ─── POST /api/forms/responses/[id]/convert ──────────────────────────────────
 // Convert a FormResponse into a CRM Lead, Job, or Customer
@@ -95,7 +96,6 @@ export async function POST(
     if (target === 'job') {
       // PL1.1: Enforce lifetime job limit on form response → job conversion
       if (authUser?.tenantId) {
-        const { checkLifetimeJobLimit, incrementTenantJobCount } = await import('@/lib/plan-gate');
         const quota = await checkLifetimeJobLimit(authUser.tenantId);
         if (!quota.ok) {
           return NextResponse.json(

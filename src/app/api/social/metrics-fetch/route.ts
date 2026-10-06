@@ -3,11 +3,12 @@ import { db } from '@/lib/db';
 import { decryptToken } from '@/lib/social/crypto';
 import { ensureAdaptersLoaded, getAdapter } from '@/lib/social/registry';
 import type { SocialAccountData, SocialPlatform } from '@/lib/social/types';
+import { verifySocialCronAuth } from '@/lib/social/cron-auth';
 
 /**
  * Metrics Fetch Cron Endpoint
  * ---------------------------
- *   GET /api/social/metrics-fetch?token=<SCHEDULE_TOKEN>
+ *   GET /api/social/metrics-fetch
  *
  * Finds SocialPosts where status='published' AND publishedAt >= now-90days,
  * and for each post + target platform, calls `adapter.fetchMetrics()` and
@@ -31,24 +32,6 @@ import type { SocialAccountData, SocialPlatform } from '@/lib/social/types';
 
 const METRICS_WINDOW_DAYS = 90;
 const MAX_POSTS_PER_RUN = 100;
-
-// ─── Token resolution (mirrors publish-due) ────────────────────────────────
-
-let generatedDevToken: string | null = null;
-
-function getScheduleToken(): string {
-  if (process.env.SOCIAL_PUBLISH_TOKEN) {
-    return process.env.SOCIAL_PUBLISH_TOKEN;
-  }
-  if (!generatedDevToken) {
-    generatedDevToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    console.warn(
-      '[api/social/metrics-fetch] SOCIAL_PUBLISH_TOKEN not set — using generated dev token: ' +
-        generatedDevToken,
-    );
-  }
-  return generatedDevToken;
-}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -109,16 +92,8 @@ function toAccountData(account: {
 // ─── GET handler ───────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const providedToken = searchParams.get('token');
-  const expectedToken = getScheduleToken();
-
-  if (!providedToken || providedToken !== expectedToken) {
-    return NextResponse.json(
-      { error: 'Unauthorized — invalid or missing token.' },
-      { status: 401 },
-    );
-  }
+  const authError = verifySocialCronAuth(request);
+  if (authError) return authError;
 
   try {
     // Ensure adapters are loaded (lazy bootstrap).

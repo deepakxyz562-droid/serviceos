@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { invalidateAuthCache } from '@/app/api/auth/me/route';
+import { invalidateAuthCache } from '@/lib/auth-me-cache';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { applyHubDefaultsToTenant, revalidatePublicBusiness } from '@/lib/public-business';
 import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
@@ -836,4 +836,3 @@ export async function PATCH(
     );
   }
 }
-

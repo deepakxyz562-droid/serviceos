@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { cn } from '@/lib/utils';
 import { FormSchema, FormField } from '@/lib/forms/form-schema-types';
 import { resolveFormLayout } from '@/lib/forms/resolve-form-layout';
+import { evaluateArithmeticExpression } from '@/lib/arithmetic-expression';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
 import { FormFieldRenderer } from './shared-field-renderer';
 import { Card, CardContent } from '@/components/ui/card';
@@ -660,14 +661,8 @@ export function evaluateFormulaSafe(
   if (expr.includes('NaN')) return null;
   if (!/^[0-9.\s+\-*/%()?:!=><&|Math.roundmaxinabslorceq]+$/.test(expr)) return null;
   if (/\/\s*0(?!\.\d)/.test(expr)) return null;
-  try {
-    const fn = new Function(`"use strict"; return (${expr});`);
-    const result = fn();
-    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
-    return Math.round(result * 10000) / 10000;
-  } catch {
-    return null;
-  }
+  const result = evaluateArithmeticExpression(expr);
+  return result === null ? null : Math.round(result * 10000) / 10000;
 }
 
 /**

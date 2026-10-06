@@ -47,7 +47,7 @@ export interface LeadSourceOption {
  * read-only "system sources" group. Custom sources added by the tenant
  * appear alongside them.
  */
-export const BUILTIN_LEAD_SOURCES: LeadSourceOption[] = [
+const BUILTIN_LEAD_SOURCES: LeadSourceOption[] = [
   { value: 'website', label: 'Website', isSystem: true },
   { value: 'whatsapp', label: 'WhatsApp', isSystem: true },
   { value: 'wordpress', label: 'WordPress', isSystem: true },

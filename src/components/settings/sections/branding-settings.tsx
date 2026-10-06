@@ -44,6 +44,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

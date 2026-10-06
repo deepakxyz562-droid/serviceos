@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
  * a toggle — this replaces the old local `cache.invalidate()` calls that
  * only cleared the current instance's cache.
  */
-export async function invalidateMenuVisibilityCache(tenantId?: string): Promise<void> {
+async function invalidateMenuVisibilityCache(tenantId?: string): Promise<void> {
   if (tenantId) {
     await sharedCacheDelete(`menu-visibility:${tenantId}`);
   } else {

@@ -22,6 +22,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { NextRequest } from 'next/server';
 
 // ─── Hoisted mock state ─────────────────────────────────────────────────────
 const { mockDb, mockGetAuthUser, mockGenerateToken } = vi.hoisted(() => ({

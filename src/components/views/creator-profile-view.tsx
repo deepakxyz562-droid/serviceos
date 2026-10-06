@@ -27,6 +27,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { CreatorProfileData, buildDefaultCreatorProfile } from '@/lib/creator-profile';
+import { cn } from '@/lib/utils';
 
 export function CreatorProfileView() {
   const [profile, setProfile] = useState<CreatorProfileData | null>(null);

@@ -64,7 +64,17 @@ export function resolveFormLayout(schema: {
     return 'split_media';
   }
 
-  // If user explicitly chose classic/paper without mediaPanel, respect their choice 100%!
+  // Persisted split-column assignments are structural data. They must win over
+  // a stale/default `classic` theme value or one side of the form disappears.
+  const hasSplitColumns = Array.isArray(schema.fields) && schema.fields.some(
+    (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
+  );
+  if (hasSplitColumns) {
+    return 'split_media';
+  }
+
+  // If the user explicitly chose classic/paper and there is no split content,
+  // preserve that choice.
   if (
     normalized === 'classic' ||
     normalized === 'paper' ||
@@ -72,14 +82,6 @@ export function resolveFormLayout(schema: {
     normalized === 'multi_step'
   ) {
     return 'classic';
-  }
-
-  // Auto-detect split_media if schema has left/right columns
-  const hasSplitColumns = Array.isArray(schema.fields) && schema.fields.some(
-    (f) => f && (f.layoutColumn === 'left' || f.layoutColumn === 'right')
-  );
-  if (hasSplitColumns) {
-    return 'split_media';
   }
 
   return 'classic';

@@ -623,7 +623,7 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
       },
     });
 
-    return { job, updated, nextRunAt, willDeactivate };
+    return { job, updated, nextRunAt, willDeactivate, generatedPin };
   })();
 
   // Phase A1 — if we skipped (dedup hit on pre-check or P2002 race), there's
@@ -702,7 +702,7 @@ async function processSingleSchedule(scheduleId: string): Promise<string | null>
           assigneeName,
           scheduledAt,
           scheduledTime,
-          verificationPin: generatedPin,
+          verificationPin: result.generatedPin,
           workspaceId,
           tenantId: schedule.tenantId,
         },

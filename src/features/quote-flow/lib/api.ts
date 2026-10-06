@@ -2,6 +2,16 @@
  * API client for the QuoteFlow suite inside ServiceOS.
  * Automatically prefixes requests to /api/quote-flow/*
  */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export async function api<T = any>(
   path: string,
   opts: RequestInit = {}
@@ -33,7 +43,7 @@ export async function api<T = any>(
     data = text;
   }
   if (!res.ok) {
-    throw new Error(data?.error || data?.message || `Request failed: ${res.status}`);
+    throw new ApiError(data?.error || data?.message || `Request failed: ${res.status}`, res.status);
   }
   return data as T;
 }

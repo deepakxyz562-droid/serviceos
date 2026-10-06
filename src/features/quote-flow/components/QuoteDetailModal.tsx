@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, Pencil, Copy, Trash2, MoreHorizontal, Send, Download, Sparkles, Edit, Printer, Palette, ZoomIn, ZoomOut, CheckCircle2, FileText } from "lucide-react";
 import { formatCurrency, computeTotals } from "@/lib/quote-flow-calc";
 import { getTemplateTheme } from "@/features/quote-flow/lib/template-themes";
+import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,

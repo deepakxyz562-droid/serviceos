@@ -89,7 +89,7 @@ export interface SocialPublishingPlatformDef {
  * prefers 'instagram' but falls back to 'facebook'). So a single
  * `facebook` IntegrationCredential row covers BOTH platform OAuth flows.
  */
-export const SOCIAL_PUBLISHING_PLATFORMS: SocialPublishingPlatformDef[] = [
+const SOCIAL_PUBLISHING_PLATFORMS: SocialPublishingPlatformDef[] = [
   {
     key: 'facebook',
     label: 'Facebook + Instagram (Meta App)',

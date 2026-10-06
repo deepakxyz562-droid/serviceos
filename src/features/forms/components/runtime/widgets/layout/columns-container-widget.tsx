@@ -84,6 +84,7 @@ export function ColumnsContainerWidget({
               value={allFormData[childField.id]}
               onChange={(val) => onChange(childField.id, val)}
               allFormData={allFormData}
+              allFields={allFields}
               formId={formId}
             />
           )}

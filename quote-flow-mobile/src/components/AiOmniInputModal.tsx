@@ -14,17 +14,10 @@ import {
 } from "react-native";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import { api } from "@/api/client";
+import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 
-let _speechModule: any = undefined;
-function getSpeechModule(): any {
-  if (_speechModule !== undefined) return _speechModule;
-  try {
-    const mod = require("expo-speech-recognition");
-    _speechModule = mod?.ExpoSpeechRecognitionModule || null;
-  } catch {
-    _speechModule = null;
-  }
-  return _speechModule;
+function getSpeechModule() {
+  return ExpoSpeechRecognitionModule;
 }
 
 interface AiOmniInputModalProps {

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -38,8 +38,8 @@ export function SignaturePadModal({
   const padHeight = 200;
 
   // PanResponder to track touch movements
-  const panResponder = useRef(
-    PanResponder.create({
+  const panResponder = useMemo(
+    () => PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (evt) => {
@@ -58,8 +58,9 @@ export function SignaturePadModal({
           return [];
         });
       },
-    })
-  ).current;
+    }),
+    [],
+  );
 
   // Convert array of points to SVG path string 'd'
   const pathToSvgD = (pts: Point[]): string => {

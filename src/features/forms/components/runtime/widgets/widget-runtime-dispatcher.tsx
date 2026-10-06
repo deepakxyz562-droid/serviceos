@@ -47,6 +47,7 @@ interface WidgetRuntimeDispatcherProps {
   value: any;
   onChange: (val: any) => void;
   allFormData?: Record<string, any>;
+  allFields?: FormField[];
   disabled?: boolean;
   /** The form ID — propagated to payment widgets so they can call
    *  POST /api/forms/[id]/charge for real payments. */
@@ -143,6 +144,7 @@ export function WidgetRuntimeDispatcher({
   value,
   onChange,
   allFormData = {},
+  allFields = [],
   disabled = false,
   formId,
 }: WidgetRuntimeDispatcherProps) {
@@ -528,23 +530,23 @@ export function WidgetRuntimeDispatcher({
 
     // ─── Extended Elementor Content Widgets ───────────────────────────
     case 'video_widget':
-      return <VideoWidget {...widgetConfig} />;
+      return <VideoWidget {...config} />;
     case 'image_box_widget':
-      return <ImageBoxWidget {...widgetConfig} />;
+      return <ImageBoxWidget {...config} />;
     case 'icon_box_widget':
-      return <IconBoxWidget {...widgetConfig} />;
+      return <IconBoxWidget {...config} />;
     case 'counter_widget':
-      return <CounterWidget {...widgetConfig} />;
+      return <CounterWidget {...config} />;
     case 'testimonial_widget':
-      return <TestimonialWidget {...widgetConfig} />;
+      return <TestimonialWidget {...config} />;
     case 'progress_bar_widget':
-      return <ProgressBarWidget {...widgetConfig} />;
+      return <ProgressBarWidget {...config} />;
     case 'social_icons_widget':
-      return <SocialIconsWidget {...widgetConfig} />;
+      return <SocialIconsWidget {...config} />;
     case 'html_widget':
-      return <HtmlWidget {...widgetConfig} />;
+      return <HtmlWidget {...config} />;
     case 'accordion_widget':
-      return <AccordionWidget {...widgetConfig} />;
+      return <AccordionWidget {...config} />;
 
     // ─── Layout Containers (Phase 6) ─────────────────────────────────
     case 'section_widget': {

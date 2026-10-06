@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { WidgetRuntimeDispatcher } from './widgets/widget-runtime-dispatcher';
 import type { FormField } from '@/lib/forms/form-schema-types';
 import { cn } from '@/lib/utils';
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html';
 
 export interface FormFieldRendererProps {
   field: FormField;
@@ -247,7 +248,7 @@ export const FormFieldRenderer = React.memo(function FormFieldRenderer({
         onClick={isEditMode ? (e) => { e.stopPropagation(); onSelectField?.(field.id); } : undefined}
       >
         {allowHTML ? (
-          <div className={`${alignClass} w-full`} style={textStyle} dangerouslySetInnerHTML={{ __html: text }} />
+          <div className={`${alignClass} w-full`} style={textStyle} dangerouslySetInnerHTML={{ __html: sanitizeUserHtml(text) }} />
         ) : (
           <p className={`${alignClass} w-full`} style={textStyle}>{text}</p>
         )}

@@ -85,8 +85,8 @@ export async function POST(req: NextRequest) {
     const tenantScope = business.tenantId || business.id;
     const expenseDate = date ? new Date(date) : new Date();
     const validPaymentMethods = ['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE'];
-    const normalizedPaymentMethod = validPaymentMethods.includes(String(paymentMethod).toUpperCase())
-      ? String(paymentMethod).toUpperCase()
+    const normalizedPaymentMethod = validPaymentMethods.includes(String(paymentMode).toUpperCase())
+      ? String(paymentMode).toUpperCase()
       : 'CASH';
 
     const count = await db.expense.count({

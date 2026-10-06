@@ -2,17 +2,22 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { signMobileToken, getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
+import { verifyGoogleToken } from '@/lib/quote-flow-google-auth';
 
 const schema = z.object({
-  email: z.string().email(),
+  idToken: z.string().optional(),
+  accessToken: z.string().optional(),
   name: z.string().optional(),
   avatar: z.string().optional(),
-  googleId: z.string().optional(),
 });
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const rateLimited = applyRateLimit(authLimiter, req);
+    if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
+    const body = await req.json().catch(() => ({}));
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -20,25 +25,60 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const { email, name, avatar, googleId } = parsed.data;
-    const lower = email.toLowerCase();
+
+    const { idToken, accessToken, name, avatar } = parsed.data;
+
+    // Cryptographically verify Google token
+    const verifiedGoogle = await verifyGoogleToken(idToken, accessToken);
+    if (!verifiedGoogle) {
+      return NextResponse.json(
+        { error: 'Invalid or missing Google authentication token' },
+        { status: 401 }
+      );
+    }
+
+    const lower = verifiedGoogle.email;
     let user = await db.user.findUnique({ where: { email: lower } });
     if (!user) {
       user = await db.user.create({
         data: {
           email: lower,
-          name: name || lower.split('@')[0],
-          avatar: avatar || null,
+          name: verifiedGoogle.name || name?.trim() || lower.split('@')[0],
+          avatar: verifiedGoogle.picture || avatar || null,
           role: 'owner',
           authProvider: 'google',
-          authProviderId: googleId || null,
+          authProviderId: verifiedGoogle.sub,
           isActive: true,
           emailVerified: true,
           emailVerifiedAt: new Date(),
         },
       });
     } else if (!user.isActive) {
-      return NextResponse.json({ error: 'Account is deactivated' }, { status: 403 });
+      return NextResponse.json(
+        { error: 'Account is deactivated. Please contact support.' },
+        { status: 403 }
+      );
+    } else {
+      // If user exists and doesn't have Google linked, link it
+      if (
+        user.authProvider === 'google' &&
+        user.authProviderId &&
+        user.authProviderId !== verifiedGoogle.sub
+      ) {
+        return NextResponse.json({ error: 'Google identity does not match this account' }, { status: 409 });
+      }
+      if (!user.authProviderId || user.authProvider !== 'google') {
+        user = await db.user.update({
+          where: { id: user.id },
+          data: {
+            authProvider: 'google',
+            authProviderId: verifiedGoogle.sub,
+            emailVerified: true,
+            emailVerifiedAt: user.emailVerifiedAt || new Date(),
+            avatar: user.avatar || verifiedGoogle.picture || avatar || null,
+          },
+        });
+      }
     }
 
     const business = await getOrCreateBusinessForUser(user.id, user.tenantId || undefined, user.name || 'My Business');
@@ -50,6 +90,6 @@ export async function POST(req: Request) {
       business,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message || 'Google authentication failed' }, { status: 500 });
   }
 }

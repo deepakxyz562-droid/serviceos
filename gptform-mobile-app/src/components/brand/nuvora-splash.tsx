@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
 import { NuvoraMark } from './nuvora-mark';
 
@@ -7,9 +7,9 @@ interface NuvoraSplashProps {
 }
 
 export function NuvoraSplash({ statusMessage = 'Loading your business...' }: NuvoraSplashProps) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
-  const pulseAnim = useRef(new Animated.Value(0.6)).current;
+  const fadeAnim = useMemo(() => new Animated.Value(0), []);
+  const scaleAnim = useMemo(() => new Animated.Value(0.92), []);
+  const pulseAnim = useMemo(() => new Animated.Value(0.6), []);
 
   useEffect(() => {
     // Fade in and scale up logo

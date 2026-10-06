@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { authFetch } from '@/lib/client-auth';
 import { wrapInMasterOutreachLayout } from '@/lib/email-templates/outreach-templates';
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 
@@ -528,7 +529,7 @@ export function OutreachSendDialog({
               <div
                 className="w-full max-w-[560px] shadow-sm rounded-xl overflow-hidden bg-white text-slate-800 text-xs"
                 dangerouslySetInnerHTML={{
-                  __html: renderedPreviewHtml || '<div style="padding: 16px; text-align: center; color: #64748b;">(empty body)</div>',
+                  __html: sanitizeUserHtml(renderedPreviewHtml) || '<div style="padding: 16px; text-align: center; color: #64748b;">(empty body)</div>',
                 }}
               />
             </div>

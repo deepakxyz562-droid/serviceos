@@ -206,7 +206,7 @@ export const BACKUP_MODEL_GROUPS: Record<string, string> = {
   WorkflowVersion: 'Templates', WorkflowAutomation: 'Templates', Checklist: 'Templates',
   Credential: 'Templates', Execution: 'Templates', ExecutionNodeData: 'Templates',
   Variable: 'Templates', Folder: 'Templates', Template: 'Templates',
-  EmailProvider: 'Templates', EmailTemplate: 'Templates', TriggerExecution: 'Templates',
+  EmailTemplate: 'Templates', TriggerExecution: 'Templates',
   BrandKit: 'Templates', ImageLibrary: 'Templates', TemplatePack: 'Templates',
   TemplateAsset: 'Templates', Document: 'Templates', KnowledgeArticle: 'Templates',
   // Billing

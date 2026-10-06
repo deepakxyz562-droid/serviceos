@@ -3,29 +3,18 @@
 import React, { useMemo } from 'react';
 import { Code2, ShieldAlert } from 'lucide-react';
 import type { WidgetProps } from '../widget-props';
+import { sanitizeUserHtml } from '@/lib/sanitize-user-html';
 
 interface HtmlSnippetValue {
   html: string;
   sanitized: boolean;
 }
 
-const DANGEROUS_TAGS = /<\/?(script|iframe|object|embed|link|meta|base|form|input|button|textarea|select|option|applet|frame|frameset)\b[^>]*>/gi;
-const DANGEROUS_ATTRS = /\s+(on\w+|srcdoc|formaction|http-equiv|expression|javascript:|vbscript:|data:text\/html)[=\s]/gi;
-const SRC_HREF_SCRIPT = /((src|href)\s*=\s*["']?\s*(javascript:|vbscript:|data:text\/html)[^"'\s]*)/gi;
-
-function sanitize(html: string): string {
-  if (!html) return '';
-  return html
-    .replace(DANGEROUS_TAGS, '')
-    .replace(DANGEROUS_ATTRS, ' data-removed="$1"')
-    .replace(SRC_HREF_SCRIPT, '$2="#"');
-}
-
 export function HtmlSnippet({ value, onChange, config, disabled, field }: WidgetProps) {
   const html = String(config?.html ?? (value as HtmlSnippetValue | undefined)?.html ?? '');
   const ariaLabel = String(field?.label ?? 'HTML snippet');
 
-  const sanitized = useMemo(() => sanitize(html), [html]);
+  const sanitized = useMemo(() => sanitizeUserHtml(html), [html]);
 
   React.useEffect(() => {
     if (!disabled && html) {

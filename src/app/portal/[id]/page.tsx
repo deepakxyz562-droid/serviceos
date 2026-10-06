@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Shield,
   AlertTriangle,
+  CreditCard,
 } from 'lucide-react';
 
 interface WarrantyItem {

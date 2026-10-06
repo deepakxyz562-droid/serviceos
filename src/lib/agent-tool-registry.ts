@@ -106,7 +106,7 @@ registerTool({
   argSchema: {
     query: { type: 'string', required: true, description: 'The search query' },
   },
-  execute: async (_ctx, args) => {
+  execute: async (ctx, args) => {
     // Delegated to the existing hybrid search — imported lazily to avoid circular deps
     const { searchKnowledgeBaseHybrid } = await import('@/lib/ai-knowledge');
     const query = String(args.query || '');

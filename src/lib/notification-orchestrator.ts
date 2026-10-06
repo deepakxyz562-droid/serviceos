@@ -867,7 +867,7 @@ export async function orchestrateNotification(
           attemptNumber = 1
         } else {
           const retryResult = await withRetry(
-            () => sendSMS(smsTo, message, context?.tenantId),
+            () => sendSMS(smsTo, message, request.context?.tenantId),
             maxRetries
           )
           sendResult = retryResult.result

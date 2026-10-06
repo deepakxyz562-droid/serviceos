@@ -153,7 +153,7 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-export const DEFAULT_TABLES = [
+const DEFAULT_TABLES = [
   { id: 'tbl_1', name: 'Table 1', capacity: 4, section: 'Main Floor' },
   { id: 'tbl_2', name: 'Table 2', capacity: 4, section: 'Main Floor' },
   { id: 'tbl_3', name: 'Table 3', capacity: 2, section: 'Main Floor' },

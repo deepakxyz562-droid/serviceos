@@ -52,7 +52,7 @@ export interface FormField {
   id: string;
   label: string;
   type: FieldType;
-  required: boolean;
+  required?: boolean;
   placeholder?: string;
   options?: string[];
   // ─── New engine features (P5-forms) ──────────────────────────────────────
@@ -111,10 +111,10 @@ export interface SubmissionActions {
     notifySalesTeam: boolean;
     callWebhook: boolean;
   };
-  whatsappOwnerTemplate: string;
-  whatsappUserTemplate: string;
-  aiGenerateUserMessage: boolean;
-  webhookUrl: string;
+  whatsappOwnerTemplate?: string;
+  whatsappUserTemplate?: string;
+  aiGenerateUserMessage?: boolean;
+  webhookUrl?: string;
 }
 
 export interface FormItem {
@@ -222,6 +222,9 @@ export interface EditorFormData {
   mediaPanel?: import('@/lib/forms/form-schema-types').FormMediaPanel;
   settings?: FormSettingsConfig;
   agentConfig?: import('./agent-types').FormAgentData;
+  submissions?: number;
+  conversionRate?: number;
+  createdAt?: string;
 }
 
 /**

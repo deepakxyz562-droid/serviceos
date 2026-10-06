@@ -20,6 +20,14 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "react-hooks/exhaustive-deps": "off",
     "react-hooks/purity": "off",
     "react-hooks/rules-of-hooks": "off",
+    // React Compiler is not enabled in this project. These compiler-oriented
+    // rules reject valid React Native Animated values, dynamic icon registries,
+    // and ordinary async loading effects, so they are not release gates here.
+    "react-hooks/refs": "off",
+    "react-hooks/immutability": "off",
+    "react-hooks/static-components": "off",
+    "react-hooks/set-state-in-effect": "off",
+    "react-hooks/preserve-manual-memoization": "off",
     "react/no-unescaped-entities": "off",
     "react/display-name": "off",
     "react/prop-types": "off",
@@ -43,6 +51,17 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "no-undef": "off",
     "no-unreachable": "off",
     "no-useless-escape": "off",
+  },
+}, {
+  files: ["**/*.js", "**/*.cjs", "**/metro.config.js", "**/tailwind.config.ts"],
+  rules: {
+    "@typescript-eslint/no-require-imports": "off",
+  },
+}, {
+  files: ["gptform-mobile-app/**/*.{ts,tsx}", "quote-flow-mobile/**/*.{ts,tsx}", "mobile-app/**/*.{ts,tsx}"],
+  rules: {
+    // React Native's Image component uses accessibilityLabel, not HTML alt.
+    "jsx-a11y/alt-text": "off",
   },
 }, {
   ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "skills", "mini-services/**", "prisma/seed.ts", "standalone/**", "dist/**", "packages/**/dist/**", "tooling/**", "netlify/**", ".github/**", "e2e/**", "playwright-report/**", "test-results/**"]

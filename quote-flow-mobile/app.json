@@ -37,7 +37,7 @@
         "expo-speech-recognition",
         {
           "permissions": [
-            " RECORD_AUDIO"
+            "RECORD_AUDIO"
           ]
         }
       ],

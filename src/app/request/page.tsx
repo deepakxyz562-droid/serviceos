@@ -8,13 +8,14 @@ export const metadata = {
   description: 'Post your trade service request, get AI-powered triage, and receive upfront proposals from verified local pros.',
 };
 
-export default function RequestPage({
+export default async function RequestPage({
   searchParams,
 }: {
-  searchParams?: { category?: string; q?: string; description?: string };
+  searchParams?: Promise<{ category?: string; q?: string; description?: string }>;
 }) {
-  const category = searchParams?.category;
-  const initialDescription = searchParams?.q || searchParams?.description;
+  const resolvedSearchParams = await searchParams;
+  const category = resolvedSearchParams?.category;
+  const initialDescription = resolvedSearchParams?.q || resolvedSearchParams?.description;
 
   return (
     <div className="min-h-screen bg-slate-50/50 dark:bg-slate-950 flex flex-col">

@@ -4,6 +4,7 @@ import React, { useMemo } from 'react';
 import { Calculator, Sparkles, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { evaluateArithmeticExpression } from '@/lib/arithmetic-expression';
 
 export interface LiveEstimateLineItem {
   id: string;
@@ -106,9 +107,7 @@ export function LiveEstimateSummaryPanel({
 
       const sanitized = evalString.replace(/[^0-9+\-*/().,\sMath.roundmaxinabslorceq]/g, '');
       if (!sanitized.trim()) return 0;
-      const result = new Function(`return (${sanitized});`)();
-      const num = Number(result);
-      return isNaN(num) || !isFinite(num) ? 0 : num;
+      return evaluateArithmeticExpression(sanitized) ?? 0;
     } catch {
       return 0;
     }

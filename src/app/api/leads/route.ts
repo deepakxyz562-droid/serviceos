@@ -317,6 +317,7 @@ export async function POST(request: NextRequest) {
       customerId,
       followUpAt,
     } = body;
+    const isExternalSource = String(source || 'manual').toLowerCase() !== 'manual';
 
     // Validate required fields
     if (!name || !phone) {

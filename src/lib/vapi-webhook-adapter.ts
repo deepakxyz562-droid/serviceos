@@ -473,14 +473,14 @@ async function handleEndOfCall(event: VapiWebhookEvent): Promise<NextResponse> {
   //
   // If the end-of-call webhook is redelivered, the UsageLedger returns the existing
   // entry (no duplicate charge). The AiCall update is also idempotent.
+  const providerCostUsd = callDetails.cost ?? callDetails.costUsd ?? 0;
   const result = await onCallEnd({
     vapiCallId: call.id,
     durationSec: callDetails.durationSeconds || 0,
     billableSeconds: Math.ceil(callDetails.durationSeconds || 0),
-    costUsd: callDetails.costUsd || 0,
-    // Vapi V2 uses cost (number), not costUsd
-    costUsd: callDetails.cost || callDetails.costUsd || 0,
-    costBreakdown: (callDetails.cost || callDetails.costUsd) ? { vapi: callDetails.cost || callDetails.costUsd } : undefined,
+    // Vapi V2 uses cost (number), while older payloads use costUsd.
+    costUsd: providerCostUsd,
+    costBreakdown: providerCostUsd > 0 ? { vapi: providerCostUsd } : undefined,
     endedReason: callDetails.endedReason,
     recordingUrl: callDetails.recordingUrl,
     stereoRecordingUrl: callDetails.stereoRecordingUrl,
