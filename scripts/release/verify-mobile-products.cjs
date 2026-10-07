@@ -14,6 +14,7 @@ const { chromium } = require('@playwright/test');
     let bootstrapCalls = 0;
     let customerCalls = 0;
     let failKhata = false;
+    let failHistory = false;
     let failSave = false;
     let savedPayload;
     let stockPayload;
@@ -50,6 +51,12 @@ const { chromium } = require('@playwright/test');
                 return;
             }
             data = { currency: 'USD', customers: [{ id: 'customer-one', phone: '14155550100', name: 'Test Customer', ordersCount: 1, totalSpent: 25, lastVisit: '2026-10-07', favoriteItems: [], tag: 'NEW', recentOrders: [{ id: 'o1', total: 25, date: '2026-10-07', status: 'CONFIRMED' }] }], summary: { totalCustomers: 1, repeatRate: 0, totalRevenue: 25 } };
+        }
+        else if (url.pathname === '/api/commerce/customer-history') {
+            status = failHistory ? 503 : 200;
+            const ledger = url.searchParams.get('section') === 'ledger';
+            const more = url.searchParams.has('cursor');
+            data = failHistory ? { error: 'History unavailable' } : { currency: 'USD', balance: 45, reviewRequired: false, ordersCount: 2, nextCursor: ledger || more ? null : 'page-two', records: ledger ? [{ id: 'receipt-1', kind: 'COLLECTION', debit: 0, credit: 15, createdAt: '2026-10-08T10:00:00Z' }] : [{ id: more ? 'order-2' : 'order-1', total: more ? 20 : 25, status: 'CONFIRMED', createdAt: '2026-10-08T10:00:00Z' }] };
         }
         else if (url.pathname === '/api/commerce/store-share') {
             data = { name: 'Sharma General Store', storeUrl: 'https://fieseros.com/store/sharma', qrDataUrl: await require('qrcode').toDataURL('https://fieseros.com/store/sharma'), html: '<!DOCTYPE html><html><body>Sharma General Store</body></html>' };
@@ -91,6 +98,12 @@ const { chromium } = require('@playwright/test');
     await page.getByText('Settings', { exact: true }).first().click();
     await page.getByText('Your business', { exact: true }).waitFor();
     await page.getByRole('button', { name: /Share store & QR/ }).waitFor();
+    const sharePosition = await page.getByRole('button', { name: /Share store & QR/ }).boundingBox();
+    const productsPosition = await page.getByRole('button', { name: /Products/ }).boundingBox();
+    const setupPosition = await page.getByText('Business setup', { exact: true }).boundingBox();
+    const preferencesPosition = await page.getByText('Preferences', { exact: true }).boundingBox();
+    if (!sharePosition || !productsPosition || sharePosition.y >= productsPosition.y) throw Error('Store sharing is not first in Your business');
+    if (!setupPosition || !preferencesPosition || setupPosition.y <= preferencesPosition.y) throw Error('Business details are not separated below preferences');
     await page.waitForTimeout(600);
     await page.screenshot({ path: '/private/tmp/nuvora-more-simple.png' });
     if (await page.getByText('Voice receptionist', { exact: true }).count())
@@ -140,6 +153,23 @@ const { chromium } = require('@playwright/test');
     await page.getByText('पुष्टि हुई', { exact: true }).waitFor();
     if (customerCalls !== beforeSearch) throw Error('Typing in customer search made another API request');
     await page.screenshot({ path: '/private/tmp/nuvora-customers-hindi.png' });
+    await page.getByRole('button', { name: 'सभी ऑर्डर और खाता विवरण', exact: true }).click();
+    await page.getByText('बकाया रकम', { exact: true }).waitFor();
+    await page.getByText('$25.00', { exact: true }).filter({ visible: true }).waitFor();
+    await page.getByRole('button', { name: 'और देखें', exact: true }).click();
+    await page.getByText('$20.00', { exact: true }).waitFor();
+    if (await page.getByText('$25.00', { exact: true }).filter({ visible: true }).count() !== 1) throw Error('History pagination lost or duplicated first page');
+    await page.getByRole('tab', { name: 'खाता विवरण', exact: true }).click();
+    await page.getByText('$15.00', { exact: true }).waitFor();
+    await page.screenshot({ path: '/private/tmp/nuvora-customer-ledger-hindi.png' });
+    failHistory = true;
+    await page.getByRole('tab', { name: 'ऑर्डर का इतिहास', exact: true }).click();
+    await page.getByText('जानकारी लोड नहीं हुई। फिर कोशिश करने के लिए टैप करें।').waitFor();
+    if (await page.getByText('$45.00', { exact: true }).filter({ visible: true }).count()) throw Error('Failed history section retained stale balance');
+    failHistory = false;
+    await page.getByText('जानकारी लोड नहीं हुई। फिर कोशिश करने के लिए टैप करें।').click();
+    await page.getByText('$25.00', { exact: true }).filter({ visible: true }).waitFor();
+    await page.getByRole('button', { name: 'ग्राहकों पर वापस जाएँ', exact: true }).click();
     await page.getByRole('button', { name: /ग्राहकों का खाता/ }).click();
     await page.getByText('लेना है', { exact: true }).waitFor();
     await page.getByText('$45.00', { exact: true }).first().waitFor();

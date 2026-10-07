@@ -27,6 +27,12 @@ const check=(name,ok,detail)=>checks.push({name,ok,detail});
    const res=await fetch(`${base}/rest/v1/rpc/nuvora_finance_snapshot`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({p_business_id:'release-preflight-nonexistent',p_start:new Date().toISOString(),p_end:new Date().toISOString()}),signal:AbortSignal.timeout(15000)});
    check('Finance snapshot RPC',res.ok,`HTTP ${res.status}`);await res.body?.cancel();
   }catch{check('Finance snapshot RPC',false,'Backend unreachable');}
+  try{
+   // A missing business must be rejected by the installed read-only function.
+   const res=await fetch(`${base}/rest/v1/rpc/nuvora_customer_history`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({p_business_id:'release-preflight-nonexistent',p_phone:'0000000000',p_section:'orders',p_before_time:'',p_before_id:''}),signal:AbortSignal.timeout(15000)});
+   const result=await res.json();
+   check('Customer history RPC',!res.ok&&result.code==='P0001'&&result.message==='BUSINESS_NOT_FOUND',`HTTP ${res.status}`);
+  }catch{check('Customer history RPC',false,'Backend unreachable or invalid response');}
  }
  for(const c of checks)console.log(`${c.ok?'PASS':'FAIL'} ${c.name}: ${c.detail}`);
  process.exitCode=checks.some(c=>!c.ok)?1:0;

@@ -1,4 +1,4 @@
-# Nuvora release readiness — 7 October 2026
+# Nuvora release readiness — updated 8 October 2026
 
 **Status: release blocked. These changes are a local implementation, not a production-ready certification or a live deployment.** The user identified fieseros.com as the production domain. Its HTTPS endpoint responded successfully. The configured Supabase backend was inspected read-only using service credentials without printing credentials or customer records. The later corrective pass changed only the verified owner account’s workspace product assignment and signup mode; no business records, messages, plan, or database schema were changed.
 
@@ -22,9 +22,9 @@
 - The additive SQL migration also applied successfully to the full PostgreSQL schema generated from the actual Prisma model, using an isolated embedded PostgreSQL database.
 - Repository-wide web TypeScript validation failed with 1,233 diagnostics on the last complete run. Two invalid Next route exports were subsequently repaired, but the remaining repository-wide failures are unresolved. Examples include stale Prisma field assumptions, nullable model data, mismatched component props, and the Supabase adapter types.
 
-## Live blockers
+## Earlier live blockers — 7 October (superseded below)
 
-The read-only backend preflight returned:
+The original read-only backend preflight returned:
 
 | Check | Result |
 | --- | --- |
@@ -111,3 +111,18 @@ Web auth respects initial registration mode and selected plan, stores the login 
 Verification: 497 tests / 62 files passed; mobile TypeScript passed; 59-file focused web TypeScript passed; targeted API/test lint passed. Expo web export passed. Mocked browser checks passed for customer save failure/retry with stable keys, Hindi QR sharing UI, restored navigation, unavailable Khata balances and product recovery. Full web typecheck still reports 1,227 diagnostics. No live migration, deployment or production message send occurred.
 
 Release remains blocked by database administration access/migrations, Meta provider renewal/template activation and worker scheduling, broad web typing issues, full customer ledger/history, complete merchant settings/entitlements, staff/gateway/email integrations, full localization, BLE hardware support and signed physical-device verification. The prior AI completion report must not be used as release evidence.
+
+
+## Latest continuation — 8 October 2026
+
+This section supersedes older schema availability and customer-history status above. **Release remains blocked; no deployment or migration was performed in this continuation.**
+
+- Settings places **Share store & QR first in Your business**. Business details appear separately under Business setup, below Preferences.
+- Customers now open an individual Orders / Ledger screen with English/Hindi controls, 16px spacing, business currency, fifty-record keyset pagination, and explicit failure/retry states. Tab changes suppress stale responses; failed loading never invents a zero balance.
+- The owner-scoped history API and additive `20261008010000_customer_history` migration provide order history and recorded order/Khata receipts. The ledger includes paid checkout receipts as well as later collections. It does not claim invoice integration, historical phone merging, refunds, or reconstructed historical payments. Legacy records marked for reconciliation return an unknown balance.
+- **Live read-only preflight now passes** payment columns, money ledger, outbox, stock retry records and finance snapshot RPC. This establishes object availability only, not live transaction correctness, worker scheduling or a deployed application version. The **new customer-history RPC returns HTTP 404** and requires its new migration before this screen can work live.
+- The most recent read-only Superadmin Meta provider check still returned HTTP 401 / OAuth 190, subcode 463 (expired credentials). Renew the provider in Superadmin and verify approved templates and the worker schedule before activation. No real customer messages were sent.
+- Verification: **502 tests passed in 63 files**, mobile TypeScript passed, focused web TypeScript passed for 61 files, and Expo web export passed. Mocked browser checks passed for paginated Hindi customer history, recorded payments, retry recovery and unavailable balances alongside the prior product/customer/Khata checks. The ledger screenshot was visually inspected at 390 × 844. These are local checks, not device or live end-to-end certification.
+- Repository-wide web type failures remain unresolved (last full check: 1,227 diagnostics). Staff, receipt/email integration, payment gateways, plan entitlement verification, complete localization, BLE printing and signed physical-device checks remain unfinished. Do not treat removal of fake controls as completion of these features.
+
+Next release actions: obtain the established database/deployment admin method, apply the reviewed history migration transactionally after backup validation, renew the Superadmin Meta token, verify templates/cron, then perform isolated authenticated live smoke tests. Production `.env` secrets and local Supabase service access do not themselves provide schema-administration access or prove server runtime configuration.

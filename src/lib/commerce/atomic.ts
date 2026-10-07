@@ -3,6 +3,7 @@ import { shouldUseSupabaseDB } from '@/lib/supabase-db';
 import { getSupabaseAdmin } from '@/lib/supabase';
 
 const functions = {
+  customerHistory: { name: 'nuvora_customer_history', sql: 'SELECT nuvora_customer_history($1::text,$2::text,$3::text,$4::text,$5::text) AS result', keys: ['p_business_id','p_phone','p_section','p_before_time','p_before_id'] },
   finance: { name: 'nuvora_finance_command', sql: 'SELECT nuvora_finance_command($1::text,$2::text,$3::jsonb) AS result', keys: ['p_business_id', 'p_key', 'p_command'] },
   snapshot: { name: 'nuvora_finance_snapshot', sql: 'SELECT nuvora_finance_snapshot($1::text,$2::timestamptz,$3::timestamptz) AS result', keys: ['p_business_id', 'p_start', 'p_end'] },
   order: { name: 'nuvora_create_order', sql: 'SELECT nuvora_create_order($1::text,$2::text,$3::jsonb) AS result', keys: ['p_business_id', 'p_key', 'p_payload'] },

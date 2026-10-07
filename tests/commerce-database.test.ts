@@ -22,7 +22,7 @@ beforeAll(async () => {
     INSERT INTO "AiBusiness" VALUES('business','tenant','INR'),('other-business','other-tenant','INR');
     INSERT INTO "Supplier" VALUES('supplier','tenant','Supplier A'),('other-supplier','other-tenant','Supplier B');
   `);
-  await database.exec((readFileSync('prisma/migrations/20261007150000_commerce_consistency/migration.sql','utf8')+readFileSync('prisma/migrations/20261007200000_order_notifications/migration.sql','utf8')));
+  await database.exec((readFileSync('prisma/migrations/20261007150000_commerce_consistency/migration.sql','utf8')+readFileSync('prisma/migrations/20261007200000_order_notifications/migration.sql','utf8')+readFileSync('prisma/migrations/20261008010000_customer_history/migration.sql','utf8')));
 }, 30000);
 afterAll(async () => { await database?.close(); });
 const command = async (key: string, body: object) => (await database.query<{ result: any }>('SELECT nuvora_finance_command($1,$2,$3::jsonb) result', ['business',key,JSON.stringify(body)])).rows[0].result;
@@ -178,4 +178,28 @@ describe('order lifecycle notifications',()=>{
   await database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',order.id,JSON.stringify({status:'CONFIRMED'})]);
   expect((await database.query('SELECT id FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1 AND audience=$2',[order.id,'customer'])).rows).toHaveLength(0);
  });
+});
+
+
+describe('customer ledger history', () => {
+  const history = async (section = 'orders', date = '', id = '', business = 'business') => (await database.query<any>('SELECT nuvora_customer_history($1,$2,$3,$4,$5) result', [business,'919876543201',section,date,id])).rows[0].result;
+  it('paginates every order without leaking another business and includes recorded collections', async () => {
+    await database.exec(`INSERT INTO "GptformCommerceConfig"(id,"businessId","catalogJson","fieldsJson","isActive") VALUES('history-config','business','[]','{}',true);
+      INSERT INTO "GptformCommerceOrder"(id,"configId","businessId","customerPhone","customerName",status,"itemsJson",total,"paidAmount","paymentStatus","createdAt","updatedAt")
+      SELECT 'history-'||lpad(n::text,3,'0'),'history-config','business','919876543201','History customer','CONFIRMED','[]',10,0,'UNPAID','2026-10-08'::timestamptz,'2026-10-08'::timestamptz FROM generate_series(1,55) n;`);
+    const first = await history();
+    expect(first.records).toHaveLength(51);
+    expect(first.balance).toBe(550);
+    const last = first.records[49];
+    const second = await history('orders',last.createdAt,last.id);
+    expect(second.records).toHaveLength(5);
+    expect(new Set([...first.records.slice(0,50),...second.records].map((r:any)=>r.id)).size).toBe(55);
+    expect((await history('orders','','','other-business')).records).toHaveLength(0);
+    await command('history-payment',{kind:'COLLECTION',customerPhone:'919876543201',amountMinor:1500,account:'CASH'});
+    const ledger = await history('ledger');
+    expect(ledger.balance).toBe(535);
+    expect(ledger.records.some((r:any)=>r.kind==='COLLECTION'&&r.credit===15)).toBe(true);
+    await database.exec(`UPDATE "GptformCommerceOrder" SET "needsReconciliation"=true WHERE id='history-001'`);
+    expect(await history()).toMatchObject({ balance:null,reviewRequired:true });
+  });
 });

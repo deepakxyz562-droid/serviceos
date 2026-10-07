@@ -375,6 +375,7 @@ export default function CustomersScreen() {
                     <Text style={styles.metaText}>{t(({ PENDING: 'Received', CONFIRMED: 'Confirmed', PREPARING: 'Preparing', READY: 'Ready', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', COMPLETED: 'Completed', PAID: 'Paid' } as Record<string, string>)[order.status] || 'Order', ({ PENDING: 'प्राप्त', CONFIRMED: 'पुष्टि हुई', PREPARING: 'तैयार हो रहा है', READY: 'तैयार', DELIVERED: 'पहुँचाया गया', CANCELLED: 'रद्द', COMPLETED: 'पूरा हुआ', PAID: 'भुगतान हुआ' } as Record<string, string>)[order.status] || 'ऑर्डर')}</Text>
                     <Text>{money(order.total)}</Text>
                   </View>) : <Text style={styles.metaText}>{t('No orders yet', 'अभी कोई ऑर्डर नहीं')}</Text>)}
+                  {!!c.phone && <TouchableOpacity accessibilityRole="button" style={styles.waBtn} onPress={() => router.push({ pathname: '/customer-history', params: { phone: c.phone, name: c.name } })}><Text style={styles.waBtnText}>{t('All orders & ledger', 'सभी ऑर्डर और खाता विवरण')}</Text></TouchableOpacity>}
                   {/* Action Buttons */}
                   <View style={styles.actionRow}>
                     <TouchableOpacity
