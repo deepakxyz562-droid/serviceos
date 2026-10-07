@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -44,6 +45,7 @@ interface MenuItem {
 export default function MobilePosScreen() {
   const router = useRouter();
   const requestTracker = useRef(new RequestTracker());
+  const blueprint = useBlueprintStore(s=>s.blueprint);
   const countryPack = useBlueprintStore((s) => s.countryPack);
   const currencySymbol = countryPack?.currency?.symbol || '₹';
 
@@ -59,6 +61,7 @@ export default function MobilePosScreen() {
   const [tableNo, setTableNo] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [whatsappConsent, setWhatsappConsent] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const [upiId, setUpiId] = useState('');
   const [businessName, setBusinessName] = useState('My Store');
@@ -245,6 +248,7 @@ export default function MobilePosScreen() {
     const orderPayload = {
       customerName: customerName.trim() || 'Walk-in Guest',
       customerPhone: customerPhone.trim(),
+      whatsappConsent: whatsappConsent && !!customerPhone.trim(),
       status: 'CONFIRMED',
       paymentStatus: payStatus,
       paymentMethod: method,
@@ -302,6 +306,7 @@ export default function MobilePosScreen() {
     setCart([]);
     setCustomerName('');
     setCustomerPhone('');
+    setWhatsappConsent(false);
     setTableNo('');
     setCompletedOrder(null);
   };
@@ -606,6 +611,10 @@ export default function MobilePosScreen() {
                   keyboardType="phone-pad"
                   style={styles.sheetInput}
                 />
+                <View style={{flexDirection:'row',alignItems:'center',gap:12,marginTop:12}}>
+                  <Text style={{flex:1,color:'#334155'}}>{blueprint.language==='hi'?'ग्राहक WhatsApp पर ऑर्डर की जानकारी पाना चाहता है':'Customer agrees to receive order updates on WhatsApp'}</Text>
+                  <Switch accessibilityLabel={blueprint.language==='hi'?'WhatsApp पर ऑर्डर की जानकारी':'WhatsApp order updates'} value={whatsappConsent} onValueChange={setWhatsappConsent} disabled={!customerPhone.trim()}/>
+                </View>
               </View>
 
               {/* Order Items List */}

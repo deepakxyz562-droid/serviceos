@@ -7,7 +7,7 @@ export type HomeLabel = HomeMetric | HomeAction | BusinessType | 'home' | 'more'
 
 const labels: Record<HomeLabel, [string, string]> = {
   money_in: ['Money In', 'पैसे आए'], money_out: ['Money Out', 'पैसे दिए'], opening: ['Set opening balance', 'शुरुआती बाकी रकम दर्ज करें'],
-  home: ['Home', 'होम'], more: ['More', 'और'], retry: ['Try again', 'फिर कोशिश करें'],
+  home: ['Home', 'होम'], more: ['Settings', 'सेटिंग'], retry: ['Try again', 'फिर कोशिश करें'],
   loading: ['Loading your business…', 'आपका कारोबार लोड हो रहा है…'], setup: ['Business setup', 'कारोबार की सेटिंग'],
   setupRequired: ['Finish your business setup to see your Home.', 'होम देखने के लिए कारोबार की सेटिंग पूरी करें।'],
   unavailable: ['Not available yet', 'अभी उपलब्ध नहीं'], error: ['Could not load your business. Please try again.', 'कारोबार की जानकारी लोड नहीं हुई। फिर कोशिश करें।'],
@@ -80,8 +80,8 @@ const metricCapabilities: Partial<Record<HomeMetric, Capability>> = {
 interface HomePreset { metrics: HomeMetric[]; actions: HomeAction[]; tabs: HomeAction[] }
 const money: HomeMetric[] = ['sales', 'toCollect', 'lowStock'];
 export const HOME_PRESETS: Record<BusinessType, HomePreset> = {
-  grocery: { metrics: money, actions: ['sale', 'products'], tabs: ['sale', 'products', 'khata'] },
-  retail: { metrics: money, actions: ['sale', 'products'], tabs: ['sale', 'products', 'customers'] },
+  grocery: { metrics: money, actions: ['sale', 'products'], tabs: ['orders', 'products', 'customers'] },
+  retail: { metrics: money, actions: ['sale', 'products'], tabs: ['orders', 'products', 'customers'] },
   restaurant: { metrics: ['sales', 'activeOrders', 'tables', 'kitchenWaiting'], actions: ['orders', 'tables', 'kitchen', 'expenses'], tabs: ['orders', 'tables', 'kitchen'] },
   salon: { metrics: ['appointments', 'sales', 'moneyIn', 'invoiceDue'], actions: ['bookings', 'sale', 'customers', 'invoices'], tabs: ['bookings', 'customers', 'sale'] },
   services: { metrics: ['jobs', 'appointments', 'moneyIn', 'invoiceDue'], actions: ['jobs', 'quotes', 'bookings', 'customers'], tabs: ['jobs', 'bookings', 'customers'] },
@@ -112,7 +112,7 @@ export function getBusinessHome(blueprint: Pick<TenantBlueprint, 'businessType'>
 export const MONEY_METRICS: HomeMetric[] = ['sales', 'moneyIn', 'moneyOut', 'balance', 'toCollect', 'toPay'];
 export function homeMetricAction(metric: HomeMetric, salesSource: 'orders' | 'invoices' = 'orders'): HomeAction | undefined {
   if (metric === 'sales') return salesSource === 'invoices' ? 'invoices' : 'orders';
-  return ({ moneyIn: 'money_in', moneyOut: 'money_out', balance: 'opening', toCollect: 'money_in', toPay: 'money_out', lowStock: 'stock', activeOrders: 'orders', kitchenWaiting: 'kitchen', appointments: 'bookings', jobs: 'jobs', quotesDue: 'quotes', invoiceDue: 'invoices', tables: 'tables' } as Partial<Record<HomeMetric, HomeAction>>)[metric];
+  return ({ moneyIn: 'money_in', moneyOut: 'money_out', balance: 'opening', toCollect: 'khata', toPay: 'money_out', lowStock: 'stock', activeOrders: 'orders', kitchenWaiting: 'kitchen', appointments: 'bookings', jobs: 'jobs', quotesDue: 'quotes', invoiceDue: 'invoices', tables: 'tables' } as Partial<Record<HomeMetric, HomeAction>>)[metric];
 }
 export interface BusinessHomeSnapshot {
   businessId: string;

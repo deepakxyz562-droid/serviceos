@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 import { API_PATHS } from '@/lib/constants';
 
 interface FavoriteItem {
@@ -24,19 +25,22 @@ interface FavoriteItem {
 }
 
 interface CustomerRecord {
+  id?: string;
+  recentOrders?: { id: string; total: number; date: string; status: string }[];
   phone: string;
   name: string;
   deliveryAddress?: string | null;
   ordersCount: number;
   totalSpent: number;
   avgOrderValue: number;
-  firstVisit: string;
-  lastVisit: string;
+  firstVisit: string | null;
+  lastVisit: string | null;
   favoriteItems: FavoriteItem[];
   tag: 'VIP' | 'REGULAR' | 'NEW';
 }
 
 interface CustomersResponse {
+  currency?: string;
   customers: CustomerRecord[];
   summary: {
     totalCustomers: number;
@@ -48,6 +52,12 @@ interface CustomersResponse {
 
 export default function CustomersScreen() {
   const router = useRouter();
+  const language = useBlueprintStore(s => s.blueprint.language);
+  const creditEnabled = useBlueprintStore(s => s.blueprint.capabilities.customerCredit);
+  const t = (en: string, hi: string) => language === 'hi' ? hi : en;
+  const [currency, setCurrency] = useState('INR');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const money = (value: number) => new Intl.NumberFormat(language === 'hi' ? 'hi-IN' : 'en-IN', { style: 'currency', currency }).format(value);
   const [customers, setCustomers] = useState<CustomerRecord[]>([]);
   const [summary, setSummary] = useState<CustomersResponse['summary']>({
     totalCustomers: 0,
@@ -63,11 +73,10 @@ export default function CustomersScreen() {
 
   const fetchCustomers = useCallback(async () => {
     try {
-      const url = `${API_PATHS.commerceCustomers}${
-        searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''
-      }`;
+      const url = API_PATHS.commerceCustomers;
       const data = await apiRequest<CustomersResponse>(url);
       setCustomers(data.customers || []);
+      setCurrency(data.currency || 'INR');
       if (data.summary) {
         setSummary(data.summary);
       }
@@ -78,7 +87,7 @@ export default function CustomersScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [searchQuery]);
+  }, []);
 
   useEffect(() => {
     fetchCustomers();
@@ -93,8 +102,7 @@ export default function CustomersScreen() {
   const handleWhatsApp = (customer: CustomerRecord) => {
     hapticFeedback.light();
     const cleanPhone = customer.phone.replace(/\D/g, '');
-    const greeting = customer.name !== 'Customer' ? `Hi ${customer.name}` : 'Hi there';
-    const text = `${greeting}, thank you for ordering with us! We appreciate your loyalty. Enjoy 10% off on your next visit with coupon code *LOYAL10*! 🎁`;
+    const text = t(`Hello ${customer.name}`, `नमस्ते ${customer.name}`);
     const url = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`
       : `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -107,6 +115,8 @@ export default function CustomersScreen() {
   };
 
   const filteredCustomers = customers.filter((c) => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (query && !`${c.name} ${c.phone} ${c.favoriteItems.map(item => item.name).join(' ')}`.toLocaleLowerCase().includes(query)) return false;
     if (selectedTag === 'ALL') return true;
     return c.tag === selectedTag;
   });
@@ -114,23 +124,24 @@ export default function CustomersScreen() {
   const getTagStyle = (tag: string) => {
     switch (tag) {
       case 'VIP':
-        return { bg: '#fef3c7', text: '#b45309', border: '#fde68a', label: '👑 VIP' };
+        return { bg: '#fef3c7', text: '#b45309', border: '#fde68a', label: t('VIP', 'विशेष') };
       case 'REGULAR':
-        return { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', label: '⭐ Regular' };
+        return { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', label: t('Regular', 'नियमित') };
       default:
-        return { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0', label: '🌱 First-Time' };
+        return { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0', label: t('New', 'नए') };
     }
   };
 
-  const formatRelativeDate = (dateStr: string) => {
+  const formatRelativeDate = (dateStr: string | null) => {
+    if (!dateStr) return t('No orders yet', 'अभी कोई ऑर्डर नहीं');
     try {
       const d = new Date(dateStr);
       const diffMs = Date.now() - d.getTime();
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      if (diffDays === 0) return 'Today';
-      if (diffDays === 1) return 'Yesterday';
-      if (diffDays < 7) return `${diffDays}d ago`;
-      return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      if (diffDays === 0) return t('Today', 'आज');
+      if (diffDays === 1) return t('Yesterday', 'कल');
+      if (diffDays < 7) return t(`${diffDays}d ago`, `${diffDays} दिन पहले`);
+      return d.toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN', { month: 'short', day: 'numeric' });
     } catch {
       return '';
     }
@@ -152,12 +163,10 @@ export default function CustomersScreen() {
           )}
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.title}>Customers & CRM</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>QR Captured</Text>
-              </View>
+              <Text style={styles.title}>{t('Customers', 'ग्राहक')}</Text>
+
             </View>
-            <Text style={styles.subtitle}>Directory, Loyalty & WhatsApp Reminders</Text>
+            <Text style={styles.subtitle}>{t('Contacts and order history', 'संपर्क और ऑर्डर की जानकारी')}</Text>
           </View>
         </View>
 
@@ -170,22 +179,27 @@ export default function CustomersScreen() {
         </TouchableOpacity>
       </View>
 
+      {creditEnabled && <TouchableOpacity style={styles.searchBox} onPress={() => router.push('/khata')} accessibilityRole="button">
+        <MaterialIcons name="account-balance-wallet" size={22} color="#059669" />
+        <Text style={{ flex: 1, color: '#0f172a', fontWeight: '600' }}>{t('Customer Khata', 'ग्राहकों का खाता')}</Text>
+        <MaterialIcons name="chevron-right" size={22} color="#64748b" />
+      </TouchableOpacity>}
       {/* Summary KPI Strip */}
       <View style={styles.metricsWrap}>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Total Customers</Text>
+          <Text style={styles.metricLabel}>{t('Total Customers', 'कुल ग्राहक')}</Text>
           <Text style={styles.metricValue}>{summary.totalCustomers}</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Repeat Rate</Text>
+          <Text style={styles.metricLabel}>{t('Repeat Rate', 'दोबारा खरीदारी')}</Text>
           <Text style={[styles.metricValue, { color: '#059669' }]}>
             {summary.repeatRate}%
           </Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricLabel}>Lifetime Revenue</Text>
+          <Text style={styles.metricLabel}>{t('Order value', 'ऑर्डर की रकम')}</Text>
           <Text style={[styles.metricValue, { color: '#0f172a' }]}>
-            ₹{summary.totalRevenue.toFixed(0)}
+            {money(summary.totalRevenue)}
           </Text>
         </View>
       </View>
@@ -194,7 +208,7 @@ export default function CustomersScreen() {
       <View style={styles.searchBox}>
         <MaterialIcons name="search" size={18} color="#94a3b8" />
         <TextInput
-          placeholder="Search customer by name, phone, or dish..."
+          placeholder={t('Search name, phone or product', 'नाम, फ़ोन या सामान खोजें')}
           placeholderTextColor="#94a3b8"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -211,10 +225,10 @@ export default function CustomersScreen() {
       <View style={styles.filterWrap}>
         {(['ALL', 'VIP', 'REGULAR', 'NEW'] as const).map((tag) => {
           const active = selectedTag === tag;
-          let label = 'All';
-          if (tag === 'VIP') label = '👑 VIP (>₹1000)';
-          if (tag === 'REGULAR') label = '⭐ Regular';
-          if (tag === 'NEW') label = '🌱 New';
+          let label = t('All', 'सभी');
+          if (tag === 'VIP') label = t('VIP', 'विशेष');
+          if (tag === 'REGULAR') label = t('Regular', 'नियमित');
+          if (tag === 'NEW') label = t('New', 'नए');
 
           return (
             <TouchableOpacity
@@ -238,7 +252,7 @@ export default function CustomersScreen() {
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#059669" />
-          <Text style={styles.loadingText}>Loading customer records...</Text>
+          <Text style={styles.loadingText}>{t('Loading customer records...', 'ग्राहकों की जानकारी लोड हो रही है…')}</Text>
         </View>
       ) : (
         <ScrollView
@@ -251,17 +265,17 @@ export default function CustomersScreen() {
           {error ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="error-outline" size={44} color="#f87171" />
-              <Text style={[styles.emptyTitle, { color: '#f87171' }]}>{error}</Text>
+              <Text style={[styles.emptyTitle, { color: '#f87171' }]}>{t('Unable to load customers. Please try again.', 'ग्राहकों की जानकारी लोड नहीं हुई। फिर कोशिश करें।')}</Text>
               <TouchableOpacity onPress={onRefresh} style={styles.retryBtn}>
-                <Text style={styles.retryBtnText}>Retry</Text>
+                <Text style={styles.retryBtnText}>{t('Retry', 'फिर कोशिश करें')}</Text>
               </TouchableOpacity>
             </View>
           ) : filteredCustomers.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="people-outline" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>No customers found</Text>
+              <Text style={styles.emptyTitle}>{t('No customers found', 'कोई ग्राहक नहीं मिला')}</Text>
               <Text style={styles.emptySub}>
-                Customer contacts and preferences are automatically captured when customers scan your QR menu or place orders.
+                {t('Customer contacts appear here after an order is placed.', 'ऑर्डर मिलने के बाद ग्राहक की जानकारी यहाँ दिखती है।')}
               </Text>
             </View>
           ) : (
@@ -270,7 +284,7 @@ export default function CustomersScreen() {
               const avatarLetter = (c.name || 'C').charAt(0).toUpperCase();
 
               return (
-                <View key={c.phone} style={styles.customerCard}>
+                <View key={c.id || c.phone} style={styles.customerCard}>
                   {/* Card Header */}
                   <View style={styles.cardHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
@@ -293,14 +307,14 @@ export default function CustomersScreen() {
                             </Text>
                           </View>
                         </View>
-                        <Text style={styles.customerPhone}>+91 {c.phone}</Text>
+                        <Text style={styles.customerPhone}>{c.phone}</Text>
                       </View>
                     </View>
 
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.spentAmount}>₹{c.totalSpent.toFixed(2)}</Text>
+                      <Text style={styles.spentAmount}>{money(c.totalSpent)}</Text>
                       <Text style={styles.spentSub}>
-                        {c.ordersCount} {c.ordersCount === 1 ? 'order' : 'orders'}
+                        {c.ordersCount} {t(c.ordersCount === 1 ? 'order' : 'orders', 'ऑर्डर')}
                       </Text>
                     </View>
                   </View>
@@ -308,7 +322,7 @@ export default function CustomersScreen() {
                   {/* Favorite Dishes */}
                   {c.favoriteItems.length > 0 && (
                     <View style={styles.favoritesBox}>
-                      <Text style={styles.favoritesLabel}>Favorites:</Text>
+                      <Text style={styles.favoritesLabel}>{t('Favorites:', 'पसंदीदा सामान:')}</Text>
                       <View style={styles.favTagsWrap}>
                         {c.favoriteItems.map((fav, i) => (
                           <View key={i} style={styles.favTag}>
@@ -324,7 +338,7 @@ export default function CustomersScreen() {
                   {/* Address & Recency */}
                   <View style={styles.metaRow}>
                     <Text style={styles.metaText}>
-                      Last visit: {formatRelativeDate(c.lastVisit)}
+                      {t('Last order:', 'पिछला ऑर्डर:')} {formatRelativeDate(c.lastVisit)}
                     </Text>
                     {c.deliveryAddress && (
                       <Text style={[styles.metaText, { maxWidth: '55%' }]} numberOfLines={1}>
@@ -333,24 +347,35 @@ export default function CustomersScreen() {
                     )}
                   </View>
 
+                  <TouchableOpacity accessibilityRole="button" onPress={() => setExpanded(expanded === (c.id || c.phone) ? null : (c.id || c.phone))} style={styles.searchBox}>
+                    <Text>{t('Recent orders', 'हाल के ऑर्डर')}</Text>
+                    <MaterialIcons name="expand-more" size={22} color="#64748b" />
+                  </TouchableOpacity>
+                  {expanded === (c.id || c.phone) && (c.recentOrders?.length ? c.recentOrders.map(order => <View key={order.id} style={styles.metaRow}>
+                    <Text style={styles.metaText}>{new Date(order.date).toLocaleDateString(language === 'hi' ? 'hi-IN' : 'en-IN')}</Text>
+                    <Text style={styles.metaText}>{t(({ PENDING: 'Received', CONFIRMED: 'Confirmed', PREPARING: 'Preparing', READY: 'Ready', DELIVERED: 'Delivered', CANCELLED: 'Cancelled', COMPLETED: 'Completed', PAID: 'Paid' } as Record<string, string>)[order.status] || 'Order', ({ PENDING: 'प्राप्त', CONFIRMED: 'पुष्टि हुई', PREPARING: 'तैयार हो रहा है', READY: 'तैयार', DELIVERED: 'पहुँचाया गया', CANCELLED: 'रद्द', COMPLETED: 'पूरा हुआ', PAID: 'भुगतान हुआ' } as Record<string, string>)[order.status] || 'ऑर्डर')}</Text>
+                    <Text>{money(order.total)}</Text>
+                  </View>) : <Text style={styles.metaText}>{t('No orders yet', 'अभी कोई ऑर्डर नहीं')}</Text>)}
                   {/* Action Buttons */}
                   <View style={styles.actionRow}>
                     <TouchableOpacity
+                      disabled={!c.phone}
                       onPress={() => handleWhatsApp(c)}
                       style={styles.waBtn}
                       activeOpacity={0.8}
                     >
                       <MaterialIcons name="chat" size={14} color="#059669" />
-                      <Text style={styles.waBtnText}>Send Offer on WhatsApp</Text>
+                      <Text style={styles.waBtnText}>{t('WhatsApp', 'WhatsApp संदेश')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
+                      disabled={!c.phone}
                       onPress={() => handleCall(c.phone)}
                       style={styles.callBtn}
                       activeOpacity={0.8}
                     >
                       <MaterialIcons name="phone" size={14} color="#0f172a" />
-                      <Text style={styles.callBtnText}>Call</Text>
+                      <Text style={styles.callBtnText}>{t('Call', 'कॉल')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

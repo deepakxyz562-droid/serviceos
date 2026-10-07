@@ -7,6 +7,10 @@ const { chromium } = require('@playwright/test');
     const blueprint = { businessType: 'grocery', businessName: 'Sharma General Store', country: 'IN', language: 'en', capabilities: caps, version: 3 };
     await page.addInitScript(() => { localStorage.setItem('gptform_token', 'eyJhbGciOiJub25lIn0.' + btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 })) + '.test'); localStorage.setItem('gptform_user_data', JSON.stringify({ user: { id: 'preview-owner', name: 'Aarav Sharma', email: 'preview@example.invalid', role: 'owner', tenantId: 'preview-tenant' }, tenant: { id: 'preview-tenant', name: 'Sharma General Store', signupMode: 'standalone' } })); });
     let failHome = false;
+    let homeCalls = 0;
+    let bootstrapCalls = 0;
+    let customerCalls = 0;
+    let failKhata = false;
     let failSave = false;
     let savedPayload;
     let stockPayload;
@@ -22,14 +26,26 @@ const { chromium } = require('@playwright/test');
             data = { blueprint };
         }
         else if (url.pathname === '/api/gptform/bootstrap') {
+            bootstrapCalls++;
             if (failHome) {
                 await route.abort('failed');
                 return;
             }
             data = { businessId: 'preview-business' };
         }
-        else if (url.pathname === '/api/commerce/home')
+        else if (url.pathname === '/api/commerce/home') {
+            homeCalls++;
+            if (failHome) { await route.abort('failed'); return; }
             data = { currency: 'INR', date: '2026-10-07', timezone: 'Asia/Kolkata', metrics: { sales: 12450, toCollect: 3200, lowStock: 3 }, salesSource: 'orders' };
+        }
+        else if (url.pathname === '/api/commerce/customers') {
+            customerCalls++;
+            data = { currency: 'USD', customers: [{ id: 'customer-one', phone: '14155550100', name: 'Test Customer', ordersCount: 1, totalSpent: 25, lastVisit: '2026-10-07', favoriteItems: [], tag: 'NEW', recentOrders: [{ id: 'o1', total: 25, date: '2026-10-07', status: 'CONFIRMED' }] }], summary: { totalCustomers: 1, repeatRate: 0, totalRevenue: 25 } };
+        }
+        else if (url.pathname === '/api/commerce/khata') {
+            status = failKhata ? 503 : 200;
+            data = failKhata ? { error: 'Ledger unavailable' } : { currency: 'USD', summary: { totalAapkoMilega: 45, customersWithDuesCount: 1 }, customers: [{ phone: '14155550100', name: 'Test Customer', balance: 45, daysPending: 1, unpaidOrdersCount: 1, unpaidOrders: [{ id: 'o1', number: '1', total: 45 }] }] };
+        }
         else if (url.pathname === '/api/commerce/config') {
             if (route.request().method() === 'PATCH') {
                 savedPayload = route.request().postDataJSON();
@@ -60,7 +76,7 @@ const { chromium } = require('@playwright/test');
     await page.getByText('Today at a glance').waitFor();
     await page.waitForTimeout(600);
     await page.screenshot({ path: '/private/tmp/nuvora-home-simple.png' });
-    await page.getByText('More', { exact: true }).click();
+    await page.getByText('Settings', { exact: true }).first().click();
     await page.getByText('Your business', { exact: true }).waitFor();
     await page.waitForTimeout(600);
     await page.screenshot({ path: '/private/tmp/nuvora-more-simple.png' });
@@ -101,8 +117,43 @@ const { chromium } = require('@playwright/test');
     await page.getByText('आपका व्यवसाय', { exact: true }).waitFor();
     await page.waitForTimeout(400);
     await page.screenshot({ path: '/private/tmp/nuvora-more-hindi.png' });
+    await page.getByText('ग्राहक', { exact: true }).last().click();
+    await page.getByText('Test Customer', { exact: true }).waitFor();
+    const beforeSearch = customerCalls;
+    await page.getByPlaceholder('नाम, फ़ोन या सामान खोजें').fill('missing');
+    await page.getByText('कोई ग्राहक नहीं मिला', { exact: true }).waitFor();
+    await page.getByPlaceholder('नाम, फ़ोन या सामान खोजें').fill('Test');
+    await page.getByText('हाल के ऑर्डर', { exact: true }).click();
+    await page.getByText('पुष्टि हुई', { exact: true }).waitFor();
+    if (customerCalls !== beforeSearch) throw Error('Typing in customer search made another API request');
+    await page.screenshot({ path: '/private/tmp/nuvora-customers-hindi.png' });
+    await page.getByRole('button', { name: /ग्राहकों का खाता/ }).click();
+    await page.getByText('लेना है', { exact: true }).waitFor();
+    await page.getByText('$45.00', { exact: true }).first().waitFor();
+    await page.getByPlaceholder('नाम या फ़ोन से ग्राहक खोजें').fill('missing');
+    await page.getByText('कोई ग्राहक नहीं मिला', { exact: true }).waitFor();
+    await page.getByPlaceholder('नाम या फ़ोन से ग्राहक खोजें').fill('Test');
+    await page.getByText('भुगतान मिला', { exact: true }).click();
+    await page.getByText('मिला भुगतान दर्ज करें', { exact: true }).waitFor();
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: '/private/tmp/nuvora-khata-hindi.png' });
+    failKhata = true;
+    await page.goto('http://127.0.0.1:8098/khata');
+    await page.getByText('खाता अभी उपलब्ध नहीं है। कृपया फिर कोशिश करें।', { exact: true }).waitFor();
+    if (await page.getByText('₹0.00', { exact: true }).count()) throw Error('Unavailable ledger displayed zero');
+    await page.goto('http://127.0.0.1:8098');
+
+    await page.getByText('होम', { exact: true }).click();
+    await page.getByText('आज की जानकारी', { exact: true }).waitFor();
+    await page.getByText('सेटिंग', { exact: true }).last().click();
+    const beforeBootstrap = bootstrapCalls;
+    const beforeHome = homeCalls;
     failHome = true;
     await page.getByText('होम', { exact: true }).click();
+    await page.getByText('जानकारी अपडेट नहीं हुई। पिछली जानकारी दिखाई जा रही है। फिर कोशिश करने के लिए टैप करें।', { exact: true }).waitFor();
+    await page.getByText('आज की जानकारी', { exact: true }).waitFor();
+    if (bootstrapCalls !== beforeBootstrap || homeCalls <= beforeHome) throw Error('Home did not refresh independently of business bootstrap');
+    await page.goto('http://127.0.0.1:8098');
     await page.getByText('कनेक्शन नहीं हो पाया', { exact: true }).waitFor();
     if (await page.getByText('बिक्री करें', { exact: true }).count())
         throw Error('Sale action visible during failed bootstrap');
@@ -110,6 +161,6 @@ const { chromium } = require('@playwright/test');
     failHome = false;
     await page.getByText('फिर कोशिश करें', { exact: true }).click();
     await page.getByText('आज की जानकारी', { exact: true }).waitFor();
-    console.log('PASS: Hindi preferences, offline recovery,  Home/More/Products, retail AI/sync cards hidden, failed save retained inputs, successful retry kept ID, total stock updated correct inventory record, authenticated deep link retained.');
+    console.log('PASS: Hindi customer and Khata forms, customer search without requests, customer history, business currency, unavailable ledger balances, Home bootstrap reuse and stale refresh recovery, Hindi preferences, offline recovery, Home/Settings/Products, retail AI/sync cards hidden, failed save retained inputs, successful retry kept ID, total stock updated correct inventory record, authenticated deep link retained.');
     await browser.close();
 })().catch(e => { console.error(e.message); process.exit(1); });

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readHomePages, postedOrderSales } from '@/lib/business-home-data';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
 
 /**
  * GET /api/commerce/customers
- * Returns customer CRM list with visit counts, lifetime spend, favorites, and loyalty tags.
+ * Returns the business customer directory with order history, posted sales, and saved contacts.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -14,18 +15,18 @@ export async function GET(req: NextRequest) {
     const tagFilter = searchParams.get('tag')?.toUpperCase().trim();
 
     // 1. Fetch all commerce orders for this business
-    const orders = await db.gptformCommerceOrder.findMany({
+    const orders = await readHomePages((skip, take) => db.gptformCommerceOrder.findMany({
       where: {
         businessId: business.id,
       },
-      orderBy: { createdAt: 'desc' },
-      take: 1000,
-    });
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip, take,
+    }));
 
     // 2. Fetch AI Customers for this business
-    const aiCustomers = await db.aiCustomer.findMany({
-      where: { businessId: business.id },
-    });
+    const aiCustomers = await readHomePages((skip, take) => db.aiCustomer.findMany({
+      where: { businessId: business.id }, orderBy: { id: 'asc' }, skip, take,
+    }));
     const aiCustomerByPhone = new Map<string, typeof aiCustomers[0]>();
     aiCustomers.forEach((c) => {
       if (c.phone) {
@@ -36,19 +37,30 @@ export async function GET(req: NextRequest) {
 
     // 3. Aggregate customer history from orders
     interface CustomerAgg {
+      id?: string;
       phone: string;
       name: string;
       deliveryAddress?: string | null;
       ordersCount: number;
       totalSpent: number;
-      firstVisit: Date;
-      lastVisit: Date;
+      firstVisit: Date | null;
+      lastVisit: Date | null;
       itemFrequency: Record<string, number>;
       recentOrders: Array<{ id: string; total: number; date: Date; status: string }>;
     }
 
     const customerMap = new Map<string, CustomerAgg>();
 
+    for (const customer of aiCustomers) {
+      const phone = (customer.phone || '').replace(/\D/g, '');
+      // Preserve contacts without a phone by ID; never combine unrelated walk-in customers.
+      const key = phone || `customer:${customer.id}`;
+      if (!customerMap.has(key)) customerMap.set(key, {
+        id: customer.id, phone, name: customer.name || 'Customer', deliveryAddress: customer.address,
+        ordersCount: 0, totalSpent: 0, firstVisit: null, lastVisit: null,
+        itemFrequency: {}, recentOrders: [],
+      });
+    }
     for (const ord of orders) {
       const cleanPhone = (ord.customerPhone || '').replace(/\D/g, '');
       if (!cleanPhone) continue;
@@ -71,11 +83,11 @@ export async function GET(req: NextRequest) {
       }
 
       existing.ordersCount += 1;
-      existing.totalSpent += Number(ord.total) || 0;
-      if (new Date(ord.createdAt) > new Date(existing.lastVisit)) {
+      existing.totalSpent += postedOrderSales([ord]);
+      if (!existing.lastVisit || new Date(ord.createdAt) > new Date(existing.lastVisit)) {
         existing.lastVisit = ord.createdAt;
       }
-      if (new Date(ord.createdAt) < new Date(existing.firstVisit)) {
+      if (!existing.firstVisit || new Date(ord.createdAt) < new Date(existing.firstVisit)) {
         existing.firstVisit = ord.createdAt;
       }
       if (ord.customerName && existing.name === 'Customer') {
@@ -123,12 +135,13 @@ export async function GET(req: NextRequest) {
       }
 
       return {
+        id: c.id || `phone:${c.phone}`,
         phone: c.phone,
         name: c.name,
         deliveryAddress: c.deliveryAddress,
         ordersCount: c.ordersCount,
         totalSpent: Number(c.totalSpent.toFixed(2)),
-        avgOrderValue: Number((c.totalSpent / c.ordersCount).toFixed(2)),
+        avgOrderValue: c.ordersCount ? Number((c.totalSpent / c.ordersCount).toFixed(2)) : 0,
         firstVisit: c.firstVisit,
         lastVisit: c.lastVisit,
         favoriteItems: topItems,
@@ -152,7 +165,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Sort by last visit descending
-    enriched.sort((a, b) => new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime());
+    enriched.sort((a, b) => new Date(b.lastVisit || 0).getTime() - new Date(a.lastVisit || 0).getTime());
 
     // Summary metrics
     const totalCustomers = customerMap.size;
@@ -160,6 +173,7 @@ export async function GET(req: NextRequest) {
     const totalRevenue = Array.from(customerMap.values()).reduce((sum, c) => sum + c.totalSpent, 0);
 
     return NextResponse.json({
+      currency: business.currency || 'INR',
       customers: enriched,
       summary: {
         totalCustomers,
@@ -167,12 +181,12 @@ export async function GET(req: NextRequest) {
         repeatRate: totalCustomers > 0 ? Math.round((repeatCustomers / totalCustomers) * 100) : 0,
         totalRevenue: Number(totalRevenue.toFixed(2)),
       },
-    });
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     console.error('Failed to fetch commerce customers:', e);
-    return NextResponse.json({ error: e.message || 'Failed to fetch customers' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
   }
 }

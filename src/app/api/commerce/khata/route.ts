@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!response.ok) return response;
   const data = await response.json();
   if (data.reviewOrders?.length) return NextResponse.json({ error: 'Review previous partial payments before using Khata.', reviewRequired: true }, { status: 409 });
-  return NextResponse.json({ summary: { totalAapkoMilega: Number(data.toCollect || 0), totalAapkoDenaHai: data.toPay, customersWithDuesCount: data.customers.length }, customers: data.customers.map((customer: any) => ({ ...customer, unpaidOrders: customer.unpaidOrders || [], unpaidOrdersCount: customer.unpaidOrdersCount, daysPending: customer.daysPending })), suppliers: data.suppliers });
+  return NextResponse.json({ currency: data.currency, summary: { totalAapkoMilega: Number(data.toCollect || 0), totalAapkoDenaHai: data.toPay, customersWithDuesCount: data.customers.length }, customers: data.customers.map((customer: any) => ({ ...customer, unpaidOrders: customer.unpaidOrders || [], unpaidOrdersCount: customer.unpaidOrdersCount, daysPending: customer.daysPending })), suppliers: data.suppliers });
 }
 
 /**

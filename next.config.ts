@@ -95,6 +95,14 @@ const nextConfig: NextConfig = {
         destination: '/',
       },
       {
+        source: '/phone-cleaner/privacy',
+        destination: '/phone-cleaner/privacy.html',
+      },
+      {
+        source: '/phone-cleaner/terms',
+        destination: '/phone-cleaner/terms.html',
+      },
+      {
         source: '/webhook-test/:path*',
         destination: '/api/webhook-test/:path*',
       },

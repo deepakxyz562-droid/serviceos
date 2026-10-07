@@ -7,7 +7,8 @@ let pg:PGlite;
 beforeAll(async()=>{
  const schema=execFileSync(process.execPath,['node_modules/prisma/build/index.js','migrate','diff','--from-empty','--to-schema-datamodel','prisma/schema.prisma','--script'],{encoding:'utf8',maxBuffer:5*1024*1024,timeout:30000});
  pg=new PGlite();await pg.exec(schema);
- await pg.exec('BEGIN;'+readFileSync('prisma/migrations/20261007150000_commerce_consistency/migration.sql','utf8')+'COMMIT;');
+ await pg.exec(readFileSync('prisma/migrations/20261007190000_auth_refresh_sessions/migration.sql','utf8'));
+ await pg.exec('BEGIN;'+(readFileSync('prisma/migrations/20261007150000_commerce_consistency/migration.sql','utf8')+readFileSync('prisma/migrations/20261007200000_order_notifications/migration.sql','utf8'))+'COMMIT;');
  await pg.exec(`INSERT INTO "Tenant"(id,name,slug,"updatedAt") VALUES('tenant','Test shop','test-shop',now());
  INSERT INTO "User"(id,email,"updatedAt") VALUES('owner','test-owner@example.invalid',now());
  INSERT INTO "AiBusiness"(id,"ownerId","tenantId",name,currency,"updatedAt") VALUES('business','owner','tenant','Test shop','INR',now());

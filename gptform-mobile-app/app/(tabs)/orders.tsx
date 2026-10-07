@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 import { API_PATHS } from '@/lib/constants';
 import {
   matchNotificationToOrders,
@@ -48,6 +49,9 @@ interface Order {
 
 export default function OrdersScreen() {
   const router = useRouter();
+  const language = useBlueprintStore(s => s.blueprint.language);
+  const t = (en: string, hi: string) => language === 'hi' ? hi : en;
+  const statusLabel = (status: string) => ({ ALL: t('All', 'सभी'), PENDING: t('Received', 'प्राप्त'), CONFIRMED: t('Confirmed', 'पुष्टि हुई'), PREPARING: t('Preparing', 'तैयार हो रहा है'), READY: t('Ready', 'तैयार'), DELIVERED: t('Delivered', 'पहुँचाया गया') } as Record<string, string>)[status] || status;
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -283,12 +287,10 @@ export default function OrdersScreen() {
       <View style={styles.header}>
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.title}>Orders & Queue</Text>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>Live Store</Text>
-            </View>
+            <Text style={styles.title}>{t('Orders', 'ऑर्डर')}</Text>
+
           </View>
-          <Text style={styles.subtitle}>Direct UPI, Cash & WhatsApp Kitchen</Text>
+          <Text style={styles.subtitle}>{t('Manage customer orders', 'ग्राहकों के ऑर्डर संभालें')}</Text>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -301,7 +303,7 @@ export default function OrdersScreen() {
             activeOpacity={0.8}
           >
             <MaterialIcons name="contacts" size={14} color="#059669" />
-            <Text style={styles.crmHeaderBtnText}>CRM</Text>
+            <Text style={styles.crmHeaderBtnText}>{t('Customers', 'ग्राहक')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -313,7 +315,7 @@ export default function OrdersScreen() {
             activeOpacity={0.8}
           >
             <MaterialIcons name="point-of-sale" size={15} color="#ffffff" />
-            <Text style={styles.posHeaderBtnText}>POS</Text>
+            <Text style={styles.posHeaderBtnText}>{t('New Sale', 'नई बिक्री')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -358,7 +360,7 @@ export default function OrdersScreen() {
             const active = activeFilter === filter;
             return (
               <TouchableOpacity
-                key={filter}
+                key={statusLabel(filter)}
                 onPress={() => {
                   hapticFeedback.light();
                   setActiveFilter(filter);
@@ -367,7 +369,7 @@ export default function OrdersScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {filter}
+                  {statusLabel(filter)}
                 </Text>
               </TouchableOpacity>
             );
@@ -399,13 +401,13 @@ export default function OrdersScreen() {
                 }}
                 style={{ marginTop: 12, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: '#059669', borderRadius: 10 }}
               >
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Retry</Text>
+                <Text style={{ color: '#fff', fontWeight: '700' }}>{t('Retry', 'फिर कोशिश करें')}</Text>
               </TouchableOpacity>
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="shopping-bag" size={48} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>No orders in this state</Text>
+              <Text style={styles.emptyTitle}>{t('No orders in this state', 'इस स्थिति में कोई ऑर्डर नहीं')}</Text>
               <Text style={styles.emptySub}>Incoming WhatsApp and Storefront orders will appear here.</Text>
             </View>
           ) : (

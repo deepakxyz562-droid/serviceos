@@ -22,7 +22,7 @@ beforeAll(async () => {
     INSERT INTO "AiBusiness" VALUES('business','tenant','INR'),('other-business','other-tenant','INR');
     INSERT INTO "Supplier" VALUES('supplier','tenant','Supplier A'),('other-supplier','other-tenant','Supplier B');
   `);
-  await database.exec(readFileSync('prisma/migrations/20261007150000_commerce_consistency/migration.sql','utf8'));
+  await database.exec((readFileSync('prisma/migrations/20261007150000_commerce_consistency/migration.sql','utf8')+readFileSync('prisma/migrations/20261007200000_order_notifications/migration.sql','utf8')));
 }, 30000);
 afterAll(async () => { await database?.close(); });
 const command = async (key: string, body: object) => (await database.query<{ result: any }>('SELECT nuvora_finance_command($1,$2,$3::jsonb) result', ['business',key,JSON.stringify(body)])).rows[0].result;
@@ -131,7 +131,7 @@ describe('public checkout and message retries in PostgreSQL',()=>{
   const saved=await publicOrder('public-order-no-consent',false);
   expect(saved.order).toMatchObject({paymentStatus:'UNPAID',paidAmount:0,status:'PENDING'});
   const messages=(await database.query<any>('SELECT audience FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1',[saved.order.id])).rows;
-  expect(messages).toEqual([{audience:'vendor'}]);
+  expect(messages.map(r=>r.audience).sort()).toEqual(['owner','vendor']);
  });
  it('restores stock once when cancelling an unpaid order',async()=>{
   const saved=await publicOrder('public-order-cancel',true);
@@ -139,7 +139,10 @@ describe('public checkout and message retries in PostgreSQL',()=>{
   await database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',saved.order.id,JSON.stringify({status:'CANCELLED'})]);
   await database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',saved.order.id,JSON.stringify({status:'CANCELLED'})]);
   expect((await database.query<any>('SELECT "totalStock" FROM "InventoryItem" WHERE id=$1',['stock'])).rows[0].totalStock).toBe(stockBefore+1);
-  expect((await database.query<any>('SELECT status FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1',[saved.order.id])).rows.every(r=>r.status==='cancelled')).toBe(true);
+  const queued=(await database.query<any>('SELECT audience,event,status FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1',[saved.order.id])).rows;
+  expect(queued.find(r=>r.audience==='vendor')?.status).toBe('pending');
+  expect(queued.filter(r=>r.event==='CANCELLED')).toHaveLength(1);
+  expect(queued.find(r=>r.audience==='customer'&&r.event==='CREATED')?.status).toBe('cancelled');
  });
  it('fences stale workers after a lease expires',async()=>{
   const claimed=(await database.query<any>('SELECT nuvora_claim_outbox(1) result')).rows[0].result[0];
@@ -149,5 +152,30 @@ describe('public checkout and message retries in PostgreSQL',()=>{
   const ack=async(token:string)=>(await database.query<any>('SELECT nuvora_ack_outbox($1,$2,$3,$4) result',[claimed.id,'true','',token])).rows[0].result;
   expect(await ack(claimed.leaseToken)).toEqual({updated:0});
   expect(await ack(reclaimed.leaseToken)).toEqual({updated:1});
+ });
+});
+
+describe('order lifecycle notifications',()=>{
+ it('queues vendor and owner alerts for counter orders and deduplicates each customer transition',async()=>{
+  await database.exec(`UPDATE "InventoryItem" SET "totalStock"=20,"availableStock"=18 WHERE id='stock'`);
+  const config=(await database.query<any>('SELECT * FROM "GptformCommerceConfig" WHERE id=$1',['config'])).rows[0];
+  const quote=priceOrder(config,[{productId:'product',qty:1}],false);
+  const payload={...quote,configId:'config',clientHash:'notification-lifecycle',customerPhone:'919999999999',publicOrder:false,paymentStatus:'UNPAID',whatsappConsent:true};
+  const create=()=>database.query<any>('SELECT nuvora_create_order($1,$2,$3::jsonb) result',['business','notification-lifecycle',JSON.stringify(payload)]);
+  const saved=(await create()).rows[0].result.order;await create();
+  const initial=(await database.query<any>('SELECT audience,event,"eventStatus" FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1',[saved.id])).rows;
+  expect(initial.map(r=>r.audience).sort()).toEqual(['customer','owner','vendor']);
+  expect(initial.every(r=>r.eventStatus==='CONFIRMED')).toBe(true);
+  for(const status of ['PREPARING','PREPARING','READY','DELIVERED'])await database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',saved.id,JSON.stringify({status})]);
+  const messages=(await database.query<any>('SELECT event,"eventStatus" FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1 AND audience=$2 ORDER BY "createdAt",id',[saved.id,'customer'])).rows;
+  expect(messages.map(r=>r.event)).toEqual(['CREATED','PREPARING','READY','DELIVERED']);
+  expect(messages.map(r=>r.eventStatus)).toEqual(['CONFIRMED','PREPARING','READY','DELIVERED']);
+  await expect(database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',saved.id,JSON.stringify({status:'READY'})])).rejects.toThrow('INVALID_ORDER_TRANSITION');
+  expect((await database.query<any>('SELECT count(*)::integer count FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1',[saved.id])).rows[0].count).toBe(6);
+ });
+ it('does not queue customer status messages without order-update consent',async()=>{
+  const order=(await database.query<any>('SELECT id FROM "GptformCommerceOrder" WHERE id=(SELECT "orderId" FROM "NuvoraCommerceRequest" WHERE "requestKey"=$1)',['public-order-no-consent'])).rows[0];
+  await database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',order.id,JSON.stringify({status:'CONFIRMED'})]);
+  expect((await database.query('SELECT id FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1 AND audience=$2',[order.id,'customer'])).rows).toHaveLength(0);
  });
 });

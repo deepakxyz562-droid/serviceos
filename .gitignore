@@ -138,3 +138,9 @@ next-dev.pid
 
 # Scratch
 /.scratch/
+
+# Reviewed additive release migrations
+!/prisma/migrations/20261007190000_auth_refresh_sessions/
+!/prisma/migrations/20261007190000_auth_refresh_sessions/migration.sql
+!/prisma/migrations/20261007200000_order_notifications/
+!/prisma/migrations/20261007200000_order_notifications/migration.sql

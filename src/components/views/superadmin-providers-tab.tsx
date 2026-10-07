@@ -73,7 +73,7 @@ interface CommunicationProviderItem {
 
 // ─── Config Field Definitions ─────────────────────────────────────────────
 
-const EMAIL_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string }[] }> = {
+const EMAIL_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string; help?: string }[] }> = {
   smtp: {
     label: 'SMTP',
     fields: [
@@ -126,13 +126,16 @@ const EMAIL_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: str
   },
 };
 
-const WHATSAPP_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string }[] }> = {
+const WHATSAPP_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string; help?: string }[] }> = {
   meta_cloud_api: {
     label: 'Meta Cloud API',
     fields: [
       { key: 'phoneNumberId', label: 'Phone Number ID', type: 'text', required: true, placeholder: '1234567890' },
       { key: 'businessAccountId', label: 'Business Account ID', type: 'text', required: true, placeholder: '1234567890' },
       { key: 'accessToken', label: 'Access Token', type: 'password', required: true },
+      { key: 'orderCustomerTemplate', label: 'Approved customer order-update template', type: 'text', required: false },
+      { key: 'orderVendorTemplate', label: 'Approved vendor new-order template', type: 'text', required: false },
+      { key: 'orderTemplateLanguage', label: 'Order template language (e.g. en or hi)', type: 'text', required: false },
       { key: 'webhookVerifyToken', label: 'Webhook Verify Token', type: 'password', placeholder: 'my_verify_token' },
       { key: 'wabaId', label: 'WhatsApp Business Account ID', type: 'text', placeholder: '1234567890' },
     ],

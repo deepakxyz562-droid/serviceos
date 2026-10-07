@@ -223,6 +223,7 @@ export function CommerceView() {
   const [posCart, setPosCart] = useState<Array<{ id: string; name: string; price: number; qty: number }>>([]);
   const [posCustomerName, setPosCustomerName] = useState('');
   const [posCustomerPhone, setPosCustomerPhone] = useState('');
+  const [posWhatsAppConsent, setPosWhatsAppConsent] = useState(false);
   const [posPaymentMethod, setPosPaymentMethod] = useState<'CASH' | 'CARD' | 'UPI'>('CASH');
   const [posTableNumber, setPosTableNumber] = useState('');
   const [posOrderType, setPosOrderType] = useState<'DINE_IN' | 'TAKEOUT' | 'DELIVERY'>('DINE_IN');
@@ -2043,6 +2044,7 @@ export function CommerceView() {
       const payload = {
           customerName: posCustomerName.trim() || 'Walk-in Guest',
           customerPhone: finalPhone,
+          whatsappConsent: posWhatsAppConsent && !!finalPhone,
           paymentMethod: posPaymentMethod,
           deliveryType: posOrderType.toLowerCase(),
           deliveryAddress: posTableNumber ? `Table #${posTableNumber}` : null,
@@ -2063,6 +2065,7 @@ export function CommerceView() {
         setPosCart([]);
         setPosCustomerName('');
         setPosCustomerPhone('');
+        setPosWhatsAppConsent(false);
         setPosTableNumber('');
         setPosMobileCheckoutOpen(false);
         loadCommerceData();
@@ -3212,6 +3215,7 @@ export function CommerceView() {
                     />
                   </div>
 
+                  <label className="flex items-center gap-2 text-xs text-stone-600"><input type="checkbox" checked={posWhatsAppConsent} disabled={!posCustomerPhone.trim()} onChange={e=>setPosWhatsAppConsent(e.target.checked)}/>Customer agrees to WhatsApp order updates</label>
                   {/* Payment Method Selector */}
                   <div>
                     <label className="text-[10px] font-bold text-stone-500 uppercase">Payment Method</label>
@@ -3414,7 +3418,8 @@ export function CommerceView() {
                       />
                     </div>
 
-                    {/* Payment Method Selector */}
+                    <label className="flex items-center gap-2 text-xs text-stone-600"><input type="checkbox" checked={posWhatsAppConsent} disabled={!posCustomerPhone.trim()} onChange={e=>setPosWhatsAppConsent(e.target.checked)}/>Customer agrees to WhatsApp order updates</label>
+                  {/* Payment Method Selector */}
                     <div>
                       <label className="text-[10px] font-bold text-stone-500 uppercase">Payment Method</label>
                       <div className="grid grid-cols-3 gap-2 mt-1">

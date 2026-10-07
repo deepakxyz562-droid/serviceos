@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 import { apiRequest } from '@/lib/api';
 import { RequestTracker } from '../../shared/money';
 import { API_PATHS } from '@/lib/constants';
@@ -40,6 +41,7 @@ interface CustomerUdhaar {
 }
 
 interface KhataResponse {
+  currency?: string;
   summary: {
     totalAapkoMilega: number;
     customersWithDuesCount: number;
@@ -50,6 +52,10 @@ interface KhataResponse {
 
 export default function KhataScreen() {
   const router = useRouter();
+  const language = useBlueprintStore(s => s.blueprint.language);
+  const t = (en: string, hi: string) => language === 'hi' ? hi : en;
+  const [currency, setCurrency] = useState('INR');
+  const money = (amount: number) => new Intl.NumberFormat(language === 'hi' ? 'hi-IN' : 'en-IN', { style: 'currency', currency }).format(amount);
   const requestTracker = useRef(new RequestTracker());
   const [customers, setCustomers] = useState<CustomerUdhaar[]>([]);
   const [summary, setSummary] = useState({
@@ -77,11 +83,10 @@ export default function KhataScreen() {
 
   const fetchKhata = useCallback(async () => {
     try {
-      const url = `${API_PATHS.commerceKhata}${
-        searchQuery ? `?search=${encodeURIComponent(searchQuery)}` : ''
-      }`;
+      const url = API_PATHS.commerceKhata;
       const data = await apiRequest<KhataResponse>(url);
       setCustomers(data.customers || []);
+      setCurrency(data.currency || 'INR');
       if (data.summary) setSummary(data.summary);
       setError(null);
     } catch (err: any) {
@@ -90,7 +95,7 @@ export default function KhataScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [searchQuery]);
+  }, []);
 
   useEffect(() => {
     fetchKhata();
@@ -104,13 +109,9 @@ export default function KhataScreen() {
 
   const handleSendReminder = (customer: CustomerUdhaar) => {
     hapticFeedback.light();
-    if (customer.whatsappReminderUrl) {
-      Linking.openURL(customer.whatsappReminderUrl);
-    } else {
-      const clean = customer.phone.replace(/\D/g, '');
-      const text = `Hi ${customer.name}, friendly reminder regarding your pending balance of ₹${customer.balance.toFixed(2)}. Please pay via UPI at your earliest. Thank you!`;
-      Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent(text)}`);
-    }
+    const clean = customer.phone.replace(/\D/g, '');
+    const text = t(`Hello ${customer.name}, this is a reminder about your pending balance of ${money(customer.balance)}. Thank you.`, `नमस्ते ${customer.name}, आपके ${money(customer.balance)} बकाया भुगतान का रिमाइंडर है। धन्यवाद।`);
+    Linking.openURL(`https://wa.me/${clean}?text=${encodeURIComponent(text)}`);
   };
 
   const handleCall = (phone: string) => {
@@ -122,7 +123,7 @@ export default function KhataScreen() {
     if (!paymentModalCustomer || !paymentAmount.trim()) return;
     const amt = parseFloat(paymentAmount);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount.');
+      Alert.alert(t('Invalid amount', 'रकम सही नहीं है'), t('Please enter a valid amount.', 'सही रकम दर्ज करें।'));
       return;
     }
 
@@ -144,10 +145,10 @@ export default function KhataScreen() {
       requestTracker.current.clear();
       setPaymentModalCustomer(null);
       setPaymentAmount('');
-      Alert.alert('Payment Recorded ✓', `₹${amt.toFixed(2)} credited to ${paymentModalCustomer.name}'s balance.`);
+      Alert.alert(t('Payment recorded', 'भुगतान दर्ज हुआ'), t(`${money(amt)} received from ${paymentModalCustomer.name}.`, `${paymentModalCustomer.name} से ${money(amt)} प्राप्त हुए।`));
       fetchKhata();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not record payment.');
+      Alert.alert(t('Unable to save', 'सेव नहीं हुआ'), language === 'hi' ? 'भुगतान दर्ज नहीं हुआ। जानकारी जाँचें और फिर कोशिश करें।' : err?.message || 'Could not record payment.');
     } finally {
       setSubmittingPayment(false);
     }
@@ -155,12 +156,12 @@ export default function KhataScreen() {
 
   const handleGiveUdhaar = async () => {
     if (!udhaarPhone.trim() || !udhaarAmount.trim()) {
-      Alert.alert('Missing details', 'Please enter phone number and amount.');
+      Alert.alert(t('Missing details', 'जानकारी अधूरी है'), t('Please enter phone number and amount.', 'फ़ोन नंबर और रकम दर्ज करें।'));
       return;
     }
     const amt = parseFloat(udhaarAmount);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount.');
+      Alert.alert(t('Invalid amount', 'रकम सही नहीं है'), t('Please enter a valid amount.', 'सही रकम दर्ज करें।'));
       return;
     }
 
@@ -185,20 +186,22 @@ export default function KhataScreen() {
       setUdhaarPhone('');
       setUdhaarAmount('');
       setUdhaarNote('');
-      Alert.alert('Udhaar Recorded', `₹${amt.toFixed(2)} added to ${udhaarName || udhaarPhone}.`);
+      Alert.alert(t('Credit sale recorded', 'उधार बिक्री दर्ज हुई'), money(amt));
       fetchKhata();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not record Udhaar.');
+      Alert.alert(t('Unable to save', 'सेव नहीं हुआ'), language === 'hi' ? 'उधार दर्ज नहीं हुआ। जानकारी जाँचें और फिर कोशिश करें।' : err?.message || 'Could not record credit sale.');
     } finally {
       setSubmittingUdhaar(false);
     }
   };
 
+  const filteredCustomers = customers.filter(customer => `${customer.name} ${customer.phone}`.toLocaleLowerCase().includes(searchQuery.trim().toLocaleLowerCase()));
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
           <TouchableOpacity
             onPress={() => router.back()}
             style={styles.backBtn}
@@ -206,14 +209,12 @@ export default function KhataScreen() {
           >
             <MaterialIcons name="arrow-back" size={20} color="#0f172a" />
           </TouchableOpacity>
-          <View>
+          <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.title}>Customer Khata</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>Udhaar Book</Text>
-              </View>
+              <Text style={styles.title}>{t('Customer Khata', 'ग्राहकों का खाता')}</Text>
+
             </View>
-            <Text style={styles.subtitle}>Track dues & send WhatsApp payment links</Text>
+            <Text style={styles.subtitle}>{t('Track dues & send WhatsApp payment links', 'बकाया देखें और भुगतान का रिमाइंडर भेजें')}</Text>
           </View>
         </View>
 
@@ -233,10 +234,10 @@ export default function KhataScreen() {
             <View style={styles.kpiIconWrapGreen}>
               <MaterialIcons name="call-received" size={16} color="#059669" />
             </View>
-            <Text style={styles.kpiLabelGreen}>Aapko Milega (To Collect)</Text>
+            <Text style={styles.kpiLabelGreen}>{t('Aapko Milega (To Collect)', 'लेना है')}</Text>
           </View>
-          <Text style={styles.kpiValueGreen}>₹{summary.totalAapkoMilega.toFixed(2)}</Text>
-          <Text style={styles.kpiSubGreen}>{summary.customersWithDuesCount} customers have pending balance</Text>
+          <Text style={styles.kpiValueGreen}>{loading || error ? '—' : money(summary.totalAapkoMilega)}</Text>
+          <Text style={styles.kpiSubGreen}>{loading || error ? t('Balance unavailable', 'रकम अभी उपलब्ध नहीं') : t(`${summary.customersWithDuesCount} customers have pending balance`, `${summary.customersWithDuesCount} ग्राहकों से रकम लेनी है`)}</Text>
         </View>
       </View>
 
@@ -244,7 +245,7 @@ export default function KhataScreen() {
       <View style={styles.searchBox}>
         <MaterialIcons name="search" size={18} color="#94a3b8" />
         <TextInput
-          placeholder="Search customer by name or phone..."
+          placeholder={t('Search customer by name or phone...', 'नाम या फ़ोन से ग्राहक खोजें')}
           placeholderTextColor="#94a3b8"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -261,7 +262,7 @@ export default function KhataScreen() {
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#059669" />
-          <Text style={styles.loadingText}>Loading Khata records...</Text>
+          <Text style={styles.loadingText}>{t('Loading Khata records...', 'खाता लोड हो रहा है…')}</Text>
         </View>
       ) : (
         <ScrollView
@@ -274,21 +275,21 @@ export default function KhataScreen() {
           {error ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="error-outline" size={44} color="#f87171" />
-              <Text style={[styles.emptyTitle, { color: '#f87171' }]}>{error}</Text>
+              <Text style={[styles.emptyTitle, { color: '#f87171' }]}>{language === 'hi' ? 'खाता अभी उपलब्ध नहीं है। कृपया फिर कोशिश करें।' : error}</Text>
               <TouchableOpacity onPress={onRefresh} style={styles.retryBtn}>
-                <Text style={styles.retryBtnText}>Retry</Text>
+                <Text style={styles.retryBtnText}>{t('Retry', 'फिर कोशिश करें')}</Text>
               </TouchableOpacity>
             </View>
-          ) : customers.length === 0 ? (
+          ) : filteredCustomers.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="check-circle-outline" size={52} color="#10b981" />
-              <Text style={styles.emptyTitle}>All Clear! No Pending Udhaar</Text>
+              <Text style={styles.emptyTitle}>{searchQuery ? t('No matching customers', 'कोई ग्राहक नहीं मिला') : t('No pending balance', 'कोई बकाया नहीं')}</Text>
               <Text style={styles.emptySub}>
-                Every customer has cleared their bills. New credit or unpaid orders will appear here automatically.
+                {t('Credit sales and unpaid orders appear here.', 'उधार बिक्री और बकाया ऑर्डर यहाँ दिखते हैं।')}
               </Text>
             </View>
           ) : (
-            customers.map((c) => {
+            filteredCustomers.map((c) => {
               const avatarLetter = (c.name || 'C').charAt(0).toUpperCase();
 
               return (
@@ -303,16 +304,16 @@ export default function KhataScreen() {
                         <Text style={styles.customerName} numberOfLines={1}>
                           {c.name}
                         </Text>
-                        <Text style={styles.customerPhone}>+91 {c.phone}</Text>
+                        <Text style={styles.customerPhone}>{c.phone}</Text>
                       </View>
                     </View>
 
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.balanceText}>₹{c.balance.toFixed(2)}</Text>
+                      <Text style={styles.balanceText}>{money(c.balance)}</Text>
                       <Text style={styles.daysOverdueText}>
                         {c.daysPending === 0
-                          ? 'Today'
-                          : `${c.daysPending}d pending`}
+                          ? t('Today', 'आज')
+                          : t(`${c.daysPending}d pending`, `${c.daysPending} दिन से बकाया`)}
                       </Text>
                     </View>
                   </View>
@@ -320,7 +321,7 @@ export default function KhataScreen() {
                   {/* Orders pill */}
                   <View style={styles.ordersPillRow}>
                     <Text style={styles.ordersPillText}>
-                      {c.unpaidOrdersCount} pending {c.unpaidOrdersCount === 1 ? 'order' : 'orders'}:{' '}
+                      {c.unpaidOrdersCount} {t('unpaid orders', 'बकाया ऑर्डर')}:{' '}
                       {c.unpaidOrders.map((o) => `#${o.number}`).join(', ')}
                     </Text>
                   </View>
@@ -333,7 +334,7 @@ export default function KhataScreen() {
                       activeOpacity={0.8}
                     >
                       <MaterialIcons name="send" size={14} color="#059669" />
-                      <Text style={styles.reminderBtnText}>Send WhatsApp Reminder</Text>
+                      <Text style={styles.reminderBtnText}>{t('Send WhatsApp Reminder', 'WhatsApp रिमाइंडर')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -345,7 +346,7 @@ export default function KhataScreen() {
                       activeOpacity={0.8}
                     >
                       <MaterialIcons name="add" size={14} color="#ffffff" />
-                      <Text style={styles.receiveBtnText}>Got Payment</Text>
+                      <Text style={styles.receiveBtnText}>{t('Got Payment', 'भुगतान मिला')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -371,7 +372,7 @@ export default function KhataScreen() {
           activeOpacity={0.85}
         >
           <MaterialIcons name="receipt-long" size={18} color="#ffffff" />
-          <Text style={styles.giveUdhaarFabText}>+ Record New Udhaar Sale</Text>
+          <Text style={styles.giveUdhaarFabText}>{t('+ Record New Udhaar Sale', '+ उधार बिक्री दर्ज करें')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -385,7 +386,7 @@ export default function KhataScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Record Payment Received</Text>
+              <Text style={styles.modalTitle}>{t('Record Payment Received', 'मिला भुगतान दर्ज करें')}</Text>
               <TouchableOpacity onPress={() => setPaymentModalCustomer(null)}>
                 <MaterialIcons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
@@ -395,23 +396,23 @@ export default function KhataScreen() {
               <View style={styles.modalBody}>
                 <Text style={styles.modalCustomerName}>{paymentModalCustomer.name}</Text>
                 <Text style={styles.modalCustomerSub}>
-                  Total Pending: ₹{paymentModalCustomer.balance.toFixed(2)}
+                  {t('Total pending:', 'कुल बकाया:')} {money(paymentModalCustomer.balance)}
                 </Text>
 
                 <View style={{ marginTop: 14 }}>
-                  <Text style={styles.inputLabel}>Amount Received (₹):</Text>
+                  <Text style={styles.inputLabel}>{t('Amount Received:', 'मिली रकम:')}</Text>
                   <TextInput
                     keyboardType="numeric"
                     value={paymentAmount}
                     onChangeText={setPaymentAmount}
                     style={styles.modalInput}
-                    placeholder="Enter amount"
+                    placeholder={t('Enter amount', 'रकम दर्ज करें')}
                   />
                 </View>
 
                 {/* Payment Mode Selector */}
                 <View style={{ marginTop: 12 }}>
-                  <Text style={styles.inputLabel}>Payment Mode:</Text>
+                  <Text style={styles.inputLabel}>{t('Payment Mode:', 'भुगतान का तरीका:')}</Text>
                   <View style={styles.paymentModeRow}>
                     <TouchableOpacity
                       onPress={() => setPaymentMethod('CASH')}
@@ -426,7 +427,7 @@ export default function KhataScreen() {
                           paymentMethod === 'CASH' && styles.paymentModeTextActive,
                         ]}
                       >
-                        💵 Cash in Hand
+                        {t('Cash', 'नकद')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -442,7 +443,7 @@ export default function KhataScreen() {
                           paymentMethod === 'UPI' && styles.paymentModeTextActive,
                         ]}
                       >
-                        ⚡ Direct UPI
+                        {t('UPI / Bank', 'UPI / बैंक')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -457,7 +458,7 @@ export default function KhataScreen() {
                   {submittingPayment ? (
                     <ActivityIndicator size="small" color="#ffffff" />
                   ) : (
-                    <Text style={styles.modalSubmitText}>Confirm & Credit Balance</Text>
+                    <Text style={styles.modalSubmitText}>{t('Confirm & Credit Balance', 'भुगतान दर्ज करें')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -476,45 +477,45 @@ export default function KhataScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Record New Udhaar (Credit)</Text>
+              <Text style={styles.modalTitle}>{t('Record New Udhaar (Credit)', 'नया उधार दर्ज करें')}</Text>
               <TouchableOpacity onPress={() => setUdhaarModalOpen(false)}>
                 <MaterialIcons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Customer Phone Number *</Text>
+              <Text style={styles.inputLabel}>{t('Customer Phone Number *', 'ग्राहक का फ़ोन नंबर *')}</Text>
               <TextInput
                 keyboardType="phone-pad"
                 value={udhaarPhone}
                 onChangeText={setUdhaarPhone}
                 style={styles.modalInput}
-                placeholder="10-digit mobile number"
+                placeholder={t('Mobile number with country code', 'देश कोड सहित मोबाइल नंबर')}
               />
 
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Customer Name</Text>
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>{t('Customer Name', 'ग्राहक का नाम')}</Text>
               <TextInput
                 value={udhaarName}
                 onChangeText={setUdhaarName}
                 style={styles.modalInput}
-                placeholder="e.g. Ramesh Kumar"
+                placeholder={t('e.g. Ramesh Kumar', 'जैसे रमेश कुमार')}
               />
 
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Udhaar Amount (₹) *</Text>
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>{t('Udhaar Amount *', 'उधार की रकम *')}</Text>
               <TextInput
                 keyboardType="numeric"
                 value={udhaarAmount}
                 onChangeText={setUdhaarAmount}
                 style={styles.modalInput}
-                placeholder="₹ 0.00"
+                placeholder="0.00"
               />
 
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Note / Item description</Text>
+              <Text style={[styles.inputLabel, { marginTop: 10 }]}>{t('Note / Item description', 'नोट / सामान की जानकारी')}</Text>
               <TextInput
                 value={udhaarNote}
                 onChangeText={setUdhaarNote}
                 style={styles.modalInput}
-                placeholder="e.g. 5kg Basmati Rice, 2 Tea packets"
+                placeholder={t('e.g. 5kg Basmati Rice, 2 Tea packets', 'जैसे 5 किलो चावल, 2 चाय पैकेट')}
               />
 
               <TouchableOpacity
@@ -526,7 +527,7 @@ export default function KhataScreen() {
                 {submittingUdhaar ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.modalSubmitText}>Save to Khata</Text>
+                  <Text style={styles.modalSubmitText}>{t('Save to Khata', 'खाते में सेव करें')}</Text>
                 )}
               </TouchableOpacity>
             </View>

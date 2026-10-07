@@ -14,7 +14,7 @@ const screens: Partial<Record<HomeAction, string>> = {
 const icons: Record<string, React.ComponentProps<typeof MaterialIcons>['name']> = {
   index: 'home', sell: 'point-of-sale', stock: 'inventory-2', khata: 'account-balance-wallet',
   orders: 'shopping-bag', tables: 'table-restaurant', bookings: 'event', customers: 'people',
-  billing: 'receipt-long', products: 'inventory-2', store: 'storefront', more: 'menu',
+  billing: 'receipt-long', products: 'inventory-2', store: 'storefront', more: 'settings',
 };
 const allScreens = ['index', 'sell', 'stock', 'khata', 'orders', 'tables', 'bookings', 'customers', 'billing', 'products', 'store', 'more', 'leads', 'inbox', 'engage'];
 export default function TabsLayout() {

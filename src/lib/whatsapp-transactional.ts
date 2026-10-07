@@ -13,6 +13,9 @@
  */
 
 import { db } from '@/lib/db';
+import { WHATSAPP_API_VERSION } from '@/lib/whatsapp-config';
+
+export interface OrderMessageTemplate { name: string; language: string; parameters: string[]; }
 
 export interface TransactionalOrderPayload {
   currency?: string;
@@ -48,20 +51,20 @@ export function formatCustomerOrderConfirmation(order: TransactionalOrderPayload
 
   const payText =
     order.paymentStatus === 'PAID'
-      ? '✅ Paid via UPI'
+      ? `✅ Paid${order.paymentMethod ? ` (${order.paymentMethod})` : ''}`
       : order.paymentMethod === 'UPI'
       ? '⚡ UPI Payment Pending'
       : '💵 Pay on Delivery / Counter';
 
   const typeText =
-    order.deliveryType === 'dine_in'
+    order.deliveryType?.toLowerCase() === 'dine_in'
       ? '🍽️ Dine-In'
-      : order.deliveryType === 'takeout'
+      : ['takeout','pickup'].includes(order.deliveryType?.toLowerCase() || '')
       ? '🛍️ Pickup'
       : '🛵 Home Delivery';
 
   const messageText =
-    `🎉 *Order Confirmed!* #${order.orderNumber}\n\n` +
+    `${order.status==='PENDING'?'📥 *Order Received!*':'🎉 *Order Confirmed!*'} #${order.orderNumber}\n\n` +
     `Hi *${order.customerName}*, your order at *${order.businessName}* has been received!\n\n` +
     `📋 *Order Summary:*\n${itemsList}\n\n` +
     `💰 *Total Amount:* ${new Intl.NumberFormat('en-IN',{style:'currency',currency:order.currency||'INR'}).format(order.total)}\n` +
@@ -81,7 +84,7 @@ export function formatVendorNewOrderAlert(order: TransactionalOrderPayload): {
 } {
   const cleanVendorPhone = (order.businessPhone || '').replace(/\D/g, '');
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.com';
-  const posUrl = `${baseUrl}/pos`;
+  const posUrl = `${baseUrl}/?view=commerce`;
 
   const itemsList = order.items
     .map((it) => `• ${it.name} × ${it.qty}`)
@@ -89,7 +92,7 @@ export function formatVendorNewOrderAlert(order: TransactionalOrderPayload): {
 
   const messageText =
     `🔔 *NEW ORDER #${order.orderNumber} RECEIVED!*\n\n` +
-    `👤 *Customer:* ${order.customerName} (+91 ${order.customerPhone})\n` +
+    `👤 *Customer:* ${order.customerName} (${order.customerPhone})\n` +
     `💰 *Amount:* ${new Intl.NumberFormat('en-IN',{style:'currency',currency:order.currency||'INR'}).format(order.total)} (${order.paymentStatus === 'PAID' ? 'PAID ✓' : 'UNPAID'})\n` +
     `📦 *Items:* ${itemsList}\n` +
     `📍 *Delivery:* ${order.deliveryAddress || order.deliveryType || 'Counter'}\n\n` +
@@ -114,6 +117,10 @@ export function formatCustomerStatusUpdate(
   let statusMessage = `Your order #${order.orderNumber} status has been updated to: ${newStatus}`;
 
   switch (newStatus.toUpperCase()) {
+    case 'CONFIRMED':
+      statusBadge = '✅ Order Confirmed';
+      statusMessage = `${order.businessName} has accepted your order #${order.orderNumber}.`;
+      break;
     case 'PREPARING':
       statusBadge = '👨‍🍳 Preparing Your Order';
       statusMessage = `Your food / items are now being freshly prepared by ${order.businessName}.`;
@@ -223,7 +230,9 @@ async function persistDispatchAudit(args: {
  */
 export async function dispatchTransactionalWhatsApp(
   phone: string,
-  message: string
+  message: string,
+  template?: OrderMessageTemplate,
+  provider?: {accessToken: string; phoneNumberId: string}
 ): Promise<{ success: boolean; method: string; error?: string }> {
   const cleanPhone = phone.replace(/\D/g, '');
   const messagePreview = (message || '').slice(0, 200);
@@ -242,8 +251,8 @@ export async function dispatchTransactionalWhatsApp(
   }
 
   // If Meta WhatsApp Business API token is present in environment
-  const wabaToken = process.env.WHATSAPP_API_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const wabaToken = provider ? provider.accessToken : process.env.WHATSAPP_API_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = provider ? provider.phoneNumberId : process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!wabaToken || !phoneNumberId) {
     const result = {
@@ -265,19 +274,19 @@ export async function dispatchTransactionalWhatsApp(
 
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`,
       {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${wabaToken}`,
           'Content-Type': 'application/json',
         },
+        signal: AbortSignal.timeout(15000),
         body: JSON.stringify({
           messaging_product: 'whatsapp',
           recipient_type: 'individual',
-          to: cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`,
-          type: 'text',
-          text: { preview_url: true, body: message },
+          to: cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone,
+          ...(template ? {type:'template',template:{name:template.name,language:{code:template.language},components:[{type:'body',parameters:template.parameters.map(text=>({type:'text',text}))}]}} : {type:'text',text:{preview_url:true,body:message}}),
         }),
       }
     );
@@ -300,15 +309,11 @@ export async function dispatchTransactionalWhatsApp(
       return result;
     }
 
-    // Success — extract the WABA message id for the audit row.
-    let wabaMessageId = synthesizeMessageId('ok', cleanPhone);
-    try {
-      const data = await res.json();
-      if (data?.messages?.[0]?.id) {
-        wabaMessageId = String(data.messages[0].id);
-      }
-    } catch {
-      // Response body wasn't JSON — keep the synthesized id.
+    // An HTTP response without a provider message ID is not an accepted send.
+    const data = await res.json();
+    const wabaMessageId = data?.messages?.[0]?.id;
+    if (typeof wabaMessageId !== 'string' || !wabaMessageId) {
+      throw new Error('WhatsApp did not acknowledge the message.');
     }
 
     const result = { success: true, method: 'waba_api' };

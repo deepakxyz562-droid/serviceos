@@ -246,6 +246,11 @@ export function setupNotificationListeners(
       const data = response.notification.request.content.data as Record<string, any> | undefined;
       if (!data) return;
 
+      if (data.orderId) {
+        onNavigate('/(tabs)/orders');
+        return;
+      }
+
       if (data.url) {
         // e.g. /chat/c-123 or /lead/lead-456 or /bookings
         onNavigate(data.url);
