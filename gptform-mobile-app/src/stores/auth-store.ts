@@ -307,6 +307,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           name,
           email,
           password,
+          mode: 'standalone',
           businessName: companyName || `${name}'s Workspace`,
           industry,
           country,
@@ -350,7 +351,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       // Google token exchange and returns a real session token. We never
       // fabricate a user locally.
       const redirectUrl = Linking.createURL('auth-callback');
-      const authUrl = `${API_BASE_URL}/api/auth/google?mode=mobile&redirect=${encodeURIComponent(redirectUrl)}`;
+      const authUrl = `${API_BASE_URL}/api/auth/google?mode=mobile&signupMode=standalone&redirect=${encodeURIComponent(redirectUrl)}`;
 
       const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
 

@@ -1,4 +1,5 @@
 'use client';
+import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -584,17 +585,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     ((auth.tenant as any)?.signupMode === 'listing_only' ||
      (auth.tenant as any)?.listingTier === 'claimed_free');
 
-  const isStandalone =
-    !isSuperAdmin &&
-    !isEmployee &&
-    (!auth.user?.tenantId ||
-     (auth.tenant as any)?.signupMode === 'standalone' ||
-     (auth.tenant as any)?.plan === 'standalone_starter' ||
-     (auth.tenant as any)?.plan === 'standalone_business' ||
-     (auth.tenant as any)?.productType === 'forms' ||
-     (auth.workspace as any)?.productType === 'forms' ||
-     String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
-     (auth.user as any)?.role === 'standalone_user');
+  const isStandalone = !isEmployee && isGptFormWorkspace(auth);
 
   // Fetch menu visibility for non-superadmin users. Superadmin bypasses the
   // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
@@ -721,7 +712,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
     // Capability-based dynamic navigation filtering
     const capabilities = blueprint?.capabilities;
-    if (capabilities && !isSuperAdmin && !isListingOnly) {
+    if (capabilities && isStandalone && !isSuperAdmin && !isListingOnly) {
       sections = sections
         .map((section) => ({
           ...section,

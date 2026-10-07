@@ -137,7 +137,7 @@ export async function GET() {
     // Fetch full user data from DB
     const user = await db.user.findUnique({
       where: { id: authUser.id },
-      include: { tenant: true },
+      include: { tenant: true, workspace: true },
     });
 
     if (!user) {
@@ -173,6 +173,7 @@ export async function GET() {
         // Include employeeId from JWT if present (set during employee portal login)
         employeeId: authUser.employeeId || null,
       },
+      workspace: user.workspace ? {id:user.workspace.id,productType:user.workspace.productType,name:user.workspace.name}:null,
       tenant: user.tenant
         ? {
             id: user.tenant.id,

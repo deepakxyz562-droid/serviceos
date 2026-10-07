@@ -24,7 +24,7 @@ describe('merchant Home', () => {
     render(<BusinessHomeView />);
     await screen.findByText('₹250.00');
     expect(screen.getByRole('heading', { name: 'Sharma Shop' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Balance/ })).toHaveTextContent('—');
+    expect(screen.queryByRole('button', { name: /Balance/ })).not.toBeInTheDocument();
     expect(screen.queryByText('Ava')).not.toBeInTheDocument();
     expect(screen.queryByText('Quick Shortcuts')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add Product' }));
@@ -35,8 +35,8 @@ describe('merchant Home', () => {
     mocks.state.blueprint.language = 'hi';
     render(<BusinessHomeView />);
     await screen.findByText('₹250.00');
-    expect(screen.getByText('लेना है')).toBeInTheDocument();
-    expect(screen.getByText('देना है')).toBeInTheDocument();
+    expect(screen.queryByText('लेना है')).not.toBeInTheDocument();
+    expect(screen.queryByText('देना है')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'सामान जोड़ें' })).toBeInTheDocument();
   });
   it('shows an actionable setup state for a new business', async () => {

@@ -6,45 +6,23 @@ import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
 
 export const runtime = 'nodejs';
 
-/**
- * GET & PATCH /api/commerce/inventory
- *
- * Phase 2 migration: now reads/writes the real `InventoryItem` Prisma model
- * (with companion `StockTransaction` for audit + `LowStockAlert` for proactive
- * restock notifications). The legacy `catalogJson[i].stock` JSON blob is no
- * longer the source of truth for stock.
- *
- * Response shapes are unchanged for backward compatibility with any consumer
- * that reads this endpoint (the `commerceInventory` path is registered in
- * `gptform-mobile-app/src/lib/constants.ts` — currently no mobile screen
- * consumes it, but the shape stays stable so a future screen can use it
- * directly).
- */
+/** Catalog products and tracked quantities share one Products screen. */
 
 interface InventoryListResponseItem {
   id: string;
   name: string;
   price: number;
   category: string;
-  stock: number;
+  stock: number | null;
+  totalStock: number | null;
+  productId?: string;
   minStock: number;
   isLowStock: boolean;
   imageUrl?: string | null;
   isActive: boolean;
 }
 
-/**
- * GET /api/commerce/inventory
- *
- * Fallback decision (documented): when no `InventoryItem` rows exist for the
- * tenant yet, we fall back to reading the catalog from `catalogJson` and
- * surface each product with `stock: 0` and `minStock: 0`. This keeps the
- * inventory screen populated with the merchant's catalog (so they can see
- * "what needs to be stocked") rather than showing an opaque empty state.
- * The stock numbers are honest (0 — not the legacy magic 50). Phase 3 will
- * add a one-time "seed InventoryItems from catalog" migration action that
- * removes this fallback entirely.
- */
+/** Untracked quantities are null; missing stock records never imply zero. */
 export async function GET(req: NextRequest) {
   try {
     const { business } = await requireQuoteFlowBusiness(req);
@@ -55,59 +33,19 @@ export async function GET(req: NextRequest) {
       orderBy: { name: 'asc' },
     });
 
-    let enriched: InventoryListResponseItem[];
-
-    if (items.length > 0) {
-      enriched = items.map((it) => {
-        const stock = it.availableStock; // honour reservations
-        const isLowStock = it.reorderLevel > 0 && stock <= it.reorderLevel;
-        return {
-          id: it.id,
-          name: it.name,
-          price: it.salePrice,
-          category: it.category || 'General',
-          stock,
-          minStock: it.reorderLevel,
-          isLowStock,
-          imageUrl: it.imageUrl,
-          isActive: it.isActive,
-        };
-      });
-    } else {
-      // Fallback: read catalog products and report them as 0-stock. Honest
-      // — no fake "50" magic number. The merchant can still see their
-      // catalog and convert items to tracked InventoryItems via PATCH.
-      const config = await db.gptformCommerceConfig.findFirst({
-        where: {
-          OR: [
-            { businessId: business.id },
-            ...(business.tenantId ? [{ businessId: business.tenantId }] : []),
-          ],
-        },
-      });
-      let catalog: any[] = [];
-      if (config?.catalogJson) {
-        try {
-          catalog = JSON.parse(config.catalogJson);
-        } catch {
-          catalog = [];
-        }
-      }
-      enriched = catalog.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        price: Number(p.price) || 0,
-        category: p.category || 'General',
-        stock: 0,
-        minStock: 0,
-        isLowStock: false,
-        imageUrl: p.imageUrl,
-        isActive: p.isActive !== false,
-      }));
-    }
+    const config = await db.gptformCommerceConfig.findFirst({where:{businessId:business.id}})
+      || (business.tenantId ? await db.gptformCommerceConfig.findFirst({where:{businessId:business.tenantId}}):null);
+    const catalog: Array<{id:string;name:string;price:number;category?:string;sku?:string;imageUrl?:string;isActive?:boolean}> = JSON.parse(config?.catalogJson || '[]');
+    const linked = new Set<string>();
+    const enriched: InventoryListResponseItem[] = catalog.map(product=>{
+      const inventory=items.find(i=>i.id===product.id||i.sku===product.id||i.sku===`CAT-${product.id}`||i.sku===`${tenantId}:${product.id}`||(product.sku&&i.sku===product.sku));
+      if(inventory)linked.add(inventory.id);
+      return {id:inventory?.id||product.id,productId:product.id,name:product.name,price:Number(product.price),category:product.category||'General',stock:inventory?.availableStock??null,totalStock:inventory?.totalStock??null,minStock:inventory?.reorderLevel||0,isLowStock:!!inventory&&inventory.reorderLevel>0&&inventory.availableStock<=inventory.reorderLevel,imageUrl:product.imageUrl,isActive:product.isActive!==false};
+    });
+    for(const inventory of items.filter(i=>!linked.has(i.id)))enriched.push({id:inventory.id,name:inventory.name,price:inventory.salePrice,category:inventory.category||'General',stock:inventory.availableStock,totalStock:inventory.totalStock,minStock:inventory.reorderLevel,isLowStock:inventory.reorderLevel>0&&inventory.availableStock<=inventory.reorderLevel,imageUrl:inventory.imageUrl,isActive:inventory.isActive});
 
     const lowStockItems = enriched.filter((i) => i.isLowStock);
-    const totalValuation = enriched.reduce((sum, i) => sum + i.stock * i.price, 0);
+    const totalValuation = enriched.reduce((sum, i) => sum + (i.stock ?? 0) * i.price, 0);
 
     return NextResponse.json({
       items: enriched,

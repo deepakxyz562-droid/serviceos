@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
+import { RequestTracker } from '../../shared/money';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 import { API_PATHS } from '@/lib/constants';
 
 export interface ProductItem {
@@ -35,7 +37,31 @@ export interface ProductItem {
 
 export default function MobileCatalogScreen() {
   const router = useRouter();
-  const { create } = useLocalSearchParams<{ create?: string }>();
+  const { create, filter } = useLocalSearchParams<{ create?: string; filter?: string }>();
+  const blueprint=useBlueprintStore(s=>s.blueprint);
+  const countryPack=useBlueprintStore(s=>s.countryPack);
+  const t=(en:string,hi:string)=>blueprint.language==='hi'?hi:en;
+  const [quantities,setQuantities]=useState<Record<string,{id:string;stock:number|null;totalStock?:number|null;minStock:number}>>({});
+  const [stockError,setStockError]=useState(false);
+  const [saveError,setSaveError]=useState<string|null>(null);
+  const newItemId=useRef(`product-${Date.now()}-${Math.random().toString(36).slice(2,10)}`);
+  const [stockProduct,setStockProduct]=useState<ProductItem|null>(null);
+  const [stockQuantity,setStockQuantity]=useState('');
+  const [stockSaving,setStockSaving]=useState(false);
+  const [lowOnly,setLowOnly]=useState(filter==='low-stock');
+  const stockTracker=useRef(new RequestTracker());
+  const saveBusy=useRef(false);
+  const loadStock=async()=>{try{const data=await apiRequest<{items:Array<{id:string;productId?:string;stock:number|null;totalStock?:number|null;minStock:number}>}>(API_PATHS.commerceInventory);setQuantities(Object.fromEntries(data.items.map(i=>[i.productId||i.id,{id:i.id,stock:i.stock,totalStock:i.totalStock,minStock:i.minStock}])));setStockError(false);}catch{setStockError(true);}};
+  const saveStock=async()=>{
+    const quantity=Number(stockQuantity);
+    if(!stockProduct||stockSaving)return;
+    if(!stockQuantity.trim()||!Number.isSafeInteger(quantity)||quantity<0){setSaveError(t('Enter a valid whole quantity.','सही पूर्ण मात्रा भरें।'));return;}
+    setSaveError(null);
+    setStockSaving(true);
+    const payload={productId:quantities[stockProduct.id]?.id||stockProduct.id,newStock:quantity};
+    try{await apiRequest(API_PATHS.commerceInventory,{method:'PATCH',body:payload,headers:{'Idempotency-Key':stockTracker.current.for(payload)}});stockTracker.current.clear();setStockProduct(null);await loadStock();}
+    catch(e:any){setSaveError(e.message);Alert.alert(t('Stock not saved','स्टॉक सेव नहीं हुआ'),e.message);}finally{setStockSaving(false);}
+  };
   const [catalog, setCatalog] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -91,25 +117,33 @@ export default function MobileCatalogScreen() {
 
   useEffect(() => {
     fetchCatalog();
+    if(blueprint.capabilities.inventory)void loadStock();
   }, []);
 
   const saveCatalogToBackend = async (updated: ProductItem[]) => {
-    setSaving(true);
+    if(saveBusy.current||loading||error)return false;
+    setSaveError(null);
+    saveBusy.current=true;setSaving(true);
     try {
       await apiRequest(API_PATHS.commerceConfig, {
         method: 'PATCH',
         body: { catalogJson: updated },
       });
+      setCatalog(updated);return true;
     } catch (err: any) {
-      Alert.alert('Save Failed', err?.message || 'Could not save catalog changes to server.');
+      setSaveError(err?.message || t('Could not save changes. Please retry.','बदलाव सेव नहीं हुए। फिर कोशिश करें।'));
+      Alert.alert(t('Save failed','सेव नहीं हुआ'), err?.message || 'Could not save catalog changes to server.');
+      return false;
     } finally {
-      setSaving(false);
+      saveBusy.current=false;setSaving(false);
     }
   };
 
   // Open Modal for Add
   const handleOpenAddModal = () => {
     hapticFeedback.light();
+    newItemId.current=`product-${Date.now()}-${Math.random().toString(36).slice(2,10)}`;
+    setSaveError(null);
     setEditingItem(null);
     setFormName('');
     setFormPrice('');
@@ -124,6 +158,7 @@ export default function MobileCatalogScreen() {
   // Open Modal for Edit
   const handleOpenEditModal = (item: ProductItem) => {
     hapticFeedback.light();
+    setSaveError(null);
     setEditingItem(item);
     setFormName(item.name);
     setFormPrice(String(item.price));
@@ -136,14 +171,16 @@ export default function MobileCatalogScreen() {
   };
 
   // Save Modal Form (Add or Edit)
-  const handleSaveModal = () => {
+  const handleSaveModal = async () => {
+    if(saveBusy.current)return;
     if (!formName.trim() || !formPrice.trim()) {
       Alert.alert('Required Fields', 'Please enter both item name and price.');
       return;
     }
 
     hapticFeedback.medium();
-    const parsedPrice = parseFloat(formPrice) || 0;
+    const parsedPrice = Number(formPrice);
+    if(!Number.isFinite(parsedPrice)||parsedPrice<0||Math.abs(parsedPrice*100-Math.round(parsedPrice*100))>0.00001){Alert.alert(t('Invalid price','सही कीमत भरें'),t('Enter a price with up to two decimal places.','दशमलव के बाद अधिकतम दो अंक भरें।'));return;}
 
     let updated: ProductItem[];
     if (editingItem) {
@@ -163,7 +200,7 @@ export default function MobileCatalogScreen() {
       );
     } else {
       const newItem: ProductItem = {
-        id: Date.now().toString(),
+        id: newItemId.current,
         name: formName.trim(),
         price: parsedPrice,
         category: formCategory.trim() || 'General',
@@ -176,9 +213,7 @@ export default function MobileCatalogScreen() {
       updated = [...catalog, newItem];
     }
 
-    setCatalog(updated);
-    setModalVisible(false);
-    saveCatalogToBackend(updated);
+    if(await saveCatalogToBackend(updated))setModalVisible(false);
   };
 
   // Toggle in-stock directly from card
@@ -187,8 +222,7 @@ export default function MobileCatalogScreen() {
     const updated = catalog.map((item) =>
       item.id === id ? { ...item, isActive: !item.isActive } : item
     );
-    setCatalog(updated);
-    saveCatalogToBackend(updated);
+    void saveCatalogToBackend(updated);
   };
 
   // Delete product
@@ -202,8 +236,7 @@ export default function MobileCatalogScreen() {
         onPress: () => {
           hapticFeedback.warning();
           const updated = catalog.filter((p) => p.id !== id);
-          setCatalog(updated);
-          saveCatalogToBackend(updated);
+          void saveCatalogToBackend(updated);
         },
       },
     ]);
@@ -268,9 +301,11 @@ export default function MobileCatalogScreen() {
         selectedCategory === 'All' ||
         (item.category && item.category.toLowerCase() === selectedCategory.toLowerCase());
 
-      return matchesSearch && matchesCat;
+      const quantity=quantities[item.id];
+      const low=quantity?.stock!=null&&quantity.minStock>0&&quantity.stock<=quantity.minStock;
+      return matchesSearch && matchesCat && (!lowOnly||low);
     });
-  }, [catalog, searchQuery, selectedCategory]);
+  }, [catalog, searchQuery, selectedCategory,lowOnly,quantities]);
 
   const activeCount = useMemo(() => catalog.filter((c) => c.isActive !== false).length, [catalog]);
 
@@ -283,14 +318,16 @@ export default function MobileCatalogScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Products & Menu</Text>
+          <Text style={styles.headerTitle}>{t('Products','सामान')}</Text>
           <Text style={styles.headerSubtitle}>
-            {catalog.length} items · {activeCount} in stock
+            {catalog.length} items · {activeCount} {t('available for sale','बिक्री के लिए उपलब्ध')}
           </Text>
         </View>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity
+          {blueprint.capabilities.onlineStore&&<TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t('Connect store','दुकान कनेक्ट करें')}
             onPress={() => {
               hapticFeedback.light();
               setSyncModalVisible(true);
@@ -299,10 +336,10 @@ export default function MobileCatalogScreen() {
             activeOpacity={0.7}
           >
             <MaterialIcons name="sync" size={20} color="#0284c7" />
-          </TouchableOpacity>
+          </TouchableOpacity>}
 
           <TouchableOpacity
-            onPress={handleOpenAddModal}
+            accessibilityRole="button" accessibilityLabel={t('Add product','सामान जोड़ें')} disabled={loading||!!error||saving} onPress={handleOpenAddModal}
             style={styles.addBtn}
             activeOpacity={0.7}
           >
@@ -311,13 +348,15 @@ export default function MobileCatalogScreen() {
         </View>
       </View>
 
+      {blueprint.capabilities.inventory&&<View style={{flexDirection:'row',gap:10,paddingHorizontal:20,paddingBottom:12}}>{[false,true].map(low=><TouchableOpacity key={String(low)} accessibilityRole="button" onPress={()=>setLowOnly(low)} style={{padding:12,borderRadius:20,backgroundColor:lowOnly===low?'#dcfce7':'#f1f5f9'}}><Text style={{color:'#14532d',fontWeight:'600'}}>{low?t('Low stock','कम स्टॉक'):t('All products','सभी सामान')}</Text></TouchableOpacity>)}</View>}
+      <Modal visible={!!stockProduct} transparent animationType="slide" onRequestClose={()=>{if(!stockSaving)setStockProduct(null);}}><KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':undefined} style={{flex:1,justifyContent:'flex-end',backgroundColor:'#0006'}}><View style={{padding:24,gap:16,backgroundColor:'white',borderTopLeftRadius:24,borderTopRightRadius:24,paddingBottom:40}}><Text style={{fontSize:22,fontWeight:'700'}}>{stockProduct?.name}</Text><Text>{t('Quantity currently in your shop, including reserved items','दुकान में कुल मात्रा, आरक्षित सामान सहित')}</Text>{saveError&&<Text accessibilityRole="alert" style={{color:'#b91c1c'}}>{saveError}</Text>}<TextInput accessibilityLabel={t('Stock quantity','स्टॉक की मात्रा')} keyboardType="number-pad" value={stockQuantity} onChangeText={setStockQuantity} style={{minHeight:52,borderWidth:1,borderColor:'#cbd5e1',borderRadius:12,padding:14,fontSize:20}}/><TouchableOpacity accessibilityRole="button" disabled={stockSaving} onPress={saveStock} style={{minHeight:52,backgroundColor:'#047857',borderRadius:12,alignItems:'center',justifyContent:'center'}}><Text style={{color:'white',fontWeight:'700'}}>{stockSaving?'…':t('Save quantity','मात्रा सेव करें')}</Text></TouchableOpacity><TouchableOpacity disabled={stockSaving} onPress={()=>setStockProduct(null)} style={{padding:14,alignItems:'center'}}><Text>{t('Cancel','रद्द करें')}</Text></TouchableOpacity></View></KeyboardAvoidingView></Modal>
       {/* Search Bar */}
       <View style={styles.searchSection}>
         <View style={styles.searchBar}>
           <MaterialIcons name="search" size={20} color="#94a3b8" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search items by name, SKU or category..."
+            placeholder={t('Search products…','सामान खोजें…')}
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -331,7 +370,7 @@ export default function MobileCatalogScreen() {
       </View>
 
       {/* WooCommerce & Shopify Sync Banner */}
-      <View style={styles.syncBanner}>
+      {blueprint.capabilities.onlineStore&&<View style={styles.syncBanner}>
         <View style={styles.syncBannerContent}>
           <View style={styles.syncBannerIconWrap}>
             <MaterialIcons name="cloud-sync" size={22} color="#0284c7" />
@@ -353,7 +392,7 @@ export default function MobileCatalogScreen() {
             <Text style={styles.syncBannerBtnText}>Connect</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </View>}
 
       {/* Category Filter Chips */}
       {categories.length > 1 && (
@@ -430,7 +469,7 @@ export default function MobileCatalogScreen() {
           </Text>
           <TouchableOpacity
             style={styles.emptyAddBtn}
-            onPress={handleOpenAddModal}
+            accessibilityRole="button" accessibilityLabel={t('Add product','सामान जोड़ें')} disabled={loading||!!error||saving} onPress={handleOpenAddModal}
             activeOpacity={0.8}
           >
             <MaterialIcons name="add" size={20} color="#ffffff" style={{ marginRight: 6 }} />
@@ -491,8 +530,9 @@ export default function MobileCatalogScreen() {
                     </Text>
                   ) : null}
 
+                  {blueprint.capabilities.inventory&&<TouchableOpacity accessibilityRole="button" disabled={stockError} onPress={()=>{setStockProduct(item);setSaveError(null);const stock=quantities[item.id]?.totalStock??quantities[item.id]?.stock;setStockQuantity(stock==null?'':String(stock));}} style={{paddingVertical:12}}><Text style={{color:'#047857',fontWeight:'600'}}>{stockError?t('Stock unavailable','स्टॉक उपलब्ध नहीं'):quantities[item.id]?.stock==null?t('Set stock quantity','स्टॉक की मात्रा जोड़ें'):`${t('In stock','स्टॉक')}: ${quantities[item.id].stock}`}  ·  {t('Update','बदलें')}</Text></TouchableOpacity>}
                   <View style={styles.priceRow}>
-                    <Text style={styles.itemPrice}>₹{Number(item.price).toFixed(2)}</Text>
+                    <Text style={styles.itemPrice}>{countryPack.currency.symbol}{Number(item.price).toFixed(2)}</Text>
 
                     {/* Stock Status Badge & Switch */}
                     <TouchableOpacity
@@ -509,7 +549,7 @@ export default function MobileCatalogScreen() {
                           inStock ? styles.stockBadgeTextIn : styles.stockBadgeTextOut,
                         ]}
                       >
-                        {inStock ? 'In Stock' : 'Out of Stock'}
+                        {inStock ? t('Available','उपलब्ध') : t('Hidden','छिपा हुआ')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -518,7 +558,7 @@ export default function MobileCatalogScreen() {
                 {/* Actions (Edit / Delete) */}
                 <View style={styles.actionCol}>
                   <TouchableOpacity
-                    onPress={() => handleOpenEditModal(item)}
+                    accessibilityRole="button" accessibilityLabel={`${t('Edit','बदलें')} ${item.name}`} onPress={() => handleOpenEditModal(item)}
                     style={styles.actionBtn}
                     activeOpacity={0.7}
                   >
@@ -553,7 +593,7 @@ export default function MobileCatalogScreen() {
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>
-                {editingItem ? 'Edit Product' : 'Add New Product'}
+                {editingItem ? t('Edit product','सामान बदलें') : t('Add product','सामान जोड़ें')}
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <MaterialIcons name="close" size={24} color="#64748b" />
@@ -561,17 +601,17 @@ export default function MobileCatalogScreen() {
             </View>
 
             <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Item Name *</Text>
+              <Text style={styles.inputLabel}>{t('Product name *','सामान का नाम *')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g. Sourdough Loaf 500g"
+                placeholder={t('e.g. Basmati rice 1 kg','जैसे बासमती चावल 1 किलो')}
                 value={formName}
                 onChangeText={setFormName}
               />
 
               <View style={styles.formRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Price (₹) *</Text>
+                  <Text style={styles.inputLabel}>{t('Price','कीमत')} ({countryPack.currency.symbol}) *</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="180"
@@ -581,10 +621,10 @@ export default function MobileCatalogScreen() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Category</Text>
+                  <Text style={styles.inputLabel}>{t('Category','श्रेणी')}</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. Breads"
+                    placeholder={t('e.g. Grocery','जैसे किराना')}
                     value={formCategory}
                     onChangeText={setFormCategory}
                   />
@@ -602,10 +642,10 @@ export default function MobileCatalogScreen() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>In Stock</Text>
+                  <Text style={styles.inputLabel}>{t('Available for sale','बिक्री के लिए उपलब्ध')}</Text>
                   <View style={styles.switchRow}>
                     <Text style={styles.switchLabel}>
-                      {formIsActive ? 'Available' : 'Unavailable'}
+                      {formIsActive ? t('Available','उपलब्ध') : t('Hidden','छिपा हुआ')}
                     </Text>
                     <Switch
                       value={formIsActive}
@@ -616,7 +656,7 @@ export default function MobileCatalogScreen() {
                 </View>
               </View>
 
-              <Text style={styles.inputLabel}>Image URL (optional)</Text>
+              <Text style={styles.inputLabel}>{t('Image URL (optional)','तस्वीर का लिंक (वैकल्पिक)')}</Text>
               <TextInput
                 style={styles.input}
                 placeholder="https://images.unsplash.com/..."
@@ -625,7 +665,7 @@ export default function MobileCatalogScreen() {
                 autoCapitalize="none"
               />
 
-              <Text style={styles.inputLabel}>Description / Ingredients</Text>
+              <Text style={styles.inputLabel}>{t('Description (optional)','विवरण (वैकल्पिक)')}</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Details, ingredients, allergens..."
@@ -635,6 +675,7 @@ export default function MobileCatalogScreen() {
                 onChangeText={setFormDescription}
               />
 
+              {saveError&&<Text accessibilityRole="alert" style={{color:'#b91c1c',marginVertical:12}}>{saveError}</Text>}
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
@@ -645,11 +686,12 @@ export default function MobileCatalogScreen() {
 
                 <TouchableOpacity
                   style={styles.modalSaveBtn}
-                  onPress={handleSaveModal}
+                  accessibilityRole="button" onPress={handleSaveModal}
+                  disabled={saving||loading||!!error}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.modalSaveText}>
-                    {editingItem ? 'Save Changes' : 'Create Item'}
+                    {saving?t('Saving…','सेव हो रहा है…'):editingItem?t('Save changes','बदलाव सेव करें'):t('Add product','सामान जोड़ें')}
                   </Text>
                 </TouchableOpacity>
               </View>

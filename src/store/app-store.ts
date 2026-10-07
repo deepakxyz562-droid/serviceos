@@ -1,3 +1,4 @@
+import { isGptFormWorkspace } from '../../shared/product-context';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ViewType } from '@/types/workflow';
@@ -203,9 +204,18 @@ export const useAppStore = create<AppState>()(
   setAuth: (auth: AuthState) => {
     const bp = auth?.tenant ? resolveTenantBlueprint(auth.tenant) : null;
     const cp = bp ? getCountryPack(bp.country) : getCountryPack('US');
-    set({
-      auth,
-      blueprint: bp, countryPack: cp,
+    set((previous) => {
+      const sameWorkspace = previous.auth.user?.id === auth.user?.id
+        && previous.auth.user?.workspaceId === auth.user?.workspaceId
+        && isGptFormWorkspace(previous.auth) === isGptFormWorkspace(auth);
+      const homeView = isGptFormWorkspace(auth) ? 'formsDashboard' : 'dashboard';
+      return {
+        auth,
+        currentView: sameWorkspace ? previous.currentView : homeView,
+        activeView: sameWorkspace ? previous.activeView : homeView,
+        blueprint: bp,
+        countryPack: cp,
+      };
     });
   },
   setAuthHydrated: (hydrated: boolean) => set({ authHydrated: hydrated }),

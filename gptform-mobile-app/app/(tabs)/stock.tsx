@@ -1,1 +1,1 @@
-export { default } from '../stock';
+export { default } from '../catalog';

@@ -1,4 +1,5 @@
 'use client';
+import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -188,17 +189,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
 
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin');
   const isEmployee = auth.user?.role === 'employee';
-  const isStandalone =
-    !isSuperAdmin &&
-    !isEmployee &&
-    (!auth.user?.tenantId ||
-     (auth.tenant as any)?.signupMode === 'standalone' ||
-     (auth.tenant as any)?.plan === 'standalone_starter' ||
-     (auth.tenant as any)?.plan === 'standalone_business' ||
-     (auth.tenant as any)?.productType === 'forms' ||
-     (auth.workspace as any)?.productType === 'forms' ||
-     String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
-     (auth.user as any)?.role === 'standalone_user');
+  const isStandalone = isGptFormWorkspace(auth);
 
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 

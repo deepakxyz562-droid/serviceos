@@ -114,6 +114,7 @@ export function CompanyLoginForm({
             isAuthenticated: true,
             user: data.user,
             tenant: data.tenant || null,
+            workspace: data.workspace || null,
             token,
             isCustomer: role === 'customer' || existingData.isCustomer === true,
             portalToken: existingData.portalToken,
@@ -130,6 +131,7 @@ export function CompanyLoginForm({
         isAuthenticated: true,
         user: data.user,
         tenant: data.tenant || null,
+            workspace: data.workspace || null,
       });
 
       toast.success(`Welcome${data.user?.name ? `, ${data.user.name}` : ''}!`);

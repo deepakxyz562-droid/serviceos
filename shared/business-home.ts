@@ -52,7 +52,7 @@ export const HOME_DESTINATIONS: Record<HomeAction, HomeDestination> = {
   opening: { view: 'formsDashboard', native: '/money?kind=OPENING' },
   sale: { view: 'commerce', tab: 'pos', native: '/pos' },
   products: { view: 'commerce', tab: 'catalog', native: '/catalog?create=1' },
-  stock: { view: 'inventory', native: '/stock' },
+  stock: { view: 'commerce', tab: 'catalog', native: '/catalog?filter=low-stock' },
   khata: { view: 'commerce', tab: 'khata', native: '/khata' },
   expenses: { view: 'commerce', tab: 'daybook', native: '/expenses?create=1' },
   orders: { view: 'commerce', tab: 'orders', native: '/(tabs)/orders' },
@@ -78,17 +78,17 @@ const metricCapabilities: Partial<Record<HomeMetric, Capability>> = {
   quotesDue: 'quotes', invoiceDue: 'invoicing',
 };
 interface HomePreset { metrics: HomeMetric[]; actions: HomeAction[]; tabs: HomeAction[] }
-const money: HomeMetric[] = ['sales', 'moneyIn', 'moneyOut', 'balance', 'toCollect', 'toPay', 'lowStock'];
+const money: HomeMetric[] = ['sales', 'toCollect', 'lowStock'];
 export const HOME_PRESETS: Record<BusinessType, HomePreset> = {
-  grocery: { metrics: money, actions: ['sale', 'products', 'money_in', 'money_out', 'khata', 'opening'], tabs: ['sale', 'stock', 'khata'] },
-  retail: { metrics: money, actions: ['sale', 'products', 'stock', 'money_in', 'money_out', 'opening'], tabs: ['sale', 'stock', 'customers'] },
+  grocery: { metrics: money, actions: ['sale', 'products'], tabs: ['sale', 'products', 'khata'] },
+  retail: { metrics: money, actions: ['sale', 'products'], tabs: ['sale', 'products', 'customers'] },
   restaurant: { metrics: ['sales', 'activeOrders', 'tables', 'kitchenWaiting'], actions: ['orders', 'tables', 'kitchen', 'expenses'], tabs: ['orders', 'tables', 'kitchen'] },
   salon: { metrics: ['appointments', 'sales', 'moneyIn', 'invoiceDue'], actions: ['bookings', 'sale', 'customers', 'invoices'], tabs: ['bookings', 'customers', 'sale'] },
   services: { metrics: ['jobs', 'appointments', 'moneyIn', 'invoiceDue'], actions: ['jobs', 'quotes', 'bookings', 'customers'], tabs: ['jobs', 'bookings', 'customers'] },
   freelancer: { metrics: ['quotesDue', 'invoiceDue', 'moneyIn', 'appointments'], actions: ['quotes', 'invoices', 'customers', 'bookings'], tabs: ['quotes', 'invoices', 'customers'] },
   online_store: { metrics: ['activeOrders', 'sales', 'invoiceDue', 'lowStock'], actions: ['orders', 'products', 'store'], tabs: ['orders', 'products', 'store'] },
-  wholesale: { metrics: ['activeOrders', 'sales', 'toCollect', 'toPay', 'lowStock'], actions: ['orders', 'quotes', 'stock', 'khata'], tabs: ['orders', 'stock', 'khata'] },
-  manufacturing: { metrics: ['production', 'materials', 'activeOrders', 'lowStock'], actions: ['production', 'stock', 'orders', 'quotes'], tabs: ['production', 'stock', 'orders'] },
+  wholesale: { metrics: ['activeOrders', 'sales', 'toCollect', 'toPay', 'lowStock'], actions: ['orders', 'quotes', 'stock', 'khata'], tabs: ['orders', 'products', 'khata'] },
+  manufacturing: { metrics: ['production', 'materials', 'activeOrders', 'lowStock'], actions: ['production', 'stock', 'orders', 'quotes'], tabs: ['products', 'orders', 'quotes'] },
   other: { metrics: ['sales', 'moneyIn', 'invoiceDue'], actions: ['sale', 'invoices', 'customers'], tabs: ['sale', 'invoices', 'customers'] },
 };
 
@@ -104,7 +104,7 @@ export function getBusinessHome(blueprint: Pick<TenantBlueprint, 'businessType'>
   if (type !== 'online_store' && blueprint.salesChannels?.some((c) => c === 'online' || c === 'delivery') && allowed('orders') && !metrics.includes('activeOrders')) {
     metrics.push('activeOrders');
   }
-  const candidates = [...preset.tabs, 'orders', 'stock', 'customers', 'invoices', 'bookings'] as HomeAction[];
+  const candidates = [...preset.tabs, 'orders', 'products', 'customers', 'invoices', 'bookings'] as HomeAction[];
   const tabs = candidates.filter((a, index) => a !== 'production' && candidates.indexOf(a) === index && allowed(actionCapabilities[a])).slice(0, 3);
   return { type, language: blueprint.language === 'hi' ? 'hi' as const : 'en' as const, metrics, actions, tabs };
 }

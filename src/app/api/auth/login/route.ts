@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Find user by email
     const user = await db.user.findUnique({
       where: { email },
-      include: { tenant: true },
+      include: { tenant: true, workspace: true },
     });
 
     if (!user || !user.passwordHash) {
@@ -138,6 +138,7 @@ export async function POST(request: NextRequest) {
         },
         token,
         refreshToken: tokens.refreshToken,
+        workspace: user.workspace ? {id:user.workspace.id,productType:user.workspace.productType,name:user.workspace.name} : null,
         tenant: user.tenant
           ? {
               id: user.tenant.id,

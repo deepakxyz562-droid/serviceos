@@ -488,10 +488,10 @@ export function getStandaloneNavSectionsForBlueprint(blueprint?: {
   sections.push({
     title: 'Apps & Add-ons',
     items: [
-      { view: 'agentStudio', label: 'AI Agent Studio', iconName: 'Bot', badge: 'AI' },
-      { view: 'aiReceptionist', label: 'AI Voice Receptionist', iconName: 'PhoneCall', badge: 'VOICE' },
-      { view: 'formBuilder', label: 'Intake Forms', iconName: 'FileInput' },
-      { view: 'omnichannel', label: 'AI Live Inbox', iconName: 'RadioTower' },
+      ...(capabilities.aiAgent ? [{ view: 'agentStudio', label: 'AI Agent Studio', iconName: 'Bot', badge: 'AI' }] : []),
+      ...(capabilities.aiReceptionist ? [{ view: 'aiReceptionist', label: 'AI Voice Receptionist', iconName: 'PhoneCall', badge: 'VOICE' }] : []),
+      ...(capabilities.forms ? [{ view: 'formBuilder', label: 'Intake Forms', iconName: 'FileInput' }] : []),
+      ...(capabilities.whatsapp ? [{ view: 'omnichannel', label: 'Inbox', iconName: 'RadioTower' }] : []),
       { view: 'integrations', label: 'Integrations & Webhooks', iconName: 'Share2' },
     ],
   });

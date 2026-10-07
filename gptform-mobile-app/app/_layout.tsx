@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Stack, router } from 'expo-router';
+import { Stack, router, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,6 +13,7 @@ export { AppErrorBoundary as ErrorBoundary } from '@/components/app-error-bounda
 
 export default function RootLayout() {
   const { isBooted, isAuthenticated, user, bootstrap } = useAuthStore();
+  const segments = useSegments();
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
@@ -60,13 +61,14 @@ export default function RootLayout() {
     // Only navigate when auth state actually transitions (initial boot, login, or explicit logout)
     if (prevAuth === null || prevAuth !== isAuthenticated) {
       if (isAuthenticated) {
-        router.replace('/(tabs)');
+        // Keep a restored session on its requested product/settings deep link.
+        if (prevAuth === false || segments[0] === '(auth)') router.replace('/(tabs)');
         registerForPushNotifications(user?.id);
       } else {
         router.replace('/(auth)/login');
       }
     }
-  }, [isBooted, isAuthenticated, user?.id]);
+  }, [isBooted, isAuthenticated, user?.id, segments]);
 
   useEffect(() => {
     const cleanup = setupNotificationListeners((route) => {

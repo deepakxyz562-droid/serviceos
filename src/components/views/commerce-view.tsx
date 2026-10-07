@@ -204,6 +204,8 @@ export function CommerceView() {
   const [deliveryAreas, setDeliveryAreas] = useState('');
   const [greetingMessage, setGreetingMessage] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
+  const catalogSaveBusy = useRef(false);
+  const newProductId = useRef<string | null>(null);
 
   const currencySymbol = countryPack?.currency?.symbol || config?.currencySymbol || '$';
   const businessSlug = auth?.tenant?.slug || auth?.user?.id || 'demo';
@@ -1401,9 +1403,11 @@ export function CommerceView() {
       }
 
       toast.success('Configuration saved!');
-      loadCommerceData();
+      await loadCommerceData();
+      return true;
     } catch (err: any) {
       toast.error(err.message || 'Failed to save settings');
+      return false;
     } finally {
       setSavingSettings(false);
     }
@@ -1587,6 +1591,7 @@ export function CommerceView() {
 
   // Product Add / Edit Handlers
   const openAddProductModal = () => {
+    newProductId.current = crypto.randomUUID();
     setEditingItem(null);
     setProdName('');
     setProdPrice('');
@@ -1610,13 +1615,18 @@ export function CommerceView() {
     setProductModalOpen(true);
   };
 
-  const handleSaveProductModal = () => {
+  const handleSaveProductModal = async () => {
+    if (catalogSaveBusy.current) return;
     if (!prodName.trim() || !prodPrice.trim()) {
       toast.error('Item name and price are required');
       return;
     }
 
-    const price = parseFloat(prodPrice) || 0;
+    const price = Number(prodPrice);
+    if (!Number.isFinite(price) || price < 0 || Math.abs(price * 100 - Math.round(price * 100)) > 0.00001) {
+      toast.error('Enter a valid price with up to two decimal places.');
+      return;
+    }
     let updatedCatalog: any[];
 
     if (editingItem) {
@@ -1634,10 +1644,10 @@ export function CommerceView() {
             }
           : it
       );
-      toast.success('Product updated');
+
     } else {
       const newItem = {
-        id: Date.now().toString(),
+        id: newProductId.current || (newProductId.current = crypto.randomUUID()),
         name: prodName.trim(),
         price,
         category: prodCategory.trim() || 'General',
@@ -1648,29 +1658,35 @@ export function CommerceView() {
         source: 'manual',
       };
       updatedCatalog = [...catalog, newItem];
-      toast.success('Product created');
+
     }
 
-    setCatalog(updatedCatalog);
-    setProductModalOpen(false);
-    saveSettings(updatedCatalog);
+    catalogSaveBusy.current = true;
+    try {
+      if (await saveSettings(updatedCatalog)) {
+        setCatalog(updatedCatalog);
+        setProductModalOpen(false);
+      }
+    } finally { catalogSaveBusy.current = false; }
   };
 
-  const toggleProductStock = (id: string) => {
+  const toggleProductStock = async (id: string) => {
+    if (catalogSaveBusy.current) return;
     const updated = catalog.map((item) =>
       item.id === id ? { ...item, isActive: !item.isActive } : item
     );
-    setCatalog(updated);
-    saveSettings(updated);
-    toast.success('Stock status updated');
+    catalogSaveBusy.current = true;
+    try { if (await saveSettings(updated)) setCatalog(updated); }
+    finally { catalogSaveBusy.current = false; }
   };
 
-  const removeProduct = (id: string, name: string) => {
+  const removeProduct = async (id: string, name: string) => {
+    if (catalogSaveBusy.current) return;
     if (confirm(`Are you sure you want to remove "${name}" from your catalog?`)) {
       const updated = catalog.filter((p) => p.id !== id);
-      setCatalog(updated);
-      saveSettings(updated);
-      toast.success('Product removed');
+      catalogSaveBusy.current = true;
+      try { if (await saveSettings(updated)) setCatalog(updated); }
+      finally { catalogSaveBusy.current = false; }
     }
   };
 
@@ -2916,7 +2932,7 @@ export function CommerceView() {
                                   inStock ? 'bg-emerald-500' : 'bg-rose-500'
                                 }`}
                               />
-                              {inStock ? 'In Stock' : 'Out of Stock'}
+                              {inStock ? 'Available' : 'Hidden'}
                             </button>
 
                             {/* Edit Button */}
@@ -5931,10 +5947,10 @@ export function CommerceView() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-stone-700">Stock Availability</label>
+                  <label className="text-xs font-bold text-stone-700">Available for sale</label>
                   <div className="mt-1 flex items-center justify-between rounded-lg border border-stone-200 bg-stone-50 px-3 h-9">
                     <span className="text-xs font-semibold text-stone-700">
-                      {prodIsActive ? 'In Stock' : 'Out of Stock'}
+                      {prodIsActive ? 'Available' : 'Hidden'}
                     </span>
                     <button
                       type="button"
@@ -6001,7 +6017,7 @@ export function CommerceView() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={handleSaveProductModal}
+                  disabled={savingSettings} onClick={handleSaveProductModal}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
                 >
                   {editingItem ? 'Save Changes' : 'Create Product'}

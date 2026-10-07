@@ -9,7 +9,7 @@ import { counterCustomerPhone } from '../shared/walk-in-customer';
 describe('shared business workspace', () => {
   it('gives kirana its own navigation and no AI/activity cards', () => {
     const home = getBusinessHome({ businessType: 'grocery', capabilities: resolveBlueprintCapabilities('grocery'), language: 'hi' });
-    expect(home.tabs).toEqual(['sale', 'stock', 'khata']);
+    expect(home.tabs).toEqual(['sale', 'products', 'khata']);
     expect(home.metrics).toContain('toCollect');
     expect(homeText('toCollect', home.language)).toBe('लेना है');
     expect(homeText('toPay', home.language)).toBe('देना है');
@@ -27,7 +27,7 @@ describe('shared business workspace', () => {
   });
   it('adds online orders to kirana without replacing its daily work', () => {
     const home = getBusinessHome({ businessType: 'grocery', salesChannels: ['in_store', 'online'], capabilities: resolveBlueprintCapabilities('grocery', ['in_store', 'online']) });
-    expect(home.tabs).toEqual(['sale', 'stock', 'khata']);
+    expect(home.tabs).toEqual(['sale', 'products', 'khata']);
     expect(home.metrics).toContain('activeOrders');
   });
   it('removes disabled modules from Home, actions and tabs', () => {

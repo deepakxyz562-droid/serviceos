@@ -1,4 +1,5 @@
 'use client';
+import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -181,10 +182,7 @@ export function MarketplaceDashboardRouter() {
 
 function UnifiedSettingsView(props: any) {
   const auth = useAppStore((s) => s.auth);
-  const isStandalone =
-    (auth.tenant as any)?.signupMode === 'forms_standalone' ||
-    String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
-    (auth.user as any)?.role === 'standalone_user';
+  const isStandalone = isGptFormWorkspace(auth);
 
   if (isStandalone) {
     return <GptFormSettingsView {...props} />;
@@ -501,15 +499,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     }
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
-  const isStandaloneTenant =
-    !isSuperAdmin &&
-    ((auth?.tenant as any)?.signupMode === 'standalone' ||
-     (auth?.tenant as any)?.plan === 'standalone_starter' ||
-     (auth?.tenant as any)?.plan === 'standalone_business' ||
-     (auth?.tenant as any)?.productType === 'forms' ||
-     (auth?.workspace as any)?.productType === 'forms' ||
-     String((auth?.tenant as any)?.plan || '').startsWith('standalone') ||
-     (auth?.user as any)?.role === 'standalone_user');
+  const isStandaloneTenant = isGptFormWorkspace(auth);
   const standaloneAllowedViews = useMemo(() => new Set([
     'superadmin',
     // AI Forms, Voice Agents & Creator Suite

@@ -1,4 +1,5 @@
 'use client';
+import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -164,19 +165,7 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
     auth.tenant?.planStatus || 'active'
   );
 
-  const isStandaloneTenant =
-    !isSuperAdmin &&
-    ((!!blueprint && ['owner', 'standalone_user'].includes(auth.user?.role)) ||
-     (auth.tenant as any)?.signupMode === 'standalone' ||
-     (auth.tenant as any)?.plan === 'standalone_starter' ||
-     (auth.tenant as any)?.plan === 'standalone_business' ||
-     (auth.tenant as any)?.productType === 'forms' ||
-     (auth.workspace as any)?.productType === 'forms' ||
-     (auth.tenant as any)?.productType === 'gptform' ||
-     (auth.workspace as any)?.productType === 'gptform' ||
-     String((auth.tenant as any)?.plan || '').startsWith('standalone') ||
-     (auth.user as any)?.role === 'standalone_user' ||
-     ['formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments', 'creatorProfile', 'creatorOffers', 'commerce'].includes(currentView));
+  const isStandaloneTenant = isGptFormWorkspace(auth);
 
   const dynamicBlueprintTabs = getMobileNavTabsForBlueprint(blueprint || undefined);
   const standaloneNavItems: MobileNavItem[] = dynamicBlueprintTabs.map((t) => ({

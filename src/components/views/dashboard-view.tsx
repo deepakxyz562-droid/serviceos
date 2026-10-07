@@ -1,4 +1,5 @@
 'use client';
+import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
@@ -449,8 +450,7 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 
 export function DashboardView() {
   const { blueprint, auth } = useAppStore();
-  const owner = ['owner', 'standalone_user'].includes(auth.user?.role);
-  if (blueprint && owner && !auth.user?.isSuperAdmin) return <BusinessHomeView />;
+  if (isGptFormWorkspace(auth)) return <BusinessHomeView />;
   return <LegacyDashboardView />;
 }
 

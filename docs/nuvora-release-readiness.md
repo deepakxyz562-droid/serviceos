@@ -1,6 +1,6 @@
 # Nuvora release readiness — 7 October 2026
 
-**Status: release blocked. These changes are a local implementation, not a production-ready certification or a live deployment.** The user identified fieseros.com as the production domain. Its HTTPS endpoint responded successfully. The configured Supabase backend was inspected read-only using service credentials without printing credentials or customer records. No production records, messages, or database schema were changed.
+**Status: release blocked. These changes are a local implementation, not a production-ready certification or a live deployment.** The user identified fieseros.com as the production domain. Its HTTPS endpoint responded successfully. The configured Supabase backend was inspected read-only using service credentials without printing credentials or customer records. The later corrective pass changed only the verified owner account’s workspace product assignment and signup mode; no business records, messages, plan, or database schema were changed.
 
 ## Implemented and verified locally
 
@@ -55,3 +55,28 @@ The wider plan remains unfinished. Native kitchen, job, manufacturing/BOM/produc
 8. Build signed Android/iOS apps and test on physical devices, including login/session expiry, slow/lost connections, app restart during a request, permissions, receipts/printers, and payment-provider callbacks. Store-signing credentials and EAS project/account configuration are not supplied by the server `.env` file.
 9. Deploy the reviewed application version only after these checks. Keep the previous application image available. A rollback should retain the additive data structures and payment history; do not drop the ledger or reset migrated records. Older code that bypasses the new financial paths must not resume taking payments without review.
 
+
+## GPTForm / CRM corrective pass — 7 October 2026
+
+### Account repair (live)
+
+The exact account provided by the user had a merchant business but `Workspace.productType=crm` and a null signup mode. Read-only checks found one workspace, one user, only the owner’s linked employee record, and no jobs, leads, customers, invoices, or quotes. The business tenant matched the owner’s tenant. After rechecking those conditions, the repair set only `Workspace.productType=forms` and `Tenant.signupMode=standalone`. Read-back verified both fields and the unchanged plan. No other account was converted. A restricted local backup of the prior assignment was saved under `/private/tmp/product-assignment-*.json`. Signing out and back in refreshes the web session’s product assignment.
+
+`scripts/release/check-product-account.cjs EMAIL` defaults to read-only. Its explicit `--apply` mode refuses repair if ownership, isolation, current assignment, or existing CRM work fails its checks. It does not migrate data or modify billing.
+
+### Interface and behavior corrections (local, not deployed)
+
+- Product identity now uses the explicit workspace assignment before legacy signup flags. A retail industry or owner role does not turn CRM into GPTForm. Login/session responses and the web auth store carry that identity consistently. Genuine CRM accounts retain their CRM dashboard and navigation.
+- GPTForm mobile registration explicitly requests standalone signup. An authenticated bootstrap provisions a missing merchant record only for a matching GPTForm workspace; CRM accounts receive a clear product mismatch instead of automatic conversion.
+- Mobile Home has a concise summary and primary tasks. Unavailable totals and accounting setup shortcuts no longer fill the screen. Retail More shows business tools and preferences according to enabled capabilities. Products includes stock quantities; old Stock links resolve to Products.
+- Physical devices default to the configured public HTTPS domain instead of localhost. Initial/retried requests show a readable connection error, and normal requests have a timeout. Authenticated product/settings deep links survive session restoration.
+- Product saves keep the editor and inputs when the server rejects a change. Retries keep a stable product ID. Web product saves also wait for server success. Availability means available for sale, not counted inventory. Quantity entry uses total stock (including reservations), while product cards show available stock. Untracked quantities remain unknown rather than fake zeroes.
+- Home, More, and principal product-edit controls support English/Hindi. This does not certify full-app localization.
+
+### Current verification
+
+- Full suite: **467 tests passed in 56 files**.
+- Mobile TypeScript: passed. Expo web, Android, and iOS bundle exports: passed; these are not signed native builds or physical-device tests.
+- Local browser checks at a 390 × 844 viewport: Home, More, Products, hidden irrelevant retail AI/store-sync cards, retained input after a failed save, successful retry with stable product ID, stock updates using the correct inventory record and total quantity, authenticated deep links, Hindi preferences, and recovery from a simulated connection failure all passed. Backend responses were mocked; no customer data was written by these checks. The repeatable check is `scripts/release/verify-mobile-products.cjs` against an Expo static preview on localhost:8098.
+- Focused web lint: zero errors, two existing navigation warnings. Expanded focused TypeScript verification reports three existing errors in header view labels and home-page routing/auth props. The earlier 45-file result above does not cover these newly inspected files. No new diagnostics were reported for the new product helper, bootstrap, inventory, or edited commerce save flow.
+- **No application deployment or production schema migration was performed.** Missing live finance/stock functions and existing web type failures remain release blockers. Browser mocks and bundle exports do not prove live sales, money, or stock writes work.

@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 
 export const BRAND = {
   name: 'Nuvora',
@@ -8,13 +7,9 @@ export const BRAND = {
 };
 
 // Default backend API base URL
-// In development, iOS simulator uses localhost:3000, Android uses 10.0.2.2:3000
-// In production, defaults to https://fieseros.com or EXPO_PUBLIC_API_URL
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ||
-  (__DEV__
-    ? (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000')
-    : 'https://fieseros.com');
+// Physical devices and release builds use the same HTTPS backend.
+// Developers may explicitly override EXPO_PUBLIC_API_URL for a local server.
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://fieseros.com').replace(/\/$/, '');
 
 export const API_PATHS = {
   login: '/api/auth/login',

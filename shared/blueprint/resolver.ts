@@ -58,6 +58,8 @@ export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
   let inferredCountry: CountryCode = 'US';
 
   // Check country clues
+  const countryAliases: Record<string,CountryCode> = {IN:'IN',INDIA:'IN',US:'US',USA:'US','UNITED STATES':'US',CA:'CA',CANADA:'CA',AU:'AU',AUSTRALIA:'AU',GB:'GB',UK:'GB','UNITED KINGDOM':'GB'};
+  const explicitCountry=countryAliases[String(tenant?.country||'').trim().toUpperCase()];
   const region = (tenant?.region || '').toLowerCase();
   const currency = (tenant?.currency || '').toUpperCase();
   const address = (tenant?.address || '').toLowerCase();
@@ -71,6 +73,8 @@ export function resolveTenantBlueprint(tenant: any): TenantBlueprint {
   } else if (region.includes('uk') || currency === 'GBP') {
     inferredCountry = 'GB';
   }
+
+  if(explicitCountry) inferredCountry=explicitCountry;
 
   // Check industry / category clues
   const industry = (tenant?.industry || settings?.industry || '').toLowerCase();

@@ -57,7 +57,7 @@ import { Separator } from '@/components/ui/separator';
 import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
 
 interface AuthPageProps {
-  onAuthSuccess: (user: any, tenant: any) => void;
+  onAuthSuccess: (user: any, tenant: any, workspace?: any) => void;
   onBackToLanding?: () => void;
   initialTab?: string;
 }
@@ -162,10 +162,11 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         isAuthenticated: true,
         user: data.user,
         tenant: data.tenant || null,
+        workspace: data.workspace || null,
         token: data.token,
       }));
       toast.success('Welcome back!');
-      onAuthSuccess(data.user, data.tenant);
+      onAuthSuccess(data.user, data.tenant, data.workspace);
     } catch {
       toast.error('Something went wrong. Please try again.');
     } finally {
@@ -207,6 +208,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         isAuthenticated: true,
         user: data.user,
         tenant: data.tenant || null,
+        workspace: data.workspace || null,
         token: data.token,
       }));
       toast.success('Account created successfully!');
@@ -226,7 +228,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
           }
         );
       }, 500);
-      onAuthSuccess(data.user, data.tenant);
+      onAuthSuccess(data.user, data.tenant, data.workspace);
     } catch {
       toast.error('Something went wrong. Please try again.');
     } finally {

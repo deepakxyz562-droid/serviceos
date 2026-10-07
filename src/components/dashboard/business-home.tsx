@@ -25,7 +25,7 @@ export function BusinessHomeView() {
   useEffect(() => {
     const controller = new AbortController();
     setSnapshot(null); setLoading(true); setError(false); setSetupRequired(false);
-    authFetch('/api/commerce/home', { signal: controller.signal })
+    authFetch('/api/gptform/bootstrap', {method:'POST',signal:controller.signal}).then(async response=>{if(response.status===404&&!controller.signal.aborted)setSetupRequired(true);if(!response.ok)throw new Error('Business setup unavailable');return authFetch('/api/commerce/home', { signal: controller.signal });})
       .then(async (response) => {
         if (response.status === 404 && !controller.signal.aborted) setSetupRequired(true);
         if (!response.ok) throw new Error('Home unavailable');
@@ -75,7 +75,7 @@ export function BusinessHomeView() {
         <div role="alert" className="rounded-2xl border p-6"><p>{homeText(setupRequired ? 'setupRequired' : 'error', language)}</p><button type="button" className="mt-4 flex min-h-11 items-center gap-2" onClick={() => setupRequired ? setSetup(true) : setRevision((v) => v + 1)}><RefreshCw className="size-4" />{homeText(setupRequired ? 'setup' : 'retry', language)}</button></div>
       ) : (
         <section className="grid grid-cols-2 gap-3 md:grid-cols-3" aria-label={homeText('home', language)}>
-          {home.metrics.map((metric, index) => {
+          {home.metrics.filter(metric=>snapshot?.metrics[metric]!=null).slice(0,4).map((metric, index) => {
             const value = snapshot?.metrics[metric];
             const missing = value == null;
             const action = homeMetricAction(metric, snapshot?.salesSource);
@@ -87,9 +87,9 @@ export function BusinessHomeView() {
           })}
         </section>
       )}
-      <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {!error && !loading && <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {home.actions.filter((a) => a !== 'production').map((action) => <button key={action} type="button" onClick={() => navigate(action)} className="flex min-h-20 items-center justify-between gap-3 rounded-2xl border bg-card p-4 text-left font-semibold hover:border-emerald-500"><span>{homeText(action, language)}</span><ArrowRight className="size-4 shrink-0" /></button>)}
-      </section>
+      </section>}
       {home.type === 'manufacturing' && <p className="rounded-xl border p-4 text-sm text-muted-foreground">{homeText('workflowPending', language)}</p>}
       <footer className="flex items-center justify-between text-xs text-muted-foreground"><span className="flex items-center gap-2"><Store className="size-4" />{snapshot?.date} · {snapshot?.timezone}</span><button type="button" onClick={() => setRevision((v) => v + 1)} className="min-h-11 px-3" aria-label={homeText('retry', language)}><RefreshCw className="size-4" /></button></footer>
     </main>

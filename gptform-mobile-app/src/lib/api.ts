@@ -54,11 +54,23 @@ export async function apiRequest<T = any>(
     }
   }
 
-  const response = await fetch(url, {
-    method,
-    headers: reqHeaders,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const send = async (): Promise<Response> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      return await fetch(url, {
+        method,
+        headers: reqHeaders,
+        body: body ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } catch {
+      throw new ApiError('Unable to connect. Check your internet connection and try again.', 0);
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+  const response = await send();
 
   if (response.status === 401 && !skipAuth) {
     // Attempt automatic single-flight refresh.
@@ -81,11 +93,7 @@ export async function apiRequest<T = any>(
     if (refreshed) {
       const newToken = await getToken();
       reqHeaders['Authorization'] = `Bearer ${newToken}`;
-      const retryResponse = await fetch(url, {
-        method,
-        headers: reqHeaders,
-        body: body ? JSON.stringify(body) : undefined,
-      });
+      const retryResponse = await send();
       if (retryResponse.ok) {
         return (await retryResponse.json()) as T;
       }

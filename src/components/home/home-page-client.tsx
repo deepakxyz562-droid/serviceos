@@ -1,4 +1,5 @@
 'use client';
+import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
@@ -254,6 +255,7 @@ export default function HomePageClient() {
                   isAuthenticated: true,
                   user: data.user,
                   tenant: data.tenant || null,
+                  workspace: data.workspace || null,
                 });
                 // Save the redirect target for the portal to consume after mount
                 try {
@@ -270,6 +272,7 @@ export default function HomePageClient() {
                     isAuthenticated: true,
                     user: data.user,
                     tenant: data.tenant || null,
+                    workspace: data.workspace || null,
                     token: data.token,
                     isCustomer: true,
                   })
@@ -323,6 +326,7 @@ export default function HomePageClient() {
             isAuthenticated: true,
             user: data.user,
             tenant: data.tenant || null,
+            workspace: data.workspace || null,
           });
           // Auto-redirect based on role (for admin/superadmin in AppLayout)
           const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -335,7 +339,7 @@ export default function HomePageClient() {
 
           const tenantPlan = (data.tenant as any)?.plan as string | null | undefined;
           const sm = (data.tenant as any)?.signupMode as string | null | undefined;
-          const isStandalone = !isPlatformAdmin(data.user) && urlView !== 'superadmin' && (sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone'));
+          const isStandalone = !isPlatformAdmin(data.user) && urlView !== 'superadmin' && isGptFormWorkspace(data);
 
           const needsOnboarding =
             data.tenant &&
@@ -345,7 +349,7 @@ export default function HomePageClient() {
             data.user.role !== 'employee';
 
           if (needsOnboarding) {
-            if (isStandalone || sm === 'standalone') {
+            if (isStandalone) {
               setOnboardingView('standalone');
             } else if (sm === 'listing_only') {
               setOnboardingView('listing');
@@ -385,6 +389,7 @@ export default function HomePageClient() {
                 isAuthenticated: true,
                 user: data.user,
                 tenant: data.tenant || null,
+                workspace: data.workspace || null,
                 token: existingData.token,
                 portalToken: existingData.portalToken,
                 isCustomer: existingData.isCustomer || data.user.role === 'customer',
@@ -468,7 +473,7 @@ export default function HomePageClient() {
               }
               const tenantPlan = (parsed.tenant as any)?.plan as string | null | undefined;
               const sm = (parsed.tenant as any)?.signupMode as string | null | undefined;
-              const isStandalone = !isPlatformAdmin(parsed.user) && (sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone'));
+              const isStandalone = !isPlatformAdmin(parsed.user) && isGptFormWorkspace(parsed);
 
               const needsOnboarding =
                 parsed.tenant &&
@@ -478,7 +483,7 @@ export default function HomePageClient() {
                 parsed.user.role !== 'employee';
 
               if (needsOnboarding) {
-                if (isStandalone || sm === 'standalone') {
+                if (isStandalone) {
                   setOnboardingView('standalone');
                 } else if (sm === 'listing_only') {
                   setOnboardingView('listing');
@@ -576,6 +581,7 @@ export default function HomePageClient() {
                       isAuthenticated: true,
                       user: data.user,
                       tenant: data.tenant || null,
+                      workspace: data.workspace || null,
                       token: data.token,
                     }));
                     // Strip the verify params so a refresh doesn't re-trigger
@@ -826,6 +832,7 @@ export default function HomePageClient() {
         isAuthenticated: true,
         user: data.user,
         tenant: data.tenant || null,
+        workspace: data.workspace || null,
       };
       setAuth(authData);
 
@@ -850,11 +857,12 @@ export default function HomePageClient() {
   }, [setAuth]);
 
   const handleAuthSuccess = useCallback(
-    (user: any, tenant?: any) => {
+    (user: any, tenant?: any, workspace?: any) => {
       const authData = {
         isAuthenticated: true,
         user,
         tenant: tenant || null,
+        workspace: workspace || null,
       };
       setAuth(authData);
 
@@ -891,7 +899,7 @@ export default function HomePageClient() {
       } else {
         const tenantPlan = (tenant as any)?.plan as string | null | undefined;
         const sm = (tenant as any)?.signupMode as string | null | undefined;
-        const isStandalone = sm === 'standalone' || tenantPlan === 'standalone_starter' || tenantPlan === 'standalone_business' || String(tenantPlan || '').startsWith('standalone');
+        const isStandalone = isGptFormWorkspace(authData);
 
         if (!tenant || !tenant.onboardingCompleted) {
           if (isStandalone) {
