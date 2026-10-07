@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { publicChannelConfig } from '@/lib/channel-public-config'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 
@@ -29,6 +30,7 @@ async function validateCredentialLink(
     return { ok: false, error: 'Linked credential not found' }
   }
 
+  if (!credential.workspaceId) return { ok: false, error: 'Platform credentials cannot be linked through merchant settings' }
   if (credential.workspaceId) {
     if (credential.workspaceId !== authUser.workspaceId) {
       let sameTenant = false
@@ -75,7 +77,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authUser = await getAuthUser()
+    const authUser = await getAuthUser(request)
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!authUser.tenantId || !['owner','admin','standalone_user'].includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -87,7 +91,8 @@ export async function PUT(
     const existing = await db.communicationProvider.findFirst({
       where: {
         id,
-        ...(authUser.tenantId ? { tenantId: authUser.tenantId } : {}),
+        tenantId: authUser.tenantId,
+        isPlatform: false,
       },
     })
 
@@ -226,7 +231,7 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json({ data: result })
+    return NextResponse.json({ data: { ...result, configJson: JSON.stringify(publicChannelConfig(JSON.parse(result.configJson || '{}'))) } })
   } catch (error) {
     console.error('Error updating communication provider:', error)
     return NextResponse.json({ error: 'Failed to update provider' }, { status: 500 })
@@ -239,7 +244,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authUser = await getAuthUser()
+    const authUser = await getAuthUser(request)
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!authUser.tenantId || !['owner','admin','standalone_user'].includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -250,7 +257,8 @@ export async function DELETE(
     const existing = await db.communicationProvider.findFirst({
       where: {
         id,
-        ...(authUser.tenantId ? { tenantId: authUser.tenantId } : {}),
+        tenantId: authUser.tenantId,
+        isPlatform: false,
       },
     })
 

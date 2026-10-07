@@ -108,64 +108,8 @@ export default function InstagramChannelScreen() {
     [buildConfig, isConnected]
   );
 
-  const connectInstagram = useCallback(async () => {
-    setSubmitting(true);
-    try {
-      const config: InstagramConfig = { ...buildConfig() };
-      configRef.current = config;
-      await apiRequest(API_PATHS.channels, {
-        method: 'POST',
-        body: {
-          channel: 'instagram',
-          type: 'instagram',
-          name: 'Instagram',
-          provider: 'meta',
-          connected: true,
-          status: 'active',
-          config,
-        },
-      });
-      setIsConnected(true);
-      hapticFeedback.success();
-      Alert.alert(
-        'Instagram Connected',
-        'Your Instagram Direct channel has been activated. If you have not yet completed the Meta OAuth in your web dashboard, please do so to enable live DM auto-reply.'
-      );
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Failed to connect Instagram. Please try again.';
-      Alert.alert('Connection Failed', msg);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [buildConfig]);
-
   const handleConnectInstagram = () => {
-    hapticFeedback.medium();
-    Alert.alert(
-      'Connect Instagram Professional',
-      'To connect your Instagram Direct Messages:\n\n1. Ensure your Instagram is switched to a Professional or Creator account.\n2. Ensure it is connected to your Facebook Business Page.\n3. Grant "instagram_manage_messages" permission.\n\nOpen Meta OAuth connection in browser?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Connect Meta OAuth',
-          onPress: () => {
-            const oauthUrl = `${API_BASE_URL}/api/oauth/instagram/callback`;
-            Linking.openURL(oauthUrl).catch(() => {
-              Alert.alert('Browser Error', 'Could not open Meta OAuth. Please try from your desktop dashboard or verify browser settings.');
-            });
-          },
-        },
-        {
-          text: 'Mark Connected',
-          onPress: () => {
-            connectInstagram();
-          },
-        },
-      ]
-    );
+    Linking.openURL(`${API_BASE_URL}/?view=channels`).catch(() => Alert.alert('Browser unavailable', 'Open the web dashboard to connect your account.'));
   };
 
   const handleToggleAutoResponder = (val: boolean) => {
@@ -363,7 +307,7 @@ export default function InstagramChannelScreen() {
         ) : (
           <TouchableOpacity
             style={[styles.manualVerifyBtn, submitting && { opacity: 0.6 }]}
-            onPress={connectInstagram}
+            onPress={handleConnectInstagram}
             disabled={submitting}
             activeOpacity={0.8}
           >

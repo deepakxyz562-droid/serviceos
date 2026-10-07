@@ -106,61 +106,8 @@ export default function MessengerChannelScreen() {
     [buildConfig, isConnected]
   );
 
-  const connectMessenger = useCallback(async () => {
-    setSubmitting(true);
-    try {
-      const config: MessengerConfig = { ...buildConfig() };
-      configRef.current = config;
-      await apiRequest(API_PATHS.channels, {
-        method: 'POST',
-        body: {
-          channel: 'messenger',
-          type: 'messenger',
-          name: 'Messenger',
-          provider: 'meta',
-          connected: true,
-          status: 'active',
-          config,
-        },
-      });
-      setIsConnected(true);
-      hapticFeedback.success();
-      Alert.alert(
-        'Messenger Connected',
-        'Your Facebook Messenger channel has been activated. If you have not yet completed the Meta OAuth in your web dashboard, please do so to enable live page-message auto-reply.'
-      );
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'Failed to connect Messenger. Please try again.';
-      Alert.alert('Connection Failed', msg);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [buildConfig]);
-
   const handleConnectFacebook = () => {
-    hapticFeedback.medium();
-    Alert.alert(
-      'Connect Facebook Page',
-      'Select your Facebook Business Page to allow GPTForm AI agent to respond to Messenger chats.\n\nOpen Meta OAuth authentication in browser?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Connect Meta OAuth',
-          onPress: () => {
-            const oauthUrl = `${API_BASE_URL}/api/oauth/facebook/callback`;
-            Linking.openURL(oauthUrl).catch(() => {
-              Alert.alert('Browser Error', 'Could not open Meta OAuth. Please try from your desktop dashboard.');
-            });
-          },
-        },
-        {
-          text: 'Mark Connected',
-          onPress: () => {
-            connectMessenger();
-          },
-        },
-      ]
-    );
+    Linking.openURL(`${API_BASE_URL}/?view=channels`).catch(() => Alert.alert('Browser unavailable', 'Open the web dashboard to connect your account.'));
   };
 
   const handleToggleAutoResponder = (val: boolean) => {
@@ -336,7 +283,7 @@ export default function MessengerChannelScreen() {
         ) : (
           <TouchableOpacity
             style={[styles.manualVerifyBtn, submitting && { opacity: 0.6 }]}
-            onPress={connectMessenger}
+            onPress={handleConnectFacebook}
             disabled={submitting}
             activeOpacity={0.8}
           >

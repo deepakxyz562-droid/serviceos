@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { publicChannelConfig } from '@/lib/channel-public-config'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { toISOString } from '@/lib/utils'
@@ -39,6 +40,7 @@ async function validateCredentialLink(
 
   // Ownership: same workspace, OR global (workspaceId IS NULL), OR same tenant
   // (via the credential's workspace.tenantId).
+  if (!credential.workspaceId) return { ok: false, error: 'Platform credentials cannot be linked through merchant settings' }
   if (credential.workspaceId) {
     if (credential.workspaceId !== authUser.workspaceId) {
       // Check whether the credential's workspace belongs to the same tenant.
@@ -55,7 +57,7 @@ async function validateCredentialLink(
       }
     }
   }
-  // If credential.workspaceId is null, treat as global → always allowed.
+  // Platform credentials are managed only through Superadmin.
 
   // Type compatibility
   if (providerType === 'whatsapp') {
@@ -75,7 +77,9 @@ async function validateCredentialLink(
 // GET /api/communication-providers - List all communication providers
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser()
+    const authUser = await getAuthUser(request)
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!authUser.tenantId || !['owner','admin','standalone_user'].includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const tenantId = authUser?.tenantId || null
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
@@ -145,12 +149,14 @@ export async function GET(request: NextRequest) {
 // POST /api/communication-providers - Create a new provider
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser()
+    const authUser = await getAuthUser(request)
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!authUser.tenantId || !['owner','admin','standalone_user'].includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const tenantId = authUser?.tenantId || null
     const workspaceId = authUser?.workspaceId || null
     const body = await request.json()
 
-    const { name, type, provider, config, isDefault, isPlatform, sendingEnabled, dailyLimit, monthlyLimit, credentialId } = body
+    const { name, type, provider, config, isDefault, sendingEnabled, dailyLimit, monthlyLimit, credentialId } = body
 
     if (!name || !type || !provider) {
       return NextResponse.json({ error: 'name, type, and provider are required' }, { status: 400 })
@@ -216,7 +222,7 @@ export async function POST(request: NextRequest) {
         configJson,
         credentialId: linkedCredentialId,
         isDefault: isDefault || false,
-        isPlatform: Boolean(isPlatform),
+        isPlatform: false,
         sendingEnabled: sendingEnabled !== undefined ? sendingEnabled : true,
         dailyLimit: dailyLimit || 1000,
         monthlyLimit: monthlyLimit || 30000,
@@ -228,7 +234,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json({ data: result }, { status: 201 })
+    return NextResponse.json({ data: { ...result, configJson: JSON.stringify(publicChannelConfig(JSON.parse(result.configJson || '{}'))) } }, { status: 201 })
   } catch (error) {
     console.error('Error creating communication provider:', error)
     return NextResponse.json({ error: 'Failed to create provider' }, { status: 500 })

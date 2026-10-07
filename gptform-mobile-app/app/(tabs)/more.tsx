@@ -46,7 +46,7 @@ export default function MoreScreen() {
     if (c.onlineStore || (c.catalog && c.orders)) business.unshift({ label: t('Share store & QR', 'दुकान और QR शेयर करें'), icon: 'qr-code', path: '/store-share' });
     const tools: Row[] = [
         ...(c.forms ? [{ label: t('Forms', 'फ़ॉर्म'), icon: 'dynamic-form' as Icon, path: '/forms' }] : []),
-        ...(c.whatsapp ? [{ label: t('Connected channels', 'जुड़े हुए चैनल'), icon: 'chat-bubble-outline' as Icon, path: '/channels' }] : []),
+        { label: t('Automations & channels', 'ऑटोमेशन और चैनल'), icon: 'chat-bubble-outline' as Icon, path: '/channels' },
         ...(c.aiAgent ? [{ label: t('AI agents', 'AI एजेंट'), icon: 'smart-toy' as Icon, path: '/team' }] : []),
         ...(c.aiReceptionist ? [{ label: t('Voice receptionist', 'वॉइस रिसेप्शनिस्ट'), icon: 'phone-in-talk' as Icon, path: '/receptionist' }] : []),
     ];

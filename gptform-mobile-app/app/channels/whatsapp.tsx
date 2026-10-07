@@ -118,76 +118,13 @@ export default function WhatsAppChannelScreen() {
     [buildConfig, isConnected]
   );
 
-  const connectWhatsApp = useCallback(
-    async (phoneValue: string) => {
-      const trimmed = phoneValue.trim();
-      if (!trimmed) {
-        Alert.alert('Phone Required', 'Please enter your WhatsApp Business number with country code (e.g. +91 9876543210).');
-        return;
-      }
-      setSubmitting(true);
-      try {
-        const config: WhatsAppConfig = { ...buildConfig(), phone: trimmed };
-        configRef.current = config;
-        setPhone(trimmed);
-        await apiRequest(API_PATHS.channels, {
-          method: 'POST',
-          body: {
-            channel: 'whatsapp',
-            type: 'whatsapp',
-            name: 'WhatsApp',
-            provider: 'whatsapp',
-            connected: true,
-            status: 'active',
-            config,
-          },
-        });
-        setIsConnected(true);
-        setPhoneModalVisible(false);
-        setPhoneInput('');
-        hapticFeedback.success();
-        Alert.alert('WhatsApp Connected', `Your AI agent is now live on ${trimmed}.`);
-      } catch (err) {
-        const msg = err instanceof ApiError ? err.message : 'Failed to connect WhatsApp. Please try again.';
-        Alert.alert('Connection Failed', msg);
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [buildConfig]
-  );
+  const connectWhatsApp = useCallback(async (_phoneValue: string) => {
+    setPhoneModalVisible(false);
+    await Linking.openURL(`${API_BASE_URL}/?view=channels`).catch(() => Alert.alert('Browser unavailable', 'Open the web dashboard to connect WhatsApp.'));
+  }, []);
 
-  const openPhoneModal = useCallback(() => {
-    hapticFeedback.medium();
-    setPhoneInput(phone || '');
-    setPhoneModalVisible(true);
-  }, [phone]);
-
-  const handleConnectMeta = () => {
-    hapticFeedback.medium();
-    Alert.alert(
-      'Connect WhatsApp Business',
-      'Choose your preferred WhatsApp connection method:\n\n1. Meta Cloud API: Recommended for high-volume automated messaging.\n2. Enter Phone Manually: Connect your existing WhatsApp Business number directly.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Meta Cloud API (OAuth)',
-          onPress: () => {
-            const oauthUrl = `${API_BASE_URL}/api/oauth/facebook/callback`;
-            Linking.openURL(oauthUrl).catch(() => {
-              Alert.alert('Browser Error', 'Could not open Meta OAuth.');
-            });
-          },
-        },
-        {
-          text: 'Enter Phone Manually',
-          onPress: () => {
-            openPhoneModal();
-          },
-        },
-      ]
-    );
-  };
+  const openPhoneModal = () => void connectWhatsApp('');
+  const handleConnectMeta = () => void connectWhatsApp('');
 
   const handleDisconnect = () => {
     hapticFeedback.medium();

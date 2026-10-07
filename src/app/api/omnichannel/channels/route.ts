@@ -2,21 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { DEFAULT_CHANNEL_SEED } from '@/lib/channel-meta'
+import { publicChannelConfig } from '@/lib/channel-public-config'
 
 // GET /api/omnichannel/channels - List all channel configs in the format the frontend expects
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser()
+    const authUser = await getAuthUser(request)
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!authUser.tenantId || !['owner', 'admin', 'standalone_user'].includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
 
-    const tenantId = authUser?.tenantId || null
+    const tenantId = authUser.tenantId
 
-    const where: Record<string, unknown> = {}
-    if (tenantId) where.tenantId = tenantId
+    const where: Record<string, unknown> = { tenantId }
     if (status) where.status = status
 
-    const existingCount = await db.channelConfig.count({ where })
+    const existingCount = await db.channelConfig.count({ where: { tenantId } })
 
     // Auto-create the 10 default channels if none exist
     if (existingCount === 0) {
@@ -24,7 +26,7 @@ export async function GET(request: NextRequest) {
         data: DEFAULT_CHANNEL_SEED.map((ch) => ({
           channel: ch.channel,
           name: ch.name,
-          status: ch.status,
+          status: 'inactive',
           isDefault: ch.isDefault,
           autoCreateLead: ch.autoCreateLead,
           configJson: '{}',
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
           leadSourceTag: '',
           channelType: ch.channelType,
           tier: ch.tier,
-          setupCompleted: ch.setupCompleted,
+          setupCompleted: false,
           setupStep: ch.setupStep,
           tenantId,
         })),
@@ -63,6 +65,8 @@ export async function GET(request: NextRequest) {
       catalogMap = null;
     }
 
+    const connections = await db.channelConnection.findMany({ where: { tenantId }, select: { channel: true, status: true } })
+    const verified = new Set(connections.filter(c => c.status === 'CONNECTED').map(c => c.channel))
     const result = channels
       .filter((ch) => {
         // If no catalog, show all (legacy behavior during rollout)
@@ -91,21 +95,22 @@ export async function GET(request: NextRequest) {
         id: ch.id,
         type: ch.channel,
         name: ch.name,
-        connected: ch.status === 'active',
+        connected: ch.status === 'active' && verified.has(ch.channel),
+        connectionStatus: ch.status === 'inactive' ? 'PAUSED' : verified.has(ch.channel) ? 'CONNECTED' : 'SETUP_REQUIRED',
         setupCompleted: ch.setupCompleted,
         setupStep: ch.setupStep,
         tier: ch.tier,
         channelType: ch.channelType,
         lastTestedAt: ch.lastTestedAt,
         lastTestStatus: ch.lastTestStatus,
-        config,
+        config: publicChannelConfig(config),
         // O1.6: platform availability flags from ChannelCatalog
         comingSoon,
         platformEnabled,
       }
     })
 
-    return NextResponse.json(result)
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (error) {
     console.error('[Omnichannel] Error listing channels:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -115,8 +120,11 @@ export async function GET(request: NextRequest) {
 // POST /api/omnichannel/channels - Create or update a channel config
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser()
-    const body = await request.json()
+    const authUser = await getAuthUser(request)
+    if (!authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!authUser.tenantId || !['owner', 'admin', 'standalone_user'].includes(authUser.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const body = await request.json().catch(() => null)
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
 
     const {
       channel,
@@ -131,24 +139,28 @@ export async function POST(request: NextRequest) {
       autoReplyMessage,
       webhookUrl,
       leadSourceTag,
-      workspaceId,
-      setupCompleted,
-      setupStep,
-      lastTestStatus,
-      tier,
-      channelType,
     } = body
 
-    if (!channel || !name) {
+    if (typeof channel !== 'string' || !DEFAULT_CHANNEL_SEED.some(c => c.channel === channel) || typeof name !== 'string' || !name.trim() || name.length > 100) {
       return NextResponse.json(
         { error: 'channel and name are required' },
         { status: 400 },
       )
     }
 
-    const tenantId = authUser?.tenantId || body.tenantId || null
-    const resolvedStatus = status || (connected ? 'active' : 'inactive')
-    const resolvedConfigJson = configJson || (config ? JSON.stringify(config) : '{}')
+    const tenantId = authUser.tenantId
+    if (body.tenantId && body.tenantId !== tenantId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const connection = await db.channelConnection.findFirst({ where: { tenantId, channel }, select: { status: true } })
+    const verified = connection?.status === 'CONNECTED'
+    if ((connected === true || status === 'active') && !verified) return NextResponse.json({ error: 'Complete and verify the provider connection before activation.' }, { status: 409 })
+    const paused = connected === false || status === 'inactive'
+    const resolvedStatus = paused ? 'inactive' : verified ? 'active' : 'inactive'
+    let suppliedConfig
+    try { suppliedConfig = configJson ? JSON.parse(configJson) : config || {} } catch { return NextResponse.json({ error: 'Invalid configuration' }, { status: 400 }) }
+    if (!suppliedConfig || typeof suppliedConfig !== 'object' || Array.isArray(suppliedConfig)) return NextResponse.json({ error: 'Invalid configuration' }, { status: 400 })
+    const safeConfig = publicChannelConfig(suppliedConfig)
+    if (JSON.stringify(safeConfig) !== JSON.stringify(suppliedConfig)) return NextResponse.json({ error: 'Credentials must be configured through the provider connection.' }, { status: 400 })
+    const resolvedConfigJson = JSON.stringify(safeConfig)
 
     const existing = await db.channelConfig.findFirst({
       where: { channel, tenantId },
@@ -157,7 +169,7 @@ export async function POST(request: NextRequest) {
     const updateData: Record<string, unknown> = {
       name,
       configJson: resolvedConfigJson !== '{}' ? resolvedConfigJson : existing?.configJson || '{}',
-      status: resolvedStatus !== 'inactive' ? resolvedStatus : existing?.status || 'inactive',
+      status: resolvedStatus,
     }
     if (isDefault !== undefined) updateData.isDefault = isDefault
     if (autoCreateLead !== undefined) updateData.autoCreateLead = autoCreateLead
@@ -165,15 +177,7 @@ export async function POST(request: NextRequest) {
     if (autoReplyMessage !== undefined) updateData.autoReplyMessage = autoReplyMessage
     if (webhookUrl !== undefined) updateData.webhookUrl = webhookUrl
     if (leadSourceTag !== undefined) updateData.leadSourceTag = leadSourceTag
-    if (workspaceId !== undefined) updateData.workspaceId = workspaceId
-    if (setupCompleted !== undefined) updateData.setupCompleted = setupCompleted
-    if (setupStep !== undefined) updateData.setupStep = setupStep
-    if (lastTestStatus !== undefined) {
-      updateData.lastTestStatus = lastTestStatus
-      updateData.lastTestedAt = new Date()
-    }
-    if (tier !== undefined) updateData.tier = tier
-    if (channelType !== undefined) updateData.channelType = channelType
+
 
     let result
     if (existing) {
@@ -195,12 +199,12 @@ export async function POST(request: NextRequest) {
           webhookUrl: webhookUrl || null,
           leadSourceTag: leadSourceTag || '',
           tenantId,
-          workspaceId: workspaceId || null,
-          channelType: channelType || null,
-          tier: tier || null,
-          setupCompleted: setupCompleted || false,
-          setupStep: setupStep || 0,
-          ...(lastTestStatus !== undefined ? { lastTestStatus, lastTestedAt: new Date() } : {}),
+          workspaceId: null,
+          channelType: null,
+          tier: null,
+          setupCompleted: false,
+          setupStep: 0,
+
         },
       })
     }
@@ -215,14 +219,14 @@ export async function POST(request: NextRequest) {
         id: result.id,
         type: result.channel,
         name: result.name,
-        connected: result.status === 'active',
+        connected: result.status === 'active' && verified,
         setupCompleted: result.setupCompleted,
         setupStep: result.setupStep,
         tier: result.tier,
         channelType: result.channelType,
         lastTestedAt: result.lastTestedAt,
         lastTestStatus: result.lastTestStatus,
-        config: configObj,
+        config: publicChannelConfig(configObj),
       },
       { status: existing ? 200 : 201 },
     )

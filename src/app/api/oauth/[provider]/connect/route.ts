@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomBytes } from 'node:crypto'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { OAUTH_PROVIDERS, SOCIAL_PUBLISHING_PLATFORMS } from '@/lib/channel-meta'
@@ -38,8 +39,8 @@ export async function GET(
     return NextResponse.json({ error: `Unknown OAuth provider: ${provider}` }, { status: 400 })
   }
 
-  const authUser = await getAuthUser()
-  if (!authUser) {
+  const authUser = await getAuthUser(request)
+  if (!authUser?.tenantId || !['owner','admin','standalone_user'].includes(authUser.role)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -62,7 +63,7 @@ export async function GET(
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
-  const redirectUri = `${appUrl}/api/oauth/${provider}/callback`
+  const redirectUri = `${appUrl}/api/oauth/${provider}/${provider === 'instagram' ? 'messaging-callback' : 'callback'}`
 
   // Build the authorization URL
   const state = Buffer.from(
@@ -71,6 +72,7 @@ export async function GET(
       userId: authUser.id,
       provider,
       ts: Date.now(),
+      nonce: randomBytes(32).toString('hex'),
     }),
   ).toString('base64url')
 
@@ -86,5 +88,7 @@ export async function GET(
     authUrl.searchParams.set('auth_type', 'rerequest')
   }
 
-  return NextResponse.redirect(authUrl.toString())
+  const response = NextResponse.redirect(authUrl.toString())
+  response.cookies.set(`channel_oauth_${provider}`, state, { httpOnly: true, secure: new URL(appUrl).protocol === 'https:', sameSite: 'lax', maxAge: 600, path: `/api/oauth/${provider}` })
+  return response
 }

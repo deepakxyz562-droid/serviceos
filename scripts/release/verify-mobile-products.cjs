@@ -15,6 +15,7 @@ const { chromium } = require('@playwright/test');
     let customerCalls = 0;
     let failKhata = false;
     let failHistory = false;
+    let failChannels = false;
     let failSave = false;
     let savedPayload;
     let stockPayload;
@@ -57,6 +58,10 @@ const { chromium } = require('@playwright/test');
             const ledger = url.searchParams.get('section') === 'ledger';
             const more = url.searchParams.has('cursor');
             data = failHistory ? { error: 'History unavailable' } : { currency: 'USD', balance: 45, reviewRequired: false, ordersCount: 2, nextCursor: ledger || more ? null : 'page-two', records: ledger ? [{ id: 'receipt-1', kind: 'COLLECTION', debit: 0, credit: 15, createdAt: '2026-10-08T10:00:00Z' }] : [{ id: more ? 'order-2' : 'order-1', total: more ? 20 : 25, status: 'CONFIRMED', createdAt: '2026-10-08T10:00:00Z' }] };
+        }
+        else if (url.pathname === '/api/omnichannel/channels') {
+            status = failChannels ? 503 : 200;
+            data = failChannels ? { error: 'Unavailable' } : [{ type: 'whatsapp', connected: false, platformEnabled: true }];
         }
         else if (url.pathname === '/api/commerce/store-share') {
             data = { name: 'Sharma General Store', storeUrl: 'https://fieseros.com/store/sharma', qrDataUrl: await require('qrcode').toDataURL('https://fieseros.com/store/sharma'), html: '<!DOCTYPE html><html><body>Sharma General Store</body></html>' };
@@ -219,6 +224,18 @@ const { chromium } = require('@playwright/test');
     await page.getByText('https://fieseros.com/store/sharma', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'QR स्टैंडी प्रिंट करें' }).waitFor();
     await page.screenshot({ path: '/private/tmp/nuvora-store-share-hindi.png' });
+    await page.goto('http://127.0.0.1:8098/channels');
+    await page.getByText('ऑटोमेशन और चैनल', { exact: true }).waitFor();
+    await page.getByText('AI रिसेप्शनिस्ट', { exact: true }).waitFor();
+    await page.getByText('डैशबोर्ड में सेटिंग जाँचें', { exact: true }).first().waitFor();
+    if (await page.getByText('जुड़ा हुआ', { exact: true }).count()) throw Error('An unverified channel was shown as connected');
+    await page.screenshot({ path: '/private/tmp/nuvora-automations-hindi.png' });
+    failChannels = true;
+    await page.reload();
+    await page.getByText('कनेक्शन की जानकारी नहीं मिली। फिर कोशिश करने के लिए टैप करें।', { exact: true }).waitFor();
+    failChannels = false;
+    await page.getByText('कनेक्शन की जानकारी नहीं मिली। फिर कोशिश करने के लिए टैप करें।', { exact: true }).click();
+    await page.getByText('सेटिंग ज़रूरी है', { exact: true }).first().waitFor();
     console.log('PASS: Hindi customer and Khata forms, customer search without requests, customer history, business currency, unavailable ledger balances, Home bootstrap reuse and stale refresh recovery, Hindi preferences, offline recovery, Home/Settings/Products, retail AI/sync cards hidden, failed save retained inputs, successful retry kept ID, total stock updated correct inventory record, authenticated deep link retained.');
     await browser.close();
 })().catch(e => { console.error(e.message); process.exit(1); });

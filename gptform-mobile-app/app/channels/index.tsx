@@ -1,398 +1,52 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  SafeAreaView,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons, FontAwesome, FontAwesome5 } from '@expo/vector-icons';
-import { hapticFeedback } from '@/lib/haptics';
-import { API_PATHS } from '@/lib/constants';
+import React, { useCallback, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Linking, Alert } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useFocusEffect } from 'expo-router';
 import { apiRequest } from '@/lib/api';
+import { API_PATHS, WEB_URL } from '@/lib/constants';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 
-interface ChannelItem {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  iconName: string;
-  iconType: 'fa' | 'fa5' | 'ionicons';
-  color: string;
-  connected: boolean;
-  statusText: string;
-  route?: string;
-}
-
+type Channel = { type: string; connected: boolean; connectionStatus?: string; platformEnabled?: boolean; comingSoon?: boolean };
 export default function ChannelsScreen() {
-  const router = useRouter();
+  const hindi = useBlueprintStore(s => s.blueprint.language) === 'hi';
+  const t = (en: string, hi: string) => hindi ? hi : en;
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
-  const [liveConfigs, setLiveConfigs] = useState<any[]>([]);
-
-  useEffect(() => {
-    apiRequest<any[]>(API_PATHS.channels)
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setLiveConfigs(data);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const isChannelConnected = (type: string) => {
-    const found = liveConfigs.find((c) => c.type === type || c.channel === type);
-    return found ? !!found.connected || found.status === 'active' : false;
-  };
-
-  const channels: ChannelItem[] = [
-    {
-      id: 'website',
-      name: 'Website Chat Widget',
-      category: 'WEB',
-      description: 'Embed floating live chat & AI assistant widget onto WordPress, Shopify, Wix, or custom websites.',
-      iconName: 'globe-outline',
-      iconType: 'ionicons',
-      color: '#0284C7',
-      connected: isChannelConnected('website'),
-      statusText: isChannelConnected('website') ? 'Active & Ready to Embed' : 'Embed script ready',
-      route: '/channels/website',
-    },
-    {
-      id: 'whatsapp',
-      name: 'WhatsApp Business',
-      category: 'MESSAGING',
-      description: 'Receive and reply to customer WhatsApp messages automatically with 24/7 AI employee.',
-      iconName: 'whatsapp',
-      iconType: 'fa',
-      color: '#25D366',
-      connected: isChannelConnected('whatsapp'),
-      statusText: isChannelConnected('whatsapp') ? 'Connected & Listening' : 'Connect via Cloud API or Phone',
-      route: '/channels/whatsapp',
-    },
-    {
-      id: 'instagram',
-      name: 'Instagram Direct',
-      category: 'SOCIAL',
-      description: 'Turn Instagram followers, story replies, and DM inquiries into qualified leads and bookings automatically.',
-      iconName: 'instagram',
-      iconType: 'fa',
-      color: '#E1306C',
-      connected: isChannelConnected('instagram'),
-      statusText: isChannelConnected('instagram') ? 'Active on Direct Messages' : 'Connect Professional Account',
-      route: '/channels/instagram',
-    },
-    {
-      id: 'messenger',
-      name: 'Facebook Messenger',
-      category: 'SOCIAL',
-      description: 'Instantly respond to inquiries on your Facebook Business Page with automated qualification.',
-      iconName: 'facebook-messenger',
-      iconType: 'fa5',
-      color: '#0084FF',
-      connected: isChannelConnected('messenger'),
-      statusText: isChannelConnected('messenger') ? 'Active on Facebook Page' : 'Connect Facebook Page',
-      route: '/channels/messenger',
-    },
-    {
-      id: 'voice',
-      name: 'AI Voice Receptionist',
-      category: 'VOICE & PHONE',
-      description: '24/7 autonomous phone answering, call screening, and calendar appointment booking.',
-      iconName: 'call-outline',
-      iconType: 'ionicons',
-      color: '#8B5CF6',
-      connected: true,
-      statusText: 'Dedicated Inbound Answering',
-      route: '/receptionist',
-    },
+  const [failed, setFailed] = useState(false);
+  const [revision, setRevision] = useState(0);
+  useFocusEffect(useCallback(() => {
+    let current = true;
+    setLoading(true); setFailed(false);
+    apiRequest<Channel[]>(API_PATHS.channels).then(result => {
+      if (!Array.isArray(result)) throw new Error('Invalid channel response');
+      if (current) setChannels(result);
+    }).catch(() => { if (current) { setChannels([]); setFailed(true); } }).finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [revision]));
+  const web = (view: string) => void Linking.openURL(`${WEB_URL}/?view=${view}`).catch(() => Alert.alert(t('Browser unavailable', 'ब्राउज़र नहीं खुला'), t('Please try again.', 'फिर कोशिश करें।')));
+  const items = [
+    { id: 'whatsapp', name: 'WhatsApp', description: t('Order updates and customer replies', 'ऑर्डर की जानकारी और ग्राहकों को जवाब'), route: '/channels/whatsapp' },
+    { id: 'instagram', name: 'Instagram', description: t('Messages and supported automatic replies', 'मैसेज और उपलब्ध ऑटोमैटिक जवाब'), route: '/channels/instagram' },
+    { id: 'messenger', name: 'Messenger', description: t('Facebook Page messages', 'Facebook पेज के मैसेज'), route: '/channels/messenger' },
+    { id: 'live_chat', name: t('Website chat', 'वेबसाइट चैट'), description: t('Live chat and website assistant setup', 'लाइव चैट और वेबसाइट सहायक की सेटिंग'), route: '/channels/website' },
+    { id: 'ai', name: t('AI chatbot', 'AI चैटबॉट'), description: t('Business information, FAQs and assistant behavior', 'व्यवसाय की जानकारी, सवाल-जवाब और सहायक की सेटिंग'), view: 'agentStudio' },
+    { id: 'voice', name: t('AI receptionist', 'AI रिसेप्शनिस्ट'), description: t('Phone service, greetings and call transfers', 'फ़ोन सेवा, स्वागत संदेश और कॉल ट्रांसफ़र'), view: 'aiReceptionist' },
   ];
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0F172A" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Channels & Integrations</Text>
-      </View>
-
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-        {/* Intro Banner */}
-        <View style={styles.bannerCard}>
-          <View style={styles.bannerHeader}>
-            <View style={styles.bannerIconCircle}>
-              <Ionicons name="layers-outline" size={22} color="#10B981" />
-            </View>
-            <Text style={styles.bannerTitle}>Omnichannel AI Hub</Text>
-          </View>
-          <Text style={styles.bannerDesc}>
-            Connect your customer touchpoints. When a customer reaches out via Website, WhatsApp, Instagram, or Phone, your trained AI agent answers instantly and captures leads in your mobile inbox.
-          </Text>
-        </View>
-
-        {/* Section Title */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>AVAILABLE CHANNELS</Text>
-          {loading && <ActivityIndicator size="small" color="#10B981" />}
-        </View>
-
-        {/* Channels List */}
-        {channels.map((channel) => (
-          <TouchableOpacity
-            key={channel.id}
-            style={styles.channelCard}
-            onPress={() => {
-              hapticFeedback.light();
-              if (channel.route) {
-                router.push(channel.route as any);
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <View style={styles.cardTopRow}>
-              <View style={[styles.iconWrapper, { backgroundColor: `${channel.color}15` }]}>
-                {channel.iconType === 'fa' && (
-                  <FontAwesome name={channel.iconName as any} size={24} color={channel.color} />
-                )}
-                {channel.iconType === 'fa5' && (
-                  <FontAwesome5 name={channel.iconName as any} size={22} color={channel.color} />
-                )}
-                {channel.iconType === 'ionicons' && (
-                  <Ionicons name={channel.iconName as any} size={24} color={channel.color} />
-                )}
-              </View>
-
-              <View style={styles.channelMeta}>
-                <View style={styles.nameStatusRow}>
-                  <Text style={styles.channelName}>{channel.name}</Text>
-                  {channel.connected ? (
-                    <View style={styles.connectedBadge}>
-                      <View style={styles.greenDot} />
-                      <Text style={styles.connectedText}>Connected</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.connectActionBadge}>
-                      <Text style={styles.connectActionText}>Setup</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.channelCategory}>{channel.category}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.channelDesc}>{channel.description}</Text>
-
-            <View style={styles.cardFooter}>
-              <Text style={[styles.statusText, channel.connected && styles.activeStatusText]}>
-                {channel.statusText}
-              </Text>
-              <View style={styles.manageRow}>
-                <Text style={styles.manageText}>{channel.connected ? 'Manage' : 'Configure'}</Text>
-                <Ionicons name="chevron-forward" size={16} color="#0F172A" />
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}>
+    <TouchableOpacity accessibilityRole="button" style={styles.back} onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/more')}><Text>{t('Back to Settings', 'सेटिंग पर वापस जाएँ')}</Text></TouchableOpacity>
+    <Text style={styles.title}>{t('Automations & channels', 'ऑटोमेशन और चैनल')}</Text>
+    <Text style={styles.description}>{t('Choose the tools your business needs. Connect an account, configure replies, then test before enabling.', 'अपने व्यवसाय के लिए टूल चुनें। खाता जोड़ें, जवाब सेट करें और चालू करने से पहले जाँचें।')}</Text>
+    {loading && <ActivityIndicator color="#047857" />}
+    {failed && <TouchableOpacity accessibilityRole="button" style={styles.card} onPress={() => setRevision(v => v + 1)}><Text>{t('Could not check connections. Tap to retry.', 'कनेक्शन की जानकारी नहीं मिली। फिर कोशिश करने के लिए टैप करें।')}</Text></TouchableOpacity>}
+    {items.map(item => {
+      const channel = channels.find(c => c.type === item.id || (item.id === 'live_chat' && ['website','livechat','webwidget'].includes(c.type)));
+      const unavailable = channel?.comingSoon || channel?.platformEnabled === false;
+      const status = loading || failed ? t('Status unavailable', 'स्थिति उपलब्ध नहीं') : unavailable ? t('Currently unavailable', 'अभी उपलब्ध नहीं') : channel?.connected ? t('Connected', 'जुड़ा हुआ') : item.view ? t('Review setup in dashboard', 'डैशबोर्ड में सेटिंग जाँचें') : t('Setup required', 'सेटिंग ज़रूरी है');
+      return <TouchableOpacity accessibilityRole="button" accessibilityState={{ disabled: !!unavailable }} disabled={!!unavailable} key={item.id} style={[styles.card, unavailable && { opacity: 0.6 }]} onPress={() => item.view ? web(item.view) : router.push(item.route as '/channels/whatsapp')}>
+        <Text style={styles.name}>{item.name}</Text><Text style={styles.description}>{item.description}</Text><Text style={styles.status}>{status}</Text>
+      </TouchableOpacity>;
+    })}
+    <Text style={styles.description}>{t('Account authorization opens the web dashboard. Sign in with the same business account. Availability and usage depend on your plan and provider setup.', 'खाता जोड़ने के लिए वेब डैशबोर्ड खुलेगा। उसी व्यवसाय के खाते से साइन इन करें। उपलब्धता और इस्तेमाल आपके प्लान और सेवा की सेटिंग पर निर्भर हैं।')}</Text>
+  </ScrollView></SafeAreaView>;
 }
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  backBtn: {
-    padding: 4,
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  bannerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 20,
-  },
-  bannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  bannerIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#D1FAE5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  bannerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  bannerDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 19,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.8,
-  },
-  channelCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  iconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  channelMeta: {
-    flex: 1,
-  },
-  nameStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  channelName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  connectedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginRight: 4,
-  },
-  connectedText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  connectActionBadge: {
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  connectActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  channelCategory: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  channelDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  statusText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '500',
-    flex: 1,
-    paddingRight: 8,
-  },
-  activeStatusText: {
-    color: '#059669',
-    fontWeight: '600',
-  },
-  manageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  manageText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-});
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: '#f6f8f7' }, content: { padding: 16, gap: 16, paddingBottom: 40 }, title: { fontSize: 26, fontWeight: '700', color: '#173d2d' }, name: { fontSize: 18, fontWeight: '600', color: '#173d2d' }, description: { fontSize: 14, lineHeight: 21, color: '#64748b' }, card: { padding: 16, gap: 8, borderRadius: 16, backgroundColor: 'white', borderWidth: 1, borderColor: '#e6ebe8' }, status: { fontSize: 13, fontWeight: '600', color: '#36634f' }, back: { minHeight: 48, justifyContent: 'center' } });

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { OAUTH_PROVIDERS, SOCIAL_PUBLISHING_PLATFORMS } from '@/lib/channel-meta'
 
@@ -48,6 +50,14 @@ export async function GET(
     return renderErrorPage('Missing authorization code or state')
   }
 
+  const user = await getAuthUser(request)
+  const cookieStore = await cookies()
+  const cookieName = `channel_oauth_${provider}`
+  if (!user?.tenantId || !['owner','admin','standalone_user'].includes(user.role) || cookieStore.get(cookieName)?.value !== stateParam) {
+    return renderErrorPage('Connection session is invalid. Start again from your dashboard.')
+  }
+  cookieStore.delete(cookieName)
+
   // Verify state
   let state: { tenantId?: string; userId?: string; provider?: string; ts?: number }
   try {
@@ -57,11 +67,11 @@ export async function GET(
   }
 
   // State must be < 10 min old (CSRF protection)
-  if (!state.ts || Date.now() - state.ts > 10 * 60 * 1000) {
+  if (!state.ts || state.ts > Date.now() || Date.now() - state.ts > 10 * 60 * 1000) {
     return renderErrorPage('Authorization timed out — please try again')
   }
 
-  if (state.provider !== provider) {
+  if (state.provider !== provider || state.tenantId !== user.tenantId || state.userId !== user.id) {
     return renderErrorPage('Provider mismatch in state')
   }
 
@@ -76,7 +86,7 @@ export async function GET(
   const meta = OAUTH_PROVIDERS[provider]
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const redirectUri = `${appUrl}/api/oauth/${provider}/callback`
+  const redirectUri = `${appUrl}/api/oauth/${provider}/${provider === 'instagram' ? 'messaging-callback' : 'callback'}`
 
   // Exchange code for access token
   let tokenResponse: { access_token?: string; token_type?: string; expires_in?: number; refresh_token?: string; scope?: string }
@@ -93,8 +103,7 @@ export async function GET(
       }),
     })
     if (!tokenReq.ok) {
-      const errText = await tokenReq.text()
-      console.error(`[OAuth callback] Token exchange failed for ${provider}:`, errText)
+      console.error(`[OAuth callback] Token exchange failed for ${provider}: HTTP ${tokenReq.status}`)
       return renderErrorPage(`Token exchange failed: ${tokenReq.status}`)
     }
     tokenResponse = await tokenReq.json()
@@ -108,7 +117,7 @@ export async function GET(
   }
 
   // Store the token in the tenant's CommunicationProvider record
-  const tenantId = state.tenantId || null
+  const tenantId = user.tenantId
   const existing = await db.communicationProvider.findFirst({
     where: { type: provider, tenantId },
   })
@@ -129,8 +138,8 @@ export async function GET(
       where: { id: existing.id },
       data: {
         configJson,
-        status: 'active',
-        sendingEnabled: true,
+        status: 'inactive',
+        sendingEnabled: false,
         lastUsedAt: new Date(),
       },
     })
@@ -140,23 +149,23 @@ export async function GET(
         name: meta.displayName,
         type: provider,
         provider,
-        status: 'active',
+        status: 'inactive',
         configJson,
         isDefault: false,
-        sendingEnabled: true,
+        sendingEnabled: false,
         tenantId,
       },
     })
   }
 
-  // Mark the ChannelConfig as setup-completed
+  // Authorization alone does not verify account selection, webhooks or delivery.
   await db.channelConfig.updateMany({
     where: { channel: provider, tenantId },
     data: {
-      status: 'active',
-      setupCompleted: true,
+      status: 'inactive',
+      setupCompleted: false,
       setupStep: 3,
-      lastTestStatus: 'success',
+      lastTestStatus: null,
       lastTestedAt: new Date(),
     },
   })
@@ -175,14 +184,14 @@ button { background: #16a34a; color: white; border: none; padding: 0.75rem 1.5re
 <body>
 <div class="card">
   <div class="icon">✓</div>
-  <h1>Connected!</h1>
-  <p>${meta.displayName} is now connected. You can close this window.</p>
+  <h1>Account authorized</h1>
+  <p>${meta.displayName} authorization was saved. Complete account selection and connection testing in your dashboard before activation.</p>
   <button onclick="window.close()">Close</button>
 </div>
 <script>
   // Try to notify the opener window
   if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_success', provider: '${provider}' }, '*');
+    window.opener.postMessage({ type: 'oauth_success', provider: '${provider}' }, ${JSON.stringify(appUrl)});
     setTimeout(() => window.close(), 1000);
   }
 </script>
@@ -192,6 +201,8 @@ button { background: #16a34a; color: white; border: none; padding: 0.75rem 1.5re
 }
 
 function renderErrorPage(message: string): NextResponse {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  message = message.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))
   return new NextResponse(
     `<!html>
 <html><head><title>Connection Failed</title><style>
@@ -211,7 +222,7 @@ button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.5re
 </div>
 <script>
   if (window.opener) {
-    window.opener.postMessage({ type: 'oauth_error', error: '${message.replace(/'/g, "\\'")}' }, '*');
+    window.opener.postMessage({ type: 'oauth_error', error: ${JSON.stringify(message)} }, ${JSON.stringify(appUrl)});
     setTimeout(() => window.close(), 2000);
   }
 </script>

@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -38,12 +39,15 @@ export default function WebsiteChannelScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const agentId = agent?.id || 'main-assistant';
+  const agentId = agent?.id || '';
   const agentName = agent?.name || 'AI Assistant';
-  const directLink = `${API_BASE_URL}/intake/${agent?.publicSlug || agentId}`;
-  const snippetCode = `<script async \n  src="${API_BASE_URL}/widget.js"\n  data-agent-id="${agentId}"\n  data-theme="auto">\n</script>`;
+  const directLink = `${API_BASE_URL}/intake/${encodeURIComponent(agent?.slug || agent?.publicSlug || agentId)}`;
+  const snippetCode = `<script async \n  src="${API_BASE_URL}/embed/agent.js"\n  data-agent="${agentId}"\n  data-theme="auto">\n</script>`;
 
-  const copyToClipboard = (type: 'snippet' | 'link') => {
+  const copyToClipboard = async (type: 'snippet' | 'link') => {
+    if (!agent?.id) { Alert.alert('Setup required', 'Create and publish an assistant before sharing its link.'); return; }
+    try { await Clipboard.setStringAsync(type === 'snippet' ? snippetCode : directLink); }
+    catch { Alert.alert('Copy failed', 'Please try again.'); return; }
     hapticFeedback.success();
     if (type === 'snippet') {
       setCopiedSnippet(true);
@@ -60,6 +64,7 @@ export default function WebsiteChannelScreen() {
   };
 
   const shareDirectLink = async () => {
+    if (!agent?.id) { Alert.alert('Setup required', 'Create and publish an assistant first.'); return; }
     hapticFeedback.light();
     try {
       await Share.share({
@@ -73,6 +78,7 @@ export default function WebsiteChannelScreen() {
 
   const handleTestChat = () => {
     hapticFeedback.light();
+    if (!agent?.id) { Alert.alert('Setup required', 'Create and publish an assistant first.'); return; }
     Linking.openURL(directLink).catch(() => {
       Alert.alert('Error', 'Could not open chat URL.');
     });

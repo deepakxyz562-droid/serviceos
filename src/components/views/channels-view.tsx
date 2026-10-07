@@ -486,8 +486,9 @@ function OAuthWizard({
   // Listen for OAuth popup completion
   useEffect(() => {
     const handler = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return
       if (event.data?.type === 'oauth_success' && event.data?.provider === channel.oauthProvider) {
-        toast.success(`${channel.label} connected successfully!`)
+        toast.success(`${channel.label} authorization saved. Complete connection verification before enabling.`)
         setConnecting(false)
         onSaved()
         onClose()
@@ -502,19 +503,14 @@ function OAuthWizard({
 
   const checkOAuthStatus = async () => {
     try {
-      const res = await authFetch('/api/superadmin/integration-credentials')
-      // This will 403 for non-superadmin — that's expected. We need a tenant-visible endpoint.
-      // For now, infer from the channel config.
-      if (res.ok) {
-        const data = await res.json()
-        const p = data.providers?.find((p: { provider: string }) => p.provider === channel.oauthProvider)
-        setOauthStatus({ configured: !!p?.configured, credentialId: p?.credentialId || null })
-      } else {
-        // Non-superadmin: assume configured (the connect button will 503 if not)
-        setOauthStatus({ configured: true, credentialId: null })
-      }
+      const res = await authFetch('/api/omnichannel/availability')
+      if (!res.ok) throw new Error('Provider status unavailable')
+      const data = await res.json()
+      const provider = data.providers?.find((p: { provider: string; configured: boolean }) => p.provider === channel.oauthProvider)
+      setOauthStatus({ configured: provider?.configured === true, credentialId: null })
     } catch {
-      setOauthStatus({ configured: true, credentialId: null })
+      setOauthStatus({ configured: false, credentialId: null })
+      toast.error('Could not verify provider setup. Please try again.')
     } finally {
       setLoadingStatus(false)
     }
@@ -535,9 +531,9 @@ function OAuthWizard({
   }
 
   const handleDisconnect = async () => {
-    if (!confirm(`Disconnect ${channel.label}? You will stop receiving messages from this channel.`)) return
+    if (!confirm(`Pause ${channel.label}? Provider authorization remains connected.`)) return
     try {
-      await authFetch('/api/omnichannel/channels', {
+      const response = await authFetch('/api/omnichannel/channels', {
         method: 'POST',
         body: JSON.stringify({
           channel: channel.id,
@@ -547,7 +543,8 @@ function OAuthWizard({
           setupStep: 0,
         }),
       })
-      toast.success(`${channel.label} disconnected`)
+      if (!response.ok) throw new Error('Unable to pause channel')
+      toast.success(`${channel.label} paused`)
       onSaved()
       onClose()
     } catch {
@@ -570,7 +567,7 @@ function OAuthWizard({
         <Step
           number={1}
           title="Superadmin registers OAuth app"
-          done={oauthStatus?.configured}
+          done={oauthStatus?.configured === true}
           active={!oauthStatus?.configured}
         >
           The platform admin registers an OAuth app with {channel.label} and stores the
@@ -585,13 +582,13 @@ function OAuthWizard({
         <Step
           number={2}
           title="Click Connect to authorize"
-          done={config?.connected}
-          active={oauthStatus?.configured && !config?.connected}
+          done={config?.connected === true}
+          active={oauthStatus?.configured === true && !config?.connected}
         >
           Click the button below to open {channel.label}&rsquo;s consent screen. After you
           authorize, this channel will start receiving messages.
         </Step>
-        <Step number={3} title="Start messaging" done={config?.connected} active={false}>
+        <Step number={3} title="Start messaging" done={config?.connected === true} active={false}>
           Messages from {channel.label} appear in your Omnichannel Inbox automatically.
         </Step>
       </div>
@@ -744,7 +741,7 @@ function ManualWizard({
         <Step number={2} title="Enter API credentials" done={Object.keys(form).length > 0} active={true}>
           Copy the credentials from your provider dashboard. All secrets are stored encrypted.
         </Step>
-        <Step number={3} title="Test &amp; activate" done={config?.connected} active={false}>
+        <Step number={3} title="Test &amp; activate" done={config?.connected === true} active={false}>
           Send a test message, then activate the channel.
         </Step>
       </div>
