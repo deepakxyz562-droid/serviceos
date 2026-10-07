@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { name, email, password, businessName, industry, phone, city, website } = body;
+    const { name, email, password, businessName, industry, phone, city, country, website } = body;
 
     // Validate required fields
     if (!name || !email || !password || !businessName) {
@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
         phone: phone || null,
         email,
         city: city || null,
+        country: country || null,
         website: website || null,
         plan: signupPlan,
         planStatus: isFreePlan ? 'active' : 'trial',
@@ -167,7 +168,7 @@ export async function POST(request: NextRequest) {
       try {
         await db.employee.create({
           data: {
-            name: user.name,
+            name: user.name || user.email.split('@')[0],
             email: user.email,
             phone: user.phone || phone || '',
             role: 'owner',

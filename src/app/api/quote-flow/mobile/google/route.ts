@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { signMobileToken, getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
+import { getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
+import { getRefreshSessionMetadata, issueAuthTokens } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { verifyGoogleToken } from '@/lib/quote-flow-google-auth';
 
@@ -82,10 +83,22 @@ export async function POST(req: Request) {
     }
 
     const business = await getOrCreateBusinessForUser(user.id, user.tenantId || undefined, user.name || 'My Business');
-    const token = signMobileToken(user.id, user.email);
+    const tokens = await issueAuthTokens({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      tenantId: user.tenantId,
+      workspaceId: user.workspaceId,
+      avatar: user.avatar,
+      isSuperAdmin: user.isSuperAdmin || false,
+      employeeId: null,
+    }, getRefreshSessionMetadata(req));
 
     return NextResponse.json({
-      token,
+      token: tokens.accessToken,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user: { id: user.id, email: user.email, name: user.name },
       business,
     });

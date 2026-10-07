@@ -1,6 +1,7 @@
 'use client';
+import { RequestTracker } from '../../../../shared/money';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   ShoppingCart,
   MessageCircle,
@@ -80,6 +81,7 @@ export function StoreClient({
   billing,
   discounts = [],
 }: StoreClientProps) {
+  const requestTracker = useRef(new RequestTracker());
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -102,7 +104,7 @@ export function StoreClient({
   const [appliedDiscount, setAppliedDiscount] = useState<DiscountRule | null>(null);
   const [promoError, setPromoError] = useState('');
   const [callServerSuccess, setCallServerSuccess] = useState(false);
-  const [whatsappUpdatesOptIn, setWhatsappUpdatesOptIn] = useState(true);
+  const [whatsappUpdatesOptIn, setWhatsappUpdatesOptIn] = useState(false);
   const [isReturningCustomer, setIsReturningCustomer] = useState(false);
 
   // Restore customer from device localStorage on QR scan / page load
@@ -202,7 +204,7 @@ export function StoreClient({
   const taxAmount = taxType === 'inclusive' ? 0 : (taxableAmount * taxRate) / 100;
   const serviceChargeAmount = (taxableAmount * serviceChargeRate) / 100;
 
-  const grandTotal = taxType === 'inclusive' ? taxableAmount : taxableAmount + taxAmount + serviceChargeAmount;
+  const grandTotal = taxableAmount + taxAmount + serviceChargeAmount;
 
   const handleApplyPromo = async () => {
     setPromoError('');
@@ -268,10 +270,7 @@ export function StoreClient({
     try {
       // 1. Submit order to backend
       const deliveryTiming = timingType === 'ORDER_AHEAD' ? scheduledSlot : 'Immediate (Now)';
-      const res = await fetch('/api/public/store/order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const payload = {
           businessId,
           customerName: customerName.trim() || 'Guest',
           customerPhone: customerPhone.trim(),
@@ -293,8 +292,11 @@ export function StoreClient({
           total: grandTotal,
           paymentMethod: method === 'UPI' ? 'UPI' : 'WHATSAPP_COD',
           whatsappConsent: whatsappUpdatesOptIn,
-        }),
-      }).then((r) => r.json());
+        };
+      const response = await fetch('/api/public/store/order', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestTracker.current.for(payload) }, body: JSON.stringify(payload) });
+      const res = await response.json();
+      if (!response.ok) throw new Error(res.error || 'Order could not be placed.');
+      requestTracker.current.clear();
 
       // Persist customer profile to device localStorage for 1-tap re-ordering
       try {
@@ -354,7 +356,7 @@ export function StoreClient({
         ? `https://wa.me/${cleanBizPhone}?text=${encodeURIComponent(waMessage)}`
         : `https://wa.me/?text=${encodeURIComponent(waMessage)}`;
 
-      const trackingUrl = res.trackingUrl || `/store/${businessId}/order/${res.orderId || orderNumber}`;
+      const trackingUrl = res.trackingUrl || res.trackingUrl || `/store/${businessId}/order/${res.orderId || orderNumber}`;
 
       setOrderSuccess({
         orderNumber,
@@ -918,7 +920,7 @@ export function StoreClient({
               </div>
               <h3 className="text-xl font-black text-stone-900">Order Confirmed!</h3>
               <p className="text-xs text-stone-500 mt-1">
-                Order #{orderSuccess.orderNumber} has been received and forwarded to {businessName}.
+                Order #{orderSuccess.orderNumber} has been received by {businessName}. Keep this link to check its status.
               </p>
 
               <div className="mt-5 space-y-2">

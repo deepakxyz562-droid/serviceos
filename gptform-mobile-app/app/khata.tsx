@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
+import { RequestTracker } from '../../shared/money';
 import { API_PATHS } from '@/lib/constants';
 
 interface UnpaidOrder {
@@ -49,6 +50,7 @@ interface KhataResponse {
 
 export default function KhataScreen() {
   const router = useRouter();
+  const requestTracker = useRef(new RequestTracker());
   const [customers, setCustomers] = useState<CustomerUdhaar[]>([]);
   const [summary, setSummary] = useState({
     totalAapkoMilega: 0,
@@ -129,6 +131,7 @@ export default function KhataScreen() {
     try {
       await apiRequest(API_PATHS.commerceKhata, {
         method: 'POST',
+        headers: { 'Idempotency-Key': requestTracker.current.for({ type: 'COLLECTION', phone: paymentModalCustomer.phone, amount: amt, paymentMethod }) },
         body: {
           customerPhone: paymentModalCustomer.phone,
           customerName: paymentModalCustomer.name,
@@ -138,6 +141,7 @@ export default function KhataScreen() {
         },
       });
 
+      requestTracker.current.clear();
       setPaymentModalCustomer(null);
       setPaymentAmount('');
       Alert.alert('Payment Recorded ✓', `₹${amt.toFixed(2)} credited to ${paymentModalCustomer.name}'s balance.`);
@@ -165,6 +169,7 @@ export default function KhataScreen() {
     try {
       await apiRequest(API_PATHS.commerceKhata, {
         method: 'POST',
+        headers: { 'Idempotency-Key': requestTracker.current.for({ type: 'CREDIT_SALE', phone: udhaarPhone.trim(), amount: amt, note: udhaarNote.trim() }) },
         body: {
           customerPhone: udhaarPhone.trim(),
           customerName: udhaarName.trim() || 'Customer',
@@ -174,6 +179,7 @@ export default function KhataScreen() {
         },
       });
 
+      requestTracker.current.clear();
       setUdhaarModalOpen(false);
       setUdhaarName('');
       setUdhaarPhone('');

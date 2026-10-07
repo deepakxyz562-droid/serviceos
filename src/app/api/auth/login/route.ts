@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyPassword, generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import {
+  verifyPassword,
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
@@ -108,7 +113,8 @@ export async function POST(request: NextRequest) {
       isSuperAdmin: user.isSuperAdmin || false,
       ...(employeeId ? { employeeId } : {}),
     };
-    const token = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    const token = tokens.accessToken;
 
     // Build response
     // Note: `refreshToken` is included so the mobile app stores it in SecureStore
@@ -131,7 +137,7 @@ export async function POST(request: NextRequest) {
           lastLoginAt: new Date(),
         },
         token,
-        refreshToken: token, // same JWT — mobile stores this for /api/auth/refresh
+        refreshToken: tokens.refreshToken,
         tenant: user.tenant
           ? {
               id: user.tenant.id,
@@ -155,10 +161,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Set auth cookie
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: token,
-    });
+    setAuthCookies(response.cookies, tokens);
 
     return response;
   } catch (error) {

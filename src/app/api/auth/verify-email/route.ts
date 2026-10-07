@@ -24,7 +24,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyEmailToken } from '@/lib/emails/verification-email';
 import { db } from '@/lib/db';
-import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,7 +98,8 @@ export async function GET(request: NextRequest) {
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
     };
-    const sessionToken = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    const sessionToken = tokens.accessToken;
 
     // ── Send the welcome email NOW (after verification, not on registration) ──
     // Previously the welcome email was sent in the register route immediately
@@ -108,8 +113,8 @@ export async function GET(request: NextRequest) {
         process.env.APP_URL ||
         new URL(request.url).origin;
       await sendWelcomeEmailTo(user.email, {
-        ownerName: user.name,
-        businessName: user.tenant?.name || user.name,
+        ownerName: user.name || user.email.split('@')[0],
+        businessName: user.tenant?.name || user.name || user.email.split('@')[0],
         appUrl,
         tenantSlug: user.tenant?.slug || '',
         marketplaceOptIn: user.tenant?.marketplaceOptIn || false,
@@ -122,15 +127,13 @@ export async function GET(request: NextRequest) {
       ok: true,
       message: 'Your email has been verified.',
       token: sessionToken,
+      refreshToken: tokens.refreshToken,
       user: authUser,
       tenant: user.tenant,
     });
 
     // Set auth cookie — MUST use the same pattern as the login route
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: sessionToken,
-    });
+    setAuthCookies(response.cookies, tokens);
     return response;
 
   } catch (err) {

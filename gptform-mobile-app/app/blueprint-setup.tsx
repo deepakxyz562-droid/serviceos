@@ -15,11 +15,13 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { hapticFeedback } from '@/lib/haptics';
-import type { BusinessType, CountryCode, BusinessCapabilities } from '@/lib/blueprint/types';
+import type { BusinessType, CountryCode, BusinessCapabilities, SalesChannel } from '@/lib/blueprint/types';
 import {
   BUSINESS_TYPE_LABELS,
   COUNTRY_PACKS,
-  getCapabilitiesForBusinessType,
+  resolveBlueprintCapabilities,
+  DEFAULT_CHANNELS_FOR_BUSINESS_TYPE,
+  SALES_CHANNEL_INFO,
   getCountryPack,
 } from '@/lib/blueprint';
 
@@ -41,17 +43,21 @@ const COUNTRIES: CountryCode[] = ['US', 'CA', 'AU', 'IN', 'GB', 'GLOBAL'];
 export default function BlueprintSetupScreen() {
   const { blueprint, saveBlueprintToServer, isLoading } = useBlueprintStore();
 
-  const [activeTab, setActiveTab] = useState<'type' | 'modules' | 'country'>('type');
+  const [activeTab, setActiveTab] = useState<'type' | 'channels' | 'modules' | 'country'>('type');
   const [selectedType, setSelectedType] = useState<BusinessType>(blueprint.businessType);
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>(blueprint.country);
   const [capabilities, setCapabilities] = useState<BusinessCapabilities>(blueprint.capabilities);
+  const [channels, setChannels] = useState<SalesChannel[]>(blueprint.salesChannels || DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[blueprint.businessType]);
+  const [language, setLanguage] = useState<'en' | 'hi'>(blueprint.language || 'en');
 
   const countryPack = getCountryPack(selectedCountry);
 
   const handleSelectType = async (type: BusinessType) => {
     await hapticFeedback.light();
     setSelectedType(type);
-    const newCaps = getCapabilitiesForBusinessType(type);
+    const defaults = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[type];
+    setChannels(defaults);
+    const newCaps = resolveBlueprintCapabilities(type, defaults);
     setCapabilities(newCaps);
   };
 
@@ -74,6 +80,8 @@ export default function BlueprintSetupScreen() {
       businessType: selectedType,
       country: selectedCountry,
       capabilities,
+      salesChannels: channels,
+      language,
     });
 
     if (success) {
@@ -119,6 +127,9 @@ export default function BlueprintSetupScreen() {
 
       {/* Top Selector Tabs */}
       <View style={styles.tabsRow}>
+        {(['en', 'hi'] as const).map((value) => <TouchableOpacity accessibilityRole="button" key={value} style={[styles.topTab, language === value && styles.topTabActive]} onPress={() => setLanguage(value)}><Text style={styles.topTabText}>{value === 'en' ? 'English' : 'हिन्दी'}</Text></TouchableOpacity>)}
+      </View>
+      <View style={styles.tabsRow}>
         <TouchableOpacity
           style={[styles.topTab, activeTab === 'type' && styles.topTabActive]}
           onPress={() => setActiveTab('type')}
@@ -128,12 +139,14 @@ export default function BlueprintSetupScreen() {
           </Text>
         </TouchableOpacity>
 
+        <TouchableOpacity style={[styles.topTab, activeTab === 'channels' && styles.topTabActive]} onPress={() => setActiveTab('channels')}><Text style={styles.topTabText}>2. Channels</Text></TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.topTab, activeTab === 'modules' && styles.topTabActive]}
           onPress={() => setActiveTab('modules')}
         >
           <Text style={[styles.topTabText, activeTab === 'modules' && styles.topTabTextActive]}>
-            2. Modules
+            3. Modules
           </Text>
         </TouchableOpacity>
 
@@ -142,12 +155,20 @@ export default function BlueprintSetupScreen() {
           onPress={() => setActiveTab('country')}
         >
           <Text style={[styles.topTabText, activeTab === 'country' && styles.topTabTextActive]}>
-            3. Country
+            4. Country
           </Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {activeTab === 'channels' && <View style={styles.sectionWrap}>
+          <Text style={styles.sectionHeading}>{language === 'hi' ? 'आप कैसे बेचते हैं?' : 'How do you sell?'}</Text>
+          {(Object.entries(SALES_CHANNEL_INFO) as Array<[SalesChannel, { label: string; description: string; icon: string }]>).map(([channel, info]) => <TouchableOpacity key={channel} accessibilityRole="checkbox" accessibilityState={{ checked: channels.includes(channel) }} style={[styles.typeCard, channels.includes(channel) && styles.typeCardActive]} onPress={() => {
+            const next = channels.includes(channel) ? channels.filter((c) => c !== channel) : [...channels, channel];
+            if (!next.length) return;
+            setChannels(next); setCapabilities(resolveBlueprintCapabilities(selectedType, next));
+          }}><Text style={styles.typeIcon}>{info.icon}</Text><View style={{ flex: 1, marginLeft: 12 }}><Text style={styles.typeTitle}>{info.label}</Text><Text style={styles.typeDesc}>{info.description}</Text></View><MaterialIcons name={channels.includes(channel) ? 'check-circle' : 'radio-button-unchecked'} size={24} color="#059669" /></TouchableOpacity>)}
+        </View>}
         {/* TAB 1: BUSINESS TYPE */}
         {activeTab === 'type' && (
           <View style={styles.sectionWrap}>

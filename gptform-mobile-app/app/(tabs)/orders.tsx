@@ -147,6 +147,7 @@ export default function OrdersScreen() {
   };
 
   const handleSimulatePayment = async () => {
+    if(!__DEV__) return;
     const candidate = orders.find((o) =>
       ['UNPAID', 'DETECTION_PENDING', 'PENDING'].includes(o.paymentStatus)
     );
@@ -326,13 +327,13 @@ export default function OrdersScreen() {
       </View>
 
       {/* UPI Auto-Match Live Strip */}
-      <View style={styles.upiStrip}>
+      {__DEV__ && <View style={styles.upiStrip}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
           <View style={styles.pulseDot} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.upiStripTitle}>UPI Auto-Match: Active</Text>
+            <Text style={styles.upiStripTitle}>UPI matching demo</Text>
             <Text style={styles.upiStripSub} numberOfLines={1}>
-              Listening for PhonePe, GPay, Paytm & SMS notifications
+              Demo notifications do not verify bank receipts
             </Text>
           </View>
         </View>
@@ -344,7 +345,7 @@ export default function OrdersScreen() {
           <MaterialIcons name="bolt" size={13} color="#b45309" />
           <Text style={styles.testMatchBtnText}>Test Match</Text>
         </TouchableOpacity>
-      </View>
+      </View>}
 
       {/* Filter Tabs */}
       <View style={styles.filterWrap}>

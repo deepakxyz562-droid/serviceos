@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
+import { POST as saveMoney } from '@/app/api/commerce/money/route';
 
 /**
  * GET /api/commerce/expenses
@@ -72,66 +73,10 @@ export async function GET(req: NextRequest) {
  * Create a new operating expense
  */
 export async function POST(req: NextRequest) {
-  try {
-    const { business } = await requireQuoteFlowBusiness(req);
-    const body = await req.json();
-    const { amount, category, description, paymentMode = 'CASH', date } = body;
-
-    const parsedAmount = Number(amount);
-    if (!parsedAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
-      return NextResponse.json({ error: 'Valid positive amount is required' }, { status: 400 });
-    }
-
-    const tenantScope = business.tenantId || business.id;
-    const expenseDate = date ? new Date(date) : new Date();
-    const validPaymentMethods = ['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE'];
-    const normalizedPaymentMethod = validPaymentMethods.includes(String(paymentMode).toUpperCase())
-      ? String(paymentMode).toUpperCase()
-      : 'CASH';
-
-    const count = await db.expense.count({
-      where: {
-        OR: [
-          { tenantId: business.id },
-          ...(business.tenantId ? [{ tenantId: business.tenantId }] : []),
-        ],
-      },
-    });
-
-    const expenseNumber = `EXP-${String(count + 1).padStart(4, '0')}-${Date.now().toString().slice(-4)}`;
-
-    const expense = await db.expense.create({
-      data: {
-        number: expenseNumber,
-        tenantId: tenantScope,
-        amount: parsedAmount,
-        currency: business.currency || 'INR',
-        category: category || 'General',
-        paymentMethod: normalizedPaymentMethod,
-        description: description || 'Operating Expense',
-        expenseDate,
-        status: 'approved',
-      },
-    });
-
-    return NextResponse.json({
-      success: true,
-      expense: {
-        id: expense.id,
-        number: expense.number,
-        amount: expense.amount,
-        category: expense.category,
-        paymentMethod: expense.paymentMethod,
-        description: expense.description,
-        notes: expense.notes,
-        date: expense.expenseDate,
-      },
-    });
-  } catch (e: any) {
-    if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('Failed to create expense:', e);
-    return NextResponse.json({ error: e.message || 'Failed to create expense' }, { status: 500 });
-  }
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid expense' }, { status: 400 });
+  return saveMoney(new Request(req.url, { method: 'POST', headers: req.headers, body: JSON.stringify({
+    kind: 'EXPENSE', amount: body.amount, account: body.paymentMode === 'CASH' ? 'CASH' : 'BANK',
+    reference: body.description || body.category || 'Shop expense', requestKey: body.requestKey,
+  }) }));
 }

@@ -4,6 +4,12 @@ import { cookies, headers } from 'next/headers';
 import { recordUserActivity } from '@/lib/presence';
 import { getCookieDomain } from '@/lib/brand';
 import { db } from '@/lib/db';
+import {
+  issueRefreshSession,
+  REFRESH_SESSION_MAX_MS,
+  type RefreshSessionMetadata,
+  type RefreshSubjectType,
+} from '@/lib/auth-refresh-session';
 
 // ── Presence throttle (Supabase production safety) ─────────────────────────
 // Per-employee in-memory timestamp of the last lastSeenAt write fired from
@@ -38,20 +44,14 @@ function getJwtSecret(): string {
   return 'fieseros-saas-dev-secret-key';
 }
 const TOKEN_NAME = 'fieseros_session';
-const TOKEN_EXPIRY = '30d';
+const REFRESH_TOKEN_NAME = 'fieseros_refresh';
+const TOKEN_EXPIRY = '15m';
 
 /**
  * Absolute session maximum lifetime (90 days).
  *
- * SESSION POLICY (updated for "stay logged in" UX):
- *   - Access JWT: 30-day sliding window (refresh extends it)
- *   - Absolute maximum: 90 days from the ORIGINAL login (embedded as `originalIat`)
- *   - After 90 days: user must re-authenticate, regardless of activity
- *
- * This gives active users a seamless experience — they stay logged in for up
- * to 90 days as long as they use the app at least once per 30 days. The
- * `originalIat` claim is set at login and preserved across refreshes.
- * The refresh endpoint rejects tokens where `now - originalIat > 90 days`.
+ * Access JWTs are intentionally short lived. Opaque, single-use refresh
+ * sessions provide the 90-day maximum session and can be revoked server-side.
  */
 export const ABSOLUTE_SESSION_MAX_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
@@ -113,6 +113,30 @@ export function generateToken(user: AuthUser, originalIat?: number): string {
     getJwtSecret(),
     { expiresIn: TOKEN_EXPIRY }
   );
+}
+
+export async function issueAuthTokens(
+  user: AuthUser,
+  metadata: RefreshSessionMetadata = {},
+  subjectType: RefreshSubjectType = 'user',
+  refreshSubjectId = user.id,
+): Promise<{ token: string; accessToken: string; refreshToken: string }> {
+  const refreshSession = await issueRefreshSession(
+    { type: subjectType, id: refreshSubjectId },
+    metadata,
+  );
+  const accessToken = generateToken(user);
+  return { token: accessToken, accessToken, refreshToken: refreshSession.token };
+}
+
+export function getRefreshSessionMetadata(request: {
+  headers: { get(name: string): string | null };
+}): RefreshSessionMetadata {
+  const forwarded = request.headers.get('x-forwarded-for');
+  return {
+    userAgent: request.headers.get('user-agent'),
+    ipAddress: forwarded?.split(',')[0]?.trim() || request.headers.get('x-real-ip'),
+  };
 }
 
 /**
@@ -367,9 +391,40 @@ export const COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   path: '/',
-  maxAge: 60 * 60 * 24 * 30, // 30 days — matches TOKEN_EXPIRY so sessions persist
+  maxAge: 60 * 15,
   domain: getCookieDomain(), // '.fieseros.com' in prod, undefined in dev
 };
+
+export const REFRESH_COOKIE_OPTIONS = {
+  name: REFRESH_TOKEN_NAME,
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  path: '/api/auth',
+  maxAge: Math.floor(REFRESH_SESSION_MAX_MS / 1000),
+  domain: getCookieDomain(),
+};
+
+interface AuthCookieWriter {
+  set(options: {
+    name: string;
+    value: string;
+    httpOnly?: boolean;
+    secure?: boolean;
+    sameSite?: 'lax' | 'strict' | 'none';
+    path?: string;
+    maxAge?: number;
+    domain?: string;
+  }): unknown;
+}
+
+export function setAuthCookies(
+  cookies: AuthCookieWriter,
+  tokens: { accessToken: string; refreshToken: string },
+): void {
+  cookies.set({ ...COOKIE_OPTIONS, value: tokens.accessToken });
+  cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: tokens.refreshToken });
+}
 
 /**
  * Generate a URL-safe slug from a business name

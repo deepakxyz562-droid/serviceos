@@ -11,6 +11,7 @@ interface AuthState {
   isAuthenticated: boolean;
   user: any;
   tenant: any;
+  workspace?: any;
 }
 
 interface AppState {
@@ -204,7 +205,7 @@ export const useAppStore = create<AppState>()(
     const cp = bp ? getCountryPack(bp.country) : getCountryPack('US');
     set({
       auth,
-      ...(bp ? { blueprint: bp, countryPack: cp } : {}),
+      blueprint: bp, countryPack: cp,
     });
   },
   setAuthHydrated: (hydrated: boolean) => set({ authHydrated: hydrated }),
@@ -334,12 +335,15 @@ export const useAppStore = create<AppState>()(
         // it's still valid because the view exists in the catalog.
         currentView: state.currentView,
         activeView: state.activeView,
-        blueprint: state.blueprint,
       }),
       // Don't persist the session-bound fields. clearAuth sets authHydrated=true
       // so the auth re-check in MarketplaceHeader runs once.
       skipHydration: false,
-      version: 1,
+      version: 2,
+      migrate: (persisted) => {
+        const { blueprint: _oldBlueprint, ...preferences } = (persisted || {}) as Partial<AppState>;
+        return preferences;
+      },
     },
   ),
 );

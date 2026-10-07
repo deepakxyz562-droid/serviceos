@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,11 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
+import { RequestTracker } from '../../shared/money';
 import { API_PATHS } from '@/lib/constants';
 
 interface DaybookTransaction {
@@ -64,6 +65,8 @@ const EXPENSE_CATEGORIES = [
 
 export default function ExpensesScreen() {
   const router = useRouter();
+  const requestTracker = useRef(new RequestTracker());
+  const { create } = useLocalSearchParams<{ create?: string }>();
   const [data, setData] = useState<DaybookResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,7 +74,7 @@ export default function ExpensesScreen() {
   const [error, setError] = useState<string | null>(null);
 
   // Add Expense Modal State
-  const [modalOpen, setModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(create === '1');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [description, setDescription] = useState('');
@@ -111,15 +114,9 @@ export default function ExpensesScreen() {
     setSubmitting(true);
     await hapticFeedback.medium();
     try {
-      await apiRequest(API_PATHS.commerceExpenses, {
-        method: 'POST',
-        body: {
-          amount: amt,
-          category,
-          description: description.trim() || category,
-          paymentMode,
-        },
-      });
+      const payload = { amount: amt, category, description: description.trim() || category, paymentMode };
+      await apiRequest(API_PATHS.commerceExpenses, { method: 'POST', body: payload, headers: { 'Idempotency-Key': requestTracker.current.for(payload) } });
+      requestTracker.current.clear();
 
       setModalOpen(false);
       setAmount('');

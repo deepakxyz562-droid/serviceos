@@ -68,6 +68,7 @@ const TABLE_MAP: Record<string, string> = {
   tenant: 'Tenant',
   subscription: 'Subscription',
   user: 'User',
+  authRefreshSession: 'AuthRefreshSession',
   service: 'Service',
   lead: 'Lead',
   invoice: 'Invoice',

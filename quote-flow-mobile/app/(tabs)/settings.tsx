@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useAppStore } from "@/store/app";
-import { apiPatch, clearToken, API_BASE_URL } from "@/api/client";
+import { apiPatch, logout, loadToken, API_BASE_URL } from "@/api/client";
 import {
   sanitizePhone,
   isValidPhone,
@@ -130,11 +130,11 @@ export default function SettingsScreen() {
         name: asset.fileName || "logo.png",
       } as any);
 
-      const token = await import("expo-secure-store").then((m) => m.getItemAsync("quoteflow_token"));
+      const token = await loadToken();
       const res = await fetch(`${API_BASE_URL}/api/quote-flow/business/logo`, {
         method: "POST",
         headers: {
-          "x-quoteflow-token": token || "",
+          Authorization: token ? `Bearer ${token}` : "",
         },
         body: formData,
       });
@@ -156,7 +156,7 @@ export default function SettingsScreen() {
   }
 
   async function signOut() {
-    await clearToken();
+    await logout();
     reset();
     router.replace("/auth");
   }

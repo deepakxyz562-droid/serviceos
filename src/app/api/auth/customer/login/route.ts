@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyPassword, generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import {
+  verifyPassword,
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
@@ -178,7 +183,7 @@ export async function POST(request: NextRequest) {
       portalToken,
     };
 
-    const token = generateToken({
+    const tokens = await issueAuthTokens({
       id: customer.id,
       email: customer.email || customer.phone,
       name: customer.name,
@@ -187,17 +192,12 @@ export async function POST(request: NextRequest) {
       workspaceId: customer.workspaceId || null,
       avatar: null,
       isSuperAdmin: false,
-    });
+    }, getRefreshSessionMetadata(request), 'customer');
+    const token = tokens.accessToken;
 
     // Set HTTP-only cookie
     const cookieStore = await cookies();
-    cookieStore.set(COOKIE_OPTIONS.name, token, {
-      httpOnly: COOKIE_OPTIONS.httpOnly,
-      secure: COOKIE_OPTIONS.secure,
-      sameSite: COOKIE_OPTIONS.sameSite,
-      path: COOKIE_OPTIONS.path,
-      maxAge: 60 * 60 * 24 * 30, // 30 days — matches merchant session
-    });
+    setAuthCookies(cookieStore, tokens);
 
     return NextResponse.json({
       success: true,
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
           }
         : null,
       token,
-      refreshToken: token,
+      refreshToken: tokens.refreshToken,
       portalToken,
     });
   } catch (error) {

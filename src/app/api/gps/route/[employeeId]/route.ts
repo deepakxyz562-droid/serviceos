@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import {
+  canAdminAccessGpsEmployee,
+  canUserAccessOwnGpsEmployee,
+  resolveGpsEmployeeTenant,
+} from '@/lib/gps-authorization';
 
 /**
  * GET /api/gps/route/[employeeId]
@@ -58,10 +63,15 @@ export async function GET(
     const jobId = searchParams.get('jobId');
     const dateStr = searchParams.get('date');
 
-    // ── Authorization ───────────────────────────────────────────────────
-    // Employees can only query their own GPS history. Admins can query any
-    // employee within their workspace/tenant (enforced via the scoped where
-    // clause below — a tenant-A admin cannot read tenant-B GPS data).
+    const targetEmployee = await db.employee.findUnique({
+      where: { id: employeeId },
+      select: { id: true, workspaceId: true, userId: true },
+    });
+    if (!targetEmployee) {
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+    }
+
+    // Employees and other non-admin roles can only query their own history.
     if (!ADMIN_ROLES.includes(authUser.role)) {
       let ownEmployeeId = authUser.employeeId;
       if (!ownEmployeeId) {
@@ -71,40 +81,19 @@ export async function GET(
         });
         ownEmployeeId = ownEmp?.id ?? null;
       }
-      if (employeeId !== ownEmployeeId) {
+      if (!canUserAccessOwnGpsEmployee(employeeId, ownEmployeeId)) {
         return NextResponse.json(
           { error: 'Forbidden: you can only query your own GPS history' },
           { status: 403 },
         );
       }
-    }
-
-    // ── Build tenant-scoped employee lookup ─────────────────────────────
-    // Verify the target employee actually belongs to the viewer's workspace
-    // / tenant. A 404 (not 403) is returned if the employee doesn't exist in
-    // the viewer's scope — this avoids leaking whether an employeeId exists
-    // in another tenant (no enumeration oracle).
-    const empWhere: Record<string, unknown> = { id: employeeId };
-    if (!authUser.isSuperAdmin && !(authUser.role === 'admin' && !authUser.tenantId)) {
-      if (authUser.workspaceId) {
-        empWhere.workspaceId = authUser.workspaceId;
-      } else if (authUser.tenantId) {
-        const tenantWorkspaces = await db.workspace.findMany({
-          where: { tenantId: authUser.tenantId },
-          select: { id: true },
-        });
-        const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
-        if (workspaceIds.length === 0) {
-          return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
-        }
-        empWhere.workspaceId = { in: workspaceIds };
-      } else {
-        return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
-      }
-    }
-
-    const targetEmployee = await db.employee.findFirst({ where: empWhere, select: { id: true } });
-    if (!targetEmployee) {
+    } else if (
+      !await canAdminAccessGpsEmployee(
+        authUser,
+        targetEmployee,
+        resolveGpsEmployeeTenant,
+      )
+    ) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
 
@@ -117,7 +106,7 @@ export async function GET(
         where: { id: jobId },
         select: { workspaceId: true },
       });
-      if (job?.workspaceId && job.workspaceId !== targetEmployee.workspaceId) {
+      if (!job || job.workspaceId !== targetEmployee.workspaceId) {
         return NextResponse.json({ error: 'Job not found' }, { status: 404 });
       }
     }

@@ -158,23 +158,22 @@ async function attemptTokenRefresh(): Promise<boolean> {
 
   refreshPromise = (async () => {
     try {
-      const currentToken = await getToken();
-      const refreshToken = (await getRefreshToken()) || currentToken;
+      const refreshToken = await getRefreshToken();
       if (!refreshToken) return false;
 
       const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${refreshToken}`,
         },
-        body: JSON.stringify({ refreshToken, token: refreshToken }),
+        body: JSON.stringify({ refreshToken }),
       });
 
       if (res.ok) {
         const data = await res.json();
         if (data.token) {
-          await setTokens(data.token, data.refreshToken || data.token);
+          if (!data.refreshToken) return false;
+          await setTokens(data.token, data.refreshToken);
           return true;
         }
         return false;

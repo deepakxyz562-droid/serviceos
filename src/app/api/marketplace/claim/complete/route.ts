@@ -34,9 +34,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
   getAuthUser,
+  getRefreshSessionMetadata,
   hashPassword,
-  generateToken,
-  COOKIE_OPTIONS,
+  issueAuthTokens,
+  setAuthCookies,
   generateSlug,
 } from '@/lib/auth';
 import { logger } from '@/lib/logger';
@@ -323,7 +324,7 @@ export async function POST(request: NextRequest) {
       workspaceId: newUser.workspaceId,
       avatar: newUser.avatar,
     };
-    const jwtToken = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
 
     logger.info(
       { component: 'claim', claimId: claim.id, userId: newUser.id },
@@ -341,7 +342,9 @@ export async function POST(request: NextRequest) {
           workspaceId: newUser.workspaceId,
           avatar: newUser.avatar,
         },
-        token: jwtToken,
+        token: tokens.accessToken,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
         tenant: {
           id: claim.tenant.id,
           name: claim.tenant.name,
@@ -356,10 +359,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Set auth cookie
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: jwtToken,
-    });
+    setAuthCookies(response.cookies, tokens);
 
     return response;
   } catch (err) {

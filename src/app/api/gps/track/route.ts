@@ -3,7 +3,11 @@ import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { getAuthUser } from '@/lib/auth';
 import { evaluateGeofenceArrival } from '@/lib/geofence-engine';
-import { canAdminAccessGpsEmployee } from '@/lib/gps-authorization';
+import {
+  canAdminAccessGpsEmployee,
+  canUserAccessOwnGpsEmployee,
+  resolveGpsEmployeeTenant,
+} from '@/lib/gps-authorization';
 
 /**
  * GPS Tracking
@@ -66,34 +70,6 @@ function haversineMeters(
  *      dispatch viewer is joined to room `tenant:<viewerTenantId>`, not
  *      `tenant:unknown`).
  */
-async function resolveTenantId(
-  workspaceId: string | null,
-  userId?: string | null,
-): Promise<string | null> {
-  try {
-    if (workspaceId) {
-      const ws = await db.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { tenantId: true },
-      });
-      if (ws?.tenantId) return ws.tenantId;
-    }
-    // Fallback: look up the tenantId on the linked User record. This is the
-    // correct source of truth when the Employee row has no workspaceId or the
-    // workspace row is missing its tenantId (schema drift).
-    if (userId) {
-      const u = await db.user.findUnique({
-        where: { id: userId },
-        select: { tenantId: true },
-      });
-      if (u?.tenantId) return u.tenantId;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // ─── POST — receive a GPS ping ──────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -213,9 +189,7 @@ export async function POST(request: NextRequest) {
         });
         ownEmployeeId = ownEmp?.id ?? null;
       }
-      if (targetEmployeeId !== ownEmployeeId && authUser.role !== 'employee') {
-        // Allow employee self-resolution
-      } else if (targetEmployeeId !== ownEmployeeId) {
+      if (!canUserAccessOwnGpsEmployee(targetEmployeeId, ownEmployeeId)) {
         return NextResponse.json(
           { error: 'Forbidden: you can only submit GPS data for your own employee record' },
           { status: 403 },
@@ -233,7 +207,7 @@ export async function POST(request: NextRequest) {
 
     // Tenant check: ensure admins cannot submit GPS pings for employees in other tenants.
     if (ADMIN_ROLES.includes(authUser.role) && !authUser.isSuperAdmin) {
-      const canAccess = await canAdminAccessGpsEmployee(authUser, employee, resolveTenantId);
+      const canAccess = await canAdminAccessGpsEmployee(authUser, employee, resolveGpsEmployeeTenant);
       if (!canAccess) {
         return NextResponse.json(
           { error: 'Forbidden: employee does not belong to your organization' },
@@ -287,7 +261,7 @@ export async function POST(request: NextRequest) {
     // the JWT). We do NOT write 'unknown' to the DB — that would pollute the
     // GPSLocation.tenantId column with a value that matches no real tenant and
     // break downstream queries + the realtime gps.ping fanout.
-    let tenantId = await resolveTenantId(employee.workspaceId, employee.userId);
+    let tenantId = await resolveGpsEmployeeTenant(employee.workspaceId, employee.userId);
     if (!tenantId && authUser.tenantId) {
       tenantId = authUser.tenantId;
     }

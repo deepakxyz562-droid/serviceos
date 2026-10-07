@@ -1,3 +1,5 @@
+import { ownerBusiness } from '@/lib/commerce/access';
+import { atomicCommerce,commerceError } from '@/lib/commerce/atomic';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
@@ -141,207 +143,16 @@ export async function GET(req: NextRequest) {
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const { business } = await requireQuoteFlowBusiness(req);
-    const body = await req.json();
-    const { productId, deltaStock, newStock, minStock } = body;
-
-    if (!productId) {
-      return NextResponse.json({ error: 'productId is required' }, { status: 400 });
-    }
-
-    const tenantId = business.tenantId || business.id;
-
-    // Resolve the InventoryItem. Look up by id; if no row exists, try the
-    // catalog (legacy path — bootstrap an InventoryItem row from the catalog
-    // entry so the merchant can start tracking it).
-    let item = await db.inventoryItem.findFirst({
-      where: { OR: [{ id: productId }, { sku: productId }], tenantId },
-    });
-
-    if (!item) {
-      // Bootstrap from catalog (lazy migration). Look up the catalog product
-      // to copy its name/price/category.
-      const config = await db.gptformCommerceConfig.findFirst({
-        where: {
-          OR: [
-            { businessId: business.id },
-            ...(business.tenantId ? [{ businessId: business.tenantId }] : []),
-          ],
-        },
-      });
-      let catalogEntry: any = null;
-      if (config?.catalogJson) {
-        try {
-          const catalog = JSON.parse(config.catalogJson);
-          catalogEntry = (Array.isArray(catalog) ? catalog : []).find(
-            (p: any) => p.id === productId || p.name === productId
-          );
-        } catch {
-          catalogEntry = null;
-        }
-      }
-
-      const name = catalogEntry?.name || `Item ${productId}`;
-      const price = Number(catalogEntry?.price) || 0;
-      const category = catalogEntry?.category || 'General';
-      const imageUrl = catalogEntry?.imageUrl || null;
-
-      item = await db.inventoryItem.create({
-        data: {
-          tenantId,
-          sku: `CAT-${productId}`.slice(0, 64),
-          name,
-          description: catalogEntry?.description || null,
-          category,
-          salePrice: price,
-          costPrice: 0,
-          currency: 'INR',
-          totalStock: 0,
-          reservedStock: 0,
-          availableStock: 0,
-          reorderLevel: 0,
-          reorderQty: 0,
-          imageUrl,
-          isActive: catalogEntry?.isActive !== false,
-          isSellableOnline: true,
-        },
-      });
-    }
-
-    // Apply the requested change.
-    let updated: typeof item | null = item;
-
-    if (typeof newStock === 'number') {
-      // Absolute set — keep reservedStock untouched, recompute available.
-      const safeStock = Math.max(0, Math.floor(newStock));
-      updated = await db.inventoryItem.update({
-        where: { id: item.id },
-        data: {
-          totalStock: safeStock,
-          availableStock: Math.max(0, safeStock - item.reservedStock),
-        },
-      });
-      // Audit row — adjustment transaction.
-      try {
-        await db.stockTransaction.create({
-          data: {
-            tenantId,
-            inventoryItemId: item.id,
-            type: 'adjustment',
-            direction: safeStock >= item.totalStock ? 'in' : 'out',
-            quantity: Math.abs(safeStock - item.totalStock),
-            unitCost: item.salePrice,
-            totalCost: Math.abs(safeStock - item.totalStock) * item.salePrice,
-            notes: `Manual stock set to ${safeStock}`,
-          },
-        });
-      } catch (txErr) {
-        console.warn('StockTransaction (set) audit row failed (non-fatal):', txErr);
-      }
-    } else if (typeof deltaStock === 'number') {
-      // Atomic increment/decrement.
-      const delta = Math.floor(deltaStock);
-      updated = await db.inventoryItem.update({
-        where: { id: item.id },
-        data: {
-          totalStock: { increment: delta },
-          availableStock: { increment: delta },
-        },
-      });
-      try {
-        await db.stockTransaction.create({
-          data: {
-            tenantId,
-            inventoryItemId: item.id,
-            type: 'adjustment',
-            direction: delta > 0 ? 'in' : 'out',
-            quantity: Math.abs(delta),
-            unitCost: item.salePrice,
-            totalCost: Math.abs(delta) * item.salePrice,
-            notes: 'Manual stock adjustment',
-          },
-        });
-      } catch (txErr) {
-        console.warn('StockTransaction (delta) audit row failed (non-fatal):', txErr);
-      }
-    }
-
-    if (typeof minStock === 'number') {
-      updated = await db.inventoryItem.update({
-        where: { id: item.id },
-        data: { reorderLevel: Math.max(0, Math.floor(minStock)) },
-      });
-    }
-
-    // Refresh the row for the alert check (in case `update` returned stale
-    // numbers under concurrent writes).
-    const fresh = await db.inventoryItem.findUnique({ where: { id: item.id } });
-    if (fresh) {
-      updated = fresh;
-    }
-
-    // Low-stock alert: create or reactivate an `active` alert if the row is
-    // at/below reorderLevel. LowStockAlert has no unique constraint on
-    // inventoryItemId, so we use findFirst + create/update.
-    if (
-      updated &&
-      updated.reorderLevel > 0 &&
-      updated.availableStock <= updated.reorderLevel
-    ) {
-      try {
-        const existingAlert = await db.lowStockAlert.findFirst({
-          where: {
-            inventoryItemId: updated.id,
-            status: { in: ['active', 'acknowledged'] },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (existingAlert) {
-          await db.lowStockAlert.update({
-            where: { id: existingAlert.id },
-            data: {
-              currentStock: updated.availableStock,
-              reorderLevel: updated.reorderLevel,
-              status: 'active',
-              resolvedAt: null,
-            },
-          });
-        } else {
-          await db.lowStockAlert.create({
-            data: {
-              tenantId,
-              inventoryItemId: updated.id,
-              currentStock: updated.availableStock,
-              reorderLevel: updated.reorderLevel,
-              status: 'active',
-            },
-          });
-        }
-      } catch (alertErr) {
-        console.warn('LowStockAlert upsert failed (non-fatal):', alertErr);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      updatedProduct: {
-        id: updated!.id,
-        name: updated!.name,
-        price: updated!.salePrice,
-        category: updated!.category || 'General',
-        stock: updated!.availableStock,
-        minStock: updated!.reorderLevel,
-        isLowStock:
-          updated!.reorderLevel > 0 && updated!.availableStock <= updated!.reorderLevel,
-        imageUrl: updated!.imageUrl,
-        isActive: updated!.isActive,
-      },
-    });
-  } catch (e: any) {
-    if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('Failed to update inventory:', e);
-    return NextResponse.json({ error: e.message || 'Failed to update inventory' }, { status: 500 });
+    const business=await ownerBusiness(req);
+    const body=await req.json().catch(()=>null);
+    const key=req.headers.get('Idempotency-Key')||body?.requestKey;
+    if(!body||typeof body.productId!=='string'||!body.productId||body.productId.length>200||typeof key!=='string')return NextResponse.json({error:'Invalid stock change'},{status:400});
+    if(body.newStock!==undefined&&body.deltaStock!==undefined)return NextResponse.json({error:'Choose an adjustment or a new count, not both.'},{status:400});
+    for(const field of ['deltaStock','newStock','minStock'])if(body[field]!==undefined&&(!Number.isSafeInteger(body[field])||Math.abs(body[field])>100000000||field!=='deltaStock'&&body[field]<0))return NextResponse.json({error:'Stock quantities must be valid whole numbers.'},{status:400});
+    const payload={productId:body.productId,...(body.deltaStock!==undefined?{deltaStock:body.deltaStock}:{}),...(body.newStock!==undefined?{newStock:body.newStock}:{}),...(body.minStock!==undefined?{minStock:body.minStock}:{})};
+    return NextResponse.json(await atomicCommerce('stock',[business.id,key,payload]));
+  }catch(error){
+    if(error instanceof Error&&['UNAUTHORIZED','FORBIDDEN'].includes(error.message))return NextResponse.json({error:'Access denied'},{status:error.message==='UNAUTHORIZED'?401:403});
+    const failure=commerceError(error);return NextResponse.json({error:failure.message},{status:failure.status});
   }
 }

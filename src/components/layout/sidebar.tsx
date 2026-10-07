@@ -673,7 +673,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       return listingOnlyNavSections;
     } else if (isStandalone) {
       // Standalone AI & Forms tenants get dynamic blueprint-driven 3-layer nav
-      const dynamicSections = getStandaloneNavSectionsForBlueprint(blueprint);
+      const dynamicSections = getStandaloneNavSectionsForBlueprint(blueprint || undefined);
       return dynamicSections.map((sec) => ({
         title: sec.title,
         items: sec.items.map((it) => ({
@@ -738,10 +738,16 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
             .filter((item) => {
               if (item.view === 'dispatch' && !capabilities.dispatch) return false;
               if (item.view === 'inventory' && !capabilities.inventory) return false;
-              if (item.view === 'booking' && !capabilities.bookings) return false;
+              if (item.view === 'booking' && !capabilities.calendarBooking) return false;
               if (item.view === 'jobs' && !capabilities.jobs) return false;
               if (item.view === 'recurringJobs' && !capabilities.jobs) return false;
-              if (item.view === 'commerce' && !capabilities.orders && !capabilities.onlineStore) return false;
+              if (item.view === 'commerce') {
+                const commerceCapability = {
+                  pos: 'posRegister', catalog: 'catalog', dineIn: 'tables', kds: 'kitchenKot',
+                  khata: 'customerCredit', daybook: 'expenses', domain: 'onlineStore', orders: 'orders',
+                }[item.tab || 'orders'] as keyof typeof capabilities | undefined;
+                if (commerceCapability && !capabilities[commerceCapability]) return false;
+              }
               if (item.view === 'salesPipeline' && !capabilities.quotes && !capabilities.leads) return false;
               if (item.view === 'expenses' && !capabilities.expenses) return false;
               return true;
@@ -1073,7 +1079,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                     : 'Adaptive Profile'}
                 </span>
                 <span className="text-[10px] text-indigo-600 dark:text-indigo-400 block -mt-0.5">
-                  {countryPack?.countryCode || 'US'} · Customize
+                  {countryPack?.code || 'US'} · Customize
                 </span>
               </div>
             </div>

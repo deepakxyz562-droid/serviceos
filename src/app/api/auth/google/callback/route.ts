@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, COOKIE_OPTIONS, getAppUrl } from '@/lib/auth';
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+  generateSlug,
+  getAppUrl,
+} from '@/lib/auth';
 import { BRAND } from '@/lib/brand';
 import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
-import { signMobileToken, getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
+import { getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -347,17 +353,17 @@ export async function GET(request: NextRequest) {
       token: string,
       email: string,
       name: string,
-      userId?: string,
-      tenantId?: string | null,
-      role?: string,
-      refreshToken?: string,
+      userId: string | undefined,
+      tenantId: string | null | undefined,
+      role: string | undefined,
+      refreshToken: string,
       tenantName?: string | null
     ) => {
       const target = state.redirect || 'quoteflow://auth-callback';
       const sep = target.includes('?') ? '&' : '?';
       const params = new URLSearchParams();
       params.set('token', token);
-      params.set('refreshToken', refreshToken || token);
+      params.set('refreshToken', refreshToken);
       params.set('email', email);
       params.set('name', name || '');
       if (userId) params.set('userId', userId);
@@ -368,8 +374,8 @@ export async function GET(request: NextRequest) {
     };
 
     // Exchange code for tokens
-    const tokens = await exchangeCodeForTokens(code, redirectUri);
-    const userInfo = await getUserInfo(tokens.access_token);
+    const oauthTokens = await exchangeCodeForTokens(code, redirectUri);
+    const userInfo = await getUserInfo(oauthTokens.access_token);
 
     if (!userInfo.email) {
       console.error('Google OAuth: No email in user info');
@@ -423,8 +429,6 @@ export async function GET(request: NextRequest) {
         workspaceId: existingUser.workspaceId,
         avatar: userInfo.picture || existingUser.avatar,
       };
-      const token = generateToken(authUser);
-
       const baseUrl = getBaseUrl(request);
 
       // If user has no tenant, create one now
@@ -436,12 +440,12 @@ export async function GET(request: NextRequest) {
           state.plan,
           state.signupMode
         );
-        // Regenerate JWT with the new tenantId/workspaceId.
-        const newToken = generateToken({
+        const tokens = await issueAuthTokens({
           ...authUser,
           tenantId: tenant.id,
           workspaceId: workspace.id,
-        });
+        }, getRefreshSessionMetadata(request));
+        const newToken = tokens.accessToken;
         await getOrCreateBusinessForUser(existingUser.id, tenant.id, existingUser.name || 'My Business');
 
         if (isMobileMode) {
@@ -453,7 +457,7 @@ export async function GET(request: NextRequest) {
               existingUser.id,
               tenant.id,
               existingUser.role,
-              newToken,
+              tokens.refreshToken,
               tenant.name
             )
           );
@@ -461,14 +465,13 @@ export async function GET(request: NextRequest) {
 
         const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
         const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
-        response.cookies.set({
-          ...COOKIE_OPTIONS,
-          value: newToken,
-        });
+        setAuthCookies(response.cookies, tokens);
         return response;
       }
 
       await getOrCreateBusinessForUser(existingUser.id, existingUser.tenantId || undefined, existingUser.name || 'My Business');
+      const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+      const token = tokens.accessToken;
 
       if (isMobileMode) {
         return NextResponse.redirect(
@@ -479,7 +482,7 @@ export async function GET(request: NextRequest) {
             existingUser.id,
             existingUser.tenantId,
             existingUser.role,
-            token,
+            tokens.refreshToken,
             existingUser.tenant?.name
           )
         );
@@ -488,10 +491,7 @@ export async function GET(request: NextRequest) {
       const isStandalone = existingUser.tenant?.signupMode === 'standalone' || existingUser.tenant?.plan === 'standalone_starter' || existingUser.tenant?.plan === 'standalone_business';
       const needsOnboarding = !existingUser.tenant?.onboardingCompleted;
       const response = NextResponse.redirect(buildSuccessUrl(baseUrl, !!isStandalone, needsOnboarding));
-      response.cookies.set({
-        ...COOKIE_OPTIONS,
-        value: token,
-      });
+      setAuthCookies(response.cookies, tokens);
       return response;
     }
 
@@ -528,7 +528,8 @@ export async function GET(request: NextRequest) {
       workspaceId: workspace.id,
       avatar: tempUser.avatar,
     };
-    const token = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    const token = tokens.accessToken;
 
     await getOrCreateBusinessForUser(tempUser.id, tenant.id, tempUser.name || 'My Business');
 
@@ -541,7 +542,7 @@ export async function GET(request: NextRequest) {
           tempUser.id,
           tenant.id,
           tempUser.role,
-          token,
+          tokens.refreshToken,
           tenant.name
         )
       );
@@ -550,10 +551,7 @@ export async function GET(request: NextRequest) {
     const baseUrl = getBaseUrl(request);
     const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
     const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: token,
-    });
+    setAuthCookies(response.cookies, tokens);
     return response;
   } catch (error) {
     console.error('Google OAuth callback error:', error);

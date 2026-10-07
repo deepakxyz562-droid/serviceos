@@ -106,7 +106,7 @@ mobile/
 
 ## Auth model
 
-The mobile app uses a custom HMAC-signed token (see `src/lib/token.ts` in the web project). On login/register, the backend returns `{ token, user }`. The token is stored in `expo-secure-store` and sent as the `x-quoteflow-token` header on every request.
+The mobile app uses the shared Fieseros access-token and rotating refresh-token flow. Tokens are stored in `expo-secure-store`; API requests send the short-lived access token as `Authorization: Bearer <token>`, and the client rotates the refresh token after an unauthorized response.
 
 This is intentionally separate from NextAuth's cookie-based session so the mobile app doesn't need a WebView or shared cookie storage.
 

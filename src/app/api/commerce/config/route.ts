@@ -161,7 +161,7 @@ const DEFAULT_TABLES = [
   { id: 'tbl_5', name: 'Table 5', capacity: 4, section: 'Outdoor Patio' },
 ];
 
-export const DEFAULT_BILLING = {
+const DEFAULT_BILLING = {
   taxRate: 5,
   taxName: 'GST',
   taxType: 'exclusive',
@@ -170,7 +170,7 @@ export const DEFAULT_BILLING = {
   billFooterText: 'Thank you for dining with us! Please visit again.',
 };
 
-export const DEFAULT_DISCOUNTS = [
+const DEFAULT_DISCOUNTS = [
   { code: 'WELCOME10', type: 'percentage', value: 10, minOrder: 200, label: '10% Off on Orders Above ₹200' },
   { code: 'FLAT50', type: 'fixed', value: 50, minOrder: 500, label: '₹50 Flat Off on Orders Above ₹500' },
 ];

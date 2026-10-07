@@ -104,7 +104,7 @@ export interface CrmSettings {
   assignmentRules: AssignmentRules;
 }
 
-export const DEFAULT_CRM_SETTINGS: CrmSettings = {
+const DEFAULT_CRM_SETTINGS: CrmSettings = {
   lostReasons: [...DEFAULT_LOST_REASONS],
   customLeadSources: [],
   assignmentRules: {

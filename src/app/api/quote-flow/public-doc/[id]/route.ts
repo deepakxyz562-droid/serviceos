@@ -327,44 +327,7 @@ export async function POST(
 
     if (invoice) {
       if (action === 'RECORD_PAYMENT_SIMULATION') {
-        // Record a payment (now with proper reference column from Phase 3).
-        // The customer portal submits a UTR/reference when paying via bank
-        // transfer or UPI. Method is recorded properly.
-        const amount = Number(body.amount) || 100;
-        await db.aiPayment.create({
-          data: {
-            invoiceId: invoice.id,
-            amount,
-            method: body.method || 'ONLINE',
-            reference: body.reference || `SIM-${Date.now()}`,
-            gateway: body.gateway || 'manual',
-            notes: body.notes || null,
-          },
-        });
-
-        // Check if invoice total is now covered
-        const allPayments = await db.aiPayment.findMany({ where: { invoiceId: invoice.id } });
-        const items = await db.aiInvoiceItem.findMany({ where: { invoiceId: invoice.id } });
-        const totals = computeInvoiceTotals({
-          items: items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice })),
-          discountValue: invoice.discountValue,
-          discountType: invoice.discountType,
-          globalTaxRate: invoice.taxRate,
-        });
-
-        const totalPaid = allPayments.reduce((s, p) => s + p.amount, 0);
-        const newStatus = totalPaid >= totals.total ? 'PAID' : 'PARTIALLY_PAID';
-
-        await db.aiInvoice.update({
-          where: { id: invoice.id },
-          data: { status: newStatus },
-        });
-
-        return NextResponse.json({
-          success: true,
-          status: newStatus,
-          message: 'Payment recorded successfully!',
-        });
+        return NextResponse.json({error:'A payment simulation cannot record a real receipt. Contact the business to verify your payment.'},{status:403});
       }
     }
 

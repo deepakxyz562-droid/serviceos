@@ -5,6 +5,8 @@ import { Stack } from "expo-router";
 import { useAppStore } from "@/store/app";
 import { loadToken, api } from "@/api/client";
 
+export { AppErrorBoundary as ErrorBoundary } from "@/components/app-error-boundary";
+
 export default function RootLayout() {
   const setToken = useAppStore((s) => s.setToken);
   const setUser = useAppStore((s) => s.setUser);

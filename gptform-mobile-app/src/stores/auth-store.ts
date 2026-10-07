@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import type { SubscriberUser, SubscriberTenant } from '@/types';
-import { getToken, setTokens, clearTokens, getStoredUserData, setStoredUserData } from '@/lib/auth';
+import {
+  getRefreshToken,
+  getToken,
+  setTokens,
+  clearTokens,
+  getStoredUserData,
+  setStoredUserData,
+} from '@/lib/auth';
 import { apiRequest } from '@/lib/api';
 import { API_PATHS, API_BASE_URL } from '@/lib/constants';
 import { clearPushToken } from '@/lib/notifications';
@@ -61,9 +68,8 @@ function decodeJwtPayload(token: string): Record<string, any> | null {
 
 /**
  * Proactively refresh the session token if it's expired (or close to it).
- * The backend `/api/auth/refresh` accepts tokens expired within a 7-day
- * grace window (signature always validated). Returns true if the session
- * is valid (either the token was still good, or a refresh succeeded, or offline).
+ * The backend rotates an opaque refresh token. Returns true if the session
+ * is valid (the token was still good, refresh succeeded, or the device is offline).
  */
 async function ensureValidSession(): Promise<boolean> {
   const token = await getToken();
@@ -94,23 +100,24 @@ async function ensureValidSession(): Promise<boolean> {
 
   // Token is expired OR expiring within 1 hour → attempt proactive refresh.
   try {
-    const refreshToken = await (await import('@/lib/auth')).getRefreshToken();
-    const tokenToUse = refreshToken || token;
-    if (!tokenToUse) return false;
+    const refreshToken = await getRefreshToken();
+    if (!refreshToken) {
+      await clearTokens();
+      return false;
+    }
 
     const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${tokenToUse}`,
       },
-      body: JSON.stringify({ refreshToken: tokenToUse, token: tokenToUse }),
+      body: JSON.stringify({ refreshToken }),
     });
 
     if (res.ok) {
       const data = await res.json();
-      if (data?.token) {
-        await setTokens(data.token, data.refreshToken || data.token);
+      if (data?.token && data?.refreshToken) {
+        await setTokens(data.token, data.refreshToken);
         // Refresh stored user/tenant in case the backend returned updated profile.
         if (data?.user) {
           await setStoredUserData({
@@ -126,17 +133,11 @@ async function ensureValidSession(): Promise<boolean> {
       // rejects the token. On any of these, the session is genuinely dead —
       // clear it so the user sees the login screen on the next navigation
       // instead of a cascade of 401s from every commerce API call.
-      //   MISSING_TOKEN          — no token in the request body/cookie
-      //   INVALID_TOKEN          — signature forged or expired beyond grace
-      //   ABSOLUTE_MAX_EXCEEDED  — session older than 90 days
-      //   USER_DISABLED          — account deactivated in the DB
-      //   SESSION_EXPIRED        — (legacy alias, same as ABSOLUTE_MAX_EXCEEDED)
       const fatalCodes = new Set([
-        'MISSING_TOKEN',
-        'INVALID_TOKEN',
-        'ABSOLUTE_MAX_EXCEEDED',
-        'USER_DISABLED',
-        'SESSION_EXPIRED',
+        'MISSING_REFRESH_TOKEN',
+        'INVALID_REFRESH_TOKEN',
+        'REFRESH_REUSE_DETECTED',
+        'SUBJECT_DISABLED',
       ]);
       if (err?.code && fatalCodes.has(err.code)) {
         await clearTokens();
@@ -162,7 +163,14 @@ interface AuthState {
 
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<boolean>;
-  register: (name: string, email: string, password: string, companyName?: string) => Promise<boolean>;
+  register: (
+    name: string,
+    email: string,
+    password: string,
+    companyName?: string,
+    industry?: string,
+    country?: string,
+  ) => Promise<'authenticated' | 'verification_required' | false>;
   loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
@@ -277,17 +285,32 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
-  register: async (name: string, email: string, password: string, companyName?: string) => {
+  register: async (
+    name: string,
+    email: string,
+    password: string,
+    companyName?: string,
+    industry?: string,
+    country?: string,
+  ) => {
     set({ isLoading: true, error: null });
     try {
       const data = await apiRequest<{
-        token: string;
+        token?: string;
         refreshToken?: string;
         user: SubscriberUser;
         tenant: SubscriberTenant;
+        emailVerificationRequired?: boolean;
       }>('/api/auth/register', {
         method: 'POST',
-        body: { name, email, password, companyName: companyName || `${name}'s Workspace` },
+        body: {
+          name,
+          email,
+          password,
+          businessName: companyName || `${name}'s Workspace`,
+          industry,
+          country,
+        },
         skipAuth: true,
       });
 
@@ -303,7 +326,11 @@ export const useAuthStore = create<AuthState>((set) => ({
           isLoading: false,
           error: null,
         });
-        return true;
+        return 'authenticated';
+      }
+      if (data.emailVerificationRequired) {
+        set({ isLoading: false, error: null });
+        return 'verification_required';
       }
       throw new Error('Registration failed. Please try again.');
     } catch (err: any) {
@@ -337,7 +364,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const token = parsed.queryParams?.token as string | undefined;
       const refreshToken = parsed.queryParams?.refreshToken as string | undefined;
 
-      if (!token) {
+      if (!token || !refreshToken) {
         const errMsg = (parsed.queryParams?.error as string) || 'Google sign-in did not return a session. Please try again.';
         set({ isLoading: false, error: errMsg });
         return false;
@@ -370,7 +397,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         plan: 'Starter',
       };
 
-      await setTokens(token, refreshToken || token);
+      await setTokens(token, refreshToken);
       await setStoredUserData({ user, tenant });
 
       set({
@@ -393,7 +420,20 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     clearPushToken();
-    await clearTokens();
+    const refreshToken = await getRefreshToken();
+    try {
+      if (refreshToken) {
+        await fetch(`${API_BASE_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+      }
+    } catch {
+      // Local logout must still succeed while offline.
+    } finally {
+      await clearTokens();
+    }
     set({
       user: null,
       tenant: null,

@@ -1,5 +1,10 @@
 import { db } from '@/lib/db';
-import { hashPassword, generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import {
+  getRefreshSessionMetadata,
+  hashPassword,
+  issueAuthTokens,
+  setAuthCookies,
+} from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // POST /api/invitations/accept — Accept an invitation (public, no auth required)
@@ -89,7 +94,12 @@ export async function POST(request: NextRequest) {
         workspaceId: customer.workspaceId || null,
         avatar: null,
       };
-      const jwtToken = generateToken(authUser);
+      const tokens = await issueAuthTokens(
+        authUser,
+        getRefreshSessionMetadata(request),
+        'customer',
+        customer.id,
+      );
 
       const response = NextResponse.json(
         {
@@ -102,14 +112,14 @@ export async function POST(request: NextRequest) {
               }
             : null,
           isCustomer: true,
+          token: tokens.accessToken,
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
         },
         { status: 200 }
       );
 
-      response.cookies.set({
-        ...COOKIE_OPTIONS,
-        value: jwtToken,
-      });
+      setAuthCookies(response.cookies, tokens);
 
       return response;
     }
@@ -268,7 +278,7 @@ export async function POST(request: NextRequest) {
       workspaceId: user.workspaceId,
       avatar: user.avatar,
     };
-    const jwtToken = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
 
     // Build the response
     const response = NextResponse.json(
@@ -285,15 +295,15 @@ export async function POST(request: NextRequest) {
         },
         tenant,
         employee,
+        token: tokens.accessToken,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
       },
       { status: 200 }
     );
 
     // Set the auth cookie
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: jwtToken,
-    });
+    setAuthCookies(response.cookies, tokens);
 
     return response;
   } catch (error) {

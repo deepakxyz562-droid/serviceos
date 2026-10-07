@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { verifyGoogleToken } from '@/lib/quote-flow-google-auth';
-import { canAdminAccessGpsEmployee } from '@/lib/gps-authorization';
+import {
+  canAdminAccessGpsEmployee,
+  canUserAccessOwnGpsEmployee,
+} from '@/lib/gps-authorization';
 import { verifySocialCronAuth } from '@/lib/social/cron-auth';
 
 describe('security hardening regressions', () => {
@@ -69,6 +72,20 @@ describe('security hardening regressions', () => {
       { workspaceId: 'workspace-b', userId: 'employee-user' },
       resolver,
     )).resolves.toBe(true);
+  });
+
+  it('fails GPS self-access closed for missing or different employee identities', () => {
+    expect(canUserAccessOwnGpsEmployee('employee-a', null)).toBe(false);
+    expect(canUserAccessOwnGpsEmployee('employee-a', 'employee-b')).toBe(false);
+    expect(canUserAccessOwnGpsEmployee('employee-a', 'employee-a')).toBe(true);
+  });
+
+  it('denies a tenantless non-super-admin GPS access', async () => {
+    await expect(canAdminAccessGpsEmployee(
+      { isSuperAdmin: false, tenantId: null, workspaceId: null },
+      { workspaceId: 'workspace-a', userId: 'employee-user' },
+      async () => 'tenant-a',
+    )).resolves.toBe(false);
   });
 
   it('rejects query-string social cron secrets and accepts header credentials', () => {

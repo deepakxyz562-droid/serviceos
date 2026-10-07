@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, hashPassword, generateToken, verifyToken, COOKIE_OPTIONS } from '@/lib/auth';
 
+function productionNotFound() {
+  return process.env.NODE_ENV === 'production'
+    ? NextResponse.json({ error: 'Not found' }, { status: 404 })
+    : null;
+}
+
 /**
  * Comprehensive test endpoint to diagnose login issues on Netlify.
  * 
@@ -12,6 +18,8 @@ import { verifyPassword, hashPassword, generateToken, verifyToken, COOKIE_OPTION
  * passwords, tokens, or other sensitive data.
  */
 export async function GET(request: NextRequest) {
+  const unavailable = productionNotFound();
+  if (unavailable) return unavailable;
   const results: Record<string, { ok: boolean; detail: string }> = {};
 
   // Test 1: Can we read the database?
@@ -120,6 +128,8 @@ export async function GET(request: NextRequest) {
  * Returns detailed step-by-step results.
  */
 export async function POST(request: NextRequest) {
+  const unavailable = productionNotFound();
+  if (unavailable) return unavailable;
   const steps: { step: string; ok: boolean; detail: string }[] = [];
 
   try {

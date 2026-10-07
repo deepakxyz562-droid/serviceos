@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import {
   verifyPassword,
-  generateToken,
-  COOKIE_OPTIONS,
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
 } from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
@@ -135,7 +136,13 @@ export async function POST(request: NextRequest) {
         isSuperAdmin: false,
       };
 
-      const token = generateToken(authUser);
+      const tokens = await issueAuthTokens(
+        authUser,
+        getRefreshSessionMetadata(request),
+        'customer',
+        customer.id,
+      );
+      const token = tokens.accessToken;
       const response = NextResponse.json({
         user: authUser,
         tenant: {
@@ -147,9 +154,9 @@ export async function POST(request: NextRequest) {
         },
         customer: { id: customer.id, name: customer.name },
         token,
-        refreshToken: token,
+        refreshToken: tokens.refreshToken,
       });
-      response.cookies.set({ ...COOKIE_OPTIONS, value: token });
+      setAuthCookies(response.cookies, tokens);
       return response;
     }
 
@@ -357,7 +364,8 @@ export async function POST(request: NextRequest) {
       employeeId,
     };
 
-    const token = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    const token = tokens.accessToken;
     const response = NextResponse.json({
       user: authUser,
       tenant: {
@@ -374,9 +382,9 @@ export async function POST(request: NextRequest) {
       // cannot read cookies and depend on `token` being in the body —
       // matches the customer-login success path above.
       token,
-      refreshToken: token,
+      refreshToken: tokens.refreshToken,
     });
-    response.cookies.set({ ...COOKIE_OPTIONS, value: token });
+    setAuthCookies(response.cookies, tokens);
     return response;
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);

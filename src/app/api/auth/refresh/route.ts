@@ -1,242 +1,148 @@
 import { NextRequest, NextResponse } from 'next/server';
+
 import { db } from '@/lib/db';
 import {
-  verifyTokenWithGrace,
   generateToken,
+  getRefreshSessionMetadata,
   COOKIE_OPTIONS,
-  ABSOLUTE_SESSION_MAX_MS,
+  REFRESH_COOKIE_OPTIONS,
   type AuthUser,
 } from '@/lib/auth';
+import { revokeRefreshSession, rotateRefreshSession } from '@/lib/auth-refresh-session';
 import { applyRateLimit, authLimiter, rateLimitResponse } from '@/lib/rate-limit';
-import { logger, withRequestId } from '@/lib/logger';
+import { withRequestId } from '@/lib/logger';
 
-/**
- * POST /api/auth/refresh
- * ======================
- *
- * Exchange a valid (or recently-expired) JWT for a fresh 30-day JWT.
- *
- * SESSION POLICY (updated for "stay logged in" UX):
- *   - 30-day sliding window: a valid JWT can be refreshed to get a new 30-day JWT.
- *   - Grace window: tokens expired within the last 7 days are ALSO accepted
- *     for refresh (so a user who comes back after the 30-day JWT expires
- *     doesn't get force-logged-out). The signature is always validated.
- *   - 90-day absolute maximum: the `originalIat` claim is preserved across
- *     refreshes. If `now - originalIat > 90 days`, the refresh is rejected
- *     and the user must re-authenticate.
- *   - This prevents unbounded sliding sessions while giving active users
- *     a seamless experience — they stay logged in for up to 90 days.
- *
- * SECURITY:
- *   - The refresh endpoint NEVER accepts user ID, tenant ID, role, or
- *     permissions from the client. The JWT is the sole source of identity.
- *   - The user's current state (isActive, role, tenantId) is re-read from
- *     the DB at refresh time to ensure revoked/disabled users can't refresh.
- *   - Super-admin status is NOT trusted from the JWT (Phase Security-1 fix).
- *
- * INPUT (two modes):
- *   1. Mobile (Bearer body): `{ "refreshToken": "<jwt>" }` in JSON body
- *   2. Web (cookie): reads `fieseros_session` cookie (set by login route)
- *
- * RESPONSE:
- *   - 200: `{ "token": "<new jwt>", "refreshToken": "<same new jwt>" }`
- *   - 401: token missing/invalid/signature forged/expired >7d grace/disabled user/absolute max exceeded
- *
- * RATE LIMITED via authLimiter (prevents brute-force token guessing).
- */
-
-export async function POST(request: NextRequest) {
-  const log = withRequestId(request);
-
-  // ── 1. Rate limit (prevent brute-force token guessing) ──────────────
-  const limited = applyRateLimit(authLimiter, request);
-  if (limited) {
-    return rateLimitResponse(limited.resetAtMs);
-  }
-
-  try {
-    // ── 2. Extract the token (mobile body, Authorization header, OR web cookie) ──
-    let oldToken: string | undefined;
-
-    // Try JSON body first (mobile app sends { refreshToken: "..." } or { token: "..." })
-    let body: Record<string, unknown> | null = null;
-    try {
-      body = (await request.json()) as Record<string, unknown>;
-    } catch {
-      // Body might be empty (web cookie-based refresh) — that's OK
-      body = null;
-    }
-
-    const bodyToken =
-      typeof body?.refreshToken === 'string' && body.refreshToken
-        ? body.refreshToken
-        : typeof body?.token === 'string' && body.token
-        ? body.token
-        : undefined;
-
-    // Authorization header fallback (Bearer <jwt>)
-    const authHeader = request.headers.get('authorization');
-    const headerToken = authHeader?.startsWith('Bearer ')
-      ? authHeader.slice(7).trim()
-      : undefined;
-
-    // Cookie fallback (web — the login route sets fieseros_session cookie)
-    const cookieToken = request.cookies.get('fieseros_session')?.value;
-
-    oldToken = bodyToken || headerToken || cookieToken;
-
-    if (!oldToken) {
-      return NextResponse.json(
-        { error: 'Refresh token required', code: 'MISSING_TOKEN' },
-        { status: 401 },
-      );
-    }
-
-    // ── 3. Verify the old token (with grace window) ───────────────────
-    // We use `verifyTokenWithGrace` so recently-expired tokens can still be
-    // refreshed. The signature is ALWAYS validated — only the expiry check
-    // is relaxed within a 7-day grace window. This fixes the "session expires
-    // every time" bug: a user who returns after the 30-day JWT expires (but
-    // within 7 days of expiry) gets silently refreshed instead of force-
-    // logged-out.
-    const decoded = verifyTokenWithGrace(oldToken);
-    if (!decoded) {
-      return NextResponse.json(
-        { error: 'Invalid or expired token', code: 'INVALID_TOKEN' },
-        { status: 401 },
-      );
-    }
-
-    // ── 4. Check absolute session maximum (90 days) ───────────────────
-    // The originalIat claim is set at login and preserved across refreshes.
-    // If the session is older than 90 days, reject even if the JWT is valid.
-    const originalIat =
-      typeof (decoded as Record<string, unknown>).originalIat === 'number'
-        ? ((decoded as Record<string, unknown>).originalIat as number)
-        : undefined;
-
-    if (originalIat) {
-      const sessionAgeMs = Date.now() - originalIat * 1000;
-      if (sessionAgeMs > ABSOLUTE_SESSION_MAX_MS) {
-        log.info(
-          { userId: decoded.id, sessionAgeDays: Math.floor(sessionAgeMs / (24 * 60 * 60 * 1000)) },
-          'auth/refresh: session exceeded 90-day absolute maximum — re-authentication required',
-        );
-        return NextResponse.json(
-          {
-            error: 'Session expired. Please sign in again.',
-            code: 'ABSOLUTE_MAX_EXCEEDED',
-          },
-          { status: 401 },
-        );
-      }
-    }
-
-    // ── 5. Re-read user from DB (security: don't trust JWT claims blindly) ──
-    // The JWT tells us WHO the user is. The DB tells us their CURRENT state.
-    // A disabled/deleted user must not be able to refresh.
-    const user = await db.user.findUnique({
-      where: { id: decoded.id },
+async function resolveRefreshSubject(
+  subject: { type: 'user' | 'customer'; id: string },
+): Promise<AuthUser | null> {
+  if (subject.type === 'customer') {
+    const customer = await db.customer.findUnique({
+      where: { id: subject.id },
       select: {
         id: true,
         email: true,
         name: true,
-        role: true,
+        phone: true,
         tenantId: true,
         workspaceId: true,
-        avatar: true,
-        isSuperAdmin: true,
-        isActive: true,
-        phone: true,
+        portalEnabled: true,
       },
     });
+    if (!customer?.portalEnabled || !customer.email) return null;
+    return {
+      id: customer.id,
+      email: customer.email,
+      name: customer.name,
+      phone: customer.phone,
+      role: 'customer',
+      tenantId: customer.tenantId,
+      workspaceId: customer.workspaceId,
+      avatar: null,
+      isSuperAdmin: false,
+      employeeId: null,
+    };
+  }
 
-    if (!user || !user.isActive) {
-      log.warn(
-        { userId: decoded.id, userExists: !!user, isActive: user?.isActive },
-        'auth/refresh: user not found or disabled — refusing refresh',
-      );
+  const user = await db.user.findUnique({
+    where: { id: subject.id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      tenantId: true,
+      workspaceId: true,
+      avatar: true,
+      isSuperAdmin: true,
+      isActive: true,
+      phone: true,
+    },
+  });
+  if (!user?.isActive) return null;
+
+  let employeeId: string | null = null;
+  if (user.role === 'employee') {
+    const employee = await db.employee.findFirst({
+      where: { userId: user.id },
+      select: { id: true },
+    });
+    employeeId = employee?.id || null;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    tenantId: user.tenantId,
+    workspaceId: user.workspaceId,
+    avatar: user.avatar,
+    isSuperAdmin: user.isSuperAdmin || false,
+    employeeId,
+    phone: user.phone,
+  };
+}
+
+export async function POST(request: NextRequest) {
+  const log = withRequestId(request);
+  const limited = applyRateLimit(authLimiter, request);
+  if (limited) return rateLimitResponse(limited.resetAtMs);
+
+  try {
+    let body: Record<string, unknown> = {};
+    try {
+      body = await request.json();
+    } catch {
+      // Cookie-based web refresh has no request body.
+    }
+
+    const bodyToken = typeof body.refreshToken === 'string' ? body.refreshToken : '';
+    const refreshToken = bodyToken || request.cookies.get(REFRESH_COOKIE_OPTIONS.name)?.value || '';
+    if (!refreshToken) {
       return NextResponse.json(
-        { error: 'Account not found or disabled', code: 'USER_DISABLED' },
+        { error: 'Refresh token required', code: 'MISSING_REFRESH_TOKEN' },
         { status: 401 },
       );
     }
 
-    // ── 6. Look up employeeId if applicable (preserved across refresh) ──
-    let employeeId: string | null = decoded.employeeId || null;
-    if (user.role === 'employee' && !employeeId) {
-      try {
-        const emp = await db.employee.findFirst({
-          where: { userId: user.id },
-          select: { id: true },
-        });
-        employeeId = emp?.id || null;
-      } catch {
-        // Non-fatal — employeeId is optional
-      }
+    const rotated = await rotateRefreshSession(refreshToken, getRefreshSessionMetadata(request));
+    if (rotated.status !== 'rotated') {
+      log.warn({ refreshStatus: rotated.status }, 'auth/refresh: refresh rejected');
+      const response = NextResponse.json(
+        {
+          error: rotated.status === 'reused'
+            ? 'Session security check failed. Please sign in again.'
+            : 'Invalid or expired refresh token',
+          code: rotated.status === 'reused' ? 'REFRESH_REUSE_DETECTED' : 'INVALID_REFRESH_TOKEN',
+        },
+        { status: 401 },
+      );
+      response.cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: '', maxAge: 0 });
+      response.cookies.set({ ...COOKIE_OPTIONS, value: '', maxAge: 0 });
+      return response;
     }
 
-    // ── 7. Build the new AuthUser (from DB, NOT from JWT) ─────────────
-    // This ensures revoked super-admin status, changed roles, etc. are
-    // reflected in the refreshed token. The JWT's isSuperAdmin is NOT
-    // trusted (Phase Security-1 fix).
-    const authUser: AuthUser = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      tenantId: user.tenantId,
-      workspaceId: user.workspaceId,
-      avatar: user.avatar,
-      isSuperAdmin: user.isSuperAdmin || false,
-      employeeId,
-      ...(user.phone ? { phone: user.phone } : {}),
-    };
+    const authUser = await resolveRefreshSubject(rotated.subject);
+    if (!authUser) {
+      await revokeRefreshSession(rotated.session.token, 'subject_disabled');
+      return NextResponse.json(
+        { error: 'Account not found or disabled', code: 'SUBJECT_DISABLED' },
+        { status: 401 },
+      );
+    }
 
-    // ── 8. Generate the new token (preserve originalIat) ──────────────
-    const newToken = generateToken(authUser, originalIat);
-
-    log.info(
-      { userId: user.id, sessionAgeDays: originalIat ? Math.floor((Date.now() - originalIat * 1000) / (24 * 60 * 60 * 1000)) : 0 },
-      'auth/refresh: token refreshed',
-    );
-
-    // ── 9. Return response ────────────────────────────────────────────
-    // Mobile expects { token, refreshToken } in JSON body.
-    // Web gets the cookie set automatically (but we also return the token
-    // in the body for clients that prefer to read it from the response).
-    const response = NextResponse.json(
-      {
-        token: newToken,
-        refreshToken: newToken, // same token — single-token system
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          tenantId: user.tenantId,
-          workspaceId: user.workspaceId,
-          avatar: user.avatar,
-          isSuperAdmin: user.isSuperAdmin || false,
-          employeeId,
-          phone: user.phone,
-        },
-      },
-      { status: 200 },
-    );
-
-    // Set the cookie for web clients (mobile ignores cookies)
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: newToken,
+    const accessToken = generateToken(authUser);
+    const response = NextResponse.json({
+      token: accessToken,
+      accessToken,
+      refreshToken: rotated.session.token,
+      user: authUser,
     });
-
+    response.cookies.set({ ...COOKIE_OPTIONS, value: accessToken });
+    response.cookies.set({ ...REFRESH_COOKIE_OPTIONS, value: rotated.session.token });
     return response;
   } catch (error) {
     log.error({ err: error }, 'auth/refresh: unexpected error');
-    return NextResponse.json(
-      { error: 'Failed to refresh token' },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Failed to refresh token' }, { status: 500 });
   }
 }

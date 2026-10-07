@@ -55,18 +55,26 @@ export default function LoginScreen() {
       return;
     }
     await hapticFeedback.light();
-    const success = await register(
+    const result = await register(
       name.trim(),
       regEmail.trim(),
       regPassword.trim(),
-      companyName.trim() || `${name.trim()}'s Business`
+      companyName.trim() || `${name.trim()}'s Business`,
+      selectedType,
+      selectedCountry,
     );
-    if (success) {
+    if (result === 'authenticated') {
       // Sync initial business blueprint
       await saveBlueprintToServer({
         businessType: selectedType,
         country: selectedCountry,
       });
+    } else if (result === 'verification_required') {
+      Alert.alert(
+        'Check your email',
+        'Your account was created. Open the verification link in your email, then sign in.',
+        [{ text: 'Sign in', onPress: () => setMode('signin') }],
+      );
     }
   };
 

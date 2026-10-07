@@ -117,18 +117,9 @@ export async function refreshSession(): Promise<boolean> {
 
   refreshInFlight = (async () => {
     try {
-      const currentToken = getToken();
       const res = await fetch('/api/auth/refresh', {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
-        },
-        body: JSON.stringify({
-          refreshToken: currentToken || '',
-          token: currentToken || '',
-        }),
       });
       if (!res.ok) return false;
       const data = await res.json();
@@ -190,7 +181,7 @@ export async function authFetch(url: string, options?: RequestInit): Promise<Res
   });
 
   // ── 401 → silent refresh + single retry ─────────────────────────────
-  if (response.status === 401 && token) {
+  if (response.status === 401) {
     const refreshed = await refreshSession();
     if (refreshed) {
       // Retry the original request with the new token.

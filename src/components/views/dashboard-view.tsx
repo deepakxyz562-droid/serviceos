@@ -50,6 +50,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
+import { BusinessHomeView } from '@/components/dashboard/business-home';
 import { cn } from '@/lib/utils';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -447,6 +448,13 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DashboardView() {
+  const { blueprint, auth } = useAppStore();
+  const owner = ['owner', 'standalone_user'].includes(auth.user?.role);
+  if (blueprint && owner && !auth.user?.isSuperAdmin) return <BusinessHomeView />;
+  return <LegacyDashboardView />;
+}
+
+function LegacyDashboardView() {
   const { setCurrentView, setPendingCreate, auth, currentWorkspaceName } = useAppStore();
   const [stats, setStats] = useState<SaaSStats | null>(null);
   const [loading, setLoading] = useState(true);

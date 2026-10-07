@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { directPrisma } from '@/lib/direct-prisma';
 import { db } from '@/lib/db';
-import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 import { cookies } from 'next/headers';
 
 /** Helper to query OTP records across db / directPrisma adapters */
@@ -242,7 +246,7 @@ export async function POST(request: NextRequest) {
         portalToken,
       };
 
-      const token = generateToken({
+      const tokens = await issueAuthTokens({
         id: targetCustomer.id,
         email: targetCustomer.email || targetCustomer.phone || normalizedEmail,
         name: targetCustomer.name,
@@ -251,16 +255,11 @@ export async function POST(request: NextRequest) {
         workspaceId: targetCustomer.workspaceId || null,
         avatar: null,
         isSuperAdmin: false,
-      });
+      }, getRefreshSessionMetadata(request), 'customer');
+      const token = tokens.accessToken;
 
       const cookieStore = await cookies();
-      cookieStore.set(COOKIE_OPTIONS.name, token, {
-        httpOnly: COOKIE_OPTIONS.httpOnly,
-        secure: COOKIE_OPTIONS.secure,
-        sameSite: COOKIE_OPTIONS.sameSite,
-        path: COOKIE_OPTIONS.path,
-        maxAge: 60 * 60 * 24 * 30, // 30 days — matches merchant session
-      });
+      setAuthCookies(cookieStore, tokens);
 
       return NextResponse.json({
         success: true,
@@ -285,7 +284,7 @@ export async function POST(request: NextRequest) {
             }
           : null,
         token,
-        refreshToken: token,
+        refreshToken: tokens.refreshToken,
         portalToken,
         isNewCustomer,
       });
@@ -437,7 +436,7 @@ export async function POST(request: NextRequest) {
         portalToken,
       };
 
-      const token = generateToken({
+      const tokens = await issueAuthTokens({
         id: customer.id,
         email: customer.email || customer.phone,
         name: customer.name,
@@ -446,16 +445,11 @@ export async function POST(request: NextRequest) {
         workspaceId: customer.workspaceId || null,
         avatar: null,
         isSuperAdmin: false,
-      });
+      }, getRefreshSessionMetadata(request), 'customer');
+      const token = tokens.accessToken;
 
       const cookieStore = await cookies();
-      cookieStore.set(COOKIE_OPTIONS.name, token, {
-        httpOnly: COOKIE_OPTIONS.httpOnly,
-        secure: COOKIE_OPTIONS.secure,
-        sameSite: COOKIE_OPTIONS.sameSite,
-        path: COOKIE_OPTIONS.path,
-        maxAge: 60 * 60 * 24 * 30, // 30 days — matches merchant session
-      });
+      setAuthCookies(cookieStore, tokens);
 
       return NextResponse.json({
         success: true,
@@ -472,6 +466,7 @@ export async function POST(request: NextRequest) {
             }
           : null,
         token,
+        refreshToken: tokens.refreshToken,
         portalToken,
         isNewCustomer,
       });

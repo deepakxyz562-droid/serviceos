@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { db } from '@/lib/db'
-import { generateToken, COOKIE_OPTIONS } from '@/lib/auth'
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -181,17 +185,16 @@ export async function POST(request: Request) {
       employeeId: null,
     }
 
-    const jwt = generateToken(authUser)
+    const tokens = await issueAuthTokens(
+      authUser,
+      getRefreshSessionMetadata(request),
+      'customer',
+    )
+    const jwt = tokens.accessToken
 
     // ── 6. Set HTTP-only cookie (24h, same as OTP verify) ────────────────
     const cookieStore = await cookies()
-    cookieStore.set(COOKIE_OPTIONS.name, jwt, {
-      httpOnly: COOKIE_OPTIONS.httpOnly,
-      secure: COOKIE_OPTIONS.secure,
-      sameSite: COOKIE_OPTIONS.sameSite,
-      path: COOKIE_OPTIONS.path,
-      maxAge: 60 * 60 * 24 * 30, // 30 days — matches merchant session
-    })
+    setAuthCookies(cookieStore, tokens)
 
     // ── 7. Update lastLoginAt (fire-and-forget) ──────────────────────────
     try {
@@ -218,7 +221,7 @@ export async function POST(request: Request) {
           }
         : null,
       token: jwt,
-      refreshToken: jwt,
+      refreshToken: tokens.refreshToken,
     })
   } catch (error) {
     console.error('[exchange-magic-link] unexpected error:', error)

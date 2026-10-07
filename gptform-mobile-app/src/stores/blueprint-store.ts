@@ -1,139 +1,72 @@
 import { create } from 'zustand';
-import type {
-  TenantBlueprint,
-  CountryPack,
-  BusinessCapabilities,
-  BusinessType,
-  CountryCode,
-} from '@/lib/blueprint/types';
-import { getCountryPack } from '@/lib/blueprint/country-packs';
-import { getCapabilitiesForBusinessType } from '@/lib/blueprint/presets';
+import type { TenantBlueprint, CountryPack, BusinessCapabilities, BusinessType, CountryCode, SalesChannel } from '@/lib/blueprint/types';
+import { getCountryPack, resolveBlueprintCapabilities, resolveTenantBlueprint } from '@/lib/blueprint';
 import { apiRequest } from '@/lib/api';
 import { storageGetItem, storageSetItem } from '@/lib/storage';
-
-const BLUEPRINT_STORAGE_KEY = 'nuvora_blueprint';
+import { useAuthStore } from './auth-store';
 
 const defaultBlueprint: TenantBlueprint = {
-  businessType: 'retail',
-  country: 'US',
-  capabilities: getCapabilitiesForBusinessType('retail'),
-  version: 1,
+  businessType: 'retail', country: 'US', language: 'en',
+  capabilities: resolveBlueprintCapabilities('retail'), version: 1,
 };
-
+function identity() {
+  const { user, isAuthenticated } = useAuthStore.getState();
+  return isAuthenticated && user ? `nuvora_blueprint:${user.id}:${user.tenantId || 'personal'}` : null;
+}
+type BlueprintPatch = {
+  businessType?: BusinessType; businessName?: string; country?: CountryCode;
+  salesChannels?: SalesChannel[]; capabilities?: Partial<BusinessCapabilities>;
+  language?: 'en' | 'hi'; timezone?: string;
+};
 interface BlueprintStore {
-  blueprint: TenantBlueprint;
-  countryPack: CountryPack;
-  isLoading: boolean;
-  isHydrated: boolean;
-  init: () => Promise<void>;
+  blueprint: TenantBlueprint; countryPack: CountryPack;
+  isLoading: boolean; isHydrated: boolean;
+  init: () => Promise<void>; reset: () => void;
   setLocalBlueprint: (bp: TenantBlueprint) => void;
   updateCapabilities: (caps: Partial<BusinessCapabilities>) => Promise<boolean>;
-  saveBlueprintToServer: (data: {
-    businessType?: BusinessType;
-    businessName?: string;
-    country?: CountryCode;
-    capabilities?: Partial<BusinessCapabilities>;
-  }) => Promise<boolean>;
+  saveBlueprintToServer: (data: BlueprintPatch) => Promise<boolean>;
 }
-
 export const useBlueprintStore = create<BlueprintStore>((set, get) => ({
-  blueprint: defaultBlueprint,
-  countryPack: getCountryPack('US'),
-  isLoading: false,
-  isHydrated: false,
-
+  blueprint: defaultBlueprint, countryPack: getCountryPack('US'), isLoading: false, isHydrated: false,
+  reset: () => set({ blueprint: defaultBlueprint, countryPack: getCountryPack('US'), isLoading: false, isHydrated: false }),
   init: async () => {
-    // 1. Instant load from local storage
+    const key = identity();
+    if (!key) return;
+    set({ blueprint: defaultBlueprint, countryPack: getCountryPack('US'), isLoading: true, isHydrated: false });
     try {
-      const cached = await storageGetItem(BLUEPRINT_STORAGE_KEY);
-      if (cached) {
-        const parsed: TenantBlueprint = JSON.parse(cached);
-        if (parsed && parsed.businessType) {
-          set({
-            blueprint: parsed,
-            countryPack: getCountryPack(parsed.country),
-            isHydrated: true,
-          });
-        }
+      const cached = await storageGetItem(key);
+      if (cached && identity() === key) {
+        const parsed = JSON.parse(cached);
+        const bp = resolveTenantBlueprint({ settingsJson: { blueprint: parsed } });
+        set({ blueprint: bp, countryPack: getCountryPack(bp.country), isHydrated: true });
       }
-    } catch {}
-
-    // 2. Fetch fresh blueprint from backend
+    } catch { /* A broken cache must not stop server hydration. */ }
     try {
-      set({ isLoading: true });
-      const data = await apiRequest<{
-        blueprint: TenantBlueprint;
-        countryPack: CountryPack;
-      }>('/api/tenant/blueprint');
-
-      if (data?.blueprint) {
-        set({
-          blueprint: data.blueprint,
-          countryPack: data.countryPack || getCountryPack(data.blueprint.country),
-          isHydrated: true,
-          isLoading: false,
-        });
-        await storageSetItem(BLUEPRINT_STORAGE_KEY, JSON.stringify(data.blueprint));
+      const data = await apiRequest<{ blueprint: TenantBlueprint }>('/api/tenant/blueprint');
+      if (identity() === key && data?.blueprint) {
+        get().setLocalBlueprint(data.blueprint);
       }
-    } catch {
-      set({ isLoading: false, isHydrated: true });
+    } finally {
+      if (identity() === key) set({ isLoading: false, isHydrated: true });
     }
   },
-
-  setLocalBlueprint: (bp: TenantBlueprint) => {
-    set({
-      blueprint: bp,
-      countryPack: getCountryPack(bp.country),
-    });
-    storageSetItem(BLUEPRINT_STORAGE_KEY, JSON.stringify(bp));
+  setLocalBlueprint: (bp) => {
+    const key = identity();
+    if (!key) return;
+    set({ blueprint: bp, countryPack: getCountryPack(bp.country), isHydrated: true });
+    void storageSetItem(key, JSON.stringify(bp)).catch(() => {});
   },
-
-  updateCapabilities: async (caps: Partial<BusinessCapabilities>) => {
-    const current = get().blueprint;
-    const updatedCaps: BusinessCapabilities = {
-      ...current.capabilities,
-      ...caps,
-    };
-    const updatedBp: TenantBlueprint = {
-      ...current,
-      capabilities: updatedCaps,
-    };
-
-    get().setLocalBlueprint(updatedBp);
-
-    try {
-      await apiRequest('/api/tenant/blueprint', {
-        method: 'PATCH',
-        body: { capabilities: updatedCaps },
-      });
-      return true;
-    } catch {
-      return false;
-    }
-  },
-
+  updateCapabilities: (caps) => get().saveBlueprintToServer({ capabilities: caps }),
   saveBlueprintToServer: async (data) => {
+    const key = identity();
+    if (!key) return false;
     set({ isLoading: true });
     try {
-      const res = await apiRequest<{
-        success: boolean;
-        blueprint: TenantBlueprint;
-        countryPack: CountryPack;
-      }>('/api/tenant/blueprint', {
-        method: 'PATCH',
-        body: data,
-      });
-
-      if (res?.blueprint) {
-        get().setLocalBlueprint(res.blueprint);
-        set({ isLoading: false });
-        return true;
-      }
-      set({ isLoading: false });
-      return false;
-    } catch (err) {
-      set({ isLoading: false });
-      return false;
-    }
+      const response = await apiRequest<{ blueprint: TenantBlueprint }>('/api/tenant/blueprint', { method: 'PATCH', body: data });
+      if (identity() !== key || !response?.blueprint) return false;
+      get().setLocalBlueprint(response.blueprint);
+      return true;
+    } catch { return false; }
+    finally { if (identity() === key) set({ isLoading: false }); }
   },
 }));

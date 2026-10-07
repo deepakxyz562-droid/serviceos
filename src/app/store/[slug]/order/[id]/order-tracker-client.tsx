@@ -52,11 +52,12 @@ interface OrderData {
 
 interface QueueData {
   ordersAhead: number;
-  estimatedWaitMinutes: number;
+  estimatedWaitMinutes?: number | null;
   counterNumber?: string;
 }
 
 interface OrderTrackerClientProps {
+  trackingToken: string;
   slug: string;
   orderId: string;
   initialOrder: OrderData;
@@ -66,6 +67,7 @@ interface OrderTrackerClientProps {
 }
 
 export function OrderTrackerClient({
+  trackingToken,
   slug,
   orderId,
   initialOrder,
@@ -130,7 +132,7 @@ export function OrderTrackerClient({
   useEffect(() => {
     const pollStatus = async () => {
       try {
-        const res = await fetch(`/api/public/store/order?orderId=${encodeURIComponent(orderId)}`);
+        const res = await fetch(`/api/public/store/order?orderId=${encodeURIComponent(orderId)}&token=${encodeURIComponent(trackingToken)}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.order) {
@@ -207,6 +209,7 @@ export function OrderTrackerClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
+          trackingToken,
           utrNumber: utrInput.trim(),
           paymentStatus: 'DETECTION_PENDING',
         }),
@@ -225,16 +228,17 @@ export function OrderTrackerClient({
 
   const handleNotifyPaidUpi = async () => {
     try {
-      await fetch('/api/public/store/order', {
+      const response=await fetch('/api/public/store/order', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId,
+          trackingToken,
           paymentStatus: 'DETECTION_PENDING',
           paymentMethod: 'UPI',
         }),
       });
-      setOrder((prev) => ({ ...prev, paymentStatus: 'DETECTION_PENDING', paymentMethod: 'UPI' }));
+      if(response.ok)setOrder((prev) => ({ ...prev, paymentStatus: 'DETECTION_PENDING', paymentMethod: 'UPI' }));
     } catch {}
   };
 
@@ -324,7 +328,7 @@ export function OrderTrackerClient({
           )}
 
           {/* VIRTUAL QUEUE CARD (For Roadside cart, Food stall, Cafe & Restaurants) */}
-          {order.status !== 'READY' && order.status !== 'COMPLETED' && order.status !== 'CANCELLED' && (
+          {order.status !== 'READY' && order.status !== 'COMPLETED' && order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
             <div className="bg-amber-50 border border-amber-200/80 rounded-3xl p-5 shadow-xs">
               <div className="flex items-start justify-between">
                 <div>
@@ -335,17 +339,17 @@ export function OrderTrackerClient({
                     {queue.ordersAhead === 0 ? 'Next in Line!' : `${queue.ordersAhead} orders ahead`}
                   </h3>
                 </div>
-                <div className="text-right bg-white/80 backdrop-blur-xs px-3 py-2 rounded-2xl border border-amber-200/60">
+                {queue.estimatedWaitMinutes != null && <div className="text-right bg-white/80 backdrop-blur-xs px-3 py-2 rounded-2xl border border-amber-200/60">
                   <span className="text-[10px] text-amber-700 font-semibold block">Est. Wait</span>
                   <span className="text-base font-black text-amber-900 flex items-center gap-1 justify-end">
                     <Clock className="h-3.5 w-3.5 text-amber-600" />
                     ~{queue.estimatedWaitMinutes} min
                   </span>
-                </div>
+                </div>}
               </div>
 
               <p className="text-xs text-amber-800/80 mt-2.5 leading-relaxed">
-                Your order is queued in our kitchen. You don't need to stand in line — feel free to sit down, we will alert you the moment it is ready!
+                Your order is queued in our kitchen. You don't need to stand in line — feel free to sit down, you can check its status here.
               </p>
 
               {/* Notification opt-in button */}

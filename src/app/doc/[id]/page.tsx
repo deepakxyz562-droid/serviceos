@@ -671,7 +671,7 @@ export default function ClientPortalPage({ params }: { params: Promise<{ id: str
                     <p className="text-xs text-slate-500 mt-1">Please quote #{data.number} in payment reference.</p>
                   </div>
 
-                  <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between">
+                  {process.env.NODE_ENV==='development' && <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col justify-between">
                     <div>
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
                         Instant Online Pay
@@ -686,7 +686,7 @@ export default function ClientPortalPage({ params }: { params: Promise<{ id: str
                       {paying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CreditCard className="w-3.5 h-3.5" />}
                       Pay Now ({formatCurrency(data.balanceDue || data.totals.total, data.business.currency, data.business.currencySymbol)})
                     </button>
-                  </div>
+                  </div>}
                 </div>
               </div>
             )}

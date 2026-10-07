@@ -117,7 +117,7 @@ export function BusinessBlueprintWizard({
       : [...selectedChannels, channel];
     const finalChannels = updated.length > 0 ? updated : [channel];
     setSelectedChannels(finalChannels);
-    setCapabilities(resolveBlueprintCapabilities(selectedType, finalChannels, capabilities));
+    setCapabilities(resolveBlueprintCapabilities(selectedType, finalChannels));
   };
 
   const toggleCapability = (key: keyof BusinessCapabilities) => {

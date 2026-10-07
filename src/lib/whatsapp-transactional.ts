@@ -15,6 +15,8 @@
 import { db } from '@/lib/db';
 
 export interface TransactionalOrderPayload {
+  currency?: string;
+  trackingUrl?: string;
   orderId: string;
   orderNumber: string;
   businessName: string;
@@ -38,10 +40,10 @@ export function formatCustomerOrderConfirmation(order: TransactionalOrderPayload
 } {
   const cleanCustomerPhone = order.customerPhone.replace(/\D/g, '');
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.com';
-  const trackingUrl = `${baseUrl}/store/${order.storeSlug || 'store'}/order/${order.orderId}`;
+  const trackingUrl = order.trackingUrl || `${baseUrl}/store/${order.storeSlug || 'store'}/order/${order.orderId}`;
 
   const itemsList = order.items
-    .map((it) => `• ${it.name} × ${it.qty} (₹${(it.price * it.qty).toFixed(2)})`)
+    .map((it) => `• ${it.name} × ${it.qty} (${new Intl.NumberFormat('en-IN',{style:'currency',currency:order.currency||'INR'}).format(it.price*it.qty)})`)
     .join('\n');
 
   const payText =
@@ -62,7 +64,7 @@ export function formatCustomerOrderConfirmation(order: TransactionalOrderPayload
     `🎉 *Order Confirmed!* #${order.orderNumber}\n\n` +
     `Hi *${order.customerName}*, your order at *${order.businessName}* has been received!\n\n` +
     `📋 *Order Summary:*\n${itemsList}\n\n` +
-    `💰 *Total Amount:* ₹${order.total.toFixed(2)}\n` +
+    `💰 *Total Amount:* ${new Intl.NumberFormat('en-IN',{style:'currency',currency:order.currency||'INR'}).format(order.total)}\n` +
     `💳 *Payment:* ${payText}\n` +
     `📍 *Type:* ${typeText}\n\n` +
     `👉 *Track Live Order & Kitchen Status:*\n${trackingUrl}\n\n` +
@@ -88,7 +90,7 @@ export function formatVendorNewOrderAlert(order: TransactionalOrderPayload): {
   const messageText =
     `🔔 *NEW ORDER #${order.orderNumber} RECEIVED!*\n\n` +
     `👤 *Customer:* ${order.customerName} (+91 ${order.customerPhone})\n` +
-    `💰 *Amount:* ₹${order.total.toFixed(2)} (${order.paymentStatus === 'PAID' ? 'PAID ✓' : 'UNPAID'})\n` +
+    `💰 *Amount:* ${new Intl.NumberFormat('en-IN',{style:'currency',currency:order.currency||'INR'}).format(order.total)} (${order.paymentStatus === 'PAID' ? 'PAID ✓' : 'UNPAID'})\n` +
     `📦 *Items:* ${itemsList}\n` +
     `📍 *Delivery:* ${order.deliveryAddress || order.deliveryType || 'Counter'}\n\n` +
     `👉 *Open in POS to Accept & Print:* ${posUrl}`;
@@ -106,7 +108,7 @@ export function formatCustomerStatusUpdate(
 ): { messageText: string; whatsappUrl: string } {
   const cleanCustomerPhone = order.customerPhone.replace(/\D/g, '');
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.com';
-  const trackingUrl = `${baseUrl}/store/${order.storeSlug || 'store'}/order/${order.orderId}`;
+  const trackingUrl = order.trackingUrl || `${baseUrl}/store/${order.storeSlug || 'store'}/order/${order.orderId}`;
 
   let statusBadge = '📦 Order Update';
   let statusMessage = `Your order #${order.orderNumber} status has been updated to: ${newStatus}`;

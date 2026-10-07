@@ -9,8 +9,8 @@ export const runtime = 'nodejs';
  *
  * Phase 2 migration: reads from the real `Promotion` Prisma model (no more
  * `fieldsJson.promotions[]` JSON blob, no more hardcoded WELCOME50/FESTIVE15
- * fallback). Atomically increments `usedCount` on successful validation.
- * Optionally records a `Coupon` row to track per-customer redemption (only
+ * fallback). Usage is consumed only by the committed checkout transaction.
+ * Legacy `Coupon` records are consulted for preview limits (only
  * when `customerId` is provided in the request body — typically for logged-in
  * customers).
  *
@@ -37,8 +37,8 @@ export async function POST(req: NextRequest) {
       where: { id: businessSlug },
     });
     if (!business && businessSlug) {
-      const tenant = await db.tenant.findUnique({
-        where: { slug: businessSlug },
+      const tenant = await db.tenant.findFirst({
+        where: { OR: [{ slug: businessSlug }, { id: businessSlug }] },
         select: { id: true },
       });
       if (tenant) {
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     // Real DB lookup — no JSON blob, no hardcoded fallback.
     const found = await db.promotion.findFirst({
-      where: { code: cleanCode, isActive: true },
+      where: { code: cleanCode, isActive: true, tenantId },
     });
 
     if (!found) {
@@ -68,6 +68,8 @@ export async function POST(req: NextRequest) {
     if (found.tenantId && found.tenantId !== tenantId) {
       return NextResponse.json({ error: 'Invalid or expired promo code' }, { status: 400 });
     }
+
+    if (new Date(found.startDate) > new Date()) return NextResponse.json({ error: 'This offer has not started yet' }, { status: 400 });
 
     // Expiry check
     if (found.endDate && new Date(found.endDate) < new Date()) {
@@ -126,42 +128,7 @@ export async function POST(req: NextRequest) {
     discountAmount = Number(discountAmount.toFixed(2));
     const finalTotal = Math.max(0, Number((amount - discountAmount).toFixed(2)));
 
-    // Atomic increment of usedCount. Wrap in try/catch — if it fails (e.g.
-    // a concurrent redemption just bumped us over usageLimit), we still
-    // return the discount because the coupon was valid at validation time.
-    // The order placement flow re-checks limits atomically before finalising.
-    try {
-      await db.promotion.update({
-        where: { id: found.id },
-        data: { usedCount: { increment: 1 } },
-      });
-    } catch (incErr) {
-      console.warn('Coupon usedCount increment failed (non-fatal):', incErr);
-    }
-
-    // Optional per-customer redemption record. Only created when the caller
-    // supplies a customerId (the storefront checkout doesn't always have
-    // one — anonymous guest checkout is supported).
-    if (customerId) {
-      try {
-        await db.coupon.create({
-          data: {
-            tenantId,
-            customerId: String(customerId),
-            promotionId: found.id,
-            code: found.code || cleanCode,
-            discountType: isPercent ? 'percentage' : 'fixed',
-            discountValue: discountAmount,
-            status: 'used',
-            usedAt: new Date(),
-          },
-        });
-      } catch (couponErr) {
-        // Don't fail validation if the audit row can't be written.
-        console.warn('Coupon redemption row creation failed (non-fatal):', couponErr);
-      }
-    }
-
+    // Preview is read-only. Usage limits are consumed atomically by order creation.
     return NextResponse.json({
       valid: true,
       code: found.code || cleanCode,

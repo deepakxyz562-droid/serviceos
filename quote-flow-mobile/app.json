@@ -13,7 +13,9 @@
       "bundleIdentifier": "com.quoteflow.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "QuoteFlow uses the microphone to create quotes from your voice.",
-        "NSCameraUsageDescription": "QuoteFlow uses the camera to scan documents."
+        "NSCameraUsageDescription": "QuoteFlow uses the camera to scan documents.",
+        "NSPhotoLibraryUsageDescription": "QuoteFlow uses your photo library to add a business logo and document attachments.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -33,6 +35,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
       [
         "expo-speech-recognition",
         {

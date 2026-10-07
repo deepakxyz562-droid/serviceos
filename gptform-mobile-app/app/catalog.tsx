@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
@@ -35,6 +35,7 @@ export interface ProductItem {
 
 export default function MobileCatalogScreen() {
   const router = useRouter();
+  const { create } = useLocalSearchParams<{ create?: string }>();
   const [catalog, setCatalog] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,7 +46,7 @@ export default function MobileCatalogScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   // Edit or Add Modal state
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(create === '1');
   const [editingItem, setEditingItem] = useState<ProductItem | null>(null);
   const [formName, setFormName] = useState('');
   const [formPrice, setFormPrice] = useState('');

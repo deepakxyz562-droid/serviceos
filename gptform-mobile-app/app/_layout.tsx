@@ -9,14 +9,23 @@ import { registerForPushNotifications, setupNotificationListeners } from '@/lib/
 
 import { NuvoraSplash } from '@/components/brand/nuvora-splash';
 
+export { AppErrorBoundary as ErrorBoundary } from '@/components/app-error-boundary';
+
 export default function RootLayout() {
   const { isBooted, isAuthenticated, user, bootstrap } = useAuthStore();
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => {
     bootstrap();
-    useBlueprintStore.getState().init();
   }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      void useBlueprintStore.getState().init().catch(() => {});
+    } else {
+      useBlueprintStore.getState().reset();
+    }
+  }, [isAuthenticated, user?.id, user?.tenantId]);
 
   // Proactive session refresh on app foreground. When the app returns to the
   // foreground (from backgrounded), re-run bootstrap() which decodes the JWT

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
@@ -56,7 +60,8 @@ export async function POST(request: NextRequest) {
       isSuperAdmin: user.isSuperAdmin || false,
       employeeId,
     };
-    const token = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    const token = tokens.accessToken;
 
     const response = NextResponse.json(
       {
@@ -74,6 +79,7 @@ export async function POST(request: NextRequest) {
           lastLoginAt: new Date(),
         },
         token,
+        refreshToken: tokens.refreshToken,
         tenant: user.tenant
           ? {
               id: user.tenant.id,
@@ -93,10 +99,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: token,
-    });
+    setAuthCookies(response.cookies, tokens);
 
     return response;
   } catch (error) {

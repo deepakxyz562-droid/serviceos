@@ -48,12 +48,25 @@ export default function AuthScreen() {
     }
     setLoading(true);
     try {
-      const r = await apiPost<{ token: string; user: any }>("/api/mobile/auth", {
+      const r = await apiPost<{
+        token?: string;
+        refreshToken?: string;
+        user?: any;
+        verificationRequired?: boolean;
+        message?: string;
+      }>("/api/mobile/auth", {
         email,
         password,
         name: name || undefined,
+        action: mode,
       });
-      await saveToken(r.token);
+      if (r.verificationRequired) {
+        Alert.alert("Verify your email", r.message || "Check your inbox before signing in.");
+        setMode("login");
+        return;
+      }
+      if (!r.token || !r.refreshToken || !r.user) throw new Error("Invalid authentication response");
+      await saveToken(r.token, r.refreshToken);
       setToken(r.token);
       setUser(r.user);
       router.replace("/");
@@ -75,6 +88,7 @@ export default function AuthScreen() {
       if (result.type === "success" && result.url) {
         const parsed = Linking.parse(result.url);
         const token = (parsed.queryParams?.token as string) || "";
+        const refreshToken = (parsed.queryParams?.refreshToken as string) || "";
         const userEmail = (parsed.queryParams?.email as string) || "";
         const userName = (parsed.queryParams?.name as string) || "";
         const error = (parsed.queryParams?.error as string) || "";
@@ -84,8 +98,8 @@ export default function AuthScreen() {
           return;
         }
 
-        if (token) {
-          await saveToken(token);
+        if (token && refreshToken) {
+          await saveToken(token, refreshToken);
           setToken(token);
           setUser({ id: "user", email: userEmail, name: userName });
           router.replace("/");

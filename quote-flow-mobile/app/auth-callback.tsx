@@ -6,14 +6,14 @@ import { saveToken } from "@/api/client";
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string; email?: string; name?: string; error?: string }>();
+  const params = useLocalSearchParams<{ token?: string; refreshToken?: string; email?: string; name?: string; error?: string }>();
   const setToken = useAppStore((s) => s.setToken);
   const setUser = useAppStore((s) => s.setUser);
 
   useEffect(() => {
     async function handle() {
-      if (params.token) {
-        await saveToken(params.token);
+      if (params.token && params.refreshToken) {
+        await saveToken(params.token, params.refreshToken);
         setToken(params.token);
         setUser({ id: "user", email: params.email || "", name: params.name || "" });
         router.replace("/");
@@ -22,7 +22,7 @@ export default function AuthCallbackScreen() {
       }
     }
     handle();
-  }, [params.token]);
+  }, [params.token, params.refreshToken]);
 
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8fafc" }}>

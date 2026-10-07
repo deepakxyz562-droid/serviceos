@@ -204,7 +204,7 @@ export default function QuotePreviewScreen() {
       const token = await loadToken();
       const localUri = `${FileSystem.documentDirectory}${quote.number}.pdf`;
       const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
-        headers: token ? { "x-quoteflow-token": token } : undefined,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadRes.uri, {
@@ -235,7 +235,7 @@ export default function QuotePreviewScreen() {
       const token = await loadToken();
       const localUri = `${FileSystem.documentDirectory}${quote.number}-print.pdf`;
       const downloadRes = await FileSystem.downloadAsync(pdfUrl, localUri, {
-        headers: token ? { "x-quoteflow-token": token } : undefined,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(downloadRes.uri, {

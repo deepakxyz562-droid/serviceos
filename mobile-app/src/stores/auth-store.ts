@@ -36,6 +36,7 @@ import type {
 } from '@/types';
 import {
   getToken,
+  getRefreshToken,
   setTokens,
   clearTokens,
   getStoredUserData,
@@ -234,6 +235,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await api.post<{
         token?: string;
         accessToken?: string;
+        refreshToken?: string;
         user?: User;
         tenant?: unknown;
       }>(
@@ -245,7 +247,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const token = extractToken(response);
       if (!token || !response.user) throw new Error('Invalid response from server');
 
-      await setTokens(token);
+      await setTokens(token, response.refreshToken);
       await setStoredUserData(response.user);
       await setActiveRole('employee');
 
@@ -565,7 +567,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: async () => {
     try {
-      await api.post(API_PATHS.authLogout).catch(() => {});
+      const refreshToken = await getRefreshToken();
+      await api.post(API_PATHS.authLogout, { refreshToken }).catch(() => {});
     } finally {
       await clearTokens();
       await clearLastCompany();

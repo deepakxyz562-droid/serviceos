@@ -40,14 +40,17 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     },
   });
 
-  let businessId = tenant?.id || slug;
+  if (!tenant) notFound();
+  const ownerBusiness = await db.aiBusiness.findFirst({ where: { tenantId: tenant.id } });
+  if (!ownerBusiness) notFound();
+  let businessId = ownerBusiness.id;
   let businessName = tenant?.name || 'Our Store & Cafe';
   let businessPhone = tenant?.phone || '';
 
   // Check config
   let config = await db.gptformCommerceConfig.findFirst({
     where: {
-      OR: [{ businessId }, { businessId: slug }],
+      OR: [{ businessId }, { businessId: tenant.id }],
     },
   });
 
@@ -61,13 +64,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     }
   }
 
-  if (catalog.length === 0) {
-    catalog = [
-      { id: '1', name: 'Fresh Artisan Croissant', price: 90, category: 'Bakery', description: 'Flaky French butter croissant baked fresh daily', isActive: true },
-      { id: '2', name: 'Signature Cappuccino', price: 140, category: 'Beverages', description: 'Double espresso with silky steamed milk foam', isActive: true },
-      { id: '3', name: 'Belgian Chocolate Brownie', price: 120, category: 'Desserts', description: 'Warm fudge brownie with 70% dark chocolate', isActive: true },
-    ];
-  }
+  if (!config || !config.isActive) notFound();
+
 
   // Parse extra billing, promotions & bannerText from fieldsJson
   let billingConfig: any = null;
@@ -77,22 +75,14 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     try {
       const parsedFields = JSON.parse(config.fieldsJson);
       if (parsedFields.billing) billingConfig = parsedFields.billing;
-      if (Array.isArray(parsedFields.promotions)) {
-        discountsConfig = parsedFields.promotions.map((p: any) => ({
-          code: p.code,
-          type: p.discountType === 'PERCENT' ? 'percentage' : 'fixed',
-          value: p.discountValue,
-          minOrder: p.minOrderValue,
-          label: p.description,
-        }));
-      } else if (Array.isArray(parsedFields.discounts)) {
-        discountsConfig = parsedFields.discounts;
-      }
       if (typeof parsedFields.bannerText === 'string') {
         bannerText = parsedFields.bannerText;
       }
     } catch {}
   }
+
+  const promotions=await db.promotion.findMany({where:{tenantId:tenant.id,isActive:true,startDate:{lte:new Date()},OR:[{endDate:null},{endDate:{gte:new Date()}}]},take:50});
+  discountsConfig=promotions.filter(p=>p.usageLimit==null||p.usedCount<p.usageLimit).map(p=>({code:p.code,type:p.type,value:p.value,minOrder:p.minSpend,label:p.description}));
 
   // Fallback banner if none set
   if (!bannerText && discountsConfig.length > 0) {

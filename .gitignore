@@ -85,7 +85,8 @@ db/*.db-journal
 /examples/
 
 # Prisma migrations (using db push instead)
-/prisma/migrations/
+/prisma/migrations/*
+!/prisma/migrations/20261007150000_commerce_consistency/
 
 # Worklog
 worklog.md

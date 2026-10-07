@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
+import { ownerBusiness } from '@/lib/commerce/access';
 
 /**
  * POST /api/commerce/orders/match-payment
@@ -8,10 +8,11 @@ import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
  */
 export async function POST(req: NextRequest) {
   try {
-    const { business } = await requireQuoteFlowBusiness(req);
+    const business = await ownerBusiness(req);
     const body = await req.json();
     const { orderId, amount, utr, appSource, autoConfirm = false } = body;
 
+    if(autoConfirm) return NextResponse.json({error:'A device notification cannot verify a bank receipt. Confirm the receipt using the order payment action.'},{status:400});
     const parsedAmount = Number(amount);
     if (!orderId && (!parsedAmount || isNaN(parsedAmount))) {
       return NextResponse.json(
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
 
       // Find candidate matching amount within 0.50
       targetOrder = candidates.find(
-        (o) => Math.abs(o.total - parsedAmount) <= 0.5
+        (o) => Math.abs(o.total - parsedAmount) < 0.005
       ) || null;
     }
 
@@ -59,48 +60,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const cleanUtr = utr ? String(utr).trim() : targetOrder.paymentRef || null;
-    const cleanAppSource = appSource ? String(appSource).trim() : 'UPI';
-    const nextPaymentStatus = autoConfirm ? 'PAID' : 'MATCHED';
+    return NextResponse.json({matched:true,autoConfirmed:false,requiresVerification:true,order:{id:targetOrder.id,orderNumber:targetOrder.id.slice(-6).toUpperCase(),status:targetOrder.status,paymentStatus:targetOrder.paymentStatus,total:targetOrder.total}});
 
-    let updatedNotes = targetOrder.notes || '';
-    const matchTag = `[Auto-Matched via ${cleanAppSource}: ₹${parsedAmount || targetOrder.total}${cleanUtr ? ` Ref:${cleanUtr}` : ''}]`;
-    if (!updatedNotes.includes(matchTag)) {
-      updatedNotes = updatedNotes ? `${updatedNotes} • ${matchTag}` : matchTag;
-    }
-
-    const updated = await db.gptformCommerceOrder.update({
-      where: { id: targetOrder.id },
-      data: {
-        paymentStatus: nextPaymentStatus,
-        paymentMethod: `UPI (${cleanAppSource})`,
-        paymentRef: cleanUtr,
-        notes: updatedNotes,
-        // If confirmed, and status is PENDING, advance status to CONFIRMED
-        ...(autoConfirm && targetOrder.status === 'PENDING' ? { status: 'CONFIRMED' } : {}),
-      },
-    });
-
-    return NextResponse.json({
-      matched: true,
-      autoConfirmed: autoConfirm,
-      order: {
-        id: updated.id,
-        orderNumber: updated.id.slice(-6).toUpperCase(),
-        status: updated.status,
-        paymentStatus: updated.paymentStatus,
-        paymentMethod: updated.paymentMethod,
-        paymentRef: updated.paymentRef,
-        total: updated.total,
-        customerName: updated.customerName,
-        customerPhone: updated.customerPhone,
-      },
-    });
   } catch (e: any) {
-    if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS' || e.message==='FORBIDDEN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: e.message==='FORBIDDEN'?403:401 });
     }
     console.error('Failed to match UPI payment:', e);
-    return NextResponse.json({ error: e.message || 'Payment match failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Payment match failed' }, { status: 500 });
   }
 }

@@ -37,6 +37,7 @@ import { checkMenuAccess } from '@/components/layout/upgrade-modal';
 import { resolvePlanTierClient } from '@/lib/plan-features';
 import { getMobileNavTabsForBlueprint, BUSINESS_TYPE_LABELS } from '@/lib/blueprint';
 import { performClientLogout } from '@/lib/client-auth';
+import { homeText } from '../../../shared/business-home';
 
 interface MobileNavItem {
   view: ViewType;
@@ -165,7 +166,8 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
 
   const isStandaloneTenant =
     !isSuperAdmin &&
-    ((auth.tenant as any)?.signupMode === 'standalone' ||
+    ((!!blueprint && ['owner', 'standalone_user'].includes(auth.user?.role)) ||
+     (auth.tenant as any)?.signupMode === 'standalone' ||
      (auth.tenant as any)?.plan === 'standalone_starter' ||
      (auth.tenant as any)?.plan === 'standalone_business' ||
      (auth.tenant as any)?.productType === 'forms' ||
@@ -176,7 +178,7 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
      (auth.user as any)?.role === 'standalone_user' ||
      ['formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments', 'creatorProfile', 'creatorOffers', 'commerce'].includes(currentView));
 
-  const dynamicBlueprintTabs = getMobileNavTabsForBlueprint(blueprint);
+  const dynamicBlueprintTabs = getMobileNavTabsForBlueprint(blueprint || undefined);
   const standaloneNavItems: MobileNavItem[] = dynamicBlueprintTabs.map((t) => ({
     view: t.view as ViewType,
     tab: t.tab,
@@ -207,79 +209,18 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
         <div className="flex items-center justify-around h-16">
           {isStandaloneTenant ? (
             <>
-              {/* Left 2 blueprint items */}
-              {standaloneNavItems.slice(0, 2).map((item) => {
+              {standaloneNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = currentView === item.view;
-                return (
-                  <button
-                    key={`${item.view}-${item.tab || ''}`}
-                    onClick={() => {
-                      if (item.tab && typeof window !== 'undefined') {
-                        sessionStorage.setItem('nuvora_commerce_tab', item.tab);
-                        window.dispatchEvent(new CustomEvent('nuvora_switch_commerce_tab', { detail: item.tab }));
-                      }
-                      setCurrentView(item.view);
-                    }}
-                    className={cn(
-                      'flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors',
-                      'touch-target min-w-[48px]',
-                      isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    aria-label={item.label}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <Icon className={cn('size-5', isActive && 'stroke-[2.5px]')} />
-                    <span className={cn('text-[10px] font-medium leading-tight', isActive && 'font-semibold')}>
-                      {item.label}
-                    </span>
-                  </button>
-                );
-              })}
-
-              {/* Center Elevated + Action Trigger FAB */}
-              <button
-                type="button"
-                onClick={() => setActionSheetOpen(true)}
-                className="relative -top-3 flex flex-col items-center justify-center shrink-0 group focus:outline-none px-1 cursor-pointer"
-                aria-label="Quick Action"
-              >
-                <div className="size-11 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white shadow-lg shadow-emerald-500/30 flex items-center justify-center border-2 border-background group-active:scale-95 transition-transform">
-                  <Plus className="size-6 stroke-[2.5px]" />
-                </div>
-                <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  New
-                </span>
-              </button>
-
-              {/* Right 1 blueprint item */}
-              {standaloneNavItems.slice(2, 3).map((item) => {
-                const Icon = item.icon;
-                const isActive = currentView === item.view;
-                return (
-                  <button
-                    key={`${item.view}-${item.tab || ''}`}
-                    onClick={() => {
-                      if (item.tab && typeof window !== 'undefined') {
-                        sessionStorage.setItem('nuvora_commerce_tab', item.tab);
-                        window.dispatchEvent(new CustomEvent('nuvora_switch_commerce_tab', { detail: item.tab }));
-                      }
-                      setCurrentView(item.view);
-                    }}
-                    className={cn(
-                      'flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors',
-                      'touch-target min-w-[48px]',
-                      isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground hover:text-foreground'
-                    )}
-                    aria-label={item.label}
-                    aria-current={isActive ? 'page' : undefined}
-                  >
-                    <Icon className={cn('size-5', isActive && 'stroke-[2.5px]')} />
-                    <span className={cn('text-[10px] font-medium leading-tight', isActive && 'font-semibold')}>
-                      {item.label}
-                    </span>
-                  </button>
-                );
+                const isActive = currentView === item.view && (!item.tab || (typeof window !== 'undefined' && sessionStorage.getItem('nuvora_commerce_tab') === item.tab));
+                return <button key={`${item.view}-${item.tab || item.label}`} onClick={() => {
+                  if (item.tab) {
+                    sessionStorage.setItem('nuvora_commerce_tab', item.tab);
+                    window.dispatchEvent(new CustomEvent('nuvora_switch_commerce_tab', { detail: item.tab }));
+                  }
+                  setCurrentView(item.view);
+                }} className={cn('flex flex-1 h-full min-w-[48px] flex-col items-center justify-center gap-1', isActive ? 'text-emerald-600' : 'text-muted-foreground')} aria-label={item.label} aria-current={isActive ? 'page' : undefined}>
+                  <Icon className="size-5" /><span className="text-[11px] font-medium">{item.label}</span>
+                </button>;
               })}
 
               {/* More menu button */}
@@ -289,7 +230,7 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
                 aria-label="More menu"
               >
                 <Menu className="size-5" />
-                <span className="text-[10px] font-medium leading-tight">More</span>
+                <span className="text-[10px] font-medium leading-tight">{homeText('more', blueprint?.language)}</span>
               </button>
             </>
           ) : (

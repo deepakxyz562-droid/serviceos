@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import { getRefreshSessionMetadata, issueAuthTokens, setAuthCookies } from '@/lib/auth';
 
 /**
  * POST /api/demo-login
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
     };
-    const token = generateToken(authUser);
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
 
     const response = NextResponse.json(
       {
@@ -86,7 +86,9 @@ export async function POST(request: NextRequest) {
           avatar: user.avatar,
           isSuperAdmin: false,
         },
-        token,
+        token: tokens.accessToken,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
         tenant: {
           id: tenant.id,
           name: tenant.name,
@@ -105,10 +107,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    response.cookies.set({
-      ...COOKIE_OPTIONS,
-      value: token,
-    });
+    setAuthCookies(response.cookies, tokens);
 
     return response;
   } catch (error) {

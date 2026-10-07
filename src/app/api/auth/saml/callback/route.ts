@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { signToken } from '@/lib/auth';
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,22 +85,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Issue JWT session token
-    const token = signToken({
-      userId: user.id,
+    const authUser = {
+      id: user.id,
       email: user.email,
+      name: user.name,
       tenantId,
       role: user.role,
-    });
+      workspaceId: user.workspaceId || null,
+      avatar: user.avatar || null,
+      isSuperAdmin: user.isSuperAdmin || false,
+      employeeId: null,
+    };
+    const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
 
     // Set cookie + redirect to app
     const response = NextResponse.redirect(new URL('/app', request.url));
-    response.cookies.set('fieseros_session', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-      path: '/',
-    });
+    setAuthCookies(response.cookies, tokens);
 
     return response;
   } catch (error: any) {

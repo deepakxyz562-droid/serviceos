@@ -1,4 +1,5 @@
 'use client';
+import { RequestTracker } from '../../../shared/money';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -89,6 +90,10 @@ import {
 } from '@/lib/billing/gst-invoice-helper';
 
 export function CommerceView() {
+  const invoicePaymentTracker = useRef(new RequestTracker());
+  const orderRequestTracker = useRef(new RequestTracker());
+  const expenseRequestTracker = useRef(new RequestTracker());
+  const khataRequestTracker = useRef(new RequestTracker());
   const [activeTab, setActiveTab] = useState<
     | 'orders'
     | 'catalog'
@@ -762,7 +767,7 @@ export function CommerceView() {
     try {
       const res = await authFetch('/api/commerce/khata', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': khataRequestTracker.current.for({type:'COLLECTION',phone:khataPaymentModal.entry.phone,amount:amt,paymentMethod:khataPayMethod,note:khataPayNote}) },
         body: JSON.stringify({
           type: 'GOT_PAYMENT',
           customerPhone: khataPaymentModal.entry.phone,
@@ -774,6 +779,7 @@ export function CommerceView() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to record payment');
       toast.success(`Payment of ₹${amt.toFixed(2)} recorded ✓`);
+      khataRequestTracker.current.clear();
       setKhataPaymentModal(null);
       loadKhata();
     } catch (err: any) {
@@ -795,7 +801,7 @@ export function CommerceView() {
     try {
       const res = await authFetch('/api/commerce/khata', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': khataRequestTracker.current.for({type:'CREDIT_SALE',phone,amount:amt,note:khataUdhaarNote}) },
         body: JSON.stringify({
           type: 'GAVE_UDHAAR',
           customerPhone: phone,
@@ -807,6 +813,7 @@ export function CommerceView() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Failed to record udhaar');
       toast.success(`Udhaar of ₹${amt.toFixed(2)} recorded ✓`);
+      khataRequestTracker.current.clear();
       setKhataUdhaarModal(false);
       setKhataUdhaarPhone('');
       setKhataUdhaarName('');
@@ -838,7 +845,7 @@ export function CommerceView() {
     try {
       const res = await authFetch('/api/commerce/khata', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': khataRequestTracker.current.for({type:'SUPPLIER_PAYMENT',amount:amt}) },
         body: JSON.stringify({
           type: 'PAID_SUPPLIER',
           supplierId: khataSupplierPayModal.entry.supplierId,
@@ -866,17 +873,11 @@ export function CommerceView() {
     }
     setSavingExpense(true);
     try {
-      const res = await authFetch('/api/commerce/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: amt,
-          category: newExpenseCat,
-          description: newExpenseNote.trim() || newExpenseCat,
-          paymentMethod: 'CASH',
-        }),
-      }).then((r) => r.json());
-      if (res.ok || res.expense) {
+      const expensePayload = { amount: amt, category: newExpenseCat, description: newExpenseNote.trim() || newExpenseCat, paymentMode: 'CASH' };
+      const response = await authFetch('/api/commerce/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': expenseRequestTracker.current.for(expensePayload) }, body: JSON.stringify(expensePayload) });
+      const res = await response.json();
+      if (response.ok && res.success) {
+        expenseRequestTracker.current.clear();
         toast.success(`Expense of ₹${amt} recorded!`);
         setNewExpenseAmt('');
         setNewExpenseNote('');
@@ -1164,12 +1165,14 @@ export function CommerceView() {
     try {
       const res = await authFetch(`/api/quote-flow/invoices/${inv.id}/pay`, {
         method: 'POST',
+        headers: {'Content-Type':'application/json','Idempotency-Key':invoicePaymentTracker.current.for({invoiceId:inv.id,amount:balance,method:'MANUAL'})},
         body: JSON.stringify({ amount: balance, method: 'MANUAL' }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error || 'Failed to record payment');
       }
+      invoicePaymentTracker.current.clear();
       toast.success(`Marked PAID ✓ (${inv.number})`);
       loadBilling();
     } catch (err: any) {
@@ -2012,7 +2015,7 @@ export function CommerceView() {
       toast.error('Please add items to cart');
       return;
     }
-    const finalPhone = posCustomerPhone.trim() || '9999999999';
+    const finalPhone = posCustomerPhone.trim();
     setPosSubmitting(true);
     try {
       // Apply tax + service charge from Settings (was ignoring them — POS total
@@ -2021,10 +2024,7 @@ export function CommerceView() {
       const taxAmount = taxRate > 0 ? (subtotal * Number(taxRate)) / 100 : 0;
       const serviceChargeAmount = serviceChargeRate > 0 ? (subtotal * Number(serviceChargeRate)) / 100 : 0;
       const total = subtotal + taxAmount + serviceChargeAmount;
-      const response = await authFetch('/api/commerce/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const payload = {
           customerName: posCustomerName.trim() || 'Walk-in Guest',
           customerPhone: finalPhone,
           paymentMethod: posPaymentMethod,
@@ -2033,8 +2033,8 @@ export function CommerceView() {
           notes: posTableNumber ? `Dine-In Table #${posTableNumber}` : 'In-store Walk-in POS',
           items: posCart.map((i) => ({ name: i.name, qty: i.qty, price: i.price, amount: i.price * i.qty })),
           total,
-        }),
-      });
+        };
+      const response = await authFetch('/api/commerce/orders', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': orderRequestTracker.current.for(payload) }, body: JSON.stringify(payload) });
 
       const res = await response.json();
       if (!response.ok) {
@@ -2042,6 +2042,7 @@ export function CommerceView() {
       }
 
       if (res.order) {
+        orderRequestTracker.current.clear();
         toast.success(`POS Order Created ✓ (${currencySymbol}${total.toFixed(2)})`);
         setPosCart([]);
         setPosCustomerName('');

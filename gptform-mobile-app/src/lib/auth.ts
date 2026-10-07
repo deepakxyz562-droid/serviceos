@@ -68,14 +68,16 @@ export async function getRefreshToken(): Promise<string | null> {
   if (stored) {
     memoryRefreshToken = stored;
   }
-  return stored || memoryToken;
+  return stored;
 }
 
 export async function setTokens(token: string, refreshToken?: string): Promise<void> {
   memoryToken = token;
-  memoryRefreshToken = refreshToken || token;
   await setItem(TOKEN_KEY, token);
-  await setItem(REFRESH_TOKEN_KEY, refreshToken || token);
+  if (refreshToken) {
+    memoryRefreshToken = refreshToken;
+    await setItem(REFRESH_TOKEN_KEY, refreshToken);
+  }
 }
 
 export async function clearTokens(): Promise<void> {

@@ -20,7 +20,10 @@ export const API_BASE_URL =
     : "https://fieseros.com");
 
 let cachedToken: string | null = null;
+let cachedRefreshToken: string | null = null;
 const REQUEST_TIMEOUT_MS = 15_000;
+const ACCESS_TOKEN_KEY = "quoteflow_token";
+const REFRESH_TOKEN_KEY = "quoteflow_refresh_token";
 
 export class ApiError extends Error {
   constructor(
@@ -35,18 +38,79 @@ export class ApiError extends Error {
 
 export async function loadToken() {
   if (cachedToken) return cachedToken;
-  cachedToken = (await SecureStore.getItemAsync("quoteflow_token")) ?? null;
+  cachedToken = (await SecureStore.getItemAsync(ACCESS_TOKEN_KEY)) ?? null;
   return cachedToken;
 }
 
-export async function saveToken(token: string) {
+export async function loadRefreshToken() {
+  if (cachedRefreshToken) return cachedRefreshToken;
+  cachedRefreshToken = (await SecureStore.getItemAsync(REFRESH_TOKEN_KEY)) ?? null;
+  return cachedRefreshToken;
+}
+
+export async function saveToken(token: string, refreshToken?: string) {
   cachedToken = token;
-  await SecureStore.setItemAsync("quoteflow_token", token);
+  await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token);
+  if (refreshToken) {
+    cachedRefreshToken = refreshToken;
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, refreshToken);
+  }
 }
 
 export async function clearToken() {
   cachedToken = null;
-  await SecureStore.deleteItemAsync("quoteflow_token");
+  cachedRefreshToken = null;
+  await Promise.all([
+    SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
+    SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+  ]);
+}
+
+export async function logout() {
+  const refreshToken = await loadRefreshToken();
+  try {
+    if (refreshToken) {
+      await fetch(`${API_BASE_URL}/api/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+    }
+  } finally {
+    await clearToken();
+  }
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = await loadRefreshToken();
+      if (!refreshToken) return null;
+      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) return null;
+      const data = await response.json() as {
+        token?: string;
+        accessToken?: string;
+        refreshToken?: string;
+      };
+      const accessToken = data.accessToken || data.token;
+      if (!accessToken || !data.refreshToken) return null;
+      await saveToken(accessToken, data.refreshToken);
+      return accessToken;
+    } catch {
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
 }
 
 export function normalizePath(path: string): string {
@@ -62,7 +126,8 @@ export function normalizePath(path: string): string {
 
 export async function api<T = any>(
   path: string,
-  opts: RequestInit = {}
+  opts: RequestInit = {},
+  retried = false,
 ): Promise<T> {
   const token = await loadToken();
   const headers: Record<string, string> = {
@@ -97,6 +162,14 @@ export async function api<T = any>(
     data = text;
   }
   if (!res.ok) {
+    const isAuthenticationRequest =
+      normalizedPath.endsWith('/auth/refresh') ||
+      normalizedPath.endsWith('/mobile/auth') ||
+      normalizedPath.endsWith('/mobile/google');
+    if (res.status === 401 && !retried && !isAuthenticationRequest) {
+      const refreshed = await refreshAccessToken();
+      if (refreshed) return api<T>(path, opts, true);
+    }
     if (res.status === 401) await clearToken();
     throw new ApiError(data?.error || `Request failed: ${res.status}`, res.status, data);
   }

@@ -20,6 +20,7 @@ import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
+import { RequestTracker } from '../../shared/money';
 import { API_PATHS } from '@/lib/constants';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 
@@ -42,6 +43,7 @@ interface MenuItem {
 
 export default function MobilePosScreen() {
   const router = useRouter();
+  const requestTracker = useRef(new RequestTracker());
   const countryPack = useBlueprintStore((s) => s.countryPack);
   const currencySymbol = countryPack?.currency?.symbol || '₹';
 
@@ -60,6 +62,7 @@ export default function MobilePosScreen() {
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const [upiId, setUpiId] = useState('');
   const [businessName, setBusinessName] = useState('My Store');
+  const [billing, setBilling] = useState({ taxRate: 5, taxType: 'exclusive', serviceChargeRate: 0 });
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCartModal, setShowCartModal] = useState(false);
@@ -75,6 +78,7 @@ export default function MobilePosScreen() {
       const d = await apiRequest<{ config: any }>(API_PATHS.commerceConfig);
       const cfg = d.config;
       if (cfg) {
+        if (cfg.billing) setBilling({ taxRate: Number(cfg.billing.taxRate ?? 5), taxType: cfg.billing.taxType || 'exclusive', serviceChargeRate: Number(cfg.billing.serviceChargeRate ?? 0) });
         if (cfg.upiId) setUpiId(cfg.upiId);
         if (cfg.businessName) setBusinessName(cfg.businessName);
         if (cfg.catalogJson) {
@@ -204,7 +208,8 @@ export default function MobilePosScreen() {
     );
   };
 
-  const total = cart.reduce((sum, it) => sum + it.price * it.qty, 0);
+  const subtotalMinor = cart.reduce((sum, it) => sum + Math.round(it.price * 100) * it.qty, 0);
+  const total = (subtotalMinor + (billing.taxType === 'inclusive' ? 0 : Math.round(subtotalMinor * billing.taxRate / 100)) + Math.round(subtotalMinor * billing.serviceChargeRate / 100)) / 100;
   const totalItemCount = cart.reduce((sum, it) => sum + it.qty, 0);
 
   const upiCurrency = countryPack?.currency?.code || 'INR';
@@ -239,13 +244,14 @@ export default function MobilePosScreen() {
 
     const orderPayload = {
       customerName: customerName.trim() || 'Walk-in Guest',
-      customerPhone: customerPhone.trim() || 'Walk-in',
+      customerPhone: customerPhone.trim(),
       status: 'CONFIRMED',
       paymentStatus: payStatus,
       paymentMethod: method,
       deliveryType: tableNo ? 'dine_in' : 'takeout',
       deliveryAddress: tableNo ? `Table #${tableNo}` : 'Stall / POS Counter',
       items: cart.map((i) => ({
+        productId: i.id,
         name: i.name,
         qty: i.qty,
         price: i.price,
@@ -259,9 +265,12 @@ export default function MobilePosScreen() {
     try {
       const d = await apiRequest<{ order?: { id?: string } }>(API_PATHS.commerceOrders, {
         method: 'POST',
+        headers: { 'Idempotency-Key': requestTracker.current.for(orderPayload) },
         body: orderPayload,
       });
       if (d.order?.id) savedId = d.order.id;
+      requestTracker.current.clear();
+      setCompletedOrder(d.order);
     } catch (err: any) {
       setSavingOrder(false);
       setShowQrModal(false);
@@ -273,10 +282,7 @@ export default function MobilePosScreen() {
     setShowQrModal(false);
     setShowCartModal(false);
 
-    setCompletedOrder({
-      ...orderPayload,
-      id: savedId,
-    });
+
   };
 
   const sendWhatsAppBill = (order: any) => {
