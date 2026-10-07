@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Linking,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -17,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { useBlueprintStore } from '@/stores/blueprint-store';
+import { RequestTracker } from '../../../shared/money';
 import { API_PATHS } from '@/lib/constants';
 
 interface FavoriteItem {
@@ -55,6 +57,22 @@ export default function CustomersScreen() {
   const language = useBlueprintStore(s => s.blueprint.language);
   const creditEnabled = useBlueprintStore(s => s.blueprint.capabilities.customerCredit);
   const t = (en: string, hi: string) => language === 'hi' ? hi : en;
+  const requestTracker = useRef(new RequestTracker());
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [saveError, setSaveError] = useState(false);
+  const saveCustomer = async () => {
+    if (saving || !newName.trim() || !newPhone.trim()) return;
+    setSaving(true); setSaveError(false);
+    const body = { name: newName.trim(), phone: newPhone.trim() };
+    try {
+      const response = await apiRequest<{ customer?: { id: string } }>(API_PATHS.commerceCustomers, { method: 'POST', body, headers: { 'Idempotency-Key': requestTracker.current.for(body) } });
+      if (!response.customer?.id) throw new Error('SAVE_UNCONFIRMED');
+      requestTracker.current.clear(); setAdding(false); setNewName(''); setNewPhone(''); await fetchCustomers();
+    } catch { setSaveError(true); } finally { setSaving(false); }
+  };
   const [currency, setCurrency] = useState('INR');
   const [expanded, setExpanded] = useState<string | null>(null);
   const money = (value: number) => new Intl.NumberFormat(language === 'hi' ? 'hi-IN' : 'en-IN', { style: 'currency', currency }).format(value);
@@ -179,6 +197,7 @@ export default function CustomersScreen() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity accessibilityRole="button" style={styles.searchBox} onPress={() => { setSaveError(false); setAdding(true); }}><MaterialIcons name="person-add" size={22} color="#047857" /><Text>{t('Add customer', 'ग्राहक जोड़ें')}</Text></TouchableOpacity>
       {creditEnabled && <TouchableOpacity style={styles.searchBox} onPress={() => router.push('/khata')} accessibilityRole="button">
         <MaterialIcons name="account-balance-wallet" size={22} color="#059669" />
         <Text style={{ flex: 1, color: '#0f172a', fontWeight: '600' }}>{t('Customer Khata', 'ग्राहकों का खाता')}</Text>
@@ -384,6 +403,14 @@ export default function CustomersScreen() {
           )}
         </ScrollView>
       )}
+      <Modal visible={adding} transparent animationType="slide" onRequestClose={() => { if (!saving) setAdding(false); }}><View style={{ flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' }}><View style={{ backgroundColor: 'white', padding: 20, gap: 16, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
+        <Text style={styles.title}>{t('Add customer', 'ग्राहक जोड़ें')}</Text>
+        <TextInput accessibilityLabel={t('Customer name', 'ग्राहक का नाम')} placeholder={t('Customer name', 'ग्राहक का नाम')} value={newName} onChangeText={setNewName} maxLength={200} editable={!saving} style={[styles.searchBox, { marginHorizontal: 0, minHeight: 48 }]} />
+        <TextInput accessibilityLabel={t('Phone with country code', 'देश कोड सहित फ़ोन')} placeholder={t('Phone with country code', 'देश कोड सहित फ़ोन')} value={newPhone} onChangeText={setNewPhone} keyboardType="phone-pad" maxLength={24} editable={!saving} style={[styles.searchBox, { marginHorizontal: 0, minHeight: 48 }]} />
+        {saveError && <Text style={{ color: '#b91c1c' }}>{t('Customer was not saved. Check the details and retry.', 'ग्राहक सेव नहीं हुआ। जानकारी जाँचें और फिर कोशिश करें।')}</Text>}
+        <TouchableOpacity accessibilityRole="button" disabled={saving || !newName.trim() || !newPhone.trim()} onPress={() => void saveCustomer()} style={styles.retryBtn}>{saving ? <ActivityIndicator color="white" /> : <Text style={styles.retryBtnText}>{t('Save customer', 'ग्राहक सेव करें')}</Text>}</TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button" disabled={saving} onPress={() => setAdding(false)} style={{ padding: 12 }}><Text>{t('Cancel', 'रद्द करें')}</Text></TouchableOpacity>
+      </View></View></Modal>
     </SafeAreaView>
   );
 }

@@ -901,11 +901,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         <BrandMark size={32} className="shadow-sm" />
         {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground">
-              {isSuperAdmin ? 'Fieseros' : 'Fieseros'}
+            <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground truncate max-w-[150px]">
+              {isSuperAdmin ? 'Fieseros' : isStandalone ? (blueprint?.businessName || auth.tenant?.name || 'My Store') : 'Fieseros'}
             </span>
-            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
-              {isSuperAdmin ? 'Admin' : planBadge.label}
+            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' : isStandalone ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30' : 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
+              {isSuperAdmin ? 'Admin' : isStandalone ? 'Store' : planBadge.label}
             </Badge>
           </div>
         )}

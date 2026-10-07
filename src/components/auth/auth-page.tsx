@@ -55,11 +55,13 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { INDUSTRY_CATALOG } from '@/lib/industry-catalog';
+import { setToken } from '@/lib/client-auth';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any, workspace?: any) => void;
   onBackToLanding?: () => void;
   initialTab?: string;
+  selectedPlan?: string | null;
 }
 
 // Business auth tab state
@@ -123,11 +125,11 @@ const formVariants = {
   exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
 };
 
-export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
+export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedPlan }: AuthPageProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   // Business Login state
-  const [businessTab, setBusinessTab] = useState<BusinessTab>('login');
+  const [businessTab, setBusinessTab] = useState<BusinessTab>(initialTab === 'register' ? 'register' : 'login');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
 
@@ -155,8 +157,28 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || 'Login failed');
+        if (data.code === 'EMAIL_NOT_VERIFIED') {
+          toast.error(data.error || 'Please verify your email before logging in.', {
+            action: {
+              label: 'Resend',
+              onClick: () => {
+                fetch('/api/auth/resend-verification?XTransformPort=3000', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: loginEmail }),
+                })
+                  .then(async response => { if (!response.ok) throw new Error('RESEND_FAILED'); toast.success('Verification link resent. Please check your inbox.'); })
+                  .catch(() => toast.error('Failed to resend verification email.'));
+              },
+            },
+          });
+        } else {
+          toast.error(data.error || 'Login failed');
+        }
         return;
+      }
+      if (data.token) {
+        setToken(data.token);
       }
       localStorage.setItem('fieseros_auth', JSON.stringify({
         isAuthenticated: true,
@@ -197,6 +219,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
           businessName: regBusinessName,
           industry: regIndustry,
           phone: regPhone,
+          plan: selectedPlan || undefined,
         }),
       });
       const data = await res.json();
@@ -204,30 +227,29 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         toast.error(data.error || 'Registration failed');
         return;
       }
+      if (data.token) {
+        setToken(data.token);
+      }
       localStorage.setItem('fieseros_auth', JSON.stringify({
-        isAuthenticated: true,
+        isAuthenticated: !!data.token,
         user: data.user,
         tenant: data.tenant || null,
         workspace: data.workspace || null,
         token: data.token,
       }));
       toast.success('Account created successfully!');
-      // Email verification notification — shown alongside the success toast.
-      // Uses a custom toast with a close (X) button so the user can dismiss it.
-      setTimeout(() => {
+      if (!data.token && data.emailVerificationRequired) {
         toast(
           "We've sent you an email with a link to confirm your address.",
           {
             description: 'Check your inbox and click the confirmation link to verify your account.',
             duration: 10000,
             icon: '📧',
-            action: {
-              label: '✕',
-              onClick: () => {},
-            },
           }
         );
-      }, 500);
+        setBusinessTab('login');
+        return;
+      }
       onAuthSuccess(data.user, data.tenant, data.workspace);
     } catch {
       toast.error('Something went wrong. Please try again.');

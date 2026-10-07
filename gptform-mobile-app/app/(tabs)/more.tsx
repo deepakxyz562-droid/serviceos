@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBlueprintStore } from '@/stores/blueprint-store';
+import { WEB_URL } from '@/lib/constants';
 import { homeText } from '@/lib/business-home';
 type Icon = React.ComponentProps<typeof MaterialIcons>['name'];
 type Row = {
@@ -31,7 +32,6 @@ export default function MoreScreen() {
         setSaving(false);
     } };
     const business: Row[] = [
-        { label: t('Business details', 'व्यवसाय की जानकारी'), icon: 'storefront', path: '/blueprint-setup', detail: homeText(blueprint.businessType, language) },
         ...(c.catalog ? [{ label: t('Products', 'सामान'), icon: 'inventory-2' as Icon, path: '/catalog' }] : []),
         ...(c.orders ? [{ label: t('Orders', 'ऑर्डर'), icon: 'shopping-bag' as Icon, path: '/(tabs)/orders' }] : []),
         ...(c.calendarBooking ? [{ label: t('Bookings', 'बुकिंग'), icon: 'event' as Icon, path: '/(tabs)/bookings' }] : []),
@@ -42,6 +42,8 @@ export default function MoreScreen() {
         ...(c.tables ? [{ label: t('Tables & QR menu', 'टेबल और QR मेन्यू'), icon: 'table-restaurant' as Icon, path: '/dine-in-qr' }] : []),
         ...(c.onlineStore ? [{ label: t('Online store', 'ऑनलाइन दुकान'), icon: 'language' as Icon, path: '/custom-domain' }] : []),
     ];
+    business.push({ label: t('Open web dashboard', 'वेब डैशबोर्ड खोलें'), icon: 'open-in-new', onPress: () => { void Linking.openURL(`${WEB_URL}/?view=formsDashboard`).catch(() => Alert.alert(t('Unable to open browser', 'ब्राउज़र नहीं खुला'))); } });
+    if (c.onlineStore || (c.catalog && c.orders)) business.unshift({ label: t('Share store & QR', 'दुकान और QR शेयर करें'), icon: 'qr-code', path: '/store-share' });
     const tools: Row[] = [
         ...(c.forms ? [{ label: t('Forms', 'फ़ॉर्म'), icon: 'dynamic-form' as Icon, path: '/forms' }] : []),
         ...(c.whatsapp ? [{ label: t('Connected channels', 'जुड़े हुए चैनल'), icon: 'chat-bubble-outline' as Icon, path: '/channels' }] : []),
@@ -53,6 +55,7 @@ export default function MoreScreen() {
     return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content}>
   <Text style={styles.title}>{t('Settings', 'सेटिंग')}</Text><View style={styles.profile}><View style={styles.avatar}><Text style={styles.initial}>{(user?.name || user?.email || '?')[0].toUpperCase()}</Text></View><View style={{ flex: 1 }}><Text style={styles.name}>{user?.name || t('Your account', 'आपका खाता')}</Text><Text style={styles.email}>{user?.email}</Text></View></View>
   {section(t('Your business', 'आपका व्यवसाय'), business)}{section(t('Enabled tools', 'चालू टूल'), tools)}{section(t('Preferences', 'पसंद'), preferences)}
+  {section(t('Business setup', 'व्यवसाय की सेटिंग'), [{ label: t('Business details', 'व्यवसाय की जानकारी'), icon: 'storefront', path: '/blueprint-setup', detail: homeText(blueprint.businessType, language) }])}
   {section(t('Help & account', 'सहायता और खाता'), [{ label: t('Support requests', 'सहायता अनुरोध'), icon: 'support-agent', path: '/tickets' }])}
   <TouchableOpacity accessibilityRole="button" style={styles.logout} onPress={() => Alert.alert(t('Log out?', 'लॉग आउट करें?'), '', [{ text: t('Cancel', 'रद्द करें'), style: 'cancel' }, { text: t('Log out', 'लॉग आउट'), style: 'destructive', onPress: () => void logout() }])}><MaterialIcons name="logout" size={20} color="#b91c1c"/><Text style={{ color: '#b91c1c', fontWeight: '600' }}>{t('Log out', 'लॉग आउट')}</Text></TouchableOpacity>
  </ScrollView></SafeAreaView>;

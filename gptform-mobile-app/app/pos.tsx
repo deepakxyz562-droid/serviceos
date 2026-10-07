@@ -265,14 +265,13 @@ export default function MobilePosScreen() {
       notes: method === 'UPI' ? 'Paid via Customer UPI Scan' : `Paid at Counter (${method})`,
     };
 
-    let savedId = `ord_${Date.now().toString().slice(-6)}`;
     try {
       const d = await apiRequest<{ order?: { id?: string } }>(API_PATHS.commerceOrders, {
         method: 'POST',
         headers: { 'Idempotency-Key': requestTracker.current.for(orderPayload) },
         body: orderPayload,
       });
-      if (d.order?.id) savedId = d.order.id;
+      if (!d.order?.id) throw new Error('The server did not confirm this order. Please retry.');
       requestTracker.current.clear();
       setCompletedOrder(d.order);
     } catch (err: any) {

@@ -7,6 +7,9 @@ const { chromium } = require('@playwright/test');
     const blueprint = { businessType: 'grocery', businessName: 'Sharma General Store', country: 'IN', language: 'en', capabilities: caps, version: 3 };
     await page.addInitScript(() => { localStorage.setItem('gptform_token', 'eyJhbGciOiJub25lIn0.' + btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 })) + '.test'); localStorage.setItem('gptform_user_data', JSON.stringify({ user: { id: 'preview-owner', name: 'Aarav Sharma', email: 'preview@example.invalid', role: 'owner', tenantId: 'preview-tenant' }, tenant: { id: 'preview-tenant', name: 'Sharma General Store', signupMode: 'standalone' } })); });
     let failHome = false;
+    let failContact = true;
+    const contactKeys = [];
+    let contactCreated = false;
     let homeCalls = 0;
     let bootstrapCalls = 0;
     let customerCalls = 0;
@@ -40,7 +43,16 @@ const { chromium } = require('@playwright/test');
         }
         else if (url.pathname === '/api/commerce/customers') {
             customerCalls++;
+            if (route.request().method() === 'POST') {
+                contactKeys.push(route.request().headers()['idempotency-key']);
+                if (!failContact) contactCreated = true;
+                await route.fulfill({ status: failContact ? 503 : 201, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(failContact ? { error: 'Unavailable' } : { customer: { id: 'new-contact' } }) });
+                return;
+            }
             data = { currency: 'USD', customers: [{ id: 'customer-one', phone: '14155550100', name: 'Test Customer', ordersCount: 1, totalSpent: 25, lastVisit: '2026-10-07', favoriteItems: [], tag: 'NEW', recentOrders: [{ id: 'o1', total: 25, date: '2026-10-07', status: 'CONFIRMED' }] }], summary: { totalCustomers: 1, repeatRate: 0, totalRevenue: 25 } };
+        }
+        else if (url.pathname === '/api/commerce/store-share') {
+            data = { name: 'Sharma General Store', storeUrl: 'https://fieseros.com/store/sharma', qrDataUrl: await require('qrcode').toDataURL('https://fieseros.com/store/sharma'), html: '<!DOCTYPE html><html><body>Sharma General Store</body></html>' };
         }
         else if (url.pathname === '/api/commerce/khata') {
             status = failKhata ? 503 : 200;
@@ -78,6 +90,7 @@ const { chromium } = require('@playwright/test');
     await page.screenshot({ path: '/private/tmp/nuvora-home-simple.png' });
     await page.getByText('Settings', { exact: true }).first().click();
     await page.getByText('Your business', { exact: true }).waitFor();
+    await page.getByRole('button', { name: /Share store & QR/ }).waitFor();
     await page.waitForTimeout(600);
     await page.screenshot({ path: '/private/tmp/nuvora-more-simple.png' });
     if (await page.getByText('Voice receptionist', { exact: true }).count())
@@ -161,6 +174,21 @@ const { chromium } = require('@playwright/test');
     failHome = false;
     await page.getByText('फिर कोशिश करें', { exact: true }).click();
     await page.getByText('आज की जानकारी', { exact: true }).waitFor();
+    await page.goto('http://127.0.0.1:8098/customers');
+    await page.getByRole('button', { name: /ग्राहक जोड़ें/ }).click();
+    await page.getByLabel('ग्राहक का नाम', { exact: true }).fill('New contact');
+    await page.getByLabel('देश कोड सहित फ़ोन', { exact: true }).fill('+919876543210');
+    await page.getByRole('button', { name: 'ग्राहक सेव करें', exact: true }).click();
+    await page.getByText('ग्राहक सेव नहीं हुआ। जानकारी जाँचें और फिर कोशिश करें।').waitFor();
+    if (await page.getByLabel('ग्राहक का नाम', { exact: true }).inputValue() !== 'New contact') throw Error('Contact failure lost input');
+    failContact = false;
+    await page.getByRole('button', { name: 'ग्राहक सेव करें', exact: true }).click();
+    await page.getByLabel('ग्राहक का नाम', { exact: true }).waitFor({ state: 'hidden' });
+    if (!contactCreated || contactKeys.length !== 2 || contactKeys[0] !== contactKeys[1]) throw Error('Contact retry changed its key');
+    await page.goto('http://127.0.0.1:8098/store-share');
+    await page.getByText('https://fieseros.com/store/sharma', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'QR स्टैंडी प्रिंट करें' }).waitFor();
+    await page.screenshot({ path: '/private/tmp/nuvora-store-share-hindi.png' });
     console.log('PASS: Hindi customer and Khata forms, customer search without requests, customer history, business currency, unavailable ledger balances, Home bootstrap reuse and stale refresh recovery, Hindi preferences, offline recovery, Home/Settings/Products, retail AI/sync cards hidden, failed save retained inputs, successful retry kept ID, total stock updated correct inventory record, authenticated deep link retained.');
     await browser.close();
 })().catch(e => { console.error(e.message); process.exit(1); });

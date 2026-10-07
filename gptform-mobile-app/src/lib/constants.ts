@@ -10,6 +10,7 @@ export const BRAND = {
 // Physical devices and release builds use the same HTTPS backend.
 // Developers may explicitly override EXPO_PUBLIC_API_URL for a local server.
 export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://fieseros.com').replace(/\/$/, '');
+export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fieseros.com').replace(/\/$/, '');
 
 export const API_PATHS = {
   login: '/api/auth/login',

@@ -162,47 +162,116 @@ export interface WorkflowTemplate {
 }
 
 // View types — organized by module
-export type ViewType =
-  // Dashboard
-  | 'dashboard'
-  // CRM
-  | 'crm' | 'leads' | 'contacts' | 'customers' | 'customer360' | 'salesPipeline'
-  // Communication
-  | 'broadcast' | 'campaigns' | 'marketingTemplates' | 'omnichannel' | 'whatsapp'
-  | 'liveChat' | 'smsNumbers'
-  // Automation
-  | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
-  // Forms Product (standalone AI Forms), Creator Profile & Scheduling
-  | 'formsDashboard' | 'formSubmissions' | 'formAppointments' | 'formsAnalytics'
-  | 'agentStudio'
-  | 'scheduling' | 'meetingTypes' | 'appointmentTypes'
-  | 'creatorProfile' | 'creatorOffers'
-  // Operations
-  | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'realtimeStatus' | 'employees' | 'employeePerformance' | 'timesheet' | 'recurringJobs'
-  | 'inventory' | 'purchaseOrders' | 'commerce'
-  // Finance
-  | 'quotes' | 'quoteFlow' | 'invoices' | 'billing' | 'expenses'
-  // System
-  | 'credentials' | 'settings' | 'auditLogs' | 'activityLogs' | 'reports' | 'notifications' | 'brandBrain'
-  // Portals
-  | 'customerPortal' | 'employeePortal'
-  // Integrations
-  | 'integrations'
-  | 'aiAssistant' | 'chatbotBuilder' | 'retargeting' | 'segments' | 'marketingAnalytics'
-  | 'serviceCatalog' | 'knowledgeBase' | 'communicationProviders'
-  | 'leadDiscovery' | 'reviews' | 'journeyAutomation'
-  | 'marketplace' | 'marketplaceDashboard' | 'claimBusiness' | 'enterprise' | 'aiCampaignGenerator' | 'webviewEngine' | 'adsIntegration'
-  | 'versionHistory' | 'documentCenter' | 'saasDashboard'
-  | 'templateStudio'
-  // AI Receptionist (Vapi.ai BYOK)
-  | 'aiReceptionist' | 'aiAgents' | 'aiPhoneNumbers' | 'aiCallHistory'
-  // Audience
-  | 'groups' | 'tags' | 'contactImports' | 'contactExports' | 'audienceAnalytics' | 'emailCampaigns'
-  // Communication Providers
-  | 'emailProviders' | 'emailTemplates' | 'channels'
-  // Help & Support Center
-  | 'helpCenter' | 'helpTicketDetail' | 'helpAdminTickets' | 'helpAdminTicketDetail' | 'helpAdminKB' | 'helpAdminCategories' | 'helpAdminAnnouncements'
-  // Social Publishing (Engine 1)
-  | 'socialMedia' | 'socialAccounts' | 'postComposer' | 'postsList' | 'socialAnalytics'
-  // Super Admin
-  | 'superadmin';
+export const VIEW_TYPES = [
+  'dashboard',
+  'crm',
+  'leads',
+  'contacts',
+  'customers',
+  'customer360',
+  'salesPipeline',
+  'broadcast',
+  'campaigns',
+  'marketingTemplates',
+  'omnichannel',
+  'whatsapp',
+  'liveChat',
+  'smsNumbers',
+  'workflows',
+  'canvas',
+  'triggers',
+  'variables',
+  'executions',
+  'formBuilder',
+  'workflowAutomations',
+  'formsDashboard',
+  'formSubmissions',
+  'formAppointments',
+  'formsAnalytics',
+  'agentStudio',
+  'scheduling',
+  'meetingTypes',
+  'appointmentTypes',
+  'creatorProfile',
+  'creatorOffers',
+  'operations',
+  'booking',
+  'calendar',
+  'jobs',
+  'dispatch',
+  'realtimeStatus',
+  'employees',
+  'employeePerformance',
+  'timesheet',
+  'recurringJobs',
+  'inventory',
+  'purchaseOrders',
+  'commerce',
+  'quotes',
+  'quoteFlow',
+  'invoices',
+  'billing',
+  'expenses',
+  'credentials',
+  'settings',
+  'auditLogs',
+  'activityLogs',
+  'reports',
+  'notifications',
+  'brandBrain',
+  'customerPortal',
+  'employeePortal',
+  'integrations',
+  'aiAssistant',
+  'chatbotBuilder',
+  'retargeting',
+  'segments',
+  'marketingAnalytics',
+  'serviceCatalog',
+  'knowledgeBase',
+  'communicationProviders',
+  'leadDiscovery',
+  'reviews',
+  'journeyAutomation',
+  'marketplace',
+  'marketplaceDashboard',
+  'claimBusiness',
+  'enterprise',
+  'aiCampaignGenerator',
+  'webviewEngine',
+  'adsIntegration',
+  'versionHistory',
+  'documentCenter',
+  'saasDashboard',
+  'templateStudio',
+  'aiReceptionist',
+  'aiAgents',
+  'aiPhoneNumbers',
+  'aiCallHistory',
+  'groups',
+  'tags',
+  'contactImports',
+  'contactExports',
+  'audienceAnalytics',
+  'emailCampaigns',
+  'emailProviders',
+  'emailTemplates',
+  'channels',
+  'helpCenter',
+  'helpTicketDetail',
+  'helpAdminTickets',
+  'helpAdminTicketDetail',
+  'helpAdminKB',
+  'helpAdminCategories',
+  'helpAdminAnnouncements',
+  'socialMedia',
+  'socialAccounts',
+  'postComposer',
+  'postsList',
+  'socialAnalytics',
+  'superadmin',
+] as const;
+export type ViewType = typeof VIEW_TYPES[number];
+export function isViewType(value: string): value is ViewType {
+  return (VIEW_TYPES as readonly string[]).includes(value);
+}

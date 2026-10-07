@@ -16,6 +16,11 @@ export interface SubscriberTenant {
   slug: string;
   industry?: string;
   plan?: string;
+  currency?: string;
+  phone?: string | null;
+  email?: string | null;
+  logo?: string | null;
+  signupMode?: string | null;
 }
 
 export interface ChatSession {

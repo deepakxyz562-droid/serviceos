@@ -1,5 +1,4 @@
 'use client';
-import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
@@ -51,7 +50,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
-import { BusinessHomeView } from '@/components/dashboard/business-home';
 import { cn } from '@/lib/utils';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -449,12 +447,6 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { blueprint, auth } = useAppStore();
-  if (isGptFormWorkspace(auth)) return <BusinessHomeView />;
-  return <LegacyDashboardView />;
-}
-
-function LegacyDashboardView() {
   const { setCurrentView, setPendingCreate, auth, currentWorkspaceName } = useAppStore();
   const [stats, setStats] = useState<SaaSStats | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,4 +1,5 @@
 'use client';
+import { isViewType } from '@/types/workflow';
 import { isGptFormWorkspace } from '../../../shared/product-context';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -718,7 +719,7 @@ export default function HomePageClient() {
         sessionStorage.setItem('pendingTemplateId', templateId);
       } catch {}
       useAppStore.getState().setCurrentView('formBuilder');
-    } else if (view) {
+    } else if (view && isViewType(view)) {
       useAppStore.getState().setCurrentView(view);
     } else {
       // Check if a template was picked prior to login/redirect

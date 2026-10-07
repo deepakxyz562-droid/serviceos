@@ -96,3 +96,18 @@ See [GPTForm order notification activation](gptform-order-notifications.md). Loc
 - Removed the invented LOYAL10 WhatsApp promotion and unconditional +91 display prefix. Khata no longer displays zero while unavailable; it formats loaded balances in business currency.
 - Verification: 484 tests in 60 files passed after the final Khata presentation changes; mobile TypeScript and Expo web export passed. Updated mocked browser checks passed for Hindi customer search/history, no search API traffic, retained Home summary on refresh failure, bootstrap reuse, Hindi Khata search/payment forms, business currency, unavailable ledger balance, and the existing product recovery cases. Full repository TypeScript remains failing with 1,230 diagnostics; production readiness is not established.
 - No changes from this continuation were deployed. Live migration access, renewed Superadmin Meta credentials/templates, cron activation, full localization, full customer profile, BLE hardware integration, and physical Android/iOS release verification remain outstanding.
+
+
+## Corrective audit follow-through — 8 October 2026
+
+Unsafe uncommitted changes were preserved in `/private/tmp/gptform-reviewed-changes-20261007223304` before restoring atomic commerce, email verification, business-specific Home/navigation, Hindi customer controls, explicit WhatsApp consent and real POS pricing. Removed simulated BLE connection, local-only customer creation, and hard-coded subscription/receipt claims. These removals do not implement the missing integrations.
+
+Store sharing now has an authenticated owner-scoped endpoint, verifies a published store, derives the tenant URL, generates an embedded QR, and escapes business names in printable HTML. Mobile offers genuine clipboard, WhatsApp/link sharing, system printing and native PDF sharing; no external QR image service or fake copy/print success. Settings links to this screen and the existing root web dashboard route. Expo Clipboard requires a rebuilt native application. Native printing/PDF sharing remains untested on physical hardware.
+
+Customer creation now persists to AiCustomer, uses a business-scoped deterministic request ID to prevent duplicate inserts on retry, rejects changed payloads on an already-used key, retains inputs on failure and reloads the server directory. This does not yet provide canonical historical phone merging, full paginated order history or an individual transaction ledger.
+
+Web auth respects initial registration mode and selected plan, stores the login token, waits for verification before authentication, and checks resend HTTP status. New merchants retain onboarding. URL view strings are validated against the ViewType runtime list. Header labels cover the supported view list. POS refuses an order response without a saved ID.
+
+Verification: 497 tests / 62 files passed; mobile TypeScript passed; 59-file focused web TypeScript passed; targeted API/test lint passed. Expo web export passed. Mocked browser checks passed for customer save failure/retry with stable keys, Hindi QR sharing UI, restored navigation, unavailable Khata balances and product recovery. Full web typecheck still reports 1,227 diagnostics. No live migration, deployment or production message send occurred.
+
+Release remains blocked by database administration access/migrations, Meta provider renewal/template activation and worker scheduling, broad web typing issues, full customer ledger/history, complete merchant settings/entitlements, staff/gateway/email integrations, full localization, BLE hardware support and signed physical-device verification. The prior AI completion report must not be used as release evidence.

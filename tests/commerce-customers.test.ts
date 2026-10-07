@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-const mocks = vi.hoisted(() => ({ session: vi.fn(), orders: vi.fn(), customers: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), orders: vi.fn(), customers: vi.fn(), find: vi.fn(), create: vi.fn() }));
 vi.mock('@/lib/quote-flow-session', () => ({ requireQuoteFlowBusiness: mocks.session }));
-vi.mock('@/lib/db', () => ({ db: { gptformCommerceOrder: { findMany: mocks.orders }, aiCustomer: { findMany: mocks.customers } } }));
-import { GET } from '@/app/api/commerce/customers/route';
+vi.mock('@/lib/db', () => ({ db: { gptformCommerceOrder: { findMany: mocks.orders }, aiCustomer: { findMany: mocks.customers, findUnique: mocks.find, create: mocks.create } } }));
+import { GET, POST } from '@/app/api/commerce/customers/route';
 const request = () => new NextRequest('http://localhost/api/commerce/customers?businessId=other');
 const order = (id: number, status = 'CONFIRMED') => ({ id: String(id), customerPhone: '919876543210', customerName: 'Buyer', total: 10, paymentStatus: 'UNPAID', status, createdAt: new Date('2026-10-07'), itemsJson: '[]' });
 describe('commerce customer directory', () => {
@@ -43,5 +43,25 @@ describe('commerce customer directory', () => {
     expect((await GET(request())).status).toBe(401);
     expect(mocks.customers).not.toHaveBeenCalled();
     expect(mocks.orders).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('persisted customer creation', () => {
+  const req = (name = 'Buyer') => new NextRequest('http://localhost/api/commerce/customers', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'request-contact-1' }, body: JSON.stringify({ name, phone: '+91 98765 43210', businessId: 'foreign' }) });
+  beforeEach(() => { vi.resetAllMocks(); mocks.session.mockResolvedValue({ business: { id: 'own-business' } }); });
+  it('persists to the authorized business and replays an uncertain response without duplicate inserts', async () => {
+    let saved: any = null;
+    mocks.find.mockImplementation(async () => saved);
+    mocks.create.mockImplementation(async ({ data }) => { saved = data; return data; });
+    expect((await POST(req())).status).toBe(201);
+    expect((await POST(req())).status).toBe(200);
+    expect(mocks.create).toHaveBeenCalledTimes(1);
+    expect(saved).toMatchObject({ businessId: 'own-business', phone: '919876543210' });
+    expect((await POST(req('Different'))).status).toBe(409);
+  });
+  it('never acknowledges a failed write', async () => {
+    mocks.find.mockResolvedValue(null); mocks.create.mockRejectedValue(new Error('offline'));
+    expect((await POST(req())).status).toBe(503);
   });
 });

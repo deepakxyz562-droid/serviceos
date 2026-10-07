@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+import { counterCustomerPhone } from '../../../../../shared/walk-in-customer';
 import { NextRequest, NextResponse } from 'next/server';
 import { readHomePages, postedOrderSales } from '@/lib/business-home-data';
 import { db } from '@/lib/db';
@@ -188,5 +190,33 @@ export async function GET(req: NextRequest) {
     }
     console.error('Failed to fetch commerce customers:', e);
     return NextResponse.json({ error: 'Failed to fetch customers' }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const { business } = await requireQuoteFlowBusiness(req);
+    const body = await req.json().catch(() => null);
+    const key = req.headers.get('Idempotency-Key');
+    if (!body || typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200 || typeof body.phone !== 'string' || !key || !/^[\w-]{8,128}$/.test(key)) return NextResponse.json({ error: 'Enter a name, phone and request key.' }, { status: 400 });
+    let phone: string;
+    try { phone = counterCustomerPhone(body.phone); } catch { return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 }); }
+    if (!phone) return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 });
+    const id = `contact_${createHash('sha256').update(JSON.stringify([business.id, key])).digest('hex')}`;
+    const data = { businessId: business.id, name: body.name.trim(), phone };
+    const replay = (customer: { businessId: string; name: string; phone: string | null }) => customer.businessId === data.businessId && customer.name === data.name && customer.phone === data.phone;
+    const existing = await db.aiCustomer.findUnique({ where: { id } });
+    if (existing) return replay(existing) ? NextResponse.json({ customer: existing, replayed: true }) : NextResponse.json({ error: 'This request was used for different customer details.' }, { status: 409 });
+    try {
+      const customer = await db.aiCustomer.create({ data: { id, ...data } });
+      return NextResponse.json({ customer }, { status: 201 });
+    } catch (error) {
+      const saved = await db.aiCustomer.findUnique({ where: { id } });
+      if (saved && replay(saved)) return NextResponse.json({ customer: saved, replayed: true });
+      throw error;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    return NextResponse.json({ error: 'Could not save customer.' }, { status: message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 503 });
   }
 }
