@@ -1030,7 +1030,7 @@ export async function* callAIStream(options: {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${key.apiKey}`,
+              Authorization: `Bearer ${key.plaintext}`,
               ...(provider === 'openrouter' ? { 'HTTP-Referer': 'https://fieseros.com', 'X-Title': 'Fieseros' } : {}),
             },
             body: JSON.stringify({

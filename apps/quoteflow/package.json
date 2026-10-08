@@ -1,0 +1,36 @@
+{
+  "name": "quoteflow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "QuoteFlow \u2014 AI Quote & Instant Invoice Generator (quoteflow.fieseros.com)",
+  "scripts": {
+    "dev": "next dev -p 3004",
+    "build": "next build --webpack",
+    "start": "next start -p 3004",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false"
+  },
+  "dependencies": {
+    "next": "^16.3.8",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.6",
+    "lucide-react": "^0.525.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.3.1",
+    "canvas-confetti": "^1.9.4",
+    "jspdf": "^2.5.2",
+    "html2canvas": "^1.4.1",
+    "sonner": "^2.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/canvas-confetti": "^1.9.0",
+    "typescript": "^5",
+    "tailwindcss": "^4",
+    "postcss": "^8.4.49",
+    "autoprefixer": "^10.4.20"
+  }
+}

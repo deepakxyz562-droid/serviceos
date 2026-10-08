@@ -64,7 +64,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
 const ownerNavCandidates: MobileNavItem[] = [
   { view: 'dashboard', label: 'Today', icon: LayoutDashboard },
   { view: 'commerce', label: 'Orders', icon: ShoppingBag },
-  { view: 'quoteFlow', label: 'Billing', icon: Receipt },
+  { view: 'invoices', label: 'Invoices', icon: Receipt },
   { view: 'customers', label: 'Customers', icon: Users },
   { view: 'jobs', label: 'Jobs', icon: Briefcase },
   { view: 'omnichannel', label: 'Inbox', icon: RadioTower },
@@ -77,7 +77,7 @@ const ownerNavCandidates: MobileNavItem[] = [
 const standaloneNavCandidates: MobileNavItem[] = [
   { view: 'formsDashboard', label: 'Today', icon: LayoutDashboard },
   { view: 'commerce', label: 'Orders', icon: ShoppingBag },
-  { view: 'quoteFlow', label: 'Billing', icon: Receipt },
+  { view: 'invoices', label: 'Invoices', icon: Receipt },
   { view: 'customers', label: 'Customers', icon: Users },
   { view: 'formBuilder', label: 'Forms', icon: FileInput },
   { view: 'agentStudio', label: 'AI Agent', icon: Bot },

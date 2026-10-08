@@ -244,7 +244,7 @@ export function isInfraFailure(error: unknown): boolean {
  */
 export async function withCircuitBreaker<T>(
   name: string,
-  fn: () => Promise<T>,
+  fn: () => PromiseLike<T>,
   opts: CircuitBreakerOptions = {},
 ): Promise<T> {
   // Check + throw BEFORE the network call. This is the fail-fast path.

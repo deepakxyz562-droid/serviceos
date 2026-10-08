@@ -253,6 +253,7 @@ export function ensureSplitMediaLeftWidgets(
   if (hasLeftFields) return fields;
 
   const fallbackPanel: FormMediaPanel = {
+    enabled: true,
     headline: formName || 'Fast & Reliable Professional Service',
     subtitle: formDescription || 'Fill out the form below to receive upfront pricing and schedule top-rated pros.',
     badgeText: '⭐ 5-Star Rated Service Pro',

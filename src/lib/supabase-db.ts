@@ -758,7 +758,9 @@ type WhereOperator = {
 };
 
 type WhereField = WhereValue | WhereOperator;
-type WhereInput = Record<string, WhereField>;
+interface WhereInput {
+  [field: string]: WhereField | WhereInput | WhereInput[] | undefined;
+}
 
 interface FindManyOptions {
   where?: WhereInput;
@@ -932,8 +934,17 @@ function buildOrConditionPart(cond: WhereInput): string | null {
 
 // ── Helper: Map Prisma where clause to Supabase filters ────────────────────
 
+// Only mutation methods are needed here; result/method generics differ between
+// SELECT, UPDATE and DELETE builders. Preserve their argument types without
+// imposing a particular response shape on every query.
+type SelectBuilder = ReturnType<ReturnType<SupabaseClient['from']>['select']>;
+type QueryMethods = {
+  [K in 'or' | 'not' | 'eq' | 'neq' | 'in' | 'is' | 'ilike' | 'gt' | 'gte' | 'lt' | 'lte' | 'order']:
+    (...args: Parameters<SelectBuilder[K]>) => unknown;
+};
+
 function applyWhereFilters(
-  query: ReturnType<SupabaseClient['from']['select'] | SupabaseClient['from']['update'] | SupabaseClient['from']['delete']>,
+  query: QueryMethods,
   where: WhereInput
 ): void {
   for (const [field, value] of Object.entries(where)) {
@@ -1125,7 +1136,7 @@ function applyWhereFilters(
 // ── Helper: Apply orderBy ──────────────────────────────────────────────────
 
 function applyOrderBy(
-  query: ReturnType<SupabaseClient['from']['select']>,
+  query: QueryMethods,
   orderBy?: Record<string, string> | Record<string, string>[]
 ): void {
   if (!orderBy) return;
@@ -1458,11 +1469,11 @@ async function resolveIncludes(
         // Recursively resolve nested includes on the related rows
         // (e.g. Property.contacts when Customer.properties was included).
         if (nestedInclude || nestedSelectForRecursive) {
-          await resolveIncludes(rel.targetTable, related as Record<string, unknown>[], nestedInclude);
+          await resolveIncludes(rel.targetTable, related as unknown as Record<string, unknown>[], nestedInclude);
         }
 
         const grouped = new Map<string, unknown[]>();
-        for (const r of related) {
+        for (const r of related as unknown as Record<string, unknown>[]) {
           const fkVal = r[targetFkCol] as string;
           if (!grouped.has(fkVal)) grouped.set(fkVal, []);
           grouped.get(fkVal)!.push(r);
@@ -1487,11 +1498,11 @@ async function resolveIncludes(
         if (error || !related) return;
 
         if (nestedInclude || nestedSelectForRecursive) {
-          await resolveIncludes(rel.targetTable, related as Record<string, unknown>[], nestedInclude);
+          await resolveIncludes(rel.targetTable, related as unknown as Record<string, unknown>[], nestedInclude);
         }
 
         const relatedMap = new Map<string, unknown>();
-        for (const r of related) {
+        for (const r of related as unknown as Record<string, unknown>[]) {
           relatedMap.set(r[rel.targetFkColumn] as string, r);
         }
 
@@ -1504,6 +1515,7 @@ async function resolveIncludes(
         }
       } else {
         const fkColumn = rel.fkColumn;
+        if (!fkColumn) throw new Error(`Missing foreign key mapping for ${relName}`);
         const fkValues = [...new Set(results.map(r => r[fkColumn]).filter(Boolean))] as string[];
         if (fkValues.length === 0) {
           for (const main of results) { main[relName] = null; }
@@ -1518,11 +1530,11 @@ async function resolveIncludes(
         if (error || !related) return;
 
         if (nestedInclude || nestedSelectForRecursive) {
-          await resolveIncludes(rel.targetTable, related as Record<string, unknown>[], nestedInclude);
+          await resolveIncludes(rel.targetTable, related as unknown as Record<string, unknown>[], nestedInclude);
         }
 
         const relatedMap = new Map<string, unknown>();
-        for (const r of related) {
+        for (const r of related as unknown as Record<string, unknown>[]) {
           relatedMap.set(r.id as string, r);
         }
 
@@ -1730,7 +1742,7 @@ class SupabaseModel {
       throw new Error(`[SupabaseDB] findMany on ${this.tableName} failed: ${error.message} (code=${error.code}${error.hint ? `, hint="${error.hint}"` : ''})`);
     }
 
-    let results = (data || []) as Record<string, unknown>[];
+    let results = (data || []) as unknown as Record<string, unknown>[];
 
     // Apply `distinct` — dedupe in JS by building a composite key from the
     // specified columns. PostgREST has no native SELECT DISTINCT for
@@ -1822,7 +1834,7 @@ class SupabaseModel {
     }
 
     if (mergedInclude && data) {
-      const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], mergedInclude);
+      const resolved = await resolveIncludes(this.tableName, [data as unknown as Record<string, unknown>], mergedInclude);
       await resolveCounts(this.tableName, resolved, mergedInclude);
       return resolved?.[0] ?? data;
     }
@@ -1886,7 +1898,7 @@ class SupabaseModel {
     }
 
     if (mergedInclude && data) {
-      const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], mergedInclude);
+      const resolved = await resolveIncludes(this.tableName, [data as unknown as Record<string, unknown>], mergedInclude);
       return resolved?.[0] ?? data;
     }
 
@@ -2472,7 +2484,7 @@ class SupabaseModel {
     }
 
     // PostgREST returns a single row with the aggregate values.
-    const row = (data && data[0]) || {};
+    const row = ((data && data[0]) || {}) as unknown as Record<string, unknown>;
     const result: Record<string, unknown> = {};
 
     if (_count === true) {
@@ -2611,8 +2623,8 @@ class SupabaseModel {
       let q = this.client.from(this.tableName).select(selectStr).range(from, to);
       if (where) applyWhereFilters(q, where);
       const { data, error } = await q;
-      if (error) return [] as Record<string, unknown>[];
-      return (data || []) as Record<string, unknown>[];
+      if (error) return [] as unknown as Record<string, unknown>[];
+      return (data || []) as unknown as Record<string, unknown>[];
     });
 
     const pages = await Promise.all(pagePromises);
@@ -2657,7 +2669,7 @@ class SupabaseModel {
 
     const { data, error } = await aggQuery;
     if (!error) {
-      const rows = (data || []) as Record<string, unknown>[];
+      const rows = (data || []) as unknown as Record<string, unknown>[];
       return this._mapGroupByRows(rows, by, options);
     }
 
@@ -2751,8 +2763,8 @@ class SupabaseModel {
       let q = this.client.from(this.tableName).select(selectCols).range(from, to);
       if (where) applyWhereFilters(q, where);
       const { data: pageData, error: pageErr } = await q;
-      if (pageErr) return [] as Record<string, unknown>[];
-      return (pageData || []) as Record<string, unknown>[];
+      if (pageErr) return [] as unknown as Record<string, unknown>[];
+      return (pageData || []) as unknown as Record<string, unknown>[];
     });
 
     const pages = await Promise.all(pagePromises);
@@ -2837,7 +2849,7 @@ class SupabaseModel {
 class SupabaseDB {
   private models: Map<string, SupabaseModel> = new Map();
 
-  private getModel(name: string): SupabaseModel {
+  getModel(name: string): SupabaseModel {
     if (!this.models.has(name)) {
       this.models.set(name, new SupabaseModel(name));
     }

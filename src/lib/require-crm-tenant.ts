@@ -57,7 +57,8 @@ const SIGNUP_MODE_TTL = 60_000;
  * (workspace.productType === 'forms') from accessing CRM endpoints.
  */
 export async function requireCrmTenant(
-  _request: NextRequest
+  _request: NextRequest,
+  options?: { allowStandalone?: boolean }
 ): Promise<NextResponse | null> {
   try {
     const authUser = await getAuthUser();
@@ -99,11 +100,11 @@ export async function requireCrmTenant(
       tenant.signupMode === 'standalone' ||
       String(tenant.plan || '').startsWith('standalone');
 
-    if (isStandalone) {
+    if (isStandalone && !options?.allowStandalone) {
       return NextResponse.json(
         {
           error:
-            'This CRM feature is not available on your GPTForm plan. Upgrade to Fieseros CRM to access pipeline, leads, jobs, invoicing, and dispatch.',
+            'This CRM feature is not available on your GPTForm plan. Upgrade to Fieseros CRM to access pipeline, leads, jobs, and dispatch.',
           code: 'STANDALONE_FORMS_NO_CRM',
           upgradeUrl: '/?view=billing',
         },

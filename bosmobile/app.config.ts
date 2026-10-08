@@ -1,14 +1,14 @@
 import type { ExpoConfig, ConfigContext } from 'expo/config';
 
-const APP_NAME = 'Nuvora';
-const FULL_STORE_TITLE = 'Nuvora — Business Management';
-const SCHEME = 'nuvora';
+const APP_NAME = 'BOS';
+const FULL_STORE_TITLE = 'BOS — Business Operating System';
+const SCHEME = 'bos';
 
 export default ({ config }: ConfigContext): any => ({
   ...config,
   name: APP_NAME,
-  description: 'Your entire business, in one simple app. Point of sale, orders, khata, scheduling, and AI receptionist tailored for your industry.',
-  slug: 'nuvora',
+  description: 'BOS — Business Operating System. One system to run the entire business: Point of Sale, inventory, orders, khata, and GST invoicing.',
+  slug: 'bos',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -21,18 +21,18 @@ export default ({ config }: ConfigContext): any => ({
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.nuvora.app',
+    bundleIdentifier: 'com.fieseros.bos',
     infoPlist: {
-      CFBundleDisplayName: 'Nuvora',
-      NSMicrophoneUsageDescription: 'Nuvora uses microphone access for voice dictation and natural language AI Copilot commands.',
-      NSCameraUsageDescription: 'Nuvora uses camera access to capture profile images and form attachments.',
-      NSPhotoLibraryUsageDescription: 'Nuvora uses photo library access to upload form assets.',
-      NSUserNotificationsUsageDescription: 'Nuvora sends instant notifications for new orders, customer payments, leads, and booking requests.',
+      CFBundleDisplayName: 'BOS',
+      NSMicrophoneUsageDescription: 'BOS uses microphone access for voice dictation and natural language Copilot commands.',
+      NSCameraUsageDescription: 'BOS uses camera access to capture product images and barcode scanning.',
+      NSPhotoLibraryUsageDescription: 'BOS uses photo library access to upload catalog and store assets.',
+      NSUserNotificationsUsageDescription: 'BOS sends instant notifications for new orders, customer payments, low stock, and billing updates.',
       ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
-    package: 'com.nuvora.app',
+    package: 'com.fieseros.bos',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#080C14',

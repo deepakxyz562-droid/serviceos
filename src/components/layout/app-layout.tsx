@@ -1,5 +1,5 @@
 'use client';
-import { isGptFormWorkspace } from '../../../shared/product-context';
+import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace } from '../../../shared/product-context';
 
 import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -509,15 +509,16 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'formsAnalytics', 'chatbotBuilder',
     // Bookings, Calendar & Storefront
-    'booking', 'calendar', 'commerce', 'quoteFlow',
+    'booking', 'calendar', 'commerce', 'quoteFlow', 'invoices', 'customers',
     // System & Integrations
     'integrations', 'billing', 'settings', 'notifications', 'helpCenter', 'activityLogs',
   ]), []);
   useEffect(() => {
     if (isStandaloneTenant && (!standaloneAllowedViews.has(currentView) || currentView === 'dashboard')) {
-      setCurrentView('formsDashboard');
+      const isChatbotly = isChatbotlyWorkspace(auth);
+      setCurrentView(isChatbotly ? 'formBuilder' : 'formsDashboard');
     }
-  }, [isStandaloneTenant, currentView, setCurrentView, standaloneAllowedViews]);
+  }, [isStandaloneTenant, currentView, setCurrentView, standaloneAllowedViews, auth]);
 
   // Theme is handled at root level by next-themes <ThemeProvider>.
 

@@ -37,12 +37,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci --legacy-peer-deps
 
       - name: Generate Prisma client
         run: bun run db:generate
@@ -56,12 +60,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci --legacy-peer-deps
 
       - name: Generate Prisma client
         run: bun run db:generate
@@ -75,12 +83,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci --legacy-peer-deps
 
       - name: Generate Prisma client
         run: bun run db:generate
@@ -98,12 +110,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci --legacy-peer-deps
 
       - name: Run unit tests
         run: bun run test:run
@@ -114,10 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [mobile-app, gptform-mobile-app, quote-flow-mobile]
-    defaults:
-      run:
-        working-directory: ${{ matrix.app }}
+        app: [mobile-app, bosmobile, chatbotlymobile, quote-flow-mobile]
     steps:
       - uses: actions/checkout@v4
 
@@ -131,14 +144,42 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if [ "${{ matrix.app }}" = "mobile-app" ]; then
-            bun install --frozen-lockfile
-          else
-            npm ci --legacy-peer-deps
-          fi
+          case "${{ matrix.app }}" in
+            bosmobile|chatbotlymobile) npm ci --legacy-peer-deps ;;
+            mobile-app) cd mobile-app && bun install --frozen-lockfile ;;
+            quote-flow-mobile) cd quote-flow-mobile && npm ci --legacy-peer-deps ;;
+          esac
 
       - name: Run lint
-        run: npm run lint -- --quiet
+        run: npm --prefix "${{ matrix.app }}" run lint -- --quiet
 
       - name: Run TypeScript check
-        run: npm run typecheck
+        run: npm --prefix "${{ matrix.app }}" run typecheck
+
+  product-web:
+    name: Product web (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [bos, chatbotly, quoteflow, marketplace]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --legacy-peer-deps
+      - run: npm --prefix apps/${{ matrix.app }} run typecheck
+      - run: npm --prefix apps/${{ matrix.app }} run build
+        env:
+          CORE_API_URL: http://127.0.0.1:3000
+
+  schema-recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --legacy-peer-deps
+      - run: npm run test:schema-recovery

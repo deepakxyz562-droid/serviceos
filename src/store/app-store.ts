@@ -1,4 +1,4 @@
-import { isGptFormWorkspace } from '../../shared/product-context';
+import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace } from '../../shared/product-context';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { ViewType } from '@/types/workflow';
@@ -208,7 +208,10 @@ export const useAppStore = create<AppState>()(
       const sameWorkspace = previous.auth.user?.id === auth.user?.id
         && previous.auth.user?.workspaceId === auth.user?.workspaceId
         && isGptFormWorkspace(previous.auth) === isGptFormWorkspace(auth);
-      const homeView = isGptFormWorkspace(auth) ? 'formsDashboard' : 'dashboard';
+      const isChatbotly = isChatbotlyWorkspace(auth);
+      const isBos = isBosWorkspace(auth);
+      const isForms = auth?.workspace?.productType === 'forms';
+      const homeView = isForms || isBos ? 'formsDashboard' : isChatbotly ? 'formBuilder' : 'dashboard';
       return {
         auth,
         currentView: sameWorkspace ? previous.currentView : homeView,

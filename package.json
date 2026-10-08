@@ -29,10 +29,26 @@
     "e2e:install": "playwright install --with-deps",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
-    "analyze": "ANALYZE=true next build",
-    "release:preflight": "node scripts/release/commerce-preflight.cjs",
-    "release:check": "npm run test:run && npm run typecheck && npm --prefix gptform-mobile-app run typecheck"
+    "release:check": "npm run test:run && npm run typecheck && npm --prefix bosmobile run typecheck && npm --prefix chatbotlymobile run typecheck && npm run test:schema-recovery && npm run typecheck:web && npm run build:web",
+    "typecheck:bosmobile": "npm --prefix bosmobile run typecheck",
+    "typecheck:chatbotlymobile": "npm --prefix chatbotlymobile run typecheck",
+    "dev:bos": "npm --prefix apps/bos run dev",
+    "dev:chatbotly": "npm --prefix apps/chatbotly run dev",
+    "dev:quoteflow": "npm --prefix apps/quoteflow run dev",
+    "dev:marketplace": "npm --prefix apps/marketplace run dev",
+    "build:bos": "npm --prefix apps/bos run build",
+    "build:chatbotly": "npm --prefix apps/chatbotly run build",
+    "build:quoteflow": "npm --prefix apps/quoteflow run build",
+    "build:marketplace": "npm --prefix apps/marketplace run build",
+    "test:schema-recovery": "node --test scripts/release/schema-recovery.test.cjs",
+    "typecheck:web": "npm run typecheck --workspace bos-web && npm run typecheck --workspace chatbotly-web && npm run typecheck --workspace quoteflow && npm run typecheck --workspace marketplace",
+    "build:web": "npm run build --workspace bos-web && npm run build --workspace chatbotly-web && npm run build --workspace quoteflow && npm run build --workspace marketplace"
   },
+  "workspaces": [
+    "bosmobile",
+    "chatbotlymobile",
+    "apps/*"
+  ],
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1076.0",
     "@aws-sdk/s3-request-presigner": "^3.1076.0",

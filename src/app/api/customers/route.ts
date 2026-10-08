@@ -29,7 +29,7 @@ import { normalizePhone, normalizeEmail } from '@/lib/customer-normalize'
 // 1.74ms warm, indexed).
 async function _GET(request: NextRequest) {
   try {
-    const crmGuard = await requireCrmTenant(request);
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true });
     if (crmGuard) return crmGuard;
     const user = await getAuthUser()
     if (!user) {
@@ -154,7 +154,7 @@ async function _GET(request: NextRequest) {
 //   }
 export async function POST(request: NextRequest) {
   try {
-    const crmGuard = await requireCrmTenant(request);
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true });
     if (crmGuard) return crmGuard;
     const user = await getAuthUser()
     if (!user) {

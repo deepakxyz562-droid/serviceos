@@ -9,6 +9,8 @@ import { FormAgentData, DEFAULT_FORM_AGENT, AVATAR_CATALOG } from '@/features/fo
 import { FormField } from '@/lib/forms/form-schema-types';
 import type { CrawledWebsiteResult } from './website-crawler-service';
 
+export type WizardCrawledContext = Pick<CrawledWebsiteResult, 'url' | 'businessName' | 'industry' | 'description' | 'services' | 'faqPairs' | 'primaryColor'> & Partial<CrawledWebsiteResult>;
+
 export interface WizardGenerationInput {
   businessDescription: string;
   businessName?: string;
@@ -17,7 +19,7 @@ export interface WizardGenerationInput {
   audience?: 'new_customers' | 'existing_customers' | 'both';
   knowledgeUrl?: string;
   tone?: 'friendly' | 'professional' | 'medical' | 'sales' | 'empathetic';
-  crawledContext?: CrawledWebsiteResult;
+  crawledContext?: WizardCrawledContext;
   requiredCustomerInfo?: string[]; // e.g. ['name', 'phone', 'email', 'address', 'photos', 'urgency', 'notes']
   bookingConfig?: {
     durationMinutes?: number;
@@ -470,7 +472,7 @@ Your Goals as our 24/7 AI Intake Employee:
       },
       {
         id: 'f_roof_sqft',
-        type: 'slider',
+        type: 'control_widget',
         widgetType: 'slider',
         label: 'Estimated Roof Size (sq ft)',
         required: false,

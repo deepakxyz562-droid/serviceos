@@ -62,6 +62,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
+  type WizardCrawledContext,
   parseBusinessText,
   generateAgentAndFormFromWizard,
 } from '@/lib/forms/generators/ai-agent-wizard-service';
@@ -221,7 +222,7 @@ export function AgentSetupWizard({
   const [businessDescription, setBusinessDescription] = useState(VERTICAL_PRESETS[0].prompt);
   const [websiteScanUrl, setWebsiteScanUrl] = useState('');
   const [isScanningUrl, setIsScanningUrl] = useState(false);
-  const [crawledData, setCrawledData] = useState<CrawledWebsiteResult | null>(null);
+  const [crawledData, setCrawledData] = useState<WizardCrawledContext | null>(null);
   const [isListening, setIsListening] = useState(false);
 
   // Step 2: Capabilities & Tasks
@@ -330,7 +331,7 @@ export function AgentSetupWizard({
   );
 
   // Synchronize generated state
-  const updateGeneratedState = useCallback((overrideCrawled?: CrawledWebsiteResult) => {
+  const updateGeneratedState = useCallback((overrideCrawled?: WizardCrawledContext) => {
     try {
       const activeCrawled = overrideCrawled !== undefined ? overrideCrawled : (crawledData || undefined);
       const res = generateAgentAndFormFromWizard({
@@ -438,7 +439,7 @@ export function AgentSetupWizard({
       label: newFieldLabel.trim(),
       placeholder: `Enter ${newFieldLabel.trim()}...`,
       required: false,
-      layoutWidth: 'full',
+      width: 'full',
     };
     setActiveFields((prev) => [...prev, newField]);
     setNewFieldLabel('');

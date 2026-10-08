@@ -408,12 +408,53 @@ export interface DynamicNavSection {
  * organized into the 3-layer architecture:
  * Layer 1 (Core Operations), Layer 2 (Vertical Modules & Finance), Layer 3 (Apps & Add-ons), Account.
  */
-export function getStandaloneNavSectionsForBlueprint(blueprint?: {
-  businessType?: BusinessType;
-  salesChannels?: SalesChannel[];
-  capabilities?: Partial<BusinessCapabilities>;
-  country?: import('./types').CountryCode;
-}): DynamicNavSection[] {
+export function getStandaloneNavSectionsForBlueprint(
+  blueprint?: {
+    businessType?: BusinessType;
+    salesChannels?: SalesChannel[];
+    capabilities?: Partial<BusinessCapabilities>;
+    country?: import('./types').CountryCode;
+  },
+  productType?: string
+): DynamicNavSection[] {
+  // ── Dedicated Chatbotly Navigation ──
+  if (productType === 'chatbotly') {
+    return [
+      {
+        title: 'Intake & Forms',
+        items: [
+          { view: 'formBuilder', label: 'Conversational Forms', iconName: 'FileInput' },
+          { view: 'formSubmissions', label: 'Submissions', iconName: 'Users' },
+          { view: 'formsAnalytics', label: 'Form Analytics', iconName: 'LayoutDashboard' },
+        ],
+      },
+      {
+        title: 'AI Studio',
+        items: [
+          { view: 'agentStudio', label: 'AI Agents', iconName: 'Bot', badge: 'AI' },
+          { view: 'chatbotBuilder', label: 'Website Chatbots', iconName: 'RadioTower' },
+          { view: 'aiReceptionist', label: 'Voice Receptionist', iconName: 'PhoneCall', badge: 'VOICE' },
+        ],
+      },
+      {
+        title: 'Engagement',
+        items: [
+          { view: 'omnichannel', label: 'Live Inbox', iconName: 'RadioTower' },
+          { view: 'booking', label: 'Appointments & Calendar', iconName: 'Calendar' },
+        ],
+      },
+      {
+        title: 'Settings & Integrations',
+        items: [
+          { view: 'integrations', label: 'Integrations & Webhooks', iconName: 'Share2' },
+          { view: 'billing', label: 'Plan & Billing', iconName: 'CreditCard' },
+          { view: 'settings', label: 'Settings', iconName: 'Settings' },
+        ],
+      },
+    ];
+  }
+
+  // ── Dedicated BOS (Business Operating System) Navigation ──
   const type = blueprint?.businessType || 'retail';
   const capabilities = blueprint?.capabilities || resolveBlueprintCapabilities(type, blueprint?.salesChannels);
 
@@ -432,7 +473,7 @@ export function getStandaloneNavSectionsForBlueprint(blueprint?: {
       title: 'Operations',
       items: [
         { view: 'formsDashboard', label: 'Today', iconName: 'LayoutDashboard' },
-        { view: type === 'services' ? 'jobs' : type === 'freelancer' ? 'quoteFlow' : 'commerce', label: type === 'freelancer' ? 'Quotes & Invoices' : coreLabel, iconName: type === 'services' ? 'Briefcase' : 'ShoppingBag' },
+        { view: type === 'services' ? 'jobs' : type === 'freelancer' ? 'invoices' : 'commerce', label: type === 'freelancer' ? 'Invoices' : coreLabel, iconName: type === 'services' ? 'Briefcase' : 'ShoppingBag' },
         { view: 'customers', label: 'Customers', iconName: 'Users' },
       ],
     },
@@ -478,7 +519,7 @@ export function getStandaloneNavSectionsForBlueprint(blueprint?: {
   sections.push({
     title: 'Finance & Ledger',
     items: [
-      ...(capabilities.invoicing ? [{ view: 'quoteFlow', label: 'Invoices', iconName: 'Receipt' }] : []),
+      ...(capabilities.invoicing ? [{ view: 'invoices', label: 'Invoices', iconName: 'Receipt' }] : []),
       ...(capabilities.customerCredit ? [{ view: 'commerce', label: blueprint?.country === 'IN' ? 'Khata' : 'Customer Dues', iconName: 'Users', tab: 'khata' }] : []),
       ...(capabilities.expenses ? [{ view: 'commerce', label: 'Expenses', iconName: 'FileText', tab: 'daybook' }] : []),
     ],

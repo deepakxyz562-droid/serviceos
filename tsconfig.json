@@ -44,7 +44,6 @@
     "mini-services",
     "daemon.js",
     "mobile-app",
-    "gptform-mobile-app",
     "quote-flow-mobile",
     "standalone",
     "e2e",
@@ -52,6 +51,9 @@
     "prisma/seed.ts",
     "prisma/seed-crm.ts",
     "prisma",
-    "scratch"
+    "scratch",
+    "bosmobile",
+    "chatbotlymobile",
+    "apps"
   ]
 }

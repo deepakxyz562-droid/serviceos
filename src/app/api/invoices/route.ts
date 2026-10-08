@@ -61,7 +61,7 @@ function shouldTryInvoicesRpc(): boolean {
  */
 async function _GET(request: NextRequest) {
   try {
-    const crmGuard = await requireCrmTenant(request);
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true });
     if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
     if (!authUser) {
@@ -260,7 +260,7 @@ async function _GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const crmGuard = await requireCrmTenant(request);
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true });
     if (crmGuard) return crmGuard;
     const authUser = await getAuthUser();
     if (!authUser) {

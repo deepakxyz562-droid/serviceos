@@ -58,13 +58,13 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
     "@typescript-eslint/no-require-imports": "off",
   },
 }, {
-  files: ["gptform-mobile-app/**/*.{ts,tsx}", "quote-flow-mobile/**/*.{ts,tsx}", "mobile-app/**/*.{ts,tsx}"],
+  files: ["bosmobile/**/*.{ts,tsx}", "chatbotlymobile/**/*.{ts,tsx}", "quote-flow-mobile/**/*.{ts,tsx}", "mobile-app/**/*.{ts,tsx}"],
   rules: {
     // React Native's Image component uses accessibilityLabel, not HTML alt.
     "jsx-a11y/alt-text": "off",
   },
 }, {
-  ignores: ["node_modules/**", ".next/**", "out/**", "build/**", "next-env.d.ts", "skills", "mini-services/**", "prisma/seed.ts", "standalone/**", "dist/**", "packages/**/dist/**", "tooling/**", "netlify/**", ".github/**", "e2e/**", "playwright-report/**", "test-results/**"]
+  ignores: ["node_modules/**", "**/.next/**", "out/**", "build/**", "next-env.d.ts", "skills", "mini-services/**", "prisma/seed.ts", "standalone/**", "dist/**", "packages/**/dist/**", "tooling/**", "netlify/**", ".github/**", "e2e/**", "playwright-report/**", "test-results/**"]
 }];
 
 export default eslintConfig;

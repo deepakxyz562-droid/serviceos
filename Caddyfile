@@ -54,8 +54,8 @@
 	redir https://{host}{uri} permanent
 }
 
-# ── Primary HTTPS site ────────────────────────────────────────────────────────
-fieseros.com {
+# ── Primary HTTPS site & Domain Dispatches ────────────────────────────────────
+fieseros.com, bos.fieseros.com, chatbotly.fieseros.com, chatboly.fieseros.com, quoteflow.fieseros.com, marketplace.fieseros.com {
 	# (Optional) issue a wildcard cert for tenant subdomains. Uncomment if you
 	# serve *.fieseros.com from this same Caddy instance.
 	# tls {
@@ -100,10 +100,11 @@ fieseros.com {
 	# @webhooks query XTransformPort=3005
 	# reverse_proxy @webhooks localhost:3005
 
-	# ── Default: reverse-proxy everything else to Next.js ────────────────────
+	# ── Reverse-proxy all product domains to Next.js :3000 ────────────────────
+	# Interim monolith deployment. For independently running web apps use
+	# Caddyfile.products after starting and validating all four app servers.
+	# Middleware product labels are presentation hints, not authorization.
 	reverse_proxy localhost:3000 {
-		# Pass the original host + client IP through to Next.js so it can build
-		# correct absolute URLs and audit-log the real requester.
 		header_up Host {host}
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}

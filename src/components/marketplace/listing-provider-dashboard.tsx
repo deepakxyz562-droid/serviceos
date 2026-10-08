@@ -338,7 +338,7 @@ function BusinessDetailsCard({
                   return (
                     <div key={v.id}>
                       <div className="px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {v.label}
+                        {v.name}
                       </div>
                       {items.map((ind) => (
                         <SelectItem key={ind.id} value={ind.id}>

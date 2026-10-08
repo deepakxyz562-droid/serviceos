@@ -12,7 +12,7 @@ async function _GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const crmGuard = await requireCrmTenant(request)
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true })
     if (crmGuard) return crmGuard
 
     // ── Security-3 IDOR fix: require authentication + tenant isolation ──
@@ -224,7 +224,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const crmGuard = await requireCrmTenant(request)
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true })
     if (crmGuard) return crmGuard
 
     // ── Security-3 IDOR fix: require authentication + tenant isolation ──
@@ -496,7 +496,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const crmGuard = await requireCrmTenant(request)
+    const crmGuard = await requireCrmTenant(request, { allowStandalone: true })
     if (crmGuard) return crmGuard
 
     // ── Security-3 IDOR fix: require authentication + tenant isolation ──

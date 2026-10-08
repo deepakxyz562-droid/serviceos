@@ -1054,7 +1054,7 @@ export function InvoiceEditModal({ invoiceId }: { invoiceId: string }) {
               </div>
             </div>
             <button
-              onClick={() => openModal({ type: "settings" })}
+              onClick={() => { closeModal(); useAppStore.getState().setActiveTab("settings"); }}
               className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-2xs hover:bg-blue-700"
             >
               <Plus className="h-4 w-4" />

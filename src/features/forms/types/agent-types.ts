@@ -336,6 +336,7 @@ export interface FormAgentData {
 
   // ── Visual Designer & CSS Tokens (Screenshot 2) ──
   style?: {
+    isDark?: boolean;
     colorSchemeId: string;
     themePreset: 'modern-blue' | 'emerald-serene' | 'midnight-dark' | 'sunset-purple' | 'pure-light';
     pageBackgroundStart: string;

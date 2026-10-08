@@ -233,7 +233,7 @@ ${combinedText}`;
       maxTokens: 2500,
     });
 
-    if (res.ok && res.content) {
+    if (res.content) {
       const parsed = JSON.parse(res.content);
       return {
         businessName: parsed.businessName || fallback.businessName,

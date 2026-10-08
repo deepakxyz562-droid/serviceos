@@ -1,5 +1,5 @@
 'use client';
-import { isGptFormWorkspace } from '../../../shared/product-context';
+import { isGptFormWorkspace, getAppProduct, isChatbotlyWorkspace, isBosWorkspace, isQuoteflowWorkspace, isMarketplaceWorkspace } from '../../../shared/product-context';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -586,6 +586,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
      (auth.tenant as any)?.listingTier === 'claimed_free');
 
   const isStandalone = !isEmployee && isGptFormWorkspace(auth);
+  const isChatbotly = isChatbotlyWorkspace(auth);
+  const isBos = isBosWorkspace(auth);
+  const isQuoteflow = isQuoteflowWorkspace(auth);
+  const isMarketplace = isMarketplaceWorkspace(auth);
+  const appProduct = getAppProduct(auth);
 
   // Fetch menu visibility for non-superadmin users. Superadmin bypasses the
   // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
@@ -664,7 +669,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       return listingOnlyNavSections;
     } else if (isStandalone) {
       // Standalone AI & Forms tenants get dynamic blueprint-driven 3-layer nav
-      const dynamicSections = getStandaloneNavSectionsForBlueprint(blueprint || undefined);
+      const dynamicSections = getStandaloneNavSectionsForBlueprint(blueprint || undefined, appProduct);
       return dynamicSections.map((sec) => ({
         title: sec.title,
         items: sec.items.map((it) => ({
@@ -902,10 +907,26 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground truncate max-w-[150px]">
-              {isSuperAdmin ? 'Fieseros' : isStandalone ? (blueprint?.businessName || auth.tenant?.name || 'My Store') : 'Fieseros'}
+              {isSuperAdmin
+                ? 'Fieseros'
+                : isQuoteflow
+                ? 'QuoteFlow'
+                : isMarketplace
+                ? 'Marketplace'
+                : isChatbotly
+                ? (blueprint?.businessName || auth.tenant?.name || 'Chatbotly')
+                : isBos
+                ? (blueprint?.businessName || auth.tenant?.name || 'BOS')
+                : 'Fieseros'}
             </span>
-            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' : isStandalone ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30' : 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
-              {isSuperAdmin ? 'Admin' : isStandalone ? 'Store' : planBadge.label}
+            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0',
+              isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' :
+              isQuoteflow ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30' :
+              isMarketplace ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30' :
+              isChatbotly ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30' :
+              isBos ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' :
+              'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
+              {isSuperAdmin ? 'Admin' : isQuoteflow ? 'QuoteFlow' : isMarketplace ? 'Marketplace' : isChatbotly ? 'Chatbotly' : isBos ? 'BOS' : planBadge.label}
             </Badge>
           </div>
         )}

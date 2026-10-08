@@ -70,6 +70,10 @@ import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Service {
+  costPrice?: number;
+  markup?: number;
+  isBookable?: boolean;
+  isOnlineBookable?: boolean;
   id: string;
   name: string;
   description: string | null;

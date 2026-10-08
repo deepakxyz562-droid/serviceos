@@ -432,7 +432,7 @@ export function AgentDeviceSimulator({
     }
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.rate = agent.voiceTone === 'energetic' ? 1.1 : agent.voiceTone === 'calm' ? 0.95 : 1.0;
+    utterance.rate = agent.voiceTone === 'sales' ? 1.1 : agent.voiceTone === 'empathetic' ? 0.95 : 1.0;
     utterance.pitch = agent.voiceTone === 'friendly' ? 1.05 : 1.0;
 
     const voices = window.speechSynthesis.getVoices();

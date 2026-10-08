@@ -1,16 +1,16 @@
 
 export const BRAND = {
-  name: 'Nuvora',
-  tagline: 'Your Entire Business, in One Simple App',
-  primaryColor: '#4F46E5', // Indigo 600 (Nuvora brand)
-  accentColor: '#080C14',  // Obsidian slate
+  name: 'BOS',
+  tagline: 'One System to Run the Entire Business',
+  primaryColor: '#10B981', // Emerald 600 (BOS brand)
+  accentColor: '#0F172A',  // Slate 900
 };
 
 // Default backend API base URL
-// Physical devices and release builds use the same HTTPS backend.
+// Physical devices and release builds use https://bos.fieseros.com.
 // Developers may explicitly override EXPO_PUBLIC_API_URL for a local server.
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://fieseros.com').replace(/\/$/, '');
-export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://fieseros.com').replace(/\/$/, '');
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'https://bos.fieseros.com').replace(/\/$/, '');
+export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://bos.fieseros.com').replace(/\/$/, '');
 
 export const API_PATHS = {
   login: '/api/auth/login',
