@@ -253,6 +253,10 @@ export function StandaloneOnboarding({
             industry,
             weeklyVolume: volume,
             launchTimeline: timeline,
+            productOnboarding: {
+              ...(typeof (tenant as any)?.settingsJson === 'object' ? (tenant as any)?.settingsJson?.productOnboarding : {}),
+              chatbotly: true,
+            },
           },
         }),
       });

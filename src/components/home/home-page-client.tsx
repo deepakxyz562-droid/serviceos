@@ -131,6 +131,45 @@ function isPlatformAdmin(user: any): boolean {
   return false;
 }
 
+function isProductOnboardingCompleted(data: any, product: string): boolean {
+  if (!data?.tenant) return false;
+  const t = data.tenant;
+  const w = data.workspace;
+  let settings: any = {};
+  try {
+    settings = typeof t.settingsJson === 'string' ? JSON.parse(t.settingsJson || '{}') : (t.settingsJson || {});
+  } catch {
+    settings = {};
+  }
+
+  if (product === 'chatbotly') {
+    if (settings?.productOnboarding?.chatbotly === true) return true;
+    if (w?.productType === 'chatbotly' && t.onboardingCompleted) return true;
+    if (t.signupMode === 'forms_standalone' && t.onboardingCompleted && w?.productType !== 'bos') return true;
+    return false;
+  }
+
+  if (product === 'bos') {
+    if (settings?.productOnboarding?.bos === true) return true;
+    if (w?.productType === 'bos' && t.onboardingCompleted) return true;
+    if (t.signupMode === 'standalone' && t.onboardingCompleted) return true;
+    return false;
+  }
+
+  if (product === 'crm') {
+    if (settings?.productOnboarding?.crm === true) return true;
+    if (w?.productType === 'crm' && t.onboardingCompleted) return true;
+    if (t.signupMode === 'crm_trial' && t.onboardingCompleted && w?.productType !== 'bos' && w?.productType !== 'chatbotly') return true;
+    return false;
+  }
+
+  if (product === 'marketplace') {
+    return t.signupMode === 'listing_only' && Boolean(t.onboardingCompleted);
+  }
+
+  return Boolean(t.onboardingCompleted);
+}
+
 function ViewLoader() {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background">
@@ -347,17 +386,18 @@ export default function HomePageClient() {
           const sm = (data.tenant as any)?.signupMode as string | null | undefined;
           const isStandalone = !isPlatformAdmin(data.user) && urlView !== 'superadmin' && isGptFormWorkspace(data);
 
+          const isCompleted = isProductOnboardingCompleted(data, hostProduct);
           const needsOnboarding =
             data.tenant &&
-            !data.tenant.onboardingCompleted &&
+            !isCompleted &&
             !isPlatformAdmin(data.user) &&
             data.user.role !== 'customer' &&
             data.user.role !== 'employee';
 
           if (needsOnboarding) {
-            if (hostProduct === 'chatbotly' || isChatbotlyWorkspace(data)) {
+            if (hostProduct === 'chatbotly') {
               setOnboardingView('standalone');
-            } else if (hostProduct === 'bos' || isBosWorkspace(data)) {
+            } else if (hostProduct === 'bos') {
               setOnboardingView('bos');
             } else if (sm === 'listing_only' || hostProduct === 'marketplace') {
               setOnboardingView('listing');
@@ -386,6 +426,8 @@ export default function HomePageClient() {
                 useAppStore.getState().setCurrentView('formBuilder');
               } else if (hostProduct === 'bos') {
                 useAppStore.getState().setCurrentView('commerce');
+              } else if (hostProduct === 'crm') {
+                useAppStore.getState().setCurrentView('dashboard');
               } else if (isStandalone) {
                 useAppStore.getState().setCurrentView('formsDashboard');
               }
@@ -914,10 +956,11 @@ export default function HomePageClient() {
         const sm = (tenant as any)?.signupMode as string | null | undefined;
         const isStandalone = isGptFormWorkspace(authData);
 
-        if (!tenant || !tenant.onboardingCompleted) {
-          if (hostProduct === 'chatbotly' || isChatbotlyWorkspace(authData)) {
+        const isCompleted = isProductOnboardingCompleted(authData, hostProduct);
+        if (!tenant || !isCompleted) {
+          if (hostProduct === 'chatbotly') {
             setOnboardingView('standalone');
-          } else if (hostProduct === 'bos' || isBosWorkspace(authData)) {
+          } else if (hostProduct === 'bos') {
             setOnboardingView('bos');
           } else if (sm === 'listing_only' || hostProduct === 'marketplace') {
             setOnboardingView('listing');
@@ -943,6 +986,8 @@ export default function HomePageClient() {
               useAppStore.getState().setCurrentView('formBuilder');
             } else if (hostProduct === 'bos') {
               useAppStore.getState().setCurrentView('commerce');
+            } else if (hostProduct === 'crm') {
+              useAppStore.getState().setCurrentView('dashboard');
             } else if (isStandalone) {
               useAppStore.getState().setCurrentView('formsDashboard');
             }

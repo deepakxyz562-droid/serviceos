@@ -1,5 +1,5 @@
 'use client';
-import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace } from '../../../shared/product-context';
+import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, getAppProduct } from '../../../shared/product-context';
 
 import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -499,7 +499,8 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     }
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
-  const isStandaloneTenant = isGptFormWorkspace(auth);
+  const appProduct = getAppProduct(auth);
+  const isStandaloneTenant = !auth.user?.isSuperAdmin && (appProduct === 'bos' || appProduct === 'chatbotly');
   const standaloneAllowedViews = useMemo(() => new Set([
     'superadmin',
     // AI Forms, Voice Agents & Creator Suite
