@@ -13,6 +13,10 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+function sanitizeKey(key: string): string {
+  return key.replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
 export async function storageSetItem(key: string, value: string): Promise<void> {
   if (Platform.OS === 'web') {
     try {
@@ -21,7 +25,7 @@ export async function storageSetItem(key: string, value: string): Promise<void> 
     return;
   }
   try {
-    await SecureStore.setItemAsync(key, value);
+    await SecureStore.setItemAsync(sanitizeKey(key), value);
   } catch (err) {
     console.warn(`[storage] setItemAsync failed for key "${key}":`, err);
   }
@@ -36,7 +40,7 @@ export async function storageGetItem(key: string): Promise<string | null> {
     }
   }
   try {
-    return await SecureStore.getItemAsync(key);
+    return await SecureStore.getItemAsync(sanitizeKey(key));
   } catch (err) {
     console.warn(`[storage] getItemAsync failed for key "${key}":`, err);
     return null;
@@ -51,7 +55,7 @@ export async function storageDeleteItem(key: string): Promise<void> {
     return;
   }
   try {
-    await SecureStore.deleteItemAsync(key);
+    await SecureStore.deleteItemAsync(sanitizeKey(key));
   } catch (err) {
     console.warn(`[storage] deleteItemAsync failed for key "${key}":`, err);
   }

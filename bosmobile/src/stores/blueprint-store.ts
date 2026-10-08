@@ -11,7 +11,7 @@ const defaultBlueprint: TenantBlueprint = {
 };
 function identity() {
   const { user, isAuthenticated } = useAuthStore.getState();
-  return isAuthenticated && user ? `nuvora_blueprint:${user.id}:${user.tenantId || 'personal'}` : null;
+  return isAuthenticated && user ? `nuvora_blueprint_${user.id}_${user.tenantId || 'personal'}` : null;
 }
 type BlueprintPatch = {
   businessType?: BusinessType; businessName?: string; country?: CountryCode;

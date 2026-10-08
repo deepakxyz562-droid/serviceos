@@ -1,6 +1,6 @@
 'use client';
 import { isViewType } from '@/types/workflow';
-import { isGptFormWorkspace } from '../../../shared/product-context';
+import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, productForHostname } from '../../../shared/product-context';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
@@ -37,6 +37,10 @@ const ListingOnboarding = dynamic(
 );
 const StandaloneOnboarding = dynamic(
   () => import('@/components/onboarding/standalone-onboarding').then(m => ({ default: m.StandaloneOnboarding })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const BusinessBlueprintWizard = dynamic(
+  () => import('@/components/onboarding/business-blueprint-wizard').then(m => ({ default: m.BusinessBlueprintWizard })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
 const AppLayout = dynamic(
@@ -189,7 +193,7 @@ export default function HomePageClient() {
   //   'saas'           → full 4-step SaaSOnboarding wizard (signupMode='crm_trial')
   //   'listing'        → mini 1-step ListingOnboarding wizard (signupMode='listing_only')
   const [onboardingView, setOnboardingView] = useState<
-    null | 'mode_selector' | 'saas' | 'listing' | 'standalone'
+    null | 'mode_selector' | 'saas' | 'listing' | 'standalone' | 'bos'
   >(null);
 
   // Handle Google OAuth callback URL parameters.
@@ -338,6 +342,7 @@ export default function HomePageClient() {
             useAppStore.getState().setCurrentView('superadmin');
           }
 
+          const hostProduct = typeof window !== 'undefined' ? productForHostname(window.location.hostname) : 'crm';
           const tenantPlan = (data.tenant as any)?.plan as string | null | undefined;
           const sm = (data.tenant as any)?.signupMode as string | null | undefined;
           const isStandalone = !isPlatformAdmin(data.user) && urlView !== 'superadmin' && isGptFormWorkspace(data);
@@ -350,11 +355,13 @@ export default function HomePageClient() {
             data.user.role !== 'employee';
 
           if (needsOnboarding) {
-            if (isStandalone) {
+            if (hostProduct === 'chatbotly' || isChatbotlyWorkspace(data)) {
               setOnboardingView('standalone');
-            } else if (sm === 'listing_only') {
+            } else if (hostProduct === 'bos' || isBosWorkspace(data)) {
+              setOnboardingView('bos');
+            } else if (sm === 'listing_only' || hostProduct === 'marketplace') {
               setOnboardingView('listing');
-            } else if (sm === 'crm_trial') {
+            } else if (sm === 'crm_trial' || hostProduct === 'crm') {
               setOnboardingView('saas');
             } else {
               setOnboardingView('mode_selector');
@@ -364,18 +371,22 @@ export default function HomePageClient() {
             setShowOnboarding(false);
             setOnboardingView(null);
 
-            if (isStandalone) {
-              if (typeof window !== 'undefined') {
-                const params = new URLSearchParams(window.location.search);
-                const viewParam = params.get('view') || params.get('tab');
+            if (typeof window !== 'undefined') {
+              const params = new URLSearchParams(window.location.search);
+              const viewParam = params.get('view') || params.get('tab');
+              if (viewParam) {
                 if (viewParam === 'forms' || viewParam === 'formBuilder') {
                   useAppStore.getState().setCurrentView('formBuilder');
                 } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
                   useAppStore.getState().setCurrentView('aiReceptionist');
-                } else if (!viewParam || viewParam === 'dashboard' || viewParam === 'marketplaceDashboard') {
-                  useAppStore.getState().setCurrentView('formsDashboard');
+                } else if (viewParam === 'superadmin' || isPlatformAdmin(data.user)) {
+                  useAppStore.getState().setCurrentView('superadmin');
                 }
-              } else {
+              } else if (hostProduct === 'chatbotly') {
+                useAppStore.getState().setCurrentView('formBuilder');
+              } else if (hostProduct === 'bos') {
+                useAppStore.getState().setCurrentView('commerce');
+              } else if (isStandalone) {
                 useAppStore.getState().setCurrentView('formsDashboard');
               }
             }
@@ -898,23 +909,26 @@ export default function HomePageClient() {
         useAppStore.getState().setCurrentView('superadmin');
         toast.success('Welcome, Super Admin!');
       } else {
+        const hostProduct = typeof window !== 'undefined' ? productForHostname(window.location.hostname) : 'crm';
         const tenantPlan = (tenant as any)?.plan as string | null | undefined;
         const sm = (tenant as any)?.signupMode as string | null | undefined;
         const isStandalone = isGptFormWorkspace(authData);
 
         if (!tenant || !tenant.onboardingCompleted) {
-          if (isStandalone) {
+          if (hostProduct === 'chatbotly' || isChatbotlyWorkspace(authData)) {
             setOnboardingView('standalone');
-          } else if (sm === 'listing_only') {
+          } else if (hostProduct === 'bos' || isBosWorkspace(authData)) {
+            setOnboardingView('bos');
+          } else if (sm === 'listing_only' || hostProduct === 'marketplace') {
             setOnboardingView('listing');
-          } else if (sm === 'crm_trial') {
+          } else if (sm === 'crm_trial' || hostProduct === 'crm') {
             setOnboardingView('saas');
           } else {
             setOnboardingView('mode_selector');
           }
           setShowOnboarding(false);
           toast.success('Welcome to Fieseros! Let\'s set up your workspace.');
-        } else if (isStandalone) {
+        } else {
           setShowOnboarding(false);
           setOnboardingView(null);
           toast.success('Welcome to Fieseros!');
@@ -925,14 +939,14 @@ export default function HomePageClient() {
               useAppStore.getState().setCurrentView('formBuilder');
             } else if (viewParam === 'ai-employee' || viewParam === 'aiReceptionist') {
               useAppStore.getState().setCurrentView('aiReceptionist');
-            } else {
+            } else if (hostProduct === 'chatbotly') {
+              useAppStore.getState().setCurrentView('formBuilder');
+            } else if (hostProduct === 'bos') {
+              useAppStore.getState().setCurrentView('commerce');
+            } else if (isStandalone) {
               useAppStore.getState().setCurrentView('formsDashboard');
             }
           }
-        } else {
-          setShowOnboarding(false);
-          setOnboardingView(null);
-          toast.success('Welcome to Fieseros!');
         }
       }
 
@@ -1071,6 +1085,28 @@ export default function HomePageClient() {
               setOnboardingView(null);
               // Land the standalone user directly in the Form Builder
               useAppStore.getState().setCurrentView('formBuilder');
+            }}
+          />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    // BOS business blueprint wizard
+    if (onboardingView === 'bos') {
+      return (
+        <>
+          <BusinessBlueprintWizard
+            open={true}
+            onOpenChange={(open) => {
+              if (!open) {
+                setOnboardingView(null);
+                useAppStore.getState().setCurrentView('commerce');
+              }
+            }}
+            onComplete={() => {
+              setOnboardingView(null);
+              useAppStore.getState().setCurrentView('commerce');
             }}
           />
           <PWAInstallBanner />

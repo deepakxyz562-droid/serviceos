@@ -1,7 +1,7 @@
 # GPTForm Mobile App 📱
 
 > **Never miss a customer, lead, or booking.**
-> A dedicated mobile companion app for GPTForm subscribers, built with **React Native + Expo SDK 54**, **NativeWind**, and **Reanimated**.
+> A dedicated mobile companion app for GPTForm subscribers, built with **React Native + Expo SDK 57**.
 
 ---
 
@@ -51,27 +51,45 @@
 
 ## 3. How to Run & Develop
 
-From the `gptform-mobile-app` directory:
+Install dependencies from the repository root using its Bun workspace lockfile:
 
 ```bash
-cd gptform-mobile-app
+bun install --frozen-lockfile
+cd bosmobile
+bun run start --clear
+```
 
-# 1. Install dependencies (uses bun or npm)
-bun install
-# or: npm install
+BOS uses Expo SDK 57 and React Native 0.86.3. The installed iOS app must
+contain compatible native modules; restarting Metro only reloads JavaScript.
+App Store Expo Go supports SDK 54, so it cannot run this SDK 57 project.
+For physical iPhones, use an SDK 57 Expo Go build distributed through
+TestFlight or a BOS development build. See
+[Expo's compatibility instructions](https://docs.expo.dev/troubleshooting/expo-go-version-mismatch/).
 
-# 2. Start the Expo development server
-bun start
-# or: npm start
+If a custom BOS build reports missing `ExpoAsset` or `ExponentConstants`,
+rebuild and reinstall it with the current dependencies. The subsequent
+`"main" has not been registered` message is caused by startup failing before
+Expo Router can register the app; changing the entry point does not repair
+missing native modules.
 
-# 3. Run on iOS Simulator
-bun run ios
+For a compatible Expo Go runtime, start explicitly with:
 
-# 4. Run on Android Emulator
-bun run android
+```bash
+bun run start --go --clear
+```
 
-# 5. Run on Web (for instant browser preview)
-bun run web
+Local iOS native builds require full Xcode and its iOS platform tools.
+To use a custom development client, first install `expo-dev-client` with
+`bunx expo install expo-dev-client`, build and install the development app,
+then run `bun run start --dev-client --clear`. Rebuild after changing native
+dependencies or Expo SDK versions.
+
+Checks:
+
+```bash
+bun run typecheck
+bun run test
+bunx expo install --check
 ```
 
 ---

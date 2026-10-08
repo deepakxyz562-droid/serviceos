@@ -1,13 +1,13 @@
-const secureValues = new Map<string, string>();
+const mockSecureValues = new Map<string, string>();
 
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn((key: string) => Promise.resolve(secureValues.get(key) ?? null)),
+  getItemAsync: jest.fn((key: string) => Promise.resolve(mockSecureValues.get(key) ?? null)),
   setItemAsync: jest.fn((key: string, value: string) => {
-    secureValues.set(key, value);
+    mockSecureValues.set(key, value);
     return Promise.resolve();
   }),
   deleteItemAsync: jest.fn((key: string) => {
-    secureValues.delete(key);
+    mockSecureValues.delete(key);
     return Promise.resolve();
   }),
 }));
@@ -16,7 +16,7 @@ import { clearTokens, getRefreshToken, getToken, setTokens } from '../auth';
 
 describe('Nuvora token storage', () => {
   beforeEach(async () => {
-    secureValues.clear();
+    mockSecureValues.clear();
     await clearTokens();
   });
 

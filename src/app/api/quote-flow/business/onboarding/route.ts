@@ -48,8 +48,8 @@ const onboardingSchema = z.object({
 export async function GET(req: Request) {
   try {
     const user = await requireQuoteFlowUser(req);
-    const business = await getOrCreateBusinessForUser(user.id, user.tenantId, user.name ? `${user.name}'s Business` : 'My Business');
-    return NextResponse.json({ business });
+    const business = await getBusinessForUser(user.id);
+    return NextResponse.json({ business: business || null });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
