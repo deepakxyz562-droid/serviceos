@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { apiLimiter, getClientIp } from '@/lib/rate-limit';
 import { generateRequestId } from '@/lib/logger';
 import { BRAND } from '@/lib/brand';
+import { productForHostname } from '../shared/product-context';
 
 /**
  * Trial-expiry paywall middleware (server-side layer) + global API rate limit
@@ -63,9 +64,12 @@ function isExemptFromGlobalLimit(pathname: string): boolean {
 }
 
 /** Wrap NextResponse.next() with the X-Request-Id header so clients/tracers see it. */
-function nextWithRequestId(requestId: string, extraHeaders?: Record<string, string>): NextResponse {
+function nextWithRequestId(requestId: string, extraHeaders?: Record<string, string>, appProduct?: string): NextResponse {
   const response = NextResponse.next();
   response.headers.set('X-Request-Id', requestId);
+  if (appProduct) {
+    response.headers.set('x-app-product', appProduct);
+  }
   if (extraHeaders) {
     for (const [k, v] of Object.entries(extraHeaders)) {
       response.headers.set(k, v);
@@ -135,6 +139,27 @@ export async function proxy(request: NextRequest) {
     host.startsWith('localhost') ||
     host.startsWith('127.0.0.1') ||
     /^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host);
+
+  // If someone requests /quote-flow directly on fieseros.com, redirect to quoteflow.fieseros.com
+  const lowerHost = host.toLowerCase();
+  if (
+    (lowerHost === 'fieseros.com' || lowerHost === 'www.fieseros.com') &&
+    pathname.startsWith('/quote-flow')
+  ) {
+    const redirectUrl = new URL(request.url);
+    redirectUrl.host = 'quoteflow.fieseros.com';
+    redirectUrl.pathname = pathname === '/quote-flow' ? '/' : pathname.replace('/quote-flow', '');
+    return NextResponse.redirect(redirectUrl, { status: 307 });
+  }
+
+  const appProduct = productForHostname(lowerHost);
+  if (appProduct === 'quoteflow' && pathname === '/') {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = '/quote-flow';
+    const response = NextResponse.rewrite(rewriteUrl);
+    response.headers.set('x-app-product', appProduct);
+    return response;
+  }
 
   // Any host on the canonical root domain is allowed (fieseros.com,
   // admin.fieseros.com, {tenant}.fieseros.com, www.fieseros.com, etc.).
@@ -299,7 +324,7 @@ export async function proxy(request: NextRequest) {
   // cron, webhook) — pass through with the request ID only.
   // (PUBLIC_PATHS is preserved as a marker for future auth-gating logic; the
   // actual auth checks happen inside each route handler via getAuthUser().)
-  return nextWithRequestId(requestId);
+  return nextWithRequestId(requestId, undefined, appProduct);
 }
 
 export const config = {
