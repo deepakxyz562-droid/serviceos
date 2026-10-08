@@ -149,8 +149,162 @@ CREATE TABLE IF NOT EXISTS public."SitemapState" (
 );
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- Part 2: Reconcile QuoteFlow Tables (Move from bos OR public -> quoteflow)
+-- Part 2: Reconcile QuoteFlow Tables (Move from bos OR public -> quoteflow, or create if missing)
 -- ═══════════════════════════════════════════════════════════════════════════
+
+-- Ensure QuoteFlow base tables exist before migrating or view generation
+CREATE TABLE IF NOT EXISTS quoteflow."AiBusiness" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "ownerId" TEXT NOT NULL,
+    "tenantId" TEXT,
+    "name" TEXT NOT NULL,
+    "email" TEXT,
+    "phone" TEXT,
+    "address" TEXT,
+    "logoUrl" TEXT,
+    "currency" TEXT NOT NULL DEFAULT 'USD',
+    "currencySymbol" TEXT NOT NULL DEFAULT '$',
+    "defaultTaxRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "quoteSeq" INTEGER NOT NULL DEFAULT 1000,
+    "invoiceSeq" INTEGER NOT NULL DEFAULT 2000,
+    "plan" TEXT NOT NULL DEFAULT 'FREE',
+    "paymentCountry" TEXT,
+    "paymentInstructions" TEXT,
+    "bankAccountName" TEXT,
+    "bankAccountNumber" TEXT,
+    "bankIfsc" TEXT,
+    "bankSwift" TEXT,
+    "bankIban" TEXT,
+    "bankRoutingNumber" TEXT,
+    "bankSortCode" TEXT,
+    "bankBsb" TEXT,
+    "bankTransitNumber" TEXT,
+    "bankInstitutionNumber" TEXT,
+    "bankName" TEXT,
+    "bankBranch" TEXT,
+    "bankAddress" TEXT,
+    "upiId" TEXT,
+    "upiPayeeName" TEXT,
+    "paypalHandle" TEXT,
+    "venmoHandle" TEXT,
+    "zelleIdentifier" TEXT,
+    "cashappCashtag" TEXT,
+    "wiseIban" TEXT,
+    "showBankOnInvoice" BOOLEAN NOT NULL DEFAULT true,
+    "showUpiOnInvoice" BOOLEAN NOT NULL DEFAULT true,
+    "gstin" TEXT,
+    "stateCode" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiCustomer" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "businessId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT,
+    "phone" TEXT,
+    "address" TEXT,
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiQuote" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "businessId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "number" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "validUntil" TIMESTAMP(3),
+    "notes" TEXT,
+    "aiRawInput" TEXT,
+    "aiEditHistory" TEXT,
+    "discountValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "discountType" TEXT NOT NULL DEFAULT 'AMOUNT',
+    "taxRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "pdfTemplate" TEXT NOT NULL DEFAULT 'modern',
+    "convertedInvoiceId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiQuoteItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "quoteId" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "qty" DOUBLE PRECISION NOT NULL DEFAULT 1,
+    "unitPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "hsnCode" TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiInvoice" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "businessId" TEXT NOT NULL,
+    "customerId" TEXT NOT NULL,
+    "number" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "dueDate" TIMESTAMP(3),
+    "notes" TEXT,
+    "aiRawInput" TEXT,
+    "discountValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "discountType" TEXT NOT NULL DEFAULT 'AMOUNT',
+    "taxRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "pdfTemplate" TEXT NOT NULL DEFAULT 'modern',
+    "fromQuoteId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiInvoiceItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "invoiceId" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "qty" DOUBLE PRECISION NOT NULL DEFAULT 1,
+    "unitPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "hsnCode" TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiPayment" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "invoiceId" TEXT NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "method" TEXT NOT NULL DEFAULT 'MANUAL',
+    "paidAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "reference" TEXT,
+    "currency" TEXT,
+    "fee" DOUBLE PRECISION DEFAULT 0,
+    "gateway" TEXT,
+    "notes" TEXT,
+    "recordedBy" TEXT
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "businessId" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "unitPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "unit" TEXT,
+    "taxRate" DOUBLE PRECISION DEFAULT 0,
+    "category" TEXT,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS quoteflow."AiTemplate" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "businessId" TEXT,
+    "name" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "suggestedItems" TEXT NOT NULL,
+    "defaultTaxRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "isSystem" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Reconcile existing tables in bos or public by moving them into quoteflow
 DO $$
 DECLARE
     qf_tables TEXT[] := ARRAY[
@@ -165,33 +319,29 @@ DECLARE
         'AiTemplate'
     ];
     tbl TEXT;
-    table_count INTEGER;
 BEGIN
     FOREACH tbl IN ARRAY qf_tables
     LOOP
-        SELECT count(*) INTO table_count FROM information_schema.tables
-        WHERE table_schema IN ('public', 'bos', 'quoteflow')
-          AND table_name = tbl AND table_type = 'BASE TABLE';
-        IF table_count <> 1 THEN
-            RAISE EXCEPTION 'Expected exactly one base table for %, found %', tbl, table_count;
-        END IF;
-        -- Check if it currently lives in bos
+        -- If it currently lives in bos as a BASE TABLE, move it to quoteflow
         IF EXISTS (
             SELECT 1 FROM information_schema.tables 
             WHERE table_schema = 'bos' AND table_name = tbl AND table_type = 'BASE TABLE'
         ) THEN
+            -- Drop any empty placeholder table created in quoteflow before moving
+            EXECUTE format('DROP TABLE IF EXISTS quoteflow.%I CASCADE', tbl);
             EXECUTE format('ALTER TABLE bos.%I SET SCHEMA quoteflow', tbl);
-            EXECUTE format('CREATE OR REPLACE VIEW public.%I AS SELECT * FROM quoteflow.%I', tbl, tbl);
             RAISE NOTICE 'Moved table % from bos to quoteflow schema', tbl;
-        -- Or check if it currently lives in public as a BASE TABLE
+        -- Or if it currently lives in public as a BASE TABLE, move it to quoteflow
         ELSIF EXISTS (
             SELECT 1 FROM information_schema.tables 
             WHERE table_schema = 'public' AND table_name = tbl AND table_type = 'BASE TABLE'
         ) THEN
+            EXECUTE format('DROP TABLE IF EXISTS quoteflow.%I CASCADE', tbl);
             EXECUTE format('ALTER TABLE public.%I SET SCHEMA quoteflow', tbl);
-            EXECUTE format('CREATE OR REPLACE VIEW public.%I AS SELECT * FROM quoteflow.%I', tbl, tbl);
             RAISE NOTICE 'Moved table % from public to quoteflow schema', tbl;
         END IF;
+
+        -- Create or replace backward compatibility view in public
         EXECUTE format('CREATE OR REPLACE VIEW public.%I AS SELECT * FROM quoteflow.%I', tbl, tbl);
     END LOOP;
 END $$;

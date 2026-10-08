@@ -38,13 +38,12 @@ for (const existing of [false, true]) test(`repairs ${existing ? 'existing' : 'm
     assert.equal((await db.query(`SELECT has_table_privilege('service_role','public."NotificationLog"','INSERT') AS allowed`)).rows[0].allowed, true);
   } finally { await db.close(); }
 });
-test('missing QuoteFlow table aborts without partial restoration', async () => {
+test('missing QuoteFlow tables are automatically provisioned with views', async () => {
   const db = await fixture();
   try {
-    await db.exec('DROP VIEW public."AiTemplate"; DROP TABLE bos."AiTemplate";');
-    await assert.rejects(db.exec(sql), /Expected exactly one base table/);
-    await db.exec('ROLLBACK');
-    assert.equal((await db.query(`SELECT to_regclass('public."NotificationLog"') AS table_name`)).rows[0].table_name, null);
-    assert.equal((await db.query(`SELECT id FROM bos."AiBusiness"`)).rows[0].id, 'preserved');
+    await db.exec('DROP VIEW public."AiItem"; DROP TABLE bos."AiItem";');
+    await db.exec(sql);
+    assert.equal((await db.query(`SELECT table_schema FROM information_schema.tables WHERE table_schema='quoteflow' AND table_name='AiItem'`)).rows[0].table_schema, 'quoteflow');
+    assert.equal((await db.query(`SELECT table_schema FROM information_schema.tables WHERE table_schema='public' AND table_name='AiItem' AND table_type='VIEW'`)).rows[0].table_schema, 'public');
   } finally { await db.close(); }
 });

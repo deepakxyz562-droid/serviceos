@@ -12,6 +12,13 @@ COPY --from=oven/bun:1.2 /usr/local/bin/bunx /usr/local/bin/bunx
 # -----------------------------------------------------------------------------
 FROM base AS deps
 COPY package.json bun.lock ./
+# Copy workspace manifests so bun install can resolve monorepo workspaces
+COPY bosmobile/package.json ./bosmobile/
+COPY chatbotlymobile/package.json ./chatbotlymobile/
+COPY apps/bos/package.json ./apps/bos/
+COPY apps/chatbotly/package.json ./apps/chatbotly/
+COPY apps/quoteflow/package.json ./apps/quoteflow/
+COPY apps/marketplace/package.json ./apps/marketplace/
 RUN bun install --frozen-lockfile --ignore-scripts
 
 # -----------------------------------------------------------------------------
