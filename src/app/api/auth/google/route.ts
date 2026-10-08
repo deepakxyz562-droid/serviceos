@@ -49,20 +49,24 @@ export async function GET(request: NextRequest) {
   // serviceos.cc (or any other alias) hijack the OAuth redirect URI.
   // The server now always uses the canonical app URL.
 
+  const rawHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
+  const host = rawHost.toLowerCase().split(':')[0];
+  const originProto = request.headers.get('x-forwarded-proto') || (request.url.startsWith('https') ? 'https' : 'http');
+  const originHost = host ? `${originProto}://${rawHost}` : getAppUrl();
+
   // Derive the canonical redirect URI from NEXT_PUBLIC_APP_URL.
   const redirectUri = getRedirectUri();
   console.log('[Google OAuth] Using canonical redirect URI:', redirectUri, {
     'NEXT_PUBLIC_APP_URL': process.env.NEXT_PUBLIC_APP_URL || '(not set)',
     host: request.headers.get('host'),
     'x-forwarded-host': request.headers.get('x-forwarded-host'),
+    originHost,
   });
 
-  // Build state parameter to pass mode, redirect info, plan, signupMode, AND the redirect URI
-  // used so the callback can verify it matches. The callback validates that
-  // `state.redirectUri` host matches BRAND.domain before using it (defense
-  // against tampered state).
+  // Build state parameter to pass mode, redirect info, plan, signupMode, originHost, AND the redirect URI
+  // used so the callback can verify it matches and return the user to the initiating domain.
   const state = Buffer.from(
-    JSON.stringify({ mode, redirect: redirectTo, plan, signupMode, redirectUri })
+    JSON.stringify({ mode, redirect: redirectTo, plan, signupMode, redirectUri, originHost })
   ).toString('base64');
 
   // Google OAuth 2.0 authorization URL

@@ -33,7 +33,8 @@ async function createTenantForGoogleUser(
   userEmail: string,
   userName: string,
   requestedPlan?: string,
-  requestedSignupMode?: string
+  requestedSignupMode?: string,
+  originHost?: string
 ) {
   // Use the Google user's name as the initial business name.
   const businessName = `${userName || userEmail.split('@')[0]}'s Workspace`;
@@ -45,25 +46,33 @@ async function createTenantForGoogleUser(
     slugCounter++;
   }
 
-  const isStandalone = requestedPlan === 'standalone_starter' || requestedPlan === 'standalone_business' || requestedSignupMode === 'standalone';
+  const hostStr = (originHost || '').toLowerCase();
+  const isBosHost = hostStr.includes('bos.');
+  const isChatbotlyHost = hostStr.includes('chatbotly.');
+  const isQuoteFlowHost = hostStr.includes('quoteflow.');
+
+  const isStandalone = isBosHost || requestedPlan === 'standalone_starter' || requestedPlan === 'standalone_business' || requestedSignupMode === 'standalone';
+  const isChatbotly = isChatbotlyHost || requestedSignupMode === 'forms_standalone';
+
   const defaultSignupPlan = await resolveSignupDefaultPlan();
   const validPlans = ['standalone_starter', 'standalone_business', 'starter', 'professional', 'growth', 'launch_special', 'enterprise'];
-  const signupPlan = isStandalone
+  const signupPlan = (isStandalone || isChatbotly)
     ? (requestedPlan && (requestedPlan === 'standalone_business' || requestedPlan === 'standalone_starter') ? requestedPlan : 'standalone_starter')
     : (requestedPlan && validPlans.includes(requestedPlan) ? requestedPlan : defaultSignupPlan);
 
   const isListing = requestedSignupMode === 'listing_only';
-  const isExplicitMode = !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan));
+  const isExplicitMode = !!requestedSignupMode || !!(requestedPlan && validPlans.includes(requestedPlan)) || isBosHost || isChatbotlyHost || isQuoteFlowHost;
 
-  // If a specific mode/plan was requested (e.g. via deep-link), assign that mode directly.
-  // Otherwise set null so the Step 0 Product Picker (SignupModeSelector: CRM vs Listing vs AI Forms)
-  // is presented upon login (matching email/password registration behavior).
   const signupMode = isStandalone
     ? 'standalone'
-    : (isListing
-      ? 'listing_only'
-      : (isExplicitMode ? 'crm_trial' : null));
+    : (isChatbotly
+      ? 'forms_standalone'
+      : (isListing
+        ? 'listing_only'
+        : (isExplicitMode ? 'crm_trial' : null)));
   const onboardingCompleted = false;
+
+  const productType = isBosHost ? 'bos' : (isChatbotly ? 'chatbotly' : (isQuoteFlowHost ? 'quoteflow' : (isStandalone ? 'forms' : 'crm')));
 
   const tenant = await db.tenant.create({
     data: {
@@ -91,7 +100,7 @@ async function createTenantForGoogleUser(
       slug: `${slug}-workspace`,
       ownerId: userId,
       tenantId: tenant.id,
-      productType: isStandalone ? 'forms' : 'crm',
+      productType: productType,
     },
   });
 
@@ -214,21 +223,36 @@ async function getUserInfo(accessToken: string): Promise<GoogleUserInfo> {
 }
 
 /**
- * Get the canonical base URL for success/error redirects after OAuth.
+ * Get the base URL for success/error redirects after OAuth.
  *
- * SECURITY: Always returns `getAppUrl()` — which resolves to
- * `NEXT_PUBLIC_APP_URL` env var, falling back to `https://fieseros.com`.
- * Never trusts the `Host` header or `X-Forwarded-Host` because those
- * reflect whatever host the user landed on (which could be a stale/parked
- * alias like `serviceos.cc`). Pinning the success redirect to the
- * canonical app URL prevents the post-OAuth cookie from binding to the
- * wrong host.
- *
- * The `request` parameter is kept for signature compatibility with callers
- * but is intentionally unused.
+ * Checks if `stateOriginHost` was provided by the initiator and is on an allowed
+ * domain (*.fieseros.com, canonical app URL, or localhost in dev).
+ * If valid, returns `stateOriginHost` so users stay on their originating subdomain
+ * (e.g. bos.fieseros.com, chatbotly.fieseros.com, quoteflow.fieseros.com).
+ * Otherwise falls back to canonical `getAppUrl()`.
  */
-function getBaseUrl(_request: NextRequest): string {
+function getBaseUrl(_request: NextRequest, stateOriginHost?: string): string {
+  if (stateOriginHost && isAllowedOriginHost(stateOriginHost)) {
+    return stateOriginHost.replace(/\/+$/, '');
+  }
   return getAppUrl();
+}
+
+function isAllowedOriginHost(uriOrHost: string): boolean {
+  try {
+    const url = uriOrHost.startsWith('http://') || uriOrHost.startsWith('https://')
+      ? new URL(uriOrHost)
+      : new URL(`https://${uriOrHost}`);
+    const canonicalUrl = getAppUrl();
+    const canonicalHost = new URL(canonicalUrl).host;
+    if (url.host === canonicalHost) return true;
+    const rootDomain = BRAND.domain;
+    if (url.host === rootDomain || url.host.endsWith(`.${rootDomain}`)) return true;
+    if (url.host.startsWith('localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(url.host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -237,28 +261,9 @@ function getBaseUrl(_request: NextRequest): string {
  * call. Allowed hosts are:
  *   - the canonical app host derived from `NEXT_PUBLIC_APP_URL` / BRAND.url
  *   - localhost (dev only)
- *
- * This is defense-in-depth: even if an attacker tampers with the base64
- * `state` parameter, they cannot trick the token-exchange call into using
- * a different `redirect_uri` (which would have to match what was registered
- * in Google Cloud Console anyway, but this adds an explicit boundary).
  */
 function isAllowedRedirectUri(uri: string): boolean {
-  try {
-    const url = new URL(uri);
-    const canonicalUrl = getAppUrl();
-    const canonicalHost = new URL(canonicalUrl).host;
-    // Allow exact match on canonical host.
-    if (url.host === canonicalHost) return true;
-    // Allow subdomains of the canonical root domain (e.g. tenant.fieseros.com).
-    const rootDomain = BRAND.domain;
-    if (url.host === rootDomain || url.host.endsWith(`.${rootDomain}`)) return true;
-    // Allow localhost (dev).
-    if (url.host.startsWith('localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(url.host)) return true;
-    return false;
-  } catch {
-    return false;
-  }
+  return isAllowedOriginHost(uri);
 }
 
 export async function GET(request: NextRequest) {
@@ -268,10 +273,21 @@ export async function GET(request: NextRequest) {
     const stateParam = searchParams.get('state');
     const error = searchParams.get('error');
 
+    // Parse state parameter early to extract originHost for error redirects
+    let state: { mode?: string; redirect?: string; plan?: string; signupMode?: string; redirectUri?: string; originHost?: string } = {};
+    try {
+      if (stateParam) {
+        state = JSON.parse(Buffer.from(stateParam, 'base64').toString());
+      }
+    } catch {
+      // Ignore invalid state
+    }
+
+    const baseUrl = getBaseUrl(request, state.originHost);
+
     // Handle Google OAuth errors (e.g., user denied access, redirect_uri_mismatch)
     if (error) {
       console.error('Google OAuth callback error:', error, 'Full URL:', request.url);
-      const baseUrl = getBaseUrl(request);
       const errorDetail = searchParams.get('error_description') || error;
       // Map specific errors to user-friendly messages
       let errorMessage = errorDetail;
@@ -285,7 +301,6 @@ export async function GET(request: NextRequest) {
 
     if (!code) {
       console.error('Google OAuth: No authorization code received');
-      const baseUrl = getBaseUrl(request);
       return NextResponse.redirect(
         new URL('/?auth_error=google_no_code', baseUrl)
       );
@@ -293,20 +308,9 @@ export async function GET(request: NextRequest) {
 
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
       console.error('Google OAuth: Client ID or Secret not configured');
-      const baseUrl = getBaseUrl(request);
       return NextResponse.redirect(
         new URL('/?auth_error=google_not_configured', baseUrl)
       );
-    }
-
-    // Parse state parameter
-    let state: { mode?: string; redirect?: string; plan?: string; signupMode?: string; redirectUri?: string } = {};
-    try {
-      if (stateParam) {
-        state = JSON.parse(Buffer.from(stateParam, 'base64').toString());
-      }
-    } catch {
-      // Ignore invalid state
     }
 
     // Determine the redirect URI that was used when initiating the OAuth flow.
@@ -429,8 +433,6 @@ export async function GET(request: NextRequest) {
         workspaceId: existingUser.workspaceId,
         avatar: userInfo.picture || existingUser.avatar,
       };
-      const baseUrl = getBaseUrl(request);
-
       // If user has no tenant, create one now
       if (!existingUser.tenantId) {
         const { tenant, workspace } = await createTenantForGoogleUser(
@@ -438,7 +440,8 @@ export async function GET(request: NextRequest) {
           userInfo.email,
           userInfo.name || userInfo.given_name || '',
           state.plan,
-          state.signupMode
+          state.signupMode,
+          state.originHost
         );
         const tokens = await issueAuthTokens({
           ...authUser,
@@ -516,7 +519,8 @@ export async function GET(request: NextRequest) {
       userInfo.email,
       userInfo.name || userInfo.given_name || '',
       state.plan,
-      state.signupMode
+      state.signupMode,
+      state.originHost
     );
 
     const authUser = {
@@ -548,14 +552,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const baseUrl = getBaseUrl(request);
     const isStandalone = tenant.signupMode === 'standalone' || tenant.plan === 'standalone_starter' || tenant.plan === 'standalone_business';
     const response = NextResponse.redirect(buildSuccessUrl(baseUrl, isStandalone, true));
     setAuthCookies(response.cookies, tokens);
     return response;
   } catch (error) {
     console.error('Google OAuth callback error:', error);
-    const baseUrl = getBaseUrl(request);
+    const baseUrl = getAppUrl();
     return NextResponse.redirect(
       new URL('/?auth_error=google_callback_failed', baseUrl)
     );
