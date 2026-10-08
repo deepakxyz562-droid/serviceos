@@ -213,7 +213,12 @@ export function getCookieDomain(): string | undefined {
     if (host === 'localhost' || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
       return undefined;
     }
-    return `.${host}`;
+    // Product and www deployments must share the apex cookie scope.
+    if (host === BRAND.domain || host.endsWith(`.${BRAND.domain}`)) return `.${BRAND.domain}`;
+    // Preview/custom domains remain host-only unless explicitly configured.
+    const configured = process.env.AUTH_COOKIE_DOMAIN?.replace(/^\./, '').toLowerCase();
+    if (configured && (host === configured || host.endsWith(`.${configured}`))) return `.${configured}`;
+    return undefined;
   } catch {
     return undefined;
   }

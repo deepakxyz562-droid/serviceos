@@ -3,6 +3,7 @@ import { apiLimiter, getClientIp } from '@/lib/rate-limit';
 import { generateRequestId } from '@/lib/logger';
 import { BRAND } from '@/lib/brand';
 import { productForHostname } from '../shared/product-context';
+import { marketplaceRedirect } from '../shared/products';
 
 /**
  * Trial-expiry paywall middleware (server-side layer) + global API rate limit
@@ -141,15 +142,20 @@ export async function proxy(request: NextRequest) {
     /^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host);
 
   // If someone requests /quote-flow directly on fieseros.com, redirect to quoteflow.fieseros.com
-  const lowerHost = host.toLowerCase();
+  const lowerHost = host.toLowerCase().split(':')[0];
   if (
     (lowerHost === 'fieseros.com' || lowerHost === 'www.fieseros.com') &&
     pathname.startsWith('/quote-flow')
   ) {
-    const redirectUrl = new URL(request.url);
-    redirectUrl.host = 'quoteflow.fieseros.com';
-    redirectUrl.pathname = pathname === '/quote-flow' ? '/' : pathname.replace('/quote-flow', '');
+    const targetPath = pathname === '/quote-flow' ? '/' : pathname.replace(/^\/quote-flow/, '');
+    const redirectUrl = new URL(targetPath || '/', 'https://quoteflow.fieseros.com');
+    redirectUrl.search = request.nextUrl.search;
     return NextResponse.redirect(redirectUrl, { status: 307 });
+  }
+
+  if (lowerHost === 'marketplace.fieseros.com' && ['GET', 'HEAD'].includes(request.method)
+      && !pathname.startsWith('/api/') && !pathname.startsWith('/_next/')) {
+    return NextResponse.redirect(marketplaceRedirect(pathname, request.nextUrl.search), 308);
   }
 
   const appProduct = productForHostname(lowerHost);

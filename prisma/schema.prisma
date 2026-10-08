@@ -9336,3 +9336,45 @@ model GptformConversationState {
   @@index([businessId, customerPhone])
   @@unique([businessId, customerPhone])
 }
+
+// Shared identity, independently owned product workspaces. Runtime access is
+// checked against membership and the workspace subscription, never the hostname.
+model ProductWorkspace {
+  workspaceId String @id
+  tenantId String?
+  product String
+  status String @default("active")
+  onboardingCompleted Boolean @default(false)
+  onboardingStep Int @default(0)
+  profileJson String @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([tenantId, product])
+}
+
+model ProductMembership {
+  id String @id
+  workspaceId String
+  userId String
+  role String
+  status String @default("active")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([workspaceId, userId])
+  @@index([userId, status])
+}
+
+model ProductSubscription {
+  workspaceId String @id
+  plan String
+  status String
+  trialEndsAt DateTime?
+  currentPeriodEnd DateTime?
+  // Legacy billing remains authoritative for backfilled accounts.
+  billingSource String @default("product")
+  legacySubscriptionId String?
+  provider String?
+  providerSubscriptionId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

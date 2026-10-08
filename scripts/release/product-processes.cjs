@@ -3,7 +3,7 @@
 const path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 module.exports = {
-  apps: ['bos', 'chatbotly', 'quoteflow', 'marketplace'].map(name => ({
+  apps: ['bos', 'chatbotly', 'quoteflow'].map(name => ({
     name: `serviceos-${name}`,
     cwd: path.join(root, 'apps', name),
     script: path.join(root, 'node_modules', 'next', 'dist', 'bin', 'next'),

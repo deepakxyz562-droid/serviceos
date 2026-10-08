@@ -147,3 +147,6 @@ next-dev.pid
 
 !/prisma/migrations/20261008010000_customer_history/
 !/prisma/migrations/20261008010000_customer_history/migration.sql
+
+!/prisma/migrations/20261008120000_product_workspaces/
+!/prisma/migrations/20261008120000_product_workspaces/migration.sql

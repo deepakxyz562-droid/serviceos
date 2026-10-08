@@ -114,7 +114,7 @@ fieseros.com, bos.fieseros.com, chatbotly.fieseros.com, chatboly.fieseros.com, q
 	}
 	@marketplace host marketplace.fieseros.com
 	handle @marketplace {
-		reverse_proxy localhost:3005
+		reverse_proxy localhost:3000
 	}
 	handle {
 		reverse_proxy localhost:3000

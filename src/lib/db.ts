@@ -9,7 +9,7 @@ import { shouldUseSupabaseDB, supabaseDb } from './supabase-db'
 // 2026-09-22-p2-migration: added `CustomDomain` model + the commerce Phase 2
 // migration routes now use `db.promotion`, `db.coupon`, `db.inventoryItem`,
 // `db.stockTransaction`, `db.lowStockAlert`, `db.customDomain` directly.
-const PRISMA_SCHEMA_VERSION = '2026-10-07-auth-refresh-sessions'
+const PRISMA_SCHEMA_VERSION = '2026-10-08-product-workspaces'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined

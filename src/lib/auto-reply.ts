@@ -80,6 +80,7 @@ export interface AutoReplyResult {
     | 'cooldown_active'
     | 'no_config'
     | 'send_failed'
+    | 'unsupported_channel'
     | 'ai_unconfigured';
   message?: string;
   messageId?: string;
@@ -219,6 +220,13 @@ export async function maybeAutoReply(ctx: AutoReplyContext): Promise<AutoReplyRe
   try {
     if (!ctx.tenantId || !ctx.conversationId) {
       return { replied: false, reason: 'no_config' };
+    }
+    // Do not create an outbound message for a transport that cannot send it.
+    if (!['sms', 'whatsapp', 'website'].includes(ctx.channel)) {
+      return { replied: false, reason: 'unsupported_channel' };
+    }
+    if (ctx.channel !== 'website' && !ctx.visitorPhone) {
+      return { replied: false, reason: 'send_failed' };
     }
 
     // ── 1. Subscription gate ───────────────────────────────────────────────

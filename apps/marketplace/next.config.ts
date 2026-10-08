@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  async redirects() {
+    return [
+      { source: '/', destination: 'https://fieseros.com/marketplace', permanent: true },
+      ...['login', 'register', 'app', 'dashboard'].map(path => ({
+        source: `/${path}`, destination: 'https://fieseros.com/marketplace/dashboard', permanent: true,
+      })),
+    ];
+  },
   async rewrites() {
     const core = (process.env.CORE_API_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
     return {
