@@ -134,3 +134,9 @@ The following cron-shaped endpoints exist in the codebase but are **not** in `cr
 | `/api/journey/process-scheduled` | `verifyCronAuth` | Processes scheduled journey automations. Needs cron-job.org entry if journey scheduling is used. |
 
 To add any of these to cron-job.org, follow the same pattern: POST method, `x-cron-secret` header, appropriate schedule.
+
+## Paced SES outreach
+
+The optional SuperAdmin outreach worker needs a separate every-minute POST job at
+`/api/cron/outreach`. It starts paused. Follow [OUTREACH.md](OUTREACH.md) for the
+database migration, SES event subscription, sender setup and launch steps.

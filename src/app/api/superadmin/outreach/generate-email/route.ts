@@ -4,7 +4,7 @@ import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { generateOutreachCopy } from '@/lib/outreach/copy';
 import { outreachDb } from '@/lib/outreach/db';
 export async function POST(request: NextRequest) {
-  if (!await isSuperAdminRequest(request)) return NextResponse.json({ error: 'SuperAdmin access required.' }, { status: 403 });
+  if (!await isSuperAdminRequest()) return NextResponse.json({ error: 'SuperAdmin access required.' }, { status: 403 });
   const parsed = z.object({ tenantId: z.string().min(1) }).safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Choose a real marketplace company.' }, { status: 400 });
   const tenant = await outreachDb.tenant.findUnique({ where: { id: parsed.data.tenantId }, select: { name: true, industry: true, city: true } });

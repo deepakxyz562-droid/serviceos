@@ -568,6 +568,10 @@ export async function applyCanonicalEvent(
     }
 
     if (emailComm) {
+      // Paced outreach has its own signed SNS endpoint. Never let this legacy
+      // multi-provider endpoint (or its email fallback) mutate its records.
+      const { outreachDb } = await import('@/lib/outreach/db')
+      if (await outreachDb.outreachQueue.findUnique({ where: { communicationId: emailComm.id }, select: { id: true } })) return
       // Update EmailCommunication status. We only track delivery-level events
       // for outreach — open/click are intentionally ignored (outreach emails
       // are one-to-one and don't drive read-tracking analytics the way

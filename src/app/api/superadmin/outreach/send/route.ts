@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 // All entry points use the same persistent queue, pacing and global quota.
 export async function POST(request: NextRequest) {
   const user = await getAuthUser();
-  if (!user || !await isSuperAdminRequest(request)) return NextResponse.json({ error: 'SuperAdmin access required.' }, { status: 403 });
+  if (!user || !await isSuperAdminRequest()) return NextResponse.json({ error: 'SuperAdmin access required.' }, { status: 403 });
   try {
     const result = await queueLegacyOutreach(await request.json(), user.id);
     if (result.status !== 'queued') return NextResponse.json({ error: result.reason }, { status: 409 });

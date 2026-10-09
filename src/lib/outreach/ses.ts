@@ -9,7 +9,9 @@ export async function loadSesProvider(id: string | null) {
   const provider = await outreachDb.emailProvider.findUnique({ where: { id } });
   if (!provider || provider.status !== 'active' || provider.providerType !== 'ses') throw new Error('An active Amazon SES provider is required.');
   if (!validEmail(provider.fromEmail) || !provider.fromName.trim()) throw new Error('Set the SES sender name and email address.');
-  const config = JSON.parse(provider.configJson) as Record<string, string>;
+  let config: Record<string, string>;
+  try { config = JSON.parse(provider.configJson); }
+  catch { throw new Error('SES provider settings contain invalid JSON.'); }
   const smtp = emailProviderToSmtpConfig(provider);
   if (!smtp && !(config.region && config.accessKeyId && config.secretAccessKey)) throw new Error('SES needs SMTP credentials or region/accessKeyId/secretAccessKey in provider settings.');
   return { provider, config, smtp };

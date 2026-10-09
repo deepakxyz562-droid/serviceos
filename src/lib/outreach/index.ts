@@ -12,9 +12,6 @@ import { randomBytes } from 'crypto';
 
 const COOLDOWN_MS = 72 * 60 * 60 * 1000; // 72 hours
 const CLAIM_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const DEFAULT_DAILY_LIMIT = 20;
-
-const OUTREACH_FEATURE_KEY = 'outreach';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -47,57 +44,23 @@ export interface OutreachStats {
 // ── Settings ─────────────────────────────────────────────────────────────
 
 export async function getDailyLimit(): Promise<number> {
-  try {
-    const toggle = await db.revenueFeatureToggle.findUnique({
-      where: { featureKey: OUTREACH_FEATURE_KEY },
-      select: { configJson: true },
-    });
-    if (toggle?.configJson) {
-      const cfg = JSON.parse(toggle.configJson) as { dailyLimit?: number };
-      if (typeof cfg.dailyLimit === 'number' && cfg.dailyLimit > 0) {
-        return cfg.dailyLimit;
-      }
-    }
-  } catch {
-    // fall through to default
-  }
-  return DEFAULT_DAILY_LIMIT;
+  const { outreachDb } = await import('./db');
+  const state = await outreachDb.outreachAutomation.findUnique({ where: { id: 'default' } });
+  return state?.dailyLimit ?? 500;
 }
 
 export async function setDailyLimit(limit: number, userId: string): Promise<void> {
-  const safeLimit = Math.max(1, Math.min(1000, Math.floor(limit)));
-  const configJson = JSON.stringify({ dailyLimit: safeLimit });
-  await db.revenueFeatureToggle.upsert({
-    where: { featureKey: OUTREACH_FEATURE_KEY },
-    update: { configJson, enabled: true },
-    create: {
-      featureKey: OUTREACH_FEATURE_KEY,
-      displayName: 'Outreach',
-      description: 'Superadmin to Tenant one-to-one outreach emails',
-      enabled: true,
-      perTenantOverride: false,
-      defaultForNewTenants: false,
-      configJson,
-    },
-  });
-  void userId; // reserved for audit logging
+  const { locked } = await import('./db');
+  await locked(tx => tx.outreachAutomation.update({ where: { id: 'default' },
+    data: { dailyLimit: Math.max(1, Math.min(500, Math.floor(limit))) } }));
+  void userId;
 }
 
-// ── Counting (only counts provider-accepted 'sent' sends) ────────────────
-
+// This legacy name is retained for callers; the counter is rolling 24 hours.
 export async function countSentToday(): Promise<number> {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  try {
-    return await db.emailCommunication.count({
-      where: {
-        status: 'sent',
-        sentAt: { gte: startOfDay },
-      },
-    });
-  } catch {
-    return 0;
-  }
+  const { outreachDb } = await import('./db');
+  const { quotaUsed } = await import('./automation');
+  return quotaUsed(outreachDb, new Date());
 }
 
 // ── Cooldown ─────────────────────────────────────────────────────────────
@@ -142,7 +105,7 @@ export async function isEmailSuppressed(
     });
     return { suppressed: !!row, reason: row?.reason ?? null };
   } catch {
-    return { suppressed: false, reason: null };
+    throw new Error('Suppression status unavailable; sending is blocked.');
   }
 }
 

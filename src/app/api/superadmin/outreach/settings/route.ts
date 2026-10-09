@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic';
  * GET  /api/superadmin/outreach/settings
  * PUT  /api/superadmin/outreach/settings
  * --------------------------------------
- * Read and update the global outreach daily limit (default 20, capped
- * 1–1000 by the lib helper).
+ * Read and update the global outreach daily limit (default 500, capped
+ * 1–500 by the lib helper).
  *
  * Auth: superadmin only (`isSuperAdminRequest()` + `getAuthUser()`).
  *
@@ -23,7 +23,7 @@ export const dynamic = 'force-dynamic';
  *
  * ── PUT ──────────────────────────────────────────────────────────────────
  * Body: `{ dailyLimit: number }`
- * Calls `setDailyLimit(dailyLimit, user.id)` (clamped to [1, 1000] inside
+ * Calls `setDailyLimit(dailyLimit, user.id)` (clamped to [1, 500] inside
  * the lib). Returns 200 `{ ok: true, dailyLimit: number }`.
  *
  * Status codes:
@@ -101,12 +101,12 @@ export async function PUT(request: NextRequest) {
   }
 
   // Re-read so the response reflects the clamped value (lib clamps to
-  // [1, 1000] and floors — the caller may have sent 0.5 and gotten 1).
+  // [1, 500] and floors — the caller may have sent 0.5 and gotten 1).
   let stored: number;
   try {
     stored = await getDailyLimit();
   } catch {
-    stored = Math.max(1, Math.min(1000, Math.floor(raw)));
+    stored = Math.max(1, Math.min(500, Math.floor(raw)));
   }
 
   return NextResponse.json({ ok: true, dailyLimit: stored });

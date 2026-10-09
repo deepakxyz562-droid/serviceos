@@ -16,7 +16,7 @@ const configSchema = z.object({
 });
 async function authorize(request: NextRequest) {
   const user = await getAuthUser();
-  return user && await isSuperAdminRequest(request) ? user : null;
+  return user && await isSuperAdminRequest() ? user : null;
 }
 const queueSelect = { id: true, tenantId: true, email: true, companyName: true, industry: true, city: true,
   subject: true, body: true, copySource: true, status: true, error: true, sentAt: true, providerMessageId: true, createdAt: true } as const;

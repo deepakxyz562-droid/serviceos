@@ -3114,8 +3114,8 @@ model EmailEvent {
 ///
 /// `status` transitions are driven by ESP webhook events (see
 /// `/api/webhooks/email/[provider]`) matched via `providerMessageId`.
-/// Only `sent` (provider-accepted) sends count toward the daily limit —
-/// `queued` and `failed` sends do NOT consume the daily quota.
+/// Rolling outreach quota counts sentAt regardless of delivery status, plus
+/// in-flight/unknown send reservations. Queued drafts do not consume quota.
 model EmailCommunication {
   id                 String   @id @default(cuid())
   tenantId           String
@@ -3142,6 +3142,7 @@ model EmailCommunication {
   @@index([status])
   @@index([sentByUserId])
   @@index([providerMessageId])
+  @@index([category, sentAt], map: "EmailCommunication_outreach_sentAt_idx")
 }
 
 /// Per-email-address suppression list (NOT per-tenant).
