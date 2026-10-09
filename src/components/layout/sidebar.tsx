@@ -188,6 +188,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'formBuilder', label: 'Forms', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
+      { view: 'aiReceptionist', label: 'AI Voice Receptionist', icon: PhoneCall, badge: 'VOICE' },
     ],
   },
   {
@@ -420,6 +421,7 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'formBuilder', label: 'Forms', icon: FileInput },
       { view: 'agentStudio', label: 'AI Agent Studio', icon: Bot, badge: 'AI' },
+      { view: 'aiReceptionist', label: 'AI Voice Receptionist', icon: PhoneCall, badge: 'VOICE' },
     ],
   },
   {
