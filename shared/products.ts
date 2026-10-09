@@ -1,14 +1,15 @@
 import { productForHostname, type ProductApp } from './product-context';
 
-export const PRODUCTS = ['crm', 'bos', 'chatbotly', 'quoteflow', 'marketplace'] as const;
+export const PRODUCTS = ['crm', 'bos', 'chatbotly', 'bgos', 'quoteflow', 'marketplace'] as const;
 export const PRODUCT_LABELS: Record<ProductApp, string> = {
-  crm: 'Fieseros CRM', bos: 'BOS', chatbotly: 'Chatbotly', quoteflow: 'QuoteFlow', marketplace: 'Marketplace',
+  crm: 'Fieseros CRM', bos: 'BOS', chatbotly: 'Chatbotly', bgos: 'BGOS', quoteflow: 'QuoteFlow', marketplace: 'Marketplace',
 };
 export function isProduct(value: unknown): value is ProductApp {
   return typeof value === 'string' && (PRODUCTS as readonly string[]).includes(value);
 }
 export function normalizeProduct(value: string): ProductApp {
-  if (['forms', 'gptform', 'chatboly'].includes(value)) return 'chatbotly';
+  if (['forms', 'gptform', 'chatboly'].includes(value)) return 'bgos';
+  if (value === 'chatbotly') return 'bgos';
   return isProduct(value) ? value : 'crm';
 }
 export function productUrl(product: ProductApp): string {

@@ -11,7 +11,7 @@ async function identity(req: NextRequest, context: Context) {
   if (process.env.PRODUCT_WORKSPACES_ENABLED !== 'true') throw new ProductAccessError('PRODUCT_WORKSPACES_NOT_ENABLED', 503);
   if (!['GET', 'HEAD'].includes(req.method)) {
     const origin = req.headers.get('origin');
-    const trusted = ['https://fieseros.com', 'https://www.fieseros.com', 'https://bos.fieseros.com', 'https://chatbotly.fieseros.com', 'https://quoteflow.fieseros.com'];
+    const trusted = ['https://fieseros.com', 'https://www.fieseros.com', 'https://bos.fieseros.com', 'https://bgos.fieseros.com', 'https://chatbotly.fieseros.com', 'https://quoteflow.fieseros.com'];
     if (origin && !trusted.includes(origin) && !(process.env.NODE_ENV !== 'production' && origin === req.nextUrl.origin)) {
       throw new ProductAccessError('ORIGIN_NOT_ALLOWED');
     }

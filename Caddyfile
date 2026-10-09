@@ -55,7 +55,7 @@
 }
 
 # ── Primary HTTPS site & Domain Dispatches ────────────────────────────────────
-fieseros.com, bos.fieseros.com, chatbotly.fieseros.com, chatboly.fieseros.com, quoteflow.fieseros.com, marketplace.fieseros.com {
+fieseros.com, bgos.fieseros.com, bos.fieseros.com, chatbotly.fieseros.com, chatboly.fieseros.com, quoteflow.fieseros.com, marketplace.fieseros.com {
 	# (Optional) issue a wildcard cert for tenant subdomains. Uncomment if you
 	# serve *.fieseros.com from this same Caddy instance.
 	# tls {
