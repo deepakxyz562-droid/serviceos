@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { ProductSessionShell } from '@/components/products/product-session-shell';
 
 export const metadata: Metadata = {
   title: 'BGOS — Business Growth Operating System',
@@ -15,7 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-slate-50 font-sans antialiased text-slate-900">
-        <ProductSessionShell>{children}</ProductSessionShell>
+        {children}
       </body>
     </html>
   );
