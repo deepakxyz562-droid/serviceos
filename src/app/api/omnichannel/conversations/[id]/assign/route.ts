@@ -1,3 +1,4 @@
+import { canUseInbox, canAccessConversation } from '@/lib/conversation-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -23,13 +24,13 @@ export async function POST(
 ) {
   try {
     const auth = await getAuthUser();
-    if (!auth) {
+    if (!canUseInbox(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const agentId = (body as { agentId?: string })?.agentId || auth.userId;
+    const agentId = (body as { agentId?: string })?.agentId || auth.id;
     const agentName =
       (body as { agentName?: string })?.agentName || auth.name || auth.email || 'Agent';
 
@@ -40,9 +41,9 @@ export async function POST(
     // creating/looking up assignments.
     const conv = await db.conversation.findUnique({
       where: { id },
-      select: { id: true, conversationId: true },
+      select: { id: true, conversationId: true, tenantId: true, workspaceId: true },
     });
-    if (!conv) {
+    if (!conv || !canAccessConversation(auth, conv)) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
@@ -58,7 +59,7 @@ export async function POST(
         conversationId: conv.conversationId,
         agentId,
         agentName,
-        assignedById: auth.userId,
+        assignedById: auth.id,
         type: 'primary',
         status: 'active',
       },
@@ -86,7 +87,7 @@ export async function DELETE(
 ) {
   try {
     const auth = await getAuthUser();
-    if (!auth) {
+    if (!canUseInbox(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -94,9 +95,9 @@ export async function DELETE(
 
     const conv = await db.conversation.findUnique({
       where: { id },
-      select: { conversationId: true },
+      select: { conversationId: true, tenantId: true, workspaceId: true },
     });
-    if (!conv) {
+    if (!conv || !canAccessConversation(auth, conv)) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 

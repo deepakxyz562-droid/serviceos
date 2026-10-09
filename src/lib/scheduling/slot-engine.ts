@@ -1,3 +1,4 @@
+import { outlookBusyTimes } from '@/lib/scheduling/outlook-calendar-sync';
 /**
  * Slot Engine — server-side availability calculator.
  *
@@ -213,7 +214,13 @@ export async function calculateAvailableSlots(
         bookedRanges.push(...gcalBusy);
       }
     } catch (gcalErr) {
-      // Non-blocking: continue with database bookings if Google Calendar sync is offline
+      return { date, timezone: tz, slots: [], workingDay: true, reason: 'Connected calendar availability is temporarily unavailable. Please retry.' };
+    }
+
+    try {
+      bookedRanges.push(...await outlookBusyTimes(tenantId, dayStart.toISOString(), dayEnd.toISOString()));
+    } catch {
+      return { date, timezone: tz, slots: [], workingDay: true, reason: 'Microsoft calendar availability is temporarily unavailable. Please retry.' };
     }
 
     const availableSlots = filteredSlots.filter((slot) => {

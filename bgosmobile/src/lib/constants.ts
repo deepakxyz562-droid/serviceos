@@ -21,8 +21,8 @@ export const API_PATHS = {
   contacts: '/api/contacts',
   // Form Submissions
   forms: '/api/forms',
-  formSubmissions: (id: string) => `/api/forms/${id}/submissions`,
-  allSubmissions: '/api/forms/submissions',
+  formSubmissions: (id: string) => `/api/forms/${id}/responses`,
+  allSubmissions: '/api/forms/responses',
   // AI Agents & Chatbots
   agents: '/api/forms/agents',
   agentChat: (id: string) => `/api/forms/agents/${id}/chat`,

@@ -1,3 +1,4 @@
+import { canUseInbox, canAccessConversation } from '@/lib/conversation-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -25,7 +26,7 @@ export async function GET(
 ) {
   try {
     const auth = await getAuthUser();
-    if (!auth) {
+    if (!canUseInbox(auth)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -47,14 +48,13 @@ export async function GET(
         customerPhone: true,
         customerId: true,
         tenantId: true,
-        leadId: true,
-      },
-      include: {
+        workspaceId: true,
         customer: { select: { email: true } },
+        leadId: true,
       },
     });
 
-    if (!conv) {
+    if (!conv || !canAccessConversation(auth, conv)) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 

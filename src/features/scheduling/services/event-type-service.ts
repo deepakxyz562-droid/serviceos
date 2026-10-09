@@ -101,22 +101,6 @@ export async function findEventTypeBySlug(
       });
     }
 
-    // 2. Fallback to default/primary tenant
-    if (!tenant) {
-      tenant = await db.tenant.findFirst({
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          logo: true,
-          email: true,
-          phone: true,
-          featuresJson: true,
-          googleCalendarSyncEnabled: true,
-        },
-      });
-    }
-
     if (!tenant) {
       return { eventType: null, tenant: null };
     }
@@ -126,7 +110,7 @@ export async function findEventTypeBySlug(
       (e) => e.slug.toLowerCase() === eventSlug.toLowerCase() || e.id === eventSlug
     );
 
-    return { eventType: matched || eventTypes[0] || null, tenant };
+    return { eventType: matched?.isActive ? matched : null, tenant };
   } catch (err) {
     console.error('[event-type-service] findEventTypeBySlug error:', err);
     return { eventType: null, tenant: null };

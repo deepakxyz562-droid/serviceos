@@ -1,3 +1,4 @@
+import { bgosView } from '../../shared/bgos-navigation';
 import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace } from '../../shared/product-context';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -197,7 +198,7 @@ const initialAuthState: AuthState = {
 // `partialize` is the contract for what actually gets written to storage.
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   // Auth
   auth: initialAuthState,
   authHydrated: false,
@@ -207,11 +208,13 @@ export const useAppStore = create<AppState>()(
     set((previous) => {
       const sameWorkspace = previous.auth.user?.id === auth.user?.id
         && previous.auth.user?.workspaceId === auth.user?.workspaceId
+        && previous.auth.workspace?.id === auth.workspace?.id
+        && previous.auth.workspace?.productType === auth.workspace?.productType
         && isGptFormWorkspace(previous.auth) === isGptFormWorkspace(auth);
       const isChatbotly = isChatbotlyWorkspace(auth);
       const isBos = isBosWorkspace(auth);
       const isForms = auth?.workspace?.productType === 'forms';
-      const homeView = isForms || isBos ? 'formsDashboard' : isChatbotly ? 'formBuilder' : 'dashboard';
+      const homeView = isChatbotly ? 'dashboard' : isForms || isBos ? 'formsDashboard' : 'dashboard';
       return {
         auth,
         currentView: sameWorkspace ? previous.currentView : homeView,
@@ -248,9 +251,9 @@ export const useAppStore = create<AppState>()(
   // Auto-close the global Create Form/AI Agent wizard on view change so the
   // modal doesn't follow the user into unrelated views (e.g. AI Agents list).
   activeView: 'dashboard',
-  setActiveView: (view: ActiveView) => set({ activeView: view, currentView: view, mobileSidebarOpen: false, createFormWizardOpen: false, createFormWizardInitialType: null }),
+  setActiveView: (requested: ActiveView) => { const view = (isChatbotlyWorkspace(get().auth) ? bgosView(requested) : requested) as ActiveView; set({ activeView: view, currentView: view, mobileSidebarOpen: false, createFormWizardOpen: false, createFormWizardInitialType: null }); },
   currentView: 'dashboard',
-  setCurrentView: (view: ActiveView) => set({ currentView: view, activeView: view, mobileSidebarOpen: false, createFormWizardOpen: false, createFormWizardInitialType: null }),
+  setCurrentView: (requested: ActiveView) => { const view = (isChatbotlyWorkspace(get().auth) ? bgosView(requested) : requested) as ActiveView; set({ currentView: view, activeView: view, mobileSidebarOpen: false, createFormWizardOpen: false, createFormWizardInitialType: null }); },
 
   // Onboarding
   showOnboarding: false,

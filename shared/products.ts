@@ -19,7 +19,7 @@ export function productUrl(product: ProductApp): string {
 /** The selector is untrusted input; membership is always checked on the server. */
 export function requestedProduct(headers: { get(name: string): string | null }): ProductApp | null {
   const explicit = headers.get('x-product-app');
-  if (isProduct(explicit)) return explicit;
+  if (isProduct(explicit)) return normalizeProduct(explicit);
   const host = (headers.get('x-forwarded-host') || headers.get('host') || '').split(',')[0].trim();
   const product = productForHostname(host);
   return product === 'crm' ? null : product;

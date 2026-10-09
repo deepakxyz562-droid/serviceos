@@ -1,5 +1,5 @@
 'use client';
-import { isGptFormWorkspace } from '../../../shared/product-context';
+import { isGptFormWorkspace, isChatbotlyWorkspace } from '../../../shared/product-context';
 
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -49,6 +49,7 @@ interface MobileNavItem {
 
 const ICON_MAP: Record<string, React.ElementType> = {
   LayoutDashboard,
+  RadioTower,
   ShoppingBag,
   ShoppingCart,
   UtensilsCrossed,
@@ -167,7 +168,12 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
 
   const isStandaloneTenant = isGptFormWorkspace(auth);
 
-  const dynamicBlueprintTabs = getMobileNavTabsForBlueprint(blueprint || undefined);
+  const dynamicBlueprintTabs = isChatbotlyWorkspace(auth) ? [
+    { view: 'dashboard', label: 'Home', iconName: 'LayoutDashboard', tab: undefined },
+    { view: 'omnichannel', label: 'Inbox', iconName: 'RadioTower', tab: undefined },
+    { view: 'contacts', label: 'Contacts', iconName: 'Users', tab: undefined },
+    { view: 'scheduling', label: 'Bookings', iconName: 'Calendar', tab: undefined },
+  ] : getMobileNavTabsForBlueprint(blueprint || undefined);
   const standaloneNavItems: MobileNavItem[] = dynamicBlueprintTabs.map((t) => ({
     view: t.view as ViewType,
     tab: t.tab,

@@ -16,6 +16,10 @@ beforeEach(()=>{
  mocks.productSubscription.findUnique.mockResolvedValue({status:'active',billingSource:'product'});
 });
 describe('product access isolation',()=>{
+ it('preserves access to legacy Chatbotly memberships from BGOS',async()=>{
+ mocks.productWorkspace.findUnique.mockResolvedValue({workspaceId:'w',tenantId:'t',product:'chatbotly',status:'active',onboardingCompleted:true});
+ expect((await requireProductAccess('u','bgos')).workspace.workspaceId).toBe('w');
+ });
  it('allows an active member',async()=>expect((await requireProductAccess('u','bos')).workspace.workspaceId).toBe('w'));
  it('rejects a different product',async()=>expect(requireProductAccess('u','chatbotly')).rejects.toMatchObject({code:'PRODUCT_MEMBERSHIP_REQUIRED'}));
  it('does not authorize arbitrary workspace selection',async()=>{

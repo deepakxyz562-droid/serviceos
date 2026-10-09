@@ -3,11 +3,11 @@
 const path = require('node:path');
 const root = path.resolve(__dirname, '../..');
 module.exports = {
-  apps: ['bos', 'chatbotly', 'quoteflow'].map(name => ({
+  apps: ['bos', 'bgos', 'quoteflow'].map(name => ({
     name: `serviceos-${name}`,
     cwd: path.join(root, 'apps', name),
     script: path.join(root, 'node_modules', 'next', 'dist', 'bin', 'next'),
-    args: `start -p ${{ bos: 3001, chatbotly: 3002, quoteflow: 3004, marketplace: 3005 }[name]}`,
+    args: `start -p ${{ bos: 3001, bgos: 3002, quoteflow: 3004, marketplace: 3005 }[name]}`,
     env: { NODE_ENV: 'production' },
     autorestart: true,
     max_restarts: 10,

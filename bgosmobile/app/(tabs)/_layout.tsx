@@ -8,8 +8,8 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#0f172a',
-          borderTopColor: '#1e293b',
+          backgroundColor: '#ffffff',
+          borderTopColor: '#DEE5EF',
           borderTopWidth: 1,
           height: 62,
           paddingBottom: 8,
@@ -68,6 +68,8 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="automations" options={{ href: null }} />
+      <Tabs.Screen name="outreach" options={{ href: null }} />
       {/* Hidden compatibility tabs for deep routes */}
       <Tabs.Screen
         name="appointments"

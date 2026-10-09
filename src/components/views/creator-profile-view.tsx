@@ -1,4 +1,5 @@
 'use client';
+import { BgosProfilePreview } from '@/components/bgos/profile-preview';
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -411,106 +412,7 @@ export function CreatorProfileView() {
           </Card>
         </div>
 
-        {/* ── RIGHT: Live Mobile/Desktop Preview Card ── */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Eye className="size-3.5" />
-              <span>Live Page Preview</span>
-            </h3>
-            <Badge variant="outline" className="text-[10px]">
-              Instant Sync
-            </Badge>
-          </div>
-
-          <div className="relative mx-auto max-w-[340px] rounded-[44px] border-[10px] border-slate-900 bg-slate-950 p-4 shadow-2xl space-y-4 text-xs">
-            {/* Phone Speaker Notch */}
-            <div className="flex justify-center">
-              <div className="h-4 w-28 rounded-full bg-slate-900 flex items-center justify-center">
-                <div className="h-1.5 w-10 rounded-full bg-slate-800" />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <div className="size-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-black text-lg flex items-center justify-center shadow-xs">
-                {profile?.displayName
-                  ? profile.displayName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-                  : 'BG'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <h4 className="text-sm font-black text-white truncate">
-                    {profile?.displayName || 'My Business'}
-                  </h4>
-                  {profile?.verified && <CheckCircle2 className="size-3.5 fill-blue-500 text-white shrink-0" />}
-                </div>
-                <p className="text-[11px] text-slate-400 truncate">
-                  {profile?.headline || 'Business Growth OS'}
-                </p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-slate-800 text-slate-300">
-                    {profile?.location || 'India'}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-around py-1.5 border-y border-slate-800 text-[10px] font-bold text-slate-400">
-              <span className="text-white">Services</span>
-              <span>About</span>
-              <span>Reviews</span>
-              <span>Contact</span>
-            </div>
-
-            <p className="text-[11px] text-slate-300 line-clamp-2 leading-relaxed">
-              {profile?.bio || '24/7 client booking, digital cards, and conversational intake powered by BGOS.'}
-            </p>
-
-            {/* Simulated Live Ask AI Banner */}
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between gap-2 shadow-xs">
-              <div className="flex items-center gap-2">
-                <Bot className="size-4 shrink-0" />
-                <span className="text-[11px] font-bold">Ask AI Assistant</span>
-              </div>
-              <Badge className="bg-white/20 text-white text-[9px] py-0 font-mono">24/7</Badge>
-            </div>
-
-            {/* Simulated Offers */}
-            <div className="space-y-2 pt-1">
-              <div className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-white">1:1 Consultation</p>
-                  <p className="text-[10px] text-slate-400">Google Meet Instant Link</p>
-                </div>
-                <span className="text-xs font-black text-blue-400">Book Slot</span>
-              </div>
-
-              <div className="p-2.5 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-white">Direct Inquiry Form</p>
-                  <p className="text-[10px] text-slate-400">Pre-qualify in 60s</p>
-                </div>
-                <span className="text-xs font-black text-emerald-400">Open</span>
-              </div>
-            </div>
-
-            {/* Phone Bottom Home Bar */}
-            <div className="pt-2">
-              <a
-                href={`/p/${profile?.handle || 'creator'}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-2xl bg-white text-slate-950 text-xs font-bold hover:bg-slate-200 transition-colors shadow-sm"
-              >
-                <span>Preview Live Public Page</span>
-                <ExternalLink className="size-3" />
-              </a>
-              <div className="mt-3 flex justify-center">
-                <div className="h-1 w-24 rounded-full bg-slate-700" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <BgosProfilePreview profile={profile} />
       </div>
     </div>
   );

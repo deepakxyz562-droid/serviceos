@@ -154,6 +154,8 @@ export async function fetchGoogleCalendarBusyTimes(
   calendarIds?: string[],
 ): Promise<Array<{ start: Date; end: Date }>> {
   try {
+    const connection = await db.tenant.findUnique({ where: { id: tenantId }, select: { googleCalendarSyncEnabled: true } });
+    if (!connection?.googleCalendarSyncEnabled) return [];
     const calendar = await getCalendarClient(tenantId);
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
@@ -187,6 +189,7 @@ export async function fetchGoogleCalendarBusyTimes(
     const calendarsData = response.data.calendars || {};
 
     for (const calId of Object.keys(calendarsData)) {
+      if (calendarsData[calId]?.errors?.length) throw new Error('A selected Google calendar could not be checked');
       const busyList = calendarsData[calId]?.busy || [];
       for (const period of busyList) {
         if (period.start && period.end) {
@@ -201,7 +204,7 @@ export async function fetchGoogleCalendarBusyTimes(
     return busyRanges;
   } catch (error) {
     console.error('[google-calendar] Failed to fetch busy times:', error);
-    return []; // Return empty on error — don't block all slots
+    throw new Error('Connected Google Calendar availability is unavailable');
   }
 }
 

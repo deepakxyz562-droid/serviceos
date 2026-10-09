@@ -72,6 +72,16 @@ export async function requireCrmTenant(
       return null;
     }
 
+    if (authUser.workspaceId && !authUser.isSuperAdmin) {
+      const workspace = await db.workspace.findUnique({ where: { id: authUser.workspaceId }, select: { productType: true } });
+      if (['bgos', 'chatbotly', 'forms', 'gptform'].includes(workspace?.productType || '')) {
+        const path = _request.nextUrl.pathname;
+        const allowed = ['/api/leads', '/api/contacts', '/api/campaigns', '/api/forms', '/api/bookings', '/api/omnichannel', '/api/reviews', '/api/workflows', '/api/workflow-automations'];
+        if (allowed.some(prefix => path === prefix || path.startsWith(prefix + '/'))) return null;
+        return NextResponse.json({ error: 'This operational feature belongs to BOS or CRM, not BGOS.', code: 'PRODUCT_FEATURE_UNAVAILABLE' }, { status: 403 });
+      }
+    }
+
     const cacheKey = `signup-mode:${authUser.tenantId}`;
     let tenant = cache.get<{ signupMode: string | null; listingTier: string | null; plan: string | null }>(cacheKey);
 

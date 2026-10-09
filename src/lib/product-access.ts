@@ -1,7 +1,7 @@
 import { db } from '@/lib/db';
 import { getAdminClient, shouldUseSupabaseDB } from '@/lib/supabase-db';
 import type { ProductApp } from '../../shared/product-context';
-import { subscriptionAllowsAccess } from '../../shared/products';
+import { normalizeProduct, subscriptionAllowsAccess } from '../../shared/products';
 
 export class ProductAccessError extends Error {
   constructor(public code: string, public status = 403) { super(code); }
@@ -14,7 +14,7 @@ export async function resolveProductAccess(userId: string, product: ProductApp, 
   const memberships = await db.productMembership.findMany({ where: { userId, status: 'active', ...(workspaceId ? { workspaceId } : {}) } });
   for (const membership of memberships) {
     const workspace = await db.productWorkspace.findUnique({ where: { workspaceId: membership.workspaceId } });
-    if (!workspace || workspace.product !== product) continue;
+    if (!workspace || normalizeProduct(workspace.product) !== normalizeProduct(product)) continue;
     if (workspace.status !== 'active') throw new ProductAccessError('WORKSPACE_SUSPENDED');
     const tenant = workspace.tenantId ? await db.tenant.findUnique({ where: { id: workspace.tenantId } }) : null;
     if (workspace.tenantId && (!tenant || tenant.suspendedAt)) throw new ProductAccessError('TENANT_UNAVAILABLE');

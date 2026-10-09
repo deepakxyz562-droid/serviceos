@@ -1,3 +1,4 @@
+import { syncOutlookBooking } from '@/lib/scheduling/outlook-calendar-sync';
 /**
  * Unified Appointment Booking Service (Calendly Alternative Engine)
  *
@@ -346,6 +347,9 @@ export async function createAppointmentBooking(
       }),
     },
   });
+
+  try { await syncOutlookBooking(booking.id, tenantId); }
+  catch { await db.booking.update({ where: { id: booking.id }, data: { metadataJson: JSON.stringify({ ...JSON.parse(booking.metadataJson || '{}'), outlookSyncStatus: 'failed' }) } }); }
 
   // 4. Push Event to Google Calendar & Auto-Generate Google Meet link if connected
   let googleMeetUrl: string | null = null;

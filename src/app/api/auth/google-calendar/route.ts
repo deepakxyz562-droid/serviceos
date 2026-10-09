@@ -1,19 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getGoogleCalendarAuthUrl, exchangeGoogleCalendarCode } from '@/lib/scheduling/google-calendar-sync';
+import { NextResponse } from 'next/server';
+import { getGoogleCalendarAuthUrl } from '@/lib/scheduling/google-calendar-sync';
 import { getAuthUser } from '@/lib/auth';
-
+import { createCalendarState, setCalendarState } from '@/lib/scheduling/calendar-oauth-state';
 export const dynamic = 'force-dynamic';
-
-/**
- * GET /api/auth/google-calendar
- * Redirects to Google OAuth consent screen for Calendar access.
- */
-export async function GET(request: NextRequest) {
+export async function GET() {
   const user = await getAuthUser();
-  if (!user?.tenantId) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  const authUrl = getGoogleCalendarAuthUrl(user.tenantId);
-  return NextResponse.redirect(authUrl);
+  if (!user?.tenantId || !['owner','admin','standalone_user'].includes(user.role)) return NextResponse.json({ error:'Workspace owner access required' }, { status:403 });
+  try { const state = createCalendarState(user.id,user.tenantId); const response = NextResponse.redirect(getGoogleCalendarAuthUrl(state.nonce)); setCalendarState(response,'google',state.cookie); return response; }
+  catch { return NextResponse.json({ error:'Google Calendar is not configured' }, { status:503 }); }
 }

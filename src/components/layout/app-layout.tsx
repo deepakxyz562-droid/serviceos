@@ -1,3 +1,5 @@
+import type { ViewType } from '@/types/workflow';
+import { bgosView } from '../../../shared/bgos-navigation';
 'use client';
 import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, getAppProduct } from '../../../shared/product-context';
 
@@ -25,6 +27,9 @@ import { CreateFormOrAgentModal } from '@/features/forms/components/wizard/creat
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
 
 // Dashboard
+const BgosSettings = lazy(() => import('@/components/bgos/settings').then(m => ({ default: m.BgosSettings })));
+const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ default: m.BgosBilling })));
+const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
 const DashboardView = lazy(() => import('@/components/views/dashboard-view').then(m => ({ default: m.DashboardView })));
 
 // CRM
@@ -184,6 +189,7 @@ function UnifiedSettingsView(props: any) {
   const auth = useAppStore((s) => s.auth);
   const isStandalone = isGptFormWorkspace(auth);
 
+  if (isChatbotlyWorkspace(auth)) return <BgosSettings />;
   if (isStandalone) {
     return <GptFormSettingsView {...props} />;
   }
@@ -194,6 +200,9 @@ function UnifiedSettingsView(props: any) {
 
 const viewComponents: Record<string, any> = {
   // Dashboard
+const BgosSettings = lazy(() => import('@/components/bgos/settings').then(m => ({ default: m.BgosSettings })));
+const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ default: m.BgosBilling })));
+const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
   dashboard: DashboardView,
   // Forms product dashboard (standalone AI Forms)
   formsDashboard: FormsDashboardView,
@@ -500,13 +509,19 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
   const appProduct = getAppProduct(auth);
-  const isStandaloneTenant = !auth.user?.isSuperAdmin && (appProduct === 'bos' || appProduct === 'chatbotly');
+  useEffect(() => {
+    if (appProduct === 'bgos' || appProduct === 'chatbotly') {
+      const allowed = bgosView(currentView) as ViewType;
+      if (allowed !== currentView) setCurrentView(allowed);
+    }
+  }, [appProduct, currentView, setCurrentView]);
+  const isStandaloneTenant = !auth.user?.isSuperAdmin && (appProduct === 'bos');
   const standaloneAllowedViews = useMemo(() => new Set([
     'superadmin',
     // AI Forms, Voice Agents & Creator Suite
     'formsDashboard', 'formBuilder', 'agentStudio', 'formSubmissions', 'formAppointments',
     'aiReceptionist', 'aiCallHistory', 'aiAgents', 'aiPhoneNumbers', 'omnichannel', 'workflowAutomations',
-    'creatorProfile', 'creatorOffers',
+    'creatorProfile', 'creatorOffers', 'leadDiscovery', 'reviews', 'contacts', 'campaigns',
     'scheduling', 'meetingTypes', 'appointmentTypes',
     'formsAnalytics', 'chatbotBuilder',
     // Bookings, Calendar & Storefront
@@ -538,7 +553,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   // Helper: render a view by ID.
   const renderView = (viewId: string) => {
-    const Component = viewComponents[viewId] || DashboardView;
+    if ((appProduct === 'bgos' || appProduct === 'chatbotly') && bgosView(viewId) !== viewId) return null;
+    if (viewId === 'billing' && (appProduct === 'bgos' || appProduct === 'chatbotly')) return <BgosBilling />;
+    const Component = viewId === 'dashboard' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosDashboard : viewComponents[viewId] || DashboardView;
     return <Component />;
   };
 

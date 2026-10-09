@@ -295,36 +295,7 @@ export const PLAN_TIER_LEGEND: Record<PlanTier, string> = {
 };
 
 /** BGOS India Market Pricing Tiers */
-export const BGOS_PRICING_PLANS = {
-  free: {
-    name: 'Free',
-    priceInr: 0,
-    priceLabel: '₹0 / month',
-    description: 'Digital card, basic forms, up to 100 contacts',
-    features: ['1 Digital Business Card & QR', '1 Hosted Intake Form', 'Up to 100 Contacts', 'Community Support'],
-  },
-  starter: {
-    name: 'Starter',
-    priceInr: 499,
-    priceLabel: '₹499 / month',
-    description: 'Forms, chatbot, live inbox, appointments',
-    features: ['Unlimited BGOS Forms', '24/7 AI Website Chatbot', 'Unified Live Inbox', 'Appointment Booking & Calendar', 'Up to 1,000 Contacts'],
-  },
-  growth: {
-    name: 'Growth',
-    priceInr: 1499,
-    priceLabel: '₹1,499 / month',
-    description: 'Campaigns, local growth, automations',
-    features: ['Everything in Starter', 'Email & WhatsApp Campaigns', 'Google Business Profile & Review Requests', 'Automated Drip Workflows', 'Up to 10,000 Contacts'],
-  },
-  business: {
-    name: 'Business',
-    priceInr: 3999,
-    priceLabel: '₹3,999 / month',
-    description: 'Teams, AI agents, advanced reporting',
-    features: ['Everything in Growth', 'AI Growth Agents with Proactive Outreach', 'Multi-User Team Collaboration', 'B2B Lead Discovery (2,500 credits)', 'Advanced Funnel Analytics'],
-  },
-};
+export { BGOS_PLANS as BGOS_PRICING_PLANS } from '../../shared/bgos-plans';
 
 /**
  * Display names for each plan tier. Used by the billing UI, upgrade modal,

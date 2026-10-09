@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { PGlite } = require('@electric-sql/pglite');
 const sql = readFileSync('prisma/migrations/20261008120000_product_workspaces/migration.sql','utf8');
+const bgosSql = readFileSync('prisma/migrations/20261009180000_bgos_product_identity/migration.sql','utf8');
 async function fixture() {
  const db = new PGlite();
  await db.exec(`CREATE ROLE service_role; CREATE ROLE anon; CREATE ROLE authenticated;
@@ -38,5 +39,16 @@ test('activation is idempotent, independent, and cannot reset subscriptions',asy
  assert.equal((await db.query(`SELECT "onboardingCompleted" FROM "ProductWorkspace" WHERE "workspaceId"=$1`,[id])).rows[0].onboardingCompleted,false);
  for(const user of ['employee','disabled','missing']) await assert.rejects(db.query(`SELECT activate_product_workspace($1,'bos','x')`,[user]),/FORBIDDEN/);
  assert.equal((await db.query('SELECT count(*)::int AS n FROM "ProductWorkspace"')).rows[0].n,2);
+ }finally{await db.close()}
+});
+test('BGOS upgrade preserves memberships and subscriptions and canonicalizes activation',async()=>{
+ const db=await fixture();try {
+ await db.exec(sql);
+ const legacy=(await db.query(`SELECT activate_product_workspace('u','chatbotly','Growth') AS id`)).rows[0].id;
+ await db.query(`UPDATE "ProductSubscription" SET status='expired' WHERE "workspaceId"=$1`,[legacy]);
+ await db.exec(bgosSql);await db.exec(bgosSql);
+ for(const product of ['bgos','chatbotly']) assert.equal((await db.query(`SELECT activate_product_workspace('u',$1,'Growth') AS id`,[product])).rows[0].id,legacy);
+ assert.equal((await db.query(`SELECT status FROM "ProductSubscription" WHERE "workspaceId"=$1`,[legacy])).rows[0].status,'expired');
+ assert.equal((await db.query(`SELECT product FROM "ProductWorkspace" WHERE "workspaceId"=$1`,[legacy])).rows[0].product,'bgos');
  }finally{await db.close()}
 });

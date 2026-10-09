@@ -1,3 +1,4 @@
+import { BGOS_NAVIGATION } from '../bgos-navigation';
 import { getBusinessHome, HOME_DESTINATIONS, homeTabText, homeText } from '../business-home';
 import type { BusinessType, BusinessCapabilities, SalesChannel } from './types';
 
@@ -419,44 +420,7 @@ export function getStandaloneNavSectionsForBlueprint(
 ): DynamicNavSection[] {
   // ── Dedicated BGOS (Business Growth Operating System) Navigation ──
   if (productType === 'chatbotly' || productType === 'bgos') {
-    return [
-      {
-        title: 'Acquisition & Funnels',
-        items: [
-          { view: 'formBuilder', label: 'BGOS Forms & Funnels', iconName: 'FileInput' },
-          { view: 'formSubmissions', label: 'Form Submissions', iconName: 'Inbox' },
-          { view: 'leadDiscovery', label: 'B2B Lead Intelligence', iconName: 'Search', badge: 'NEW' },
-          { view: 'creatorProfile', label: 'Digital Card & Mini Site', iconName: 'QrCode', badge: 'QR' },
-          { view: 'reviews', label: 'Local Reviews & GBP', iconName: 'Star' },
-        ],
-      },
-      {
-        title: 'Engagement & AI',
-        items: [
-          { view: 'omnichannel', label: 'Unified Live Inbox', iconName: 'RadioTower' },
-          { view: 'agentStudio', label: 'AI Growth Agents', iconName: 'Bot', badge: 'AI' },
-          { view: 'chatbotBuilder', label: 'Website Chatbots', iconName: 'MessageSquare' },
-          { view: 'aiReceptionist', label: 'Voice Receptionist', iconName: 'PhoneCall', badge: 'VOICE' },
-        ],
-      },
-      {
-        title: 'Conversion & Growth',
-        items: [
-          { view: 'booking', label: 'Appointments & Scheduling', iconName: 'Calendar' },
-          { view: 'contacts', label: 'Contacts & CRM Lite', iconName: 'Users' },
-          { view: 'campaigns', label: 'Outreach Campaigns', iconName: 'Send' },
-          { view: 'formsAnalytics', label: 'Growth Analytics', iconName: 'BarChart3' },
-        ],
-      },
-      {
-        title: 'Settings & Account',
-        items: [
-          { view: 'integrations', label: 'Integrations & Webhooks', iconName: 'Share2' },
-          { view: 'billing', label: 'Plans & Growth Credits', iconName: 'CreditCard' },
-          { view: 'settings', label: 'Settings', iconName: 'Settings' },
-        ],
-      },
-    ];
+    return BGOS_NAVIGATION.map(section => ({ title: section.title, items: section.items.map(item => ({ ...item })) }));
   }
 
   // ── Dedicated BOS (Business Operating System) Navigation ──

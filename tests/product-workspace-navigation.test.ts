@@ -14,7 +14,7 @@ describe('product workspace navigation',()=>{
   useAppStore.getState().setAuth(crm as any);
   useAppStore.getState().setCurrentView('jobs');
   useAppStore.getState().setAuth({...crm,workspace:{id:'workspace',productType:'forms'}} as any);
-  expect(useAppStore.getState().currentView).toBe('formsDashboard');
-  expect(useAppStore.getState().activeView).toBe('formsDashboard');
+  expect(useAppStore.getState().currentView).toBe('dashboard');
+  expect(useAppStore.getState().activeView).toBe('dashboard');
  });
 });

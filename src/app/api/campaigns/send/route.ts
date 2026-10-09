@@ -68,7 +68,7 @@ interface SendLog {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser()
-    if (!user) {
+    if (!user?.tenantId || !['owner','admin','standalone_user'].includes(user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -77,7 +77,18 @@ export async function POST(request: NextRequest) {
     // ── Resolve the linked campaign (if any) to inherit channel + audience ──
     let campaign: Awaited<ReturnType<typeof db.campaign.findUnique>> = null
     if (body.campaignId) {
-      campaign = await db.campaign.findUnique({ where: { id: body.campaignId } })
+      campaign = await db.campaign.findFirst({ where: { id: body.campaignId, tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}) } })
+      if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+      if (campaign.type === 'bgos_outreach') {
+        if (campaign.status !== 'approved') return NextResponse.json({ error: 'This batch needs approval or has already been dispatched' }, { status: 409 })
+        const snapshot = JSON.parse(campaign.audienceFiltersJson)
+        body.contactIds = snapshot.contactIds
+        body.groupIds = undefined; body.customerIds = undefined; body.segmentId = undefined; body.allContacts = false
+        body.subject = campaign.description || campaign.name
+        body.text = campaign.messageContent
+        body.html = '<p>' + campaign.messageContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '</p>'
+        body.channel = 'email'
+      }
     }
 
     const channel = body.channel || (campaign?.channel as SendBroadcastBody['channel']) || 'email'
@@ -167,16 +178,6 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       })
       if (!defaultMarketing) {
-        defaultMarketing = await db.emailProvider.findFirst({
-          where: {
-            status: 'active',
-            OR: [{ usageType: 'marketing' }, { usageType: 'both' }],
-          },
-          orderBy: [{ isDefaultMarketing: 'desc' }, { createdAt: 'asc' }],
-          select: { id: true },
-        })
-      }
-      if (!defaultMarketing) {
         return NextResponse.json(
           {
             error: 'MARKETING_PROVIDER_REQUIRED',
@@ -220,6 +221,12 @@ export async function POST(request: NextRequest) {
           { status: 409 },
         )
       }
+    }
+
+    if (totalAudience === 0) return NextResponse.json({ error: 'No eligible recipients. Select contacts with valid email addresses.' }, { status: 400 })
+    if (campaign?.type === 'bgos_outreach') {
+      const claim = await db.campaign.updateMany({ where: { id: campaign.id, tenantId: user.tenantId, status: 'approved' }, data: { status: 'running' } })
+      if (!claim.count) return NextResponse.json({ error: 'This batch has already been dispatched' }, { status: 409 })
     }
 
     // ── Dispatch loop ───────────────────────────────────────────────────────

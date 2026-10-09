@@ -74,6 +74,7 @@ export interface AutoReplyContext {
 export interface AutoReplyResult {
   replied: boolean;
   reason?:
+    | 'human_takeover'
     | 'tenant_online'
     | 'disabled'
     | 'trial_locked'
@@ -228,6 +229,12 @@ export async function maybeAutoReply(ctx: AutoReplyContext): Promise<AutoReplyRe
     if (ctx.channel !== 'website' && !ctx.visitorPhone) {
       return { replied: false, reason: 'send_failed' };
     }
+
+    const handoff = await db.conversation.findFirst({
+      where: { tenantId: ctx.tenantId, OR: [{ id: ctx.conversationId }, { conversationId: ctx.conversationId }] },
+      select: { aiPaused: true },
+    });
+    if (handoff?.aiPaused) return { replied: false, reason: 'human_takeover' };
 
     // ── 1. Subscription gate ───────────────────────────────────────────────
     const allowed = await canUseAutoReply(ctx.tenantId);

@@ -1,3 +1,4 @@
+import { syncOutlookBooking } from '@/lib/scheduling/outlook-calendar-sync';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
@@ -190,6 +191,9 @@ export async function PUT(
         console.error('[BookingsUpdate] booking.cancelled emit failed:', evtErr)
       }
     }
+
+    try { await syncOutlookBooking(booking.id, user.tenantId); }
+    catch { return NextResponse.json({ ...booking, calendarWarning: 'Booking saved, but Microsoft calendar sync failed. Retry the update to synchronize.' }); }
 
     return NextResponse.json(booking);
   } catch (error) {

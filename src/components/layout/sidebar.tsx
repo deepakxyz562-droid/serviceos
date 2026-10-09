@@ -932,7 +932,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
               isChatbotly ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30' :
               isBos ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' :
               'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
-              {isSuperAdmin ? 'Admin' : isQuoteflow ? 'QuoteFlow' : isMarketplace ? 'Marketplace' : isChatbotly ? 'Chatbotly' : isBos ? 'BOS' : planBadge.label}
+              {isSuperAdmin ? 'Admin' : isQuoteflow ? 'QuoteFlow' : isMarketplace ? 'Marketplace' : isChatbotly ? 'BGOS' : isBos ? 'BOS' : planBadge.label}
             </Badge>
           </div>
         )}

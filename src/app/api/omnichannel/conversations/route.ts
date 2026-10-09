@@ -1,3 +1,4 @@
+import { canUseInbox } from '@/lib/conversation-access'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
@@ -10,7 +11,7 @@ import { toISOString } from '@/lib/utils'
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser()
-    if (!authUser) {
+    if (!canUseInbox(authUser)) {
       return NextResponse.json({ error: 'Authentication required', code: 'UNAUTHENTICATED' }, { status: 401 })
     }
     const { searchParams } = new URL(request.url)
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
     // Scope to tenant
     if (tenantId) {
       where.tenantId = tenantId
+      if (authUser.workspaceId && !authUser.isSuperAdmin) where.workspaceId = authUser.workspaceId
     }
 
     // Filter by channel
@@ -166,6 +168,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: conv.id,
+        aiPaused: conv.aiPaused,
         customerName: conv.customerName || conv.customerPhone || 'Unknown',
         customerPhone: conv.customerPhone || undefined,
         customerEmail: conv.lead?.source ? undefined : undefined,

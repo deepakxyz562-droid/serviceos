@@ -1,3 +1,4 @@
+import { canUseInbox, canAccessConversation } from '@/lib/conversation-access'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
@@ -10,6 +11,7 @@ export async function GET(
 ) {
   try {
     const authUser = await getAuthUser()
+    if (!canUseInbox(authUser)) return NextResponse.json({ error: 'Operator authentication required' }, { status: authUser ? 403 : 401 })
     const { id } = await params
     const tenantId = authUser?.tenantId || null
 
@@ -23,7 +25,7 @@ export async function GET(
     }
 
     // Tenant scope check
-    if (tenantId && conversation.tenantId !== tenantId) {
+    if (!canAccessConversation(authUser, conversation)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -63,6 +65,7 @@ export async function POST(
 ) {
   try {
     const authUser = await getAuthUser()
+    if (!canUseInbox(authUser)) return NextResponse.json({ error: 'Operator authentication required' }, { status: authUser ? 403 : 401 })
     const { id } = await params
     const tenantId = authUser?.tenantId || null
     const workspaceId = authUser?.workspaceId || null
@@ -70,7 +73,7 @@ export async function POST(
     const body = await request.json()
     const { content } = body
 
-    if (!content || !content.trim()) {
+    if (typeof content !== 'string' || !content.trim() || content.length > 10000) {
       return NextResponse.json({ error: 'content is required' }, { status: 400 })
     }
 
@@ -84,7 +87,7 @@ export async function POST(
     }
 
     // Tenant scope check
-    if (tenantId && conversation.tenantId !== tenantId) {
+    if (!canAccessConversation(authUser, conversation)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -109,6 +112,9 @@ export async function POST(
     await db.conversation.update({
       where: { id: conversation.id },
       data: {
+        aiPaused: true,
+        tookOverById: authUser.id,
+        tookOverAt: new Date(),
         lastMessageBody: content.trim(),
         lastDirection: 'outbound',
         lastMessageAt: new Date(),
@@ -307,6 +313,7 @@ export async function POST(
       senderName: message.senderName || undefined,
       timestamp: toISOString(message.createdAt as Date | string),
       channel: conversation.channel,
+      delivery: dispatchMeta.dispatch,
     }, { status: 201 })
   } catch (error) {
     console.error('[Omnichannel] Error sending message:', error)

@@ -1,3 +1,4 @@
+import { unregisterPush } from '../lib/push';
 import { create } from 'zustand';
 import { getToken, setTokens, clearTokens } from '../lib/auth';
 import { apiRequest } from '../lib/api';
@@ -50,6 +51,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async () => {
+    await unregisterPush();
     await clearTokens();
     set({ user: null, isAuthenticated: false, error: null });
   },

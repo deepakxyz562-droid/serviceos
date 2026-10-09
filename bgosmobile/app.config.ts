@@ -25,5 +25,6 @@ export default ({ config }: ConfigContext): any => ({
     package: 'com.fieseros.bgos',
     permissions: ['POST_NOTIFICATIONS'],
   },
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications'],
+  extra: { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } },
 });

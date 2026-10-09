@@ -1,107 +1,38 @@
-import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
-import { resolveBroadcastAudience } from '@/lib/broadcast-audience'
-
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-
-    const campaign = await db.campaign.findUnique({
-      where: { id },
-    })
-
-    if (!campaign) {
-      return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
-    }
-
-    return NextResponse.json({ data: campaign })
-  } catch (error) {
-    console.error('Error fetching campaign:', error)
-    return NextResponse.json({ error: 'Failed to fetch campaign' }, { status: 500 })
-  }
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
+import { z } from 'zod';
+type Context = { params: Promise<{ id: string }> };
+const fields = z.object({ name: z.string().trim().min(1).max(150).optional(), description: z.string().max(1000).nullable().optional(), messageContent: z.string().max(100000).optional(), status: z.enum(['draft','scheduled','paused']).optional(), audienceType: z.enum(['all','segment','contact_list','custom']).optional(), audienceId: z.string().nullable().optional(), audienceFiltersJson: z.string().max(20000).optional(), scheduledAt: z.string().datetime().nullable().optional(), channel: z.literal('email').optional() }).strict();
+async function context(params: Context['params']) {
+  const user = await getAuthUser();
+  if (!user?.tenantId || user.role === 'customer') return { error: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  const { id } = await params;
+  const campaign = await db.campaign.findFirst({ where: { id, tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}) } });
+  if (!campaign) return { error: NextResponse.json({ error: 'Campaign not found' }, { status: 404 }) };
+  return { user, campaign };
 }
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const body = await request.json()
-
-    const updateData: Record<string, unknown> = { ...body }
-
-    // Handle date fields
-    if (body.scheduledAt) updateData.scheduledAt = new Date(body.scheduledAt)
-    if (body.approvedAt) updateData.approvedAt = new Date(body.approvedAt)
-
-    // Remove id from update data
-    delete updateData.id
-
-    // ── When audience fields change, recompute totalRecipients live ──
-    const audienceChanged =
-      body.audienceType !== undefined ||
-      body.audienceId !== undefined ||
-      body.audienceFiltersJson !== undefined
-
-    if (audienceChanged) {
-      try {
-        const user = await getAuthUser()
-        // Fetch the merged campaign (existing values + incoming updates) so the
-        // count reflects the post-edit audience.
-        const existing = await db.campaign.findUnique({ where: { id } })
-        const merged = {
-          audienceType: (body.audienceType !== undefined ? body.audienceType : existing?.audienceType) || 'all',
-          audienceId: body.audienceId !== undefined ? body.audienceId : existing?.audienceId,
-          audienceFiltersJson:
-            body.audienceFiltersJson !== undefined
-              ? body.audienceFiltersJson
-              : existing?.audienceFiltersJson,
-          channel: (body.channel !== undefined ? body.channel : existing?.channel) || 'email',
-        }
-        const audience = await resolveBroadcastAudience({
-          tenantId: user?.tenantId || null,
-          audienceType: merged.audienceType,
-          audienceId: merged.audienceId,
-          audienceFiltersJson: merged.audienceFiltersJson,
-          channel: merged.channel as 'email' | 'whatsapp' | 'sms' | 'multi',
-        })
-        updateData.totalRecipients = audience.total
-      } catch {
-        // Non-fatal
-      }
-    }
-
-    const campaign = await db.campaign.update({
-      where: { id },
-      data: updateData,
-    })
-
-    return NextResponse.json({ data: campaign })
-  } catch (error) {
-    console.error('Error updating campaign:', error)
-    return NextResponse.json({ error: 'Failed to update campaign' }, { status: 500 })
-  }
+export async function GET(_request: NextRequest, { params }: Context) {
+  try { const access = await context(params); if (access.error) return access.error; return NextResponse.json({ data: access.campaign }); }
+  catch { return NextResponse.json({ error: 'Campaign unavailable' }, { status: 503 }); }
 }
-
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PUT(request: NextRequest, { params }: Context) {
   try {
-    const { id } = await params
-
-    await db.campaign.delete({
-      where: { id },
-    })
-
-    return NextResponse.json({ data: { id, deleted: true } })
-  } catch (error) {
-    console.error('Error deleting campaign:', error)
-    return NextResponse.json({ error: 'Failed to delete campaign' }, { status: 500 })
-  }
+    const access = await context(params); if (access.error) return access.error;
+    if (!['owner','admin','standalone_user'].includes(access.user!.role)) return NextResponse.json({ error: 'Owner access required' }, { status: 403 });
+    if (access.campaign!.type === 'bgos_outreach') return NextResponse.json({ error: 'Reviewed outreach is immutable. Create a new draft to change its content or audience.' }, { status: 409 });
+    const body = fields.safeParse(await request.json());
+    if (!body.success) return NextResponse.json({ error: 'Invalid campaign update' }, { status: 400 });
+    const data = { ...body.data, ...(body.data.scheduledAt !== undefined ? { scheduledAt: body.data.scheduledAt ? new Date(body.data.scheduledAt) : null } : {}) };
+    return NextResponse.json({ data: await db.campaign.update({ where: { id: access.campaign!.id }, data }) });
+  } catch { return NextResponse.json({ error: 'Could not update campaign' }, { status: 503 }); }
+}
+export async function DELETE(_request: NextRequest, { params }: Context) {
+  try {
+    const access = await context(params); if (access.error) return access.error;
+    if (!['owner','admin','standalone_user'].includes(access.user!.role)) return NextResponse.json({ error: 'Owner access required' }, { status: 403 });
+    if (access.campaign!.status === 'running') return NextResponse.json({ error: 'A running campaign cannot be deleted' }, { status: 409 });
+    await db.campaign.delete({ where: { id: access.campaign!.id } });
+    return NextResponse.json({ data: { id: access.campaign!.id, deleted: true } });
+  } catch { return NextResponse.json({ error: 'Could not delete campaign' }, { status: 503 }); }
 }
