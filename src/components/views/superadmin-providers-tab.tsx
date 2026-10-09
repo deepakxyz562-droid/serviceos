@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/client-auth';
 import {
   MessageSquare, Mail, Plus, Trash2, Edit3, RefreshCw, Loader2,
   CheckCircle2, XCircle, AlertTriangle, Send, Key, Settings2,
@@ -283,7 +284,7 @@ export function ProvidersTab() {
 
   const fetchEmailProviders = useCallback(async () => {
     try {
-      const res = await fetch('/api/superadmin/providers/email-providers?showAll=true');
+      const res = await authFetch('/api/superadmin/providers/email-providers?showAll=true');
       if (res.ok) {
         const data = await res.json();
         setEmailProviders(data.data || []);
@@ -295,7 +296,7 @@ export function ProvidersTab() {
 
   const fetchCommProviders = useCallback(async () => {
     try {
-      const res = await fetch('/api/superadmin/providers/communication-providers');
+      const res = await authFetch('/api/superadmin/providers/communication-providers');
       if (res.ok) {
         const data = await res.json();
         setCommProviders(data.data || []);
@@ -395,7 +396,7 @@ export function ProvidersTab() {
       };
 
       if (editingEmailProvider) {
-        const res = await fetch(`/api/superadmin/providers/email-providers/${editingEmailProvider.id}`, {
+        const res = await authFetch(`/api/superadmin/providers/email-providers/${editingEmailProvider.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -413,7 +414,7 @@ export function ProvidersTab() {
         }
         toast.success('Email provider updated');
       } else {
-        const res = await fetch('/api/superadmin/providers/email-providers', {
+        const res = await authFetch('/api/superadmin/providers/email-providers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -446,7 +447,7 @@ export function ProvidersTab() {
   const deleteEmailProvider = async (id: string) => {
     if (!confirm('Delete this email provider? This cannot be undone.')) return;
     try {
-      const res = await fetch(`/api/superadmin/providers/email-providers/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/superadmin/providers/email-providers/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error((err as { error?: string }).error || 'Failed to delete');
@@ -517,7 +518,7 @@ export function ProvidersTab() {
       };
 
       if (editingCommProvider) {
-        const res = await fetch(`/api/superadmin/providers/communication-providers/${editingCommProvider.id}`, {
+        const res = await authFetch(`/api/superadmin/providers/communication-providers/${editingCommProvider.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -529,7 +530,7 @@ export function ProvidersTab() {
         }
         toast.success('Provider updated');
       } else {
-        const res = await fetch('/api/superadmin/providers/communication-providers', {
+        const res = await authFetch('/api/superadmin/providers/communication-providers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -554,7 +555,7 @@ export function ProvidersTab() {
   const deleteCommProvider = async (id: string) => {
     if (!confirm('Delete this provider? This cannot be undone.')) return;
     try {
-      const res = await fetch(`/api/superadmin/providers/communication-providers/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/superadmin/providers/communication-providers/${id}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error((err as { error?: string }).error || 'Failed to delete');

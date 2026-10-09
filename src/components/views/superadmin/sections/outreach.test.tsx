@@ -31,5 +31,5 @@ it('queues the selected company with its edited draft without sending immediatel
   await waitFor(() => expect(screen.getByLabelText('Subject')).toHaveValue('Scheduling question'));
   fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'My edited message' } });
   fireEvent.click(screen.getByText('Add to queue'));
-  await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith('/api/superadmin/outreach/automation', expect.objectContaining({ method: 'POST', body: JSON.stringify({ tenantIds: ['t1'], draft: { subject: 'Scheduling question', body: 'My edited message' } }) })));
+  await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith('/api/superadmin/outreach/automation', expect.objectContaining({ method: 'POST', body: JSON.stringify({ action: 'queue', tenantIds: ['t1'], draft: { subject: 'Scheduling question', body: 'My edited message' } }) })));
 });

@@ -45,7 +45,7 @@ function getJwtSecret(): string {
 }
 const TOKEN_NAME = 'fieseros_session';
 const REFRESH_TOKEN_NAME = 'fieseros_refresh';
-const TOKEN_EXPIRY = '15m';
+const TOKEN_EXPIRY = '30d';
 
 /**
  * Absolute session maximum lifetime (90 days).
@@ -391,7 +391,7 @@ export const COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
   path: '/',
-  maxAge: 60 * 15,
+  maxAge: 60 * 60 * 24 * 30, // 30 days
   domain: getCookieDomain(), // '.fieseros.com' in prod, undefined in dev
 };
 
@@ -400,8 +400,8 @@ export const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  path: '/api/auth',
-  maxAge: Math.floor(REFRESH_SESSION_MAX_MS / 1000),
+  path: '/',
+  maxAge: Math.floor(REFRESH_SESSION_MAX_MS / 1000), // 90 days
   domain: getCookieDomain(),
 };
 

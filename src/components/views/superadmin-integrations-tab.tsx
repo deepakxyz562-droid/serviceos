@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/client-auth';
 import {
   Plug, Star, Briefcase, RefreshCw, Loader2, XCircle, Search,
 } from 'lucide-react';
@@ -51,7 +52,7 @@ export function IntegrationsTab() {
   const fetchCatalog = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/superadmin/integrations');
+      const res = await authFetch('/api/superadmin/integrations');
       if (res.ok) {
         const data = await res.json();
         setCategories(data.categories || []);
@@ -71,7 +72,7 @@ export function IntegrationsTab() {
   const persist = useCallback(async (newCats: CatalogCategory[], newInts: CatalogIntegration[]) => {
     setSaving(true);
     try {
-      const res = await fetch('/api/superadmin/integrations', {
+      const res = await authFetch('/api/superadmin/integrations', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categories: newCats, integrations: newInts }),

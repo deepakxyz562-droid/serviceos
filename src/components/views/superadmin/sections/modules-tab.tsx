@@ -35,6 +35,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/client-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -221,7 +222,7 @@ export function ModulesTab({
       return all;
     });
     setSaving(true);
-    fetch('/api/superadmin/feature-flags', {
+    authFetch('/api/superadmin/feature-flags', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tenantId: selectedTenantForFlags,
@@ -248,7 +249,7 @@ export function ModulesTab({
       return all;
     });
     setSaving(true);
-    fetch('/api/superadmin/menu-items', {
+    authFetch('/api/superadmin/menu-items', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tenantId: effectiveTenantId,
