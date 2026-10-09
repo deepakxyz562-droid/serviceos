@@ -21,18 +21,18 @@ export function startOutreachBackgroundWorker() {
     return;
   }
 
-  console.log('[Outreach Worker Daemon] Initializing internal background scheduler (60s interval)...');
+  console.log('[Outreach Worker Daemon] Initializing internal background scheduler (20s interval)...');
 
-  // Run initial tick after 15s to allow DB connection pools to stabilize on boot
+  // Run initial tick after 10s to allow DB connection pools to stabilize on boot
   setTimeout(async () => {
     try {
       await runOutreachTick();
     } catch {
       // Suppressed during boot
     }
-  }, 15_000);
+  }, 10_000);
 
-  // Setup recurring 60s tick
+  // Setup recurring 20s tick
   workerInterval = setInterval(async () => {
     if (isTicking) return; // Prevent overlapping ticks within the same Node process
     isTicking = true;
@@ -43,7 +43,7 @@ export function startOutreachBackgroundWorker() {
     } finally {
       isTicking = false;
     }
-  }, 60_000);
+  }, 20_000);
 
   // Unref timer so it doesn't block clean process shutdown
   if (workerInterval && typeof workerInterval.unref === 'function') {

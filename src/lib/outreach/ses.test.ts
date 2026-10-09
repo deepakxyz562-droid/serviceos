@@ -22,7 +22,8 @@ describe('SES dispatch', () => {
     expect(mail.headers['X-SES-MESSAGE-TAGS']).toBe('outreach_id=q1');
     expect(mail.headers['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
     expect(mail.text).toContain('123 Sender Street'); expect(mail.text).toContain('/api/outreach/unsubscribe/');
-    expect(mail.html).toBeUndefined(); expect(mocks.close).toHaveBeenCalled();
+    expect(mail.html).toContain('Privacy Policy'); expect(mail.html).toContain('/api/outreach/unsubscribe/');
+    expect(mocks.close).toHaveBeenCalled();
   });
   it('treats missing SMTP acceptance ID as uncertain instead of fabricating success', async () => {
     mocks.sendMail.mockResolvedValue({ messageId: '<local@example.com>', response: 'unexpected reply' });
