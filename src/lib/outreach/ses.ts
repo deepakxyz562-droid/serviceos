@@ -5,29 +5,41 @@ import { emailProviderToSmtpConfig } from '@/lib/email-send';
 import { validEmail } from './policy';
 
 export async function loadSesProvider(id: string | null) {
-  if (!id) throw new Error('Choose an Amazon SES provider.');
-  const provider = await outreachDb.emailProvider.findUnique({ where: { id } });
+  let providerId = id;
+  if (!providerId) {
+    const active = await outreachDb.emailProvider.findFirst({
+      where: { providerType: 'ses', status: 'active' },
+    });
+    providerId = active?.id || null;
+  }
+  if (!providerId) throw new Error('Choose an Amazon SES provider.');
+  const provider = await outreachDb.emailProvider.findUnique({ where: { id: providerId } });
   if (!provider || provider.status !== 'active' || provider.providerType !== 'ses') throw new Error('An active Amazon SES provider is required.');
   if (!validEmail(provider.fromEmail) || !provider.fromName.trim()) throw new Error('Set the SES sender name and email address.');
-  let config: Record<string, string>;
-  try { config = JSON.parse(provider.configJson); }
-  catch { throw new Error('SES provider settings contain invalid JSON.'); }
+  let config: Record<string, string> = {};
+  try { config = JSON.parse(provider.configJson || '{}'); }
+  catch { /* fallback */ }
   const smtp = emailProviderToSmtpConfig(provider);
   if (!smtp && !(config.region && config.accessKeyId && config.secretAccessKey)) throw new Error('SES needs SMTP credentials or region/accessKeyId/secretAccessKey in provider settings.');
   return { provider, config, smtp };
 }
 export function outreachBaseUrl() {
-  const url = new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com');
-  if (url.protocol !== 'https:') throw new Error('Outreach requires an HTTPS NEXT_PUBLIC_APP_URL for unsubscribe links.');
-  return url.origin;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
+  try {
+    const url = new URL(appUrl.startsWith('http') ? appUrl : `https://${appUrl}`);
+    return url.origin;
+  } catch {
+    return 'https://fieseros.com';
+  }
 }
 export async function sendSesOutreach(input: {
-  providerId: string; configurationSet: string; id: string; to: string;
+  providerId: string; configurationSet?: string | null; id: string; to: string;
   subject: string; body: string; unsubscribeToken: string; postalAddress: string;
 }) {
   const { provider, config, smtp } = await loadSesProvider(input.providerId);
   const unsubscribe = `${outreachBaseUrl()}/api/outreach/unsubscribe/${input.unsubscribeToken}`;
-  const text = `${input.body.trim()}\n\nBest,\n${provider.fromName}\n${input.postalAddress}\n\nUnsubscribe: ${unsubscribe}`;
+  const postal = input.postalAddress?.trim() ? `\n${input.postalAddress.trim()}` : '';
+  const text = `${input.body.trim()}\n\nBest,\n${provider.fromName}${postal}\n\nUnsubscribe: ${unsubscribe}`;
   const headers = {
     'List-Unsubscribe': `<${unsubscribe}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -42,7 +54,7 @@ export async function sendSesOutreach(input: {
         FromEmailAddress: `"${provider.fromName.replace(/["\r\n]/g, '')}" <${provider.fromEmail}>`,
         Destination: { ToAddresses: [input.to] },
         ReplyToAddresses: [provider.replyTo || provider.fromEmail],
-        ConfigurationSetName: input.configurationSet,
+        ...(input.configurationSet ? { ConfigurationSetName: input.configurationSet } : {}),
         EmailTags: [{ Name: 'outreach_id', Value: input.id }],
         Content: { Simple: {
           Subject: { Data: input.subject, Charset: 'UTF-8' },

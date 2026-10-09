@@ -8,11 +8,16 @@ import { loadSesProvider, outreachBaseUrl } from '@/lib/outreach/ses';
 
 export const dynamic = 'force-dynamic';
 const configSchema = z.object({
-  action: z.enum(['save', 'start', 'pause']), providerId: z.string().min(1).max(200).optional(),
-  configurationSet: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
-  postalAddress: z.string().trim().min(5).max(500).optional(),
-  industry: z.string().trim().max(100).optional(), pitch: z.string().trim().min(10).max(1500).optional(),
-  dailyLimit: z.number().int().min(1).max(500).optional(),
+  action: z.enum(['save', 'start', 'pause']),
+  providerId: z.string().optional().nullable().transform(v => v?.trim() || null),
+  configurationSet: z.string().optional().nullable().transform(v => v?.trim() || null),
+  postalAddress: z.string().optional().nullable().transform(v => v?.trim() || ''),
+  industry: z.string().optional().nullable().transform(v => (v === 'All industries' || !v ? '' : v.trim())),
+  pitch: z.string().optional().nullable().transform(v => v?.trim() || 'Fieseros helps service businesses manage scheduling, invoicing and missed calls in one place.'),
+  dailyLimit: z.union([z.number(), z.string()]).optional().nullable().transform(v => {
+    const num = Number(v);
+    return Number.isFinite(num) && num >= 1 ? Math.min(500, Math.floor(num)) : 500;
+  }),
 });
 async function authorize(request: NextRequest) {
   const user = await getAuthUser();
