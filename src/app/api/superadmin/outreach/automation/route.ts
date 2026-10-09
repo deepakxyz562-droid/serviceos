@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { locked, outreachDb } from '@/lib/outreach/db';
-import { listProspects, enqueueProspects, quotaUsed, removeFromQueue, markAsSentFromQueue, markAsSentFromProspects, excludeProspects, reEnableProspects } from '@/lib/outreach/automation';
+import { listProspects, enqueueProspects, quotaUsed, removeFromQueue, markAsSentFromQueue, markAsSentFromProspects, excludeProspects, reEnableProspects, runOutreachTick } from '@/lib/outreach/automation';
 import { loadSesProvider, outreachBaseUrl } from '@/lib/outreach/ses';
 
 export const dynamic = 'force-dynamic';
@@ -99,8 +99,14 @@ export async function PUT(request: NextRequest) {
       if (action !== 'pause' && current.leaseUntil && current.leaseUntil > new Date()) throw new Error('An email is being prepared or sent. Pause and wait for it to finish before changing settings.');
       await tx.outreachAutomation.update({ where: { id: 'default' }, data: action === 'pause'
         ? { enabled: false, pauseReason: 'Paused by you.' }
-        : { ...settings, ...(action === 'start' ? { enabled: true, startedBy: user.id, pauseReason: null } : {}) } });
+        : { ...settings, ...(action === 'start' ? { enabled: true, startedBy: user.id, pauseReason: null, nextSendAt: new Date() } : {}) } });
     });
+
+    if (action === 'start') {
+      // Trigger an immediate dispatch tick in the background
+      runOutreachTick().catch(err => console.warn('[Outreach] Immediate start tick:', err?.message || err));
+    }
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to update outreach.' }, { status: 400 });
@@ -114,6 +120,11 @@ export async function POST(request: NextRequest) {
   const action = body?.action || (body?.tenantIds ? 'queue' : '');
 
   try {
+    if (action === 'process_now') {
+      const result = await runOutreachTick();
+      return NextResponse.json({ ok: true, result });
+    }
+
     if (action === 'queue') {
       const schema = z.object({
         tenantIds: z.array(z.string().min(1)).min(1).max(500),
@@ -127,7 +138,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Choose contacts; a custom draft must target one company.' }, { status: 400 });
       }
       const results = await enqueueProspects(parsed.data.tenantIds, user.id, parsed.data.draft);
-      return NextResponse.json({ ok: true, results, queued: results.filter(r => r.status === 'queued').length });
+      const queuedCount = results.filter(r => r.status === 'queued').length;
+      if (queuedCount > 0) {
+        runOutreachTick().catch(err => console.warn('[Outreach] Post-queue tick:', err?.message || err));
+      }
+      return NextResponse.json({ ok: true, results, queued: queuedCount });
     }
 
     if (action === 'remove_from_queue') {

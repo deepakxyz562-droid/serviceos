@@ -46,7 +46,7 @@ beforeEach(() => {
     create: vi.fn(async ({ data }: any) => { communication = { id: 'c1', ...data }; return communication; }),
     updateMany: vi.fn(async ({ where, data }: any) => { if (matches(communication, where)) Object.assign(communication, data); return { count: 1 }; }),
   };
-  mocks.provider.mockResolvedValue({}); mocks.send.mockResolvedValue('ses-id');
+  mocks.provider.mockResolvedValue({ provider: { id: 'ses' } }); mocks.send.mockResolvedValue('ses-id');
   mocks.copy.mockResolvedValue({ subject: 'Hi', body: 'Hello team', source: 'template' });
 });
 

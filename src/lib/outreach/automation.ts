@@ -252,7 +252,12 @@ export async function reEnableProspects(tenantIds: string[]) {
 export async function runOutreachTick() {
   const now = new Date();
   const claim = await locked(async tx => {
-    const state = await tx.outreachAutomation.findUnique({ where: { id: 'default' } });
+    let state = await tx.outreachAutomation.findUnique({ where: { id: 'default' } });
+    if (!state) {
+      state = await tx.outreachAutomation.create({
+        data: { id: 'default', enabled: false, dailyLimit: 500, nextSendAt: now, postalAddress: '', pitch: 'Fieseros helps service businesses manage scheduling, invoicing and missed calls in one place.' },
+      });
+    }
     await tx.outreachAutomation.update({ where: { id: 'default' }, data: { lastRunAt: now } });
     if (state.leaseUntil && state.leaseUntil > now) return { skipped: 'Worker is active.' } as const;
     // A process could die after SMTP accepted the email. Never re-send it.
@@ -331,9 +336,9 @@ export async function runOutreachTick() {
   const { item, state, token } = claim;
   let attempted = false;
   try {
-    await loadSesProvider(state.providerId);
+    const ses = await loadSesProvider(state.providerId);
+    const providerId = ses?.provider?.id || state.providerId || null;
     outreachBaseUrl();
-    if (!state.configurationSet || !state.postalAddress.trim()) throw new Error('Set SES configuration set and sender postal address.');
     const copy = item.subject && item.body ? { subject: item.subject, body: item.body, source: item.copySource || 'edited' }
       : await generateOutreachCopy({ companyName: item.companyName, industry: item.industry, city: item.city, pitch: state.pitch });
     const ready = await locked(async tx => {
@@ -358,8 +363,16 @@ export async function runOutreachTick() {
     });
     if (!ready) return { skipped: 'Paused, excluded, or quota reached during preparation.' };
     attempted = true;
-    const messageId = await sendSesOutreach({ providerId: state.providerId!, configurationSet: state.configurationSet!, id: item.id,
-      to: item.email, subject: copy.subject, body: copy.body, unsubscribeToken: item.unsubscribeToken, postalAddress: state.postalAddress });
+    const messageId = await sendSesOutreach({
+      providerId,
+      configurationSet: state.configurationSet || null,
+      id: item.id,
+      to: item.email,
+      subject: copy.subject,
+      body: copy.body,
+      unsubscribeToken: item.unsubscribeToken,
+      postalAddress: state.postalAddress || '',
+    });
     await locked(async tx => {
       const row = await tx.outreachQueue.findUnique({ where: { id: item.id } });
       const sentAt = row.sentAt || new Date();

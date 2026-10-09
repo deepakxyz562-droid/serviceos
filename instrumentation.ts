@@ -47,7 +47,22 @@ export async function register() {
     // Non-fatal — Leads will still be created; they just won't get a
     // linked Deal until the lazy safety net in GET /api/deals runs or the
     // admin backfill endpoint is invoked.
-    console.error('[instrumentation] Failed to register lead-deal sync listener:', err)
+    console.error('[instrumentation] Failed to register lead-deal sync listener:', err);
+  }
+
+  // ── Outreach Background Worker Daemon ──────────────────────────────────
+  // Self-sustaining 60s background daemon for scheduled email outreach.
+  try {
+    if (
+      process.env.NEXT_PHASE !== 'phase-production-build' &&
+      process.env.npm_lifecycle_event !== 'build' &&
+      process.env.BUILDING !== '1'
+    ) {
+      const workerModule: any = await import('./src/lib/outreach/worker-daemon' as any);
+      workerModule.startOutreachBackgroundWorker?.();
+    }
+  } catch (err) {
+    console.warn('[instrumentation] Failed to start outreach background worker:', err);
   }
 }
 

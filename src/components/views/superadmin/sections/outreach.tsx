@@ -204,6 +204,31 @@ export function OutreachSection() {
     }
   };
 
+  const processNow = async () => {
+    setBusy(true);
+    try {
+      const response = await authFetch('/api/superadmin/outreach/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'process_now' }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Worker execution failed.');
+      if (result.result?.skipped) {
+        toast.info(`Worker status: ${result.result.skipped}`);
+      } else if (result.result?.sent) {
+        toast.success(`Sent 1 outreach email via SES!`);
+      } else {
+        toast.success('Outreach queue processed.');
+      }
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Process failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const configure = async (action: 'save' | 'start' | 'pause') => {
     setBusy(true);
     try {
@@ -227,8 +252,11 @@ export function OutreachSection() {
   return <section className="space-y-4" aria-label="Outreach workspace">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-2xl font-semibold">Personal outreach</h2><p className="text-sm text-muted-foreground">Amazon SES · One email at a time · 24-hour schedule</p></div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="icon" aria-label="Refresh outreach" onClick={fetchDashboard}><RefreshCw className="h-4 w-4" /></Button>
+        <Button variant="outline" disabled={busy || !data} onClick={processNow} title="Trigger worker immediately to send the next queued email">
+          <Send className="mr-2 h-4 w-4 text-primary" />Send next email
+        </Button>
         <Button variant="outline" disabled={!data} onClick={() => { setSettings(data!.state); setShowSettings(true); }}><Settings2 className="mr-2 h-4 w-4" />Settings</Button>
         <Button disabled={busy || !data} onClick={() => running ? configure('pause') : (setSettings(data!.state), setShowSettings(true))}>
           {running ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}{running ? 'Pause' : 'Start outreach'}
