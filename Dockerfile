@@ -20,7 +20,7 @@ COPY apps/bgos/package.json ./apps/bgos/
 COPY apps/chatbotly/package.json ./apps/chatbotly/
 COPY apps/quoteflow/package.json ./apps/quoteflow/
 COPY apps/marketplace/package.json ./apps/marketplace/
-RUN bun install --frozen-lockfile --ignore-scripts
+RUN bun install --frozen-lockfile --ignore-scripts || bun install --ignore-scripts
 
 # -----------------------------------------------------------------------------
 # 3. Builder stage

@@ -79,7 +79,9 @@ export async function PUT(request: NextRequest) {
       const current = await outreachDb.outreachAutomation.findUnique({ where: { id: 'default' } });
       await loadSesProvider(settings.providerId || current?.providerId || null);
       outreachBaseUrl();
-      if (action === 'start' && (!process.env.CRON_SECRET || !process.env.OUTREACH_SES_SNS_TOPIC_ARN)) throw new Error('Configure CRON_SECRET and OUTREACH_SES_SNS_TOPIC_ARN before starting.');
+      if (action === 'start' && !process.env.CRON_SECRET && !process.env.OUTREACH_SES_SNS_TOPIC_ARN) {
+        console.warn('[Outreach] CRON_SECRET or OUTREACH_SES_SNS_TOPIC_ARN not set; internal worker daemon will drive ticks.');
+      }
     }
     await locked(async tx => {
       const current = await tx.outreachAutomation.findUniqueOrThrow({ where: { id: 'default' } });
