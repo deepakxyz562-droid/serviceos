@@ -1,7 +1,7 @@
 /**
  * Event Types Storage & Retrieval Service
  *
- * Persists event types within Tenant featuresJson for instant zero-migration support.
+ * Persists event types within Tenant settingsJson for instant zero-migration support.
  */
 
 import { db } from '@/lib/db';
@@ -11,13 +11,13 @@ export async function getTenantEventTypes(tenantId: string): Promise<EventType[]
   try {
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
-      select: { featuresJson: true },
+      select: { settingsJson: true },
     });
 
-    if (tenant?.featuresJson) {
+    if (tenant?.settingsJson) {
       try {
-        const parsed = JSON.parse(tenant.featuresJson);
-        if (Array.isArray(parsed.schedulingEventTypes) && parsed.schedulingEventTypes.length > 0) {
+        const parsed = JSON.parse(tenant.settingsJson);
+        if (Array.isArray(parsed.schedulingEventTypes)) {
           return parsed.schedulingEventTypes;
         }
       } catch {}
@@ -35,7 +35,7 @@ export async function getTenantEventTypes(tenantId: string): Promise<EventType[]
     return seeded;
   } catch (error) {
     console.error('[event-type-service] Failed to fetch event types:', error);
-    return DEFAULT_EVENT_TYPES.map((evt) => ({ ...evt, tenantId }));
+    throw error;
   }
 }
 
@@ -46,25 +46,27 @@ export async function saveTenantEventTypes(
   try {
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
-      select: { featuresJson: true },
+      select: { settingsJson: true },
     });
 
+    if (!tenant) throw new Error('Workspace not found');
     let currentFeatures: Record<string, any> = {};
-    if (tenant?.featuresJson) {
+    if (tenant?.settingsJson) {
       try {
-        currentFeatures = JSON.parse(tenant.featuresJson);
+        currentFeatures = JSON.parse(tenant.settingsJson);
       } catch {}
     }
 
     currentFeatures.schedulingEventTypes = eventTypes;
 
-    await db.tenant.update({
-      where: { id: tenantId },
+    const updated = await db.tenant.updateMany({
+      where: { id: tenantId, settingsJson: tenant?.settingsJson },
       data: {
-        featuresJson: JSON.stringify(currentFeatures),
+        settingsJson: JSON.stringify(currentFeatures),
       },
     });
 
+    if (!updated.count) throw new Error("Scheduling settings changed. Refresh and retry.");
     return eventTypes;
   } catch (error) {
     console.error('[event-type-service] Failed to save event types:', error);
@@ -77,7 +79,7 @@ export async function findEventTypeBySlug(
   eventSlug: string
 ): Promise<{ eventType: EventType | null; tenant: any }> {
   try {
-    let tenant = null;
+    let tenant: { id: string; name: string; slug: string; logo: string | null; email: string | null; phone: string | null; settingsJson: string; googleCalendarSyncEnabled: boolean } | null = null;
 
     // 1. Find tenant by slug or id if not preview
     if (tenantOrUserSlug && tenantOrUserSlug !== 'preview') {
@@ -95,7 +97,7 @@ export async function findEventTypeBySlug(
           logo: true,
           email: true,
           phone: true,
-          featuresJson: true,
+          settingsJson: true,
           googleCalendarSyncEnabled: true,
         },
       });

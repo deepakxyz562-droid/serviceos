@@ -967,8 +967,8 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                       <span>Connect Google Account</span>
                       <ArrowRight className="size-3.5" />
                     </a>
-                    <a href="/api/auth/outlook-calendar" className="inline-flex items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Connect Microsoft Outlook</a>
                   )}
+                    <a href="/api/auth/outlook-calendar" className="inline-flex items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Connect Microsoft Outlook</a>
                 </div>
               </div>
 

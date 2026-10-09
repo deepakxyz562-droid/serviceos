@@ -168,8 +168,7 @@ export async function createAppointmentBooking(
     } catch {}
   }
   if (!tenantId) {
-    const firstTenant = await db.tenant.findFirst({ select: { id: true } });
-    tenantId = firstTenant?.id || null;
+    throw new Error('A valid business workspace is required to book an appointment');
   }
 
   const { scheduledAt, scheduledEndTime, dateStr, timeStr } = resolveScheduledDateTimes(
@@ -265,7 +264,7 @@ export async function createAppointmentBooking(
             tenantId: tenantId || null,
             name: customer.name || 'Appointment Client',
             email: customer.email || '',
-            phone: customer.phone || null,
+            phone: customer.phone || '',
             serviceType: serviceName,
             status: 'new',
             source: source === 'form' ? 'form_submission' : 'ai_chat_widget',
@@ -297,7 +296,7 @@ export async function createAppointmentBooking(
         booking: existingBooking,
         lead: createdLead,
         availableSlotMatched: true,
-        meetingUrl: existingBooking.location?.includes('meet.google.com') ? existingBooking.location : null,
+        meetingUrl: JSON.parse(existingBooking.metadataJson || '{}').meetingUrl || null,
         calendarUrls: {
           google: googleCalendarUrl,
           outlook: outlookCalendarUrl,

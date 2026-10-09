@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   if (!body.success) return NextResponse.json({ error: 'A name, subject, message and 1–100 contacts are required' }, { status: 400 });
   try {
     const ids = [...new Set(body.data.contactIds)];
-    const contacts = await db.contact.findMany({ where: { id: { in: ids }, tenantId: user.tenantId, status: 'active', email: { not: null } }, select: { id: true } });
+    const contacts = await db.contact.findMany({ where: { id: { in: ids }, tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}), status: 'active', email: { not: null } }, select: { id: true } });
     if (contacts.length !== ids.length) return NextResponse.json({ error: 'Select active email contacts from your workspace' }, { status: 400 });
     const batch = await db.campaign.create({ data: { name: body.data.name, description: body.data.subject, messageContent: body.data.text, type: 'bgos_outreach', status: 'pending_approval', channel: 'email', audienceType: 'custom', audienceFiltersJson: JSON.stringify({ contactIds: ids }), totalRecipients: ids.length, tenantId: user.tenantId, workspaceId: user.workspaceId, createdById: user.id } });
     return NextResponse.json({ batch }, { status: 201 });

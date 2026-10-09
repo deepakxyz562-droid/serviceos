@@ -11,10 +11,10 @@ export async function GET() {
   const user = await getAuthUser();
   if (!user?.tenantId || user.role === 'customer') return NextResponse.json({ error: 'Workspace authentication required' }, { status: 401 });
   try {
-    const tenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { name: true, slug: true, settingsJson: true, featuresJson: true, plan: true, planStatus: true, googlePlaceId: true } });
+    const tenant = await db.tenant.findUnique({ where: { id: user.tenantId }, select: { name: true, slug: true, settingsJson: true, plan: true, planStatus: true, googlePlaceId: true } });
     if (!tenant) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     const form = await db.form.findFirst({ where: { tenantId: user.tenantId, ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}), status: 'active', slug: { not: null } }, select: { slug: true }, orderBy: { createdAt: 'desc' } });
-    const settings = parse(tenant.settingsJson), features = parse(tenant.featuresJson);
+    const settings = parse(tenant.settingsJson), features = settings;
     const profile = settings.creatorProfile;
     const event = Array.isArray(features.schedulingEventTypes) ? features.schedulingEventTypes.find((item: { isActive?: boolean; slug?: string }) => item.isActive && item.slug) : null;
     const subscription = user.workspaceId ? await db.productSubscription.findUnique({ where: { workspaceId: user.workspaceId } }) : null;

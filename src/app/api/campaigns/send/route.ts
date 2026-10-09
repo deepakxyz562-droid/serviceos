@@ -192,6 +192,16 @@ export async function POST(request: NextRequest) {
       body.providerId = defaultMarketing.id
     }
 
+    // Provider and credential IDs are untrusted input, even for approved batches.
+    if (body.providerId) {
+      const provider = await db.emailProvider.findFirst({ where: { id: body.providerId, tenantId: user.tenantId, status: 'active', usageType: { in: ['marketing', 'both'] }, ...(user.workspaceId ? { OR: [{ workspaceId: user.workspaceId }, { workspaceId: null }] } : {}) }, select: { id: true } })
+      if (!provider) return NextResponse.json({ error: 'Email provider unavailable in your workspace' }, { status: 403 })
+    }
+    if (body.credentialId) {
+      const credential = await db.credential.findFirst({ where: { id: body.credentialId, OR: [{ userId: user.id }, ...(user.workspaceId ? [{ workspaceId: user.workspaceId }] : [])] }, select: { id: true } })
+      if (!credential) return NextResponse.json({ error: 'Email credential unavailable in your workspace' }, { status: 403 })
+    }
+
     // ── Pre-flight: validate the resolved provider yields a usable SMTP config
     // BEFORE entering the per-recipient loop (email/multi channels only).
     //

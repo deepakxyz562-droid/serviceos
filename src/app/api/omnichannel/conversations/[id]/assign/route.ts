@@ -30,9 +30,14 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const agentId = (body as { agentId?: string })?.agentId || auth.id;
-    const agentName =
-      (body as { agentName?: string })?.agentName || auth.name || auth.email || 'Agent';
+    const agentId = (body as { agentId?: unknown })?.agentId || auth.id;
+    if (typeof agentId !== 'string') return NextResponse.json({ error: 'Invalid agent' }, { status: 400 });
+    const agent = await db.user.findFirst({
+      where: { id: agentId, tenantId: auth.tenantId, isActive: true, role: { not: 'customer' }, ...(auth.workspaceId ? { OR: [{ workspaceId: auth.workspaceId }, { workspaceId: null }] } : {}) },
+      select: { id: true, name: true, email: true },
+    });
+    if (!agent) return NextResponse.json({ error: 'Agent unavailable in your workspace' }, { status: 404 });
+    const agentName = agent.name || agent.email;
 
     // Resolve the conversation record. The [id] param is the Conversation.id
     // (cuid). ConversationAssignment.conversationId stores the

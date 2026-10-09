@@ -920,7 +920,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 : isMarketplace
                 ? 'Marketplace'
                 : isChatbotly
-                ? (blueprint?.businessName || auth.tenant?.name || 'Chatbotly')
+                ? (blueprint?.businessName || auth.tenant?.name || 'BGOS')
                 : isBos
                 ? (blueprint?.businessName || auth.tenant?.name || 'BOS')
                 : 'Fieseros'}

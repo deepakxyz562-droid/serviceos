@@ -1,6 +1,7 @@
+'use client';
+
 import type { ViewType } from '@/types/workflow';
 import { bgosView } from '../../../shared/bgos-navigation';
-'use client';
 import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, getAppProduct } from '../../../shared/product-context';
 
 import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo } from 'react';
@@ -29,6 +30,7 @@ import { CreateFormOrAgentModal } from '@/features/forms/components/wizard/creat
 // Dashboard
 const BgosSettings = lazy(() => import('@/components/bgos/settings').then(m => ({ default: m.BgosSettings })));
 const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ default: m.BgosBilling })));
+const BgosOutreach = lazy(() => import('@/components/bgos/outreach').then(m => ({ default: m.BgosOutreach })));
 const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
 const DashboardView = lazy(() => import('@/components/views/dashboard-view').then(m => ({ default: m.DashboardView })));
 
@@ -200,9 +202,6 @@ function UnifiedSettingsView(props: any) {
 
 const viewComponents: Record<string, any> = {
   // Dashboard
-const BgosSettings = lazy(() => import('@/components/bgos/settings').then(m => ({ default: m.BgosSettings })));
-const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ default: m.BgosBilling })));
-const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
   dashboard: DashboardView,
   // Forms product dashboard (standalone AI Forms)
   formsDashboard: FormsDashboardView,
@@ -555,7 +554,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const renderView = (viewId: string) => {
     if ((appProduct === 'bgos' || appProduct === 'chatbotly') && bgosView(viewId) !== viewId) return null;
     if (viewId === 'billing' && (appProduct === 'bgos' || appProduct === 'chatbotly')) return <BgosBilling />;
-    const Component = viewId === 'dashboard' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosDashboard : viewComponents[viewId] || DashboardView;
+    const Component = viewId === 'dashboard' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosDashboard : viewId === 'campaigns' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosOutreach : viewComponents[viewId] || DashboardView;
     return <Component />;
   };
 
