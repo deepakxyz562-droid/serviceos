@@ -1,4 +1,4 @@
-import { randomBytes, randomInt, randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { locked, outreachDb, type OutreachTx } from './db';
 import { DAY_MS, LEASE_MS, delaySeconds, escapeHtml, healthPause, normalizeEmail, validEmail } from './policy';

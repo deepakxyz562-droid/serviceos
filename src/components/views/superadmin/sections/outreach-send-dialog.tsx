@@ -326,8 +326,8 @@ export function OutreachSendDialog({
       const data: SendResponseOk | SendResponseFail = await res.json().catch(() => ({ ok: false }) as SendResponseFail);
 
       if (res.ok && data.ok === true) {
-        toast.success('Outreach email sent', {
-          description: `Provider message ID: ${data.communication.providerMessageId ?? 'simulated'}`,
+        toast.success('Outreach email queued', {
+          description: 'The outreach worker will send it when automation is running and the next slot is available.',
         });
         onSent?.();
         onOpenChange(false);
