@@ -96,6 +96,159 @@ export async function enqueueProspects(tenantIds: string[], userId: string, draf
   });
 }
 
+export async function removeFromQueue(queueIds: string[]) {
+  return locked(async tx => {
+    let removed = 0;
+    for (const id of queueIds) {
+      const item = await tx.outreachQueue.findUnique({ where: { id } });
+      if (!item) continue;
+      if (item.status === 'preparing' || item.status === 'sending') continue;
+      await tx.outreachQueue.delete({ where: { id } }).catch(() => {});
+      removed++;
+    }
+    return { removed };
+  });
+}
+
+export async function markAsSentFromQueue(queueIds: string[], userId: string, notes?: string) {
+  return locked(async tx => {
+    let updated = 0;
+    const now = new Date();
+    for (const id of queueIds) {
+      const item = await tx.outreachQueue.findUnique({ where: { id } });
+      if (!item || item.status === 'sending') continue;
+
+      let commId = item.communicationId;
+      if (!commId) {
+        const comm = await tx.emailCommunication.create({
+          data: {
+            tenantId: item.tenantId,
+            recipientEmail: item.email,
+            recipientName: item.companyName,
+            subject: item.subject || `Outreach for ${item.companyName}`,
+            htmlBody: escapeHtml(item.body || notes || 'Manually marked as sent by SuperAdmin'),
+            textBody: item.body || notes || 'Manually marked as sent by SuperAdmin',
+            category: 'outreach',
+            status: 'sent',
+            sentAt: now,
+            sentByUserId: userId,
+          },
+        });
+        commId = comm.id;
+      } else {
+        await tx.emailCommunication.updateMany({
+          where: { id: commId },
+          data: { status: 'sent', sentAt: now },
+        });
+      }
+
+      await tx.outreachQueue.update({
+        where: { id },
+        data: {
+          status: 'sent',
+          sentAt: now,
+          communicationId: commId,
+          error: null,
+        },
+      });
+      updated++;
+    }
+    return { updated };
+  });
+}
+
+export async function markAsSentFromProspects(tenantIds: string[], userId: string, notes?: string) {
+  return locked(async tx => {
+    let updated = 0;
+    const now = new Date();
+    for (const tenantId of [...new Set(tenantIds)]) {
+      const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { id: true, name: true, email: true, industry: true, city: true } });
+      if (!tenant || !tenant.email) continue;
+      const email = normalizeEmail(tenant.email);
+
+      const comm = await tx.emailCommunication.create({
+        data: {
+          tenantId: tenant.id,
+          recipientEmail: email,
+          recipientName: tenant.name,
+          subject: `Outreach for ${tenant.name}`,
+          htmlBody: escapeHtml(notes || 'Manually marked as sent by SuperAdmin'),
+          textBody: notes || 'Manually marked as sent by SuperAdmin',
+          category: 'outreach',
+          status: 'sent',
+          sentAt: now,
+          sentByUserId: userId,
+        },
+      });
+
+      const existing = await tx.outreachQueue.findFirst({ where: { OR: [{ tenantId }, { email }] } });
+      if (existing) {
+        await tx.outreachQueue.update({
+          where: { id: existing.id },
+          data: { status: 'sent', sentAt: now, communicationId: comm.id, error: null },
+        });
+      } else {
+        await tx.outreachQueue.create({
+          data: {
+            tenantId: tenant.id,
+            email,
+            companyName: tenant.name,
+            industry: tenant.industry,
+            city: tenant.city,
+            createdBy: userId,
+            unsubscribeToken: randomBytes(32).toString('hex'),
+            status: 'sent',
+            sentAt: now,
+            communicationId: comm.id,
+          },
+        });
+      }
+      updated++;
+    }
+    return { updated };
+  });
+}
+
+export async function excludeProspects(tenantIds: string[], reason = 'Manually excluded by SuperAdmin') {
+  return locked(async tx => {
+    let excluded = 0;
+    for (const tenantId of [...new Set(tenantIds)]) {
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data: { outreachDisabled: true },
+      }).catch(() => {});
+
+      await tx.outreachQueue.updateMany({
+        where: { tenantId, status: { in: ['queued', 'preparing'] } },
+        data: { status: 'excluded', error: reason },
+      }).catch(() => {});
+
+      excluded++;
+    }
+    return { excluded };
+  });
+}
+
+export async function reEnableProspects(tenantIds: string[]) {
+  return locked(async tx => {
+    let restored = 0;
+    for (const tenantId of [...new Set(tenantIds)]) {
+      await tx.tenant.update({
+        where: { id: tenantId },
+        data: { outreachDisabled: false },
+      }).catch(() => {});
+
+      await tx.outreachQueue.updateMany({
+        where: { tenantId, status: 'excluded' },
+        data: { status: 'queued', error: null },
+      }).catch(() => {});
+
+      restored++;
+    }
+    return { restored };
+  });
+}
+
 export async function runOutreachTick() {
   const now = new Date();
   const claim = await locked(async tx => {

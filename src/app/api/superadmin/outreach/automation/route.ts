@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { locked, outreachDb } from '@/lib/outreach/db';
-import { listProspects, enqueueProspects, quotaUsed } from '@/lib/outreach/automation';
+import { listProspects, enqueueProspects, quotaUsed, removeFromQueue, markAsSentFromQueue, markAsSentFromProspects, excludeProspects, reEnableProspects } from '@/lib/outreach/automation';
 import { loadSesProvider, outreachBaseUrl } from '@/lib/outreach/ses';
 
 export const dynamic = 'force-dynamic';
@@ -109,13 +109,83 @@ export async function PUT(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await authorize(request);
   if (!user) return NextResponse.json({ error: 'SuperAdmin access required.' }, { status: 403 });
-  const schema = z.object({ tenantIds: z.array(z.string().min(1)).min(1).max(500), draft: z.object({
-    subject: z.string().trim().min(1).max(150).regex(/^[^\r\n]+$/), body: z.string().trim().min(1).max(4000),
-  }).optional() });
-  const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success || (parsed.data.draft && parsed.data.tenantIds.length !== 1)) return NextResponse.json({ error: 'Choose contacts; a custom draft must target one company.' }, { status: 400 });
+
+  const body = await request.json().catch(() => ({}));
+  const action = body?.action || (body?.tenantIds ? 'queue' : '');
+
   try {
-    const results = await enqueueProspects(parsed.data.tenantIds, user.id, parsed.data.draft);
-    return NextResponse.json({ results, queued: results.filter(r => r.status === 'queued').length });
-  } catch { return NextResponse.json({ error: 'Could not queue contacts. No emails were sent.' }, { status: 503 }); }
+    if (action === 'queue') {
+      const schema = z.object({
+        tenantIds: z.array(z.string().min(1)).min(1).max(500),
+        draft: z.object({
+          subject: z.string().trim().min(1).max(150).regex(/^[^\r\n]+$/),
+          body: z.string().trim().min(1).max(4000),
+        }).optional(),
+      });
+      const parsed = schema.safeParse(body);
+      if (!parsed.success || (parsed.data.draft && parsed.data.tenantIds.length !== 1)) {
+        return NextResponse.json({ error: 'Choose contacts; a custom draft must target one company.' }, { status: 400 });
+      }
+      const results = await enqueueProspects(parsed.data.tenantIds, user.id, parsed.data.draft);
+      return NextResponse.json({ ok: true, results, queued: results.filter(r => r.status === 'queued').length });
+    }
+
+    if (action === 'remove_from_queue') {
+      const schema = z.object({
+        queueIds: z.array(z.string().min(1)).min(1).max(500),
+      });
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ error: 'Select queued contacts to remove.' }, { status: 400 });
+      const { removed } = await removeFromQueue(parsed.data.queueIds);
+      return NextResponse.json({ ok: true, removed });
+    }
+
+    if (action === 'mark_sent_queue') {
+      const schema = z.object({
+        queueIds: z.array(z.string().min(1)).min(1).max(500),
+        notes: z.string().max(1000).optional(),
+      });
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ error: 'Select queued contacts to mark as sent.' }, { status: 400 });
+      const { updated } = await markAsSentFromQueue(parsed.data.queueIds, user.id, parsed.data.notes);
+      return NextResponse.json({ ok: true, updated });
+    }
+
+    if (action === 'mark_sent_prospects') {
+      const schema = z.object({
+        tenantIds: z.array(z.string().min(1)).min(1).max(500),
+        notes: z.string().max(1000).optional(),
+      });
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ error: 'Select contacts to mark as sent.' }, { status: 400 });
+      const { updated } = await markAsSentFromProspects(parsed.data.tenantIds, user.id, parsed.data.notes);
+      return NextResponse.json({ ok: true, updated });
+    }
+
+    if (action === 'exclude_prospects') {
+      const schema = z.object({
+        tenantIds: z.array(z.string().min(1)).min(1).max(500),
+        reason: z.string().max(500).optional(),
+      });
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ error: 'Select contacts to exclude.' }, { status: 400 });
+      const { excluded } = await excludeProspects(parsed.data.tenantIds, parsed.data.reason);
+      return NextResponse.json({ ok: true, excluded });
+    }
+
+    if (action === 'reenable_prospects') {
+      const schema = z.object({
+        tenantIds: z.array(z.string().min(1)).min(1).max(500),
+      });
+      const parsed = schema.safeParse(body);
+      if (!parsed.success) return NextResponse.json({ error: 'Select contacts to re-enable.' }, { status: 400 });
+      const { restored } = await reEnableProspects(parsed.data.tenantIds);
+      return NextResponse.json({ ok: true, restored });
+    }
+
+    return NextResponse.json({ error: 'Invalid outreach action.' }, { status: 400 });
+  } catch (error) {
+    console.error('[outreach/automation] action error', error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Action failed.' }, { status: 500 });
+  }
 }

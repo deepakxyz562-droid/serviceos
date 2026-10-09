@@ -101,6 +101,31 @@ describe('paced outreach worker', () => {
     const result = await enqueueProspects(['t1', 't1'], 'admin');
     expect(result).toHaveLength(1); expect(result[0].status).toBe('skipped'); expect(mocks.tx.outreachQueue.create).not.toHaveBeenCalled();
   });
+
+  it('removes contacts from queue when not actively sending', async () => {
+    mocks.tx.outreachQueue.delete = vi.fn().mockResolvedValue({});
+    const res = await (await import('./automation')).removeFromQueue(['q1']);
+    expect(res.removed).toBe(1);
+    expect(mocks.tx.outreachQueue.delete).toHaveBeenCalledWith({ where: { id: 'q1' } });
+  });
+
+  it('marks queued contacts as sent manually', async () => {
+    const res = await (await import('./automation')).markAsSentFromQueue(['q1'], 'admin', 'Manual outreach');
+    expect(res.updated).toBe(1);
+    expect(item.status).toBe('sent');
+    expect(mocks.tx.emailCommunication.create).toHaveBeenCalled();
+  });
+
+  it('excludes prospects and re-enables them', async () => {
+    mocks.tx.tenant.update = vi.fn().mockResolvedValue({});
+    const res = await (await import('./automation')).excludeProspects(['t1']);
+    expect(res.excluded).toBe(1);
+    expect(mocks.tx.tenant.update).toHaveBeenCalledWith({ where: { id: 't1' }, data: { outreachDisabled: true } });
+
+    const restored = await (await import('./automation')).reEnableProspects(['t1']);
+    expect(restored.restored).toBe(1);
+    expect(mocks.tx.tenant.update).toHaveBeenCalledWith({ where: { id: 't1' }, data: { outreachDisabled: false } });
+  });
 });
 
 describe('pacing and health', () => {

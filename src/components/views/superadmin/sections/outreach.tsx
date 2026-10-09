@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2, Pause, Play, RefreshCw, Search, Send, Settings2, Sparkles, X } from 'lucide-react';
+import { Ban, CheckCircle2, Loader2, Pause, Play, RefreshCw, RotateCcw, Search, Send, Settings2, Sparkles, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ export function OutreachSection() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const requestVersion = useRef(0);
   const copyVersion = useRef(0);
+
   const fetchDashboard = useCallback(async () => {
     const version = ++requestVersion.current;
     try {
@@ -55,19 +56,23 @@ export function OutreachSection() {
     } catch (err) { if (version === requestVersion.current) setError(err instanceof Error ? err.message : 'Could not load outreach.'); }
     finally { if (version === requestVersion.current) setLoading(false); }
   }, [view, search, industry, page]);
+
   useEffect(() => {
     setLoading(true);
     const timer = setTimeout(fetchDashboard, 250);
     const poll = setInterval(fetchDashboard, 15000);
     return () => { clearTimeout(timer); clearInterval(poll); requestVersion.current++; };
   }, [fetchDashboard]);
+
   useEffect(() => {
     setSelected(null); setChecked([]); setSubject(''); setBody(''); setGenerating(false); copyVersion.current++;
   }, [view, search, industry, page]);
+
   const select = (contact: Contact) => {
     copyVersion.current++; setGenerating(false); setSelected(contact);
     setSubject(contact.subject || ''); setBody(contact.body || ''); setCopySource(contact.copySource || '');
   };
+
   const generate = async () => {
     if (!selected) return;
     const version = ++copyVersion.current;
@@ -80,11 +85,12 @@ export function OutreachSection() {
     } catch (err) { if (version === copyVersion.current) toast.error(err instanceof Error ? err.message : 'Draft generation failed.'); }
     finally { if (version === copyVersion.current) setGenerating(false); }
   };
+
   const queue = async (ids: string[], useDraft = false) => {
     setBusy(true);
     try {
       const response = await authFetch('/api/superadmin/outreach/automation', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantIds: ids, ...(useDraft ? { draft: { subject, body } } : {}) }) });
+        body: JSON.stringify({ action: 'queue', tenantIds: ids, ...(useDraft ? { draft: { subject, body } } : {}) }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not queue contacts.');
       toast.success(`${result.queued} contact${result.queued === 1 ? '' : 's'} queued`, { description: result.queued === 0 ? result.results?.[0]?.reason : 'Sent gradually while automation is running.' });
@@ -92,6 +98,112 @@ export function OutreachSection() {
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Queue failed.'); }
     finally { setBusy(false); }
   };
+
+  const removeFromQueue = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      const response = await authFetch('/api/superadmin/outreach/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_from_queue', queueIds: ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not remove from queue.');
+      toast.success(`Removed ${result.removed || ids.length} contact(s) from queue`);
+      setChecked([]);
+      if (selected && ids.includes(selected.id)) setSelected(null);
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Remove failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const markAsSentQueue = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      const response = await authFetch('/api/superadmin/outreach/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_sent_queue', queueIds: ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not mark as sent.');
+      toast.success(`Marked ${result.updated || ids.length} contact(s) as sent`);
+      setChecked([]);
+      if (selected && ids.includes(selected.id)) setSelected(null);
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mark as sent failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const markAsSentProspects = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      const response = await authFetch('/api/superadmin/outreach/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mark_sent_prospects', tenantIds: ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not mark as sent.');
+      toast.success(`Marked ${result.updated || ids.length} contact(s) as sent`);
+      setChecked([]);
+      if (selected && ids.includes(selected.tenantId || selected.id)) setSelected(null);
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Mark as sent failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const excludeProspects = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      const response = await authFetch('/api/superadmin/outreach/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'exclude_prospects', tenantIds: ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not exclude contact.');
+      toast.success(`Excluded ${result.excluded || ids.length} contact(s) from outreach`);
+      setChecked([]);
+      if (selected && ids.includes(selected.tenantId || selected.id)) setSelected(null);
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Exclude failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reEnableProspects = async (ids: string[]) => {
+    setBusy(true);
+    try {
+      const response = await authFetch('/api/superadmin/outreach/automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reenable_prospects', tenantIds: ids }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not re-enable contact.');
+      toast.success(`Restored ${result.restored || ids.length} contact(s) to eligible list`);
+      setChecked([]);
+      if (selected && ids.includes(selected.tenantId || selected.id)) setSelected(null);
+      await fetchDashboard();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Re-enable failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const configure = async (action: 'save' | 'start' | 'pause') => {
     setBusy(true);
     try {
@@ -108,8 +220,10 @@ export function OutreachSection() {
     } catch (err) { toast.error(err instanceof Error ? err.message : 'Settings failed.'); }
     finally { setBusy(false); }
   };
+
   const running = data?.state.enabled;
   const workerLate = running && (!data?.state.lastRunAt || Date.now() - new Date(data.state.lastRunAt).getTime() > 180000);
+
   return <section className="space-y-4" aria-label="Outreach workspace">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div><h2 className="text-2xl font-semibold">Personal outreach</h2><p className="text-sm text-muted-foreground">Amazon SES · One email at a time · 24-hour schedule</p></div>
@@ -135,33 +249,163 @@ export function OutreachSection() {
         <div className="space-y-2 border-b p-3">
           <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input aria-label="Search companies or emails" className="pl-9" placeholder="Search companies or emails" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} /></div>
           {view === 'new' && <Input aria-label="Filter contacts by industry" placeholder="Filter industry, e.g. cleaning" value={industry} onChange={e => { setIndustry(e.target.value); setPage(1); }} />}
-          {view === 'new' && <div className="flex items-center justify-between text-xs"><label className="flex items-center gap-2"><input type="checkbox" aria-label="Select this page" checked={Boolean(data?.items.length && checked.length === data.items.length)} onChange={e => setChecked(e.target.checked ? data?.items.map(i => i.id) || [] : [])} />Select page</label><Button variant="outline" size="sm" disabled={!checked.length || busy} onClick={() => queue(checked)}>Queue {checked.length || 'selected'}</Button></div>}
+          
+          {/* Bulk toolbar for New Contacts */}
+          {view === 'new' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" aria-label="Select this page" checked={Boolean(data?.items.length && checked.length === data.items.length)} onChange={e => setChecked(e.target.checked ? data?.items.map(i => i.id) || [] : [])} />
+                <span>Select page ({checked.length}/{data?.items.length || 0})</span>
+              </label>
+              {checked.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <Button variant="default" size="sm" className="h-7 text-xs px-2" disabled={busy} onClick={() => queue(checked)}>
+                    Queue ({checked.length})
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs px-2" disabled={busy} onClick={() => markAsSentProspects(checked)}>
+                    <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-emerald-600" /> Mark Sent
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50" disabled={busy} onClick={() => excludeProspects(checked)}>
+                    <Ban className="mr-1 h-3.5 w-3.5" /> Exclude
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bulk toolbar for Queued Contacts */}
+          {view === 'queued' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" aria-label="Select this page" checked={Boolean(data?.items.length && checked.length === data.items.length)} onChange={e => setChecked(e.target.checked ? data?.items.map(i => i.id) || [] : [])} />
+                <span>Select page ({checked.length}/{data?.items.length || 0})</span>
+              </label>
+              {checked.length > 0 && (
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" className="h-7 text-xs px-2 text-red-600 hover:text-red-700 hover:bg-red-50" disabled={busy} onClick={() => removeFromQueue(checked)}>
+                    <Trash2 className="mr-1 h-3.5 w-3.5" /> Cancel ({checked.length})
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" disabled={busy} onClick={() => markAsSentQueue(checked)}>
+                    <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Move to Sent
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Bulk toolbar for Excluded / Needs Attention Contacts */}
+          {view === 'excluded' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" aria-label="Select this page" checked={Boolean(data?.items.length && checked.length === data.items.length)} onChange={e => setChecked(e.target.checked ? data?.items.map(i => i.tenantId || i.id) || [] : [])} />
+                <span>Select page ({checked.length}/{data?.items.length || 0})</span>
+              </label>
+              {checked.length > 0 && (
+                <Button variant="outline" size="sm" className="h-7 text-xs px-2" disabled={busy} onClick={() => reEnableProspects(checked)}>
+                  <RotateCcw className="mr-1 h-3.5 w-3.5" /> Re-enable ({checked.length})
+                </Button>
+              )}
+            </div>
+          )}
         </div>
         <div className="max-h-[600px] overflow-y-auto">
-          {loading && !data ? <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div> : !data?.items.length ? <div className="p-12 text-center text-sm text-muted-foreground">{view === 'new' ? 'No matching eligible contacts.' : 'No contacts in this list yet.'}</div> : data.items.map(contact =>
-            <div key={contact.id} className={`flex items-start gap-3 border-b px-4 py-4 ${selected?.id === contact.id ? 'bg-primary/5' : 'hover:bg-muted/40'}`}>
-              {view === 'new' && <input type="checkbox" className="mt-1" aria-label={`Select ${contact.name || contact.companyName}`} checked={checked.includes(contact.id)} onChange={e => setChecked(ids => e.target.checked ? [...ids, contact.id] : ids.filter(id => id !== contact.id))} />}
-              <button className="min-w-0 flex-1 text-left" onClick={() => select(contact)}>
-                <div className="truncate font-medium">{contact.name || contact.companyName || 'Company'}</div>
-                <p className="truncate text-sm text-muted-foreground">{contact.email}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{[contact.industry, contact.city].filter(Boolean).join(' · ')}</p>
-                <p className="mt-2 text-xs">{contact.status || 'Not contacted · Email unchecked'}{contact.sentAt ? ` · ${dateLabel(contact.sentAt)}` : ''}</p>
-                {contact.error && <p className="mt-1 text-xs text-amber-700">{contact.error}</p>}
-              </button>
-            </div>)}
+          {loading && !data ? <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div> : !data?.items.length ? <div className="p-12 text-center text-sm text-muted-foreground">{view === 'new' ? 'No matching eligible contacts.' : 'No contacts in this list yet.'}</div> : data.items.map(contact => {
+            const itemKey = view === 'excluded' ? (contact.tenantId || contact.id) : contact.id;
+            return (
+              <div key={contact.id} className={`flex items-start gap-3 border-b px-4 py-4 ${selected?.id === contact.id ? 'bg-primary/5' : 'hover:bg-muted/40'}`}>
+                {view !== 'sent' && (
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    aria-label={`Select ${contact.name || contact.companyName}`}
+                    checked={checked.includes(itemKey)}
+                    onChange={e => setChecked(ids => e.target.checked ? [...ids, itemKey] : ids.filter(id => id !== itemKey))}
+                  />
+                )}
+                <button className="min-w-0 flex-1 text-left" onClick={() => select(contact)}>
+                  <div className="truncate font-medium">{contact.name || contact.companyName || 'Company'}</div>
+                  <p className="truncate text-sm text-muted-foreground">{contact.email}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{[contact.industry, contact.city].filter(Boolean).join(' · ')}</p>
+                  <p className="mt-2 text-xs">{contact.status || 'Not contacted · Email unchecked'}{contact.sentAt ? ` · ${dateLabel(contact.sentAt)}` : ''}</p>
+                  {contact.error && <p className="mt-1 text-xs text-amber-700">{contact.error}</p>}
+                </button>
+              </div>
+            );
+          })}
         </div>
         <div className="flex items-center justify-between p-3 text-xs text-muted-foreground"><span>{data?.total.toLocaleString() || 0} contacts · Page {page}</span><div className="flex gap-2"><Button size="sm" variant="ghost" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Previous</Button><Button size="sm" variant="ghost" disabled={!data || page * 50 >= data.total} onClick={() => setPage(p => p + 1)}>Next</Button></div></div>
       </div>
       <div className="flex flex-col p-6">
-        {!selected ? <div className="m-auto max-w-sm space-y-3 text-center"><Send className="mx-auto h-8 w-8 text-muted-foreground" /><h3 className="font-medium">Choose a company to preview an email</h3><p className="text-sm text-muted-foreground">Generate a personal draft, edit it, and add it to the paced queue. Starting automation also selects new contacts matching your campaign industry.</p><p className="text-xs text-muted-foreground">500 per rolling 24 hours maximum. Typical pacing takes about 17–21 hours for 500 when the scheduler and SES are healthy.</p></div> : <>
-          <h3 className="text-lg font-semibold">{selected.name || selected.companyName}</h3>
-          <p className="mb-5 text-sm text-muted-foreground">{[selected.industry, selected.city].filter(Boolean).join(' · ')}</p>
-          <label className="mb-2 text-xs font-medium text-muted-foreground">To</label><Input readOnly value={selected.email} aria-label="Recipient" />
-          <label className="mb-2 mt-4 text-xs font-medium text-muted-foreground" htmlFor="outreach-subject">Subject</label><Input id="outreach-subject" value={subject} maxLength={150} readOnly={view !== 'new'} onChange={e => setSubject(e.target.value)} placeholder="Generate a draft to begin" />
-          <label className="mb-2 mt-4 text-xs font-medium text-muted-foreground" htmlFor="outreach-body">Message</label><textarea id="outreach-body" className="min-h-[280px] flex-1 resize-y rounded-md border bg-transparent p-4 text-sm leading-7" value={body} readOnly={view !== 'new'} onChange={e => setBody(e.target.value)} placeholder="Your personalized message will appear here." maxLength={4000} />
-          <p className="mt-3 text-xs text-muted-foreground">{copySource === 'template' ? 'Template fallback used. ' : copySource === 'ai' ? 'AI draft — review the facts. ' : ''}{view === 'new' ? 'Sender signature, postal address and unsubscribe link are added at sending. No tracking pixels.' : `SES message ID: ${selected.providerMessageId || 'Not sent yet'}`}</p>
-          {view === 'new' && <div className="mt-5 flex flex-wrap gap-2"><Button variant="outline" disabled={generating || busy} onClick={generate}>{generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Generate draft</Button><Button disabled={busy || generating || !subject.trim() || !body.trim()} onClick={() => queue([selected.id], true)}><Send className="mr-2 h-4 w-4" />Add to queue</Button></div>}
-        </>}
+        {!selected ? (
+          <div className="m-auto max-w-sm space-y-3 text-center">
+            <Send className="mx-auto h-8 w-8 text-muted-foreground" />
+            <h3 className="font-medium">Choose a company to preview an email</h3>
+            <p className="text-sm text-muted-foreground">Generate a personal draft, edit it, and add it to the paced queue. Starting automation also selects new contacts matching your campaign industry.</p>
+            <p className="text-xs text-muted-foreground">500 per rolling 24 hours maximum. Typical pacing takes about 17–21 hours for 500 when the scheduler and SES are healthy.</p>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-lg font-semibold">{selected.name || selected.companyName}</h3>
+            <p className="mb-5 text-sm text-muted-foreground">{[selected.industry, selected.city].filter(Boolean).join(' · ')}</p>
+            
+            <label className="mb-2 text-xs font-medium text-muted-foreground">To</label>
+            <Input readOnly value={selected.email} aria-label="Recipient" />
+            
+            <label className="mb-2 mt-4 text-xs font-medium text-muted-foreground" htmlFor="outreach-subject">Subject</label>
+            <Input id="outreach-subject" value={subject} maxLength={150} readOnly={view !== 'new'} onChange={e => setSubject(e.target.value)} placeholder={view === 'new' ? 'Generate a draft to begin' : 'Subject'} />
+            
+            <label className="mb-2 mt-4 text-xs font-medium text-muted-foreground" htmlFor="outreach-body">Message</label>
+            <textarea id="outreach-body" className="min-h-[260px] flex-1 resize-y rounded-md border bg-transparent p-4 text-sm leading-7" value={body} readOnly={view !== 'new'} onChange={e => setBody(e.target.value)} placeholder={view === 'new' ? 'Your personalized message will appear here.' : 'Message content'} maxLength={4000} />
+            
+            <p className="mt-3 text-xs text-muted-foreground">
+              {copySource === 'template' ? 'Template fallback used. ' : copySource === 'ai' ? 'AI draft — review the facts. ' : ''}
+              {view === 'new'
+                ? 'Sender signature, postal address and unsubscribe link are added at sending. No tracking pixels.'
+                : view === 'sent'
+                ? `Sent: ${dateLabel(selected.sentAt)} · SES ID: ${selected.providerMessageId || 'Recorded'}`
+                : `Status: ${selected.status || 'Queued'}${selected.error ? ` · Reason: ${selected.error}` : ''}`}
+            </p>
+
+            {/* Actions for New Contacts */}
+            {view === 'new' && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button variant="outline" disabled={generating || busy} onClick={generate}>
+                  {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Generate draft
+                </Button>
+                <Button disabled={busy || generating || !subject.trim() || !body.trim()} onClick={() => queue([selected.id], true)}>
+                  <Send className="mr-2 h-4 w-4" />Add to queue
+                </Button>
+                <Button variant="outline" disabled={busy} onClick={() => markAsSentProspects([selected.id])}>
+                  <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" />Mark as already sent
+                </Button>
+                <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" disabled={busy} onClick={() => excludeProspects([selected.id])}>
+                  <Ban className="mr-2 h-4 w-4" />Exclude contact
+                </Button>
+              </div>
+            )}
+
+            {/* Actions for Queued Contacts */}
+            {view === 'queued' && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50" disabled={busy} onClick={() => removeFromQueue([selected.id])}>
+                  <Trash2 className="mr-2 h-4 w-4" />Remove from queue
+                </Button>
+                <Button variant="outline" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" disabled={busy} onClick={() => markAsSentQueue([selected.id])}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />Mark as already sent
+                </Button>
+              </div>
+            )}
+
+            {/* Actions for Excluded Contacts */}
+            {view === 'excluded' && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button variant="outline" disabled={busy} onClick={() => reEnableProspects([selected.tenantId || selected.id])}>
+                  <RotateCcw className="mr-2 h-4 w-4" />Restore to new contacts
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
     {showSettings && settings && <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setShowSettings(false)}>
