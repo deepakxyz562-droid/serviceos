@@ -27,6 +27,7 @@ beforeEach(() => {
   item = { id: 'q1', tenantId: 't1', email: 'owner@example.com', companyName: 'Example', status: 'queued', createdBy: 'admin',
     subject: 'Hello', body: 'Hello Example team', unsubscribeToken: 'a'.repeat(64), communicationId: null, sentAt: null };
   mocks.tx.outreachAutomation = {
+    findUnique: vi.fn(async () => ({ ...state })),
     findUniqueOrThrow: vi.fn(async () => ({ ...state })),
     update: vi.fn(async ({ data }: any) => Object.assign(state, data)),
     updateMany: vi.fn(async ({ where, data }: any) => { if (matches(state, where)) { Object.assign(state, data); return { count: 1 }; } return { count: 0 }; }),

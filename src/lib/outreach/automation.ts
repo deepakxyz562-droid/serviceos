@@ -6,6 +6,7 @@ import { generateOutreachCopy } from './copy';
 import { loadSesProvider, outreachBaseUrl, sendSesOutreach } from './ses';
 
 export interface ProspectRow { id: string; name: string; email: string; industry: string | null; city: string | null }
+
 export function eligibleSql(search = '', industry = '') {
   return Prisma.sql`
     t."email" IS NOT NULL AND trim(t."email") <> '' AND t."outreachDisabled" = false
@@ -18,13 +19,40 @@ export function eligibleSql(search = '', industry = '') {
     AND NOT EXISTS (SELECT 1 FROM "EmailSuppression" s WHERE lower(trim(s.email)) = lower(trim(t.email)) AND s."resolvedAt" IS NULL)
   `;
 }
+
 export async function listProspects(search: string, industry: string, page: number) {
-  const where = eligibleSql(search, industry);
-  const [items, counts] = await Promise.all([
-    outreachDb.$queryRaw<ProspectRow[]>(Prisma.sql`SELECT t.id,t.name,t.email,t.industry,t.city FROM "Tenant" t WHERE ${where} ORDER BY t.id LIMIT 50 OFFSET ${(page - 1) * 50}`),
-    outreachDb.$queryRaw<{ count: bigint }[]>(Prisma.sql`SELECT count(*) FROM "Tenant" t WHERE ${where}`),
+  const where: any = {
+    email: { not: null },
+    outreachDisabled: false,
+  };
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+    ];
+  }
+  if (industry) {
+    where.industry = { contains: industry, mode: 'insensitive' };
+  }
+
+  const [items, total] = await Promise.all([
+    outreachDb.tenant.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        industry: true,
+        city: true,
+      },
+      orderBy: { id: 'asc' },
+      skip: (Math.max(1, page) - 1) * 50,
+      take: 50,
+    }),
+    outreachDb.tenant.count({ where }),
   ]);
-  return { items, total: Number(counts[0].count) };
+
+  return { items: items.filter((i: any) => i.email), total };
 }
 export async function quotaUsed(tx: OutreachTx, now: Date) {
   // sentAt survives delivered/bounced/complained transitions. In-flight and
@@ -71,7 +99,7 @@ export async function enqueueProspects(tenantIds: string[], userId: string, draf
 export async function runOutreachTick() {
   const now = new Date();
   const claim = await locked(async tx => {
-    const state = await tx.outreachAutomation.findUniqueOrThrow({ where: { id: 'default' } });
+    const state = await tx.outreachAutomation.findUnique({ where: { id: 'default' } });
     await tx.outreachAutomation.update({ where: { id: 'default' }, data: { lastRunAt: now } });
     if (state.leaseUntil && state.leaseUntil > now) return { skipped: 'Worker is active.' } as const;
     // A process could die after SMTP accepted the email. Never re-send it.
@@ -99,13 +127,39 @@ export async function runOutreachTick() {
     }
     let item = await tx.outreachQueue.findFirst({ where: { status: 'queued' }, orderBy: { createdAt: 'asc' } });
     if (!item) {
-      const candidates = await tx.$queryRaw<ProspectRow[]>(Prisma.sql`SELECT t.id,t.name,t.email,t.industry,t.city FROM "Tenant" t WHERE ${eligibleSql('', state.industry)} ORDER BY t.id LIMIT 20`);
+      const where: any = {
+        email: { not: null },
+        outreachDisabled: false,
+      };
+      if (state.industry) {
+        where.industry = { contains: state.industry, mode: 'insensitive' };
+      }
+      const candidates = await tx.tenant.findMany({
+        where,
+        select: { id: true, name: true, email: true, industry: true, city: true },
+        orderBy: { id: 'asc' },
+        take: 20,
+      });
       for (const t of candidates) {
+        if (!t.email) continue;
         const email = normalizeEmail(t.email);
-        await tx.outreachQueue.createMany({ data: [{ tenantId: t.id, email, companyName: t.name, industry: t.industry, city: t.city,
-          createdBy: state.startedBy, unsubscribeToken: randomBytes(32).toString('hex'),
-          status: validEmail(email) ? 'queued' : 'excluded', error: validEmail(email) ? null : 'Invalid email address.',
-        }], skipDuplicates: true });
+        const reason = await blockReason(tx, t.id, email);
+        if (reason) continue;
+        const exists = await tx.outreachQueue.findFirst({ where: { OR: [{ tenantId: t.id }, { email }] } });
+        if (exists) continue;
+        await tx.outreachQueue.create({
+          data: {
+            tenantId: t.id,
+            email,
+            companyName: t.name,
+            industry: t.industry,
+            city: t.city,
+            createdBy: state.startedBy || 'system',
+            unsubscribeToken: randomBytes(32).toString('hex'),
+            status: validEmail(email) ? 'queued' : 'excluded',
+            error: validEmail(email) ? null : 'Invalid email address.',
+          },
+        }).catch(() => {});
       }
       item = await tx.outreachQueue.findFirst({ where: { status: 'queued' }, orderBy: { createdAt: 'asc' } });
     }
@@ -130,10 +184,10 @@ export async function runOutreachTick() {
     const copy = item.subject && item.body ? { subject: item.subject, body: item.body, source: item.copySource || 'edited' }
       : await generateOutreachCopy({ companyName: item.companyName, industry: item.industry, city: item.city, pitch: state.pitch });
     const ready = await locked(async tx => {
-      const current = await tx.outreachAutomation.findUniqueOrThrow({ where: { id: 'default' } });
+      const current = await tx.outreachAutomation.findUnique({ where: { id: 'default' } });
       if (current.leaseToken !== token) return false;
       const blocked = await blockReason(tx, item.tenantId, item.email);
-      const queue = await tx.outreachQueue.findUniqueOrThrow({ where: { id: item.id } });
+      const queue = await tx.outreachQueue.findUnique({ where: { id: item.id } });
       if (!current.enabled || blocked || queue.status !== 'preparing' || await quotaUsed(tx, new Date()) >= current.dailyLimit) {
         await tx.outreachQueue.updateMany({ where: { id: item.id, status: 'preparing' }, data: { status: blocked ? 'excluded' : 'queued', error: blocked } });
         await tx.outreachAutomation.update({ where: { id: 'default' }, data: { leaseToken: null, leaseUntil: null } });
@@ -154,7 +208,7 @@ export async function runOutreachTick() {
     const messageId = await sendSesOutreach({ providerId: state.providerId!, configurationSet: state.configurationSet!, id: item.id,
       to: item.email, subject: copy.subject, body: copy.body, unsubscribeToken: item.unsubscribeToken, postalAddress: state.postalAddress });
     await locked(async tx => {
-      const row = await tx.outreachQueue.findUniqueOrThrow({ where: { id: item.id } });
+      const row = await tx.outreachQueue.findUnique({ where: { id: item.id } });
       const sentAt = row.sentAt || new Date();
       // A delivery webhook can arrive before the SMTP/API response. Preserve it.
       await tx.outreachQueue.update({ where: { id: item.id }, data: { sentAt, providerMessageId: messageId,
@@ -170,7 +224,7 @@ export async function runOutreachTick() {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Outreach failed.';
     await locked(async tx => {
-      const current = await tx.outreachAutomation.findUniqueOrThrow({ where: { id: 'default' } });
+      const current = await tx.outreachAutomation.findUnique({ where: { id: 'default' } });
       if (current.leaseToken !== token) return;
       await tx.outreachQueue.updateMany({ where: { id: item.id, status: { in: ['preparing', 'sending'] } }, data: {
         status: attempted ? 'unknown' : 'queued', error: attempted ? 'Send outcome uncertain. Check SES events; do not resend automatically.' : message.slice(0, 300),

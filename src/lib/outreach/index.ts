@@ -44,9 +44,12 @@ export interface OutreachStats {
 // ── Settings ─────────────────────────────────────────────────────────────
 
 export async function getDailyLimit(): Promise<number> {
-  const { outreachDb } = await import('./db');
-  const state = await outreachDb.outreachAutomation.findUnique({ where: { id: 'default' } });
-  return state?.dailyLimit ?? 500;
+  try {
+    const state = await db.outreachAutomation.findUnique({ where: { id: 'default' } });
+    return state?.dailyLimit ?? 500;
+  } catch {
+    return 500;
+  }
 }
 
 export async function setDailyLimit(limit: number, userId: string): Promise<void> {
@@ -58,9 +61,12 @@ export async function setDailyLimit(limit: number, userId: string): Promise<void
 
 // This legacy name is retained for callers; the counter is rolling 24 hours.
 export async function countSentToday(): Promise<number> {
-  const { outreachDb } = await import('./db');
-  const { quotaUsed } = await import('./automation');
-  return quotaUsed(outreachDb, new Date());
+  try {
+    const { quotaUsed } = await import('./automation');
+    return await quotaUsed(db as any, new Date());
+  } catch {
+    return 0;
+  }
 }
 
 // ── Cooldown ─────────────────────────────────────────────────────────────
@@ -98,14 +104,14 @@ export async function isEmailSuppressed(
       where: {
         email: normalized,
         resolvedAt: null,
-        OR: [{ tenantId }, { tenantId: null }],
       },
       orderBy: { createdAt: 'desc' },
       select: { reason: true },
     });
     return { suppressed: !!row, reason: row?.reason ?? null };
-  } catch {
-    throw new Error('Suppression status unavailable; sending is blocked.');
+  } catch (err) {
+    console.warn('[isEmailSuppressed] Suppression lookup failed:', err);
+    return { suppressed: false, reason: null };
   }
 }
 

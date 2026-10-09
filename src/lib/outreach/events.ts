@@ -23,7 +23,8 @@ export async function applyOutreachSesEvent(raw: unknown) {
     const next = (rank[status] ?? 0) > (rank[row.status] ?? 0) ? status : row.status;
     await tx.outreachQueue.update({ where: { id: row.id }, data: { status: next, sentAt, providerMessageId: data.mail.messageId,
       error: next === 'sent' || next === 'delivered' ? null : row.error } });
-    const communication = await tx.emailCommunication.findUniqueOrThrow({ where: { id: row.communicationId } });
+    const communication = await tx.emailCommunication.findUnique({ where: { id: row.communicationId } });
+    if (!communication) return { skipped: true };
     const commNext = (rank[status] ?? 0) > (rank[communication.status] ?? 0) ? status : communication.status;
     await tx.emailCommunication.update({ where: { id: row.communicationId }, data: {
       sentAt, providerMessageId: data.mail.messageId, status: commNext,

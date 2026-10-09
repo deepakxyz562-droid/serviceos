@@ -10,8 +10,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   row = { id: 'q1', tenantId: 't1', email: 'owner@example.com', communicationId: 'c1', status: 'unknown', attemptedAt: new Date(), providerMessageId: null, sentAt: null };
   comm = { id: 'c1', status: 'unknown' };
-  mocks.tx.outreachQueue = { findUnique: vi.fn(async () => ({ ...row })), findFirst: vi.fn(async () => ({ ...row })), update: vi.fn(async ({ data }: any) => Object.assign(row, data)) };
-  mocks.tx.emailCommunication = { findUniqueOrThrow: vi.fn(async () => ({ ...comm })), update: vi.fn(async ({ data }: any) => Object.assign(comm, data)) };
+  mocks.tx.outreachQueue = { findUnique: vi.fn(async () => ({ ...row })), findUniqueOrThrow: vi.fn(async () => ({ ...row })), findFirst: vi.fn(async () => ({ ...row })), update: vi.fn(async ({ data }: any) => Object.assign(row, data)) };
+  mocks.tx.emailCommunication = { findUnique: vi.fn(async () => ({ ...comm })), findUniqueOrThrow: vi.fn(async () => ({ ...comm })), update: vi.fn(async ({ data }: any) => Object.assign(comm, data)) };
   mocks.tx.emailSuppression = { findFirst: vi.fn(async () => null), create: vi.fn(async () => ({})), update: vi.fn() };
   mocks.tx.outreachAutomation = { update: vi.fn(async () => ({})) };
   mocks.tx.tenant = { updateMany: vi.fn(async () => ({ count: 1 })) };

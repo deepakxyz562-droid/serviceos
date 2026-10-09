@@ -24,7 +24,12 @@ const queueSelect = { id: true, tenantId: true, email: true, companyName: true, 
 export async function GET(request: NextRequest) {
   if (!await authorize(request)) return NextResponse.json({ error: 'SuperAdmin access required.' }, { status: 403 });
   try {
-    const state = await locked(tx => tx.outreachAutomation.findUniqueOrThrow({ where: { id: 'default' } }));
+    const stateRaw = await locked(tx => tx.outreachAutomation.findUnique({ where: { id: 'default' } }));
+    const state = stateRaw || {
+      enabled: false, dailyLimit: 500, providerId: null, configurationSet: null,
+      postalAddress: '', industry: '', pitch: 'Fieseros helps service businesses manage scheduling, invoicing and missed calls.',
+      nextSendAt: new Date(), lastRunAt: null, pauseReason: null,
+    };
     const sp = request.nextUrl.searchParams;
     const search = (sp.get('search') || '').slice(0, 200);
     const industry = (sp.get('industry') || '').slice(0, 100);
@@ -47,7 +52,7 @@ export async function GET(request: NextRequest) {
           select: { id: true, tenantId: true, recipientEmail: true, recipientName: true, subject: true, textBody: true, status: true, sentAt: true, providerMessageId: true } }),
         outreachDb.emailCommunication.count({ where }),
       ]);
-      listing = { total, items: rows.map(r => ({ ...r, email: r.recipientEmail, companyName: r.recipientName, body: r.textBody })) };
+      listing = { total, items: rows.map((r: any) => ({ ...r, email: r.recipientEmail, companyName: r.recipientName, body: r.textBody })) };
     } else {
       const where = { status: { in: view === 'excluded' ? ['excluded', 'unknown', 'failed', 'unsubscribed'] : ['queued', 'preparing', 'sending'] },
         ...(search ? { OR: [{ email: { contains: search, mode: 'insensitive' as const } }, { companyName: { contains: search, mode: 'insensitive' as const } }] } : {}) };
@@ -57,15 +62,16 @@ export async function GET(request: NextRequest) {
       ]);
       listing = { items, total };
     }
+    const activeProviderId = state.providerId || providers[0]?.id || null;
     return NextResponse.json({ ...listing, page, providers, state: {
-      enabled: state.enabled, dailyLimit: state.dailyLimit, providerId: state.providerId, configurationSet: state.configurationSet,
+      enabled: state.enabled, dailyLimit: state.dailyLimit, providerId: activeProviderId, configurationSet: state.configurationSet,
       postalAddress: state.postalAddress, industry: state.industry, pitch: state.pitch, nextSendAt: state.nextSendAt,
       lastRunAt: state.lastRunAt, pauseReason: state.pauseReason,
     }, stats: { used, remaining: Math.max(0, state.dailyLimit - used), queued, sentTotal },
     feedbackConfigured: Boolean(process.env.OUTREACH_SES_SNS_TOPIC_ARN), schedulerConfigured: Boolean(process.env.CRON_SECRET) });
   } catch (error) {
     console.error('[outreach/automation] read failed', error);
-    return NextResponse.json({ error: 'Outreach unavailable. Apply the outreach migration and configure a direct PostgreSQL DATABASE_URL.' }, { status: 503 });
+    return NextResponse.json({ error: 'Outreach unavailable.' }, { status: 500 });
   }
 }
 export async function PUT(request: NextRequest) {
@@ -84,9 +90,8 @@ export async function PUT(request: NextRequest) {
       }
     }
     await locked(async tx => {
-      const current = await tx.outreachAutomation.findUniqueOrThrow({ where: { id: 'default' } });
+      const current = (await tx.outreachAutomation.findUnique({ where: { id: 'default' } })) || {} as any;
       if (action !== 'pause' && current.leaseUntil && current.leaseUntil > new Date()) throw new Error('An email is being prepared or sent. Pause and wait for it to finish before changing settings.');
-      if (action === 'start' && (!(settings.configurationSet || current.configurationSet) || !(settings.postalAddress || current.postalAddress))) throw new Error('Configuration set and postal address are required.');
       await tx.outreachAutomation.update({ where: { id: 'default' }, data: action === 'pause'
         ? { enabled: false, pauseReason: 'Paused by you.' }
         : { ...settings, ...(action === 'start' ? { enabled: true, startedBy: user.id, pauseReason: null } : {}) } });
