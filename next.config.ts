@@ -59,10 +59,56 @@ const nextConfig: NextConfig = {
     // Disable Webpack worker threads to prevent OOM kills on memory-constrained servers
     webpackBuildWorker: false,
     cpus: 1,
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-icons',
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-aspect-ratio',
+      '@radix-ui/react-avatar',
+      '@radix-ui/react-checkbox',
+      '@radix-ui/react-collapsible',
+      '@radix-ui/react-context-menu',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-hover-card',
+      '@radix-ui/react-label',
+      '@radix-ui/react-menubar',
+      '@radix-ui/react-navigation-menu',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-progress',
+      '@radix-ui/react-radio-group',
+      '@radix-ui/react-scroll-area',
+      '@radix-ui/react-select',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-slider',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-switch',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-toast',
+      '@radix-ui/react-toggle',
+      '@radix-ui/react-toggle-group',
+      '@radix-ui/react-tooltip',
+      'date-fns',
+      'framer-motion',
+      'recharts',
+      'googleapis',
+      '@aws-sdk/client-s3',
+      '@aws-sdk/client-sesv2',
+    ],
   },
+  productionBrowserSourceMaps: false,
   webpack: (config, { dev }) => {
+    config.devtool = false;
     if (!dev) {
       config.cache = false; // Disable heavy Webpack memory cache during production build
+      if (config.optimization && Array.isArray(config.optimization.minimizer)) {
+        config.optimization.minimizer.forEach((minimizer: any) => {
+          if (minimizer?.options?.parallel) {
+            minimizer.options.parallel = 1;
+          }
+        });
+      }
     }
     return config;
   },
