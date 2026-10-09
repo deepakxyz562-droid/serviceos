@@ -9378,3 +9378,50 @@ model ProductSubscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+/// Singleton, locked transactionally before any outreach queue mutation.
+model OutreachAutomation {
+  id             String   @id @default("default")
+  enabled        Boolean  @default(false)
+  dailyLimit     Int      @default(500)
+  providerId     String?
+  configurationSet String?
+  postalAddress  String   @default("")
+  industry       String   @default("")
+  pitch          String   @default("Fieseros helps service businesses manage scheduling, invoicing and missed calls.")
+  startedBy      String   @default("")
+  nextSendAt     DateTime @default(now())
+  leaseToken     String?
+  leaseUntil     DateTime?
+  lastRunAt      DateTime?
+  pauseReason    String?
+  updatedAt      DateTime @updatedAt
+}
+
+/// Unique email and company reservations survive sent/bounced/failed states.
+/// Unknown SMTP outcomes are NEVER retried automatically.
+model OutreachQueue {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  email          String   @unique
+  companyName    String
+  industry       String?
+  city           String?
+  subject        String   @default("")
+  body           String   @default("")
+  copySource     String?
+  status         String   @default("queued")
+  error          String?
+  createdBy      String
+  unsubscribeToken String @unique
+  communicationId String? @unique
+  providerMessageId String?
+  attemptedAt    DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([attemptedAt])
+  @@index([sentAt])
+}

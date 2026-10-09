@@ -14,8 +14,9 @@ FROM base AS deps
 COPY package.json bun.lock ./
 # Copy workspace manifests so bun install can resolve monorepo workspaces
 COPY bosmobile/package.json ./bosmobile/
-COPY chatbotlymobile/package.json ./chatbotlymobile/
+COPY bgosmobile/package.json ./bgosmobile/
 COPY apps/bos/package.json ./apps/bos/
+COPY apps/bgos/package.json ./apps/bgos/
 COPY apps/chatbotly/package.json ./apps/chatbotly/
 COPY apps/quoteflow/package.json ./apps/quoteflow/
 COPY apps/marketplace/package.json ./apps/marketplace/

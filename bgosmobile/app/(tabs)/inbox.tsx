@@ -183,6 +183,34 @@ export default function InboxScreen() {
               <Text style={styles.modalTitle}>{selectedSession?.customerName || 'Website Visitor'}</Text>
               <Text style={styles.modalSub}>{selectedSession?.channel || 'Website Widget'}</Text>
             </View>
+            <TouchableOpacity
+              style={[
+                styles.takeoverPill,
+                selectedSession?.status === 'OPEN' ? styles.takeoverPillActive : styles.takeoverPillBot,
+              ]}
+              onPress={() => {
+                if (!selectedSession) return;
+                const newStatus = selectedSession.status === 'BOT' ? 'OPEN' : 'BOT';
+                setSelectedSession({ ...selectedSession, status: newStatus });
+                setSessions((prev) =>
+                  prev.map((s) => (s.id === selectedSession.id ? { ...s, status: newStatus } : s))
+                );
+              }}
+            >
+              <MaterialIcons
+                name={selectedSession?.status === 'OPEN' ? 'pause-circle' : 'smart-toy'}
+                size={14}
+                color={selectedSession?.status === 'OPEN' ? '#ef4444' : '#38bdf8'}
+              />
+              <Text
+                style={[
+                  styles.takeoverText,
+                  selectedSession?.status === 'OPEN' ? { color: '#ef4444' } : { color: '#38bdf8' },
+                ]}
+              >
+                {selectedSession?.status === 'OPEN' ? 'AI Paused' : 'AI Active'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <FlatList
@@ -262,4 +290,8 @@ const styles = StyleSheet.create({
   replyBox: { flexDirection: 'row', padding: 12, backgroundColor: '#1e293b', borderTopWidth: 1, borderTopColor: '#334155', alignItems: 'center' },
   replyInput: { flex: 1, height: 44, backgroundColor: '#0f172a', borderRadius: 12, paddingHorizontal: 14, color: '#ffffff', fontSize: 14, borderWidth: 1, borderColor: '#334155' },
   sendBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#0ea5e9', justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
+  takeoverPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, gap: 5 },
+  takeoverPillActive: { backgroundColor: '#ef444420', borderColor: '#ef4444' },
+  takeoverPillBot: { backgroundColor: '#0284c720', borderColor: '#0284c7' },
+  takeoverText: { fontSize: 11, fontWeight: '700' },
 });

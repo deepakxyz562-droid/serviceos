@@ -79,6 +79,7 @@ import {
   UtensilsCrossed,
   ChefHat,
   ShoppingCart,
+  QrCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -297,6 +298,11 @@ const ICON_MAP: Record<string, React.ElementType> = {
   ShoppingCart,
   Briefcase,
   Zap,
+  QrCode,
+  Search,
+  Star,
+  MessageSquare,
+  Send,
 };
 
 const employeeNavSections: NavSection[] = [

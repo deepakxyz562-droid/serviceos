@@ -11,7 +11,7 @@ export default function TabLayout() {
           backgroundColor: '#0f172a',
           borderTopColor: '#1e293b',
           borderTopWidth: 1,
-          height: 60,
+          height: 62,
           paddingBottom: 8,
           paddingTop: 6,
         },
@@ -24,48 +24,73 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="inbox"
         options={{
-          title: 'Live Inbox',
+          title: 'Inbox',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="chat-bubble-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
+        name="leads"
+        options={{
+          title: 'Leads',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="people-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="growth"
+        options={{
+          title: 'Growth',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="trending-up" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="tools"
+        options={{
+          title: 'Tools',
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="grid-view" size={size} color={color} />
+          ),
+        }}
+      />
+      {/* Hidden compatibility tabs for deep routes */}
+      <Tabs.Screen
+        name="appointments"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="submissions"
         options={{
-          title: 'Submissions',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="dynamic-form" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
         name="agents"
         options={{
-          title: 'AI Agents',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="smart-toy" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="appointments"
-        options={{
-          title: 'Bookings',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="event" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="settings" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
     </Tabs>
