@@ -13,6 +13,13 @@ let isTicking = false;
 export function startOutreachBackgroundWorker() {
   // Only run in Node.js server environment and prevent duplicate timers
   if (typeof window !== 'undefined' || workerInterval) return;
+  if (
+    process.env.NEXT_PHASE === 'phase-production-build' ||
+    process.env.npm_lifecycle_event === 'build' ||
+    process.env.BUILDING === '1'
+  ) {
+    return;
+  }
 
   console.log('[Outreach Worker Daemon] Initializing internal background scheduler (60s interval)...');
 

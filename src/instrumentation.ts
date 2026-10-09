@@ -6,6 +6,15 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
+    // Never run background daemons during next build / SSG prerender phase
+    if (
+      process.env.NEXT_PHASE === 'phase-production-build' ||
+      process.env.npm_lifecycle_event === 'build' ||
+      process.env.BUILDING === '1'
+    ) {
+      return;
+    }
+
     try {
       const { startOutreachBackgroundWorker } = await import('@/lib/outreach/worker-daemon');
       startOutreachBackgroundWorker();
