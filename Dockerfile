@@ -60,10 +60,12 @@ ENV USE_SUPABASE_DB=true
 # when in-memory caches grow. The app normally uses ~500MB; this leaves headroom.
 ENV NODE_OPTIONS="--max-old-space-size=1024"
 
-# Copy built standalone application & public static assets
+# Copy built standalone application, scripts & public static assets
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/outreach_sent_history.json ./outreach_sent_history.json
 
 EXPOSE 3000
 
