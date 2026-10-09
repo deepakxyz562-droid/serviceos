@@ -56,6 +56,15 @@ const nextConfig: NextConfig = {
     // page — they then have to scroll back down to find their place, which
     // feels slow even if the page rendered instantly.
     scrollRestoration: true,
+    // Disable Webpack worker threads to prevent OOM kills on memory-constrained servers
+    webpackBuildWorker: false,
+    cpus: 1,
+  },
+  webpack: (config, { dev }) => {
+    if (!dev) {
+      config.cache = false; // Disable heavy Webpack memory cache during production build
+    }
+    return config;
   },
   allowedDevOrigins: [
     "21.0.11.123",

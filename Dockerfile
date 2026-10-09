@@ -32,7 +32,8 @@ COPY . .
 # Generate Prisma Client & Build Next.js app
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV CI=1
+ENV NODE_OPTIONS="--max-old-space-size=2048 --no-warnings"
 
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG SUPABASE_SERVICE_ROLE_KEY
