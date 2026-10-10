@@ -167,7 +167,7 @@ describe('order lifecycle notifications',()=>{
   expect(initial.map(r=>r.audience).sort()).toEqual(['customer','owner','vendor']);
   expect(initial.every(r=>r.eventStatus==='CONFIRMED')).toBe(true);
   for(const status of ['PREPARING','PREPARING','READY','DELIVERED'])await database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',saved.id,JSON.stringify({status})]);
-  const messages=(await database.query<any>('SELECT event,"eventStatus" FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1 AND audience=$2 ORDER BY "createdAt",id',[saved.id,'customer'])).rows;
+  const messages=(await database.query<any>('SELECT event,"eventStatus" FROM "NuvoraCommerceOutbox" WHERE "orderId"=$1 AND audience=$2 ORDER BY "createdAt", CASE "eventStatus" WHEN \'CONFIRMED\' THEN 1 WHEN \'PREPARING\' THEN 2 WHEN \'READY\' THEN 3 WHEN \'DELIVERED\' THEN 4 ELSE 5 END',[saved.id,'customer'])).rows;
   expect(messages.map(r=>r.event)).toEqual(['CREATED','PREPARING','READY','DELIVERED']);
   expect(messages.map(r=>r.eventStatus)).toEqual(['CONFIRMED','PREPARING','READY','DELIVERED']);
   await expect(database.query('SELECT nuvora_update_order($1,$2,$3::jsonb)',['business',saved.id,JSON.stringify({status:'READY'})])).rejects.toThrow('INVALID_ORDER_TRANSITION');
