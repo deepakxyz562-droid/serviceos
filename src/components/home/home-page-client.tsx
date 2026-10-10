@@ -8,13 +8,8 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 
-// SEO (P0-1): LandingPage is loaded with ssr:false because it's a 2290-line
-// interactive component that is too heavy for Turbopack to server-render
-// efficiently on first compile (OOM/hang). Instead, the server-component
-// page.tsx renders a lightweight <HomeSeoContent /> block (H1, hero text, key
-// features, FAQ) as static HTML that crawlers see in the initial response.
-// This SEO content is always present in the HTML — it's not hidden — and the
-// interactive LandingPage hydrates on top for human visitors.
+// LandingPage is loaded with ssr:false to optimize hydration and avoid
+// server-side overhead for interactive sub-views.
 const LandingPage = dynamic(
   () => import('@/components/landing/dual-audience-landing').then(m => ({ default: m.DualAudienceLanding })),
   { ssr: false, loading: () => <ViewLoader /> }

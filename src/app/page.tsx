@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
-import { HomeSeoContent } from '@/components/seo/home-seo-content';
 
 /**
  * The HTTP-only auth cookie name. Mirrors `TOKEN_NAME` in `src/lib/auth.ts`.
@@ -12,30 +11,69 @@ import { HomeSeoContent } from '@/components/seo/home-seo-content';
  */
 const AUTH_COOKIE = 'fieseros_session';
 
+const homeFaqs = [
+  {
+    question: 'How does Fieseros create a job from plain language?',
+    answer:
+      'You type or speak an instruction like “Book Sarah in for an emergency boiler repair tomorrow.” Fieseros finds the customer in your CRM, creates the job, checks availability, assigns a technician, drafts the quote and sends the confirmation — all in one run you can review before it goes out.',
+  },
+  {
+    question: 'How are technicians assigned?',
+    answer:
+      'The AI dispatcher matches required certifications, parts on the van, live GPS position, traffic and existing schedule. You can always drag and drop to override, and the board re-optimises the rest of the day automatically.',
+  },
+  {
+    question: 'Is there a mobile app for my crew?',
+    answer:
+      'Yes — a mobile PWA that installs on iOS and Android without an app store. It works offline on site and syncs checklists, photos, signatures and payments as soon as signal returns.',
+  },
+  {
+    question: 'What is GPTForm™?',
+    answer:
+      'GPTForm™ is the built-in form and chatbot builder. Create booking forms, quote requests and lead qualifiers from 20,000+ templates, embed them on your site, and have an AI chat with visitors and book them straight into your calendar.',
+  },
+  {
+    question: 'Do I need my own Vapi or WhatsApp account?',
+    answer:
+      'The AI receptionist supports bring-your-own Vapi key so you control voice costs, and WhatsApp runs on your own Business API number. Email, SMS, push and in-app messaging are included on every paid plan.',
+  },
+  {
+    question: 'How is Fieseros different from Jobber?',
+    answer:
+      'Jobber is a strong scheduling and invoicing tool that still expects you to do the clicking. Fieseros adds an autonomous AI layer — voice reception, dispatch, quoting and follow-up run themselves — and includes forms, chatbots and marketing that Jobber sells separately or not at all.',
+  },
+  {
+    question: 'How is Fieseros different from Housecall Pro?',
+    answer:
+      'Housecall Pro charges per-transaction payment fees and prices AI add-ons on top. Fieseros charges 0% platform commission, includes the AI receptionist and dispatcher in the plan, and gives you one prompt-driven interface instead of a dozen screens.',
+  },
+  {
+    question: 'Will it work with QuickBooks and my accountant?',
+    answer:
+      'Yes. Invoices, payments and payouts export cleanly to QuickBooks and Xero, and your accountant can be given a read-only seat at no extra cost.',
+  },
+  {
+    question: 'How long does setup take?',
+    answer:
+      'Most businesses are live in under an hour. Import customers from a CSV or your current tool, connect your number and calendar, and the AI receptionist can take its first call tonight.',
+  },
+  {
+    question: 'What does 0% platform commission actually mean?',
+    answer:
+      'Fieseros never takes a cut of the money you collect. You pay your card processor’s standard rate and nothing to us on top — tap-to-pay in the field included.',
+  },
+];
+
 /**
- * Homepage — server component shell (P0-1 SEO fix).
+ * Homepage — server component shell.
  *
  * This is a server component that:
  *   1. Exports full `metadata` (title, description, OG, Twitter, canonical)
  *      — server components can export metadata, client components cannot.
- *   2. Renders `<HomeSeoContent />` for non-authenticated visitors — a
- *      server-rendered block with the hero H1, 5 feature pillars, 5
- *      industry pairings, comparison links, and FAQ Q&A + FAQPage schema.
- *      This is always in the initial server response so crawlers see real
- *      content even without executing JavaScript.
+ *   2. Generates JSON-LD structured data (SoftwareApplication, Organization, FAQPage)
+ *      in the initial response so crawlers receive rich structured data.
  *   3. Renders `<HomePageClient />` — the auth-routing logic + interactive
- *      LandingPage (loaded with ssr:false because the 2290-line component
- *      is too heavy for Turbopack to SSR efficiently).
- *
- * The SEO content is visible to:
- *   • Googlebot's first HTML parse (before JS execution)
- *   • Bingbot and other crawlers that don't execute JS
- *   • Social scrapers (Facebook, Twitter, LinkedIn)
- *   • Users with JavaScript disabled
- *
- * Auth-gated views (AppLayout, portals, AuthPage, Onboarding) remain
- * ssr:false inside HomePageClient — they're behind auth and shouldn't be
- * crawled anyway.
+ *      DualAudienceLanding page (loaded with ssr:false to optimize hydration and build performance).
  */
 export const metadata: Metadata = {
   // Google AI Overview & G2 Ranked Authority Title:
@@ -111,9 +149,6 @@ export default async function HomePage() {
         },
         description:
           'Fieseros is an all-in-one, AI-powered operating system and field service management platform built for trade and service-based businesses.',
-        // aggregateRating removed — Google penalizes self-declared ratings
-        // without verified third-party data. The sameAs G2 link below lets
-        // Google pull real reviews from G2's Knowledge Graph if they exist.
         sameAs: [
           'https://www.g2.com/products/fieseros/reviews',
         ],
@@ -128,6 +163,18 @@ export default async function HomePage() {
           'https://www.g2.com/products/fieseros/reviews',
           'https://twitter.com/fieseros',
         ],
+      },
+      {
+        '@type': 'FAQPage',
+        '@id': 'https://fieseros.com/#faq',
+        mainEntity: homeFaqs.map((f) => ({
+          '@type': 'Question',
+          name: f.question,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: f.answer,
+          },
+        })),
       },
     ],
   };
@@ -147,10 +194,8 @@ export default async function HomePage() {
           fetchPriority="high"
         />
       )}
-      {/* Interactive client app — auth routing + landing page (rendered at top) */}
+      {/* Interactive client app — auth routing + landing page */}
       <HomePageClient />
-      {/* Server-rendered SEO content — visible to Googlebot's first HTML parse */}
-      {!hasAuthCookie && <HomeSeoContent />}
     </>
   );
 }
