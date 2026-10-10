@@ -29,6 +29,27 @@ it('starts on canonical host and sets a cookie-bound state with PKCE', async () 
   expect(location.searchParams.get('code_challenge_method')).toBe('S256');
   expect(res.cookies.get(MOBILE_COOKIE)?.value).toBeTruthy();
 });
+it('proceeds directly to Google OAuth when behind a reverse proxy with internal port/proto', async () => {
+  const internalUrl = `http://127.0.0.1:3000/api/bgos/mobile-auth/google?challenge=${challengeFor(verifier)}`;
+  const req = new NextRequest(internalUrl, {
+    headers: {
+      'host': '127.0.0.1:3000',
+      'x-forwarded-host': 'fieseros.com',
+      'x-forwarded-proto': 'https',
+    },
+  });
+  const res = await start(req);
+  const location = new URL(res.headers.get('location')!);
+  expect(location.hostname).toBe('accounts.google.com');
+});
+it('redirects non-canonical host to canonical host', async () => {
+  const url = `https://other-domain.com/api/bgos/mobile-auth/google?challenge=${challengeFor(verifier)}`;
+  const res = await start(new NextRequest(url));
+  expect(res.status).toBe(308);
+  const location = new URL(res.headers.get('location')!);
+  expect(location.hostname).toBe('fieseros.com');
+  expect(location.searchParams.get('challenge')).toBe(challengeFor(verifier));
+});
 it('rejects unsolicited callback and never redirects session tokens', async () => {
   const res = await callback(new NextRequest('https://fieseros.com/api/bgos/mobile-auth/callback?code=abc&state=anything'));
   expect(res.headers.get('location')).toBe('bgos://auth-callback?error=invalid_state');

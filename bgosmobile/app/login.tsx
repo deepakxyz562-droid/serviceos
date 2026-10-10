@@ -13,13 +13,23 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [appleAvailable, setAppleAvailable] = useState(Platform.OS === 'ios');
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const { login, loginGoogle, loginApple, checkAuth, error } = useAuthStore();
 
   useEffect(() => {
+    let active = true;
     if (Platform.OS === 'ios') {
-      isAppleAuthAvailable().then(setAppleAvailable);
+      isAppleAuthAvailable()
+        .then((available) => {
+          if (active) setAppleAvailable(available);
+        })
+        .catch(() => {
+          if (active) setAppleAvailable(false);
+        });
     }
+    return () => {
+      active = false;
+    };
   }, []);
 
   async function signIn() {
