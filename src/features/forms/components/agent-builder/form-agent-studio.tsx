@@ -29,6 +29,7 @@ import {
   PresentationAddModal,
   WhatsAppConnectModal,
 } from './agent-channel-modals';
+import { AgentOverviewTab } from './agent-overview-tab';
 import {
   ArrowLeft,
   Bot,
@@ -64,6 +65,8 @@ import {
   ShoppingBag,
   LayoutTemplate,
   FileText,
+  User,
+  BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -152,7 +155,9 @@ export function FormAgentStudio({
   siteOrigin,
 }: FormAgentStudioProps) {
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
-  const [studioTab, setStudioTab] = useState<'build' | 'skills' | 'train' | 'test' | 'publish'>('build');
+  const [studioTab, setStudioTab] = useState<
+    'overview' | 'personality' | 'knowledge' | 'skills' | 'channels' | 'widget' | 'phone' | 'test' | 'publish' | 'build'
+  >('overview');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
   const [rightDrawerMode, setRightDrawerMode] = useState<'channel_settings' | 'designer'>('channel_settings');
   const [rightDrawerOpen, setRightDrawerOpen] = useState<boolean>(true);
@@ -169,6 +174,8 @@ export function FormAgentStudio({
   const [isInstagramModalOpen, setIsInstagramModalOpen] = useState(false);
   const [isWhatsAppModalOpen, setIsWhatsAppModalOpen] = useState(false);
   const [isPresentationModalOpen, setIsPresentationModalOpen] = useState(false);
+  const auth = useAppStore((s) => s.auth);
+  const businessName = (auth?.tenant as any)?.name || 'Cinderella Cleaners';
 
   // ── Real channel connection state ──────────────────────────────────
   // Fetches the authoritative per-channel connection state from the DB
@@ -349,251 +356,254 @@ export function FormAgentStudio({
   return (
     <div className="flex-1 min-h-0 flex flex-col w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none">
       {/* ═══════════════════════════════════════════════════════════════════════
-          1. TOP NAVIGATION BAR (BUILD | TRAIN | PUBLISH + ⚙️ SETTINGS)
+          1. TOP NAVIGATION BAR (Matching AI Assistant Studio Reference)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between shrink-0 z-30 shadow-2xs">
-        {/* Left: Product Dropdown + Agent Name */}
-        <div className="flex items-center gap-3">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3.5 flex items-center justify-between shrink-0 z-30 shadow-2xs">
+        <div className="flex items-center gap-4 min-w-0">
           {onBack && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={onBack}
-              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground gap-1 shrink-0"
             >
               <ArrowLeft className="size-3.5" /> Back
             </Button>
           )}
 
-          <div className="flex items-center gap-2.5">
-            <div className="size-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-              <Bot className="size-4" />
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="size-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+              <Sparkles className="size-5" />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">AI Agent Builder</span>
-              <ChevronDown className="size-3 text-slate-400" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">AI Assistant Studio</h1>
+                <Badge
+                  variant="secondary"
+                  className="text-[10px] bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-semibold gap-1 py-0 h-4"
+                >
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground truncate hidden sm:block">
+                Configure your AI assistant to handle customer conversations, calls, bookings, quotes and more — across all channels.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Center Title + 3 Studio Pillars */}
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-1.5">
-            {isEditingTitle ? (
-              <input
-                type="text"
-                value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
-                onBlur={handleTitleSubmit}
-                onKeyDown={(e) => e.key === 'Enter' && handleTitleSubmit()}
-                autoFocus
-                className="text-xs font-bold border border-blue-500 rounded px-1.5 py-0.5 bg-background text-foreground"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setIsEditingTitle(true)}
-                className="text-xs font-bold hover:text-blue-600 transition-colors"
-              >
-                {agent.name} {agent.roleTitle ? `— ${agent.roleTitle}` : ''}
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center bg-blue-900/10 dark:bg-slate-800 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setStudioTab('build')}
-              className={cn(
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
-                studioTab === 'build'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              )}
-            >
-              BUILD
-            </button>
-            <button
-              type="button"
-              onClick={() => setStudioTab('skills')}
-              className={cn(
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
-                studioTab === 'skills'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              )}
-            >
-              SKILLS
-            </button>
-            <button
-              type="button"
-              onClick={() => setStudioTab('train')}
-              className={cn(
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
-                studioTab === 'train'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              )}
-            >
-              KNOWLEDGE
-            </button>
-            <button
-              type="button"
-              onClick={() => setStudioTab('test')}
-              className={cn(
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
-                studioTab === 'test'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              )}
-            >
-              TEST LAB
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (studioTab !== 'publish') {
-                  handleSave(agent, true);
-                }
-                setStudioTab('publish');
-              }}
-              className={cn(
-                'px-4 py-1.5 text-xs font-bold rounded-lg transition-all',
-                studioTab === 'publish'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-              )}
-            >
-              PUBLISH
-            </button>
-          </div>
-        </div>
-
-        {/* Right: AI Wizard + Settings + Test Mode */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-muted-foreground hidden md:inline-block">
+            Last updated Apr 24, 2025 10:30 AM
+          </span>
 
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="sm"
-            onClick={() => setSettingsOpen(true)}
-            className="h-8 text-xs font-semibold gap-1.5 text-slate-700 dark:text-slate-300"
+            onClick={() => handleSave(agent, false)}
+            disabled={saving}
+            className="h-8 text-xs font-semibold px-3 rounded-xl border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            <Settings className="size-3.5" />
-            <span>Settings</span>
+            {saving ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
+            Save Changes
           </Button>
 
-          {(studioTab === 'skills' || studioTab === 'train') && (
-            <Button
-              type="button"
-              variant={showSideSimulator ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setShowSideSimulator(!showSideSimulator)}
-              className={cn(
-                'h-8 text-xs font-semibold gap-1.5 cursor-pointer',
-                showSideSimulator ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'text-slate-700 dark:text-slate-300'
-              )}
-            >
-              <Bot className="size-3.5" />
-              <span>{showSideSimulator ? 'Hide Simulator' : 'Live Simulator'}</span>
-            </Button>
-          )}
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Test Mode</span>
-            <Switch
-              checked={isTestMode}
-              onCheckedChange={setIsTestMode}
-              className="scale-75 data-[state=checked]:bg-blue-600"
-            />
-          </div>
-
-          {/* ── Dynamic Channel Action Button (Matching Jotform Screenshots) ── */}
-          {selectedChannel === 'instagram' && (
-            <Button
-              type="button"
-              onClick={() => setIsInstagramModalOpen(true)}
-              className="h-8 text-xs font-semibold text-white bg-gradient-to-r from-amber-500 via-pink-500 to-purple-600 hover:opacity-90 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
-            >
-              <Instagram className="size-3.5" />
-              <span>Connect your Instagram</span>
-            </Button>
-          )}
-
-          {selectedChannel === 'whatsapp' && (
-            <Button
-              type="button"
-              onClick={() => setIsWhatsAppModalOpen(true)}
-              className="h-8 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
-            >
-              <MessageCircle className="size-3.5" />
-              <span>Connect with Meta</span>
-            </Button>
-          )}
-
-          {selectedChannel === 'gmail' && (
-            <Button
-              type="button"
-              onClick={() => { window.location.href = '/api/oauth/gmail'; }}
-              className="h-8 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
-            >
-              <Mail className="size-3.5 text-red-500" />
-              <span>Connect Your Gmail</span>
-            </Button>
-          )}
-
-          {selectedChannel === 'presentation' && (
-            <Button
-              type="button"
-              onClick={() => setIsPresentationModalOpen(true)}
-              className="h-8 text-xs font-semibold text-white bg-purple-700 hover:bg-purple-600 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
-            >
-              <Presentation className="size-3.5" />
-              <span>Add Presentation</span>
-            </Button>
-          )}
-
-          {selectedChannel === 'messenger' && (
-            <Button
-              type="button"
-              onClick={() => useAppStore.getState().setCurrentView('integrations')}
-              className="h-8 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
-            >
-              <MessageSquare className="size-3.5" />
-              <span>Connect with Facebook</span>
-            </Button>
-          )}
-
-          {selectedChannel === 'shopify' && (
-            <Button
-              type="button"
-              onClick={() => {
-                setRightDrawerMode('channel_settings');
-                setRightDrawerOpen(true);
-              }}
-              className="h-8 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-full px-3.5 gap-1.5 shadow-sm transition-all"
-            >
-              <ShoppingBag className="size-3.5" />
-              <span>Connect Store</span>
-            </Button>
-          )}
-
           <Button
             type="button"
+            size="sm"
+            onClick={() => {
+              handleSave(agent, true);
+              setStudioTab('publish');
+            }}
             disabled={saving}
-            onClick={() => handleSave()}
-            className="h-8 text-xs font-bold bg-orange-600 hover:bg-orange-700 text-white px-3.5 rounded-lg shadow-xs"
+            className="h-8 text-xs font-bold px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
           >
-            {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Publish'}
+            Publish
           </Button>
         </div>
       </header>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          2. 3-PANEL WORKSPACE (16 CHANNELS | CANVAS | RIGHT DRAWER)
+          STUDIO NAVIGATION TABS (9 Core Pillars from Reference Screenshot)
          ═══════════════════════════════════════════════════════════════════════ */}
-      {studioTab === 'build' && (
+      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center gap-1 overflow-x-auto shrink-0 shadow-2xs">
+        {[
+          { id: 'overview', label: 'Overview', icon: LayoutTemplate },
+          { id: 'personality', label: 'Personality', icon: User },
+          { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
+          { id: 'skills', label: 'Skills & Actions', icon: CheckCircle2 },
+          { id: 'channels', label: 'Channels', icon: Layers },
+          { id: 'widget', label: 'Chat Widget', icon: Globe },
+          { id: 'phone', label: 'Voice & Phone', icon: Phone },
+          { id: 'test', label: 'Test Lab', icon: Bot },
+          { id: 'publish', label: 'Publish', icon: Sparkles },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const active = studioTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                if (tab.id === 'publish' && studioTab !== 'publish') {
+                  handleSave(agent, true);
+                }
+                setStudioTab(tab.id as StudioTabType);
+              }}
+              className={cn(
+                'flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap',
+                active
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/30 dark:bg-indigo-950/20'
+                  : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+              )}
+            >
+              <Icon className={cn('size-3.5', active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400')} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── OVERVIEW TAB (3-COLUMN DASHBOARD MATCHING REFERENCE SCREENSHOT) ── */}
+      {studioTab === 'overview' && (
+        <AgentOverviewTab
+          agent={agent}
+          onChange={setAgent}
+          onNavigateTab={(tab) => setStudioTab(tab)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          businessName={businessName}
+        />
+      )}
+
+      {/* ── PERSONALITY TAB ── */}
+      {studioTab === 'personality' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+          <div className="max-w-4xl mx-auto">
+            <AgentBuildTab
+              agent={agent}
+              onChange={setAgent}
+              availableForms={accountForms}
+              siteOrigin={siteOrigin}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── CHAT WIDGET TAB ── */}
+      {studioTab === 'widget' && (
+        <div className="flex-1 overflow-hidden p-6 bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center">
+          <div className="max-w-4xl w-full h-full flex flex-col items-center justify-center">
+            <AgentDeviceSimulator
+              agent={agent}
+              isTestMode={true}
+              previewPage={previewPage}
+              onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
+              onSwitchPage={(page) => setPreviewPage(page)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── VOICE & PHONE TAB ── */}
+      {studioTab === 'phone' && (
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+          <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center">
+                <Phone className="size-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">AI Phone Receptionist & Voice</h3>
+                <p className="text-xs text-muted-foreground">Configure the voice model, greeting prompt, and call routing for inbound calls.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <div>
+                <label className="text-xs font-semibold block mb-1.5">Voice Model</label>
+                <select
+                  value={agent.channels?.phone?.voiceId || 'Rachel'}
+                  onChange={(e) =>
+                    setAgent((prev) => ({
+                      ...prev,
+                      channels: {
+                        ...prev.channels,
+                        phone: { ...prev.channels?.phone, voiceId: e.target.value },
+                      },
+                    }))
+                  }
+                  className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="Rachel">Rachel (Warm & Professional - Female)</option>
+                  <option value="Domi">Domi (Friendly & Helpful - Female)</option>
+                  <option value="Adam">Adam (Authoritative & Crisp - Male)</option>
+                  <option value="Antoni">Antoni (Polite & Calm - Male)</option>
+                  <option value="Brian">Brian (Deep & Confident - Male)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold block mb-1.5">Voice Tone</label>
+                <div className="flex gap-2">
+                  {['friendly', 'professional', 'empathetic', 'casual'].map((tone) => (
+                    <button
+                      key={tone}
+                      type="button"
+                      onClick={() => setAgent((prev) => ({ ...prev, voiceTone: tone as any }))}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-xs font-medium capitalize border transition-all',
+                        agent.voiceTone === tone
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold'
+                          : 'bg-slate-50 border-slate-200 text-slate-600'
+                      )}
+                    >
+                      {tone}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                <div>
+                  <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">Record and Transcribe Calls</div>
+                  <div className="text-[11px] text-muted-foreground">Keep complete audio recordings and transcriptions in Call Logs</div>
+                </div>
+                <Switch
+                  checked={agent.channels?.phone?.recordCalls ?? true}
+                  onCheckedChange={(val) =>
+                    setAgent((prev) => ({
+                      ...prev,
+                      channels: {
+                        ...prev.channels,
+                        phone: { ...prev.channels?.phone, recordCalls: val },
+                      },
+                    }))
+                  }
+                  className="scale-75 data-[state=checked]:bg-indigo-600"
+                />
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  onClick={() => handleSave()}
+                  disabled={saving}
+                  className="h-8 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl"
+                >
+                  Save Voice Settings
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          CHANNELS WORKSPACE (16 CHANNELS | CANVAS | RIGHT DRAWER)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {(studioTab === 'channels' || studioTab === 'build') && (
         <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
           {/* ── LEFT DRAWER: 16 CHANNELS (Matching Screenshot) ── */}
           <aside className="w-64 border-r border-slate-800 bg-slate-900 text-slate-100 flex flex-col shrink-0">

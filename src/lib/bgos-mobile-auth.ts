@@ -7,7 +7,7 @@ export const MOBILE_COOKIE = 'bgos-mobile-oauth';
 const PURPOSE = 'bgos-mobile-google-v1';
 export const challengeFor = (verifier: string) => createHash('sha256').update(verifier).digest('base64url');
 export const randomVerifier = () => randomBytes(32).toString('base64url');
-export function callbackUrl() { return `${getAppUrl().replace(/\/+$/, '')}/api/bgos/mobile-auth/callback`; }
+export function callbackUrl() { return `${getAppUrl().replace(/\/+$/, '')}/api/auth/google/callback`; }
 export function mobileAuthConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET &&
     (process.env.SOCIAL_CRYPTO_KEY || process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET));

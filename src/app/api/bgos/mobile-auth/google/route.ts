@@ -22,6 +22,6 @@ export async function GET(request: NextRequest) {
     code_challenge: challengeFor(state.verifier), code_challenge_method: 'S256' }).toString();
   const response = NextResponse.redirect(url);
   response.headers.set('Cache-Control', 'no-store');
-  response.cookies.set(MOBILE_COOKIE, sealMobileState(state), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/api/bgos/mobile-auth', maxAge: 600 });
+  response.cookies.set(MOBILE_COOKIE, sealMobileState(state), { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 600 });
   return response;
 }

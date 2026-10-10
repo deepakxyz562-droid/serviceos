@@ -9,6 +9,7 @@ vi.mock('@/lib/bgos-mobile-account', () => ({ resolveBgosMobileAccount: m.resolv
 vi.mock('@/lib/product-access', () => ({ activateProductWorkspace: vi.fn(), ProductAccessError: class extends Error {} }));
 import { GET as start } from '@/app/api/bgos/mobile-auth/google/route';
 import { GET as callback } from '@/app/api/bgos/mobile-auth/callback/route';
+import { GET as mainCallback } from '@/app/api/auth/google/callback/route';
 import { POST as exchange } from '@/app/api/bgos/mobile-auth/exchange/route';
 import { MOBILE_COOKIE, challengeFor, randomVerifier, sealMobileState } from '@/lib/bgos-mobile-auth';
 const verifier = 'v'.repeat(64);
@@ -27,6 +28,7 @@ it('starts on canonical host and sets a cookie-bound state with PKCE', async () 
   const location = new URL(res.headers.get('location')!);
   expect(location.hostname).toBe('accounts.google.com');
   expect(location.searchParams.get('code_challenge_method')).toBe('S256');
+  expect(location.searchParams.get('redirect_uri')).toBe('https://fieseros.com/api/auth/google/callback');
   expect(res.cookies.get(MOBILE_COOKIE)?.value).toBeTruthy();
 });
 it('proceeds directly to Google OAuth when behind a reverse proxy with internal port/proto', async () => {
@@ -62,6 +64,17 @@ it('returns an encrypted ticket only when browser state matches', async () => {
   expect(url.searchParams.has('ticket')).toBe(true);
   expect(url.searchParams.has('token')).toBe(false);
   expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+});
+it('main Google callback route handles BGOS mobile requests and returns ticket to bgos://auth-callback', async () => {
+  const state = makeState();
+  const req = new NextRequest(`https://fieseros.com/api/auth/google/callback?code=google-code&state=${state.nonce}`, {
+    headers: { Cookie: `${MOBILE_COOKIE}=${sealMobileState(state)}` },
+  });
+  const res = await mainCallback(req);
+  const url = new URL(res.headers.get('location')!);
+  expect(url.protocol).toBe('bgos:');
+  expect(url.hostname).toBe('auth-callback');
+  expect(url.searchParams.has('ticket')).toBe(true);
 });
 it('requires app proof before consuming a Google code and issues BGOS session once', async () => {
   const ticket = sealMobileState({ ...makeState(), code: 'code' });

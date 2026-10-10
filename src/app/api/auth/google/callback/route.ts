@@ -10,6 +10,7 @@ import {
 import { BRAND } from '@/lib/brand';
 import { resolveSignupDefaultPlan } from '@/lib/billing-seed';
 import { getOrCreateBusinessForUser } from '@/lib/quote-flow-session';
+import { MOBILE_COOKIE, MOBILE_RETURN, readMobileState, sealMobileState } from '@/lib/bgos-mobile-auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -272,6 +273,33 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get('code');
     const stateParam = searchParams.get('state');
     const error = searchParams.get('error');
+
+    // Check if this callback belongs to a BGOS mobile auth PKCE session
+    const mobileCookie = request.cookies.get(MOBILE_COOKIE)?.value;
+    if (mobileCookie) {
+      const mobileState = readMobileState(mobileCookie);
+      if (mobileState) {
+        const url = new URL(MOBILE_RETURN);
+        if (!stateParam || stateParam !== mobileState.nonce) {
+          url.searchParams.set('error', 'invalid_state');
+        } else if (error || !code) {
+          url.searchParams.set('error', 'cancelled');
+        } else {
+          url.searchParams.set('ticket', sealMobileState({ ...mobileState, code, expires: Date.now() + 60000 }));
+        }
+        const response = NextResponse.redirect(url);
+        response.cookies.set(MOBILE_COOKIE, '', {
+          path: '/',
+          maxAge: 0,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+        });
+        response.headers.set('Cache-Control', 'no-store');
+        response.headers.set('Referrer-Policy', 'no-referrer');
+        return response;
+      }
+    }
 
     // Parse state parameter early to extract originHost for error redirects
     let state: { mode?: string; redirect?: string; plan?: string; signupMode?: string; redirectUri?: string; originHost?: string } = {};
