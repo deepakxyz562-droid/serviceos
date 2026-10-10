@@ -1,8 +1,10 @@
 export const BRAND = {
   name: 'BGOS',
   tagline: 'Business Growth Operating System',
-  primaryColor: '#643BFA', // BGOS violet
-  accentColor: '#151333',  // Slate 900
+  primaryColor: '#007F73', // BGOS Teal
+  accentColor: '#00BFAE',  // Cyan glow
+  heroColor: '#003E43',    // Deep Teal
+  inkColor: '#070B2D',     // Ink Navy
 };
 
 // Default backend API base URL for BGOS

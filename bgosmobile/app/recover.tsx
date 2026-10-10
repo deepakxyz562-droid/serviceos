@@ -15,5 +15,38 @@ export default function RecoveryScreen() {
     catch (e) { setError(e instanceof Error ? e.message : 'Could not request recovery.'); }
     finally { setBusy(false); }
   }
-  return <Screen title="Recover your account" subtitle="Reset your password securely through your email."><Card><ErrorNotice message={error} />{sent ? <Text style={ui.body}>If an account exists for that email, you’ll receive a reset link. Check your inbox and spam folder, then return here to sign in.</Text> : <><Field label="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoComplete="email" /><Action label={busy ? 'Requesting…' : 'Send reset link'} disabled={busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())} onPress={recover} /></>}<Action secondary label="Back to sign in" disabled={busy} onPress={() => router.replace('/login')} /></Card></Screen>;
+  return (
+    <Screen
+      title="Recover your account"
+      subtitle="Reset your password securely through your email."
+      showBack={true}
+      onBack={() => router.replace('/login')}
+    >
+      <Card>
+        <ErrorNotice message={error} />
+        {sent ? (
+          <Text style={ui.body}>
+            If an account exists for that email, you’ll receive a reset link. Check your inbox and spam folder, then return here to sign in.
+          </Text>
+        ) : (
+          <>
+            <Field
+              label="Email address"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+            <Action
+              label={busy ? 'Requesting…' : 'Send reset link'}
+              disabled={busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())}
+              onPress={recover}
+            />
+          </>
+        )}
+        <Action secondary label="Back to sign in" disabled={busy} onPress={() => router.replace('/login')} />
+      </Card>
+    </Screen>
+  );
 }

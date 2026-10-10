@@ -411,7 +411,37 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const url = `${window.location.origin}${landingPagePath}`;
+                await navigator.clipboard.writeText(url);
+                toast.success('Public booking page link copied!');
+              } catch {
+                toast.error('Failed to copy booking link');
+              }
+            }}
+            className="font-semibold text-xs h-9 gap-1.5"
+          >
+            <Copy className="size-3.5 text-muted-foreground" />
+            <span>Copy Booking Link</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setActiveTab('calendars')}
+            className="font-semibold text-xs h-9 gap-1.5"
+          >
+            <CalendarIcon className="size-3.5 text-muted-foreground" />
+            <span>Sync External Calendar</span>
+          </Button>
+
           <Button
             type="button"
             onClick={() => {
@@ -426,11 +456,58 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
               });
               setShowEventModal(true);
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold gap-1.5 shadow-sm rounded-xl h-9 text-xs"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-1.5 shadow-sm rounded-xl h-9 text-xs"
           >
             <Plus className="size-4" />
             <span>Create Event Type</span>
           </Button>
+        </div>
+      </div>
+
+      {/* ── Stitch Kinetic Appointments Status & Telemetry Strip ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+            <span>Bookable Services</span>
+            <CalendarCheck className="size-3.5 text-primary" />
+          </div>
+          <p className="text-xl font-bold text-foreground">{eventTypes.length}</p>
+          <p className="text-[10px] text-muted-foreground">Active event slots</p>
+        </div>
+
+        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+            <span>Upcoming Sessions</span>
+            <Clock className="size-3.5 text-violet-600" />
+          </div>
+          <p className="text-xl font-bold text-foreground">{filteredMeetings.length}</p>
+          <p className="text-[10px] text-muted-foreground">Scheduled with customers</p>
+        </div>
+
+        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+            <span>External Calendar</span>
+            <CheckCircle2 className="size-3.5 text-emerald-600" />
+          </div>
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold text-foreground">
+              {calendarSettings?.connected ? 'Google Calendar Live' : 'Ready to Connect'}
+            </span>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Real-time slot conflict check</p>
+        </div>
+
+        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+            <span>AI Booking Engine</span>
+            <Bot className="size-3.5 text-purple-600" />
+          </div>
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <span className="size-2 rounded-full bg-purple-500 animate-pulse" />
+            <span className="text-xs font-bold text-foreground">Active 24/7</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground">Voice &amp; chat automated slots</p>
         </div>
       </div>
 

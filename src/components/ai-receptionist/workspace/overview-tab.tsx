@@ -150,6 +150,204 @@ export function OverviewTab({ data, onNavigate, onTestCall }: OverviewTabProps) 
         </Card>
       )}
 
+      {/* ── Stitch Kinetic Workstation: AI Receptionist Status & Visual IVR Routing ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Sub-section: AI Receptionist Status Card (6 cols) */}
+        <Card className="lg:col-span-6 border-border/60 shadow-sm flex flex-col justify-between">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <div className="size-7 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center">
+                <Sparkles className="size-4" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold">AI Receptionist Status</CardTitle>
+                <CardDescription className="text-xs">Live conversational voice engine</CardDescription>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold text-[10px]">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Online
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onNavigate('receptionist')}
+                className="text-xs h-7 px-2"
+              >
+                Edit Voice
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Persona Hero */}
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
+              <div className="relative size-12 rounded-2xl bg-gradient-to-br from-primary to-purple-600 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                <Bot className="size-6" />
+                <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-emerald-500 border-2 border-background" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-sm text-foreground truncate">
+                  {data.receptionist?.name || 'AI Phone Assistant'}
+                </p>
+                <p className="text-[11px] text-purple-600 dark:text-purple-400 font-semibold">
+                  Natural Conversational Voice • 24/7
+                </p>
+                <p className="text-xs text-muted-foreground italic truncate mt-0.5">
+                  {data.receptionist?.greeting
+                    ? `"${data.receptionist.greeting.slice(0, 75)}…"`
+                    : '"Hi! Thanks for calling. How can I help you today?"'}
+                </p>
+              </div>
+            </div>
+
+            {/* Active Capabilities */}
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
+                Active Telephony Capabilities
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-xs font-medium text-foreground">
+                  <CheckCircle2 className="size-3 text-emerald-600" /> Answer FAQs
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-xs font-medium text-foreground">
+                  <CheckCircle2 className="size-3 text-emerald-600" /> Book Appointments
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-xs font-medium text-foreground">
+                  <CheckCircle2 className="size-3 text-emerald-600" /> Capture Leads
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted text-xs font-medium text-foreground">
+                  <CheckCircle2 className="size-3 text-emerald-600" /> Provide Estimates
+                </span>
+                {data.receptionist?.handoffEnabled && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-semibold">
+                    <CheckCircle2 className="size-3 text-purple-600" /> Human Transfer
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Performance Strip */}
+            <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-muted/30 text-center">
+              <div>
+                <p className="text-[10px] text-muted-foreground">Response Latency</p>
+                <p className="font-bold text-xs text-foreground mt-0.5">
+                  {data.receptionist?.responseDelaySeconds != null
+                    ? `${data.receptionist.responseDelaySeconds}s`
+                    : '0.8s'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Max Duration</p>
+                <p className="font-bold text-xs text-foreground mt-0.5">
+                  {usage?.maxCallDurationSeconds
+                    ? `${Math.floor(usage.maxCallDurationSeconds / 60)}m`
+                    : '10m'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground">Active Lines</p>
+                <p className="font-bold text-xs text-foreground mt-0.5">
+                  {data.connections?.length || 1} line{data.connections?.length === 1 ? '' : 's'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sub-section: Call Routing & Visual IVR Flow (6 cols) */}
+        <Card className="lg:col-span-6 border-border/60 shadow-sm flex flex-col justify-between">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-2">
+              <div className="size-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                <PhoneCall className="size-4" />
+              </div>
+              <div>
+                <CardTitle className="text-sm font-semibold">Call Routing &amp; IVR Architecture</CardTitle>
+                <CardDescription className="text-xs">Visual inbound call progression</CardDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate('phones')}
+              className="text-xs h-7 px-2"
+            >
+              Configure Lines
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Visual Flow Tree */}
+            <div className="rounded-xl bg-muted/30 p-3.5 border">
+              <div className="flex items-center justify-between gap-2">
+                {/* Node 1: Incoming */}
+                <div className="flex flex-col items-center text-center w-20 shrink-0">
+                  <div className="size-9 rounded-xl bg-card border flex items-center justify-center text-blue-600 shadow-2xs">
+                    <Phone className="size-4" />
+                  </div>
+                  <span className="text-[11px] font-bold text-foreground mt-1">Inbound Call</span>
+                  <span className="text-[10px] text-muted-foreground truncate max-w-[70px]">
+                    {data.connections?.[0]?.phoneNumber?.number || 'Main line'}
+                  </span>
+                </div>
+
+                {/* Connector */}
+                <div className="flex-1 h-0.5 bg-border relative">
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-primary" />
+                </div>
+
+                {/* Node 2: AI Core */}
+                <div className="flex flex-col items-center text-center w-24 shrink-0">
+                  <div className="size-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 text-white flex items-center justify-center shadow-xs">
+                    <Bot className="size-5" />
+                  </div>
+                  <span className="text-[11px] font-bold text-foreground mt-1">AI Receptionist</span>
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">Intent Parser</span>
+                </div>
+
+                {/* Connector */}
+                <div className="flex-1 h-0.5 bg-border relative">
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 size-1.5 rounded-full bg-purple-600" />
+                </div>
+
+                {/* Node 3: Branches */}
+                <div className="flex flex-col gap-1 flex-1 min-w-[100px] text-[10px]">
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-semibold truncate">
+                    <CheckCircle2 className="size-2.5" /> Book Slot
+                  </div>
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-semibold truncate">
+                    <CheckCircle2 className="size-2.5" /> Create Lead
+                  </div>
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold truncate">
+                    <CheckCircle2 className="size-2.5" /> Human Transfer
+                  </div>
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-semibold truncate">
+                    <CheckCircle2 className="size-2.5" /> Voicemail Drop
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Fallback routing note */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
+              <span>
+                Fallback Target:{' '}
+                <strong className="text-foreground">
+                  {data.receptionist?.handoffTransferTarget || 'Team Manager'}
+                </strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => onNavigate('phones')}
+                className="text-primary hover:underline font-semibold"
+              >
+                Change
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* ── Contextual Action Hub ── */}
       <div>
         <div className="flex items-center justify-between mb-3">

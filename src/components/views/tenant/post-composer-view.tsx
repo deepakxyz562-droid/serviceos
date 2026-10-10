@@ -517,6 +517,36 @@ export function PostComposerView() {
                     Generate
                   </Button>
                 </div>
+
+                {/* Quick Prompts Carousel */}
+                <div className="pt-1.5 space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Quick Prompt Inspiration
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      'Spring Cleaning 20% Off',
+                      'Move-in Deep Clean Special',
+                      'Weekend Openings Available',
+                      'Pet-Safe Organic Products',
+                      '5-Star Customer Review Spotlight',
+                    ].map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => {
+                          setAiTopic(prompt);
+                          if (selectedPlatforms.length > 0) {
+                            toast.info(`Prompt selected: "${prompt}". Click Generate to run AI.`);
+                          }
+                        }}
+                        className="px-2 py-0.5 rounded-md border bg-background hover:bg-muted text-[11px] font-medium text-foreground transition-colors"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* Images */}
@@ -776,6 +806,83 @@ export function PostComposerView() {
                 <span className="font-medium text-foreground">
                   {content.length} / {charLimit}
                 </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stitch Marketing Studio Live Preview Mockup Card */}
+          <Card className="border-border/60 shadow-sm overflow-hidden">
+            <CardHeader className="pb-3 border-b bg-muted/20">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Live Feed Preview
+                </CardTitle>
+                <div className="flex items-center gap-1 text-[11px] font-semibold text-primary">
+                  <Sparkles className="size-3" /> Omnichannel
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-3.5 space-y-3">
+              {/* Account Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="size-8 rounded-full bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                    {(accounts.find((a) => selectedAccountIds.includes(a.id))?.accountName || 'BG')[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-foreground truncate">
+                      {accounts.find((a) => selectedAccountIds.includes(a.id))?.accountName || 'Your Business'}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      Just now • Public
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider">
+                  {selectedPlatforms[0] ? selectedPlatforms[0] : 'Preview'}
+                </Badge>
+              </div>
+
+              {/* Media Graphic Preview */}
+              {mediaUrls.length > 0 ? (
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden border bg-muted">
+                  <img
+                    src={mediaUrls[0]}
+                    alt="Post media preview"
+                    className="size-full object-cover"
+                  />
+                  {mediaUrls.length > 1 && (
+                    <span className="absolute bottom-2 right-2 rounded-md bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      +{mediaUrls.length - 1} more
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-gradient-to-br from-primary/10 via-purple-500/10 to-muted flex flex-col items-center justify-center p-4 text-center border border-dashed border-border/70">
+                  <ImageIcon className="size-6 text-muted-foreground/60 mb-1" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">
+                    No image attached
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/80">
+                    Upload photos above to preview rich social media card
+                  </span>
+                </div>
+              )}
+
+              {/* Caption Text Preview */}
+              <div className="text-xs text-foreground space-y-1.5">
+                <p className="whitespace-pre-wrap leading-relaxed line-clamp-4">
+                  {content || (
+                    <span className="italic text-muted-foreground">
+                      Compose your caption or generate with AI above to preview how your audience sees it…
+                    </span>
+                  )}
+                </p>
+                {linkUrl && (
+                  <p className="text-[11px] text-primary underline truncate font-medium">
+                    {linkUrl}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
