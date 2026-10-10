@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { issueAuthTokens, getRefreshSessionMetadata } from '@/lib/auth';
-import { applyRateLimit, authLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { applyRateLimit, oauthLimiter, rateLimitResponse, getClientIp } from '@/lib/rate-limit';
 import { callbackUrl, challengeFor, readMobileState } from '@/lib/bgos-mobile-auth';
 import { verifyGoogleToken } from '@/lib/quote-flow-google-auth';
 import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 import { activateProductWorkspace, ProductAccessError } from '@/lib/product-access';
 const input = z.object({ ticket: z.string().max(12000), verifier: z.string().regex(/^[\w-]{43,128}$/) });
 export async function POST(request: NextRequest) {
-  const limited = applyRateLimit(authLimiter, request);
+  const limited = applyRateLimit(oauthLimiter, request);
   if (limited) return rateLimitResponse(limited.resetAtMs);
   const body = input.safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: 'Invalid sign-in request' }, { status: 400 });
@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
     const authUser = { id: user.id, email: user.email, name: user.name, role: account.user.role, tenantId: account.user.tenantId,
       workspaceId: account.user.workspaceId, avatar: user.avatar, isSuperAdmin: false };
     const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    oauthLimiter.reset(getClientIp(request));
     return NextResponse.json({ token: tokens.accessToken, refreshToken: tokens.refreshToken, user: authUser,
       workspace: account.workspace, onboardingRequired: account.onboardingRequired }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {

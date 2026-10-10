@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 const m = vi.hoisted(() => ({ issue: vi.fn(), find: vi.fn(), update: vi.fn(), resolve: vi.fn(), verify: vi.fn() }));
 vi.mock('@/lib/auth', () => ({ getAppUrl: () => 'https://fieseros.com', issueAuthTokens: m.issue, getRefreshSessionMetadata: () => ({}) }));
 vi.mock('@/lib/db', () => ({ db: { user: { findUnique: m.find, update: m.update } } }));
-vi.mock('@/lib/rate-limit', () => ({ applyRateLimit: () => null, authLimiter: {}, rateLimitResponse: vi.fn() }));
+vi.mock('@/lib/rate-limit', () => ({ applyRateLimit: () => null, authLimiter: {}, oauthLimiter: { reset: vi.fn() }, getClientIp: () => '127.0.0.1', rateLimitResponse: vi.fn() }));
 vi.mock('@/lib/quote-flow-google-auth', () => ({ verifyGoogleToken: m.verify }));
 vi.mock('@/lib/bgos-mobile-account', () => ({ resolveBgosMobileAccount: m.resolve }));
 vi.mock('@/lib/product-access', () => ({ activateProductWorkspace: vi.fn(), ProductAccessError: class extends Error {} }));

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { issueAuthTokens, getRefreshSessionMetadata } from '@/lib/auth';
-import { applyRateLimit, authLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { applyRateLimit, oauthLimiter, rateLimitResponse, getClientIp } from '@/lib/rate-limit';
 import { decodeAppleIdentityToken } from '@/lib/bgos-apple-auth';
 import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 import { activateProductWorkspace, ProductAccessError } from '@/lib/product-access';
@@ -16,7 +16,7 @@ const appleInputSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const limited = applyRateLimit(authLimiter, request);
+  const limited = applyRateLimit(oauthLimiter, request);
   if (limited) return rateLimitResponse(limited.resetAtMs);
 
   const parsed = appleInputSchema.safeParse(await request.json().catch(() => null));
@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
     };
 
     const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
+    oauthLimiter.reset(getClientIp(request));
 
     return NextResponse.json(
       {

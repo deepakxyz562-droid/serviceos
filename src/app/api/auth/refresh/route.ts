@@ -9,7 +9,7 @@ import {
   type AuthUser,
 } from '@/lib/auth';
 import { revokeRefreshSession, rotateRefreshSession } from '@/lib/auth-refresh-session';
-import { applyRateLimit, authLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { applyRateLimit, refreshLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
 import { ProductAccessError } from '@/lib/product-access';
 import { withRequestId } from '@/lib/logger';
@@ -87,7 +87,7 @@ async function resolveRefreshSubject(
 
 export async function POST(request: NextRequest) {
   const log = withRequestId(request);
-  const limited = applyRateLimit(authLimiter, request);
+  const limited = applyRateLimit(refreshLimiter, request);
   if (limited) return rateLimitResponse(limited.resetAtMs);
 
   try {

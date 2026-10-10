@@ -49,12 +49,16 @@ class RateLimiter {
 }
 
 // Pre-configured limiters
-// Auth routes: 10 attempts per 15 min per IP (brute-force protection)
-export const authLimiter = new RateLimiter(15 * 60 * 1000, 10);
-// Password reset: 3 per hour per IP
-export const passwordResetLimiter = new RateLimiter(60 * 60 * 1000, 3);
-// OTP send: 5 per hour per IP (in addition to per-phone limit already in the route)
-export const otpLimiter = new RateLimiter(60 * 60 * 1000, 5);
+// Auth routes (passwords): 30 attempts per 15 min per IP (brute-force protection)
+export const authLimiter = new RateLimiter(15 * 60 * 1000, 30);
+// OAuth routes (Google / Apple / SSO): 60 attempts per 15 min per IP
+export const oauthLimiter = new RateLimiter(15 * 60 * 1000, 60);
+// Token refresh routes: 120 attempts per 15 min per IP (silent background refreshes)
+export const refreshLimiter = new RateLimiter(15 * 60 * 1000, 120);
+// Password reset: 5 per hour per IP
+export const passwordResetLimiter = new RateLimiter(60 * 60 * 1000, 5);
+// OTP send: 10 per hour per IP (in addition to per-phone limit already in the route)
+export const otpLimiter = new RateLimiter(60 * 60 * 1000, 10);
 // Generic API: 300 per minute per IP
 export const apiLimiter = new RateLimiter(60 * 1000, 300);
 
@@ -62,6 +66,8 @@ export const apiLimiter = new RateLimiter(60 * 1000, 300);
 if (typeof setInterval !== 'undefined') {
   const interval = setInterval(() => {
     authLimiter.cleanup();
+    oauthLimiter.cleanup();
+    refreshLimiter.cleanup();
     passwordResetLimiter.cleanup();
     otpLimiter.cleanup();
     apiLimiter.cleanup();
@@ -69,8 +75,10 @@ if (typeof setInterval !== 'undefined') {
   if (interval.unref) interval.unref();
 }
 
-/** Extract client IP from request, handling X-Forwarded-For through the proxy. */
+/** Extract client IP from request, handling Cloudflare and proxy headers. */
 export function getClientIp(request: Request): string {
+  const cf = request.headers.get('cf-connecting-ip');
+  if (cf) return cf.trim();
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0]!.trim();
   return request.headers.get('x-real-ip') || 'unknown';

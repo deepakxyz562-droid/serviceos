@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { applyRateLimit, authLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { applyRateLimit, oauthLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { MOBILE_COOKIE, callbackUrl, challengeFor, mobileAuthConfigured, randomVerifier, sealMobileState } from '@/lib/bgos-mobile-auth';
 
 export async function GET(request: NextRequest) {
-  const limited = applyRateLimit(authLimiter, request);
+  const limited = applyRateLimit(oauthLimiter, request);
   if (limited) return rateLimitResponse(limited.resetAtMs);
   if (!mobileAuthConfigured()) return NextResponse.json({ error: 'Google sign-in is not configured on this server.' }, { status: 503 });
   const challenge = request.nextUrl.searchParams.get('challenge') || '';
