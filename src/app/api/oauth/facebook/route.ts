@@ -81,13 +81,21 @@ export async function GET(request: NextRequest) {
     // Prefer the 'facebook' entry when both exist.
     orderBy: { provider: 'asc' },
   });
-  if (!cred || !cred.clientId) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.META_CLIENT_ID ||
+    process.env.META_APP_ID ||
+    process.env.FACEBOOK_APP_ID ||
+    process.env.FACEBOOK_CLIENT_ID;
+
+  if (!clientId) {
     return NextResponse.json(
       {
         error: 'PLATFORM_NOT_CONFIGURED',
         message:
           'A platform admin must register Facebook/Meta OAuth credentials ' +
-          '(IntegrationCredential, provider=facebook or provider=instagram) ' +
+          '(in SuperAdmin Integration Credentials or META_APP_ID / META_CLIENT_ID in server environment) ' +
           'before tenants can connect.',
       },
       { status: 503 },
@@ -102,7 +110,7 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const callbackUrl = cred.redirectUri
+  const callbackUrl = cred?.redirectUri
     ? cred.redirectUri
     : `${appUrl}/api/oauth/facebook/callback`;
 
@@ -125,10 +133,10 @@ export async function GET(request: NextRequest) {
     'pages_manage_posts,pages_read_engagement,pages_show_list,pages_read_user_content,instagram_content_publish';
   // Prefer the scopes configured on the credential if set, otherwise the
   // canonical FB publishing scopes above.
-  const scopes = cred.scopes && cred.scopes.trim().length > 0 ? cred.scopes : FB_SCOPES;
+  const scopes = cred?.scopes && cred.scopes.trim().length > 0 ? cred.scopes : FB_SCOPES;
 
   const authUrl = new URL('https://www.facebook.com/v18.0/dialog/oauth');
-  authUrl.searchParams.set('client_id', cred.clientId);
+  authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', callbackUrl);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('scope', scopes);

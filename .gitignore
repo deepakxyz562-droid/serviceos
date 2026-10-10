@@ -150,3 +150,7 @@ next-dev.pid
 
 !/prisma/migrations/20261008120000_product_workspaces/
 !/prisma/migrations/20261008120000_product_workspaces/migration.sql
+
+# BGOS application identity assets
+!bgosmobile/assets/brand-mark.png
+!bgosmobile/assets/app-icon.png

@@ -85,10 +85,21 @@ export async function GET(request: NextRequest) {
     where: { provider: 'twitter', status: 'active' },
     select: { clientId: true, clientSecret: true },
   });
-  if (!cred) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.TWITTER_CLIENT_ID ||
+    process.env.X_CLIENT_ID;
+
+  const clientSecret =
+    cred?.clientSecret ||
+    process.env.TWITTER_CLIENT_SECRET ||
+    process.env.X_CLIENT_SECRET;
+
+  if (!clientId) {
     return renderOAuthErrorPage({
       provider: 'twitter',
-      message: 'X (Twitter) OAuth app credentials are no longer configured.',
+      message: 'X (Twitter) OAuth app credentials are not configured. Please configure them in SuperAdmin Integration Credentials or server environment.',
     });
   }
 
@@ -108,7 +119,7 @@ export async function GET(request: NextRequest) {
     const formBody = new URLSearchParams({
       code,
       grant_type: 'authorization_code',
-      client_id: cred.clientId,
+      client_id: clientId,
       redirect_uri: redirectUri,
       code_verifier: codeVerifier,
     });
@@ -118,9 +129,9 @@ export async function GET(request: NextRequest) {
     };
     // Confidential client: send Basic auth (client_id:client_secret base64)
     // instead of client_id in the form body. X supports both patterns.
-    if (cred.clientSecret) {
+    if (clientSecret) {
       const basic = Buffer.from(
-        `${cred.clientId}:${cred.clientSecret}`,
+        `${clientId}:${clientSecret}`,
       ).toString('base64');
       headers['Authorization'] = `Basic ${basic}`;
       // When Basic auth is used, client_id should NOT also be in the body.

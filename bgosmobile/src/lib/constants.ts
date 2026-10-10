@@ -1,8 +1,8 @@
 export const BRAND = {
   name: 'BGOS',
   tagline: 'Business Growth Operating System',
-  primaryColor: '#0ea5e9', // Electric Cyan
-  accentColor: '#0f172a',  // Slate 900
+  primaryColor: '#643BFA', // BGOS violet
+  accentColor: '#151333',  // Slate 900
 };
 
 // Default backend API base URL for BGOS
@@ -11,7 +11,7 @@ export const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL || 'https://bgos.fiesero
 
 export const API_PATHS = {
   login: '/api/auth/login',
-  currentUser: '/api/auth/me',
+  currentUser: '/api/bgos/mobile-auth/session',
   // Omnichannel Live Inbox
   inboxSessions: '/api/omnichannel/conversations',
   inboxMessages: (id: string) => `/api/omnichannel/conversations/${id}/messages`,

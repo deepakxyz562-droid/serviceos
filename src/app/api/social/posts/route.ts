@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { createHash } from 'node:crypto';
 import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { publishPost } from '@/lib/social/publisher';
@@ -175,6 +176,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!['draft', 'scheduled', 'published'].includes(body.status || 'draft')) return NextResponse.json({ error: 'Invalid post status.' }, { status: 400 });
+    if (body.status === 'scheduled' && (!body.scheduledAt || !Number.isFinite(Date.parse(body.scheduledAt)) || Date.parse(body.scheduledAt) <= Date.now())) return NextResponse.json({ error: 'Choose a valid future schedule.' }, { status: 400 });
+    const key = request.headers.get('idempotency-key');
+    if (key && !/^[a-zA-Z0-9_-]{16,100}$/.test(key)) return NextResponse.json({ error: 'Invalid request key.' }, { status: 400 });
+    const requestId = key ? `sp_${createHash('sha256').update(`${tenantId}:${user.id}:${key}`).digest('hex')}` : undefined;
+    if (requestId) {
+      const existing = await db.socialPost.findUnique({ where: { id: requestId } });
+      if (existing) return NextResponse.json({ data: { ...existing, mediaUrls: safeJsonArray(existing.mediaUrls), publishTargets: safeJsonArray(existing.publishTargets) } });
+    }
+
     // Validate platforms.
     for (const t of body.targets) {
       if (!isValidPlatform(t.platform)) {
@@ -198,6 +209,7 @@ export async function POST(request: NextRequest) {
       select: { id: true, platform: true },
     });
     const ownedIds = new Set(ownedAccounts.map((a) => a.id));
+    if (body.targets.some(t => ownedAccounts.find(a => a.id === t.socialAccountId)?.platform !== t.platform)) return NextResponse.json({ error: 'A publishing channel does not match its connected account.' }, { status: 400 });
     const missing = accountIds.filter((id) => !ownedIds.has(id));
     if (missing.length > 0) {
       return NextResponse.json(
@@ -216,7 +228,9 @@ export async function POST(request: NextRequest) {
       requestedStatus === 'published' ||
       (requestedStatus === 'scheduled' && (!scheduledAt || scheduledAt.getTime() <= now.getTime()));
 
-    const initialStatus = publishNow ? 'publishing' : requestedStatus === 'published' ? 'publishing' : requestedStatus;
+    // The publisher must claim a queued post itself. Persisting 'publishing' here
+    // previously made publishPost skip it forever. Scheduled-now is also recoverable by cron.
+    const initialStatus = publishNow ? 'scheduled' : requestedStatus;
 
     // Build the initial publishTargets JSON (all targets 'pending').
     const publishTargets: PublishTarget[] = body.targets.map((t) => ({
@@ -226,15 +240,17 @@ export async function POST(request: NextRequest) {
     }));
 
     // Persist the post.
+    let created = true;
     const post = await db.socialPost.create({
       data: {
+        ...(requestId ? { id: requestId } : {}),
         tenantId,
         status: initialStatus,
         content: body.content,
         mediaUrls: JSON.stringify(body.mediaUrls || []),
         linkUrl: body.linkUrl || null,
         publishTargets: JSON.stringify(publishTargets),
-        scheduledAt,
+        scheduledAt: publishNow ? now : scheduledAt,
         publishedAt: null,
         failureReason: null,
         gbpPostType: body.gbpPostType || null,
@@ -253,7 +269,15 @@ export async function POST(request: NextRequest) {
         publishedAt: true,
         createdAt: true,
       },
+    }).catch(async (error) => {
+      if (!requestId) throw error;
+      const existing = await db.socialPost.findUnique({ where: { id: requestId } });
+      if (!existing) throw error;
+      created = false;
+      return existing;
     });
+
+    if (!created) return NextResponse.json({ data: { ...post, mediaUrls: safeJsonArray(post.mediaUrls), publishTargets: safeJsonArray(post.publishTargets) } });
 
     // Audit log (best-effort).
     await logActivity({
@@ -275,9 +299,7 @@ export async function POST(request: NextRequest) {
     // immediately with status='publishing' and let the UI poll.
     if (publishNow) {
       // Fire-and-forget — the orchestrator never throws.
-      publishPost(post.id).catch((err) => {
-        console.error(`[api/social/posts] Background publish failed for ${post.id}:`, err);
-      });
+      after(() => publishPost(post.id));
     }
 
     return NextResponse.json(

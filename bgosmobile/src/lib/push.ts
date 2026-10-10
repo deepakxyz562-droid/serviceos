@@ -16,7 +16,7 @@ export async function enablePush() {
   await apiRequest('/api/notifications/push/subscribe', { method: 'POST', body: { expoPushToken: result.data, platform: Platform.OS } });
   await SecureStore.setItemAsync(key, result.data);
 }
-export async function unregisterPush() {
+export async function unregisterPush(accessToken?: string | null) {
   const token = await SecureStore.getItemAsync(key);
-  if (token) { await apiRequest('/api/notifications/push/subscribe', { method: 'DELETE', body: { expoPushToken: token } }); await SecureStore.deleteItemAsync(key); }
+  if (token) { await apiRequest('/api/notifications/push/subscribe', { method: 'DELETE', body: { expoPushToken: token }, ...(accessToken ? { skipAuth: true, headers: { Authorization: `Bearer ${accessToken}` } } : {}) }); await SecureStore.deleteItemAsync(key); }
 }

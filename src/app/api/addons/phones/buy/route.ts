@@ -324,21 +324,50 @@ export async function POST(request: NextRequest) {
       const vapi = getVapiVoiceProvider();
 
       // Get Twilio credentials for the Vapi import (Vapi needs them to reference the Twilio number)
-      const twilioAuthToken = await getDecryptedApiKey('TWILIO');
-      if (!twilioAuthToken) {
-        throw new Error('Twilio Auth Token not configured — cannot import number into Vapi');
-      }
+      let twilioAuthToken = await getDecryptedApiKey('TWILIO');
+      let twilioAccountSid = '';
 
-      // Get Twilio Account SID from TwilioProviderConfig or AiProviderConfig.configJson
+      // Get Twilio Account SID from AiProviderConfig.configJson
       const twilioConfig = await db.aiProviderConfig.findUnique({
         where: { provider: 'TWILIO' },
         select: { configJson: true },
       });
-      let twilioAccountSid = '';
       if (twilioConfig?.configJson) {
         try {
           twilioAccountSid = JSON.parse(twilioConfig.configJson).accountSid || '';
         } catch { /* ignore */ }
+      }
+
+      // Fallback: check Superadmin CommunicationProvider table
+      if (!twilioAuthToken || !twilioAccountSid) {
+        try {
+          const commProvider = await db.communicationProvider.findFirst({
+            where: { provider: 'twilio', status: 'active' },
+            orderBy: [{ isPlatform: 'desc' }, { isDefault: 'desc' }, { updatedAt: 'desc' }],
+            include: { credential: true },
+          });
+          if (commProvider) {
+            const cfg = JSON.parse(commProvider.configJson || '{}');
+            if (commProvider.credential?.encryptedData) {
+              try {
+                const credData = JSON.parse(commProvider.credential.encryptedData);
+                Object.assign(cfg, credData);
+              } catch { /* ignore */ }
+            }
+            if (!twilioAccountSid) twilioAccountSid = cfg.accountSid || cfg.AccountSid || '';
+            if (!twilioAuthToken) twilioAuthToken = cfg.authToken || cfg.AuthToken || '';
+          }
+        } catch { /* ignore */ }
+      }
+
+      // Fallback: environment variables
+      if (!twilioAuthToken || !twilioAccountSid) {
+        twilioAuthToken = twilioAuthToken || process.env.TWILIO_AUTH_TOKEN || '';
+        twilioAccountSid = twilioAccountSid || process.env.TWILIO_ACCOUNT_SID || '';
+      }
+
+      if (!twilioAuthToken) {
+        throw new Error('Twilio Auth Token not configured — cannot import number into Vapi');
       }
       if (!twilioAccountSid) {
         throw new Error('Twilio Account SID not configured — cannot import number into Vapi');

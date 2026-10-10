@@ -1,4 +1,5 @@
 'use client';
+import { BgosHeaderTools } from '@/components/bgos/header-tools';
 import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-navigation';
 import { isChatbotlyWorkspace } from '../../../shared/product-context';
 import { isGptFormWorkspace } from '../../../shared/product-context';
@@ -431,9 +432,11 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       </Button>
 
       {/* ─── Current view title ────────────────────────────────────────── */}
+      {isChatbotlyWorkspace(auth) ? <BgosHeaderTools /> : (
       <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate min-w-0">
         {isChatbotlyWorkspace(auth) ? BGOS_NAVIGATION.flatMap(section => section.items.map(item => ({ view: item.view as string, label: item.label }))).find(item => item.view === bgosNavigationView(currentView))?.label || viewLabels[currentView] || 'Overview' : viewLabels[currentView] || 'Dashboard'}
       </h1>
+      )}
 
       {/* ─── Business Type & Currency Switcher Chip (GPTForm/Nuvora Standalone mode only) ─── */}
       {isStandalone && !isChatbotlyWorkspace(auth) && (

@@ -115,6 +115,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
     subCalendars: any[];
     conflictCalendars: string[];
     targetCalendarId: string;
+    configured?: boolean;
   } | null>(null);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
   const [savingCalendars, setSavingCalendars] = useState(false);
@@ -194,6 +195,29 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
     if (activeTab === 'availability') fetchAvailability();
     if (activeTab === 'calendars') fetchCalendarSettings();
   }, [activeTab, fetchMeetings, fetchAvailability, fetchCalendarSettings]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const calStatus = params.get('calendar');
+      if (calStatus === 'connected') {
+        toast.success('Google Calendar connected successfully! Two-way sync is active.');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('calendar');
+        window.history.replaceState({}, '', url.toString());
+      } else if (calStatus === 'not_configured') {
+        toast.error('Google Calendar OAuth is pending configuration in SuperAdmin → Integration Credentials.');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('calendar');
+        window.history.replaceState({}, '', url.toString());
+      } else if (calStatus === 'failed') {
+        toast.error('Google Calendar authorization was cancelled or failed.');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('calendar');
+        window.history.replaceState({}, '', url.toString());
+      }
+    }
+  }, []);
 
   // Copy Link Helper
   const handleCopyLink = (slug: string, id: string) => {
@@ -960,13 +984,20 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                       Connected &amp; Syncing
                     </Badge>
                   ) : (
-                    <a
-                      href={calendarSettings?.authUrl || '/api/auth/google-calendar'}
-                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs inline-flex items-center gap-1.5 transition-colors"
-                    >
-                      <span>Connect Google Account</span>
-                      <ArrowRight className="size-3.5" />
-                    </a>
+                    <div className="flex flex-col items-start sm:items-end gap-1">
+                      <a
+                        href={calendarSettings?.authUrl || '/api/auth/google-calendar'}
+                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs inline-flex items-center gap-1.5 transition-colors"
+                      >
+                        <span>Connect Google Account</span>
+                        <ArrowRight className="size-3.5" />
+                      </a>
+                      {calendarSettings?.configured === false && (
+                        <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                          OAuth credentials pending in SuperAdmin → Integration Credentials
+                        </span>
+                      )}
+                    </div>
                   )}
                     <a href="/api/auth/outlook-calendar" className="inline-flex items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Connect Microsoft Outlook</a>
                 </div>

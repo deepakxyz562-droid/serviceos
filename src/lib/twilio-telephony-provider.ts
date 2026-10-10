@@ -63,6 +63,33 @@ class TwilioTelephonyProviderImpl implements TelephonyProvider {
     }
 
     if (!authToken || !accountSid) {
+      try {
+        const { db } = await import('@/lib/db');
+        const commProvider = await db.communicationProvider.findFirst({
+          where: {
+            provider: 'twilio',
+            status: 'active',
+          },
+          orderBy: [{ isPlatform: 'desc' }, { isDefault: 'desc' }, { updatedAt: 'desc' }],
+          include: { credential: true },
+        });
+        if (commProvider) {
+          const cfg = JSON.parse(commProvider.configJson || '{}');
+          if (commProvider.credential?.encryptedData) {
+            try {
+              const credData = JSON.parse(commProvider.credential.encryptedData);
+              Object.assign(cfg, credData);
+            } catch { /* ignore */ }
+          }
+          if (!accountSid) accountSid = cfg.accountSid || cfg.AccountSid || '';
+          if (!authToken) authToken = cfg.authToken || cfg.AuthToken || '';
+        }
+      } catch {
+        // Ignore DB errors
+      }
+    }
+
+    if (!authToken || !accountSid) {
       authToken = authToken || process.env.TWILIO_AUTH_TOKEN || '';
       accountSid = accountSid || process.env.TWILIO_ACCOUNT_SID || '';
     }

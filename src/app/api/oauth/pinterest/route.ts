@@ -46,12 +46,18 @@ export async function GET(request: NextRequest) {
     where: { provider: 'pinterest', status: 'active' },
     select: { clientId: true, clientSecret: true, scopes: true },
   });
-  if (!cred) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.PINTEREST_APP_ID ||
+    process.env.PINTEREST_CLIENT_ID;
+
+  if (!clientId) {
     return NextResponse.json(
       {
         error: 'PLATFORM_NOT_CONFIGURED',
         message:
-          'Pinterest OAuth app is not configured yet. Please contact support.',
+          'Pinterest OAuth app is not configured yet. Configure it in SuperAdmin Integration Credentials or PINTEREST_APP_ID in server environment.',
       },
       { status: 503 },
     );
@@ -72,7 +78,7 @@ export async function GET(request: NextRequest) {
 
   const authUrl = new URL(meta.authUrl);
   authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('client_id', cred.clientId);
+  authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', redirectUri);
   // Pinterest scopes are COMMA-separated in the URL.
   authUrl.searchParams.set('scope', meta.scopes);

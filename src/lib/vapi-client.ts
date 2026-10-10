@@ -112,9 +112,16 @@ export async function getTenantVapiKeyByTenantId(tenantId: string): Promise<stri
       }
     }
   } catch {
-    // Fall back to environment variable
+    // Fall back to platform credentials
   }
-  return process.env.VAPI_PRIVATE_API_KEY || null;
+  try {
+    const { getDecryptedApiKey } = await import('@/lib/ai-provider-config-service');
+    const platformKey = await getDecryptedApiKey('VAPI');
+    if (platformKey) return platformKey;
+  } catch {
+    // Ignore fallback errors
+  }
+  return process.env.VAPI_PRIVATE_API_KEY || process.env.VAPI_API_KEY || null;
 }
 
 export async function getTenantVapiKey(tenantId?: string): Promise<string | null> {

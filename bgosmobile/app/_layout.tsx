@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { notificationDestination } from '../src/lib/notification-routing';
 import { useAuthStore } from '../src/stores/auth-store';
 
+Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowBanner: useAuthStore.getState().isAuthenticated, shouldShowList: useAuthStore.getState().isAuthenticated, shouldPlaySound: useAuthStore.getState().isAuthenticated, shouldSetBadge: false }) });
+
 export default function RootLayout() {
-  const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
-  const segments = useSegments();
+  const { isAuthenticated, isLoading, onboardingRequired, checkAuth } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -14,31 +16,35 @@ export default function RootLayout() {
   }, [checkAuth]);
 
   useEffect(() => {
-    if (isLoading) return;
-    const inAuthGroup = segments[0] === '(tabs)';
-
-    if (!isAuthenticated && inAuthGroup) {
-      router.replace('/login');
-    } else if (isAuthenticated && segments[0] === 'login') {
-      router.replace('/(tabs)');
-    }
-  }, [isAuthenticated, isLoading, segments, router]);
-
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F4F6FA' }}>
-        <ActivityIndicator size="large" color="#0ea5e9" />
-      </View>
-    );
-  }
+    if (isLoading || !isAuthenticated || onboardingRequired) return;
+    let active = true;
+    const receive = (response: Notifications.NotificationResponse) => {
+      if (!active) return;
+      const destination = notificationDestination(response.notification.request.content.data || {});
+      if (destination) router.push(destination);
+      void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+    };
+    const listener = Notifications.addNotificationResponseReceivedListener(receive);
+    void Notifications.getLastNotificationResponseAsync().then(response => { if (response) receive(response); }).catch(() => {});
+    return () => { active = false; listener.remove(); };
+  }, [isLoading, isAuthenticated, onboardingRequired, router]);
 
   return (
     <>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F4F6FA' } }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F7F6FE' } }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="login" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Protected guard={!isLoading && !isAuthenticated}>
+          <Stack.Screen name="login" />
+          <Stack.Screen name="recover" />
+          <Stack.Screen name="auth-callback" />
+        </Stack.Protected>
+        <Stack.Protected guard={!isLoading && isAuthenticated && onboardingRequired}>
+          <Stack.Screen name="setup" />
+        </Stack.Protected>
+        <Stack.Protected guard={!isLoading && isAuthenticated && !onboardingRequired}>
+          <Stack.Screen name="(tabs)" />
+        </Stack.Protected>
       </Stack>
     </>
   );

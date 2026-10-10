@@ -22,25 +22,92 @@ const SCOPES = [
 const REDIRECT_URI = `${process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com'}/api/auth/google-calendar/callback`;
 
 /**
- * Get the OAuth2 client for Google Calendar.
+ * Retrieve Google OAuth credentials from SuperAdmin IntegrationCredential
+ * table or environment variables.
  */
-function getOAuth2Client() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Google OAuth credentials not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+export async function getGoogleOAuthCredentials(): Promise<{
+  clientId: string;
+  clientSecret: string;
+  redirectUri?: string;
+} | null> {
+  // 1. Check SuperAdmin IntegrationCredential in DB
+  try {
+    const cred = await db.integrationCredential.findFirst({
+      where: {
+        provider: { in: ['googlecalendar', 'google_calendar', 'google', 'googlebusiness'] },
+        status: 'active',
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (cred?.clientId && cred?.clientSecret) {
+      return {
+        clientId: cred.clientId,
+        clientSecret: cred.clientSecret,
+        redirectUri: cred.redirectUri || undefined,
+      };
+    }
+  } catch {
+    // Database lookup fallback
   }
 
-  return new google.auth.OAuth2(clientId, clientSecret, REDIRECT_URI);
+  // 2. Check Environment Variables
+  const clientId =
+    process.env.GOOGLE_CALENDAR_CLIENT_ID ||
+    process.env.GOOGLE_CLIENT_ID ||
+    '';
+  const clientSecret =
+    process.env.GOOGLE_CALENDAR_CLIENT_SECRET ||
+    process.env.GOOGLE_CLIENT_SECRET ||
+    '';
+
+  if (clientId && clientSecret) {
+    return {
+      clientId,
+      clientSecret,
+      redirectUri: process.env.GOOGLE_REDIRECT_URI || undefined,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Check if Google Calendar integration is configured at platform level.
+ */
+export async function isGoogleCalendarConfigured(): Promise<boolean> {
+  const creds = await getGoogleOAuthCredentials();
+  return Boolean(creds?.clientId && creds?.clientSecret);
+}
+
+/**
+ * Get the OAuth2 client for Google Calendar.
+ */
+export async function getOAuth2Client(customRedirectUri?: string) {
+  const creds = await getGoogleOAuthCredentials();
+
+  if (!creds) {
+    throw new Error(
+      'Google OAuth credentials not configured. Please register them in SuperAdmin → Integration Credentials or via GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.',
+    );
+  }
+
+  const redirectUri =
+    customRedirectUri ||
+    creds.redirectUri ||
+    REDIRECT_URI;
+
+  return new google.auth.OAuth2(creds.clientId, creds.clientSecret, redirectUri);
 }
 
 /**
  * Generate the Google Calendar OAuth URL.
  * Redirect the user to this URL to authorize calendar access.
  */
-export function getGoogleCalendarAuthUrl(state: string): string {
-  const oauth2Client = getOAuth2Client();
+export async function getGoogleCalendarAuthUrl(state: string, requestOrigin?: string): Promise<string> {
+  const redirectUri = requestOrigin
+    ? `${requestOrigin.replace(/\/+$/, '')}/api/auth/google-calendar/callback`
+    : undefined;
+  const oauth2Client = await getOAuth2Client(redirectUri);
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
@@ -55,9 +122,13 @@ export function getGoogleCalendarAuthUrl(state: string): string {
 export async function exchangeGoogleCalendarCode(
   code: string,
   tenantId: string,
+  requestOrigin?: string,
 ): Promise<{ success: boolean; email?: string; error?: string }> {
   try {
-    const oauth2Client = getOAuth2Client();
+    const redirectUri = requestOrigin
+      ? `${requestOrigin.replace(/\/+$/, '')}/api/auth/google-calendar/callback`
+      : undefined;
+    const oauth2Client = await getOAuth2Client(redirectUri);
     const { tokens } = await oauth2Client.getToken(code);
 
     if (!tokens.refresh_token) {
@@ -122,7 +193,7 @@ async function getCalendarClient(tenantId: string) {
   }
 
   const refreshToken = decryptToken(tenant.googleCalendarRefreshToken);
-  const oauth2Client = getOAuth2Client();
+  const oauth2Client = await getOAuth2Client();
   oauth2Client.setCredentials({ refresh_token: refreshToken });
 
   // Refresh to get a fresh access token

@@ -107,8 +107,9 @@ export async function getDecryptedApiKey(provider: string): Promise<string | nul
 
   if (!config || !config.encryptedApiKey || config.status !== 'ACTIVE') {
     // SaaS fallback: check environment variable if DB config is missing/inactive
-    if (provider.toUpperCase() === 'VAPI' && process.env.VAPI_PRIVATE_API_KEY) {
-      return process.env.VAPI_PRIVATE_API_KEY;
+    if (provider.toUpperCase() === 'VAPI') {
+      const envKey = process.env.VAPI_PRIVATE_API_KEY || process.env.VAPI_API_KEY;
+      if (envKey) return envKey;
     }
     return null;
   }
@@ -120,9 +121,12 @@ export async function getDecryptedApiKey(provider: string): Promise<string | nul
   } catch (err) {
     console.error(`[AiProviderConfigService] failed to decrypt key for ${provider}:`, err);
     // SaaS fallback: if decryption fails (e.g. key rotation or secret mismatch), fall back to env var
-    if (provider.toUpperCase() === 'VAPI' && process.env.VAPI_PRIVATE_API_KEY) {
-      console.log(`[AiProviderConfigService] falling back to process.env.VAPI_PRIVATE_API_KEY for ${provider}`);
-      return process.env.VAPI_PRIVATE_API_KEY;
+    if (provider.toUpperCase() === 'VAPI') {
+      const envKey = process.env.VAPI_PRIVATE_API_KEY || process.env.VAPI_API_KEY;
+      if (envKey) {
+        console.log(`[AiProviderConfigService] falling back to env var for ${provider}`);
+        return envKey;
+      }
     }
     return null;
   }
@@ -286,6 +290,22 @@ export async function validateProviderCredentials(provider: string): Promise<{
       });
 
       return { valid: true };
+    }
+
+    if (provider === 'TWILIO') {
+      const { getTwilioTelephonyProvider } = await import('@/lib/twilio-telephony-provider');
+      const twilio = getTwilioTelephonyProvider();
+      const val = await twilio.validateCredentials();
+      if (val.valid) {
+        await db.aiProviderConfig.update({
+          where: { provider },
+          data: {
+            lastValidatedAt: new Date(),
+            lastError: null,
+          },
+        }).catch(() => {});
+      }
+      return val;
     }
 
     // For other providers, add validation logic here

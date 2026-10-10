@@ -44,16 +44,33 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  if (provider === 'apollo' || provider === 'hunter') {
+    return NextResponse.json({
+      message: `${OAUTH_PROVIDERS[provider].displayName} uses API Key credentials configured by platform admins under SuperAdmin Integration Credentials.`,
+    })
+  }
+
   // Look up the superadmin-configured OAuth app credentials
   const cred = await db.integrationCredential.findFirst({
     where: { provider, status: 'active' },
   })
 
-  if (!cred) {
+  const envClientId =
+    (provider === 'whatsapp' && (process.env.WHATSAPP_CLIENT_ID || process.env.META_CLIENT_ID || process.env.META_APP_ID || process.env.FACEBOOK_APP_ID)) ||
+    (provider === 'messenger' && (process.env.MESSENGER_CLIENT_ID || process.env.META_CLIENT_ID || process.env.META_APP_ID || process.env.FACEBOOK_APP_ID)) ||
+    (provider === 'instagram' && (process.env.INSTAGRAM_CLIENT_ID || process.env.META_CLIENT_ID || process.env.META_APP_ID || process.env.FACEBOOK_APP_ID)) ||
+    (provider === 'googlebusiness' && (process.env.GOOGLE_BUSINESS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)) ||
+    (provider === 'slack' && process.env.SLACK_CLIENT_ID) ||
+    (provider === 'teams' && (process.env.TEAMS_CLIENT_ID || process.env.AZURE_CLIENT_ID)) ||
+    undefined
+
+  const clientId = cred?.clientId || envClientId
+
+  if (!clientId) {
     return NextResponse.json(
       {
         error: 'PLATFORM_NOT_CONFIGURED',
-        message: `The platform hasn't registered OAuth credentials for ${OAUTH_PROVIDERS[provider].displayName} yet. Please contact support.`,
+        message: `The platform hasn't registered OAuth credentials for ${OAUTH_PROVIDERS[provider].displayName} yet. Please configure it in SuperAdmin Integration Credentials or server environment.`,
       },
       { status: 503 },
     )
@@ -77,7 +94,7 @@ export async function GET(
   ).toString('base64url')
 
   const authUrl = new URL(meta.authUrl)
-  authUrl.searchParams.set('client_id', cred.clientId)
+  authUrl.searchParams.set('client_id', clientId)
   authUrl.searchParams.set('redirect_uri', redirectUri)
   authUrl.searchParams.set('response_type', 'code')
   authUrl.searchParams.set('scope', meta.scopes)

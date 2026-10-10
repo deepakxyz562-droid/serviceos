@@ -76,10 +76,23 @@ export async function GET(request: NextRequest) {
     where: { provider: 'linkedin', status: 'active' },
     select: { clientId: true, clientSecret: true },
   });
-  if (!cred) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.LINKEDIN_CLIENT_ID ||
+    process.env.LINKEDIN_KEY ||
+    process.env.LINKEDIN_APP_ID;
+
+  const clientSecret =
+    cred?.clientSecret ||
+    process.env.LINKEDIN_CLIENT_SECRET ||
+    process.env.LINKEDIN_SECRET ||
+    process.env.LINKEDIN_APP_SECRET;
+
+  if (!clientId || !clientSecret) {
     return renderOAuthErrorPage({
       provider: 'linkedin',
-      message: 'LinkedIn OAuth app credentials are no longer configured.',
+      message: 'LinkedIn OAuth app credentials are not configured. Please configure them in SuperAdmin Integration Credentials or server environment.',
     });
   }
 
@@ -102,8 +115,8 @@ export async function GET(request: NextRequest) {
         grant_type: 'authorization_code',
         code,
         redirect_uri: redirectUri,
-        client_id: cred.clientId,
-        client_secret: cred.clientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
       }),
     });
     if (!res.ok) {

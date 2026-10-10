@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { disconnectGoogleCalendar } from '@/lib/scheduling/google-calendar-sync';
+import { disconnectGoogleCalendar, isGoogleCalendarConfigured } from '@/lib/scheduling/google-calendar-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +28,7 @@ export async function GET() {
       connected: tenant?.googleCalendarSyncEnabled || false,
       email: tenant?.googleCalendarEmail || null,
       authUrl: '/api/auth/google-calendar',
+      configured: await isGoogleCalendarConfigured(),
     });
   } catch (error: any) {
     return NextResponse.json(

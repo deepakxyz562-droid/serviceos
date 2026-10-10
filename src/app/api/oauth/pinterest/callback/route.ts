@@ -70,10 +70,21 @@ export async function GET(request: NextRequest) {
     where: { provider: 'pinterest', status: 'active' },
     select: { clientId: true, clientSecret: true },
   });
-  if (!cred) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.PINTEREST_APP_ID ||
+    process.env.PINTEREST_CLIENT_ID;
+
+  const clientSecret =
+    cred?.clientSecret ||
+    process.env.PINTEREST_APP_SECRET ||
+    process.env.PINTEREST_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
     return renderOAuthErrorPage({
       provider: 'pinterest',
-      message: 'Pinterest OAuth app credentials are no longer configured.',
+      message: 'Pinterest OAuth app credentials are not configured. Please configure them in SuperAdmin Integration Credentials or server environment.',
     });
   }
 
@@ -91,7 +102,7 @@ export async function GET(request: NextRequest) {
   };
   try {
     const basic = Buffer.from(
-      `${cred.clientId}:${cred.clientSecret}`,
+      `${clientId}:${clientSecret}`,
     ).toString('base64');
     const res = await fetch(meta.tokenUrl, {
       method: 'POST',

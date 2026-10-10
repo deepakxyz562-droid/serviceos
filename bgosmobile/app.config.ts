@@ -10,9 +10,11 @@ export default ({ config }: ConfigContext): any => ({
   description: FULL_TITLE,
   slug: 'bgos',
   version: '1.0.0',
+  icon: './assets/app-icon.png',
+  splash: { image: './assets/brand-mark.png', resizeMode: 'contain', backgroundColor: '#F7F6FE' },
   orientation: 'portrait',
   scheme: SCHEME,
-  userInterfaceStyle: 'automatic',
+  userInterfaceStyle: 'light',
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.fieseros.bgos',
@@ -25,6 +27,6 @@ export default ({ config }: ConfigContext): any => ({
     package: 'com.fieseros.bgos',
     permissions: ['POST_NOTIFICATIONS'],
   },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications'],
+  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications', 'expo-web-browser'],
   extra: { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } },
 });

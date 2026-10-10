@@ -268,6 +268,20 @@ export const OAUTH_PROVIDERS: Record<
     displayName: 'Instagram DM',
     docsUrl: 'https://developers.facebook.com/docs/instagram-platform',
   },
+  googlecalendar: {
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events',
+    displayName: 'Google Calendar (2-Way Sync)',
+    docsUrl: 'https://developers.google.com/calendar/api/guides/overview',
+  },
+  google: {
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scopes: 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/business.manage email profile',
+    displayName: 'Google Platform App (Universal)',
+    docsUrl: 'https://developers.google.com/identity/protocols/oauth2',
+  },
   googlebusiness: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
@@ -320,6 +334,20 @@ export const OAUTH_PROVIDERS: Record<
     scopes: 'tweet.read tweet.write users.read offline.access',
     displayName: 'X (Twitter)',
     docsUrl: 'https://developer.twitter.com/en/docs/twitter-api',
+  },
+  apollo: {
+    authUrl: 'https://app.apollo.io',
+    tokenUrl: 'https://api.apollo.io/api/v1',
+    scopes: 'search,enrichment',
+    displayName: 'Apollo.io B2B Intelligence',
+    docsUrl: 'https://apolloio.github.io/apollo-api-docs/',
+  },
+  hunter: {
+    authUrl: 'https://hunter.io',
+    tokenUrl: 'https://api.hunter.io/v2',
+    scopes: 'domain_search,email_finder',
+    displayName: 'Hunter.io Domain Search',
+    docsUrl: 'https://hunter.io/api-documentation',
   },
 }
 

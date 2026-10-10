@@ -79,7 +79,29 @@ export async function GET(
   const cred = await db.integrationCredential.findFirst({
     where: { provider, status: 'active' },
   })
-  if (!cred) {
+
+  const envClientId =
+    (provider === 'whatsapp' && (process.env.WHATSAPP_CLIENT_ID || process.env.META_CLIENT_ID || process.env.META_APP_ID || process.env.FACEBOOK_APP_ID)) ||
+    (provider === 'messenger' && (process.env.MESSENGER_CLIENT_ID || process.env.META_CLIENT_ID || process.env.META_APP_ID || process.env.FACEBOOK_APP_ID)) ||
+    (provider === 'instagram' && (process.env.INSTAGRAM_CLIENT_ID || process.env.META_CLIENT_ID || process.env.META_APP_ID || process.env.FACEBOOK_APP_ID)) ||
+    (provider === 'googlebusiness' && (process.env.GOOGLE_BUSINESS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)) ||
+    (provider === 'slack' && process.env.SLACK_CLIENT_ID) ||
+    (provider === 'teams' && (process.env.TEAMS_CLIENT_ID || process.env.AZURE_CLIENT_ID)) ||
+    undefined
+
+  const envClientSecret =
+    (provider === 'whatsapp' && (process.env.WHATSAPP_CLIENT_SECRET || process.env.META_CLIENT_SECRET || process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET)) ||
+    (provider === 'messenger' && (process.env.MESSENGER_CLIENT_SECRET || process.env.META_CLIENT_SECRET || process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET)) ||
+    (provider === 'instagram' && (process.env.INSTAGRAM_CLIENT_SECRET || process.env.META_CLIENT_SECRET || process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET)) ||
+    (provider === 'googlebusiness' && (process.env.GOOGLE_BUSINESS_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET)) ||
+    (provider === 'slack' && process.env.SLACK_CLIENT_SECRET) ||
+    (provider === 'teams' && (process.env.TEAMS_CLIENT_SECRET || process.env.AZURE_CLIENT_SECRET)) ||
+    undefined
+
+  const clientId = cred?.clientId || envClientId
+  const clientSecret = cred?.clientSecret || envClientSecret
+
+  if (!clientId || !clientSecret) {
     return renderErrorPage('Platform credentials not configured')
   }
 
@@ -96,8 +118,8 @@ export async function GET(
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
-        client_id: cred.clientId,
-        client_secret: cred.clientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
         code,
         redirect_uri: redirectUri,
       }),

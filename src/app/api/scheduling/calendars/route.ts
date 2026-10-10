@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { fetchUserSubCalendars } from '@/lib/scheduling/google-calendar-sync';
+import { fetchUserSubCalendars, isGoogleCalendarConfigured } from '@/lib/scheduling/google-calendar-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +58,7 @@ export async function GET() {
       subCalendars,
       conflictCalendars,
       targetCalendarId,
+      configured: await isGoogleCalendarConfigured(),
     });
   } catch (error: any) {
     return NextResponse.json(

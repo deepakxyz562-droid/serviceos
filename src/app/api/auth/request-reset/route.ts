@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAppUrl } from '@/lib/auth';
 import crypto from 'crypto';
+import { sendEmail } from '@/lib/email-send';
 import { passwordResetLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
  * POST /api/auth/request-reset
  *
  * Public endpoint: request a password-reset link by email.
- * Generates a reset token + Invitation row (role 'employee' or 'customer' depending
- * on which record matches the email). The link is returned in dev mode; in production
- * it would be emailed.
+ * Generates a reset token and sends the existing invitation-based recovery link
+ * using the platform transactional email provider. Never returns the token.
  *
  * Body: { email, slug? }
  *
@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { email, slug } = body;
+    const { email } = body;
 
-    if (!email) {
+    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 });
     }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         })
       : null;
 
-    if (!userAccount && !customer) {
+    if ((!userAccount && !customer) || (userAccount && !userAccount.isActive)) {
       // Don't reveal whether the email exists — return success anyway
       return NextResponse.json({
         success: true,
@@ -105,17 +105,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const appUrl = getAppUrl(request);
-    const resolvedSlug = slug || tenant?.slug || 'default';
+    const appUrl = getAppUrl();
+    const resolvedSlug = encodeURIComponent(tenant?.slug || 'default');
     const resetUrl = `${appUrl}/${resolvedSlug}/accept-invite?token=${token}&mode=reset`;
 
+    const delivery = await sendEmail({ to: normalizedEmail, usageType: 'transactional',
+      subject: 'Reset your password', text: `Use this link to reset your password: ${resetUrl}\n\nThis link expires in 24 hours. If you did not request it, you can ignore this email.` }).catch(() => ({ success: false, simulated: false }));
+    if (!delivery.success || delivery.simulated) {
+      // Keep the public response independent of whether the address exists.
+      // Operations must monitor provider failures; never return a reset token.
+      console.error('[Request Reset] Transactional email delivery unavailable');
+    }
     return NextResponse.json({
       success: true,
       message: 'If an account exists for that email, a reset link has been sent.',
-      // In dev mode, return the URL directly (no email infra). In production, this
-      // would be sent via email/SMS and the resetUrl field would be omitted.
-      resetUrl: process.env.NODE_ENV === 'production' ? undefined : resetUrl,
-      expiresAt: expiresAt.toISOString(),
     });
   } catch (error) {
     console.error('[Request Reset Error]', error);

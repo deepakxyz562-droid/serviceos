@@ -10,6 +10,8 @@ import {
 } from '@/lib/auth';
 import { revokeRefreshSession, rotateRefreshSession } from '@/lib/auth-refresh-session';
 import { applyRateLimit, authLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
+import { ProductAccessError } from '@/lib/product-access';
 import { withRequestId } from '@/lib/logger';
 
 async function resolveRefreshSubject(
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
       return response;
     }
 
-    const authUser = await resolveRefreshSubject(rotated.subject);
+    let authUser = await resolveRefreshSubject(rotated.subject);
     if (!authUser) {
       await revokeRefreshSession(rotated.session.token, 'subject_disabled');
       return NextResponse.json(
@@ -131,6 +133,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (body.product === 'bgos') {
+      if (rotated.subject.type !== 'user') {
+        await revokeRefreshSession(rotated.session.token, 'bgos_user_required');
+        return NextResponse.json({ error: 'A BGOS business account is required.' }, { status: 401 });
+      }
+      try {
+        const bgos = await resolveBgosMobileAccount(authUser.id);
+        authUser = { ...authUser, tenantId: bgos.user.tenantId, workspaceId: bgos.user.workspaceId, role: bgos.user.role };
+      } catch (error) {
+        await revokeRefreshSession(rotated.session.token, 'bgos_access_unavailable');
+        return NextResponse.json({ error: 'BGOS workspace access unavailable. Please sign in again.' }, { status: error instanceof ProductAccessError ? 401 : 503 });
+      }
+    }
     const accessToken = generateToken(authUser);
     const response = NextResponse.json({
       token: accessToken,

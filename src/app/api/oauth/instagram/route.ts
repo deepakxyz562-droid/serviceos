@@ -73,13 +73,23 @@ export async function GET(request: NextRequest) {
     // don't need to also configure a 'facebook' entry for IG publishing).
     orderBy: { provider: 'desc' },
   });
-  if (!cred || !cred.clientId) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.INSTAGRAM_CLIENT_ID ||
+    process.env.INSTAGRAM_APP_ID ||
+    process.env.META_CLIENT_ID ||
+    process.env.META_APP_ID ||
+    process.env.FACEBOOK_APP_ID ||
+    process.env.FACEBOOK_CLIENT_ID;
+
+  if (!clientId) {
     return NextResponse.json(
       {
         error: 'PLATFORM_NOT_CONFIGURED',
         message:
           'A platform admin must register Meta OAuth credentials ' +
-          '(IntegrationCredential, provider=instagram or provider=facebook) ' +
+          '(in SuperAdmin Integration Credentials or META_APP_ID / INSTAGRAM_CLIENT_ID in server environment) ' +
           'before tenants can connect Instagram for publishing.',
       },
       { status: 503 },
@@ -95,7 +105,7 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const callbackUrl = cred.redirectUri
+  const callbackUrl = cred?.redirectUri
     ? cred.redirectUri
     : `${appUrl}/api/oauth/instagram/callback`;
 
@@ -121,7 +131,7 @@ export async function GET(request: NextRequest) {
   // scopes field may have been set for the legacy DM flow (different
   // scopes). The IG publishing scopes are fixed by the spec.
   const authUrl = new URL('https://www.facebook.com/v18.0/dialog/oauth');
-  authUrl.searchParams.set('client_id', cred.clientId);
+  authUrl.searchParams.set('client_id', clientId);
   authUrl.searchParams.set('redirect_uri', callbackUrl);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('scope', IG_SCOPES);

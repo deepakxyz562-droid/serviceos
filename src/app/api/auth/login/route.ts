@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { resolveBgosMobileAccount } from '@/lib/bgos-mobile-account';
+import { ProductAccessError } from '@/lib/product-access';
 import {
   verifyPassword,
   issueAuthTokens,
@@ -76,6 +78,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const bgos = body.product === 'bgos' ? await resolveBgosMobileAccount(user.id) : null;
+
     // Update lastLoginAt
     await db.user.update({
       where: { id: user.id },
@@ -106,9 +110,9 @@ export async function POST(request: NextRequest) {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
-      tenantId: user.tenantId,
-      workspaceId: user.workspaceId,
+      role: bgos?.user.role || user.role,
+      tenantId: bgos?.user.tenantId || user.tenantId,
+      workspaceId: bgos?.user.workspaceId || user.workspaceId,
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
       ...(employeeId ? { employeeId } : {}),
@@ -119,18 +123,17 @@ export async function POST(request: NextRequest) {
     // Build response
     // Note: `refreshToken` is included so the mobile app stores it in SecureStore
     // and can call /api/auth/refresh when the access token expires.
-    // In the current single-token system, refreshToken === token (same JWT).
-    // This may change in a future multi-token refresh system.
+    // Refresh tokens are opaque, revocable and rotated by /api/auth/refresh.
     const response = NextResponse.json(
       {
         user: {
           id: user.id,
           name: user.name,
           email: user.email,
-          role: user.role,
+          role: bgos?.user.role || user.role,
           phone: user.phone,
-          tenantId: user.tenantId,
-          workspaceId: user.workspaceId,
+          tenantId: bgos?.user.tenantId || user.tenantId,
+          workspaceId: bgos?.user.workspaceId || user.workspaceId,
           avatar: user.avatar,
           isSuperAdmin: user.isSuperAdmin || false,
           employeeId,
@@ -138,7 +141,8 @@ export async function POST(request: NextRequest) {
         },
         token,
         refreshToken: tokens.refreshToken,
-        workspace: user.workspace ? {id:user.workspace.id,productType:user.workspace.productType,name:user.workspace.name} : null,
+        onboardingRequired: bgos?.onboardingRequired || false,
+        workspace: bgos?.workspace || (user.workspace ? {id:user.workspace.id,productType:user.workspace.productType,name:user.workspace.name} : null),
         tenant: user.tenant
           ? {
               id: user.tenant.id,
@@ -166,6 +170,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error) {
+    if (error instanceof ProductAccessError) return NextResponse.json({ error: 'An active BGOS workspace is required.', code: error.code }, { status: error.status });
     console.error('Login error:', error);
     return NextResponse.json(
       { error: 'Failed to sign in. Please try again.' },

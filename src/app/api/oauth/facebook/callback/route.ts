@@ -106,9 +106,24 @@ export async function GET(request: NextRequest) {
     },
     orderBy: { provider: 'asc' },
   });
-  if (!cred || !cred.clientId || !cred.clientSecret) {
+
+  const clientId =
+    cred?.clientId ||
+    process.env.META_CLIENT_ID ||
+    process.env.META_APP_ID ||
+    process.env.FACEBOOK_APP_ID ||
+    process.env.FACEBOOK_CLIENT_ID;
+
+  const clientSecret =
+    cred?.clientSecret ||
+    process.env.META_CLIENT_SECRET ||
+    process.env.META_APP_SECRET ||
+    process.env.FACEBOOK_APP_SECRET ||
+    process.env.FACEBOOK_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
     return renderErrorPage(
-      'Platform credentials for Facebook are not configured. Ask a platform admin to register the Meta App credentials.',
+      'Platform credentials for Facebook are not configured. Ask a platform admin to register the Meta App credentials in SuperAdmin Integration Credentials or server environment.',
     );
   }
 
@@ -117,7 +132,7 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
     getAppUrlFromRequest(request);
-  const redirectUri = cred.redirectUri
+  const redirectUri = cred?.redirectUri
     ? cred.redirectUri
     : `${appUrl}/api/oauth/facebook/callback`;
 
@@ -144,8 +159,8 @@ export async function GET(request: NextRequest) {
   let userAccessToken: string;
   try {
     const tokenUrl = new URL('https://graph.facebook.com/v18.0/oauth/access_token');
-    tokenUrl.searchParams.set('client_id', cred.clientId);
-    tokenUrl.searchParams.set('client_secret', cred.clientSecret);
+    tokenUrl.searchParams.set('client_id', clientId);
+    tokenUrl.searchParams.set('client_secret', clientSecret);
     tokenUrl.searchParams.set('redirect_uri', redirectUri);
     tokenUrl.searchParams.set('code', code);
 
