@@ -18,6 +18,7 @@ export default ({ config }: ConfigContext): any => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.fieseros.bgos',
+    usesAppleSignIn: true,
     infoPlist: {
       CFBundleDisplayName: 'BGOS',
       NSNotificationsUsageDescription: 'BGOS sends instant push notifications when new leads, messages, or appointment requests arrive.',
@@ -27,6 +28,6 @@ export default ({ config }: ConfigContext): any => ({
     package: 'com.fieseros.bgos',
     permissions: ['POST_NOTIFICATIONS'],
   },
-  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications', 'expo-web-browser'],
+  plugins: ['expo-router', 'expo-secure-store', 'expo-notifications', 'expo-web-browser', 'expo-apple-authentication'],
   extra: { eas: { projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID } },
 });

@@ -4,6 +4,22 @@
 
 import '@testing-library/jest-dom/vitest'
 
+if (typeof (globalThis as any).__DEV__ === 'undefined') {
+  (globalThis as any).__DEV__ = false;
+}
+
+if (typeof (globalThis as any).expo === 'undefined') {
+  (globalThis as any).expo = {
+    EventEmitter: class EventEmitter {
+      addListener() { return { remove: () => {} }; }
+      removeListener() {}
+      emit() {}
+      removeAllListeners() {}
+    },
+    modules: {},
+  };
+}
+
 // jsdom doesn't implement matchMedia — some components call it at render time
 // (e.g. useReducedMotion). Polyfill it so tests don't crash.
 if (typeof window !== 'undefined' && !window.matchMedia) {

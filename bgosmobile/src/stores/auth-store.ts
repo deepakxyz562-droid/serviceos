@@ -4,6 +4,7 @@ import { getToken, getRefreshToken, setTokens, clearTokens, onSessionEnded, sess
 import { apiRequest, ApiError } from '../lib/api';
 import { API_PATHS } from '../lib/constants';
 import { googleSignIn } from '../lib/google-auth';
+import { appleSignIn } from '../lib/apple-auth';
 import { isBgosIdentity } from '../../../shared/bgos-identity';
 
 export interface User { id: string; email: string; name?: string; role?: string; tenantId?: string; workspaceId?: string }
@@ -12,7 +13,9 @@ interface AuthState {
   onboardingRequired: boolean; user: User | null; isAuthenticated: boolean; isLoading: boolean; error: string | null;
   login: (email: string, password: string) => Promise<boolean>;
   loginGoogle: () => Promise<boolean>;
+  loginApple: () => Promise<boolean>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
 async function acceptSession(session: SessionResponse, revision: number) {
@@ -46,6 +49,17 @@ export const useAuthStore = create<AuthState>((set) => ({
       return true;
     } catch (error) { set({ error: error instanceof Error ? error.message : 'Google sign-in failed', isLoading: false }); return false; }
   },
+  loginApple: async () => {
+    const revision = sessionRevision();
+    set({ error: null });
+    try {
+      const session = await appleSignIn();
+      if (!session) return false;
+      const user = await acceptSession(session, revision);
+      set({ user, onboardingRequired: !!session.onboardingRequired, isAuthenticated: true, isLoading: false });
+      return true;
+    } catch (error) { set({ error: error instanceof Error ? error.message : 'Apple sign-in failed', isLoading: false }); return false; }
+  },
   logout: async () => {
     // Capture credentials before clearing. Local sign-out never waits on the network.
     const token = await getToken().catch(() => null);
@@ -56,6 +70,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     catch (error) { set({ error: error instanceof Error ? error.message : 'Could not clear saved credentials.' }); throw error; }
     finally { set({ user: null, isAuthenticated: false, isLoading: false }); }
     void Promise.allSettled([pushCleanup, revoke]);
+  },
+  deleteAccount: async () => {
+    const token = await getToken().catch(() => null);
+    const pushCleanup = unregisterPush(token).catch(() => {});
+    try {
+      await apiRequest('/api/bgos/mobile-auth/account', { method: 'DELETE' });
+    } catch (error) {
+      console.warn('[auth-store] Remote deleteAccount error:', error);
+    }
+    try { await clearTokens(); }
+    catch (error) { set({ error: error instanceof Error ? error.message : 'Could not clear local credentials.' }); throw error; }
+    finally { set({ user: null, isAuthenticated: false, isLoading: false }); }
+    void Promise.allSettled([pushCleanup]);
   },
   checkAuth: async () => {
     const revision = sessionRevision();
