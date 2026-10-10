@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { BGOS_NAVIGATION, bgosView } from '../shared/bgos-navigation';
+import { BGOS_NAVIGATION, bgosView, bgosNavigationView } from '../shared/bgos-navigation';
 import { isProduct, normalizeProduct } from '../shared/products';
 import { canUseInbox, canAccessConversation } from '@/lib/conversation-access';
 import { useAppStore } from '@/store/app-store';
@@ -19,6 +19,13 @@ describe('BGOS product boundaries', () => {
     }
     expect(bgosView('chatbotBuilder')).toBe('agentStudio');
     expect(bgosView('canvas')).toBe('canvas');
+  });
+  it('groups existing child screens under one canonical feature', () => {
+    for (const [child, parent] of [['contacts', 'leads'], ['formSubmissions', 'formBuilder'], ['postsList', 'socialMedia'], ['socialAccounts', 'socialMedia'], ['aiCallHistory', 'aiReceptionist'], ['calendar', 'scheduling']]) {
+      expect(bgosView(child)).toBe(child);
+      expect(bgosNavigationView(child)).toBe(parent);
+    }
+    expect(bgosView('salesPipeline')).toBe('dashboard');
   });
   it('rejects BOS navigation even when requested outside the sidebar', () => {
     useAppStore.getState().setAuth({ isAuthenticated: true, user, tenant: { id: 't' }, workspace: { id: 'w', productType: 'bgos' } });

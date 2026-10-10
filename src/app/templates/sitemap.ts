@@ -14,6 +14,8 @@ import {
  *   - /templates/industries/[industry] (all 60 industries)
  *   - /templates/[category]/[slug] (all 20,391 high-intent synthesized & curated templates)
  */
+export const revalidate = 86400;
+
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://fieseros.com';
 
 export default function templatesSitemap(): MetadataRoute.Sitemap {

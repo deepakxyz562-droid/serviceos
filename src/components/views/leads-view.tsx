@@ -1,4 +1,6 @@
 'use client';
+import { isChatbotlyWorkspace } from '../../../shared/product-context';
+import { BgosLeadBoard, BgosLeadForm, BgosLeadDetail } from '@/components/bgos/lead-presentation';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -118,7 +120,11 @@ export {
 
 export function LeadsView() {
   const { currency, formatCompact, format: formatCurrency, symbol } = useCompanyCurrency();
-  const isStandalone = useIsStandalone();
+  const standalone = useIsStandalone();
+  const isBgos = isChatbotlyWorkspace(useAppStore(s => s.auth));
+  const isStandalone = standalone || isBgos;
+  const LeadForm = isBgos ? BgosLeadForm : LeadFormPage;
+  const LeadDetail = isBgos ? BgosLeadDetail : LeadDetailPage;
 
   // Global store — used to hand off a lead's data to the Jobs view when the
   // user clicks "Convert" so the New Job form opens pre-filled.
@@ -191,6 +197,7 @@ export function LeadsView() {
     { id: string; name: string; category: string; basePrice: number; duration: number }[]
   >([]);
   useEffect(() => {
+    if (isBgos) return;
     authFetch('/api/services?active=true&limit=200')
       .then((r) => (r.ok ? r.json() : { services: [] }))
       .then((data) => {
@@ -198,7 +205,7 @@ export function LeadsView() {
         setServices(list);
       })
       .catch(() => setServices([]));
-  }, []);
+  }, [isBgos]);
 
   // Add a freshly-created or selected customer to the lead's customerId,
   // and auto-fill the contact & address info from it.
@@ -469,7 +476,7 @@ export function LeadsView() {
       const url = isEditing ? `/api/leads/${editingLead.id}` : '/api/leads';
       const method = isEditing ? 'PUT' : 'POST';
 
-      const computedValue = leadForm.lineItems.length > 0
+      const computedValue = !isBgos && leadForm.lineItems.length > 0
         ? lineItemsSubtotal(leadForm.lineItems)
         : (parseFloat(leadForm.value) || 0);
 
@@ -691,6 +698,7 @@ export function LeadsView() {
   // user can review/edit before saving. When the job is saved, the Jobs view
   // marks the lead as 'won' + links the new jobId (so lead tracking is kept).
   const openConvertDialog = (lead: Lead) => {
+    if (isBgos) return;
     setPendingJobPrefill({
       leadId: lead.id,
       title: lead.title || (lead.serviceType ? `${getServiceTypeLabel(lead.serviceType)} — ${lead.name}` : `Job for ${lead.name}`),
@@ -957,7 +965,7 @@ export function LeadsView() {
     return (
       <div className="space-y-4">
         <DataTable
-          columns={leadColumns}
+          columns={isBgos ? leadColumns.filter(column => column.key !== 'serviceType') : leadColumns}
           data={sortedLeads}
           rowKey={(lead) => lead.id}
           loading={loading}
@@ -1025,7 +1033,7 @@ export function LeadsView() {
     <div className="w-full">
       {/* ─── Form page takes over when adding/editing a lead ───────── */}
       {formMode === 'form' ? (
-        <LeadFormPage
+        <LeadForm
           editingLead={editingLead}
           leadForm={leadForm}
           setLeadForm={setLeadForm}
@@ -1038,7 +1046,7 @@ export function LeadsView() {
           symbol={symbol}
         />
       ) : formMode === 'detail' ? (
-        <LeadDetailPage
+        <LeadDetail
           lead={selectedLead}
           onBack={closeLeadDetail}
           onConvert={isStandalone ? undefined : openConvertDialog}
@@ -1064,7 +1072,7 @@ export function LeadsView() {
           </div>
           <div className="flex items-center gap-2.5">
             <div>
-              <h2 className="text-xl font-bold leading-tight">Leads</h2>
+              <h2 className="text-xl font-bold leading-tight">{isBgos ? 'Leads & CRM' : 'Leads'}</h2>
               <p className="text-xs text-muted-foreground">Manage leads and track pipeline progress</p>
             </div>
             <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs h-6 px-2 shrink-0">
@@ -1235,7 +1243,7 @@ export function LeadsView() {
             </Select>
 
             {/* Layout Toggle: Grid vs Table */}
-            <div className="hidden sm:flex gap-1 border rounded-md p-0.5 bg-muted/40">
+            <div className="flex gap-1 border rounded-md p-0.5 bg-muted/40">
               <Button
                 type="button"
                 size="sm"
@@ -1246,7 +1254,7 @@ export function LeadsView() {
                 )}
                 onClick={() => setViewLayout('grid')}
               >
-                <LayoutGrid className="size-3.5 mr-1" /> Cards
+                <LayoutGrid className="size-3.5 mr-1" /> {isBgos ? 'Pipeline' : 'Cards'}
               </Button>
               <Button
                 type="button"
@@ -1267,8 +1275,8 @@ export function LeadsView() {
               <RefreshCw className="size-3.5 mr-1" /> Refresh
             </Button>
 
-            {/* Open Pipeline */}
-            <Button
+            {/* BOS deal pipeline is separate from BGOS lead qualification. */}
+            {!isBgos && <Button
               variant="outline"
               size="sm"
               className="h-9 px-3 text-xs gap-1.5 font-medium"
@@ -1276,13 +1284,13 @@ export function LeadsView() {
               title="Open the Sales Pipeline board"
             >
               <BarChart3 className="size-3.5 text-emerald-600" /> Open Pipeline
-            </Button>
+            </Button>}
           </div>
 
           {/* View Content — Grid Cards or Table View */}
           {viewLayout === 'grid' ? (
             <>
-              <LeadGridView
+              {isBgos ? <BgosLeadBoard leads={sortedLeads} loading={loading} error={error} onRetry={fetchLeads} onAddLead={openAddLead} onLeadClick={openLeadDetail} formatCompact={formatCompact} /> : <LeadGridView
                 leads={sortedLeads}
                 loading={loading}
                 error={error}
@@ -1291,7 +1299,7 @@ export function LeadsView() {
                 onLeadClick={openLeadDetail}
                 onConvert={openConvertDialog}
                 formatCompact={formatCompact}
-              />
+              />}
               {/* Pagination — same control as the table view for parity */}
               <PaginationBar
                 currentPage={page}
@@ -1359,7 +1367,7 @@ export function LeadsView() {
           ) : (
             <DataTable
               columns={[
-                ...leadColumns.slice(0, -1), // reuse all columns except the Actions column
+                ...leadColumns.slice(0, -1).filter(column => !isBgos || column.key !== 'serviceType'), // reuse all columns except the Actions column
                 {
                   key: 'restore',
                   header: 'Actions',
@@ -1418,7 +1426,7 @@ export function LeadsView() {
       </Tabs>
 
       {/* ─── Dialogs ────────────────────────────────────────────── */}
-      <LeadDetailDialog
+      {!isBgos && <LeadDetailDialog
         open={showDetailDialog}
         onOpenChange={setShowDetailDialog}
         lead={selectedLead}
@@ -1433,15 +1441,18 @@ export function LeadsView() {
         onDelete={openDeleteDialog}
         formatCompact={formatCompact}
         symbol={symbol}
-      />
-      <LeadConvertDialog
+      />}
+      {!isBgos && <LeadConvertDialog
         open={showConvertDialog}
         onOpenChange={setShowConvertDialog}
         lead={convertingLead}
         converting={converting}
         onConfirm={handleConvertToJob}
         formatCompact={formatCompact}
-      />
+      />}
+
+        </div>
+      )}
       <LeadDeleteDialog
         open={showDeleteDialog}
         onOpenChange={setShowDeleteDialog}
@@ -1449,8 +1460,6 @@ export function LeadsView() {
         deleting={deletingLeadLoading}
         onConfirm={handleDeleteLead}
       />
-        </div>
-      )}
     </div>
   );
 }

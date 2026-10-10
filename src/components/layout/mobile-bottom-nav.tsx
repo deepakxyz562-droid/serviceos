@@ -171,7 +171,7 @@ export function MobileBottomNav({ onLogout }: MobileBottomNavProps = {}) {
   const dynamicBlueprintTabs = isChatbotlyWorkspace(auth) ? [
     { view: 'dashboard', label: 'Home', iconName: 'LayoutDashboard', tab: undefined },
     { view: 'omnichannel', label: 'Inbox', iconName: 'RadioTower', tab: undefined },
-    { view: 'contacts', label: 'Contacts', iconName: 'Users', tab: undefined },
+    { view: 'leads', label: 'Leads & CRM', iconName: 'Users', tab: undefined },
     { view: 'scheduling', label: 'Bookings', iconName: 'Calendar', tab: undefined },
   ] : getMobileNavTabsForBlueprint(blueprint || undefined);
   const standaloneNavItems: MobileNavItem[] = dynamicBlueprintTabs.map((t) => ({

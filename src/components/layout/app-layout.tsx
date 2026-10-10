@@ -8,6 +8,9 @@ import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, u
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { BgosNavigation, BgosMobileNavigation } from '@/components/bgos/navigation';
+import { BgosViewNavigation } from '@/components/bgos/view-navigation';
+import '@/components/bgos/workspace.css';
 import { AppSidebar } from '@/components/layout/sidebar';
 import { AppHeader } from '@/components/layout/header';
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
@@ -508,6 +511,12 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   }, [isListingOnlyTenant, currentView, setCurrentView, listingAllowedViews]);
 
   const appProduct = getAppProduct(auth);
+  const isBgos = appProduct === 'bgos' || appProduct === 'chatbotly';
+  useEffect(() => {
+    if (!isBgos) return;
+    document.documentElement.classList.add('bgos-theme');
+    return () => document.documentElement.classList.remove('bgos-theme');
+  }, [isBgos]);
   useEffect(() => {
     if (appProduct === 'bgos' || appProduct === 'chatbotly') {
       const allowed = bgosView(currentView) as ViewType;
@@ -555,7 +564,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
     if ((appProduct === 'bgos' || appProduct === 'chatbotly') && bgosView(viewId) !== viewId) return null;
     if (viewId === 'billing' && (appProduct === 'bgos' || appProduct === 'chatbotly')) return <BgosBilling />;
     const Component = viewId === 'dashboard' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosDashboard : viewId === 'campaigns' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosOutreach : viewComponents[viewId] || DashboardView;
-    return <Component />;
+    return isBgos && viewId === 'contacts' ? <div className="bgos-crm-contacts"><Component /></div> : <Component />;
   };
 
   // Helper: check if a view needs full-height layout (no padding).
@@ -593,7 +602,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   // ─── Full-takeover AI Agent Studio: hides app sidebar & header ─────────
   // The studio takes 100% of viewport and provides its own "Back to Dashboard" button.
-  const isAgentStudioTakeover = currentView === 'agentStudio' || currentView === 'chatbotBuilder';
+  const isAgentStudioTakeover = !isBgos && (currentView === 'agentStudio' || currentView === 'chatbotBuilder');
 
   // ─── SuperAdmin console — full-takeover (no app sidebar / header / bottom
   // nav). The console component renders its own three-panel layout. ───────
@@ -616,9 +625,10 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       className={cn(
         'fixed inset-0 flex overflow-hidden bg-background',
         darkMode && 'dark',
+        isBgos && 'bgos-app',
       )}
     >
-      {!isAgentStudioTakeover && <AppSidebar onLogout={onLogout} />}
+      {!isAgentStudioTakeover && (isBgos ? <BgosNavigation onLogout={onLogout} /> : <AppSidebar onLogout={onLogout} />)}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!isAgentStudioTakeover && <AppHeader onLogout={onLogout} />}
@@ -646,6 +656,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
               The `renderView` callback receives `isActive` so it can decide
               whether to show the Suspense loader (active) or null (hidden,
               silent load). */}
+          {isBgos && <BgosViewNavigation />}
           <ViewCache
             currentView={currentView}
             isViewFullHeight={isViewFullHeight}
@@ -669,7 +680,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
             is not hidden behind the fixed nav. Since both <main> and the nav
             use `bg-background`, the padding area is the same color as the nav
             — no visible gap when content is shorter than the viewport. */}
-        {!isAgentStudioTakeover && <MobileBottomNav onLogout={onLogout} />}
+        {!isAgentStudioTakeover && (isBgos ? <BgosMobileNavigation /> : <MobileBottomNav onLogout={onLogout} />)}
       </div>
 
       {/* Web Push enrolment for tenant admins — auto-subscribes when
