@@ -31,11 +31,15 @@ import { CreateFormOrAgentModal } from '@/features/forms/components/wizard/creat
 
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
 
-// Dashboard
+// BGOS Workstations
 const BgosSettings = lazy(() => import('@/components/bgos/settings').then(m => ({ default: m.BgosSettings })));
 const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ default: m.BgosBilling })));
 const BgosOutreach = lazy(() => import('@/components/bgos/outreach').then(m => ({ default: m.BgosOutreach })));
 const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
+const BgosReviewsWorkstation = lazy(() => import('@/components/bgos/reviews-workstation').then(m => ({ default: m.BgosReviewsWorkstation })));
+const BgosOmnichannelInbox = lazy(() => import('@/components/bgos/omnichannel-inbox').then(m => ({ default: m.BgosOmnichannelInbox })));
+const BgosHelpdeskWorkstation = lazy(() => import('@/components/bgos/helpdesk-workstation').then(m => ({ default: m.BgosHelpdeskWorkstation })));
+const BgosSocialMarketing = lazy(() => import('@/components/bgos/social-marketing').then(m => ({ default: m.BgosSocialMarketing })));
 const DashboardView = lazy(() => import('@/components/views/dashboard-view').then(m => ({ default: m.DashboardView })));
 
 // CRM
@@ -558,10 +562,24 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   // Helper: render a view by ID.
   const renderView = (viewId: string) => {
-    if ((appProduct === 'bgos' || appProduct === 'chatbotly') && bgosView(viewId) !== viewId) return null;
-    if (viewId === 'billing' && (appProduct === 'bgos' || appProduct === 'chatbotly')) return <BgosBilling />;
-    const Component = viewId === 'dashboard' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosDashboard : viewId === 'campaigns' && (appProduct === 'bgos' || appProduct === 'chatbotly') ? BgosOutreach : viewComponents[viewId] || DashboardView;
-    return isBgos && viewId === 'contacts' ? <div className="bgos-crm-contacts"><Component /></div> : <Component />;
+    if (isBgos) {
+      if (bgosView(viewId) !== viewId) return null;
+      if (viewId === 'dashboard') return <BgosDashboard />;
+      if (viewId === 'reviews') return <BgosReviewsWorkstation />;
+      if (viewId === 'omnichannel') return <BgosOmnichannelInbox />;
+      if (viewId === 'liveChat') return <BgosOmnichannelInbox initialTab="visitors" />;
+      if (viewId === 'helpCenter' || viewId === 'helpTicketDetail') return <BgosHelpdeskWorkstation />;
+      if (viewId === 'socialMedia') return <BgosSocialMarketing />;
+      if (viewId === 'campaigns') return <BgosOutreach />;
+      if (viewId === 'billing') return <BgosBilling />;
+      if (viewId === 'settings') return <BgosSettings />;
+      if (viewId === 'contacts') {
+        const ContactsComp = viewComponents.contacts;
+        return <div className="bgos-crm-contacts"><ContactsComp /></div>;
+      }
+    }
+    const Component = viewComponents[viewId] || DashboardView;
+    return <Component />;
   };
 
   // Helper: check if a view needs full-height layout (no padding).

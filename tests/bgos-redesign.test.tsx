@@ -102,7 +102,7 @@ it('renders FormAgentStudio header with AI Studio title, actions, and 8 canonica
 });
 
 it('renders Unified Inbox with circular channel triage, 3-segment switch, in-chat package cards, and Customer 360 dossier', async () => {
-  const { OmnichannelView } = await import('@/components/views/omnichannel-view');
+  const { BgosOmnichannelInbox: OmnichannelView } = await import('@/components/bgos/omnichannel-inbox');
 
   render(<OmnichannelView />);
 
@@ -160,7 +160,7 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
 });
 
 it('supports selecting in-chat package cards and toggling AI automation in detail panel', async () => {
-  const { OmnichannelView } = await import('@/components/views/omnichannel-view');
+  const { BgosOmnichannelInbox: OmnichannelView } = await import('@/components/bgos/omnichannel-inbox');
 
   render(<OmnichannelView />);
 
@@ -174,7 +174,7 @@ it('supports selecting in-chat package cards and toggling AI automation in detai
 });
 
 it('renders Tickets & Support Helpdesk workstation with 5 KPI cards, AI Triage, and Customer Dossier', async () => {
-  const { HelpCenterView } = await import('@/components/views/help-center-view');
+  const { BgosHelpdeskWorkstation: HelpCenterView } = await import('@/components/bgos/helpdesk-workstation');
 
   render(<HelpCenterView />);
 
@@ -239,7 +239,7 @@ it('renders Tickets & Support Helpdesk workstation with 5 KPI cards, AI Triage, 
 });
 
 it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview canvas, and campaign velocity', async () => {
-  const { SocialMediaView } = await import('@/components/views/tenant/social-media-view');
+  const { BgosSocialMarketing: SocialMediaView } = await import('@/components/bgos/social-marketing');
 
   render(<SocialMediaView />);
 
@@ -317,7 +317,7 @@ it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview c
 });
 
 it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, and AI Review Reply', async () => {
-  const { ReviewsView } = await import('@/components/views/reviews-view');
+  const { BgosReviewsWorkstation: ReviewsView } = await import('@/components/bgos/reviews-workstation');
 
   render(<ReviewsView />);
 
@@ -607,7 +607,7 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
 });
 
 it('renders Live Website Visitor Radar workstation inside Inbox with telemetry strip, visitor stream, live keystroke mirror, and dossier', async () => {
-  const { OmnichannelView } = await import('@/components/views/omnichannel-view');
+  const { BgosOmnichannelInbox: OmnichannelView } = await import('@/components/bgos/omnichannel-inbox');
 
   render(<OmnichannelView initialTab="visitors" />);
 
@@ -652,7 +652,7 @@ it('renders Live Website Visitor Radar workstation inside Inbox with telemetry s
 });
 
 it('renders BGOS Executive Command Center Dashboard with 5 KPIs, Business Growth spline, Donut breakdown, Upcoming Appointments, Activity feed, AI cockpit, Tasks, and 6 Quick Launchers', async () => {
-  const { DashboardView } = await import('@/components/views/dashboard-view');
+  const { BgosDashboard: DashboardView } = await import('@/components/bgos/dashboard');
 
   render(<DashboardView />);
 

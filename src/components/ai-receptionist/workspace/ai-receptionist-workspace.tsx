@@ -36,14 +36,12 @@ import {
   Sliders,
   ChevronRight,
   Info,
-  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { useAppStore } from '@/store/app-store';
 import { useAiReceptionistData } from './use-ai-receptionist-data';
 import { OverviewTab } from './overview-tab';
 import { CallsTab } from './calls-tab';
@@ -97,7 +95,6 @@ function setTabInUrl(tab: TabId) {
 }
 
 export function AiReceptionistWorkspace() {
-  const setCurrentView = useAppStore((s) => s.setCurrentView);
   const [activeTab, setActiveTab] = useState<TabId>(() => getTabFromUrl());
   const [testCallOpen, setTestCallOpen] = useState(false);
   const [buyDialogOpen, setBuyDialogOpen] = useState(false);
@@ -218,25 +215,6 @@ export function AiReceptionistWorkspace() {
       {/* ── Fixed Sticky 100% Header & Tab Bar ── */}
       <div className="sticky top-0 z-30 w-full bg-background/95 backdrop-blur-md border-b border-border/60 shadow-2xs transition-all">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-3.5 space-y-3">
-          {/* Universal Back Navigation */}
-          <div className="flex items-center justify-between pb-0.5">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (activeTab !== 'overview') {
-                  handleTabChange('overview');
-                } else {
-                  setCurrentView('dashboard');
-                }
-              }}
-              className="gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground -ml-2 h-7"
-            >
-              <ArrowLeft className="size-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{activeTab !== 'overview' ? 'Back to Receptionist Overview' : 'Back to Dashboard'}</span>
-            </Button>
-          </div>
-
           {/* Top Bar: Title, Live Status, Phone, Quick Actions */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3.5 min-w-0">
