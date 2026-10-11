@@ -87,7 +87,7 @@ export default function LoginScreen() {
   // on app boot.
   useEffect(() => {
     if (isAuthenticated && role) {
-      router.replace(role === 'customer' ? '/(customer)/marketplace' : '/(employee)/today');
+      router.replace('/(customer)/marketplace');
     }
   }, [isAuthenticated, role, router]);
 

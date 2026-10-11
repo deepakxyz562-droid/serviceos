@@ -3,7 +3,7 @@ import type { ExpoConfig, ConfigContext } from 'expo/config';
 const APP_NAME = 'Fieseros';
 const SCHEME = 'fieseros';
 
-export default ({ config }: ConfigContext): ExpoConfig => ({
+export default ({ config }: ConfigContext): any => ({
   ...config,
   name: APP_NAME,
   slug: 'fieseros-customer',
@@ -12,7 +12,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/icon.png',
   scheme: SCHEME,
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
@@ -58,7 +57,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           minSdkVersion: 24,
         },
         ios: {
-          deploymentTarget: '15.1',
+          deploymentTarget: '16.4',
         },
       },
     ],
