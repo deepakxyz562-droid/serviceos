@@ -23,6 +23,30 @@ export interface CreatorOffer {
   order: number;
 }
 
+export interface WebsiteSection {
+  id: string;
+  title: string;
+  icon: string;
+  enabled: boolean;
+}
+
+export interface HeroConfig {
+  headline: string;
+  subheadline: string;
+  primaryButtonText: string;
+  primaryButtonLink: string;
+  secondaryButtonText: string;
+  secondaryButtonLink: string;
+  backgroundImage?: string;
+  overlayStyle?: 'glass' | 'clean' | 'gradient';
+  keyFeatures?: Array<{
+    id: string;
+    icon: string;
+    title: string;
+    subtitle: string;
+  }>;
+}
+
 export interface CreatorProfileData {
   isEnabled: boolean; // Strictly opt-in: profile is only publicly published when true
   handle: string; // e.g. "mybusiness"
@@ -48,7 +72,41 @@ export interface CreatorProfileData {
   aiAgentEnabled: boolean;
   aiWelcomeMessage?: string;
   offers: CreatorOffer[];
+  pageTitle?: string;
+  metaDescription?: string;
+  publishedStatus?: 'published' | 'draft' | 'archived';
+  websiteSections?: WebsiteSection[];
+  heroConfig?: HeroConfig;
 }
+
+export const DEFAULT_WEBSITE_SECTIONS: WebsiteSection[] = [
+  { id: 'header', title: 'Header & Navigation', icon: 'Home', enabled: true },
+  { id: 'hero', title: 'Hero Banner', icon: 'Sparkles', enabled: true },
+  { id: 'services', title: 'Services', icon: 'Briefcase', enabled: true },
+  { id: 'about', title: 'About Us', icon: 'Building2', enabled: true },
+  { id: 'why_us', title: 'Why Choose Us', icon: 'ShieldCheck', enabled: true },
+  { id: 'testimonials', title: 'Testimonials', icon: 'Star', enabled: true },
+  { id: 'gallery', title: 'Gallery', icon: 'Images', enabled: true },
+  { id: 'contact', title: 'Contact & Map', icon: 'MapPin', enabled: true },
+  { id: 'faq', title: 'FAQ', icon: 'HelpCircle', enabled: false },
+  { id: 'ai_assistant', title: 'AI Assistant', icon: 'Bot', enabled: true },
+];
+
+export const DEFAULT_HERO_CONFIG: HeroConfig = {
+  headline: 'A cleaner home. A brighter you.',
+  subheadline: 'Professional home and office cleaning services in Tucson. Trusted, affordable and hassle-free.',
+  primaryButtonText: 'Book a Cleaning',
+  primaryButtonLink: 'Booking Page',
+  secondaryButtonText: 'Get a Free Quote',
+  secondaryButtonLink: 'Contact Form',
+  backgroundImage: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
+  overlayStyle: 'glass',
+  keyFeatures: [
+    { id: 'feat_1', icon: 'ShieldCheck', title: 'Trusted & Verified', subtitle: 'Background-checked professionals' },
+    { id: 'feat_2', icon: 'Clock', title: 'Flexible Scheduling', subtitle: 'Book at your convenience' },
+    { id: 'feat_3', icon: 'ThumbsUp', title: '100% Satisfaction', subtitle: 'We guarantee quality service' },
+  ],
+};
 
 export const DEFAULT_OFFERS: CreatorOffer[] = [
   {
@@ -203,5 +261,10 @@ export function buildDefaultCreatorProfile(tenant: {
         order: 4,
       },
     ],
+    pageTitle: `${businessName} | Professional Cleaning & Services`,
+    metaDescription: `Professional home and office cleaning services. Book online, get a free quote and enjoy a cleaner, healthier space.`,
+    publishedStatus: 'published',
+    websiteSections: DEFAULT_WEBSITE_SECTIONS,
+    heroConfig: DEFAULT_HERO_CONFIG,
   };
 }

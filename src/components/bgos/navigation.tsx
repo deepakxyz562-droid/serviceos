@@ -26,6 +26,11 @@ import {
   Ticket,
   Users,
   Workflow,
+  ChevronDown,
+  ChevronRight,
+  LayoutTemplate,
+  Tag,
+  QrCode,
   type LucideIcon,
 } from 'lucide-react';
 import { BgosBrand } from './brand';
@@ -33,6 +38,19 @@ import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-naviga
 import { useAppStore } from '@/store/app-store';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+
+const DIGITAL_PRESENCE_SUBITEMS = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'website', label: 'My Website', icon: Globe },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { id: 'services', label: 'Services & Products', icon: Tag },
+  { id: 'bookings', label: 'Bookings', icon: Calendar },
+  { id: 'card', label: 'Digital Card', icon: CreditCard },
+  { id: 'qr', label: 'QR & Share', icon: QrCode },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'settings', label: 'Settings', icon: Settings },
+];
 import type { ViewType } from '@/types/workflow';
 
 const icons: Record<string, LucideIcon> = {
@@ -62,6 +80,8 @@ const icons: Record<string, LucideIcon> = {
 export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
   const { auth, currentView, setCurrentView, leftSidebarOpen, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
   const [search, setSearch] = useState('');
+  const [digitalPresenceExpanded, setDigitalPresenceExpanded] = useState(true);
+  const [activeDigitalPresenceTab, setActiveDigitalPresenceTab] = useState('website');
   const userName = auth.user?.name || auth.user?.email || 'Your Account';
   const activeView = bgosNavigationView(currentView);
 
@@ -100,6 +120,60 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
                 const Icon = icons[item.iconName] || Globe;
                 const isActive = activeView === item.view;
                 const badge = 'badge' in item ? (item as any).badge : undefined;
+
+                if (item.view === 'creatorProfile') {
+                  return (
+                    <div key={item.view} className="space-y-1">
+                      <button
+                        onClick={() => {
+                          navigate('creatorProfile');
+                          setDigitalPresenceExpanded((prev) => !prev);
+                        }}
+                        aria-current={isActive ? 'page' : undefined}
+                        className="group w-full flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Icon size={16} className={isActive ? 'text-purple-600 dark:text-purple-400' : 'text-slate-500'} />
+                          <span className="truncate">{item.label}</span>
+                        </div>
+                        <ChevronDown
+                          size={14}
+                          className={cn(
+                            "text-slate-400 transition-transform",
+                            !digitalPresenceExpanded && "-rotate-90"
+                          )}
+                        />
+                      </button>
+
+                      {digitalPresenceExpanded && (
+                        <div className="pl-5 space-y-0.5 border-l-2 border-purple-200 dark:border-purple-900 ml-4 py-1">
+                          {DIGITAL_PRESENCE_SUBITEMS.map((sub) => {
+                            const SubIcon = sub.icon;
+                            const isSubActive = isActive && activeDigitalPresenceTab === sub.id;
+                            return (
+                              <button
+                                key={sub.id}
+                                onClick={() => {
+                                  setActiveDigitalPresenceTab(sub.id);
+                                  navigate('creatorProfile');
+                                }}
+                                className={cn(
+                                  "w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs transition-colors text-left",
+                                  isSubActive
+                                    ? "bg-purple-100 text-purple-900 font-bold dark:bg-purple-950/60 dark:text-purple-300 shadow-2xs"
+                                    : "text-slate-600 dark:text-slate-400 hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
+                                )}
+                              >
+                                <SubIcon size={13} className={isSubActive ? "text-purple-600 dark:text-purple-400" : "text-slate-400"} />
+                                <span className="truncate">{sub.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
 
                 return (
                   <button

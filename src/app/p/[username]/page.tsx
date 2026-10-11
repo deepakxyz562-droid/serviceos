@@ -441,6 +441,53 @@ export default function CreatorPublicProfilePage({
           )}
         </div>
 
+        {/* ── OPTIONAL HERO BANNER (FROM WEBSITE BUILDER) ── */}
+        {creator?.heroConfig?.headline && (
+          <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-purple-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 shadow-sm p-6 sm:p-8">
+            <div className="max-w-2xl space-y-3">
+              <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
+                ● Professional Services
+              </Badge>
+              <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">
+                {creator.heroConfig.headline}
+              </h2>
+              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                {creator.heroConfig.subheadline}
+              </p>
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  onClick={() => {
+                    const firstCall = creator?.offers?.find((o) => o.type === 'one_on_one');
+                    if (firstCall) setSelectedOfferForBooking(firstCall);
+                  }}
+                  className="bg-primary text-white text-xs font-bold rounded-xl h-9 px-4"
+                >
+                  {creator.heroConfig.primaryButtonText || 'Book a Cleaning'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAiChat(true)}
+                  className="text-xs font-bold rounded-xl h-9 px-4"
+                >
+                  {creator.heroConfig.secondaryButtonText || 'Get a Free Quote'}
+                </Button>
+              </div>
+
+              {/* Trust Badges */}
+              {creator.heroConfig.keyFeatures && creator.heroConfig.keyFeatures.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                  {creator.heroConfig.keyFeatures.map((feat) => (
+                    <div key={feat.id} className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border text-xs space-y-0.5">
+                      <p className="font-bold text-foreground text-[11px]">{feat.title}</p>
+                      <p className="text-[10px] text-muted-foreground">{feat.subtitle}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ── PROMINENT "ASK AI" ASSISTANT BANNER ── */}
         <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">

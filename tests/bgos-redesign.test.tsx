@@ -723,6 +723,53 @@ it('renders BGOS Executive Command Center Dashboard with 5 KPIs, Business Growth
   expect(screen.getByText('Test Phone Agent')).toBeDefined();
 });
 
+it('renders Digital Presence Website Builder workstation with 3-column studio layout, live dual preview, section editor, and AI dock', async () => {
+  const { CreatorProfileView } = await import('@/components/views/creator-profile-view');
+
+  render(<CreatorProfileView />);
+
+  // 1. Header controls
+  expect(screen.getByText('Website Builder')).toBeDefined();
+  expect(screen.getByText('Live Studio')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Preview/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Save Changes/i })).toBeDefined();
+
+  // 2. Navigation tabs
+  expect(screen.getByRole('button', { name: /Design/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Pages/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Services & Products/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /SEO & Domain/i })).toBeDefined();
+
+  // 3. Column 1: Website Sections & Page Settings
+  expect(screen.getByText('Website Sections')).toBeDefined();
+  expect(screen.getByText('Header & Navigation')).toBeDefined();
+  expect(screen.getByText('Hero Banner')).toBeDefined();
+  expect(screen.getByText('About Us')).toBeDefined();
+  expect(screen.getByText('Why Choose Us')).toBeDefined();
+  expect(screen.getByText('Page Settings')).toBeDefined();
+  expect(screen.getByText('Page URL')).toBeDefined();
+  expect(screen.getByText('SEO Preview')).toBeDefined();
+
+  // 4. Column 2: Section Editor
+  expect(screen.getByText(/Edit Section: Hero Banner/i)).toBeDefined();
+  expect(screen.getByDisplayValue('A cleaner home. A brighter you.')).toBeDefined();
+  expect(screen.getByDisplayValue('Book a Cleaning')).toBeDefined();
+  expect(screen.getByDisplayValue('Get a Free Quote')).toBeDefined();
+  expect(screen.getAllByText('Trusted & Verified').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Flexible Scheduling').length).toBeGreaterThanOrEqual(1);
+
+  // 5. Column 3: Live Preview & AI Assistant Dock
+  expect(screen.getByText('Live Website Preview')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Desktop/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Mobile/i })).toBeDefined();
+  expect(screen.getAllByText('Cinderella Cleaners').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('AI Content Assistant')).toBeDefined();
+  expect(screen.getByText('Generate Content')).toBeDefined();
+  expect(screen.getByText('Improve SEO')).toBeDefined();
+  expect(screen.getByText('Rewrite Copy')).toBeDefined();
+});
+
+
 
 
 
