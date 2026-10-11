@@ -44,6 +44,8 @@
     "mini-services",
     "daemon.js",
     "mobile-app",
+    "mobile-customer",
+    "mobile-pro",
     "quote-flow-mobile",
     "standalone",
     "e2e",

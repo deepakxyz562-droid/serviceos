@@ -130,7 +130,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [mobile-app, bosmobile, chatbotlymobile, quote-flow-mobile]
+        app: [mobile-customer, mobile-pro, bosmobile, chatbotlymobile, quote-flow-mobile]
     steps:
       - uses: actions/checkout@v4
 
@@ -146,7 +146,7 @@ jobs:
         run: |
           case "${{ matrix.app }}" in
             bosmobile|chatbotlymobile) npm ci --legacy-peer-deps ;;
-            mobile-app) cd mobile-app && bun install --frozen-lockfile ;;
+            mobile-customer|mobile-pro) cd "${{ matrix.app }}" && bun install --frozen-lockfile ;;
             quote-flow-mobile) cd quote-flow-mobile && npm ci --legacy-peer-deps ;;
           esac
 

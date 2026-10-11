@@ -71,6 +71,10 @@ db/*.db-journal
 # These un-ignore rules override the *.png rule for mobile-app assets.
 !mobile-app/assets/
 !mobile-app/assets/**
+!mobile-customer/assets/
+!mobile-customer/assets/**
+!mobile-pro/assets/
+!mobile-pro/assets/**
 !quote-flow-mobile/assets/
 !quote-flow-mobile/assets/**
 .expo/

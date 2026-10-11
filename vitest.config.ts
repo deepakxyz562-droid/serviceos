@@ -45,6 +45,8 @@ export default defineConfig({
       'dist',
       '.next',
       'mobile-app',
+      'mobile-customer',
+      'mobile-pro',
       'mini-services',
     ],
     coverage: {
@@ -54,6 +56,8 @@ export default defineConfig({
         'node_modules/',
         '.next/',
         'mobile-app/',
+        'mobile-customer/',
+        'mobile-pro/',
         'mini-services/',
         '**/*.config.{ts,js,mjs}',
         '**/*.d.ts',

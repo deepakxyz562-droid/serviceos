@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "458174772969",
+    "project_id": "fieseros-8a8d1",
+    "storage_bucket": "fieseros-8a8d1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:458174772969:android:fb81176475952ae67f2278",
+        "android_client_info": {
+          "package_name": "com.fieseros.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFZ3H6apgpw2IbF7hJaVFqjpY08aXj_vA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
