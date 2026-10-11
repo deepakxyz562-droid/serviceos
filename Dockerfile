@@ -15,6 +15,8 @@ COPY package.json bun.lock ./
 # Copy workspace manifests so bun install can resolve monorepo workspaces
 COPY bosmobile/package.json ./bosmobile/
 COPY bgosmobile/package.json ./bgosmobile/
+COPY mobile-customer/package.json ./mobile-customer/
+COPY mobile-pro/package.json ./mobile-pro/
 COPY apps/bos/package.json ./apps/bos/
 COPY apps/bgos/package.json ./apps/bgos/
 COPY apps/chatbotly/package.json ./apps/chatbotly/
