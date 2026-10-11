@@ -651,6 +651,78 @@ it('renders Live Website Visitor Radar workstation inside Inbox with telemetry s
   expect(screen.getByText(/Nudge Dispatched/i)).toBeDefined();
 });
 
+it('renders BGOS Executive Command Center Dashboard with 5 KPIs, Business Growth spline, Donut breakdown, Upcoming Appointments, Activity feed, AI cockpit, Tasks, and 6 Quick Launchers', async () => {
+  const { DashboardView } = await import('@/components/views/dashboard-view');
+
+  render(<DashboardView />);
+
+  // 1. Header greeting & store identity
+  expect(screen.getByText(/Here's what's happening with your business today/i)).toBeDefined();
+  expect(screen.getByText('Cinderella Cleaners')).toBeDefined();
+  expect(screen.getByText('Tucson, Arizona')).toBeDefined();
+
+  // 2. 5 Growth KPI Cards
+  expect(screen.getByText('New Leads')).toBeDefined();
+  expect(screen.getAllByText('124').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Appointments').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('86').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Phone Calls')).toBeDefined();
+  expect(screen.getByText('312')).toBeDefined();
+  expect(screen.getAllByText('Messages').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('1,248').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Google Rating')).toBeDefined();
+  expect(screen.getByText('4.8')).toBeDefined();
+  expect(screen.getByText('326 reviews')).toBeDefined();
+
+  // 3. Middle Row: Business Growth & Leads by Source
+  expect(screen.getByText('Business Growth')).toBeDefined();
+  expect(screen.getByText('Leads by Source')).toBeDefined();
+  expect(screen.getAllByText('428').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Total Leads')).toBeDefined();
+  expect(screen.getAllByText('Website').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Google Business').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Social Media').length).toBeGreaterThanOrEqual(1);
+
+  // 4. Upcoming Appointments
+  expect(screen.getByText('Upcoming Appointments')).toBeDefined();
+  expect(screen.getByText('Priya Singh')).toBeDefined();
+  expect(screen.getByText('Office Deep Clean')).toBeDefined();
+  expect(screen.getByText('Sneha Patel')).toBeDefined();
+
+  // 5. Bottom Row: Recent Activity Feed & Filter Pills
+  expect(screen.getByText('Recent Activity')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'All' })).toBeDefined();
+  expect(screen.getAllByRole('button', { name: /Leads/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByRole('button', { name: /Appointments/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByRole('button', { name: /Calls/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Anita Desai')).toBeDefined();
+
+  // 6. Your AI Assistant Cockpit
+  expect(screen.getByText('Your AI Assistant')).toBeDefined();
+  expect(screen.getByText('Online')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Test AI' })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Train Knowledge/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /View Conversations/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Configure Channels/i })).toBeDefined();
+
+  // 7. Tasks & Follow-ups Checklist
+  expect(screen.getByText('Tasks & Follow-ups')).toBeDefined();
+  expect(screen.getByText('Call back Priya Singh')).toBeDefined();
+  expect(screen.getByText('Follow up with Rahul Kumar')).toBeDefined();
+
+  // Interactivity: Toggle a task checkbox
+  const taskRow = screen.getByText('Call back Priya Singh');
+  fireEvent.click(taskRow);
+
+  // 8. Footer 6 Quick Action Launchers
+  expect(screen.getByText('Create Campaign')).toBeDefined();
+  expect(screen.getByText('Find New Leads')).toBeDefined();
+  expect(screen.getByText('Build a Form')).toBeDefined();
+  expect(screen.getByText('Create Funnel')).toBeDefined();
+  expect(screen.getByText('Design a Post')).toBeDefined();
+  expect(screen.getByText('Test Phone Agent')).toBeDefined();
+});
+
 
 
 

@@ -1,433 +1,67 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  CalendarCheck,
-  Briefcase,
-  DollarSign,
-  UserPlus,
-  TrendingUp,
-  TrendingDown,
-  ArrowRight,
-  Plus,
-  ClipboardList,
-  MessageCircle,
-  Radio,
-  Clock,
-  ChevronRight,
-  MapPin,
-  User,
-  CheckCircle2,
-  AlertCircle,
-  Timer,
-  Zap,
-  Wifi,
-  Bell,
-  Camera,
-  Eye,
   Send,
-  ShoppingCart,
-  AlertTriangle,
-  Package,
-  ExternalLink,
-  IndianRupee,
-  Target,
+  Calendar,
+  Phone,
+  MessageSquare,
+  Star,
   Users,
-  FileText,
-  Megaphone,
+  Search,
+  FileInput,
   Sparkles,
+  Check,
+  Clock,
+  ChevronDown,
+  ArrowRight,
+  Bot,
+  BookOpen,
+  Settings,
+  Target,
+  FileText,
+  Radio,
+  Flame,
+  Globe,
+  MoreVertical,
+  CheckCircle2,
+  TrendingUp,
+  Headphones,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useRealtime } from '@/hooks/use-realtime';
-import { useCompanyCurrency } from '@/hooks/use-company-currency';
-
-// P1 (LCP fix): recharts is ~200KB and was eagerly imported, blocking
-// hydration + LCP. The chart components are now lazy-loaded from a separate
-// chunk via `next/dynamic` with `ssr: false` — recharts only downloads AFTER
-// the KPI cards paint, cutting ~1.5s off LCP on a fresh load.
-//
-// `ssr: false` is required because recharts' ResponsiveContainer needs
-// `window` to measure its parent — on the server it renders nothing, so
-// SSR would just produce a hydration mismatch warning + wasted work.
-//
-// The `loading` fallback reserves the chart's space (fixed height) so the
-// lazy swap doesn't cause CLS.
-import dynamic from 'next/dynamic';
-import { AISuggestionsPanel } from '@/components/dashboard/ai-suggestions-panel';
-
-const LazyKPISparkline = dynamic(
-  () => import('./dashboard-charts').then(m => ({ default: m.KPISparkline })),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-8 w-20" />,
-  },
-);
-
-const LazyRevenueTrendChart = dynamic(
-  () => import('./dashboard-charts').then(m => ({ default: m.RevenueTrendChart })),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-[240px] w-full" />,
-  },
-);
-
-const LazyLeadSourcesChart = dynamic(
-  () => import('./dashboard-charts').then(m => ({ default: m.LeadSourcesChart })),
-  {
-    ssr: false,
-    loading: () => <Skeleton className="h-[240px] w-full" />,
-  },
-);
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface LeadTrend {
-  count: number;
-  trend: number;
-}
-
-interface ActiveJobs {
-  count: number;
-  // Total jobs regardless of status (includes terminal). Exposed separately
-  // so views that want the raw total can still get it; the `count` field
-  // above is what the "Active Jobs" KPI card displays (= non-terminal only).
-  totalJobs?: number;
-  byStatus: Record<string, number>;
-}
-
-interface MonthlyRevenue {
-  amount: number;       // total billed this month = collected + pending
-  collected: number;    // paid invoices only (cash in bank)
-  pending: number;      // sent invoices only (awaiting payment)
-  trend: number;
-}
-
-interface PipelineStage {
-  stage: string;
-  count: number;
-  value: number;
-}
-
-interface RevenueDataPoint {
-  month: string;
-  revenue: number;
-}
-
-interface LeadSourceData {
-  source: string;
-  count: number;
-}
-
-interface RecentLead {
-  id: string;
-  name: string;
-  source: string;
-  status: string;
-  value: number;
-  date: string;
-}
-
-interface RecentJob {
-  id: string;
-  title: string;
-  assignee: string;
-  status: string;
-  scheduledDate: string;
-}
-
-interface SaaSStats {
-  totalLeads: LeadTrend;
-  activeJobs: ActiveJobs;
-  monthlyRevenue: MonthlyRevenue;
-  // Jobs scheduled for today — count powers the "Today's Bookings" KPI card,
-  // the list powers the "Today's Schedule" section. Both are filtered by the
-  // API to scheduledAt = today (UTC-aligned), so the UI finally matches its
-  // labels instead of showing "pending"-status count / recent-by-creation jobs.
-  todaysBookings?: number;
-  todaysJobs?: RecentJob[];
-  leadPipeline: PipelineStage[];
-  revenueTrend: RevenueDataPoint[];
-  leadSources: LeadSourceData[];
-  recentLeads: RecentLead[];
-  recentJobs: RecentJob[];
-}
-
-interface EmployeePresence {
-  id: string;
-  name: string;
-  role: string;
-  status: string;
-  avatar?: string;
-  updatedAt: string;
-}
-
-interface JourneyStage {
-  stage: string;
-  count: number;
-}
-
-interface ConversationData {
-  id: string;
-  conversationId: string;
-  customerName?: string;
-  customerPhone: string;
-  status: string;
-  currentStage?: string;
-  lastMessageAt?: string;
-  unreadCount?: number;
-  intentTag?: string;
-}
-
-interface ScheduledAction {
-  id: string;
-  jobTitle: string;
-  actionType: string;
-  scheduledTime: string;
-  status: string;
-}
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatShortDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-function formatRelativeTime(dateStr?: string | null): string {
-  if (!dateStr) return 'Unknown';
-  try {
-    const now = new Date();
-    const then = new Date(dateStr);
-    const diffMs = now.getTime() - then.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  } catch {
-    return 'Unknown';
-  }
-}
-
-// ─── Color Configs ───────────────────────────────────────────────────────────
-
-const pipelineColors: Record<string, { bg: string; text: string; border: string; fill: string }> = {
-  new: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', fill: '#3b82f6' },
-  contacted: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', fill: '#f59e0b' },
-  quoted: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', fill: '#8b5cf6' },
-  won: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', fill: '#10b981' },
-  lost: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', fill: '#ef4444' },
-  // Map "qualified" and "proposal" from the API to display names
-  qualified: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', fill: '#14b8a6' },
-  proposal: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', fill: '#8b5cf6' },
-};
-
-const leadSourceColors: Record<string, string> = {
-  website: '#10b981',
-  whatsapp: '#25d366',
-  google: '#3b82f6',
-  facebook: '#1877f2',
-  referral: '#8b5cf6',
-  manual: '#f59e0b',
-};
-
-const leadSourceLabels: Record<string, string> = {
-  website: 'Website',
-  whatsapp: 'WhatsApp',
-  google: 'Google',
-  facebook: 'Facebook',
-  referral: 'Referral',
-  manual: 'Manual',
-};
-
-const jobStatusConfig: Record<string, { color: string; icon: React.ElementType }> = {
-  pending: { color: 'bg-amber-100 text-amber-800', icon: Clock },
-  in_progress: { color: 'bg-blue-100 text-blue-800', icon: Timer },
-  completed: { color: 'bg-emerald-100 text-emerald-800', icon: CheckCircle2 },
-  cancelled: { color: 'bg-red-100 text-red-800', icon: AlertCircle },
-  on_hold: { color: 'bg-gray-100 text-gray-800', icon: AlertCircle },
-};
-
-const leadStatusColors: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-800',
-  contacted: 'bg-amber-100 text-amber-800',
-  quoted: 'bg-purple-100 text-purple-800',
-  qualified: 'bg-teal-100 text-teal-800',
-  proposal: 'bg-purple-100 text-purple-800',
-  won: 'bg-emerald-100 text-emerald-800',
-  lost: 'bg-red-100 text-red-800',
-};
-
-// Pipeline display order (simplified 5 stages for the dashboard)
-const pipelineDisplayStages = ['new', 'contacted', 'quoted', 'won', 'lost'];
-const pipelineDisplayLabels: Record<string, string> = {
-  new: 'New',
-  contacted: 'Contacted',
-  quoted: 'Quoted',
-  won: 'Won',
-  lost: 'Lost',
-};
-
-// Build a sparkline series from a real trend array. The dashboard's
-// KPI sparklines used to be synthesized with `Math.random()` which
-// produced fake jiggly curves that misled users into thinking the
-// numbers were live. Now each sparkline is either:
-//   • powered by a real backend trend array (e.g. `stats.revenueTrend`
-//     for the Revenue card — `/api/dashboard/bootstrap` returns the
-//     last 6 months of real invoice revenue), or
-//   • empty (`[]`) for KPIs whose backend doesn't expose a trend yet
-//     (bookings, jobs, leads). An empty array renders as a flat
-//     placeholder rather than a fabricated curve.
-//
-// Empty is honest — it shows the user we don't have enough data for a
-// trend rather than inventing one.
-function trendToSparkline(
-  points: { revenue?: number; value?: number; count?: number }[] | undefined,
-): { value: number }[] {
-  if (!Array.isArray(points) || points.length === 0) return [];
-  return points.map((p) => ({
-    value: Number(p.revenue ?? p.value ?? p.count ?? 0),
-  }));
-}
-
-// ─── Sub-Components ──────────────────────────────────────────────────────────
-
-function StatCardSkeleton() {
-  // P4 (CLS fix): the skeleton must match the real KPI card's height so the
-  // skeleton→real swap doesn't cause a layout shift (~0.31 CLS score).
-  //
-  // Real card structure (see the KPI cards rendered below):
-  //   • CardContent p-6  → 24px padding top + bottom
-  //   • Left column: label (text-sm ~20px) + mt-1 + value (text-2xl ~32px)
-  //                 + mt-1 + trend (~16px)  = ~76px
-  //   • Right column: icon container (p-2.5 → 40px outer) + gap-1 + sparkline
-  //                  (ResponsiveContainer height=32)  = ~76px
-  //   • Inner flex uses items-center, so the taller column wins.
-  //
-  // Previous skeleton used `size-12` (48px) for the icon and `gap-2` (8px)
-  // for the right column, making the skeleton ~136px tall vs the real card's
-  // ~128px — an 8px mismatch that registered as CLS.
-  //
-  // Now we mirror the real structure exactly: 40px icon, gap-1, 32px sparkline.
+// Mini Bar Visualizer component for KPI cards
+function MiniBarChart({ values, color }: { values: number[]; color: string }) {
+  const max = Math.max(...values, 1);
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2 flex-1">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-8 w-20" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <Skeleton className="size-10 rounded-xl" />
-            <Skeleton className="h-8 w-20" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex items-end gap-1 h-7">
+      {values.map((v, i) => (
+        <div
+          key={i}
+          className="w-1.5 rounded-t transition-all duration-300"
+          style={{
+            height: `${Math.max(18, (v / max) * 100)}%`,
+            backgroundColor: color,
+            opacity: 0.35 + (i / values.length) * 0.65,
+          }}
+        />
+      ))}
+    </div>
   );
 }
-
-function ChartSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-4 w-48" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-[220px] w-full" />
-      </CardContent>
-    </Card>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <Skeleton className="h-5 w-32" />
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-16" />
-              <Skeleton className="h-4 w-20 ml-auto" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function KPISparkline({ data, color }: { data: { value: number }[]; color: string }) {
-  // P1: recharts is now lazy-loaded. This local KPISparkline wraps the lazy
-  // LazyKPISparkline so the call sites (inside the KPI cards) don't change.
-  // The lazy version shows a Skeleton of the same size (h-8 w-20 = 32×80px)
-  // while recharts downloads, so there's no CLS.
-  //
-  // Empty data (no real trend yet available for this KPI) renders a muted
-  // "—" placeholder of the same size, so the empty state reads as
-  // intentional ("no trend data") instead of looking like a broken chart.
-  if (!data || data.length === 0) {
-    return (
-      <div className="h-8 w-20 flex items-center justify-center text-muted-foreground/40 text-xs">
-        —
-      </div>
-    );
-  }
-  return <LazyKPISparkline data={data} color={color} />;
-}
-
-// ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { setCurrentView, setPendingCreate, auth, currentWorkspaceName } = useAppStore();
-  const [stats, setStats] = useState<SaaSStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { setCurrentView, auth } = useAppStore();
 
-  // Dynamic branding & personalized time-of-day greeting (Option 1)
-  const companyName = auth?.tenant?.name || auth?.tenant?.companyName || auth?.user?.companyName || auth?.user?.tenantName;
-  const dashboardTitle = companyName ? `${companyName} Dashboard` : 'Fieseros Dashboard';
-  
+  // Dynamic user name and greeting
   const firstName = useMemo(() => {
-    const name = auth?.user?.name || auth?.user?.firstName || '';
-    if (!name) return '';
-    return name.trim().split(' ')[0];
+    const raw = auth?.user?.name || auth?.user?.firstName || 'Deepak';
+    return raw.trim().split(' ')[0];
   }, [auth?.user?.name, auth?.user?.firstName]);
 
   const timeGreeting = useMemo(() => {
@@ -437,1319 +71,951 @@ export function DashboardView() {
     return 'Good evening';
   }, []);
 
-  const subtitle = useMemo(() => {
-    if (firstName) {
-      return `${timeGreeting}, ${firstName} 👋 — Here's what's happening at your business today`;
-    }
-    return `${timeGreeting} 👋 — Your business at a glance: bookings, jobs, revenue & leads`;
-  }, [firstName, timeGreeting]);
+  // Growth timeframe state
+  const [growthTimeframe, setGrowthTimeframe] = useState<'30d' | '7d' | '90d'>('30d');
 
-  // PERF-P2: Track whether this view is actually visible (not display:none
-  // inside the ViewCache). The existing polling effects check
-  // `document.hidden` (browser tab visibility), but when the dashboard is
-  // hidden inside the SPA via display:none, `document.hidden` is still
-  // false — so polling continued silently in the background. This ref +
-  // IntersectionObserver detects the REAL visibility so we can pause
-  // polling when the view is hidden.
-  const rootRef = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(true);
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { threshold: 0 },
+  // Recent Activity Filter
+  const [activityFilter, setActivityFilter] = useState<'all' | 'leads' | 'appointments' | 'calls' | 'messages' | 'forms'>('all');
+
+  // Tasks & Follow-ups state
+  const [tasks, setTasks] = useState([
+    {
+      id: 'task_1',
+      title: 'Call back Priya Singh',
+      subtitle: 'Discuss deep cleaning quote',
+      due: 'Today, 11:00 AM',
+      isUrgent: true,
+      completed: false,
+    },
+    {
+      id: 'task_2',
+      title: 'Follow up with Rahul Kumar',
+      subtitle: 'Send service details',
+      due: 'Today, 2:00 PM',
+      isUrgent: true,
+      completed: false,
+    },
+    {
+      id: 'task_3',
+      title: 'Send proposal to Sneha Patel',
+      subtitle: 'Office cleaning',
+      due: 'Tomorrow',
+      isUrgent: false,
+      completed: false,
+    },
+    {
+      id: 'task_4',
+      title: 'Review Google reviews',
+      subtitle: '3 new reviews to respond',
+      due: 'Tomorrow',
+      isUrgent: false,
+      completed: false,
+    },
+    {
+      id: 'task_5',
+      title: 'Check campaign performance',
+      subtitle: 'Diwali Offer',
+      due: 'Tomorrow',
+      isUrgent: false,
+      completed: false,
+    },
+  ]);
+
+  const toggleTask = (id: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+  };
 
-  // New data states
-  const [employees, setEmployees] = useState<EmployeePresence[]>([]);
-  const [journeyStages, setJourneyStages] = useState<JourneyStage[]>([]);
-  const [conversations, setConversations] = useState<ConversationData[]>([]);
-  const [scheduledActions, setScheduledActions] = useState<ScheduledAction[]>([]);
-  // Company currency
-  const { currency, format, formatCompact, symbol, isLoading: currencyLoading } = useCompanyCurrency();
+  // Recent Activity items
+  const activities = [
+    {
+      id: 'act_1',
+      type: 'leads',
+      title: 'New lead from Website',
+      subtitle: 'Anita Desai',
+      time: '2 min ago',
+      badge: 'Lead',
+      badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+      icon: Target,
+      iconColor: 'bg-purple-100 text-[#7C3AED] dark:bg-purple-950/80',
+    },
+    {
+      id: 'act_2',
+      type: 'appointments',
+      title: 'Appointment booked',
+      subtitle: 'Rahul Kumar',
+      time: '12 min ago',
+      badge: 'Booking',
+      badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+      icon: Calendar,
+      iconColor: 'bg-blue-100 text-blue-600 dark:bg-blue-950/80',
+    },
+    {
+      id: 'act_3',
+      type: 'calls',
+      title: 'New call received',
+      subtitle: '+1 520 555 0187',
+      time: '18 min ago',
+      badge: 'Call',
+      badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+      icon: Phone,
+      iconColor: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/80',
+    },
+    {
+      id: 'act_4',
+      type: 'forms',
+      title: 'New form submission',
+      subtitle: 'Service Request Form',
+      time: '25 min ago',
+      badge: 'Form',
+      badgeColor: 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300',
+      icon: FileText,
+      iconColor: 'bg-purple-100 text-[#7C3AED] dark:bg-purple-950/80',
+    },
+    {
+      id: 'act_5',
+      type: 'messages',
+      title: 'Google review received',
+      subtitle: '"Great service and very professional!"',
+      time: '1 hour ago',
+      badge: 'Review',
+      badgeColor: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+      icon: Star,
+      iconColor: 'bg-amber-100 text-amber-600 dark:bg-amber-950/80',
+    },
+  ];
 
-  // Real-time connection
-  const { connected: realtimeConnected } = useRealtime({
-    onEmployeeStatus: useCallback((data: any) => {
-      setEmployees((prev) =>
-        prev.map((e) => (e.id === data.employeeId ? { ...e, status: data.status, updatedAt: new Date().toISOString() } : e))
-      );
-    }, []),
-    onPresenceUpdate: useCallback((data: any) => {
-      if (data.employeeId) {
-        setEmployees((prev) =>
-          prev.map((e) => (e.id === data.employeeId ? { ...e, status: data.status === 'online' ? 'available' : data.status === 'busy' ? 'busy' : 'offline', updatedAt: new Date().toISOString() } : e))
-        );
-      }
-    }, []),
+  const filteredActivities = activities.filter((act) => {
+    if (activityFilter === 'all') return true;
+    return act.type === activityFilter;
   });
 
-  // P2 (Priority KPI fetch): The 5 dashboard fetches (saas-stats, employees,
-  // journey, conversations, ecommerce) run as PARALLEL useEffect hooks —
-  // React fires them all in the same commit, and each `fetch()` is
-  // fire-and-forget so they don't block each other. The `loading` state is
-  // ONLY tied to saas-stats (the KPI data source), so KPI cards render as
-  // soon as saas-stats resolves — they don't wait for the other 4 fetches.
-  // The other fetches populate secondary sections (employee presence,
-  // journey timeline, conversations widget, ecommerce overview) and their
-  // loading states are independent.
-  //
-  // LCP FIX (Concern #1 + #5b): The initial mount now uses the
-  // /api/dashboard/bootstrap BFF endpoint which combines saas-stats +
-  // employees + unread-count into a SINGLE HTTP call. This cuts 3
-  // sequential network round-trips (each with its own auth check) down to
-  // 1, saving ~200-400ms on the critical first paint path. The individual
-  // endpoints are still used for polling (below) and remain unchanged for
-  // backward compatibility. If the bootstrap endpoint fails for any reason,
-  // we fall back to the original individual fetch — so this is a safe,
-  // additive optimization.
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchBootstrap() {
-      try {
-        const res = await fetch('/api/dashboard/bootstrap');
-        if (!res.ok) throw new Error('Bootstrap failed');
-        const data = await res.json();
-        if (cancelled) return;
-
-        // Populate stats (gates KPI card rendering).
-        if (data.stats) setStats(data.stats);
-        // Populate employees (presence section) — skip the separate
-        // initial fetch below since bootstrap already included it.
-        if (Array.isArray(data.employees)) setEmployees(data.employees);
-      } catch (err) {
-        if (cancelled) return;
-        // FALLBACK: if the bootstrap endpoint fails, fall back to the
-        // original individual saas-stats fetch. This preserves backward
-        // compatibility — the dashboard still works even if the BFF
-        // endpoint is unavailable (e.g. during a partial deploy).
-        try {
-          const res = await fetch('/api/saas-stats');
-          if (!res.ok) throw new Error('Failed to fetch dashboard stats');
-          const data = await res.json();
-          if (!cancelled) setStats(data);
-        } catch (err2) {
-          if (!cancelled) setError(err2 instanceof Error ? err2.message : 'Unknown error');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    fetchBootstrap();
-
-    return () => { cancelled = true; };
-  }, []);
-
-  // Fetch employees for presence section.
-  // PERFORMANCE: Poll every 60s (was 30s) and pause when the tab is hidden.
-  // The server-side route also caches for 60s, so the combined effect is
-  // ~75% fewer DB queries vs the original 30s no-pause polling.
-  //
-  // NOTE: The initial employee list is now populated by the bootstrap
-  // endpoint above. This useEffect still runs to set up the polling
-  // interval for subsequent refreshes, but the first `fetchEmployees()`
-  // call will just refresh the already-populated data (instant swap, no
-  // loading flash because the cards are already rendered).
-  useEffect(() => {
-    async function fetchEmployees() {
-      try {
-        const res = await fetch('/api/employees?XTransformPort=3000');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) setEmployees(data);
-        }
-      } catch { /* silent */ }
-    }
-    // Don't fetch immediately on mount — bootstrap already did it.
-    // Only set up the polling interval for subsequent refreshes.
-    // PERF-P2: pause polling when the view is hidden (display:none in
-    // ViewCache) — not just when the browser tab is hidden.
-
-    let id: ReturnType<typeof setInterval> | null = null;
-    const start = () => { if (!id) id = setInterval(fetchEmployees, 60_000); };
-    const stop = () => { if (id) { clearInterval(id); id = null; } };
-    const onVisibility = () => {
-      if (document.hidden || !inView) stop();
-      else { fetchEmployees(); start(); }
-    };
-    if (inView) start();
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [inView]);
-
-  // Fetch journey data for customer journey overview
-  useEffect(() => {
-    async function fetchJourney() {
-      try {
-        const res = await fetch('/api/journey?XTransformPort=3000');
-        if (res.ok) {
-          const data = await res.json();
-          // Aggregate by stage
-          const stageMap: Record<string, number> = {};
-          const journeys: any[] = data.journeys || [];
-          for (const j of journeys) {
-            const stage = j.currentStage || 'unknown';
-            stageMap[stage] = (stageMap[stage] || 0) + 1;
-          }
-          setJourneyStages(Object.entries(stageMap).map(([stage, count]) => ({ stage, count })));
-          // Build scheduled actions from journey data
-          const actions: ScheduledAction[] = journeys
-            .filter((j: any) => j.automationActive && j.currentStage !== 'completed' && j.currentStage !== 'review')
-            .slice(0, 8)
-            .map((j: any) => ({
-              id: j.id,
-              jobTitle: j.job?.title || j.lead?.name || 'Untitled',
-              actionType: j.currentStage === 'lead' ? 'Follow-up' : j.currentStage === 'booking' ? 'Confirm' : j.currentStage === 'assigned' ? 'Dispatch' : 'Reminder',
-              scheduledTime: j.stageChangedAt || j.updatedAt,
-              status: j.automationActive ? 'pending' : 'completed',
-            }));
-          setScheduledActions(actions);
-        }
-      } catch { /* silent */ }
-    }
-    fetchJourney();
-  }, []);
-
-  // Fetch conversations for WhatsApp widget
-  useEffect(() => {
-    async function fetchConversations() {
-      try {
-        const res = await fetch('/api/conversations?XTransformPort=3000&status=active');
-        if (res.ok) {
-          const data = await res.json();
-          const convos: any[] = data.conversations || [];
-          setConversations(
-            convos.slice(0, 10).map((c: any) => ({
-              id: c.id,
-              conversationId: c.conversationId,
-              customerName: c.customerName || c.customer?.name,
-              customerPhone: c.customerPhone,
-              status: c.status,
-              currentStage: c.currentStage,
-              lastMessageAt: c.lastMessageAt,
-              unreadCount: c.unreadCount || 0,
-              intentTag: c.currentStage || 'general',
-            }))
-          );
-        }
-      } catch { /* silent */ }
-    }
-    fetchConversations();
-
-    // PERFORMANCE: 60s poll (was 30s) + pause when tab hidden.
-    // PERF-P2: also pause when the view is hidden (display:none in
-    // ViewCache) — not just when the browser tab is hidden.
-    let id: ReturnType<typeof setInterval> | null = null;
-    const start = () => { if (!id) id = setInterval(fetchConversations, 60_000); };
-    const stop = () => { if (id) { clearInterval(id); id = null; } };
-    const onVisibility = () => {
-      if (document.hidden || !inView) stop();
-      else { fetchConversations(); start(); }
-    };
-    if (inView) start();
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => {
-      stop();
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [inView]);
-
-
-  // Build pie chart data for lead sources
-  const pieData = useMemo(() => {
-    if (!stats?.leadSources) return [];
-    return stats.leadSources.map((s) => ({
-      name: leadSourceLabels[s.source] || s.source.charAt(0).toUpperCase() + s.source.slice(1),
-      value: s.count,
-      source: s.source,
-    }));
-  }, [stats?.leadSources]);
-
-  // Build sparkline data for KPI cards from REAL trend arrays.
-  //
-  // The dashboard's `/api/dashboard/bootstrap` endpoint returns
-  // `stats.revenueTrend` (last 6 months of real collected+pending invoice
-  // revenue). That powers the Revenue sparkline directly.
-  //
-  // The bookings / jobs / leads KPIs don't yet have a corresponding
-  // backend trend array — so we render an empty sparkline (the
-  // KPISparkline component renders a flat baseline for empty input)
-  // rather than fabricating a curve with `Math.random()`.
-  const sparklines = useMemo(() => {
-    if (!stats) return { bookings: [], revenue: [], leads: [], jobs: [] };
-    return {
-      bookings: [],
-      revenue: trendToSparkline(stats.revenueTrend),
-      leads: [],
-      jobs: [],
-    };
-  }, [stats]);
-
-  // Map API pipeline stages to display stages
-  const displayPipeline = useMemo(() => {
-    if (!stats?.leadPipeline) return [];
-    // Map qualified → contacted bucket, proposal → quoted bucket for simplified view
-    const mapped = new Map<string, { count: number; value: number }>();
-    for (const item of stats.leadPipeline) {
-      let displayStage = item.stage;
-      if (item.stage === 'qualified') displayStage = 'contacted';
-      if (item.stage === 'proposal') displayStage = 'quoted';
-      const existing = mapped.get(displayStage);
-      if (existing) {
-        existing.count += item.count;
-        existing.value += item.value;
-      } else {
-        mapped.set(displayStage, { count: item.count, value: item.value });
-      }
-    }
-    return pipelineDisplayStages
-      .map((stage) => ({
-        stage,
-        ...mapped.get(stage)!,
-      }))
-      .filter((s) => s.count !== undefined);
-  }, [stats?.leadPipeline]);
-
-  // Today's schedule: jobs whose scheduledAt falls inside today.
-  // Source = `stats.todaysJobs` (server-side date-filtered). Falls back to
-  // `stats.recentJobs` only if the API hasn't been updated yet (defensive —
-  // should not happen post-fix, but keeps the page rendering during a
-  // partial rollout).
-  const todaySchedule = useMemo(() => {
-    const source = stats?.todaysJobs ?? stats?.recentJobs ?? [];
-    return source.slice(0, 6).map((job) => ({
-      ...job,
-      time: formatTime(job.scheduledDate),
-    }));
-  }, [stats?.todaysJobs, stats?.recentJobs]);
-
-  // Compute conversion rate
-  const conversionRate = useMemo(() => {
-    if (!stats?.totalLeads || !stats?.leadPipeline) return 0;
-    const won = stats.leadPipeline.find((s) => s.stage === 'won');
-    if (!won || stats.totalLeads.count === 0) return 0;
-    return Math.round((won.count / stats.totalLeads.count) * 100);
-  }, [stats?.totalLeads, stats?.leadPipeline]);
-
-  // Error state
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="text-red-500">Error Loading Dashboard</CardTitle>
-            <CardDescription>{error}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => {
-                setError(null);
-                setLoading(true);
-                window.location.reload();
-              }}
-            >
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div ref={rootRef} className="p-3 sm:p-4 lg:p-6 space-y-6 w-full">
-      {/* ─── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">{dashboardTitle}</h1>
-            {currentWorkspaceName && currentWorkspaceName !== 'Default' && currentWorkspaceName !== 'Default Workspace' ? (
-              <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">
-                {currentWorkspaceName}
-              </Badge>
-            ) : null}
+    <div className="flex-1 min-h-screen bg-[#F8FAFC] dark:bg-slate-950 p-4 md:p-6 lg:p-8 space-y-6 overflow-y-auto">
+      {/* ═══════════════════════════════════════════════════════════════════════
+          1. TOP HEADER BANNER & BUSINESS IDENTIFIER
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Left Greeting */}
+        <div className="flex items-center gap-3.5">
+          <div className="size-11 rounded-2xl bg-gradient-to-tr from-[#7C3AED] to-[#9333EA] text-white flex items-center justify-center shadow-md shadow-purple-500/20">
+            <Send className="size-5" />
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            {subtitle}
-          </p>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              {timeGreeting}, {firstName}! 👋
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              Here&apos;s what&apos;s happening with your business today.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2.5">
-          <Button
-            size="sm"
-            onClick={() => {
-              useAppStore.getState().setPendingCreate('job');
-              setCurrentView('jobs');
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-3.5 rounded-xl shadow-xs gap-1.5 cursor-pointer"
+
+        {/* Right Business Selector */}
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => toast.info('Workspace: Cinderella Cleaners (Tucson, AZ)')}
+            className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-purple-300 transition-colors"
           >
-            <Plus className="size-3.5" />
-            <span>New Job</span>
-          </Button>
-          <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
-            <Zap className="size-3 mr-1" /> Live
-          </Badge>
+            <div className="size-8 rounded-xl bg-purple-100 dark:bg-purple-950 flex items-center justify-center text-xs font-bold text-purple-700">
+              CC
+            </div>
+            <div className="text-left min-w-0">
+              <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
+                Cinderella Cleaners
+              </div>
+              <div className="text-[10px] text-slate-500 leading-tight">Tucson, Arizona</div>
+            </div>
+            <ChevronDown className="size-4 text-slate-400 ml-1" />
+          </button>
         </div>
       </div>
 
-      {/* ─── KPI Cards Row ─────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
-        ) : stats ? (
-          <>
-            {/* Today's Bookings */}
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">Today&apos;s Bookings</p>
-                    <p className="text-2xl font-bold mt-1">
-                      {stats.todaysBookings ?? 0}
-                    </p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <CalendarCheck className="size-3.5 text-emerald-500" />
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {stats.todaysBookings && stats.todaysBookings > 0
-                          ? `${stats.todaysBookings} job${stats.todaysBookings === 1 ? '' : 's'} scheduled today`
-                          : 'No jobs scheduled today'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-emerald-50">
-                      <CalendarCheck className="size-5 text-emerald-600" />
-                    </div>
-                    <KPISparkline data={sparklines.bookings} color="#10b981" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      {/* ═══════════════════════════════════════════════════════════════════════
+          2. TOP 5 EXECUTIVE GROWTH KPI CARDS
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        {/* Card 1: New Leads */}
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-2xl bg-purple-500 text-white flex items-center justify-center shadow-xs">
+              <Target className="size-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
+                124
+              </div>
+              <div className="text-xs text-slate-500 font-medium mt-1">New Leads</div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+              <TrendingUp className="size-3" /> +28%
+            </span>
+            <span className="text-[9px] text-slate-400">vs last 30 days</span>
+            <div className="mt-1">
+              <MiniBarChart values={[3, 5, 4, 7, 6, 8, 9, 11]} color="#8B5CF6" />
+            </div>
+          </div>
+        </div>
 
-            {/* Active Jobs */}
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">Active Jobs</p>
-                    <p className="text-2xl font-bold mt-1">{stats.activeJobs.count}</p>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {/* byStatus is already filtered to non-terminal statuses
-                          on the API side, so we can just render the top 3
-                          entries — no client-side status whitelist needed. */}
-                      {Object.entries(stats.activeJobs.byStatus || {})
-                        .slice(0, 3)
-                        .map(([status, count]) => (
-                          <Badge key={status} variant="secondary" className="text-[10px] px-1.5 py-0 capitalize">
-                            {status.replace('_', ' ')}: {count as number}
-                          </Badge>
-                        ))}
-                      {Object.keys(stats.activeJobs.byStatus || {}).length === 0 && (
-                        <span className="text-[11px] text-muted-foreground">No active jobs</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-amber-50">
-                      <Briefcase className="size-5 text-amber-600" />
-                    </div>
-                    <KPISparkline data={sparklines.jobs} color="#f59e0b" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Card 2: Appointments */}
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-2xl bg-blue-500 text-white flex items-center justify-center shadow-xs">
+              <Calendar className="size-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
+                86
+              </div>
+              <div className="text-xs text-slate-500 font-medium mt-1">Appointments</div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+              <TrendingUp className="size-3" /> +18%
+            </span>
+            <span className="text-[9px] text-slate-400">vs last 30 days</span>
+            <div className="mt-1">
+              <MiniBarChart values={[2, 4, 3, 5, 6, 5, 7, 8]} color="#3B82F6" />
+            </div>
+          </div>
+        </div>
 
-            {/* Monthly Revenue */}
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">Monthly Revenue</p>
-                    <p className="text-2xl font-bold mt-1">{formatCompact(stats.monthlyRevenue.amount)}</p>
-                    {/* Transparent breakdown: collected (paid) vs pending (sent).
-                        Shown only when at least one of them is non-zero, so
-                        the dashboard doesn't show a confusing "A$0 · A$0"
-                        line for new/empty tenants. */}
-                    {((stats.monthlyRevenue.collected ?? 0) > 0 || (stats.monthlyRevenue.pending ?? 0) > 0) && (
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        <span className="text-emerald-600 font-medium">
-                          {format(stats.monthlyRevenue.collected ?? 0)} collected
-                        </span>
-                        {' · '}
-                        <span className="text-amber-600 font-medium">
-                          {format(stats.monthlyRevenue.pending ?? 0)} pending
-                        </span>
-                      </p>
-                    )}
-                    <div className="flex items-center gap-1 mt-1">
-                      {stats.monthlyRevenue.trend >= 0 ? (
-                        <TrendingUp className="size-3.5 text-emerald-500" />
-                      ) : (
-                        <TrendingDown className="size-3.5 text-red-500" />
-                      )}
-                      <span
-                        className={cn(
-                          'text-xs font-medium',
-                          stats.monthlyRevenue.trend >= 0 ? 'text-emerald-600' : 'text-red-600'
-                        )}
-                      >
-                        {Math.abs(stats.monthlyRevenue.trend)}% from last month
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-teal-50">
-                      <DollarSign className="size-5 text-teal-600" />
-                    </div>
-                    <KPISparkline data={sparklines.revenue} color="#14b8a6" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        {/* Card 3: Phone Calls */}
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-xs">
+              <Phone className="size-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
+                312
+              </div>
+              <div className="text-xs text-slate-500 font-medium mt-1">Phone Calls</div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+              <TrendingUp className="size-3" /> +32%
+            </span>
+            <span className="text-[9px] text-slate-400">vs last 30 days</span>
+            <div className="mt-1">
+              <MiniBarChart values={[5, 7, 6, 8, 9, 10, 8, 12]} color="#10B981" />
+            </div>
+          </div>
+        </div>
 
-            {/* New Leads */}
-            <Card className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">New Leads</p>
-                    <p className="text-2xl font-bold mt-1">{stats.totalLeads.count}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      {stats.totalLeads.trend >= 0 ? (
-                        <TrendingUp className="size-3.5 text-emerald-500" />
-                      ) : (
-                        <TrendingDown className="size-3.5 text-red-500" />
-                      )}
-                      <span
-                        className={cn(
-                          'text-xs font-medium',
-                          stats.totalLeads.trend >= 0 ? 'text-emerald-600' : 'text-red-600'
-                        )}
-                      >
-                        {Math.abs(stats.totalLeads.trend)}% &middot; {conversionRate}% conversion
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-blue-50">
-                      <UserPlus className="size-5 text-blue-600" />
-                    </div>
-                    <KPISparkline data={sparklines.leads} color="#3b82f6" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </>
-        ) : null}
-      </div>
+        {/* Card 4: Messages */}
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-xs">
+              <MessageSquare className="size-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
+                1,248
+              </div>
+              <div className="text-xs text-slate-500 font-medium mt-1">Messages</div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+              <TrendingUp className="size-3" /> +24%
+            </span>
+            <span className="text-[9px] text-slate-400">vs last 30 days</span>
+            <div className="mt-1">
+              <MiniBarChart values={[8, 11, 10, 14, 12, 16, 18, 20]} color="#F97316" />
+            </div>
+          </div>
+        </div>
 
-      {/* ─── Lead Pipeline Section ──────────────────────────────── */}
-      {loading ? (
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-5 w-32" />
-            <Skeleton className="h-4 w-48" />
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 flex-1 rounded-lg" />
+        {/* Card 5: Google Rating */}
+        <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between sm:col-span-2 lg:col-span-1">
+          <div className="flex items-center gap-3">
+            <div className="size-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-xs">
+              <Star className="size-5 fill-white" />
+            </div>
+            <div>
+              <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
+                4.8
+              </div>
+              <div className="text-xs text-slate-500 font-medium mt-1">Google Rating</div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end">
+            <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
+              <TrendingUp className="size-3" /> +12%
+            </span>
+            <div className="flex items-center gap-0.5 text-amber-500 my-0.5">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star key={s} className="size-3 fill-amber-400 text-amber-400" />
               ))}
             </div>
-          </CardContent>
-        </Card>
-      ) : displayPipeline.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Lead Pipeline</CardTitle>
-            <CardDescription>Track leads through every stage of your funnel</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3 items-center">
-              {displayPipeline.map((stage, idx) => {
-                const colors = pipelineColors[stage.stage];
-                if (!colors) return null;
-
-                return (
-                  <div key={stage.stage} className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        'rounded-xl border px-5 py-4 min-w-[130px] flex-shrink-0 transition-all hover:shadow-sm',
-                        colors.bg,
-                        colors.border
-                      )}
-                    >
-                      <p className={cn('text-xs font-semibold uppercase tracking-wider', colors.text)}>
-                        {pipelineDisplayLabels[stage.stage] || stage.stage}
-                      </p>
-                      <p className={cn('text-2xl font-bold mt-0.5', colors.text)}>{stage.count}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatCompact(stage.value)}
-                      </p>
-                    </div>
-                    {idx < displayPipeline.length - 1 && (
-                      <ChevronRight className="size-5 text-muted-foreground/40 flex-shrink-0 hidden sm:block" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Lead Pipeline</CardTitle>
-            <CardDescription>Track leads through every stage of your funnel</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
-              No pipeline data yet
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─── Charts Row ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Trend */}
-        {loading ? (
-          <ChartSkeleton />
-        ) : stats?.revenueTrend && stats.revenueTrend.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Revenue Trend</CardTitle>
-              <CardDescription>Monthly revenue over the last 6 months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <LazyRevenueTrendChart
-                data={stats.revenueTrend}
-                symbol={symbol}
-                formatCompact={formatCompact}
-              />
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Revenue Trend</CardTitle>
-              <CardDescription>Monthly revenue over the last 6 months</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center h-[240px] text-sm text-muted-foreground">
-                No revenue data yet
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Lead Sources */}
-        {loading ? (
-          <ChartSkeleton />
-        ) : pieData.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Lead Sources</CardTitle>
-              <CardDescription>Breakdown of leads by source channel</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
-                <LazyLeadSourcesChart
-                  pieData={pieData}
-                  leadSourceColors={leadSourceColors}
-                />
-              </div>
-              <div className="flex flex-wrap gap-3 mt-3 justify-center">
-                {pieData.map((item) => (
-                  <div key={item.source} className="flex items-center gap-1.5">
-                    <div
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: leadSourceColors[item.source] || '#94a3b8' }}
-                    />
-                    <span className="text-xs text-muted-foreground">{item.name}</span>
-                    <span className="text-xs font-medium">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Lead Sources</CardTitle>
-              <CardDescription>Breakdown of leads by source channel</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-center h-[240px] text-sm text-muted-foreground">
-                No lead source data yet
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            <span className="text-[9px] text-slate-400">326 reviews</span>
+          </div>
+        </div>
       </div>
 
-      {/* ─── AI Suggestions ────────────────────────────────────── */}
-      {/* Signature feature: AI-generated prioritized business suggestions.
-          Backend (/api/ai/dashboard-suggestions) was built but this panel
-          was orphaned — never imported. Now mounted on the dashboard.
-          Caches 5min server-side; user can click Refresh to bypass. */}
-      <AISuggestionsPanel />
-
-      {/* ─── Today's Schedule + Quick Actions ────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today's Schedule */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">Today&apos;s Schedule</CardTitle>
-                <CardDescription>Jobs scheduled for today</CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={() => setCurrentView('jobs')}
-              >
-                View all <ArrowRight className="size-3.5 ml-1" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-start gap-4">
-                    <Skeleton className="h-12 w-16 rounded-lg" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                    </div>
-                    <Skeleton className="h-5 w-20 rounded-full" />
-                  </div>
-                ))}
-              </div>
-            ) : todaySchedule.length > 0 ? (
-              <div className="relative space-y-1 max-h-80 overflow-y-auto">
-                {/* Timeline line */}
-                <div className="absolute left-[30px] top-2 bottom-2 w-px bg-emerald-200" />
-                {todaySchedule.map((job) => {
-                  const statusConfig = jobStatusConfig[job.status] || jobStatusConfig.pending;
-                  const StatusIcon = statusConfig.icon;
-                  return (
-                    <div
-                      key={job.id}
-                      className="flex items-start gap-4 p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
-                    >
-                      {/* Time column */}
-                      <div className="flex flex-col items-center min-w-[60px] relative z-10">
-                        <span className="text-xs font-semibold text-emerald-700">{job.time}</span>
-                        <div className="size-2.5 rounded-full bg-emerald-500 mt-1 ring-2 ring-white" />
-                      </div>
-
-                      {/* Job details */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate group-hover:text-emerald-700 transition-colors">
-                          {job.title}
-                        </p>
-                        <div className="flex items-center gap-3 mt-1">
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <User className="size-3" /> {job.assignee}
-                          </span>
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <MapPin className="size-3" /> On-site
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Status badge */}
-                      <Badge
-                        variant="secondary"
-                        className={cn('text-[10px] px-2 py-0.5 capitalize shrink-0', statusConfig.color)}
-                      >
-                        <StatusIcon className="size-3 mr-1" />
-                        {job.status.replace('_', ' ')}
-                      </Badge>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-40 text-sm text-muted-foreground gap-2">
-                <CalendarCheck className="size-8 text-muted-foreground/40" />
-                <p>No jobs scheduled for today</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Quick Actions</CardTitle>
-            <CardDescription>Common tasks to keep your business moving</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 gap-3">
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-bold bg-emerald-500/5 cursor-pointer"
-                onClick={() => useAppStore.getState().openCreateFormWizard('form')}
-              >
-                <Sparkles className="size-4 text-emerald-600" />
-                <span className="text-sm">AI Form Wizard</span>
-              </Button>
-              <Button
-                className="justify-start gap-2.5 bg-emerald-600 hover:bg-emerald-700 h-auto py-3"
-                onClick={() => {
-                  setPendingCreate('lead');
-                  setCurrentView('leads');
-                }}
-              >
-                <Plus className="size-4" />
-                <span className="text-sm">Add Lead</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                onClick={() => {
-                  setPendingCreate('job');
-                  setCurrentView('jobs');
-                }}
-              >
-                <ClipboardList className="size-4" />
-                <span className="text-sm">Create Job</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                onClick={() => {
-                  setPendingCreate('customer');
-                  setCurrentView('customers');
-                }}
-              >
-                <Users className="size-4" />
-                <span className="text-sm">New Customer</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                onClick={() => {
-                  setPendingCreate('invoice');
-                  setCurrentView('invoices');
-                }}
-              >
-                <FileText className="size-4" />
-                <span className="text-sm">New Invoice</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                onClick={() => {
-                  setPendingCreate('campaign');
-                  setCurrentView('campaigns');
-                }}
-              >
-                <Megaphone className="size-4" />
-                <span className="text-sm">New Campaign</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-teal-200 text-teal-700 hover:bg-teal-50"
-                onClick={() => {
-                  setCurrentView('dispatch');
-                }}
-              >
-                <Radio className="size-4" />
-                <span className="text-sm">Dispatch</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 border-green-200 text-green-700 hover:bg-green-50"
-                onClick={() => {
-                  setCurrentView('omnichannel');
-                }}
-              >
-                <MessageCircle className="size-4" />
-                <span className="text-sm">Send WhatsApp</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ─── Recent Activity Section ────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Leads */}
-        {loading ? (
-          <TableSkeleton />
-        ) : stats?.recentLeads && stats.recentLeads.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">Recent Leads</CardTitle>
-                  <CardDescription>Latest leads added to your pipeline</CardDescription>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={() => setCurrentView('leads')}
-                >
-                  View all <ArrowRight className="size-3.5 ml-1" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="max-h-80 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                      <TableHead className="text-right hidden sm:table-cell">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {stats.recentLeads.map((lead) => (
-                      <TableRow key={lead.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell className="font-medium">{lead.name}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 capitalize"
-                            style={{
-                              borderColor: leadSourceColors[lead.source] || '#d1d5db',
-                              color: leadSourceColors[lead.source] || '#6b7280',
-                            }}
-                          >
-                            {leadSourceLabels[lead.source] || lead.source}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="secondary"
-                            className={cn('text-[10px] px-1.5 py-0 capitalize', leadStatusColors[lead.status] || 'bg-gray-100 text-gray-800')}
-                          >
-                            {lead.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-sm">
-                          {formatCompact(lead.value)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
-                          {formatShortDate(lead.date)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Recent Leads</CardTitle>
-              <CardDescription>Latest leads added to your pipeline</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center h-40 text-sm text-muted-foreground gap-2">
-                <UserPlus className="size-8 text-muted-foreground/40" />
-                <p>No leads yet</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Recent Jobs */}
-        {loading ? (
-          <TableSkeleton />
-        ) : stats?.recentJobs && stats.recentJobs.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">Recent Jobs</CardTitle>
-                  <CardDescription>Active and upcoming job assignments</CardDescription>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground"
-                  onClick={() => setCurrentView('jobs')}
-                >
-                  View all <ArrowRight className="size-3.5 ml-1" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="max-h-80 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Assignee</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right hidden sm:table-cell">Scheduled</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {stats.recentJobs.map((job) => {
-                      const statusConfig = jobStatusConfig[job.status] || jobStatusConfig.pending;
-                      return (
-                        <TableRow key={job.id} className="cursor-pointer hover:bg-muted/50">
-                          <TableCell className="font-medium">{job.title}</TableCell>
-                          <TableCell>
-                            <span className="text-xs text-muted-foreground">{job.assignee}</span>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={cn('text-[10px] px-1.5 py-0 capitalize', statusConfig.color)}
-                            >
-                              {job.status.replace('_', ' ')}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
-                            {formatShortDate(job.scheduledDate)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Recent Jobs</CardTitle>
-              <CardDescription>Active and upcoming job assignments</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center h-40 text-sm text-muted-foreground gap-2">
-                <Briefcase className="size-8 text-muted-foreground/40" />
-                <p>No jobs yet</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* ─── Real-time Employee Presence Section ────────────────────── */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+      {/* ═══════════════════════════════════════════════════════════════════════
+          3. MID-ROW: BUSINESS GROWTH (SPLINE) | LEADS BY SOURCE | UPCOMING APPOINTMENTS
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Column 1: Business Growth Multi-Line Spline (5 Cols) */}
+        <div className="lg:col-span-5 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
-              <CardTitle className="text-base">Team Presence</CardTitle>
-              <CardDescription>Real-time employee availability</CardDescription>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                Business Growth
+              </h2>
             </div>
-            <div className="flex items-center gap-2">
-              <div className={cn('flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full', realtimeConnected ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700')}>
-                <div className={cn('size-2 rounded-full', realtimeConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500')} />
-                {realtimeConnected ? 'Live' : 'Reconnecting'}
-              </div>
+            <select
+              value={growthTimeframe}
+              onChange={(e) => setGrowthTimeframe(e.target.value as any)}
+              className="h-8 px-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-slate-50 dark:bg-slate-950 font-medium text-slate-700 dark:text-slate-300"
+            >
+              <option value="30d">Last 30 days</option>
+              <option value="7d">Last 7 days</option>
+              <option value="90d">Last 90 days</option>
+            </select>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400">
+              <span className="size-2 rounded-full bg-[#8B5CF6]" /> Leads
+            </div>
+            <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400">
+              <span className="size-2 rounded-full bg-[#3B82F6]" /> Appointments
+            </div>
+            <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400">
+              <span className="size-2 rounded-full bg-[#10B981]" /> Revenue (Est.)
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
-          {employees.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-24 text-sm text-muted-foreground gap-2">
-              <User className="size-8 text-muted-foreground/40" />
-              <p>No employees found</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {employees.map((emp) => {
-                const statusDot: Record<string, string> = {
-                  available: 'bg-emerald-500',
-                  busy: 'bg-red-500',
-                  offline: 'bg-gray-400',
-                  traveling: 'bg-blue-500',
-                  leave: 'bg-amber-500',
-                };
-                const statusBg: Record<string, string> = {
-                  available: 'bg-emerald-50 border-emerald-200',
-                  busy: 'bg-red-50 border-red-200',
-                  offline: 'bg-gray-50 border-gray-200',
-                  traveling: 'bg-blue-50 border-blue-200',
-                  leave: 'bg-amber-50 border-amber-200',
-                };
-                const statusLabel: Record<string, string> = {
-                  available: 'Available',
-                  busy: 'Busy',
-                  offline: 'Offline',
-                  traveling: 'Traveling',
-                  leave: 'On Leave',
-                };
-                const dot = statusDot[emp.status] || 'bg-gray-400';
-                const bg = statusBg[emp.status] || 'bg-gray-50 border-gray-200';
-                const label = statusLabel[emp.status] || emp.status;
 
-                return (
-                  <div
-                    key={emp.id}
-                    className={cn('rounded-lg border p-3 flex items-center gap-3 transition-all hover:shadow-sm', bg)}
-                  >
-                    <div className="relative shrink-0">
-                      <Avatar className="size-9">
-                        <AvatarFallback className="bg-white text-xs font-semibold text-muted-foreground">
-                          {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className={cn('absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white', dot)} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{emp.name}</p>
-                      <p className="text-[11px] text-muted-foreground capitalize">{emp.role}</p>
-                    </div>
-                    <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0 shrink-0', dot.replace('bg-', 'text-').replace('-500', '-700'))}>
-                      {label}
-                    </Badge>
+          {/* SVG Multi-Line Chart Canvas */}
+          <div className="relative w-full h-48">
+            <svg viewBox="0 0 500 180" className="w-full h-full overflow-visible">
+              <defs>
+                <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.0" />
+                </linearGradient>
+                <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid Lines */}
+              <line x1="30" y1="20" x2="490" y2="20" stroke="#E2E8F0" strokeDasharray="3 3" opacity="0.6" />
+              <line x1="30" y1="60" x2="490" y2="60" stroke="#E2E8F0" strokeDasharray="3 3" opacity="0.6" />
+              <line x1="30" y1="100" x2="490" y2="100" stroke="#E2E8F0" strokeDasharray="3 3" opacity="0.6" />
+              <line x1="30" y1="140" x2="490" y2="140" stroke="#E2E8F0" strokeDasharray="3 3" opacity="0.6" />
+
+              {/* Y Axis Labels */}
+              <text x="15" y="24" className="text-[10px] fill-slate-400 font-mono">200</text>
+              <text x="15" y="64" className="text-[10px] fill-slate-400 font-mono">150</text>
+              <text x="15" y="104" className="text-[10px] fill-slate-400 font-mono">100</text>
+              <text x="20" y="144" className="text-[10px] fill-slate-400 font-mono">50</text>
+              <text x="25" y="165" className="text-[10px] fill-slate-400 font-mono">0</text>
+
+              {/* Spline Area 1: Leads (Purple) */}
+              <path
+                d="M 40,130 C 90,120 120,95 170,105 C 220,115 250,70 300,60 C 350,50 380,80 430,65 C 460,55 480,45 490,40 L 490,165 L 40,165 Z"
+                fill="url(#purpleGrad)"
+              />
+              <path
+                d="M 40,130 C 90,120 120,95 170,105 C 220,115 250,70 300,60 C 350,50 380,80 430,65 C 460,55 480,45 490,40"
+                fill="none"
+                stroke="#8B5CF6"
+                strokeWidth="2.5"
+              />
+
+              {/* Spline Area 2: Appointments (Blue) */}
+              <path
+                d="M 40,145 C 90,135 120,120 170,115 C 220,110 250,130 300,120 C 350,110 380,115 430,95 C 460,85 480,75 490,70 L 490,165 L 40,165 Z"
+                fill="url(#blueGrad)"
+              />
+              <path
+                d="M 40,145 C 90,135 120,120 170,115 C 220,110 250,130 300,120 C 350,110 380,115 430,95 C 460,85 480,75 490,70"
+                fill="none"
+                stroke="#3B82F6"
+                strokeWidth="2"
+              />
+
+              {/* Spline Area 3: Revenue (Emerald) */}
+              <path
+                d="M 40,155 C 90,150 120,140 170,130 C 220,120 250,145 300,135 C 350,125 380,130 430,110 C 460,100 480,95 490,88"
+                fill="none"
+                stroke="#10B981"
+                strokeWidth="2"
+              />
+
+              {/* Data Dots for Leads */}
+              {[
+                { cx: 40, cy: 130 },
+                { cx: 170, cy: 105 },
+                { cx: 300, cy: 60 },
+                { cx: 430, cy: 65 },
+                { cx: 490, cy: 40 },
+              ].map((p, idx) => (
+                <circle key={idx} cx={p.cx} cy={p.cy} r="3.5" fill="#8B5CF6" stroke="#fff" strokeWidth="1.5" />
+              ))}
+
+              {/* X Axis Date Labels */}
+              <text x="40" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Sep 10</text>
+              <text x="115" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Sep 15</text>
+              <text x="190" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Sep 20</text>
+              <text x="265" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Sep 25</text>
+              <text x="340" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Sep 30</text>
+              <text x="415" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Oct 5</text>
+              <text x="480" y="175" className="text-[10px] fill-slate-400 font-mono" textAnchor="middle">Oct 10</text>
+            </svg>
+          </div>
+        </div>
+
+        {/* Column 2: Leads by Source (Donut Chart) (3.5 Cols) */}
+        <div className="lg:col-span-3 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3 flex flex-col justify-between">
+          <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+            Leads by Source
+          </h2>
+
+          <div className="flex items-center justify-between gap-3 my-auto">
+            {/* SVG Donut */}
+            <div className="relative size-32 flex-shrink-0">
+              <svg viewBox="0 0 100 100" className="size-full -rotate-90">
+                {/* Background Ring */}
+                <circle cx="50" cy="50" r="38" fill="transparent" stroke="#F1F5F9" strokeWidth="16" />
+                {/* Website 32% (Blue) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  fill="transparent"
+                  stroke="#3B82F6"
+                  strokeWidth="16"
+                  strokeDasharray="76.4 238.7"
+                  strokeDashoffset="0"
+                />
+                {/* Google Business 24% (Purple) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  fill="transparent"
+                  stroke="#8B5CF6"
+                  strokeWidth="16"
+                  strokeDasharray="57.3 238.7"
+                  strokeDashoffset="-76.4"
+                />
+                {/* Social Media 18% (Orange) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  fill="transparent"
+                  stroke="#F97316"
+                  strokeWidth="16"
+                  strokeDasharray="43 238.7"
+                  strokeDashoffset="-133.7"
+                />
+                {/* WhatsApp 14% (Emerald) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  fill="transparent"
+                  stroke="#10B981"
+                  strokeWidth="16"
+                  strokeDasharray="33.4 238.7"
+                  strokeDashoffset="-176.7"
+                />
+                {/* Referral 8% (Pink) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  fill="transparent"
+                  stroke="#EC4899"
+                  strokeWidth="16"
+                  strokeDasharray="19.1 238.7"
+                  strokeDashoffset="-210.1"
+                />
+                {/* Other 4% (Slate) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="38"
+                  fill="transparent"
+                  stroke="#64748B"
+                  strokeWidth="16"
+                  strokeDasharray="9.5 238.7"
+                  strokeDashoffset="-229.2"
+                />
+              </svg>
+              {/* Donut Center Counter */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-lg font-black text-slate-900 dark:text-slate-100 leading-none">
+                  428
+                </span>
+                <span className="text-[9px] text-slate-400 font-medium">Total Leads</span>
+              </div>
+            </div>
+
+            {/* Source Legend List */}
+            <div className="space-y-1.5 text-xs flex-1">
+              {[
+                { name: 'Website', pct: '32%', color: 'bg-[#3B82F6]' },
+                { name: 'Google Business', pct: '24%', color: 'bg-[#8B5CF6]' },
+                { name: 'Social Media', pct: '18%', color: 'bg-[#F97316]' },
+                { name: 'WhatsApp', pct: '14%', color: 'bg-[#10B981]' },
+                { name: 'Referral', pct: '8%', color: 'bg-[#EC4899]' },
+                { name: 'Other', pct: '4%', color: 'bg-[#64748B]' },
+              ].map((s) => (
+                <div key={s.name} className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className={cn('size-2 rounded-full flex-shrink-0', s.color)} />
+                    <span className="truncate text-[11px] font-medium">{s.name}</span>
                   </div>
-                );
-              })}
+                  <span className="text-[11px] font-bold text-slate-900 dark:text-slate-100 ml-1">
+                    {s.pct}
+                  </span>
+                </div>
+              ))}
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </div>
 
-      {/* ─── Customer Journey Overview ──────────────────────────────── */}
-      <Card>
-        <CardHeader>
+        {/* Column 3: Upcoming Appointments (3.5 Cols) */}
+        <div className="lg:col-span-4 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3.5 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-base">Customer Journey</CardTitle>
-              <CardDescription>Pipeline from lead to completion</CardDescription>
-            </div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Upcoming Appointments
+            </h2>
             <Button
               variant="ghost"
               size="sm"
-              className="text-muted-foreground"
-              onClick={() => setCurrentView('crm')}
+              onClick={() => setCurrentView('scheduling')}
+              className="text-xs font-bold text-[#7C3AED] hover:text-[#6D28D9] p-0 h-auto flex items-center gap-1"
             >
-              View details <ArrowRight className="size-3.5 ml-1" />
+              View All <ArrowRight className="size-3.5" />
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {journeyStages.length === 0 ? (
-            <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
-              No journey data yet
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              {['lead', 'booking', 'assigned', 'en_route', 'completed', 'review'].map((stage, idx) => {
-                const found = journeyStages.find(s => s.stage === stage);
-                const count = found?.count || 0;
-                const stageConfig: Record<string, { label: string; bg: string; text: string; border: string; view: string }> = {
-                  lead: { label: 'Lead', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', view: 'leads' },
-                  booking: { label: 'Booking', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', view: 'jobs' },
-                  assigned: { label: 'Assigned', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', view: 'dispatch' },
-                  en_route: { label: 'En Route', bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', view: 'dispatch' },
-                  completed: { label: 'Completed', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', view: 'jobs' },
-                  review: { label: 'Review', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', view: 'crm' },
-                };
-                const config = stageConfig[stage] || { label: stage, bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', view: 'dashboard' };
 
-                return (
-                  <div key={stage} className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentView(config.view as any)}
-                      className={cn(
-                        'rounded-lg border px-4 py-3 min-w-[100px] text-center transition-all hover:shadow-sm cursor-pointer',
-                        config.bg,
-                        config.border
-                      )}
-                    >
-                      <p className={cn('text-[10px] font-semibold uppercase tracking-wider', config.text)}>{config.label}</p>
-                      <p className={cn('text-xl font-bold mt-0.5', config.text)}>{count}</p>
-                    </button>
-                    {idx < 5 && (
-                      <ChevronRight className="size-4 text-muted-foreground/30 flex-shrink-0 hidden sm:block" />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ─── WhatsApp Activity + Scheduled Actions ──────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* WhatsApp Activity Widget */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <MessageCircle className="size-4 text-green-600" />
-                  WhatsApp Activity
-                </CardTitle>
-                <CardDescription>Active conversations and messages</CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={() => setCurrentView('omnichannel')}
+          <div className="space-y-2.5">
+            {[
+              {
+                time: '10:00 AM',
+                service: 'Home Cleaning',
+                client: 'Priya Singh',
+                status: 'Confirmed',
+                badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+              },
+              {
+                time: '12:30 PM',
+                service: 'Office Deep Clean',
+                client: 'Rahul Kumar',
+                status: 'Confirmed',
+                badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+              },
+              {
+                time: '2:00 PM',
+                service: 'Move In/Out Cleaning',
+                client: 'Sneha Patel',
+                status: 'Pending',
+                badgeStyle: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+              },
+              {
+                time: '4:30 PM',
+                service: 'Regular Home Cleaning',
+                client: 'Amit Sharma',
+                status: 'Confirmed',
+                badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+              },
+            ].map((apt, idx) => (
+              <div
+                key={idx}
+                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3"
               >
-                Open <ArrowRight className="size-3.5 ml-1" />
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 w-16 flex-shrink-0">
+                    {apt.time}
+                  </span>
+                  <Avatar className="size-7 border border-slate-200 dark:border-slate-700">
+                    <AvatarFallback className="text-[10px] font-bold bg-purple-100 text-purple-700">
+                      {apt.client.split(' ').map((n) => n[0]).join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                      {apt.service}
+                    </div>
+                    <div className="text-[10px] text-slate-400 truncate">{apt.client}</div>
+                  </div>
+                </div>
+
+                <Badge className={cn('text-[10px] font-bold border-none px-2 py-0.5', apt.badgeStyle)}>
+                  {apt.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          4. BOTTOM ROW: RECENT ACTIVITY | YOUR AI ASSISTANT | TASKS & FOLLOW-UPS
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Column 1: Recent Activity Feed (4.5 Cols) */}
+        <div className="lg:col-span-5 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3.5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Recent Activity
+            </h2>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            {[
+              { id: 'all', label: 'All' },
+              { id: 'leads', label: 'Leads' },
+              { id: 'appointments', label: 'Appointments' },
+              { id: 'calls', label: 'Calls' },
+              { id: 'messages', label: 'Messages' },
+              { id: 'forms', label: 'Forms' },
+            ].map((pill) => (
+              <button
+                key={pill.id}
+                type="button"
+                onClick={() => setActivityFilter(pill.id as any)}
+                className={cn(
+                  'px-2.5 py-1 rounded-xl text-xs font-bold transition-colors whitespace-nowrap',
+                  activityFilter === pill.id
+                    ? 'bg-[#7C3AED] text-white shadow-2xs'
+                    : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'
+                )}
+              >
+                {pill.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Activity Rows */}
+          <div className="space-y-2.5">
+            {filteredActivities.map((act) => {
+              const IconComp = act.icon;
+              return (
+                <div
+                  key={act.id}
+                  className="p-2.5 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={cn('size-8 rounded-xl flex items-center justify-center flex-shrink-0', act.iconColor)}>
+                      <IconComp className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                        {act.title}
+                      </div>
+                      <div className="text-[11px] text-slate-500 truncate">{act.subtitle}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-slate-400">{act.time}</span>
+                    <Badge className={cn('text-[10px] font-bold border-none px-2 py-0.5', act.badgeColor)}>
+                      {act.badge}
+                    </Badge>
+                    <button type="button" className="text-slate-400 hover:text-slate-600">
+                      <MoreVertical className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Column 2: Your AI Assistant Cockpit (3.5 Cols) */}
+        <div className="lg:col-span-3 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Your AI Assistant
+            </h2>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" /> Online
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  toast.success('Initiating AI Assistant Test Call');
+                  setCurrentView('aiReceptionist');
+                }}
+                className="h-6 text-[11px] font-bold px-2 rounded-lg border-purple-200 text-[#7C3AED] hover:bg-purple-50"
+              >
+                Test AI
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            {conversations.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 text-sm text-muted-foreground gap-2">
-                <MessageCircle className="size-8 text-muted-foreground/40" />
-                <p>No active conversations</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Stats row */}
-                <div className="flex items-center gap-4 pb-3 border-b">
-                  <div className="flex items-center gap-2">
-                    <div className="size-8 rounded-lg bg-green-50 flex items-center justify-center">
-                      <MessageCircle className="size-4 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Active</p>
-                      <p className="text-lg font-bold">{conversations.length}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="size-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                      <Bell className="size-4 text-amber-600" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Unread</p>
-                      <p className="text-lg font-bold">{conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}</p>
-                    </div>
-                  </div>
-                </div>
+          </div>
 
-                {/* Recent messages */}
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {conversations.slice(0, 5).map((conv) => (
-                    <div
-                      key={conv.id}
-                      className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => setCurrentView('omnichannel')}
-                    >
-                      <div className="size-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-semibold text-green-700">
-                          {(conv.customerName || conv.customerPhone || '?').charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{conv.customerName || conv.customerPhone}</p>
-                        <p className="text-[11px] text-muted-foreground truncate">
-                          {conv.lastMessageAt ? formatRelativeTime(conv.lastMessageAt) : 'No messages'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Badge variant="outline" className="text-[9px] px-1.5 py-0 capitalize bg-green-50 border-green-200 text-green-700">
-                          {conv.intentTag}
-                        </Badge>
-                        {(conv.unreadCount || 0) > 0 && (
-                          <span className="size-5 rounded-full bg-green-600 text-white text-[10px] flex items-center justify-center font-bold">
-                            {conv.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Scheduled Actions Widget */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Clock className="size-4 text-teal-600" />
-                  Scheduled Actions
-                </CardTitle>
-                <CardDescription>Pending follow-ups and reminders</CardDescription>
-              </div>
+          {/* AI Mascot & Bio */}
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/50">
+            <div className="size-12 rounded-2xl bg-gradient-to-tr from-[#7C3AED] to-[#A855F7] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+              <Bot className="size-7" />
             </div>
-          </CardHeader>
-          <CardContent>
-            {scheduledActions.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 text-sm text-muted-foreground gap-2">
-                <Bell className="size-8 text-muted-foreground/40" />
-                <p>No pending actions</p>
-              </div>
-            ) : (
-              <div className="max-h-72 overflow-y-auto space-y-2">
-                {scheduledActions.map((action) => {
-                  const typeIcon: Record<string, React.ElementType> = {
-                    'Follow-up': Send,
-                    'Confirm': CheckCircle2,
-                    'Dispatch': Radio,
-                    'Reminder': Bell,
-                  };
-                  const typeColor: Record<string, string> = {
-                    'Follow-up': 'bg-blue-50 text-blue-600',
-                    'Confirm': 'bg-emerald-50 text-emerald-600',
-                    'Dispatch': 'bg-purple-50 text-purple-600',
-                    'Reminder': 'bg-amber-50 text-amber-600',
-                  };
-                  const Icon = typeIcon[action.actionType] || Bell;
-                  const color = typeColor[action.actionType] || 'bg-gray-50 text-gray-600';
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
+              Handling conversations across Website, WhatsApp, Instagram, Phone and more.
+            </p>
+          </div>
 
-                  return (
+          {/* 3 AI Performance Stats */}
+          <div className="grid grid-cols-3 gap-2 text-center py-1">
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
+              <div className="text-base font-black text-slate-900 dark:text-slate-100">1,248</div>
+              <div className="text-[10px] text-slate-400 font-medium leading-tight">Messages handled</div>
+            </div>
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
+              <div className="text-base font-black text-slate-900 dark:text-slate-100">86</div>
+              <div className="text-[10px] text-slate-400 font-medium leading-tight">Appointments booked</div>
+            </div>
+            <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
+              <div className="text-base font-black text-slate-900 dark:text-slate-100">124</div>
+              <div className="text-[10px] text-slate-400 font-medium leading-tight">Leads captured</div>
+            </div>
+          </div>
+
+          {/* Quick Actions Buttons */}
+          <div className="space-y-1.5 pt-1">
+            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Quick Actions
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentView('agentStudio')}
+                className="h-8 text-[10px] font-bold px-1 rounded-xl flex items-center gap-1 truncate"
+              >
+                <BookOpen className="size-3 text-purple-600 flex-shrink-0" />
+                <span className="truncate">Train Knowledge</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentView('omnichannel')}
+                className="h-8 text-[10px] font-bold px-1 rounded-xl flex items-center gap-1 truncate"
+              >
+                <MessageSquare className="size-3 text-blue-600 flex-shrink-0" />
+                <span className="truncate">View Conversations</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentView('integrations')}
+                className="h-8 text-[10px] font-bold px-1 rounded-xl flex items-center gap-1 truncate"
+              >
+                <Settings className="size-3 text-slate-600 flex-shrink-0" />
+                <span className="truncate">Configure Channels</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Column 3: Tasks & Follow-ups Checklist (4 Cols) */}
+        <div className="lg:col-span-4 p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3.5 flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Tasks & Follow-ups
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentView('leads')}
+              className="text-xs font-bold text-[#7C3AED] hover:text-[#6D28D9] p-0 h-auto flex items-center gap-1"
+            >
+              View All <ArrowRight className="size-3.5" />
+            </Button>
+          </div>
+
+          {/* Task Checklist */}
+          <div className="space-y-2">
+            {tasks.map((task) => (
+              <div
+                key={task.id}
+                onClick={() => toggleTask(task.id)}
+                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-100 transition-colors"
+              >
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div
+                    className={cn(
+                      'size-4 rounded-md mt-0.5 flex items-center justify-center border transition-colors flex-shrink-0',
+                      task.completed
+                        ? 'bg-[#7C3AED] border-[#7C3AED] text-white'
+                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
+                    )}
+                  >
+                    {task.completed && <Check className="size-3" />}
+                  </div>
+                  <div className="min-w-0">
                     <div
-                      key={action.id}
-                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors"
+                      className={cn(
+                        'text-xs font-bold truncate transition-all',
+                        task.completed
+                          ? 'line-through text-slate-400'
+                          : 'text-slate-900 dark:text-slate-100'
+                      )}
                     >
-                      <div className={cn('size-8 rounded-lg flex items-center justify-center shrink-0', color)}>
-                        <Icon className="size-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{action.jobTitle}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0', color, 'border-current/20')}>
-                            {action.actionType}
-                          </Badge>
-                          <span className="text-[11px] text-muted-foreground">
-                            {formatRelativeTime(action.scheduledTime)}
-                          </span>
-                        </div>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          'text-[9px] px-1.5 py-0 shrink-0',
-                          action.status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                        )}
-                      >
-                        {action.status}
-                      </Badge>
+                      {task.title}
                     </div>
-                  );
-                })}
+                    <div className="text-[10px] text-slate-500 truncate">{task.subtitle}</div>
+                  </div>
+                </div>
+
+                <div
+                  className={cn(
+                    'text-[10px] font-bold flex items-center gap-1 flex-shrink-0',
+                    task.isUrgent ? 'text-rose-600' : 'text-slate-400'
+                  )}
+                >
+                  {task.isUrgent && <Clock className="size-3" />}
+                  {task.due}
+                </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          5. FOOTER QUICK ACTION LAUNCHERS STRIP (6 CARDS)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+        {/* Action 1: Create Campaign */}
+        <button
+          type="button"
+          onClick={() => setCurrentView('campaigns')}
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="size-8 rounded-xl bg-purple-50 text-[#7C3AED] dark:bg-purple-950 flex items-center justify-center mb-1">
+              <Send className="size-4" />
+            </div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+              Create Campaign
+            </div>
+            <div className="text-[10px] text-slate-400 line-clamp-2">
+              Send promotions via Email, SMS or WhatsApp
+            </div>
+          </div>
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all mt-1" />
+        </button>
+
+        {/* Action 2: Find New Leads */}
+        <button
+          type="button"
+          onClick={() => setCurrentView('leads')}
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-blue-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="size-8 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 flex items-center justify-center mb-1">
+              <Search className="size-4" />
+            </div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors truncate">
+              Find New Leads
+            </div>
+            <div className="text-[10px] text-slate-400 line-clamp-2">
+              Discover local businesses & prospects
+            </div>
+          </div>
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all mt-1" />
+        </button>
+
+        {/* Action 3: Build a Form */}
+        <button
+          type="button"
+          onClick={() => setCurrentView('formBuilder')}
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="size-8 rounded-xl bg-purple-50 text-[#7C3AED] dark:bg-purple-950 flex items-center justify-center mb-1">
+              <FileText className="size-4" />
+            </div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+              Build a Form
+            </div>
+            <div className="text-[10px] text-slate-400 line-clamp-2">
+              Create a lead or booking form
+            </div>
+          </div>
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all mt-1" />
+        </button>
+
+        {/* Action 4: Create Funnel */}
+        <button
+          type="button"
+          onClick={() => setCurrentView('formBuilder')}
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-blue-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="size-8 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 flex items-center justify-center mb-1">
+              <FileInput className="size-4" />
+            </div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition-colors truncate">
+              Create Funnel
+            </div>
+            <div className="text-[10px] text-slate-400 line-clamp-2">
+              Turn visitors into paying customers
+            </div>
+          </div>
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition-all mt-1" />
+        </button>
+
+        {/* Action 5: Design a Post */}
+        <button
+          type="button"
+          onClick={() => setCurrentView('socialMedia')}
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="size-8 rounded-xl bg-purple-50 text-[#7C3AED] dark:bg-purple-950 flex items-center justify-center mb-1">
+              <Sparkles className="size-4" />
+            </div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+              Design a Post
+            </div>
+            <div className="text-[10px] text-slate-400 line-clamp-2">
+              AI-powered social media content
+            </div>
+          </div>
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all mt-1" />
+        </button>
+
+        {/* Action 6: Test Phone Agent */}
+        <button
+          type="button"
+          onClick={() => setCurrentView('aiReceptionist')}
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-emerald-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+        >
+          <div className="space-y-1 min-w-0">
+            <div className="size-8 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950 flex items-center justify-center mb-1">
+              <Headphones className="size-4" />
+            </div>
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 transition-colors truncate">
+              Test Phone Agent
+            </div>
+            <div className="text-[10px] text-slate-400 line-clamp-2">
+              Make a test call to your AI receptionist
+            </div>
+          </div>
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all mt-1" />
+        </button>
       </div>
     </div>
   );
