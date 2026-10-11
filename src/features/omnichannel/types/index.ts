@@ -29,14 +29,28 @@ export type ChannelType =
   | 'phone'
   | 'manual';
 
+export interface InteractivePackageCard {
+  id: string;
+  name: string;
+  price: string;
+  duration?: string;
+  features?: string[];
+  isPopular?: boolean;
+}
+
 export interface ConversationMessage {
   id: string;
   conversationId: string;
   content: string;
-  sender: 'customer' | 'agent' | 'system';
+  sender: 'customer' | 'agent' | 'system' | 'ai';
   senderName?: string;
   timestamp: string;
   channel: ChannelType;
+  packageCards?: InteractivePackageCard[];
+  confirmationCard?: {
+    scheduledDate: string;
+    actions: string[];
+  };
 }
 
 export interface LeadInfo {
@@ -67,6 +81,15 @@ export interface Conversation {
    *  icon (emerald) when assigned, UserPlus (muted) when unassigned. */
   assigneeId?: string;
   assigneeName?: string;
+  aiPaused?: boolean;
+  vipStatus?: boolean;
+  totalSpent?: number;
+  bookingsCount?: number;
+  rating?: number;
+  tags?: string[];
+  aiSummary?: string;
+  notes?: Array<{ id: string; text: string; date: string; author: string }>;
+  address?: string;
 }
 
 export interface OmnichannelStats {

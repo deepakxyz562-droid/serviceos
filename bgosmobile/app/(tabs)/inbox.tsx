@@ -544,7 +544,25 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
             })
           )}
         </View>
-      </ScrollView>
+      {/* Quick Action Chips (Screenshot 1 & 3 Parity) */}
+      <View style={[ui.row, { flexWrap: 'wrap', gap: 6, marginVertical: 6 }]}>
+        {['Get Quote', 'Book Appointment', 'Ask a Question'].map((chip) => (
+          <Pressable
+            key={chip}
+            onPress={() => setText(`I would like to ${chip.toLowerCase()}.`)}
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 14,
+              backgroundColor: '#EDE9FE',
+              borderWidth: 1,
+              borderColor: '#DDD6FE',
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{chip}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       {/* 3-Mode Action Pill Bar: Reply, AI Reply, Note */}
       <View style={[ui.row, { justifyContent: 'space-between', backgroundColor: colors.surface, padding: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.line }]}>

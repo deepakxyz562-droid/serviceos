@@ -164,6 +164,10 @@ export interface FormAgentData {
         action2: string;
         showTalk: boolean;
       };
+      launcherIcon?: 'chat' | 'bot' | 'custom';
+      showAgentName?: boolean;
+      showOnlineStatus?: boolean;
+      showWatermark?: boolean;
     };
     standalone: {
       enabled: boolean;
