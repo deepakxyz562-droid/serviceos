@@ -213,6 +213,7 @@ interface RecentFormFunnelItem {
   conversionRate: string;
   status: 'Published' | 'Draft';
   lastUpdated: string;
+  rawForm?: FormItem;
 }
 
 const INITIAL_RECENT_ITEMS: RecentFormFunnelItem[] = [
@@ -317,6 +318,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
   // Studio Builder State (When in edit/create mode)
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [studioMode, setStudioMode] = useState<'funnel' | 'full_studio'>('funnel');
   const [builderDevice, setBuilderDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [builderStep, setBuilderStep] = useState<number>(1);
   const [builderModeTab, setBuilderModeTab] = useState<'build' | 'design' | 'settings' | 'integrations' | 'analytics'>('build');
@@ -336,6 +338,33 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   const [optionDefault, setOptionDefault] = useState(true);
   const [optionRequired, setOptionRequired] = useState(false);
   const [optionErrorMessage, setOptionErrorMessage] = useState('Please select a service type');
+
+  // Dynamic field add handler for visual builder
+  const handleAddField = (label: string) => {
+    const typeMap: Record<string, string> = {
+      'Text Input': 'text',
+      'Email': 'email',
+      'Phone': 'phone',
+      'Textarea': 'textarea',
+      'Dropdown': 'select',
+      'Radio Buttons': 'radio',
+      'Checkboxes': 'checkbox',
+      'Date Picker': 'date',
+      'File Upload': 'file',
+    };
+    const newField: FormField = {
+      id: `f_${Date.now()}`,
+      type: (typeMap[label] || 'text') as any,
+      label: label,
+      required: false,
+      options: label === 'Radio Buttons' || label === 'Dropdown' ? ['Option 1', 'Option 2'] : undefined,
+    };
+    setFormData((prev) => ({
+      ...prev,
+      fields: [...(prev.fields || []), newField],
+    }));
+    toast.success(`Added ${label} field to form`);
+  };
 
   // Dialogs
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -492,29 +521,32 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     setIsBuilderOpen(true);
   };
 
-  const handleSave = async (options?: { silent?: boolean }) => {
+  const handleSave = async (overrideData?: EditorFormData | unknown, options?: { silent?: boolean }) => {
     setSaving(true);
     try {
-      const payload = {
-        name: funnelName,
-        description: funnelSubtitle,
-        type: 'lead_capture',
-        status: 'active',
-        fields: formData.fields.length > 0 ? formData.fields : [
+      const isFormDataObj =
+        overrideData && typeof overrideData === 'object' && 'fields' in overrideData;
+      const targetFormData: EditorFormData = isFormDataObj
+        ? (overrideData as EditorFormData)
+        : {
+            ...formData,
+            name: funnelName || formData.name || 'Home Cleaning Quote Funnel',
+            description: funnelSubtitle || formData.description || '',
+          };
+
+      if (!targetFormData.fields || targetFormData.fields.length === 0) {
+        targetFormData.fields = [
           {
             id: 'field-1',
-            type: 'radio',
+            type: 'radio' as any,
             label: 'What type of cleaning do you need?',
             required: true,
             options: ['Regular Home Cleaning', 'Deep Cleaning', 'Move In/Out Cleaning', 'Office Cleaning'],
           },
-        ],
-        settings: {
-          formLayout: 'split_media',
-          submitButtonText: 'Next Step',
-        },
-      };
+        ];
+      }
 
+      const payload = buildApiPayload(targetFormData);
       const url = editFormId ? `/api/forms/${editFormId}` : '/api/forms';
       const method = editFormId ? 'PUT' : 'POST';
 
@@ -530,11 +562,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
       }
 
       const resData = await res.json();
-      toast.success(editFormId ? 'Changes saved successfully!' : 'Funnel published successfully!');
+      if (!options?.silent) {
+        toast.success(editFormId ? 'Changes saved successfully!' : 'Funnel published successfully!');
+      }
       await fetchForms();
       return resData.form;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save funnel');
+      if (!options?.silent) {
+        toast.error(err instanceof Error ? err.message : 'Could not save funnel');
+      }
       return null;
     } finally {
       setSaving(false);
@@ -592,8 +628,30 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
       conversionRate: `${f.conversionRate || 30}%`,
       status: (f.status === 'active' ? 'Published' : 'Draft') as 'Published' | 'Draft',
       lastUpdated: timeAgo(f.createdAt || new Date()),
+      rawForm: f,
     })),
-    ...INITIAL_RECENT_ITEMS.filter((init) => !forms.some((f) => f.name === init.name)),
+    ...INITIAL_RECENT_ITEMS.filter((init) => !forms.some((f) => f.name === init.name)).map((init) => ({
+      ...init,
+      rawForm: {
+        id: init.id,
+        name: init.name,
+        type: 'lead_capture' as FormType,
+        status: (init.status === 'Published' ? 'active' : 'inactive') as FormStatus,
+        fields: [
+          {
+            id: 'field-1',
+            type: 'radio' as any,
+            label: 'What type of cleaning do you need?',
+            required: true,
+            options: ['Regular Home Cleaning', 'Deep Cleaning', 'Move In/Out Cleaning', 'Office Cleaning'],
+          },
+        ],
+        submissionActions: getDefaultActions('lead_capture'),
+        submissions: init.leads,
+        conversionRate: parseInt(init.conversionRate, 10) || 28,
+        createdAt: new Date().toISOString(),
+      } as FormItem,
+    })),
   ];
 
   const filteredRecentItems = allRecentItems.filter((item) => {
@@ -688,6 +746,17 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setStudioMode(studioMode === 'funnel' ? 'full_studio' : 'funnel')}
+              className="h-8 text-xs font-semibold gap-1.5 border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/40"
+              title="Toggle between Funnel Workstation and Full Form Studio Builder"
+            >
+              <Sliders className="size-3.5 text-teal-600" />
+              <span>{studioMode === 'funnel' ? 'Full Form Studio' : 'Funnel Workstation'}</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => toast.info('Opening interactive test view in current modal')}
               className="h-8 text-xs font-semibold gap-1.5"
             >
@@ -718,81 +787,97 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           </div>
         </header>
 
-        {/* ─── 3-Column Visual Studio Workstation ─────────────────────────── */}
-        <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-0 overflow-hidden">
-          {/* ── Left Column (3/12 cols): Add Elements Palette ──────────────── */}
-          <div className="xl:col-span-3 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-64px)]">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Add Elements
-              </h2>
-            </div>
-
-            {/* Sub-Tabs: Form Elements | Page Elements */}
-            <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
-              <button
-                onClick={() => setPaletteTab('form_elements')}
-                className={cn(
-                  'py-1.5 rounded-lg transition-all text-center',
-                  paletteTab === 'form_elements'
-                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-500'
-                )}
-              >
-                Form Elements
-              </button>
-              <button
-                onClick={() => setPaletteTab('page_elements')}
-                className={cn(
-                  'py-1.5 rounded-lg transition-all text-center',
-                  paletteTab === 'page_elements'
-                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-500'
-                )}
-              >
-                Page Elements
-              </button>
-            </div>
-
-            {/* Element Search */}
-            <div className="relative">
-              <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Search elements..."
-                className="h-8 pl-8 text-xs bg-slate-50 dark:bg-slate-800/60"
-              />
-            </div>
-
-            {/* Basic Fields Grid */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Basic Fields</h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                {[
-                  { label: 'Text Input', icon: Type },
-                  { label: 'Email', icon: Mail },
-                  { label: 'Phone', icon: Phone },
-                  { label: 'Textarea', icon: AlignLeft },
-                  { label: 'Dropdown', icon: ChevronDown },
-                  { label: 'Radio Buttons', icon: CircleDot },
-                  { label: 'Checkboxes', icon: CheckSquare },
-                  { label: 'Date Picker', icon: CalendarDays },
-                  { label: 'File Upload', icon: Upload },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    onClick={() => toast.info(`Added ${item.label} to active step`)}
-                    className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-indigo-300 transition-all text-left group"
-                  >
-                    <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                      <item.icon className="size-3.5" />
-                    </div>
-                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate text-[11px]">
-                      {item.label}
-                    </span>
-                  </button>
-                ))}
+        {/* ─── 3-Column Visual Studio Workstation OR Full Form Studio Builder ─── */}
+        {studioMode === 'full_studio' ? (
+          <div className="flex-1 w-full overflow-hidden bg-white dark:bg-slate-900">
+            <FormStudioBuilder
+              formData={formData}
+              onFormDataChange={setFormData}
+              editMode={editMode}
+              saving={saving}
+              onSave={handleSave}
+              onExit={() => {
+                setIsBuilderOpen(false);
+                fetchForms();
+              }}
+              siteOrigin={siteOrigin}
+            />
+          </div>
+        ) : (
+          <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-0 overflow-hidden">
+            {/* ── Left Column (3/12 cols): Add Elements Palette ──────────────── */}
+            <div className="xl:col-span-3 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-64px)]">
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Add Elements
+                </h2>
               </div>
-            </div>
+
+              {/* Sub-Tabs: Form Elements | Page Elements */}
+              <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
+                <button
+                  onClick={() => setPaletteTab('form_elements')}
+                  className={cn(
+                    'py-1.5 rounded-lg transition-all text-center',
+                    paletteTab === 'form_elements'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
+                      : 'text-slate-500'
+                  )}
+                >
+                  Form Elements
+                </button>
+                <button
+                  onClick={() => setPaletteTab('page_elements')}
+                  className={cn(
+                    'py-1.5 rounded-lg transition-all text-center',
+                    paletteTab === 'page_elements'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
+                      : 'text-slate-500'
+                  )}
+                >
+                  Page Elements
+                </button>
+              </div>
+
+              {/* Element Search */}
+              <div className="relative">
+                <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Input
+                  placeholder="Search elements..."
+                  className="h-8 pl-8 text-xs bg-slate-50 dark:bg-slate-800/60"
+                />
+              </div>
+
+              {/* Basic Fields Grid */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Basic Fields</h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    { label: 'Text Input', icon: Type },
+                    { label: 'Email', icon: Mail },
+                    { label: 'Phone', icon: Phone },
+                    { label: 'Textarea', icon: AlignLeft },
+                    { label: 'Dropdown', icon: ChevronDown },
+                    { label: 'Radio Buttons', icon: CircleDot },
+                    { label: 'Checkboxes', icon: CheckSquare },
+                    { label: 'Date Picker', icon: CalendarDays },
+                    { label: 'File Upload', icon: Upload },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => handleAddField(item.label)}
+                      className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-indigo-300 transition-all text-left group"
+                    >
+                      <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                        <item.icon className="size-3.5" />
+                      </div>
+                      <span className="font-semibold text-slate-700 dark:text-slate-300 truncate text-[11px]">
+                        {item.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
             {/* Layout Fields Grid */}
             <div className="space-y-2 pt-2">
@@ -1177,6 +1262,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             </div>
           </div>
         </div>
+        )}
       </div>
     );
   }
@@ -1526,10 +1612,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => {
-                                  setFunnelName(item.name);
-                                  setIsBuilderOpen(true);
+                                  if (item.rawForm) {
+                                    handleOpenEdit(item.rawForm);
+                                  } else {
+                                    setFunnelName(item.name);
+                                    setIsBuilderOpen(true);
+                                  }
                                 }}
                                 className="size-7 text-slate-500 hover:text-slate-900"
+                                title="Edit Form"
                               >
                                 <Pencil className="size-3" />
                               </Button>
@@ -1538,16 +1629,82 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                                 size="icon"
                                 onClick={() => setActiveTab('analytics')}
                                 className="size-7 text-slate-500 hover:text-slate-900"
+                                title="View Analytics"
                               >
                                 <BarChart3 className="size-3" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 text-slate-500 hover:text-slate-900"
-                              >
-                                <MoreVertical className="size-3" />
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7 text-slate-500 hover:text-slate-900"
+                                    title="More Options"
+                                  >
+                                    <MoreVertical className="size-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48 text-xs font-medium">
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      if (item.rawForm) {
+                                        handleOpenEdit(item.rawForm);
+                                      } else {
+                                        setFunnelName(item.name);
+                                        setIsBuilderOpen(true);
+                                      }
+                                    }}
+                                  >
+                                    <Pencil className="size-3.5 mr-2 text-teal-600" /> Edit Form
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                      setSelectedForm(f);
+                                      setShowResponsesDialog(true);
+                                      fetchResponses(f.id);
+                                    }}
+                                  >
+                                    <Inbox className="size-3.5 mr-2 text-indigo-600" /> View Submissions
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                      setSelectedForm(f);
+                                      setShowEmbedDialog(true);
+                                    }}
+                                  >
+                                    <Code className="size-3.5 mr-2 text-blue-600" /> Embed Code &amp; QR
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                      setSelectedForm(f);
+                                      setShowWhatsAppDialog(true);
+                                    }}
+                                  >
+                                    <MessageCircle className="size-3.5 mr-2 text-emerald-600" /> Share on WhatsApp
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                      setSelectedForm(f);
+                                      setShowPreviewDialog(true);
+                                    }}
+                                  >
+                                    <Eye className="size-3.5 mr-2 text-amber-600" /> Preview
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
+                                    onClick={() => {
+                                      const f = item.rawForm || ({ id: item.id, name: item.name } as FormItem);
+                                      setShowDeleteConfirm(f);
+                                    }}
+                                  >
+                                    <Trash2 className="size-3.5 mr-2" /> Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </td>
                         </tr>

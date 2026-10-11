@@ -145,6 +145,8 @@ export function AgentOverviewTab({
   ]);
 
   const [inputMessage, setInputMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll chat on new messages
@@ -152,7 +154,7 @@ export function AgentOverviewTab({
     if (typeof chatBottomRef.current?.scrollIntoView === 'function') {
       chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatMessages]);
+  }, [chatMessages, isTyping]);
 
   // Keep welcome greeting in sync if updated from settings
   useEffect(() => {
@@ -210,8 +212,8 @@ export function AgentOverviewTab({
     setChatMessages((prev) => [...prev, userMsg, botMsg]);
   };
 
-  const handleSendMessage = () => {
-    if (!inputMessage.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() || isTyping) return;
     const text = inputMessage.trim();
     setInputMessage('');
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -224,17 +226,63 @@ export function AgentOverviewTab({
     };
 
     setChatMessages((prev) => [...prev, userMsg]);
+    setIsTyping(true);
 
-    setTimeout(() => {
-      const botMsg: ChatMessage = {
-        id: `bot_${Date.now()}`,
-        sender: 'bot',
-        text: `Thank you for asking about "${text}"! Our specialists at ${businessName} ensure guaranteed satisfaction. Would you like me to book this or provide a personalized quote?`,
-        chips: ['Get Instant Estimate', 'Book Appointment', 'Talk to a Human'],
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setChatMessages((prev) => [...prev, botMsg]);
-    }, 550);
+    try {
+      const targetAgentId = agent.id || 'preview';
+      const res = await fetch(`/api/forms/agents/${encodeURIComponent(targetAgentId)}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          sessionId: chatSessionId || undefined,
+          history: chatMessages.map((m) => ({
+            id: m.id,
+            sender: m.sender === 'user' ? 'user' : 'ai',
+            text: m.text,
+            timestamp: m.time,
+          })),
+          agentConfig: agent,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.sessionId && !chatSessionId) {
+          setChatSessionId(data.sessionId);
+        }
+
+        const replyText =
+          data.reply ||
+          `Thank you for asking about "${text}"! Our specialists at ${businessName} ensure guaranteed satisfaction. Would you like me to book this or provide a personalized quote?`;
+
+        const botMsg: ChatMessage = {
+          id: `bot_${Date.now()}`,
+          sender: 'bot',
+          text: replyText,
+          chips: Array.isArray(data.suggestedQuestions) && data.suggestedQuestions.length > 0
+            ? data.suggestedQuestions
+            : ['Get Instant Estimate', 'Book Appointment', 'Talk to a Human'],
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setChatMessages((prev) => [...prev, botMsg]);
+        return;
+      }
+    } catch (err) {
+      console.warn('[AgentOverviewTab] AI Chat API error:', err);
+    } finally {
+      setIsTyping(false);
+    }
+
+    // Fallback response for offline / dev preview
+    const fallbackMsg: ChatMessage = {
+      id: `bot_${Date.now()}`,
+      sender: 'bot',
+      text: `Thank you for asking about "${text}"! Our specialists at ${businessName} ensure guaranteed satisfaction. Would you like me to book this or provide a personalized quote?`,
+      chips: ['Get Instant Estimate', 'Book Appointment', 'Talk to a Human'],
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setChatMessages((prev) => [...prev, fallbackMsg]);
   };
 
   const resetChat = () => {
@@ -793,6 +841,21 @@ export function AgentOverviewTab({
                         </div>
                       );
                     })}
+                    {isTyping && (
+                      <div className="flex items-start gap-2 mr-auto animate-in fade-in duration-200">
+                        <div
+                          className="size-6 rounded-full text-white flex items-center justify-center font-bold text-[10px] shrink-0"
+                          style={{ backgroundColor: primaryColor }}
+                        >
+                          <Bot className="size-3.5" />
+                        </div>
+                        <div className="p-2.5 rounded-2xl rounded-tl-xs bg-white text-slate-800 border border-slate-200/80 shadow-2xs flex items-center gap-1.5">
+                          <span className="size-1.5 rounded-full bg-teal-500 animate-bounce" />
+                          <span className="size-1.5 rounded-full bg-teal-500 animate-bounce [animation-delay:0.2s]" />
+                          <span className="size-1.5 rounded-full bg-teal-500 animate-bounce [animation-delay:0.4s]" />
+                        </div>
+                      </div>
+                    )}
                     <div ref={chatBottomRef} />
                   </div>
 
