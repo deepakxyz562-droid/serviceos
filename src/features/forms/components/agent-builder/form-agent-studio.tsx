@@ -29,6 +29,7 @@ import {
   PresentationAddModal,
   WhatsAppConnectModal,
 } from './agent-channel-modals';
+import { BgosAssistantOverview } from '@/components/bgos/assistant-overview';
 import { AgentOverviewTab } from './agent-overview-tab';
 import {
   ArrowLeft,
@@ -487,7 +488,7 @@ export function FormAgentStudio({
       </div>
 
       {/* ── OVERVIEW TAB (3-COLUMN DASHBOARD MATCHING REFERENCE SCREENSHOT) ── */}
-      {studioTab === 'overview' && (
+      {studioTab === 'overview' && (isBgos ? <BgosAssistantOverview agent={agent} onChange={setAgent} onNavigateTab={setStudioTab} onOpenSettings={() => setSettingsOpen(true)} onOpenForm={setActiveConnectedFormModal} businessName={businessName} channelStatus={channelBadgeMap} /> :
         <AgentOverviewTab
           agent={agent}
           onChange={setAgent}

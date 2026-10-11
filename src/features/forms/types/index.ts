@@ -118,6 +118,7 @@ export interface SubmissionActions {
 }
 
 export interface FormItem {
+  agentConfig?: import('./agent-types').FormAgentData;
   id: string;
   name: string;
   description?: string;

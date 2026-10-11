@@ -85,3 +85,19 @@ it('restores other product branding when leaving BGOS', () => {
   expect(link.getAttribute('href')).toBe('/manifest.json');
   link.remove();
 });
+
+it('does not insert sample forms into an empty workspace', async () => {
+  mocks.request.mockImplementation(async () => Response.json({ forms: [] }));
+  const { FormBuilderView } = await import('@/components/views/form-builder-view');
+  mount(<FormBuilderView />);
+  await screen.findByText('No forms yet. Create a form or choose a template to get started.');
+  expect(screen.queryByText('Diwali Offer Landing Page')).toBeNull();
+  expect(screen.queryByText('+20% vs last month')).toBeNull();
+});
+it('keeps failed form loads distinct from empty workspaces', async () => {
+  mocks.request.mockImplementation(async () => Response.json({ error: 'Forms temporarily unavailable' }, { status: 503 }));
+  const { FormBuilderView } = await import('@/components/views/form-builder-view');
+  mount(<FormBuilderView />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Forms temporarily unavailable');
+  expect(screen.queryByText('No forms yet. Create a form or choose a template to get started.')).toBeNull();
+});

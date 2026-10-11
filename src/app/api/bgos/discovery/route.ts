@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   const { provider, query: search, page } = parsed.data;
 
-  // ── 1. Built-in Verified B2B Directory (Instant · No Key Required) ──────────
+  // ── 1. Search saved workspace contacts and leads ──────────
   if (provider === 'directory') {
     const prospects: ProspectItem[] = [];
     const seenEmails = new Set<string>();

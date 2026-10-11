@@ -414,7 +414,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         },
         {
           id: 'field-phone',
-          type: 'phone_number',
+          type: 'phone',
           label: 'Phone Number',
           required: false,
           placeholder: '+1 (555) 000-0000',
@@ -502,8 +502,8 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
       const { getTemplateSync, searchTemplates } = await import('@/lib/forms/templates');
       let template = getTemplateSync(tpl.id);
       if (!template) {
-        const matches = searchTemplates(tpl.title);
-        if (matches && matches.length > 0) template = matches[0];
+        const matches = await searchTemplates({ query: tpl.title, limit: 1 });
+        if (matches && matches.length > 0) template = matches[0].template;
       }
       if (template) {
         applyTemplateToFormData(template);
@@ -542,7 +542,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         },
         {
           id: 'field-4',
-          type: 'phone_number',
+          type: 'phone',
           label: 'Phone Number',
           required: false,
           placeholder: '+1 (555) 000-0000',
@@ -754,8 +754,12 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     }
     setWaSending(true);
     try {
-      await new Promise((r) => setTimeout(r, 600));
-      toast.success(`WhatsApp invitation sent to ${waPhone}!`);
+      if (!selectedForm) throw new Error('Select a saved form first.');
+      const phone = waPhone.replace(/[^0-9]/g, '');
+      if (phone.length < 7 || phone.length > 15) throw new Error('Enter a valid international phone number.');
+      const link = `${siteOrigin}/f/${selectedForm.slug || selectedForm.id}`;
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(link)}`, '_blank', 'noopener,noreferrer');
+      toast.info('Complete sending in WhatsApp.');
       setShowWhatsAppDialog(false);
       setWaPhone('');
     } catch {
@@ -770,62 +774,13 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     toast.success(`${label} copied to clipboard`);
   };
 
-  // Seeded / combined table items
-  const INITIAL_RECENT_ITEMS = [
-    {
-      id: 'init-1',
-      name: 'Diwali Offer Landing Page',
-      type: 'Form',
-      leads: 184,
-      conversionRate: '42%',
-      status: 'Published' as const,
-      lastUpdated: '2 hours ago',
-    },
-    {
-      id: 'init-2',
-      name: 'Service Request Form',
-      type: 'Form',
-      leads: 96,
-      conversionRate: '31%',
-      status: 'Published' as const,
-      lastUpdated: '1 day ago',
-    },
-    {
-      id: 'init-3',
-      name: 'Home Cleaning Quote Funnel',
-      type: 'Form',
-      leads: 124,
-      conversionRate: '32%',
-      status: 'Published' as const,
-      lastUpdated: '3 days ago',
-    },
-  ];
-
-  const allRecentItems = [
-    ...forms.map((f, idx) => ({
-      id: f.id,
-      name: f.name,
-      type: 'Form',
-      leads: f.submissions || (idx === 0 ? 124 : 45),
-      conversionRate: `${f.conversionRate || 30}%`,
-      status: (f.status === 'active' ? 'Published' : 'Draft') as 'Published' | 'Draft',
-      lastUpdated: timeAgo(f.createdAt || new Date()),
-      rawForm: f,
-    })),
-    ...INITIAL_RECENT_ITEMS.filter((init) => !forms.some((f) => f.name === init.name)).map(item => ({
-      ...item,
-      rawForm: {
-        id: item.id,
-        name: item.name,
-        type: 'lead_capture' as const,
-        status: item.status === 'Published' ? ('active' as const) : ('inactive' as const),
-        fields: [],
-        submissions: item.leads,
-        conversionRate: parseInt(item.conversionRate, 10),
-        submissionActions: getDefaultActions('lead_capture'),
-      } as FormItem,
-    })),
-  ];
+  // Operational rows always come from the forms API. Templates are listed separately.
+  const allRecentItems = forms.map(f => ({
+    id: f.id, name: f.name, type: 'Form', leads: f.submissions ?? 0,
+    conversionRate: `${f.conversionRate ?? 0}%`,
+    status: (f.status === 'active' ? 'Published' : 'Draft') as 'Published' | 'Draft',
+    lastUpdated: f.createdAt ? timeAgo(f.createdAt) : 'Unavailable', rawForm: f,
+  }));
 
   const filteredRecentItems = allRecentItems.filter((item) => {
     if (search.trim()) {
@@ -956,82 +911,16 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
       {(activeTab === 'overview' || activeTab === 'forms' || activeTab === 'settings') && (
         <div className="space-y-6">
-          {/* ─── 4 KPI Summary Telemetry Cards ─────────────────────────────── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-            {/* Card 1: Total Forms */}
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-[#712AE2] flex items-center justify-center font-bold shrink-0">
-                  <FileInput className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Total Forms</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.length > 0 ? forms.length : 12}
-                  </p>
-                </div>
-              </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +20% vs last month
-              </Badge>
-            </div>
-
-            {/* Card 2: Published Forms / Active */}
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center font-bold shrink-0">
-                  <Layers className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Active Forms</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.filter((f) => f.status === 'active').length > 0
-                      ? forms.filter((f) => f.status === 'active').length
-                      : 6}
-                  </p>
-                </div>
-              </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +50% vs last month
-              </Badge>
-            </div>
-
-            {/* Card 3: Leads Captured */}
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center font-bold shrink-0">
-                  <BarChart3 className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Leads Captured</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    {forms.reduce((sum, f) => sum + (f.submissions || 0), 0) > 0
-                      ? forms.reduce((sum, f) => sum + (f.submissions || 0), 0)
-                      : 428}
-                  </p>
-                </div>
-              </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +38% vs last month
-              </Badge>
-            </div>
-
-            {/* Card 4: Appointments Booked */}
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center font-bold shrink-0">
-                  <Calendar className="size-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500 font-medium">Appointments Booked</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">126</p>
-                </div>
-              </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
-                +12% vs last month
-              </Badge>
-            </div>
-          </div>
+          <section aria-label="Form metrics" className="grid gap-4 sm:grid-cols-3">
+            {[
+              ['Forms', forms.length],
+              ['Published', forms.filter(form => form.status === 'active').length],
+              ['Submissions', forms.reduce((total, form) => total + (form.submissions ?? 0), 0)],
+            ].map(([label, value]) => <div key={label} className="rounded-xl border bg-card p-5"><p className="text-sm text-muted-foreground">{label}</p><strong className="mt-2 block text-2xl">{formsLoading || formsError ? '—' : value}</strong></div>)}
+          </section>
+          {formsLoading && <p role="status">Loading forms…</p>}
+          {formsError && <div role="alert" className="rounded-xl border p-4 text-destructive">{formsError}<Button variant="outline" className="ml-3" onClick={fetchForms}>Retry</Button></div>}
+          {!formsLoading && !formsError && !forms.length && <p className="rounded-xl border p-6 text-muted-foreground">No forms yet. Create a form or choose a template to get started.</p>}
 
           {/* ─── Main Workstation Grid (2/3 Left Rail + 1/3 Right Rail) ────── */}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
@@ -1262,102 +1151,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
             {/* ── Right Rail (4/12 cols): Lead Sources, Quick Actions, Submissions */}
             <div className="xl:col-span-4 space-y-5">
-              {/* Lead Sources Donut Card */}
-              <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                  Lead Sources
-                </h3>
-
-                <div className="flex items-center justify-center py-2">
-                  <div className="relative w-36 h-36 flex items-center justify-center">
-                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                      <circle cx="50" cy="50" r="40" fill="transparent" stroke="#e2e8f0" strokeWidth="14" />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#4648D4"
-                        strokeWidth="14"
-                        strokeDasharray="105.5 251.3"
-                        strokeDashoffset="0"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#0ea5e9"
-                        strokeWidth="14"
-                        strokeDasharray="60.3 251.3"
-                        strokeDashoffset="-105.5"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#10b981"
-                        strokeWidth="14"
-                        strokeDasharray="45.2 251.3"
-                        strokeDashoffset="-165.8"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#f59e0b"
-                        strokeWidth="14"
-                        strokeDasharray="25.1 251.3"
-                        strokeDashoffset="-211.0"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        fill="transparent"
-                        stroke="#94a3b8"
-                        strokeWidth="14"
-                        strokeDasharray="15.1 251.3"
-                        strokeDashoffset="-236.1"
-                      />
-                    </svg>
-
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-base font-black text-slate-900 dark:text-slate-100">
-                        428
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-semibold">
-                        Total Leads
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Legend */}
-                <div className="space-y-1.5 text-xs pt-1">
-                  {[
-                    { label: 'Website', pct: '42%', color: 'bg-[#4648D4]' },
-                    { label: 'Google Business', pct: '24%', color: 'bg-sky-500' },
-                    { label: 'Social Media', pct: '18%', color: 'bg-emerald-500' },
-                    { label: 'WhatsApp', pct: '10%', color: 'bg-amber-500' },
-                    { label: 'Other', pct: '6%', color: 'bg-slate-400' },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('w-2.5 h-2.5 rounded-full', item.color)} />
-                        <span className="text-slate-600 dark:text-slate-400 font-medium">
-                          {item.label}
-                        </span>
-                      </div>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
-                        {item.pct}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <section className="rounded-xl border bg-card p-5"><h3 className="font-semibold">Lead sources</h3><p className="my-3 text-sm text-muted-foreground">View recorded traffic and submissions in Analytics.</p><Button variant="outline" onClick={() => setActiveTab('analytics')}>View analytics</Button></section>
 
               {/* Quick Actions Card */}
               <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
@@ -1432,47 +1226,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 </div>
 
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {RECENT_SUBMISSIONS.map((sub) => (
-                    <div
-                      key={sub.id}
-                      onClick={() => setActiveTab('submissions')}
-                      className="py-2.5 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-50/60 dark:hover:bg-slate-800/40 rounded-lg px-1 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={cn(
-                            'w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0',
-                            sub.avatarBg
-                          )}
-                        >
-                          {sub.initials}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate leading-tight">
-                            {sub.name}
-                          </p>
-                          <p className="text-[10px] text-slate-400 truncate leading-tight">
-                            {sub.formName}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[10px] text-slate-400">{sub.timeAgo}</span>
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            'text-[10px] font-bold px-1.5 py-0',
-                            sub.status === 'Booked'
-                              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          )}
-                        >
-                          {sub.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
+                  <p className="py-3 text-sm text-muted-foreground">Open submissions to view saved responses for your forms.</p>
                 </div>
               </div>
             </div>
