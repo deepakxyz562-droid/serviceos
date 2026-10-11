@@ -14,7 +14,7 @@ export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; c
       className={`relative shrink-0 flex items-center justify-center ${className}`}
     >
       <Image
-        src="/bgos/icon-mark.png"
+        src="/bgos/icon.svg"
         alt="BGOS Mark"
         width={size}
         height={size}
@@ -22,10 +22,9 @@ export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; c
         unoptimized
         className="size-full object-contain filter drop-shadow-xs"
         onError={(e) => {
-          // Fallback to vector SVG if PNG is missing
           const target = e.currentTarget;
-          if (!target.src.includes('icon.svg')) {
-            target.src = '/bgos/icon.svg';
+          if (!target.src.includes('icon-mark.png')) {
+            target.src = '/bgos/icon-mark.png';
           }
         }}
       />

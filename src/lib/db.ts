@@ -17,6 +17,10 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient() {
+  if (typeof window !== 'undefined') {
+    return {} as PrismaClient;
+  }
+
   const databaseUrl = process.env.DATABASE_URL
 
   // Log which database we're connecting to (for debugging deployment issues)
@@ -45,14 +49,16 @@ function createPrismaClient() {
 // Check if we should use Supabase REST API instead of Prisma
 const useSupabase = shouldUseSupabaseDB()
 
-if (useSupabase) {
-  console.log('[DB] ✅ Using Supabase REST API (PostgREST) as database backend — no direct SQL connection needed')
-} else {
-  console.log('[DB] ⚠️ Using Prisma with direct database connection (DATABASE_URL)')
-  console.log('[DB] To switch to Supabase REST API, ensure these env vars are set:')
-  console.log('[DB]   - USE_SUPABASE_DB=true')
-  console.log('[DB]   - NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co')
-  console.log('[DB]   - SUPABASE_SERVICE_ROLE_KEY=eyJ...')
+if (typeof window === 'undefined') {
+  if (useSupabase) {
+    console.log('[DB] ✅ Using Supabase REST API (PostgREST) as database backend — no direct SQL connection needed')
+  } else {
+    console.log('[DB] ⚠️ Using Prisma with direct database connection (DATABASE_URL)')
+    console.log('[DB] To switch to Supabase REST API, ensure these env vars are set:')
+    console.log('[DB]   - USE_SUPABASE_DB=true')
+    console.log('[DB]   - NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co')
+    console.log('[DB]   - SUPABASE_SERVICE_ROLE_KEY=eyJ...')
+  }
 }
 
 // Export either Prisma client or Supabase adapter

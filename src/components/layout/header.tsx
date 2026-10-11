@@ -200,6 +200,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     currentView,
     darkMode,
     setDarkMode,
+    leftSidebarOpen,
     toggleLeftSidebar,
     toggleMobileSidebar,
     searchQuery,
