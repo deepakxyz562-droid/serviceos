@@ -120,6 +120,11 @@ import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form
 import { FormSubmissionsView } from '@/components/views/form-submissions-view';
 import { FormsAnalyticsView } from '@/components/views/forms-analytics-view';
 import { TemplateExplorer } from '@/features/forms/components/builder/template-explorer';
+import { getTemplateSync } from '@/lib/forms/templates';
+import type { FormTemplate } from '@/lib/forms/templates';
+import { injectMediaPanelContent } from '@/lib/forms/form-node-schema';
+import { resolveFormLayout, type FormLayout } from '@/lib/forms/resolve-form-layout';
+import type { FieldType } from '@/features/forms/types';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 
@@ -135,6 +140,15 @@ interface TemplatePreset {
   leadsSeed: number;
   conversionSeed: string;
 }
+
+const CANONICAL_TEMPLATE_MAP: Record<string, string> = {
+  'home-cleaning-quote': 'cleaning-service-quote-form',
+  'appointment-booking': 'auto-service-appointment-form',
+  'contact-us-form': 'contact-form',
+  'service-request': 'electrical-service-request-form',
+  'survey-form': 'customer-satisfaction-csat-survey',
+  'landing-page-funnel': 'cleaning-service-quote-form',
+};
 
 const POPULAR_TEMPLATES: TemplatePreset[] = [
   {
@@ -472,7 +486,125 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     setIsBuilderOpen(true);
   };
 
+  const handleApplyCanonicalTemplate = useCallback((tpl: FormTemplate, customTitle?: string) => {
+    const newFields: FormField[] = (tpl.schema.fields || []).map((f: any, idx: number) => ({
+      id: f.id || `f-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+      type: (f.widgetType ? 'control_widget' : f.type) as FieldType,
+      label: f.label || 'Question',
+      placeholder: f.placeholder,
+      helpText: f.helpText || f.description,
+      description: f.description,
+      required: Boolean(f.required),
+      options: f.options,
+      widgetType: f.widgetType,
+      widgetConfig: f.widgetConfig,
+      width: f.width,
+      layoutColumn: f.layoutColumn,
+      stepId: f.stepId,
+      defaultValue: f.defaultValue ?? (f.widgetConfig as any)?.defaultValue,
+      hidden: f.hidden,
+      validation: f.validation,
+    }));
+
+    const isSplit =
+      tpl.schema.theme?.layout === 'split_media' ||
+      Boolean(tpl.schema.mediaPanel || tpl.schema.theme?.mediaPanel) ||
+      (tpl.schema.fields || []).some((f: any) => f.layoutColumn === 'left' || f.layoutColumn === 'right');
+
+    const rawMediaPanel = tpl.schema.mediaPanel || tpl.schema.theme?.mediaPanel;
+    const finalFields = isSplit && rawMediaPanel
+      ? injectMediaPanelContent(newFields as any, rawMediaPanel, tpl.name, tpl.shortDescription || tpl.description)
+      : newFields;
+
+    const templateResolvedLayout: FormLayout = isSplit
+      ? 'split_media'
+      : tpl.schema.theme?.layout === 'card'
+      ? 'card'
+      : (tpl.schema.theme?.layout as FormLayout) || (tpl.schema.settings?.formLayout as FormLayout) || 'classic';
+
+    const templateSteps = tpl.schema.steps?.map((s: any) => ({
+      id: s.id,
+      title: s.title,
+      description: s.description,
+    })) || [{ id: 'step_1', title: 'Step 1: Details' }];
+
+    const hasMultiSteps = (tpl.schema.steps?.length || 0) > 1;
+
+    setFormData({
+      name: customTitle || tpl.name,
+      description: tpl.shortDescription || tpl.description || '',
+      type: 'lead_capture',
+      status: 'active',
+      fields: finalFields as any,
+      submissionActions: getDefaultActions('lead_capture'),
+      fieldMappings: [],
+      welcomeMessage: '',
+      completionMessage: tpl.schema.settings?.successMessage || 'Thank you for your submission!',
+      isMultiStep: hasMultiSteps,
+      steps: templateSteps,
+      primaryColor: tpl.schema.theme?.primaryColor || '#059669',
+      submitButtonText: tpl.schema.settings?.submitButtonText || 'Submit',
+      theme: {
+        ...(tpl.schema.theme || {}),
+        primaryColor: tpl.schema.theme?.primaryColor || '#059669',
+        layout: templateResolvedLayout,
+        mediaPanel: tpl.schema.mediaPanel || tpl.schema.theme?.mediaPanel,
+      } as any,
+      mediaPanel: tpl.schema.mediaPanel || tpl.schema.theme?.mediaPanel,
+      rules: tpl.schema.rules || [],
+      settings: {
+        ...(tpl.schema.settings as any || {}),
+        formLayout: templateResolvedLayout as any,
+      },
+    });
+
+    setFunnelName(customTitle || tpl.name);
+    setFunnelSubtitle(tpl.shortDescription || tpl.description || '');
+    setEditMode(false);
+    setEditFormId(null);
+    setStudioMode('full_studio');
+    setIsBuilderOpen(true);
+    toast.success(`Loaded "${tpl.name}" template with ${finalFields.length} fields!`);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const storedEdit = sessionStorage.getItem('fieseros_active_edit_form_id');
+      const sp = new URLSearchParams(window.location.search);
+      if (storedEdit || sp.get('editFormId') || sp.get('formId')) return;
+
+      let pendingId =
+        sessionStorage.getItem('pendingTemplateId') ||
+        sp.get('templateId') ||
+        sp.get('template') ||
+        localStorage.getItem('fieseros_pending_template_id');
+      if (!pendingId) return;
+
+      sessionStorage.removeItem('pendingTemplateId');
+      localStorage.removeItem('fieseros_pending_template_id');
+      localStorage.removeItem('fieseros_pending_template');
+      if (sp.has('templateId') || sp.has('template')) {
+        sp.delete('templateId');
+        sp.delete('template');
+        const clean = sp.toString() ? `${window.location.pathname}?${sp.toString()}` : window.location.pathname;
+        window.history.replaceState({}, '', clean);
+      }
+
+      const tpl = getTemplateSync(pendingId);
+      if (tpl) {
+        handleApplyCanonicalTemplate(tpl);
+      }
+    } catch {}
+  }, [handleApplyCanonicalTemplate]);
+
   const handlePickTemplate = (tpl: TemplatePreset) => {
+    const canonicalId = CANONICAL_TEMPLATE_MAP[tpl.id] || tpl.id;
+    const canonicalTpl = getTemplateSync(canonicalId);
+    if (canonicalTpl) {
+      handleApplyCanonicalTemplate(canonicalTpl, tpl.title);
+      return;
+    }
     setFunnelName(tpl.title);
     setFunnelSubtitle(`${tpl.category} • ${tpl.steps} to maximize conversion.`);
     setFormData({
@@ -480,18 +612,28 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
       description: `${tpl.category} template`,
       type: 'lead_capture',
       status: 'active',
-      fields: [],
+      fields: [
+        {
+          id: 'field-1',
+          type: 'radio' as any,
+          label: 'What type of cleaning do you need?',
+          required: true,
+          options: ['Regular Home Cleaning', 'Deep Cleaning', 'Move In/Out Cleaning', 'Office Cleaning'],
+        },
+      ],
       submissionActions: getDefaultActions('lead_capture'),
       fieldMappings: [],
       welcomeMessage: '',
       completionMessage: '',
     });
     setEditMode(false);
+    setEditFormId(null);
+    setStudioMode('full_studio');
     setIsBuilderOpen(true);
     toast.success(`Loaded template: ${tpl.title}`);
   };
 
-  const handleOpenEdit = (form: FormItem) => {
+  const handleOpenEdit = (form: FormItem, mode: 'full_studio' | 'funnel' = 'full_studio') => {
     setSelectedForm(form);
     setFunnelName(form.name);
     setFunnelSubtitle(form.description || 'Lead capture and appointment scheduling form.');
@@ -518,7 +660,48 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
     });
     setEditMode(true);
     setEditFormId(form.id);
+    setStudioMode(mode);
     setIsBuilderOpen(true);
+
+    if (form.id) {
+      authFetch(`/api/forms/${form.id}`)
+        .then((res) => {
+          if (!res.ok) return null;
+          return res.json();
+        })
+        .then((data) => {
+          if (data?.form) {
+            const enriched = apiFormToFormItem(data.form);
+            setSelectedForm(enriched);
+            setFunnelName(enriched.name);
+            if (enriched.description) setFunnelSubtitle(enriched.description);
+            setFormData({
+              id: enriched.id,
+              slug: enriched.slug,
+              name: enriched.name,
+              description: enriched.description || '',
+              type: enriched.type || 'lead_capture',
+              status: enriched.status || 'active',
+              fields: Array.isArray(enriched.fields) ? [...enriched.fields] : [],
+              submissionActions: enriched.submissionActions || getDefaultActions(enriched.type || 'lead_capture'),
+              fieldMappings: Array.isArray(enriched.fieldMappings) ? [...enriched.fieldMappings] : [],
+              welcomeMessage: enriched.welcomeMessage || '',
+              completionMessage: enriched.completionMessage || '',
+              isMultiStep: enriched.isMultiStep,
+              steps: enriched.steps,
+              primaryColor: enriched.primaryColor,
+              submitButtonText: enriched.submitButtonText,
+              theme: enriched.theme,
+              mediaPanel: enriched.mediaPanel,
+              rules: enriched.rules || [],
+              settings: enriched.settings,
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('[form-builder-view] Failed to re-fetch full schema:', err);
+        });
+    }
   };
 
   const handleSave = async (overrideData?: EditorFormData | unknown, options?: { silent?: boolean }) => {
@@ -1358,11 +1541,13 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
       {activeTab === 'templates' && (
         <div className="space-y-4">
-          <TemplateExplorer onSelectTemplate={(tpl) => {
-            setFunnelName(tpl.name);
-            setFunnelSubtitle(tpl.description || 'Lead generation template');
-            setIsBuilderOpen(true);
-          }} />
+          <TemplateExplorer
+            onBackToBuild={() => setActiveTab('overview')}
+            onApplyTemplate={(tpl, customTitle) => {
+              handleApplyCanonicalTemplate(tpl, customTitle);
+            }}
+            currentFieldCount={formData.fields?.length || 0}
+          />
         </div>
       )}
 
@@ -1613,14 +1798,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                                 size="icon"
                                 onClick={() => {
                                   if (item.rawForm) {
-                                    handleOpenEdit(item.rawForm);
+                                    handleOpenEdit(item.rawForm, 'full_studio');
                                   } else {
                                     setFunnelName(item.name);
+                                    setStudioMode('full_studio');
                                     setIsBuilderOpen(true);
                                   }
                                 }}
                                 className="size-7 text-slate-500 hover:text-slate-900"
-                                title="Edit Form"
+                                title="Edit in Form Studio"
                               >
                                 <Pencil className="size-3" />
                               </Button>
@@ -1644,18 +1830,43 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                                     <MoreVertical className="size-3" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48 text-xs font-medium">
+                                <DropdownMenuContent align="end" className="w-52 text-xs font-medium">
                                   <DropdownMenuItem
                                     onClick={() => {
                                       if (item.rawForm) {
-                                        handleOpenEdit(item.rawForm);
+                                        handleOpenEdit(item.rawForm, 'full_studio');
                                       } else {
                                         setFunnelName(item.name);
+                                        setStudioMode('full_studio');
                                         setIsBuilderOpen(true);
                                       }
                                     }}
                                   >
-                                    <Pencil className="size-3.5 mr-2 text-teal-600" /> Edit Form
+                                    <Sliders className="size-3.5 mr-2 text-teal-600" /> Edit in Form Studio
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      if (item.rawForm) {
+                                        handleOpenEdit(item.rawForm, 'funnel');
+                                      } else {
+                                        setFunnelName(item.name);
+                                        setStudioMode('funnel');
+                                        setIsBuilderOpen(true);
+                                      }
+                                    }}
+                                  >
+                                    <Pencil className="size-3.5 mr-2 text-purple-600" /> Edit in Funnel Workstation
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      if (item.rawForm) {
+                                        openFormLink(item.rawForm);
+                                      } else if (typeof window !== 'undefined') {
+                                        window.open(`/f/${item.id}`, '_blank', 'noopener,noreferrer');
+                                      }
+                                    }}
+                                  >
+                                    <ExternalLink className="size-3.5 mr-2 text-sky-600" /> View Live Form
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => {
