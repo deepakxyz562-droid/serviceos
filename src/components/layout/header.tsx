@@ -1,4 +1,5 @@
 'use client';
+import { BgosBrand } from '@/components/bgos/brand';
 import { BgosHeaderTools } from '@/components/bgos/header-tools';
 import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-navigation';
 import { isChatbotlyWorkspace } from '../../../shared/product-context';
@@ -432,6 +433,18 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       >
         <Menu className="size-4" />
       </Button>
+
+      {/* ─── Prominent BGOS Logo (Always visible on mobile or when sidebar is collapsed) ─── */}
+      {isChatbotlyWorkspace(auth) && (!leftSidebarOpen || isMobile) && (
+        <button
+          type="button"
+          onClick={() => setCurrentView('dashboard')}
+          className="flex items-center gap-2 mr-1 shrink-0 hover:opacity-85 transition-opacity cursor-pointer"
+          aria-label="BGOS Overview"
+        >
+          <BgosBrand compact size={28} />
+        </button>
+      )}
 
       {/* ─── Current view title ────────────────────────────────────────── */}
       {isChatbotlyWorkspace(auth) ? <BgosHeaderTools /> : (

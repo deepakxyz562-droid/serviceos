@@ -48,6 +48,7 @@ import {
   Sliders,
   BarChart3,
   Lightbulb,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +64,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -196,6 +198,7 @@ const COMMON_KEYWORDS = [
 ];
 
 export function ReviewsView() {
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   // Navigation & Sub-Tabs
   const [activeSubTab, setActiveSubTab] = useState('reviews');
   const [timeRange, setTimeRange] = useState('Last 30 days');
@@ -224,6 +227,42 @@ export function ReviewsView() {
       setIsEditingReply(false);
     }
   }, [selectedReviewId]);
+
+  // Fetch real reviews from backend API on mount
+  useEffect(() => {
+    let mounted = true;
+    authFetch('/api/reviews?limit=50')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data || !data.reviews || data.reviews.length === 0) return;
+        const mapped: ReviewItem[] = data.reviews.map((r: any) => ({
+          id: r.id,
+          name: r.authorName || 'Verified Client',
+          source: (r.source === 'google' ? 'Google' : r.source === 'facebook' ? 'Facebook' : 'Direct') as any,
+          rating: r.rating || 5,
+          date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+          text: r.comment || 'Outstanding service and quality execution.',
+          sentiment: (r.rating >= 4 ? 'positive' : r.rating === 3 ? 'neutral' : 'negative') as any,
+          replied: !!(r.responseJson && r.responseJson !== '{}'),
+          replyText: r.responseJson ? (safeJsonParse(r.responseJson)?.text || null) : null,
+          serviceCategory: 'Commercial & Residential',
+          tags: ['Reliable', 'Top Rated'],
+        }));
+        setReviewsList(mapped);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  function safeJsonParse(val: any) {
+    try {
+      return typeof val === 'string' ? JSON.parse(val) : val;
+    } catch {
+      return null;
+    }
+  }
 
   // Dialog States
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -256,10 +295,21 @@ export function ReviewsView() {
   };
 
   // Save Reply
-  const handleSaveReply = () => {
+  const handleSaveReply = async () => {
     if (!replyDraft.trim()) {
       toast.error('Reply text cannot be empty');
       return;
+    }
+    try {
+      await authFetch(`/api/reviews/${selectedReview.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          responseJson: JSON.stringify({ text: replyDraft.trim(), repliedAt: new Date().toISOString() }),
+        }),
+      });
+    } catch {
+      // optimistic update persists locally
     }
     setReviewsList((prev) =>
       prev.map((r) =>
@@ -274,7 +324,7 @@ export function ReviewsView() {
       )
     );
     setIsEditingReply(false);
-    toast.success('Reply published to Google Business Profile!');
+    toast.success('Reply published to Google Business profile!');
   };
 
   // Filtered reviews
@@ -298,7 +348,26 @@ export function ReviewsView() {
   });
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full max-w-[1600px] mx-auto text-slate-900 dark:text-slate-100">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full text-slate-900 dark:text-slate-100">
+      {/* Universal Back Navigation */}
+      <div className="flex items-center justify-between pb-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (activeSubTab !== 'reviews') {
+              setActiveSubTab('reviews');
+            } else {
+              setCurrentView('dashboard');
+            }
+          }}
+          className="gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
+        >
+          <ArrowLeft className="size-4 text-teal-600" />
+          <span>{activeSubTab !== 'reviews' ? 'Back to Reviews Overview' : 'Back to Dashboard'}</span>
+        </Button>
+      </div>
+
       {/* ─── 1. Header Section ─────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
@@ -363,7 +432,7 @@ export function ReviewsView() {
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between"
                   >
                     <span>{range}</span>
-                    {timeRange === range && <Check className="size-3 text-[#4648D4]" />}
+                    {timeRange === range && <Check className="size-3 text-teal-600" />}
                   </button>
                 ))}
               </div>
@@ -373,7 +442,7 @@ export function ReviewsView() {
           <Button
             size="sm"
             onClick={() => toast.success('Synced latest reviews from Google Business Profile!')}
-            className="h-9 gap-1.5 bg-[#4648D4] hover:bg-[#383AC0] text-white font-semibold text-xs shadow-sm rounded-lg"
+            className="h-9 gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm rounded-lg"
           >
             <RefreshCw className="size-3.5" />
             <span>Sync GBP</span>
@@ -399,7 +468,7 @@ export function ReviewsView() {
             onClick={() => setActiveSubTab(tab.id)}
             className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
               activeSubTab === tab.id
-                ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800'
+                ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs border border-slate-200 dark:border-slate-800'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
             }`}
           >
@@ -435,7 +504,7 @@ export function ReviewsView() {
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total Reviews</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#4648D4] dark:text-indigo-400">
+            <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
               <MessageSquare className="size-4" />
             </div>
           </div>
@@ -454,7 +523,7 @@ export function ReviewsView() {
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">New Reviews</span>
-            <div className="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-[#712AE2] dark:text-purple-400">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-4" />
             </div>
           </div>
@@ -542,8 +611,8 @@ export function ReviewsView() {
                 <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 400 120">
                   <defs>
                     <linearGradient id="trendGradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#712AE2" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#712AE2" stopOpacity="0.0" />
+                      <stop offset="0%" stopColor="#007F73" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#007F73" stopOpacity="0.0" />
                     </linearGradient>
                   </defs>
                   <path
@@ -553,19 +622,19 @@ export function ReviewsView() {
                   <path
                     d="M 0,90 Q 50,75 100,70 T 200,65 T 280,50 T 340,65 T 400,45"
                     fill="none"
-                    stroke="#712AE2"
+                    stroke="#007F73"
                     strokeLinecap="round"
                     strokeWidth="2.5"
                   />
                   {/* Point circles */}
-                  <circle cx="0" cy="90" r="3.5" fill="#712AE2" />
-                  <circle cx="60" cy="76" r="3.5" fill="#712AE2" />
-                  <circle cx="120" cy="72" r="3.5" fill="#712AE2" />
-                  <circle cx="180" cy="68" r="3.5" fill="#712AE2" />
-                  <circle cx="240" cy="60" r="3.5" fill="#712AE2" />
-                  <circle cx="300" cy="52" r="3.5" fill="#712AE2" />
-                  <circle cx="350" cy="62" r="3.5" fill="#712AE2" />
-                  <circle cx="400" cy="45" r="4.5" fill="#712AE2" />
+                  <circle cx="0" cy="90" r="3.5" fill="#007F73" />
+                  <circle cx="60" cy="76" r="3.5" fill="#007F73" />
+                  <circle cx="120" cy="72" r="3.5" fill="#007F73" />
+                  <circle cx="180" cy="68" r="3.5" fill="#007F73" />
+                  <circle cx="240" cy="60" r="3.5" fill="#007F73" />
+                  <circle cx="300" cy="52" r="3.5" fill="#007F73" />
+                  <circle cx="350" cy="62" r="3.5" fill="#007F73" />
+                  <circle cx="400" cy="45" r="4.5" fill="#007F73" />
                 </svg>
               </div>
 
@@ -640,7 +709,7 @@ export function ReviewsView() {
 
           <Button
             onClick={handleCopyReviewLink}
-            className="w-full h-8 text-xs font-semibold gap-1.5 bg-[#4648D4] hover:bg-[#383AC0] text-white rounded-lg shadow-sm"
+            className="w-full h-8 text-xs font-semibold gap-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg shadow-sm"
           >
             {copiedLink ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             <span>{copiedLink ? 'Link Copied!' : 'Copy Review Link'}</span>
@@ -669,7 +738,7 @@ export function ReviewsView() {
 
           <button
             onClick={() => setQrModalOpen(true)}
-            className="text-xs text-[#4648D4] dark:text-indigo-400 hover:underline font-semibold flex items-center justify-center gap-1.5 pt-0.5"
+            className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-semibold flex items-center justify-center gap-1.5 pt-0.5"
           >
             <QrCode className="size-3.5" />
             <span>Download QR Code</span>
@@ -702,7 +771,7 @@ export function ReviewsView() {
                 onClick={() => setFilterRating(pill.id)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors ${
                   filterRating === pill.id
-                    ? 'bg-[#4648D4] text-white shadow-xs'
+                    ? 'bg-teal-600 text-white shadow-xs'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
                 }`}
               >
@@ -757,7 +826,7 @@ export function ReviewsView() {
                 onClick={() => setSelectedReviewId(item.id)}
                 className={`p-3 rounded-xl border transition-all cursor-pointer ${
                   selectedReviewId === item.id
-                    ? 'bg-purple-50/50 dark:bg-purple-950/20 border-[#4648D4] shadow-xs'
+                    ? 'bg-teal-50/50 dark:bg-teal-950/20 border-teal-600 shadow-xs'
                     : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 hover:bg-slate-100/60'
                 }`}
               >
@@ -900,7 +969,7 @@ export function ReviewsView() {
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <MessageSquare className="size-3.5 text-[#4648D4]" /> Your Reply
+                <MessageSquare className="size-3.5 text-teal-600" /> Your Reply
               </span>
               <span className="text-[11px] text-slate-400 font-mono">
                 {selectedReview.replyEdited || 'Edited 2 days ago'}
@@ -931,7 +1000,7 @@ export function ReviewsView() {
                   <Button
                     size="sm"
                     onClick={handleSaveReply}
-                    className="h-7 text-xs bg-[#4648D4] hover:bg-[#383AC0] text-white font-bold"
+                    className="h-7 text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold"
                   >
                     Post Reply
                   </Button>
@@ -993,7 +1062,7 @@ export function ReviewsView() {
               variant="outline"
               size="sm"
               onClick={() => window.open('https://google.com/maps', '_blank')}
-              className="w-full h-8 text-xs gap-1.5 bg-slate-50 dark:bg-slate-800 text-[#4648D4] dark:text-indigo-400 font-semibold"
+              className="w-full h-8 text-xs gap-1.5 bg-slate-50 dark:bg-slate-800 text-teal-600 dark:text-teal-400 font-semibold"
             >
               <span>View in Google</span>
               <ExternalLink className="size-3.5" />
@@ -1007,11 +1076,11 @@ export function ReviewsView() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <Sparkles className="size-4 text-[#712AE2]" />
+                <Sparkles className="size-4 text-teal-600" />
                 <h3 className="text-xs font-bold">AI Review Reply</h3>
                 <Badge
                   variant="secondary"
-                  className="bg-purple-100 text-[#712AE2] dark:bg-purple-950 dark:text-purple-300 text-[9px] px-1 py-0"
+                  className="bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 text-[9px] px-1 py-0"
                 >
                   Beta
                 </Badge>
@@ -1021,7 +1090,7 @@ export function ReviewsView() {
                 size="sm"
                 onClick={handleGenerateAiReply}
                 disabled={isGeneratingAi}
-                className="h-7 text-[11px] font-bold px-2.5 rounded-lg bg-[#4648D4] hover:bg-[#383AC0] text-white"
+                className="h-7 text-[11px] font-bold px-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white"
               >
                 {isGeneratingAi ? 'Drafting...' : 'Generate Reply'}
               </Button>
@@ -1040,7 +1109,7 @@ export function ReviewsView() {
             </div>
 
             <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-center">
-              <button className="py-1 text-[11px] font-bold rounded bg-white dark:bg-slate-900 text-[#4648D4] shadow-xs">
+              <button className="py-1 text-[11px] font-bold rounded bg-white dark:bg-slate-900 text-teal-600 shadow-xs">
                 Common Keywords
               </button>
               <button
@@ -1122,7 +1191,7 @@ export function ReviewsView() {
         <DialogContent className="sm:max-w-[360px] text-center">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center justify-center gap-2">
-              <QrCode className="size-5 text-[#4648D4]" /> Google Review QR Code
+              <QrCode className="size-5 text-teal-600" /> Google Review QR Code
             </DialogTitle>
             <DialogDescription className="text-xs">
               Display this on counter tents or invoices for 1-scan Google reviews.
@@ -1155,7 +1224,7 @@ export function ReviewsView() {
                 toast.success('Downloaded Google Review QR Code PNG');
                 setQrModalOpen(false);
               }}
-              className="flex-1 h-8 text-xs bg-[#4648D4] hover:bg-[#383AC0] text-white font-bold"
+              className="flex-1 h-8 text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold"
             >
               Download PNG
             </Button>
@@ -1168,7 +1237,7 @@ export function ReviewsView() {
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Send className="size-4 text-[#4648D4]" /> Request Customer Reviews
+              <Send className="size-4 text-teal-600" /> Request Customer Reviews
             </DialogTitle>
             <DialogDescription className="text-xs">
               Send personalized review links directly to recent clients via SMS and Email.
@@ -1189,11 +1258,11 @@ export function ReviewsView() {
               <label className="font-semibold text-slate-700 dark:text-slate-300">Delivery Channel</label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="rounded text-[#4648D4]" />
+                  <input type="checkbox" defaultChecked className="rounded text-teal-600" />
                   <span>SMS (Highest Open Rate)</span>
                 </label>
                 <label className="flex items-center gap-2 p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 cursor-pointer">
-                  <input type="checkbox" defaultChecked className="rounded text-[#4648D4]" />
+                  <input type="checkbox" defaultChecked className="rounded text-teal-600" />
                   <span>Email</span>
                 </label>
               </div>
@@ -1224,7 +1293,7 @@ export function ReviewsView() {
                 toast.success('Sent 28 review requests via SMS & Email!');
                 setRequestReviewsOpen(false);
               }}
-              className="h-8 text-xs bg-[#4648D4] hover:bg-[#383AC0] text-white font-bold"
+              className="h-8 text-xs bg-teal-600 hover:bg-teal-700 text-white font-bold"
             >
               Send Requests
             </Button>

@@ -1,458 +1,406 @@
-/**
- * Quotes Screen (NEW)
- *
- * PWA-matching quotes list:
- *   - Fetch GET /api/quotes → Quote[]
- *   - Status filter chips: All / Pending / Accepted / Declined / Expired
- *   - Cards: number, provider, total, issue/expiry date, status badge
- *   - Tap a quote → Modal with line items, totals, notes
- *   - Accept/Decline buttons: PATCH /api/quotes/[id] { status: 'accepted'|'declined' }
- */
-import React, { useMemo, useState } from 'react';
-import { View, Text, Pressable, FlatList, RefreshControl, ScrollView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+  Modal,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO, isPast } from 'date-fns';
 import {
-  FileText,
-  ChevronRight,
-  AlertTriangle,
-  Check,
+  ArrowLeft,
+  ShieldCheck,
+  Star,
+  Clock,
+  Sparkles,
+  CheckCircle2,
   X,
-  AlertCircle,
-  Calendar,
-  DollarSign,
-  Plus,
+  Phone,
+  MessageSquare,
+  ChevronRight,
+  Filter,
 } from 'lucide-react-native';
-import { api } from '@/lib/api';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { SkeletonList } from '@/components/ui/Skeleton';
-import { StatusBadge } from '@/components/ui/Badge';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
-import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
-import { useToast } from '@/components/ui/Toast';
 import { COLORS } from '@/lib/constants';
-import { cn } from '@/lib/cn';
-import type { Quote } from '@/types';
 
-// ── Helpers ──────────────────────────────────────────────────────────
-
-type FilterKey = 'all' | 'pending' | 'accepted' | 'declined' | 'expired';
-
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'declined', label: 'Declined' },
-  { key: 'expired', label: 'Expired' },
-];
-
-function normalizeQuotes(
-  r: Quote[] | { data: Quote[] } | { quotes: Quote[] } | undefined
-): Quote[] {
-  if (!r) return [];
-  if (Array.isArray(r)) return r;
-  if (Array.isArray((r as { data?: Quote[] }).data)) return (r as { data: Quote[] }).data;
-  if (Array.isArray((r as { quotes?: Quote[] }).quotes))
-    return (r as { quotes: Quote[] }).quotes;
-  return [];
+interface ProposalQuote {
+  id: string;
+  providerName: string;
+  avatar: string;
+  rating: number;
+  reviewCount: number;
+  verified: boolean;
+  arrivalWindow: string;
+  warranty: string;
+  includesParts: boolean;
+  price: number;
+  badge?: string;
+  bio: string;
 }
 
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    return format(parseISO(iso), 'MMM d, yyyy');
-  } catch {
-    return iso;
-  }
-}
+export default function CustomerQuotesScreen() {
+  const [isSearching, setIsSearching] = useState(true);
+  const [activeTab, setActiveTab] = useState<'recommended' | 'lowest' | 'earliest'>('recommended');
+  const [selectedPro, setSelectedPro] = useState<ProposalQuote | null>(null);
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
 
-function formatMoney(amount: number | null | undefined): string {
-  if (amount == null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-}
+  // Radar animation timer
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsSearching(false);
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, []);
 
-function isQuoteExpired(q: Quote): boolean {
-  if (q.status === 'accepted' || q.status === 'declined') return false;
-  if (!q.expiryDate) return false;
-  try {
-    return isPast(parseISO(q.expiryDate));
-  } catch {
-    return false;
-  }
-}
-
-function displayStatus(q: Quote): string {
-  if (isQuoteExpired(q)) return 'expired';
-  return q.status;
-}
-
-// ── Screen ───────────────────────────────────────────────────────────
-
-export default function QuotesScreen() {
-  const toast = useToast();
-  const qc = useQueryClient();
-  const [filter, setFilter] = useState<FilterKey>('all');
-  const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
-
-  // ── Query ────────────────────────────────────────────────────────
-  const { data, isLoading, isRefetching, refetch, isError, error } = useQuery({
-    queryKey: ['quotes', 'list'],
-    queryFn: async () => {
-      const r = await api.get<Quote[] | { data: Quote[] }>('/api/quotes');
-      return normalizeQuotes(r);
+  const proposals: ProposalQuote[] = [
+    {
+      id: 'prop-1',
+      providerName: 'Ravi Plumbing Services',
+      avatar: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80',
+      rating: 4.8,
+      reviewCount: 120,
+      verified: true,
+      arrivalWindow: 'Tomorrow, 10 AM - 12 PM',
+      warranty: '1 year warranty',
+      includesParts: true,
+      price: 1200,
+      badge: 'Recommended',
+      bio: 'Experienced plumber specializing in residential pipe replacement, drain cleaning, and water heater repair. 5+ years experience, 1,200+ completed jobs.',
     },
-  });
-
-  const allQuotes = useMemo(() => data ?? [], [data]);
-
-  const filtered = useMemo(() => {
-    if (filter === 'all') return allQuotes;
-    if (filter === 'expired') {
-      return allQuotes.filter((q) => isQuoteExpired(q));
-    }
-    return allQuotes.filter((q) => q.status === filter && !isQuoteExpired(q));
-  }, [allQuotes, filter]);
-
-  // ── Mutations ────────────────────────────────────────────────────
-  const updateQuote = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: 'accepted' | 'declined' }) =>
-      api.patch<Quote>(`/api/quotes/${id}`, { status }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['quotes'] });
+    {
+      id: 'prop-2',
+      providerName: 'QuickFix Home Services',
+      avatar: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=150&q=80',
+      rating: 4.6,
+      reviewCount: 85,
+      verified: true,
+      arrivalWindow: 'Tomorrow, 9 AM - 11 AM',
+      warranty: '6 months warranty',
+      includesParts: true,
+      price: 1600,
+      badge: 'Earliest',
+      bio: 'Fast-response home repair fleet with emergency equipment on van. Specializes in rapid leak stoppage and sanitary fittings.',
     },
-  });
+    {
+      id: 'prop-3',
+      providerName: 'Prime Plumbing Co.',
+      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+      rating: 4.7,
+      reviewCount: 76,
+      verified: true,
+      arrivalWindow: 'Tomorrow, 11 AM - 1 PM',
+      warranty: '3 months warranty',
+      includesParts: false,
+      price: 1350,
+      bio: 'Affordable licensed plumbers across Bengaluru South. Reliable diagnostic testing and transparent parts pricing.',
+    },
+  ];
 
-  const handleRespond = async (
-    quote: Quote,
-    status: 'accepted' | 'declined'
-  ) => {
-    try {
-      await updateQuote.mutateAsync({ id: quote.id, status });
-      toast.show(
-        status === 'accepted' ? 'Quote accepted!' : 'Quote declined.',
-        'success'
-      );
-      setSelectedQuote(null);
-    } catch (err) {
-      toast.show(
-        err instanceof Error ? err.message : `Failed to ${status} quote.`,
-        'error'
-      );
-    }
-  };
-
-  const renderItem = ({ item }: { item: Quote }) => {
-    const status = displayStatus(item);
-    const isPending = status === 'sent' || status === 'draft';
-    return (
-      <Pressable
-        onPress={() => setSelectedQuote(item)}
-        accessibilityRole="button"
-        accessibilityLabel={`View quote ${item.number}`}
-        className="active:opacity-70"
-      >
-        <Card className="mb-3">
-          <View className="flex-row items-start justify-between">
-            <View className="flex-1 pr-3">
-              <Text className="text-base font-bold text-foreground">{item.number}</Text>
-              {item.provider?.name ? (
-                <Text className="mt-0.5 text-xs text-muted-foreground">
-                  {item.provider.name}
-                </Text>
-              ) : null}
-              <View className="mt-1 flex-row items-center">
-                <Calendar size={12} color={COLORS.mutedForeground} />
-                <Text className="ml-1 text-xs text-muted-foreground">
-                  Issued {formatDate(item.issueDate)}
-                </Text>
-              </View>
-              <View className="mt-1 flex-row items-center">
-                <Calendar size={12} color={COLORS.mutedForeground} />
-                <Text
-                  className={cn(
-                    'ml-1 text-xs',
-                    isQuoteExpired(item)
-                      ? 'font-semibold text-destructive'
-                      : 'text-muted-foreground'
-                  )}
-                >
-                  Expires {formatDate(item.expiryDate)}
-                </Text>
-              </View>
-            </View>
-            <StatusBadge status={status} />
-          </View>
-
-          <View className="mt-3 flex-row items-center justify-between">
-            <View className="flex-row items-center">
-              <DollarSign size={14} color={COLORS.primary} />
-              <Text className="ml-0.5 text-lg font-bold text-foreground">
-                {formatMoney(item.total)}
-              </Text>
-            </View>
-            <View className="flex-row items-center">
-              <Text className="mr-1 text-xs font-semibold text-primary-600">
-                {isPending ? 'Review' : 'Details'}
-              </Text>
-              <ChevronRight size={16} color={COLORS.primary} />
-            </View>
-          </View>
-        </Card>
-      </Pressable>
-    );
+  const handleSelectBook = (pro: ProposalQuote) => {
+    setDetailModalVisible(false);
+    // Navigate to booking tracking / confirmation
+    router.push('/(customer)/bookings');
   };
 
   return (
-    <SafeAreaView edges={['top']} className="flex-1 bg-background">
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
-          />
-        }
-        ListHeaderComponent={
-          <View>
-            <View className="flex-row items-center justify-between">
-              <Text className="mb-2 mt-2 text-xl font-bold text-foreground">Quotes</Text>
-              <Pressable
-                onPress={() => router.push('/(customer)/marketplace')}
-                hitSlop={8}
-                className="mb-2 flex-row items-center"
-              >
-                <Plus size={14} color={COLORS.primary} />
-                <Text className="ml-1 text-xs font-semibold text-primary-700">New</Text>
-              </Pressable>
-            </View>
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              data={FILTERS}
-              keyExtractor={(f) => f.key}
-              contentContainerStyle={{ paddingVertical: 8, paddingRight: 16 }}
-              renderItem={({ item: f }) => {
-                const selected = filter === f.key;
-                return (
-                  <Pressable
-                    onPress={() => setFilter(f.key)}
-                    className={cn(
-                      'mr-2 rounded-full border px-3 py-1.5',
-                      selected ? 'border-primary-500 bg-primary-500' : 'border-border bg-white'
-                    )}
-                  >
-                    <Text
-                      className={cn(
-                        'text-xs font-semibold',
-                        selected ? 'text-white' : 'text-muted-foreground'
-                      )}
-                    >
-                      {f.label}
-                    </Text>
-                  </Pressable>
-                );
-              }}
-            />
-          </View>
-        }
-        ListEmptyComponent={
-          isLoading ? (
-            <View className="mt-4">
-              <SkeletonList count={4} />
-            </View>
-          ) : isError ? (
-            <EmptyState
-              icon={<AlertCircle size={48} color={COLORS.destructive} />}
-              title="Couldn't load quotes"
-              description={error instanceof Error ? error.message : 'Please try again later.'}
-              actionLabel="Retry"
-              onAction={() => refetch()}
-            />
-          ) : (
-            <EmptyState
-              icon={<FileText size={48} color={COLORS.mutedForeground} />}
-              title="No quotes yet"
-              description="Request a quote from any marketplace provider to see it here."
-              actionLabel="Browse Marketplace"
-              onAction={() => router.replace('/(customer)/marketplace')}
-            />
-          )
-        }
-      />
-
-      {/* Quote detail modal */}
-      <Modal
-        visible={!!selectedQuote}
-        onClose={() => setSelectedQuote(null)}
-        position="center"
-        showHandle={false}
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+      {/* Top Header */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: '#FFFFFF',
+          borderBottomWidth: 1,
+          borderBottomColor: '#E2E8F0',
+        }}
       >
-        {selectedQuote ? (
-          <ScrollView style={{ maxHeight: 600 }}>
-            <View className="px-5 pb-6 pt-5">
-              <View className="flex-row items-start justify-between">
-                <View className="flex-1 pr-3">
-                  <Text className="text-lg font-bold text-foreground">
-                    {selectedQuote.number}
-                  </Text>
-                  {selectedQuote.provider?.name ? (
-                    <Text className="mt-0.5 text-sm text-muted-foreground">
-                      {selectedQuote.provider.name}
-                    </Text>
-                  ) : null}
-                </View>
-                <StatusBadge status={displayStatus(selectedQuote)} />
-              </View>
+        <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+          <ArrowLeft size={22} color="#0F172A" />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>
+          3 Quotes for Your Request
+        </Text>
+        <View style={{ width: 28 }} />
+      </View>
 
-              <View className="mt-3 flex-row">
-                <View className="flex-1">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Issued
-                  </Text>
-                  <Text className="mt-1 text-sm text-foreground">
-                    {formatDate(selectedQuote.issueDate)}
-                  </Text>
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Expires
-                  </Text>
+      {/* SCREEN 11: FINDING PROFESSIONALS RADAR STATE */}
+      {isSearching ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <View
+            style={{
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: '#ECFDF5',
+              borderWidth: 2,
+              borderColor: '#10B981',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 24,
+            }}
+          >
+            <ActivityIndicator size="large" color="#059669" />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A', textAlign: 'center' }}>
+            Finding the best professionals for you
+          </Text>
+          <Text style={{ fontSize: 12, color: '#64748B', textAlign: 'center', marginTop: 6, maxWidth: 260 }}>
+            We've sent your request to verified local pros. 3–5 pros are reviewing your photos and details.
+          </Text>
+
+          <View style={{ marginTop: 24, gap: 8, width: '100%', maxWidth: 280 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={16} color="#059669" />
+              <Text style={{ fontSize: 12, color: '#334155' }}>Matching with verified pros</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <CheckCircle2 size={16} color="#059669" />
+              <Text style={{ fontSize: 12, color: '#334155' }}>Checking availability</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator size="small" color="#059669" />
+              <Text style={{ fontSize: 12, color: '#059669', fontWeight: 'bold' }}>Collecting upfront quotes</Text>
+            </View>
+          </View>
+        </View>
+      ) : (
+        /* SCREEN 12: 3 QUOTES LIST */
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 14 }}>
+          {/* Subheader info & filters */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, color: '#64748B' }}>Compare and choose the best option:</Text>
+            <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 10, padding: 2 }}>
+              {(['recommended', 'lowest', 'earliest'] as const).map((t) => (
+                <TouchableOpacity
+                  key={t}
+                  onPress={() => setActiveTab(t)}
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 4,
+                    borderRadius: 8,
+                    backgroundColor: activeTab === t ? '#FFFFFF' : 'transparent',
+                  }}
+                >
                   <Text
-                    className={cn(
-                      'mt-1 text-sm',
-                      isQuoteExpired(selectedQuote)
-                        ? 'font-semibold text-destructive'
-                        : 'text-foreground'
-                    )}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: activeTab === t ? 'bold' : '500',
+                      color: activeTab === t ? '#059669' : '#64748B',
+                    }}
                   >
-                    {formatDate(selectedQuote.expiryDate)}
+                    {t === 'recommended' ? 'Best' : t === 'lowest' ? 'Lowest' : 'Fast'}
                   </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* 3 Proposal Cards */}
+          {proposals.map((item) => (
+            <View
+              key={item.id}
+              style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 18,
+                borderWidth: item.badge === 'Recommended' ? 2 : 1,
+                borderColor: item.badge === 'Recommended' ? '#10B981' : '#E2E8F0',
+                padding: 14,
+                gap: 12,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 4,
+                elevation: 2,
+              }}
+            >
+              {item.badge && (
+                <View
+                  style={{
+                    backgroundColor: '#ECFDF5',
+                    alignSelf: 'flex-start',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#047857' }}>{item.badge}</Text>
+                </View>
+              )}
+
+              {/* Provider Info Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Image
+                    source={{ uri: item.avatar }}
+                    style={{ width: 44, height: 44, borderRadius: 12 }}
+                  />
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#0F172A' }}>
+                        {item.providerName}
+                      </Text>
+                      {item.verified && <ShieldCheck size={14} color="#059669" />}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                      <Star size={12} color="#F59E0B" fill="#F59E0B" />
+                      <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#0F172A' }}>{item.rating}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>({item.reviewCount} reviews)</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Price */}
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>₹{item.price}</Text>
+                  <Text style={{ fontSize: 10, color: '#64748B' }}>Upfront Total</Text>
                 </View>
               </View>
 
-              {/* Line items */}
-              {selectedQuote.items && selectedQuote.items.length > 0 ? (
-                <View className="mt-4">
-                  <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Line Items
-                  </Text>
-                  <View className="rounded-lg border border-border">
-                    {selectedQuote.items.map((item, idx) => (
-                      <View
-                        key={item.id ?? idx}
-                        className={cn(
-                          'flex-row px-3 py-2',
-                          idx < selectedQuote.items.length - 1
-                            ? 'border-b border-border'
-                            : ''
-                        )}
-                      >
-                        <View className="flex-1 pr-2">
-                          <Text className="text-sm text-foreground">{item.description}</Text>
-                          <Text className="text-xs text-muted-foreground">
-                            {item.quantity} × {formatMoney(item.unitPrice)}
-                          </Text>
-                        </View>
-                        <Text className="text-sm font-semibold text-foreground">
-                          {formatMoney(item.total)}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              ) : null}
-
-              {/* Totals */}
-              <View className="mt-4 rounded-lg bg-muted p-3">
-                <View className="flex-row justify-between py-0.5">
-                  <Text className="text-sm text-muted-foreground">Subtotal</Text>
-                  <Text className="text-sm text-foreground">
-                    {formatMoney(selectedQuote.subtotal)}
-                  </Text>
-                </View>
-                <View className="flex-row justify-between py-0.5">
-                  <Text className="text-sm text-muted-foreground">Tax</Text>
-                  <Text className="text-sm text-foreground">{formatMoney(selectedQuote.tax)}</Text>
-                </View>
-                <View className="mt-1 h-px bg-border" />
-                <View className="mt-1 flex-row justify-between">
-                  <Text className="text-base font-bold text-foreground">Total</Text>
-                  <Text className="text-base font-bold text-primary-700">
-                    {formatMoney(selectedQuote.total)}
-                  </Text>
-                </View>
+              {/* Details & Inclusions */}
+              <View style={{ backgroundColor: '#F8FAFC', padding: 10, borderRadius: 12, gap: 4 }}>
+                <Text style={{ fontSize: 11, color: '#334155' }}>⏱️ Arrival: {item.arrivalWindow}</Text>
+                <Text style={{ fontSize: 11, color: '#047857', fontWeight: '600' }}>✓ {item.warranty}</Text>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  {item.includesParts ? '✓ Parts & labor included' : '• Labor & inspection only'}
+                </Text>
               </View>
 
-              {/* Notes */}
-              {selectedQuote.notes ? (
-                <View className="mt-3">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Notes
-                  </Text>
-                  <Text className="mt-1 text-sm text-foreground">{selectedQuote.notes}</Text>
-                </View>
-              ) : null}
+              {/* Action Buttons */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedPro(item);
+                    setDetailModalVisible(true);
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>View Details</Text>
+                </TouchableOpacity>
 
-              {/* Actions */}
-              {selectedQuote.status === 'sent' || selectedQuote.status === 'draft' ? (
-                isQuoteExpired(selectedQuote) ? (
-                  <View className="mt-5 flex-row items-center justify-center rounded-lg bg-amber-50 py-3">
-                    <AlertTriangle size={16} color={COLORS.accent} />
-                    <Text className="ml-2 text-sm font-semibold text-amber-700">
-                      This quote has expired.
-                    </Text>
-                  </View>
-                ) : (
-                  <View className="mt-5 flex-row gap-2">
-                    <Button
-                      variant="outline"
-                      onPress={() => handleRespond(selectedQuote, 'declined')}
-                      loading={updateQuote.isPending}
-                      className="flex-1"
-                    >
-                      <View className="flex-row items-center">
-                        <X size={14} color={COLORS.destructive} />
-                        <Text className="ml-1.5 text-sm font-semibold text-destructive">
-                          Decline
-                        </Text>
-                      </View>
-                    </Button>
-                    <Button
-                      onPress={() => handleRespond(selectedQuote, 'accepted')}
-                      loading={updateQuote.isPending}
-                      className="flex-1"
-                    >
-                      <View className="flex-row items-center">
-                        <Check size={14} color="#fff" />
-                        <Text className="ml-1.5 text-sm font-semibold text-white">
-                          Accept
-                        </Text>
-                      </View>
-                    </Button>
-                  </View>
-                )
-              ) : null}
-
-              <View className="mt-3">
-                <Button variant="ghost" onPress={() => setSelectedQuote(null)} fullWidth>
-                  Close
-                </Button>
+                <TouchableOpacity
+                  onPress={() => handleSelectBook(item)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    backgroundColor: '#059669',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#FFFFFF' }}>Select & Book</Text>
+                </TouchableOpacity>
               </View>
             </View>
-          </ScrollView>
-        ) : null}
-      </Modal>
+          ))}
+        </ScrollView>
+      )}
 
-      <LoadingOverlay visible={updateQuote.isPending} message="Updating quote…" />
+      {/* SCREEN 13: PROVIDER DETAILED PROFILE MODAL */}
+      <Modal
+        visible={detailModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setDetailModalVisible(false)}
+      >
+        {selectedPro && (
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: '#E2E8F0',
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#0F172A' }}>Provider Profile</Text>
+              <TouchableOpacity onPress={() => setDetailModalVisible(false)}>
+                <X size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+              <View style={{ alignItems: 'center', gap: 8 }}>
+                <Image
+                  source={{ uri: selectedPro.avatar }}
+                  style={{ width: 80, height: 80, borderRadius: 24 }}
+                />
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0F172A' }}>
+                  {selectedPro.providerName}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <ShieldCheck size={16} color="#059669" />
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#059669' }}>
+                    Verified Fieseros Pro Partner
+                  </Text>
+                </View>
+              </View>
+
+              {/* Stats Grid */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: 16,
+                  padding: 12,
+                  justifyContent: 'space-around',
+                }}
+              >
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Experience</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#0F172A', marginTop: 2 }}>5+ Years</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Completed</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#0F172A', marginTop: 2 }}>1,200+ Jobs</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>Response</Text>
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#0F172A', marginTop: 2 }}>&lt; 30 mins</Text>
+                </View>
+              </View>
+
+              {/* Bio */}
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: 'bold', color: '#0F172A', marginBottom: 4 }}>About</Text>
+                <Text style={{ fontSize: 12, color: '#475569', lineHeight: 18 }}>{selectedPro.bio}</Text>
+              </View>
+
+              {/* Bottom Sticky Action */}
+              <View style={{ marginTop: 24, gap: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>Arrival: {selectedPro.arrivalWindow}</Text>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#0F172A' }}>₹{selectedPro.price}</Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => handleSelectBook(selectedPro)}
+                  style={{
+                    backgroundColor: '#059669',
+                    paddingVertical: 14,
+                    borderRadius: 16,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>Confirm & Book Pro</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </SafeAreaView>
+        )}
+      </Modal>
     </SafeAreaView>
   );
 }

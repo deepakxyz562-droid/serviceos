@@ -9,7 +9,18 @@
  * 5. Fieseros CRM (Field Service Contractors & Trade Management) -> fieseros.com
  */
 
-export type ProductApp = 'bgos' | 'bos' | 'chatbotly' | 'crm' | 'quoteflow' | 'marketplace';
+export type ProductApp =
+  | 'marketing'
+  | 'customer'
+  | 'pro'
+  | 'business'
+  | 'admin'
+  | 'bgos'
+  | 'bos'
+  | 'chatbotly'
+  | 'crm'
+  | 'quoteflow'
+  | 'marketplace';
 
 export type ProductIdentity = {
   workspace?: {
@@ -28,10 +39,14 @@ export type ProductIdentity = {
 
 export function getWorkspaceProduct(auth?: ProductIdentity): ProductApp {
   if (auth?.user?.isSuperAdmin || ['superadmin', 'super_admin'].includes(auth?.user?.role || '')) {
-    return 'crm';
+    return 'admin';
   }
 
   const product = auth?.workspace?.productType || auth?.tenant?.productType;
+  if (product === 'customer') return 'customer';
+  if (product === 'pro') return 'pro';
+  if (product === 'admin') return 'admin';
+  if (product === 'business') return 'crm';
   if (product === 'crm') return 'crm';
   if (product === 'quoteflow') return 'quoteflow';
   if (product === 'marketplace') return 'marketplace';
@@ -56,6 +71,11 @@ export function getWorkspaceProduct(auth?: ProductIdentity): ProductApp {
 export function productForHostname(hostname: string): ProductApp {
   const host = hostname.toLowerCase().split(':')[0];
   const products: Record<string, ProductApp> = {
+    'fieseros.com': 'marketing',
+    'app.fieseros.com': 'customer',
+    'pro.fieseros.com': 'pro',
+    'business.fieseros.com': 'crm',
+    'admin.fieseros.com': 'admin',
     'bgos.fieseros.com': 'bgos',
     'bgos.app': 'bgos',
     'bos.fieseros.com': 'bos',
@@ -68,12 +88,29 @@ export function productForHostname(hostname: string): ProductApp {
 }
 
 export function getAppProduct(auth?: ProductIdentity): ProductApp {
-  if (auth?.user?.isSuperAdmin || ['superadmin', 'super_admin'].includes(auth?.user?.role || '')) return 'crm';
+  if (auth?.user?.isSuperAdmin || ['superadmin', 'super_admin'].includes(auth?.user?.role || '')) return 'admin';
   if (typeof window !== 'undefined') {
     const product = productForHostname(window.location.hostname);
     if (product !== 'crm') return product;
   }
   return getWorkspaceProduct(auth);
+}
+
+export function isCustomerWorkspace(auth?: ProductIdentity): boolean {
+  return getAppProduct(auth) === 'customer';
+}
+
+export function isProWorkspace(auth?: ProductIdentity): boolean {
+  return getAppProduct(auth) === 'pro';
+}
+
+export function isAdminWorkspace(auth?: ProductIdentity): boolean {
+  return getAppProduct(auth) === 'admin';
+}
+
+export function isBusinessWorkspace(auth?: ProductIdentity): boolean {
+  const p = getAppProduct(auth);
+  return p === 'crm' || p === 'business';
 }
 
 export function isBosWorkspace(auth?: ProductIdentity): boolean {

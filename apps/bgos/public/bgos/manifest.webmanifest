@@ -1,0 +1,12 @@
+{
+  "id": "/app?product=bgos",
+  "name": "BGOS — Business Growth OS",
+  "short_name": "BGOS",
+  "description": "Conversations, leads, appointments and business growth.",
+  "start_url": "/app?product=bgos",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4FAF9",
+  "theme_color": "#007F73",
+  "icons": [{ "src": "/bgos/teal-mark.png", "type": "image/png", "sizes": "1254x1254", "purpose": "any" }]
+}

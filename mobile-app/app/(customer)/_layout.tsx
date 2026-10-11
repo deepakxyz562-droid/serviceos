@@ -12,7 +12,7 @@
  */
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Home, ShoppingBag, CalendarCheck, FileText, User } from 'lucide-react-native';
+import { Home, Sparkles, Bot, Building2, CalendarCheck, User } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '@/lib/constants';
 
@@ -22,16 +22,16 @@ export default function CustomerLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.customerAccent,
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarActiveTintColor: '#059669',
+        tabBarInactiveTintColor: '#94A3B8',
         tabBarStyle: {
           backgroundColor: '#fff',
-          borderTopColor: '#E5E7EB',
+          borderTopColor: '#E2E8F0',
           paddingTop: 4,
-          height: 56 + insets.bottom,
+          height: 60 + insets.bottom,
           paddingBottom: insets.bottom,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen
@@ -43,11 +43,27 @@ export default function CustomerLayout() {
         }}
       />
       <Tabs.Screen
-        name="marketplace"
+        name="quotes"
         options={{
-          title: 'Marketplace',
-          tabBarLabel: 'Browse',
-          tabBarIcon: ({ color }) => <ShoppingBag size={22} color={color} />,
+          title: 'Quotes',
+          tabBarLabel: 'Quotes',
+          tabBarIcon: ({ color }) => <Sparkles size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="ai-assistant"
+        options={{
+          title: 'AI Intake',
+          tabBarLabel: 'AI Intake',
+          tabBarIcon: ({ color }) => <Bot size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="my-home"
+        options={{
+          title: 'My Home',
+          tabBarLabel: 'My Home',
+          tabBarIcon: ({ color }) => <Building2 size={22} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -59,14 +75,6 @@ export default function CustomerLayout() {
         }}
       />
       <Tabs.Screen
-        name="invoices"
-        options={{
-          title: 'Invoices',
-          tabBarLabel: 'Invoices',
-          tabBarIcon: ({ color }) => <FileText size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -75,10 +83,10 @@ export default function CustomerLayout() {
         }}
       />
 
-      {/* Non-tab route groups — handled by nested <Stack> layouts.
-          Standalone push screens declared href:null. */}
+      {/* Non-tab route groups — push screens declared href:null */}
+      <Tabs.Screen name="marketplace" options={{ href: null }} />
+      <Tabs.Screen name="invoices" options={{ href: null }} />
       <Tabs.Screen name="tracking" options={{ href: null }} />
-      <Tabs.Screen name="quotes" options={{ href: null }} />
       <Tabs.Screen name="messages" options={{ href: null }} />
       <Tabs.Screen name="reviews" options={{ href: null }} />
       <Tabs.Screen name="payments" options={{ href: null }} />

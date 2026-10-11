@@ -133,7 +133,7 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
                         className="group w-full flex items-center justify-between"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <Icon size={16} className={isActive ? 'text-purple-600 dark:text-purple-400' : 'text-slate-500'} />
+                          <Icon size={16} className={isActive ? 'text-teal-600 dark:text-teal-400' : 'text-slate-500'} />
                           <span className="truncate">{item.label}</span>
                         </div>
                         <ChevronDown
@@ -146,7 +146,7 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
                       </button>
 
                       {digitalPresenceExpanded && (
-                        <div className="pl-5 space-y-0.5 border-l-2 border-purple-200 dark:border-purple-900 ml-4 py-1">
+                        <div className="pl-5 space-y-0.5 border-l-2 border-teal-200 dark:border-teal-900 ml-4 py-1">
                           {DIGITAL_PRESENCE_SUBITEMS.map((sub) => {
                             const SubIcon = sub.icon;
                             const isSubActive = isActive && activeDigitalPresenceTab === sub.id;

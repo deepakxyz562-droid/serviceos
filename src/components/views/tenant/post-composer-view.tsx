@@ -392,7 +392,7 @@ export function PostComposerView() {
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Create Post</h1>

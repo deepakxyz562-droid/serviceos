@@ -393,7 +393,7 @@ export function FormAgentStudio({
           )}
 
           <div className="flex items-center gap-3 min-w-0">
-            <div className="size-10 rounded-2xl bg-[#7C3AED] text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+            <div className="size-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
               <Bot className="size-5" />
             </div>
             <div className="min-w-0">
@@ -436,7 +436,7 @@ export function FormAgentStudio({
             size="sm"
             onClick={() => handleSave(agent, false)}
             disabled={saving}
-            className="h-9 text-xs font-bold px-4 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-xs gap-1.5"
+            className="h-9 text-xs font-bold px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs gap-1.5"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
             Publish Changes
@@ -475,11 +475,11 @@ export function FormAgentStudio({
               className={cn(
                 'flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap',
                 active
-                  ? 'border-[#7C3AED] text-[#7C3AED] dark:text-purple-400 bg-purple-50/40 dark:bg-purple-950/20'
+                  ? 'border-teal-600 text-teal-700 dark:text-teal-300 bg-teal-50/50 dark:bg-teal-950/30'
                   : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800/40'
               )}
             >
-              <Icon className={cn('size-3.5', active ? 'text-[#7C3AED] dark:text-purple-400' : 'text-slate-400')} />
+              <Icon className={cn('size-3.5', active ? 'text-teal-600 dark:text-teal-400' : 'text-slate-400')} />
               <span>{tab.label}</span>
             </button>
           );
@@ -535,7 +535,7 @@ export function FormAgentStudio({
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
           <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 shadow-xs">
             <div className="flex items-center gap-3">
-              <div className="size-10 rounded-xl bg-purple-100 dark:bg-purple-950/50 text-purple-600 flex items-center justify-center">
+              <div className="size-10 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 flex items-center justify-center">
                 <Phone className="size-5" />
               </div>
               <div>
@@ -816,7 +816,7 @@ export function FormAgentStudio({
                         setRightDrawerMode('designer');
                         setRightDrawerOpen(true);
                       }}
-                      className="size-9 rounded-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 ring-4 ring-purple-600/20"
+                      className="size-9 rounded-full bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center shadow-lg transition-transform hover:scale-110 ring-4 ring-teal-600/20"
                       title="Open Designer Panel (Avatars & Styles)"
                     >
                       <Settings className="size-4" />
@@ -889,7 +889,7 @@ export function FormAgentStudio({
                     }}
                     className="h-7 text-xs font-semibold gap-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
                   >
-                    <Paintbrush className="size-3 text-purple-600" /> Designer
+                    <Paintbrush className="size-3 text-teal-600" /> Designer
                   </Button>
                 </div>
               </>
@@ -897,7 +897,7 @@ export function FormAgentStudio({
 
             {/* Bottom Edit Mode / Test Mode for Standalone Phone/Chat views */}
             {selectedChannel !== 'chatbot' && selectedChannel !== 'standalone' && selectedChannel !== 'presentation' && (
-              <div className="max-w-4xl mx-auto w-full pt-3 flex items-center justify-center z-20">
+              <div className="w-full pt-3 flex items-center justify-center z-20">
                 <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full p-0.5 shadow-xs text-xs">
                   <button
                     type="button"
@@ -1037,11 +1037,11 @@ export function FormAgentStudio({
 
       {studioTab === 'analytics' && (
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="w-full space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <BarChart2 className="size-5 text-[#7C3AED]" /> Assistant Performance &amp; Telemetry
+                  <BarChart2 className="size-5 text-teal-600" /> Assistant Performance &amp; Telemetry
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   Real-time analytics across all connected customer touchpoints over the past 30 days.
@@ -1115,7 +1115,7 @@ export function FormAgentStudio({
                     { name: 'Website Chat', count: 154, percent: 62, color: 'bg-indigo-600' },
                     { name: 'WhatsApp', count: 59, percent: 24, color: 'bg-emerald-600' },
                     { name: 'Instagram Direct', count: 22, percent: 9, color: 'bg-pink-600' },
-                    { name: 'Phone (AI Receptionist)', count: 13, percent: 5, color: 'bg-purple-600' },
+                    { name: 'Phone (AI Receptionist)', count: 13, percent: 5, color: 'bg-teal-600' },
                   ].map((ch) => (
                     <div key={ch.name} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">

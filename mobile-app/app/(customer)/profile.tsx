@@ -31,6 +31,9 @@ import {
   Edit3,
   Lock,
   LogOut,
+  Building2,
+  Briefcase,
+  Repeat,
 } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/lib/api';
@@ -168,6 +171,12 @@ export default function ProfileScreen() {
     onPress: () => void;
   }[] = [
     {
+      key: 'my-home',
+      label: 'My Home & Appliance Memory',
+      icon: Building2,
+      onPress: () => router.push('/(customer)/my-home'),
+    },
+    {
       key: 'bookings',
       label: 'My Bookings',
       icon: CalendarCheck,
@@ -276,6 +285,25 @@ export default function ProfileScreen() {
             </Button>
           </View>
         </Card>
+
+        {/* Fieseros Pro Provider Switcher Banner */}
+        <Pressable
+          onPress={() => router.push('/(pro)/home')}
+          className="mt-4 flex-row items-center justify-between rounded-2xl bg-emerald-800 p-4 shadow-sm active:opacity-90"
+        >
+          <View className="flex-1 flex-row items-center pr-2">
+            <View className="h-10 w-10 items-center justify-center rounded-xl bg-emerald-600">
+              <Briefcase size={20} color="#fff" />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-sm font-bold text-white">Switch to Fieseros Pro</Text>
+              <Text className="text-xs text-emerald-200">
+                Are you a contractor or technician? Manage leads & earnings
+              </Text>
+            </View>
+          </View>
+          <ChevronRight size={18} color="#A7F3D0" />
+        </Pressable>
 
         {/* Menu */}
         <Card padded={false} className="mt-4">

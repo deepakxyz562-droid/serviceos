@@ -27,6 +27,12 @@ import {
   Truck,
   DollarSign,
   CalendarClock,
+  MapPin,
+  Sparkles,
+  Camera,
+  Building2,
+  ShieldCheck,
+  ArrowRight,
 } from 'lucide-react-native';
 import { useBookings } from '@/hooks/use-bookings';
 import { useInvoices } from '@/hooks/use-invoices';
@@ -297,12 +303,118 @@ export default function CustomerDashboardScreen() {
           />
         }
       >
+        {/* Top Location Bar */}
+        <View className="mb-3 mt-1 flex-row items-center justify-between">
+          <View className="flex-row items-center">
+            <View className="h-7 w-7 items-center justify-center rounded-full bg-emerald-100">
+              <MapPin size={15} color="#059669" />
+            </View>
+            <View className="ml-2">
+              <Text className="text-[11px] font-medium text-muted-foreground">SERVICE LOCATION</Text>
+              <Text className="text-sm font-bold text-foreground">Indiranagar, Bengaluru</Text>
+            </View>
+          </View>
+          <Pressable
+            onPress={() => router.push('/(customer)/my-home')}
+            className="flex-row items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1"
+          >
+            <Building2 size={13} color="#059669" />
+            <Text className="ml-1 text-xs font-semibold text-emerald-700">My Vault</Text>
+          </Pressable>
+        </View>
+
+        {/* AI Problem Intake Search Bar */}
+        <Pressable
+          onPress={() => router.push('/(customer)/ai-assistant')}
+          className="mb-4 flex-row items-center justify-between rounded-2xl border border-emerald-200 bg-white p-3.5 shadow-sm active:bg-emerald-50/50"
+        >
+          <View className="flex-1 flex-row items-center">
+            <View className="h-9 w-9 items-center justify-center rounded-xl bg-emerald-600">
+              <Sparkles size={18} color="#fff" />
+            </View>
+            <View className="ml-3 flex-1">
+              <Text className="text-sm font-bold text-foreground">What needs fixing today?</Text>
+              <Text className="text-xs text-muted-foreground">e.g. Leaking pipe, AC not cooling, spark in MCB...</Text>
+            </View>
+          </View>
+          <View className="flex-row items-center gap-2 pl-2">
+            <View className="h-8 w-8 items-center justify-center rounded-lg bg-emerald-50">
+              <Camera size={16} color="#059669" />
+            </View>
+          </View>
+        </Pressable>
+
+        {/* 8 Category Grid */}
+        <Text className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Popular Services
+        </Text>
+        <View className="mb-4 flex-row flex-wrap justify-between">
+          {[
+            { label: 'Plumbing', category: 'Plumbing', icon: '💧', bg: '#EFF6FF' },
+            { label: 'AC & HVAC', category: 'AC & HVAC', icon: '❄️', bg: '#ECFDF5' },
+            { label: 'Electrical', category: 'Electrical', icon: '⚡', bg: '#FEF3C7' },
+            { label: 'Cleaning', category: 'Cleaning', icon: '✨', bg: '#F5F3FF' },
+            { label: 'Appliances', category: 'Appliance Repair', icon: '🔧', bg: '#FFF7ED' },
+            { label: 'Carpentry', category: 'Carpentry', icon: '🪚', bg: '#FDF2F8' },
+            { label: 'Painting', category: 'Painting', icon: '🎨', bg: '#F0FDF4' },
+            { label: 'Pest Control', category: 'Pest Control', icon: '🛡️', bg: '#FEF2F2' },
+          ].map((cat, idx) => (
+            <Pressable
+              key={idx}
+              onPress={() =>
+                router.push({
+                  pathname: '/(customer)/quotes',
+                  params: { category: cat.category },
+                })
+              }
+              style={{ width: '23%', marginBottom: 10 }}
+              className="items-center active:opacity-75"
+            >
+              <View
+                style={{ backgroundColor: cat.bg }}
+                className="h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 shadow-sm"
+              >
+                <Text style={{ fontSize: 24 }}>{cat.icon}</Text>
+              </View>
+              <Text className="mt-1.5 text-center text-[11px] font-semibold text-slate-800" numberOfLines={1}>
+                {cat.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* 3-Quote AI Match Banner */}
+        <Pressable
+          onPress={() => router.push('/(customer)/ai-assistant')}
+          className="mb-5 overflow-hidden rounded-2xl bg-emerald-800 p-4 shadow-sm active:opacity-90"
+        >
+          <View className="flex-row items-center justify-between">
+            <View className="flex-1 pr-2">
+              <View className="flex-row items-center">
+                <ShieldCheck size={16} color="#A7F3D0" />
+                <Text className="ml-1 text-xs font-bold uppercase tracking-wider text-emerald-200">
+                  Fieseros Guarantee
+                </Text>
+              </View>
+              <Text className="mt-1 text-base font-extrabold text-white">
+                Get 3 Verified Quotes in 5 Mins
+              </Text>
+              <Text className="mt-1 text-xs text-emerald-100">
+                Transparent pricing, background-checked pros, 30-day service warranty.
+              </Text>
+            </View>
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-white">
+              <ArrowRight size={20} color="#059669" />
+            </View>
+          </View>
+        </Pressable>
+
         {/* Greeting */}
-        <View className="mb-4 mt-2">
-          <Text className="text-2xl font-bold text-foreground">
-            Hello, {firstName} 👋
+        <View className="mb-3">
+          <Text className="text-xl font-bold text-foreground">
+            Activity Overview
           </Text>
-          <Text className="mt-1 text-sm text-muted-foreground">{todayStr}</Text>
+          <Text className="text-xs text-muted-foreground">{todayStr}</Text>
         </View>
 
         {hasError ? (

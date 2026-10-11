@@ -12,6 +12,7 @@ import {
   Filter,
   ArrowDown,
   ArrowUp,
+  ArrowLeft,
   Star,
   Phone,
   Mail,
@@ -436,6 +437,70 @@ export function HelpCenterView() {
     return () => clearInterval(timer);
   }, []);
 
+  // Live Support Tickets Fetching
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchSupportTickets() {
+      try {
+        const res = await fetch('/api/support/tickets?limit=50');
+        if (res.ok) {
+          const data = await res.json();
+          const apiTickets = data.tickets || [];
+          if (apiTickets.length > 0 && isMounted) {
+            const mapped: HelpdeskTicket[] = apiTickets.map((t: any) => ({
+              id: t.id,
+              ticketNumber: t.ticketNumber || `#TK-${t.id.slice(0, 5)}`,
+              subject: t.subject,
+              description: t.description || '',
+              category: (t.type || 'general') as any,
+              categoryLabel: (t.type || 'General').toUpperCase(),
+              priority: (t.priority || 'medium') as any,
+              status: (t.status || 'open') as any,
+              source: (t.source || 'web') as any,
+              sourceLabel: (t.source || 'Web').toUpperCase(),
+              customerName: t.reporterName || 'Customer',
+              customerPhone: '+1 (520) 555-0100',
+              customerEmail: t.reporterEmail || 'customer@example.com',
+              customerAddress: 'Tucson, Arizona',
+              customerTier: 'Standard Tier',
+              customerTags: ['Support'],
+              cleaningsCount: 1,
+              totalSpent: 150,
+              avgRating: 5.0,
+              createdAt: t.createdAt,
+              timeAgo: 'Recently',
+              slaRemaining: '4h left',
+              slaProgressPercent: 25,
+              firstTouchSla: 'Met',
+              channelId: t.source || 'web',
+              assigneeName: 'Deepak Chandra',
+              messages: [
+                {
+                  id: `msg_${t.id}`,
+                  sender: 'customer',
+                  senderName: t.reporterName || 'Customer',
+                  content: t.description || t.subject,
+                  timestamp: new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  channel: t.source || 'web',
+                },
+              ],
+            }));
+            setTickets((prev) => {
+              const existingIds = new Set(mapped.map((m) => m.id));
+              return [...mapped, ...prev.filter((p) => !existingIds.has(p.id))];
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load support tickets:', e);
+      }
+    }
+    fetchSupportTickets();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
 
   // Filtering tickets
@@ -604,6 +669,21 @@ export function HelpCenterView() {
     setNewPhone('');
     setNewDescription('');
     toast.success(`Ticket ${nextNumber} created successfully`);
+
+    // Persist to backend support tickets API
+    try {
+      fetch('/api/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: created.subject,
+          description: created.description,
+          priority: created.priority,
+          type: created.category,
+          source: created.source,
+        }),
+      }).catch(() => {});
+    } catch {}
   };
 
   // Action: Export CSV
@@ -633,8 +713,8 @@ export function HelpCenterView() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#FAF8FF] dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 lg:p-6 select-none">
-      <div className="max-w-[1720px] mx-auto space-y-5">
+    <div className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 lg:p-6 select-none">
+      <div className="w-full space-y-5">
         {/* ═══════════════════════════════════════════════════════════════════
             1. PAGE HEADER & PRIMARY ACTIONS (Stitch Reference Parity)
            ═══════════════════════════════════════════════════════════════════ */}
@@ -679,7 +759,7 @@ export function HelpCenterView() {
               type="button"
               size="sm"
               onClick={() => setCreateTicketOpen(true)}
-              className="h-9 px-4 text-xs font-bold rounded-xl bg-[#4648D4] hover:bg-[#383AC0] text-white shadow-sm gap-1.5"
+              className="h-9 px-4 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-sm gap-1.5"
             >
               <Plus className="size-4" />
               <span>Create Ticket</span>
@@ -695,7 +775,7 @@ export function HelpCenterView() {
           <Card className="shadow-2xs border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 rounded-2xl flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Open Backlog</span>
-              <div className="p-1.5 rounded-lg bg-indigo-50 text-[#4648D4] dark:bg-indigo-950/60 dark:text-indigo-300">
+              <div className="p-1.5 rounded-lg bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-300">
                 <Ticket className="size-4" />
               </div>
             </div>
@@ -707,7 +787,7 @@ export function HelpCenterView() {
             </div>
             <div className="mt-3 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-slate-500">11 within SLA</span>
-              <svg className="w-16 h-4 text-[#4648D4]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 20">
+              <svg className="w-16 h-4 text-teal-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 20">
                 <path d="M0 16 Q20 18 35 10 T70 4 T80 8" strokeLinecap="round" />
               </svg>
             </div>
@@ -825,7 +905,7 @@ export function HelpCenterView() {
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
                     isSelected
-                      ? 'bg-[#4648D4] text-white shadow-2xs'
+                      ? 'bg-teal-600 text-white shadow-2xs'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900'
                   )}
                 >
@@ -873,7 +953,7 @@ export function HelpCenterView() {
           {/* ─────────────────────────────────────────────────────────────
               COLUMN 1: TICKET QUEUE FEED (~3.2 Cols)
              ───────────────────────────────────────────────────────────── */}
-          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+          <div id="tickets-list-column" className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
             {/* Header with Live Counter and Actions */}
             <div className="flex items-center justify-between pb-1">
               <div className="flex items-center gap-2">
@@ -900,7 +980,7 @@ export function HelpCenterView() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter by customer, ID, issue..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#4648D4] border border-slate-200 dark:border-slate-700"
+                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-600 border border-slate-200 dark:border-slate-700"
               />
             </div>
 
@@ -919,7 +999,7 @@ export function HelpCenterView() {
                   className={cn(
                     'px-2 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-colors',
                     channelFilter === ch.id
-                      ? 'bg-indigo-50 text-[#4648D4] dark:bg-indigo-950/60 dark:text-indigo-300'
+                      ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
                   )}
                 >
@@ -942,18 +1022,18 @@ export function HelpCenterView() {
                     className={cn(
                       'p-3 rounded-xl transition-all cursor-pointer relative shadow-2xs border',
                       isSelected
-                        ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-[#4648D4] ring-1 ring-[#4648D4]/40'
+                        ? 'bg-teal-50/50 dark:bg-teal-950/30 border-teal-600 ring-1 ring-teal-600/40'
                         : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300'
                     )}
                   >
                     {/* Active Ticket Left Indicator */}
                     {isSelected && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#4648D4] rounded-l-xl" />
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-teal-600 rounded-l-xl" />
                     )}
 
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-mono text-xs font-bold text-[#4648D4]">
+                        <span className="font-mono text-xs font-bold text-teal-700 dark:text-teal-400">
                           {ticket.ticketNumber}
                         </span>
                         {isUrgent || isHigh ? (
@@ -983,14 +1063,14 @@ export function HelpCenterView() {
                     <div className="mt-2.5 flex items-center justify-between pt-1.5 border-t border-slate-100 dark:border-slate-800">
                       <div className="flex items-center gap-1.5">
                         <Avatar className="size-4">
-                          <AvatarFallback className="text-[9px] font-bold bg-purple-100 text-[#4648D4]">
+                          <AvatarFallback className="text-[9px] font-bold bg-teal-100 text-teal-700">
                             {ticket.customerName.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">
                           {ticket.customerName}
                         </span>
-                        <span className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-[9px] font-bold">
+                        <span className="px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 text-[9px] font-bold">
                           {ticket.categoryLabel}
                         </span>
                       </div>
@@ -1022,10 +1102,22 @@ export function HelpCenterView() {
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs font-bold text-[#4648D4] px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const listEl = document.getElementById('tickets-list-column');
+                      listEl?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="h-7 px-2 text-xs font-semibold text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800 hover:bg-teal-50 dark:hover:bg-teal-950/40 gap-1 rounded-lg lg:hidden"
+                  >
+                    <ArrowLeft className="size-3.5" /> Back to list
+                  </Button>
+                  <span className="font-mono text-xs font-bold text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-950/60">
                     {selectedTicket.ticketNumber}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-xs font-semibold flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 text-xs font-semibold flex items-center gap-1">
                     <RotateCcw className="size-3" /> {selectedTicket.categoryLabel}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1">
@@ -1105,7 +1197,7 @@ export function HelpCenterView() {
                   <span className="text-slate-500 font-medium">Assignee:</span>
                   <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
                     <Avatar className="size-4">
-                      <AvatarFallback className="text-[9px] font-bold bg-[#4648D4] text-white">
+                      <AvatarFallback className="text-[9px] font-bold bg-teal-600 text-white">
                         DC
                       </AvatarFallback>
                     </Avatar>
@@ -1129,7 +1221,7 @@ export function HelpCenterView() {
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="size-4 text-[#4648D4]" />
+                  <MessageSquare className="size-4 text-teal-600" />
                   <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
                     Service Conversation &amp; Audit Trail
                   </h3>
@@ -1145,7 +1237,7 @@ export function HelpCenterView() {
                 {selectedTicket.messages.map((msg) => (
                   <div key={msg.id} className="flex items-start gap-3">
                     <Avatar className="size-8 mt-0.5 shrink-0">
-                      <AvatarFallback className="text-xs font-bold bg-purple-100 text-[#4648D4]">
+                      <AvatarFallback className="text-xs font-bold bg-teal-50 text-teal-700">
                         {selectedTicket.customerName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -1167,13 +1259,13 @@ export function HelpCenterView() {
 
                 {/* AI Copilot Smart Triage Summary Card */}
                 {selectedTicket.aiTriage && (
-                  <div className="ml-11 p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800 text-xs space-y-2 shadow-2xs">
+                  <div className="ml-11 p-3.5 rounded-xl bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200/80 dark:border-teal-800 text-xs space-y-2 shadow-2xs">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 font-bold">
+                      <div className="flex items-center gap-1.5 text-teal-700 dark:text-teal-300 font-bold">
                         <Sparkles className="size-3.5" />
                         <span>AI Copilot Smart Triage Summary</span>
                       </div>
-                      <span className="font-mono text-[10px] font-bold text-purple-700 dark:text-purple-300">
+                      <span className="font-mono text-[10px] font-bold text-teal-700 dark:text-teal-300">
                         Triage Confidence {selectedTicket.aiTriage.confidence}
                       </span>
                     </div>
@@ -1196,7 +1288,7 @@ export function HelpCenterView() {
                 {selectedTicket.aiTriage && (
                   <div className="ml-11 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-2.5 shadow-2xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-[#4648D4] uppercase tracking-wider">
+                      <span className="text-[11px] font-bold text-teal-600 uppercase tracking-wider">
                         Recommended 1-Click Resolution
                       </span>
                       <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1">
@@ -1213,7 +1305,7 @@ export function HelpCenterView() {
                         type="button"
                         size="sm"
                         onClick={handleApplyResolution}
-                        className="h-8 px-3 text-xs font-bold rounded-xl bg-[#4648D4] hover:bg-[#383AC0] text-white shadow-2xs gap-1.5"
+                        className="h-8 px-3 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-2xs gap-1.5"
                       >
                         <Calendar className="size-3.5" />
                         <span>Update Schedule &amp; Send WhatsApp</span>
@@ -1255,7 +1347,7 @@ export function HelpCenterView() {
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
                         composerMode === 'whatsapp'
-                          ? 'bg-white dark:bg-slate-900 text-[#4648D4] shadow-2xs'
+                          ? 'bg-white dark:bg-slate-900 text-teal-600 shadow-2xs'
                           : 'text-slate-500 hover:text-slate-900'
                       )}
                     >
@@ -1281,11 +1373,11 @@ export function HelpCenterView() {
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5',
                         composerMode === 'sms'
-                          ? 'bg-white dark:bg-slate-900 text-purple-600 shadow-2xs'
+                          ? 'bg-white dark:bg-slate-900 text-teal-600 shadow-2xs'
                           : 'text-slate-500 hover:text-slate-900'
                       )}
                     >
-                      <MessageSquare className="size-3 text-purple-500" />
+                      <MessageSquare className="size-3 text-teal-500" />
                       <span>Send SMS</span>
                     </button>
                   </div>
@@ -1328,7 +1420,7 @@ export function HelpCenterView() {
                         ? 'Write private note for team (not sent to customer)...'
                         : 'Type your message or press "/" for canned snippets...'
                     }
-                    className="w-full p-2.5 rounded-lg bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-[#4648D4] border border-slate-200 dark:border-slate-700 resize-none shadow-2xs"
+                    className="w-full p-2.5 rounded-lg bg-white dark:bg-slate-900 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-600 border border-slate-200 dark:border-slate-700 resize-none shadow-2xs"
                   />
                 </div>
 
@@ -1348,7 +1440,7 @@ export function HelpCenterView() {
                           toast.success('AI Tone Polish applied');
                         }
                       }}
-                      className="p-1 hover:text-purple-600 text-purple-500"
+                      className="p-1 hover:text-teal-600 text-teal-500"
                       title="AI Tone Polish"
                     >
                       <Sparkles className="size-3.5" />
@@ -1373,7 +1465,7 @@ export function HelpCenterView() {
                       size="sm"
                       onClick={handleSendMessage}
                       disabled={!messageInput.trim()}
-                      className="h-8 px-3.5 text-xs font-bold rounded-xl bg-[#4648D4] hover:bg-[#383AC0] text-white shadow-2xs gap-1.5"
+                      className="h-8 px-3.5 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-2xs gap-1.5"
                     >
                       <span>
                         {composerMode === 'internal'
@@ -1403,7 +1495,7 @@ export function HelpCenterView() {
                 <button
                   type="button"
                   onClick={() => toast.info(`Viewing ${selectedTicket.customerName} in CRM profile`)}
-                  className="text-xs font-semibold text-[#4648D4] hover:underline flex items-center gap-0.5"
+                  className="text-xs font-semibold text-teal-600 hover:underline flex items-center gap-0.5"
                 >
                   <span>View in CRM</span>
                   <ExternalLink className="size-3" />
@@ -1412,7 +1504,7 @@ export function HelpCenterView() {
 
               <div className="flex items-center gap-3">
                 <Avatar className="size-12 rounded-xl">
-                  <AvatarFallback className="text-sm font-bold bg-purple-100 text-[#4648D4] rounded-xl">
+                  <AvatarFallback className="text-sm font-bold bg-teal-50 text-teal-700 rounded-xl">
                     {selectedTicket.customerName.slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -1427,7 +1519,7 @@ export function HelpCenterView() {
                     Residential Client • Tucson, AZ
                   </p>
                   <div className="flex items-center gap-1 mt-1">
-                    <span className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-[10px] font-bold">
+                    <span className="px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 text-[10px] font-bold">
                       {selectedTicket.customerTier}
                     </span>
                     <span className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
@@ -1449,7 +1541,7 @@ export function HelpCenterView() {
                 </div>
                 <div className="flex items-center justify-between p-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                   <span className="text-slate-500 flex items-center gap-1.5">
-                    <Mail className="size-3 text-[#4648D4]" /> Email
+                    <Mail className="size-3 text-teal-600" /> Email
                   </span>
                   <span className="font-mono text-slate-800 dark:text-slate-200 truncate max-w-[150px]">
                     {selectedTicket.customerEmail}
@@ -1474,7 +1566,7 @@ export function HelpCenterView() {
                   <span className="text-[10px] text-slate-500">Cleanings</span>
                 </div>
                 <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
-                  <span className="block text-sm font-bold text-[#4648D4]">
+                  <span className="block text-sm font-bold text-teal-600">
                     ${selectedTicket.totalSpent}
                   </span>
                   <span className="text-[10px] text-slate-500">LTV Spent</span>
@@ -1493,12 +1585,12 @@ export function HelpCenterView() {
               <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-slate-100">
-                    <FileText className="size-3.5 text-[#4648D4]" />
+                    <FileText className="size-3.5 text-teal-600" />
                     <span className="uppercase tracking-wider text-[11px] text-slate-500">
                       Associated Order
                     </span>
                   </div>
-                  <span className="font-mono text-xs font-bold text-[#4648D4]">
+                  <span className="font-mono text-xs font-bold text-teal-600">
                     {selectedTicket.associatedOrder.id}
                   </span>
                 </div>
@@ -1542,8 +1634,8 @@ export function HelpCenterView() {
                 </div>
 
                 {/* Property / Entry Notes */}
-                <div className="p-2.5 rounded-xl bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-800 flex items-start gap-2 text-xs">
-                  <Info className="size-3.5 text-purple-600 shrink-0 mt-0.5" />
+                <div className="p-2.5 rounded-xl bg-teal-50/50 dark:bg-teal-950/30 border border-teal-200/60 dark:border-teal-800 flex items-start gap-2 text-xs">
+                  <Info className="size-3.5 text-teal-600 shrink-0 mt-0.5" />
                   <p className="text-slate-700 dark:text-slate-300 leading-snug">
                     <strong>Property Notes:</strong> {selectedTicket.associatedOrder.propertyNotes}
                   </p>
@@ -1558,7 +1650,7 @@ export function HelpCenterView() {
                     onClick={() => toast.success('Dispatch Calendar opened for rescheduling')}
                     className="w-full h-8 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 gap-1.5 shadow-2xs"
                   >
-                    <Calendar className="size-3.5 text-[#4648D4]" />
+                    <Calendar className="size-3.5 text-teal-600" />
                     <span>Reschedule in Dispatch Calendar</span>
                   </Button>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1579,7 +1671,7 @@ export function HelpCenterView() {
                       onClick={() => toast.success('Re-clean service work order dispatched')}
                       className="h-8 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 gap-1"
                     >
-                      <RotateCcw className="size-3 text-purple-600" />
+                      <RotateCcw className="size-3 text-teal-600" />
                       <span>Re-clean Ticket</span>
                     </Button>
                   </div>
@@ -1611,15 +1703,15 @@ export function HelpCenterView() {
 
                 {/* Step 2: Full Resolution SLA */}
                 <div className="flex items-start gap-2.5">
-                  <Clock className="size-4 text-[#4648D4] shrink-0 mt-0.5" />
+                  <Clock className="size-4 text-teal-600 shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-900 dark:text-slate-100">Full Resolution SLA</span>
-                      <span className="font-mono font-bold text-[#4648D4]">1h 42m Left</span>
+                      <span className="font-mono font-bold text-teal-600">1h 42m Left</span>
                     </div>
                     <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden mt-1.5">
                       <div
-                        className="bg-[#4648D4] h-full rounded-full transition-all"
+                        className="bg-teal-600 h-full rounded-full transition-all"
                         style={{ width: `${selectedTicket.slaProgressPercent}%` }}
                       />
                     </div>
@@ -1639,7 +1731,7 @@ export function HelpCenterView() {
         <DialogContent className="sm:max-w-lg rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Ticket className="size-5 text-[#4648D4]" />
+              <Ticket className="size-5 text-teal-600" />
               Create Support Ticket
             </DialogTitle>
             <DialogDescription className="text-xs">
@@ -1751,7 +1843,7 @@ export function HelpCenterView() {
               type="button"
               size="sm"
               onClick={handleCreateNewTicket}
-              className="h-8 text-xs font-bold rounded-xl bg-[#4648D4] hover:bg-[#383AC0] text-white"
+              className="h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white"
             >
               Create Ticket
             </Button>

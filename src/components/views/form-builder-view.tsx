@@ -36,6 +36,7 @@ import {
   Copy,
   Filter,
   ArrowRight,
+  ArrowLeft,
   Clock,
   Smartphone,
   Monitor,
@@ -300,6 +301,7 @@ export interface FormBuilderViewProps {
 }
 
 export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewProps = {}) {
+  const setCurrentView = useAppStore((state) => state.setCurrentView);
   // Navigation & View Sub-Tabs
   const [activeTab, setActiveTab] = useState<
     'overview' | 'forms' | 'funnels' | 'templates' | 'submissions' | 'analytics' | 'settings'
@@ -608,19 +610,19 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
   if (isBuilderOpen) {
     return (
-      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 w-full">
         {/* ─── Builder Top Header Bar ────────────────────────────────────────── */}
         <header className="h-16 px-4 md:px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4 sticky top-0 z-30 shadow-xs">
           {/* Breadcrumbs & Editable Title */}
           <div className="flex items-center gap-3 min-w-0">
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => setIsBuilderOpen(false)}
-              className="h-8 px-2 text-xs font-semibold text-slate-500 hover:text-slate-900 gap-1"
+              className="h-9 px-3 text-xs font-semibold border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 shadow-2xs shrink-0"
             >
-              <ChevronRight className="size-4 rotate-180" />
-              <span>Back</span>
+              <ArrowLeft className="size-4 text-teal-600 dark:text-teal-400" />
+              <span>Back to Forms</span>
             </Button>
 
             <div className="h-5 w-px bg-slate-200 dark:bg-slate-800" />
@@ -672,7 +674,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'px-3.5 py-1.5 rounded-lg transition-all',
                   builderModeTab === tab.id
-                    ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs font-bold'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs font-bold'
                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                 )}
               >
@@ -708,7 +710,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
               size="sm"
               disabled={saving}
               onClick={() => handleSave()}
-              className="h-8 text-xs font-bold bg-[#4648D4] hover:bg-[#383AC0] text-white shadow-sm gap-1.5"
+              className="h-8 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-sm gap-1.5"
             >
               {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
               <span>Publish</span>
@@ -733,7 +735,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'py-1.5 rounded-lg transition-all text-center',
                   paletteTab === 'form_elements'
-                    ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500'
                 )}
               >
@@ -744,7 +746,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'py-1.5 rounded-lg transition-all text-center',
                   paletteTab === 'page_elements'
-                    ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500'
                 )}
               >
@@ -781,7 +783,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                     onClick={() => toast.info(`Added ${item.label} to active step`)}
                     className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-indigo-300 transition-all text-left group"
                   >
-                    <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-[#4648D4] dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                       <item.icon className="size-3.5" />
                     </div>
                     <span className="font-semibold text-slate-700 dark:text-slate-300 truncate text-[11px]">
@@ -806,7 +808,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                     onClick={() => toast.info(`Added ${item.label} block`)}
                     className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 transition-all text-center"
                   >
-                    <item.icon className="size-4 text-[#4648D4]" />
+                    <item.icon className="size-4 text-teal-600" />
                     <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
                       {item.label}
                     </span>
@@ -825,7 +827,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
                   builderDevice === 'desktop'
-                    ? 'bg-[#4648D4] text-white shadow-xs'
+                    ? 'bg-teal-600 text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-800'
                 )}
               >
@@ -837,7 +839,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
                   builderDevice === 'mobile'
-                    ? 'bg-[#4648D4] text-white shadow-xs'
+                    ? 'bg-teal-600 text-white shadow-xs'
                     : 'text-slate-500 hover:text-slate-800'
                 )}
               >
@@ -864,7 +866,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         className={cn(
                           'w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs transition-colors',
                           builderStep === st.num
-                            ? 'bg-[#4648D4] text-white shadow-xs'
+                            ? 'bg-teal-600 text-white shadow-xs'
                             : builderStep > st.num
                             ? 'bg-emerald-500 text-white'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
@@ -876,7 +878,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         className={cn(
                           'font-bold text-xs',
                           builderStep === st.num
-                            ? 'text-[#4648D4] dark:text-indigo-400'
+                            ? 'text-teal-700 dark:text-teal-400'
                             : 'text-slate-600 dark:text-slate-400'
                         )}
                       >
@@ -930,7 +932,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 <div className="p-6 md:p-8 flex flex-col justify-between space-y-5">
                   <div className="space-y-4">
                     <div className="space-y-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#4648D4] dark:text-indigo-400">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
                         Step {builderStep} of 4
                       </span>
                       <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100">
@@ -982,7 +984,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                             className={cn(
                               'p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-3',
                               isSelected
-                                ? 'border-[#4648D4] bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-[#4648D4]'
+                                ? 'border-teal-600 bg-teal-50/50 dark:bg-purple-950/20 ring-1 ring-teal-600'
                                 : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900/60'
                             )}
                           >
@@ -990,7 +992,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                               className={cn(
                                 'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
                                 isSelected
-                                  ? 'bg-[#4648D4] text-white shadow-2xs'
+                                  ? 'bg-teal-600 text-white shadow-2xs'
                                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                               )}
                             >
@@ -1020,7 +1022,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         toast.success('Funnel complete! Test response logged.');
                       }
                     }}
-                    className="w-full h-9 text-xs font-bold bg-[#4648D4] hover:bg-[#383AC0] text-white gap-2 shadow-sm rounded-xl"
+                    className="w-full h-9 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white gap-2 shadow-sm rounded-xl"
                   >
                     <span>Next Step</span>
                     <ArrowRight className="size-3.5" />
@@ -1045,7 +1047,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'py-1.5 rounded-lg transition-all text-center',
                   inspectorTab === 'content'
-                    ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500'
                 )}
               >
@@ -1056,7 +1058,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'py-1.5 rounded-lg transition-all text-center',
                   inspectorTab === 'style'
-                    ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500'
                 )}
               >
@@ -1067,7 +1069,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 className={cn(
                   'py-1.5 rounded-lg transition-all text-center',
                   inspectorTab === 'advanced'
-                    ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs'
+                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                     : 'text-slate-500'
                 )}
               >
@@ -1130,7 +1132,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                   type="checkbox"
                   checked={optionDefault}
                   onChange={(e) => setOptionDefault(e.target.checked)}
-                  className="rounded text-[#4648D4] size-4"
+                  className="rounded text-teal-600 size-4"
                 />
               </div>
             </div>
@@ -1147,7 +1149,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                   type="checkbox"
                   checked={optionRequired}
                   onChange={(e) => setOptionRequired(e.target.checked)}
-                  className="rounded text-[#4648D4] size-4"
+                  className="rounded text-teal-600 size-4"
                 />
               </div>
 
@@ -1184,19 +1186,37 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full max-w-[1600px] mx-auto text-slate-900 dark:text-slate-100">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full text-slate-900 dark:text-slate-100">
       {/* ─── 1. Header Section ─────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#4648D4] to-[#712AE2] flex items-center justify-center text-white shadow-md shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (activeTab !== 'overview') {
+                setActiveTab('overview');
+              } else {
+                setCurrentView('dashboard');
+              }
+            }}
+            className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 -ml-1 gap-1 self-center"
+            title={activeTab !== 'overview' ? 'Back to Forms Overview' : 'Back to Dashboard'}
+          >
+            <ArrowLeft className="size-4" />
+            <span className="hidden sm:inline text-xs font-semibold">
+              {activeTab !== 'overview' ? 'Back to Overview' : 'Back'}
+            </span>
+          </Button>
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#00A884] to-[#007F73] flex items-center justify-center text-white shadow-md shrink-0">
             <FileInput className="size-6" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">Forms & Funnels</h1>
+              <h1 className="text-2xl font-bold tracking-tight">Forms</h1>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Create high-converting forms and funnels to capture leads, book appointments and grow your business.
+              Create high-converting forms to capture leads, book appointments and grow your business.
             </p>
           </div>
         </div>
@@ -1205,11 +1225,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         <div className="flex items-center flex-wrap gap-2">
           <Button
             size="sm"
-            onClick={() => handleOpenCreate('funnel')}
-            className="h-9 gap-1.5 bg-[#4648D4] hover:bg-[#383AC0] text-white font-semibold text-xs shadow-sm rounded-lg"
+            onClick={() => handleOpenCreate('form')}
+            className="h-9 gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm rounded-lg"
           >
             <Plus className="size-4" />
-            <span>Create Form or Funnel</span>
+            <span>Create Form</span>
           </Button>
         </div>
       </div>
@@ -1231,7 +1251,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             className={cn(
               'px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap',
               activeTab === tab.id
-                ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800 font-bold'
+                ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-slate-200 dark:border-slate-800 font-bold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
             )}
           >
@@ -1267,7 +1287,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
             {/* Card 1: Total Forms */}
             <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-[#712AE2] flex items-center justify-center font-bold shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 flex items-center justify-center font-bold shrink-0">
                   <FileInput className="size-5" />
                 </div>
                 <div>
@@ -1341,7 +1361,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                   </h2>
                   <button
                     onClick={() => setActiveTab('templates')}
-                    className="text-xs font-semibold text-[#4648D4] dark:text-indigo-400 hover:underline flex items-center gap-1"
+                    className="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline flex items-center gap-1"
                   >
                     <span>View All Templates</span>
                     <ArrowRight className="size-3" />
@@ -1353,7 +1373,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                     <div
                       key={tpl.id}
                       onClick={() => handlePickTemplate(tpl)}
-                      className="group cursor-pointer p-2 rounded-xl border border-slate-200/70 dark:border-slate-800 hover:border-[#4648D4] dark:hover:border-indigo-500 hover:shadow-xs transition-all flex flex-col justify-between"
+                      className="group cursor-pointer p-2 rounded-xl border border-slate-200/70 dark:border-slate-800 hover:border-teal-600 dark:hover:border-indigo-500 hover:shadow-xs transition-all flex flex-col justify-between"
                     >
                       <div className="h-20 w-full rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 relative">
                         <img
@@ -1369,7 +1389,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         <p className="text-[10px] text-slate-400 truncate mt-0.5">
                           {tpl.category}
                         </p>
-                        <span className="text-[10px] font-semibold text-[#4648D4] dark:text-indigo-400 mt-1 block">
+                        <span className="text-[10px] font-semibold text-teal-700 dark:text-teal-400 mt-1 block">
                           {tpl.steps}
                         </span>
                       </div>
@@ -1382,7 +1402,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
               <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Recent Forms & Funnels
+                    Recent Forms
                   </h2>
 
                   {/* Filter Pills */}
@@ -1400,7 +1420,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         className={cn(
                           'px-2.5 py-1 rounded-md text-xs font-semibold transition-colors',
                           filterType === f.id
-                            ? 'bg-[#4648D4] text-white shadow-2xs'
+                            ? 'bg-teal-600 text-white shadow-2xs'
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
                         )}
                       >
@@ -1413,13 +1433,13 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                     <Button
                       size="sm"
                       onClick={() => handleOpenCreate('funnel')}
-                      className="h-7 text-xs font-bold bg-[#4648D4] text-white"
+                      className="h-7 text-xs font-bold bg-teal-600 text-white"
                     >
                       <Plus className="size-3 mr-1" /> Create New
                     </Button>
                     <button
                       onClick={() => setActiveTab('forms')}
-                      className="text-xs font-semibold text-[#4648D4] dark:text-indigo-400 hover:underline flex items-center gap-0.5"
+                      className="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline flex items-center gap-0.5"
                     >
                       <span>View All</span>
                       <ArrowRight className="size-3" />
@@ -1449,7 +1469,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         >
                           <td className="py-2.5 px-2">
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-[#4648D4] flex items-center justify-center font-bold text-xs shrink-0">
+                              <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center font-bold text-xs shrink-0">
                                 {item.type === 'Funnel' ? (
                                   <Layers className="size-3.5" />
                                 ) : (
@@ -1467,7 +1487,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                               className={cn(
                                 'text-[10px] font-semibold',
                                 item.type === 'Funnel'
-                                  ? 'bg-purple-100 text-[#712AE2] dark:bg-purple-950 dark:text-purple-300'
+                                  ? 'bg-purple-100 text-teal-700 dark:bg-purple-950 dark:text-purple-300'
                                   : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
                               )}
                             >
@@ -1557,7 +1577,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                         cy="50"
                         r="40"
                         fill="transparent"
-                        stroke="#4648D4"
+                        stroke="#00A884"
                         strokeWidth="14"
                         strokeDasharray="105.5 251.3"
                         strokeDashoffset="0"
@@ -1622,7 +1642,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 {/* Legend */}
                 <div className="space-y-1.5 text-xs pt-1">
                   {[
-                    { label: 'Website', pct: '42%', color: 'bg-[#4648D4]' },
+                    { label: 'Website', pct: '42%', color: 'bg-teal-600' },
                     { label: 'Google Business', pct: '24%', color: 'bg-sky-500' },
                     { label: 'Social Media', pct: '18%', color: 'bg-emerald-500' },
                     { label: 'WhatsApp', pct: '10%', color: 'bg-amber-500' },
@@ -1654,7 +1674,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                     onClick={() => handleOpenCreate('form')}
                     className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex flex-col items-center text-center gap-1.5"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-[#4648D4] flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-teal-950 text-teal-600 flex items-center justify-center">
                       <Pencil className="size-4" />
                     </div>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -1666,7 +1686,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                     onClick={() => handleOpenCreate('funnel')}
                     className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex flex-col items-center text-center gap-1.5"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-950 text-[#712AE2] flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-lg bg-teal-50 dark:bg-purple-950 text-teal-700 flex items-center justify-center">
                       <Layers className="size-4" />
                     </div>
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
@@ -1708,7 +1728,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                   </h3>
                   <button
                     onClick={() => setActiveTab('submissions')}
-                    className="text-xs font-semibold text-[#4648D4] dark:text-indigo-400 hover:underline flex items-center gap-0.5"
+                    className="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline flex items-center gap-0.5"
                   >
                     <span>View All</span>
                     <ArrowRight className="size-3" />

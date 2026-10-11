@@ -6,6 +6,8 @@ import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { BGOS_NAVIGATION } from '../../../shared/bgos-navigation';
 
+import { BgosRibbonIcon } from './brand';
+
 export function BgosHeaderTools() {
   const { auth, setCurrentView, aiDrawerOpen, setAiDrawerOpen } = useAppStore();
   const [query, setQuery] = useState('');
@@ -40,7 +42,7 @@ export function BgosHeaderTools() {
         aria-label="Open business profile"
       >
         <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-400">
-          <Building2 size={15} />
+          <BgosRibbonIcon size={20} />
         </div>
         <div className="min-w-0 pr-1">
           <strong className="block truncate text-xs font-semibold leading-tight text-foreground">
@@ -117,10 +119,10 @@ export function BgosHeaderTools() {
         variant="outline"
         size="sm"
         onClick={() => setAiDrawerOpen(!aiDrawerOpen)}
-        className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-lg border-purple-200 bg-purple-50 px-2.5 text-xs font-semibold text-purple-700 shadow-2xs hover:bg-purple-100 hover:text-purple-800 dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-300 dark:hover:bg-purple-900/60"
+        className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-lg border-teal-200 bg-teal-50 px-2.5 text-xs font-semibold text-teal-700 shadow-2xs hover:bg-teal-100 hover:text-teal-800 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-900/60"
         title="Open AI Copilot"
       >
-        <Sparkles size={13} className="text-purple-600 dark:text-purple-400" />
+        <Sparkles size={13} className="text-teal-600 dark:text-teal-400" />
         <span>AI Copilot</span>
       </Button>
     </div>

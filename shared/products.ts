@@ -1,20 +1,52 @@
 import { productForHostname, type ProductApp } from './product-context';
 
-export const PRODUCTS = ['crm', 'bos', 'chatbotly', 'bgos', 'quoteflow', 'marketplace'] as const;
+export const PRODUCTS = [
+  'marketing',
+  'customer',
+  'pro',
+  'business',
+  'admin',
+  'crm',
+  'bos',
+  'chatbotly',
+  'bgos',
+  'quoteflow',
+  'marketplace',
+] as const;
+
 export const PRODUCT_LABELS: Record<ProductApp, string> = {
-  crm: 'Fieseros CRM', bos: 'BOS', chatbotly: 'Chatbotly', bgos: 'BGOS', quoteflow: 'QuoteFlow', marketplace: 'Marketplace',
+  marketing: 'Fieseros',
+  customer: 'Fieseros Customer',
+  pro: 'Fieseros Pro',
+  business: 'Fieseros Business OS',
+  admin: 'Fieseros Admin',
+  crm: 'Fieseros Business OS',
+  bos: 'BOS',
+  chatbotly: 'Chatbotly',
+  bgos: 'BGOS',
+  quoteflow: 'QuoteFlow',
+  marketplace: 'Marketplace',
 };
+
 export function isProduct(value: unknown): value is ProductApp {
   return typeof value === 'string' && (PRODUCTS as readonly string[]).includes(value);
 }
+
 export function normalizeProduct(value: string): ProductApp {
   if (['forms', 'gptform', 'chatboly'].includes(value)) return 'bgos';
   if (value === 'chatbotly') return 'bgos';
+  if (value === 'business') return 'crm';
   return isProduct(value) ? value : 'crm';
 }
+
 export function productUrl(product: ProductApp): string {
-  return product === 'crm' ? 'https://fieseros.com/app' : product === 'marketplace'
-    ? 'https://fieseros.com/marketplace/dashboard' : `https://${product}.fieseros.com`;
+  if (product === 'marketing') return 'https://fieseros.com';
+  if (product === 'customer') return 'https://app.fieseros.com';
+  if (product === 'pro') return 'https://pro.fieseros.com';
+  if (product === 'business' || product === 'crm') return 'https://business.fieseros.com';
+  if (product === 'admin') return 'https://admin.fieseros.com';
+  if (product === 'marketplace') return 'https://fieseros.com/marketplace/dashboard';
+  return `https://${product}.fieseros.com`;
 }
 /** The selector is untrusted input; membership is always checked on the server. */
 export function requestedProduct(headers: { get(name: string): string | null }): ProductApp | null {

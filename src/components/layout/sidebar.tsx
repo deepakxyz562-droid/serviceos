@@ -7,6 +7,7 @@ import { useBelowLg } from '@/hooks/use-mobile';
 import { prefetchView } from '@/lib/view-prefetch';
 import type { ViewType } from '@/types/workflow';
 import { BrandMark } from '@/components/brand/brand-mark';
+import { BgosRibbonIcon } from '@/components/bgos/brand';
 import {
   LayoutDashboard,
   Target,
@@ -911,7 +912,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           isExpandedMode ? 'justify-start gap-3' : 'justify-center'
         )}
       >
-        <BrandMark size={32} className="shadow-sm" />
+        {isChatbotly ? (
+          <BgosRibbonIcon size={32} className="shadow-xs" />
+        ) : (
+          <BrandMark size={32} className="shadow-sm" />
+        )}
         {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground truncate max-w-[150px]">
@@ -931,7 +936,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
               isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' :
               isQuoteflow ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30' :
               isMarketplace ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30' :
-              isChatbotly ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30' :
+              isChatbotly ? 'bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/30' :
               isBos ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30' :
               'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
               {isSuperAdmin ? 'Admin' : isQuoteflow ? 'QuoteFlow' : isMarketplace ? 'Marketplace' : isChatbotly ? 'BGOS' : isBos ? 'BOS' : planBadge.label}

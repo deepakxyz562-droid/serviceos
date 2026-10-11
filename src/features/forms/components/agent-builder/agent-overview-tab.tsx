@@ -72,12 +72,12 @@ interface ChatMessage {
 }
 
 const THEME_SWATCHES = [
-  { name: 'Purple', hex: '#7C3AED' },
-  { name: 'Blue', hex: '#2563EB' },
+  { name: 'BGOS Teal', hex: '#007F73' },
   { name: 'Emerald', hex: '#059669' },
+  { name: 'Cyan', hex: '#06B6D4' },
+  { name: 'Blue', hex: '#2563EB' },
+  { name: 'Purple', hex: '#7C3AED' },
   { name: 'Orange', hex: '#EA580C' },
-  { name: 'Red', hex: '#DC2626' },
-  { name: 'Magenta', hex: '#DB2777' },
 ];
 
 export function AgentOverviewTab({
@@ -112,7 +112,7 @@ export function AgentOverviewTab({
     placeholderMessage: 'Type your message...',
     aiGeneratedGreeting: true,
     showButtons: true,
-    primaryColor: '#7C3AED',
+    primaryColor: '#007F73',
     greetingBubble: '👋 Need help? Chat with us!',
     showAgentName: true,
     showOnlineStatus: true,
@@ -120,7 +120,7 @@ export function AgentOverviewTab({
     launcherIcon: 'chat',
   };
 
-  const primaryColor = chatbotConfig.primaryColor || '#7C3AED';
+  const primaryColor = chatbotConfig.primaryColor || '#007F73';
   const layoutMode = chatbotConfig.layoutMode || 'floating';
   const position = chatbotConfig.position || 'right';
   const showAgentName = chatbotConfig.showAgentName !== false;
@@ -291,7 +291,7 @@ export function AgentOverviewTab({
             {/* Profile Row */}
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 mb-4">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="size-10 rounded-full bg-gradient-to-tr from-[#7C3AED] to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0 overflow-hidden">
+                <div className="size-10 rounded-full bg-gradient-to-tr from-[#00A884] to-[#007F73] text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0 overflow-hidden">
                   {agent.avatarUrl ? (
                     <img src={agent.avatarUrl} alt="Avatar" className="size-full object-cover" />
                   ) : (
@@ -302,7 +302,7 @@ export function AgentOverviewTab({
                   <button
                     type="button"
                     onClick={() => onNavigateTab('setup')}
-                    className="text-xs font-bold text-slate-900 dark:text-slate-100 hover:text-[#7C3AED] flex items-center gap-1 group text-left truncate"
+                    className="text-xs font-bold text-slate-900 dark:text-slate-100 hover:text-teal-600 flex items-center gap-1 group text-left truncate"
                   >
                     <span className="truncate">{agent.name || 'Business AI Assistant'}</span>
                     <ChevronRight className="size-3 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
@@ -345,7 +345,7 @@ export function AgentOverviewTab({
               <button
                 type="button"
                 onClick={() => onNavigateTab('channels')}
-                className="text-xs font-semibold text-[#7C3AED] hover:text-purple-700 dark:text-purple-400 hover:underline flex items-center gap-0.5"
+                className="text-xs font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 hover:underline flex items-center gap-0.5"
               >
                 Manage all channels <ChevronRight className="size-3" />
               </button>
@@ -357,7 +357,7 @@ export function AgentOverviewTab({
                   id: 'website',
                   name: 'Website Chat',
                   icon: MessageSquare,
-                  colorClass: 'bg-purple-100 text-[#7C3AED] dark:bg-purple-950/60 dark:text-purple-300',
+                  colorClass: 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
                   status: chatbotConfig.enabled !== false ? 'Online' : 'Disabled',
                   tabTarget: 'appearance',
                 },
@@ -489,7 +489,7 @@ export function AgentOverviewTab({
               variant="outline"
               size="sm"
               onClick={() => onNavigateTab('channels')}
-              className="w-full h-9 text-xs font-bold rounded-xl border-[#7C3AED]/40 text-[#7C3AED] hover:bg-purple-50 dark:hover:bg-purple-950/30 gap-1.5"
+              className="w-full h-9 text-xs font-bold rounded-xl border-teal-600/40 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/30 gap-1.5"
             >
               <Plus className="size-3.5" /> Connect New Channel
             </Button>
@@ -526,7 +526,7 @@ export function AgentOverviewTab({
                     className={cn(
                       'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0',
                       active
-                        ? 'bg-purple-50 dark:bg-purple-950/40 text-[#7C3AED] dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-2xs'
+                        ? 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-2xs'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent'
                     )}
                   >
@@ -546,7 +546,7 @@ export function AgentOverviewTab({
                   className={cn(
                     'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all',
                     deviceMode === 'desktop'
-                      ? 'bg-white dark:bg-slate-900 text-[#7C3AED] shadow-2xs'
+                      ? 'bg-white dark:bg-slate-900 text-teal-600 shadow-2xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                   )}
                 >
@@ -559,7 +559,7 @@ export function AgentOverviewTab({
                   className={cn(
                     'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all',
                     deviceMode === 'mobile'
-                      ? 'bg-white dark:bg-slate-900 text-[#7C3AED] shadow-2xs'
+                      ? 'bg-white dark:bg-slate-900 text-teal-600 shadow-2xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
                   )}
                 >
@@ -798,7 +798,7 @@ export function AgentOverviewTab({
 
                   {/* Input Field */}
                   <div className="p-2.5 bg-white border-t border-slate-100 flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:ring-1 focus-within:ring-[#7C3AED]">
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 focus-within:ring-1 focus-within:ring-teal-600">
                       <button type="button" className="text-slate-400 hover:text-slate-600">
                         <Paperclip className="size-3.5" />
                       </button>
@@ -877,7 +877,7 @@ export function AgentOverviewTab({
                 title: 'Ask a Question',
                 subtitle: 'Answer common queries',
                 icon: HelpCircle,
-                colorClass: 'bg-purple-50 text-[#7C3AED] dark:bg-purple-950/50 dark:text-purple-300',
+                colorClass: 'bg-teal-50 text-teal-600 dark:bg-teal-950/50 dark:text-teal-300',
                 query: 'Ask a Question',
               },
               {
@@ -897,13 +897,13 @@ export function AgentOverviewTab({
                     handleChipClick(action.query);
                     setIsWidgetMinimized(false);
                   }}
-                  className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-purple-300 hover:shadow-xs transition-all cursor-pointer group flex items-start gap-2.5"
+                  className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-teal-300 hover:shadow-xs transition-all cursor-pointer group flex items-start gap-2.5"
                 >
                   <div className={cn('size-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs', action.colorClass)}>
                     <ActionIcon className="size-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors truncate">
                       {action.title}
                     </div>
                     <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-1">
@@ -924,7 +924,7 @@ export function AgentOverviewTab({
             {/* Header with Title and Device Icons */}
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#7C3AED] dark:text-purple-400 block mb-0.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400 block mb-0.5">
                   Assistant Configuration
                 </span>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Chatbot Settings</h3>
@@ -938,7 +938,7 @@ export function AgentOverviewTab({
                   onClick={() => setDeviceMode('mobile')}
                   className={cn(
                     'size-7 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors',
-                    deviceMode === 'mobile' ? 'text-[#7C3AED] bg-purple-50 dark:bg-purple-950/40' : ''
+                    deviceMode === 'mobile' ? 'text-teal-600 bg-teal-50 dark:bg-teal-950/40' : ''
                   )}
                   title="Mobile View"
                 >
@@ -949,7 +949,7 @@ export function AgentOverviewTab({
                   onClick={() => setDeviceMode('desktop')}
                   className={cn(
                     'size-7 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors',
-                    deviceMode === 'desktop' ? 'text-[#7C3AED] bg-purple-50 dark:bg-purple-950/40' : ''
+                    deviceMode === 'desktop' ? 'text-teal-600 bg-teal-50 dark:bg-teal-950/40' : ''
                   )}
                   title="Tablet/Desktop View"
                 >
@@ -976,7 +976,7 @@ export function AgentOverviewTab({
                     className={cn(
                       'text-xs font-semibold px-2 py-1 rounded-md transition-all whitespace-nowrap',
                       active
-                        ? 'text-[#7C3AED] bg-purple-50 dark:bg-purple-950/50 dark:text-purple-300'
+                        ? 'text-teal-600 bg-teal-50 dark:bg-teal-950/50 dark:text-teal-300'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
                     )}
                   >
@@ -1007,17 +1007,17 @@ export function AgentOverviewTab({
                       className={cn(
                         'relative p-3 rounded-xl border text-center cursor-pointer transition-all flex flex-col items-center justify-between h-28',
                         layoutMode === 'floating'
-                          ? 'border-[#7C3AED] bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-[#7C3AED]'
+                          ? 'border-teal-600 bg-teal-50/50 dark:bg-teal-950/20 ring-1 ring-teal-600'
                           : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
                       )}
                     >
                       {layoutMode === 'floating' && (
-                        <div className="absolute top-1.5 right-1.5 size-4 rounded-full bg-[#7C3AED] text-white flex items-center justify-center">
+                        <div className="absolute top-1.5 right-1.5 size-4 rounded-full bg-teal-600 text-white flex items-center justify-center">
                           <Check className="size-2.5" />
                         </div>
                       )}
                       <div className="w-12 h-10 border border-slate-300 dark:border-slate-700 rounded-lg p-1 relative flex items-end justify-end bg-slate-50 dark:bg-slate-800 mt-1">
-                        <div className="size-3.5 rounded-sm bg-[#7C3AED]" />
+                        <div className="size-3.5 rounded-sm bg-teal-600" />
                       </div>
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
                         Floating Widget
@@ -1030,17 +1030,17 @@ export function AgentOverviewTab({
                       className={cn(
                         'relative p-3 rounded-xl border text-center cursor-pointer transition-all flex flex-col items-center justify-between h-28',
                         layoutMode === 'sidebar'
-                          ? 'border-[#7C3AED] bg-purple-50/50 dark:bg-purple-950/20 ring-1 ring-[#7C3AED]'
+                          ? 'border-teal-600 bg-teal-50/50 dark:bg-teal-950/20 ring-1 ring-teal-600'
                           : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
                       )}
                     >
                       {layoutMode === 'sidebar' && (
-                        <div className="absolute top-1.5 right-1.5 size-4 rounded-full bg-[#7C3AED] text-white flex items-center justify-center">
+                        <div className="absolute top-1.5 right-1.5 size-4 rounded-full bg-teal-600 text-white flex items-center justify-center">
                           <Check className="size-2.5" />
                         </div>
                       )}
                       <div className="w-12 h-10 border border-slate-300 dark:border-slate-700 rounded-lg relative overflow-hidden bg-slate-50 dark:bg-slate-800 mt-1">
-                        <div className="absolute top-0 bottom-0 right-0 w-4 bg-[#7C3AED]" />
+                        <div className="absolute top-0 bottom-0 right-0 w-4 bg-teal-600" />
                       </div>
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Sidebar</span>
                     </div>
@@ -1069,7 +1069,7 @@ export function AgentOverviewTab({
                             name="widget_pos"
                             checked={isSelected}
                             onChange={() => updateChatbot({ position: pos.id as any })}
-                            className="accent-[#7C3AED]"
+                            className="accent-teal-600"
                           />
                           <span>{pos.label}</span>
                         </label>
@@ -1093,7 +1093,7 @@ export function AgentOverviewTab({
                           onClick={() => updateChatbot({ primaryColor: swatch.hex })}
                           className={cn(
                             'size-6 rounded-full transition-transform hover:scale-110 shadow-2xs relative flex items-center justify-center',
-                            isSelected ? 'ring-2 ring-offset-2 ring-[#7C3AED]' : ''
+                            isSelected ? 'ring-2 ring-offset-2 ring-teal-600' : ''
                           )}
                           style={{ backgroundColor: swatch.hex }}
                           title={swatch.name}
@@ -1135,7 +1135,7 @@ export function AgentOverviewTab({
                           className={cn(
                             'flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold border transition-all',
                             active
-                              ? 'border-[#7C3AED] bg-purple-50/50 dark:bg-purple-950/40 text-[#7C3AED]'
+                              ? 'border-teal-600 bg-teal-50/50 dark:bg-teal-950/40 text-teal-600'
                               : 'border-slate-200 dark:border-slate-800 text-slate-600 hover:bg-slate-50'
                           )}
                         >
@@ -1154,7 +1154,7 @@ export function AgentOverviewTab({
                     <Switch
                       checked={showAgentName}
                       onCheckedChange={(val) => updateChatbot({ showAgentName: val })}
-                      className="scale-80 data-[state=checked]:bg-[#7C3AED]"
+                      className="scale-80 data-[state=checked]:bg-teal-600"
                     />
                   </div>
 
@@ -1163,7 +1163,7 @@ export function AgentOverviewTab({
                     <Switch
                       checked={showOnlineStatus}
                       onCheckedChange={(val) => updateChatbot({ showOnlineStatus: val })}
-                      className="scale-80 data-[state=checked]:bg-[#7C3AED]"
+                      className="scale-80 data-[state=checked]:bg-teal-600"
                     />
                   </div>
 
@@ -1174,7 +1174,7 @@ export function AgentOverviewTab({
                     <Switch
                       checked={showWatermark}
                       onCheckedChange={(val) => updateChatbot({ showWatermark: val })}
-                      className="scale-80 data-[state=checked]:bg-[#7C3AED]"
+                      className="scale-80 data-[state=checked]:bg-teal-600"
                     />
                   </div>
                 </div>
@@ -1185,7 +1185,7 @@ export function AgentOverviewTab({
                   variant="outline"
                   size="sm"
                   onClick={() => onNavigateTab('appearance')}
-                  className="w-full h-9 text-xs font-bold rounded-xl bg-purple-50/60 dark:bg-purple-950/40 text-[#7C3AED] border-purple-200 dark:border-purple-800 hover:bg-purple-100 gap-1.5"
+                  className="w-full h-9 text-xs font-bold rounded-xl bg-teal-50/60 dark:bg-teal-950/40 text-teal-700 border-teal-200 dark:border-teal-800 hover:bg-teal-100 gap-1.5"
                 >
                   <Settings className="size-3.5" /> Advanced Design Options
                 </Button>
@@ -1204,7 +1204,7 @@ export function AgentOverviewTab({
                     value={agent.welcomeGreeting || ''}
                     onChange={(e) => onChange((prev) => ({ ...prev, welcomeGreeting: e.target.value }))}
                     placeholder="Hi! Welcome. How can I help you today?"
-                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] resize-none"
+                    className="w-full text-xs p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-teal-600 resize-none"
                   />
                 </div>
 
@@ -1217,7 +1217,7 @@ export function AgentOverviewTab({
                     value={chatbotConfig.greetingBubble || ''}
                     onChange={(e) => updateChatbot({ greetingBubble: e.target.value })}
                     placeholder="👋 Need help? Chat with us!"
-                    className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                    className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-teal-600"
                   />
                 </div>
 
@@ -1226,7 +1226,7 @@ export function AgentOverviewTab({
                   <Switch
                     checked={chatbotConfig.greetingToggle !== false}
                     onCheckedChange={(val) => updateChatbot({ greetingToggle: val })}
-                    className="scale-80 data-[state=checked]:bg-[#7C3AED]"
+                    className="scale-80 data-[state=checked]:bg-teal-600"
                   />
                 </div>
               </div>
@@ -1248,7 +1248,7 @@ export function AgentOverviewTab({
                         className={cn(
                           'p-2 rounded-xl text-xs font-semibold capitalize border transition-all text-center',
                           agent.voiceTone === tone
-                            ? 'bg-purple-50 border-[#7C3AED] text-[#7C3AED]'
+                            ? 'bg-teal-50 border-teal-600 text-teal-600'
                             : 'border-slate-200 dark:border-slate-800 text-slate-600 hover:bg-slate-50'
                         )}
                       >
@@ -1262,7 +1262,7 @@ export function AgentOverviewTab({
                   <label className="text-xs font-bold text-slate-900 dark:text-slate-100 block mb-1">
                     AI Model Engine
                   </label>
-                  <select className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]">
+                  <select className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60 focus:outline-none focus:ring-1 focus:ring-teal-600">
                     <option value="gpt-4o">GPT-4o (High Speed &amp; Accuracy)</option>
                     <option value="claude-3.5">Claude 3.5 Sonnet (Nuanced Reasoning)</option>
                     <option value="gemini-1.5">Gemini 1.5 Pro (Multimodal)</option>
@@ -1283,7 +1283,7 @@ export function AgentOverviewTab({
                       Ask for Name, Phone, and Email during chat
                     </span>
                   </div>
-                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-[#7C3AED]" />
+                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-teal-600" />
                 </div>
 
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -1295,7 +1295,7 @@ export function AgentOverviewTab({
                       Sync completed conversations into Leads dossier
                     </span>
                   </div>
-                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-[#7C3AED]" />
+                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-teal-600" />
                 </div>
               </div>
             )}
@@ -1305,12 +1305,12 @@ export function AgentOverviewTab({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-700 dark:text-slate-300">Play chime sound on open</span>
-                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-[#7C3AED]" />
+                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-teal-600" />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-700 dark:text-slate-300">Escalate to human on 2 failed attempts</span>
-                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-[#7C3AED]" />
+                  <Switch defaultChecked className="scale-80 data-[state=checked]:bg-teal-600" />
                 </div>
 
                 <Button

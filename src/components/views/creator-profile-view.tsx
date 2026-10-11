@@ -13,6 +13,7 @@ import {
   ChevronDown,
   GripVertical,
   Plus,
+  ArrowLeft,
   Trash2,
   RefreshCw,
   Settings,
@@ -82,9 +83,11 @@ import {
   DEFAULT_HERO_CONFIG,
   buildDefaultCreatorProfile,
 } from '@/lib/creator-profile';
+import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 
 export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   const [profile, setProfile] = useState<CreatorProfileData>(() =>
     buildDefaultCreatorProfile({
       id: 'tenant_demo',
@@ -242,7 +245,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
   const SECTION_ICONS: Record<string, React.ReactNode> = {
     header: <Home className="size-4" />,
-    hero: <Sparkles className="size-4 text-purple-600" />,
+    hero: <Sparkles className="size-4 text-teal-600" />,
     services: <Briefcase className="size-4 text-blue-600" />,
     about: <Building2 className="size-4 text-amber-600" />,
     why_us: <ShieldCheck className="size-4 text-emerald-600" />,
@@ -250,7 +253,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
     gallery: <Images className="size-4 text-indigo-600" />,
     contact: <MapPin className="size-4 text-rose-600" />,
     faq: <HelpCircle className="size-4 text-slate-500" />,
-    ai_assistant: <Bot className="size-4 text-purple-600" />,
+    ai_assistant: <Bot className="size-4 text-teal-600" />,
   };
 
   if (loading && !profile) {
@@ -267,15 +270,24 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
   return (
     <div className="flex flex-col w-full min-h-screen bg-slate-50/50 dark:bg-slate-950 pb-16">
       {/* ── Top Header Bar ── */}
-      <div className="bg-white dark:bg-slate-900 border-b px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-30 shadow-xs">
-        <div className="flex items-center gap-3.5">
-          <div className="size-11 rounded-xl bg-primary flex items-center justify-center text-white shadow-sm shrink-0">
-            <LayoutGrid className="size-6" />
+      <div className="bg-white dark:bg-slate-900 border-b px-4 sm:px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-30 shadow-xs">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentView('dashboard')}
+            className="h-9 px-3 text-xs font-semibold gap-1.5 rounded-lg border shadow-2xs hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+          >
+            <ArrowLeft className="size-4 text-teal-600 dark:text-teal-400" />
+            <span>Back</span>
+          </Button>
+          <div className="size-10 rounded-xl bg-teal-600 flex items-center justify-center text-white shadow-sm shrink-0">
+            <LayoutGrid className="size-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold tracking-tight text-foreground">Website Builder</h1>
-              <Badge variant="outline" className="text-[11px] font-semibold bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300">
+              <Badge variant="outline" className="text-[11px] font-semibold bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300">
                 Live Studio
               </Badge>
             </div>
@@ -730,9 +742,9 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
                           className="text-xs rounded-xl resize-none"
                         />
                       </div>
-                      <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-300 text-[11px] space-y-1">
+                      <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-teal-900 dark:text-teal-300 text-[11px] space-y-1">
                         <p className="font-bold flex items-center gap-1.5">
-                          <Sparkles className="size-3.5 text-purple-600" /> Auto-Synced with BGOS
+                          <Sparkles className="size-3.5 text-teal-600" /> Auto-Synced with BGOS
                         </p>
                         <p className="leading-relaxed">
                           This section draws directly from your Services &amp; Products catalog and Appointments engine.
@@ -977,7 +989,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
                 <CardContent className="p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <div className="size-8 rounded-xl bg-purple-100 dark:bg-purple-950 text-purple-600 flex items-center justify-center shrink-0">
+                      <div className="size-8 rounded-xl bg-teal-100 dark:bg-teal-950 text-teal-600 flex items-center justify-center shrink-0">
                         <Bot className="size-4" />
                       </div>
                       <div>
@@ -1042,7 +1054,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: Pages ── */}
         {activeTab === 'pages' && (
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className="w-full space-y-4">
             <div className="flex items-center justify-between pb-2 border-b">
               <div>
                 <h2 className="text-base font-bold">Website Pages</h2>
@@ -1076,7 +1088,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: Services & Products ── */}
         {activeTab === 'services' && (
-          <div className="max-w-4xl mx-auto space-y-4">
+          <div className="w-full space-y-4">
             <div className="flex items-center justify-between pb-2 border-b">
               <div>
                 <h2 className="text-base font-bold">Services &amp; Pricing Catalog</h2>
@@ -1105,7 +1117,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: Booking ── */}
         {activeTab === 'booking' && (
-          <div className="max-w-3xl mx-auto space-y-4">
+          <div className="w-full space-y-4">
             <Card className="p-6 rounded-2xl space-y-4">
               <h2 className="text-base font-bold">Public Booking Calendar Settings</h2>
               <p className="text-xs text-muted-foreground">Connect with your Appointments engine to allow instant client self-scheduling.</p>
@@ -1131,10 +1143,10 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: AI Assistant ── */}
         {activeTab === 'aiAssistant' && (
-          <div className="max-w-3xl mx-auto space-y-4">
+          <div className="w-full space-y-4">
             <Card className="p-6 rounded-2xl space-y-4">
               <h2 className="text-base font-bold flex items-center gap-2">
-                <Bot className="size-5 text-purple-600" /> Website AI Concierge
+                <Bot className="size-5 text-teal-600" /> Website AI Concierge
               </h2>
               <p className="text-xs text-muted-foreground">Configure the automated chat assistant that answers customer questions 24/7 on your website.</p>
               <div className="space-y-3 pt-2">
@@ -1156,7 +1168,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: SEO & Domain ── */}
         {activeTab === 'seoDomain' && (
-          <div className="max-w-3xl mx-auto space-y-4">
+          <div className="w-full space-y-4">
             <Card className="p-6 rounded-2xl space-y-4">
               <h2 className="text-base font-bold">Custom Domain &amp; SSL</h2>
               <p className="text-xs text-muted-foreground">Connect your own custom domain (e.g. cinderellacleaners.com) to your BGOS public website.</p>
@@ -1176,7 +1188,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: Analytics ── */}
         {activeTab === 'analytics' && (
-          <div className="max-w-4xl mx-auto space-y-5">
+          <div className="w-full space-y-5">
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               {[
                 { label: 'Website Visitors', value: '28,450', change: '+32%' },
@@ -1198,7 +1210,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
 
         {/* ── Sub-Tab: Settings ── */}
         {activeTab === 'settings' && (
-          <div className="max-w-3xl mx-auto space-y-4">
+          <div className="w-full space-y-4">
             <Card className="p-6 rounded-2xl space-y-4">
               <h2 className="text-base font-bold">General Website Settings</h2>
               <div className="space-y-3 pt-2">

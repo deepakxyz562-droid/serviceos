@@ -138,7 +138,7 @@ export function DashboardView() {
       badge: 'Lead',
       badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
       icon: Target,
-      iconColor: 'bg-purple-100 text-[#7C3AED] dark:bg-purple-950/80',
+      iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
     },
     {
       id: 'act_2',
@@ -169,9 +169,9 @@ export function DashboardView() {
       subtitle: 'Service Request Form',
       time: '25 min ago',
       badge: 'Form',
-      badgeColor: 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300',
+      badgeColor: 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
       icon: FileText,
-      iconColor: 'bg-purple-100 text-[#7C3AED] dark:bg-purple-950/80',
+      iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
     },
     {
       id: 'act_5',
@@ -199,7 +199,7 @@ export function DashboardView() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         {/* Left Greeting */}
         <div className="flex items-center gap-3.5">
-          <div className="size-11 rounded-2xl bg-gradient-to-tr from-[#7C3AED] to-[#9333EA] text-white flex items-center justify-center shadow-md shadow-purple-500/20">
+          <div className="size-11 rounded-2xl bg-gradient-to-tr from-[#00A884] to-[#007F73] text-white flex items-center justify-center shadow-md shadow-teal-500/20">
             <Send className="size-5" />
           </div>
           <div>
@@ -217,7 +217,7 @@ export function DashboardView() {
           <button
             type="button"
             onClick={() => toast.info('Workspace: Cinderella Cleaners (Tucson, AZ)')}
-            className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-purple-300 transition-colors"
+            className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-teal-300 transition-colors"
           >
             <div className="size-8 rounded-xl bg-purple-100 dark:bg-purple-950 flex items-center justify-center text-xs font-bold text-purple-700">
               CC
@@ -600,7 +600,7 @@ export function DashboardView() {
               variant="ghost"
               size="sm"
               onClick={() => setCurrentView('scheduling')}
-              className="text-xs font-bold text-[#7C3AED] hover:text-[#6D28D9] p-0 h-auto flex items-center gap-1"
+              className="text-xs font-bold text-teal-600 hover:text-teal-700 p-0 h-auto flex items-center gap-1"
             >
               View All <ArrowRight className="size-3.5" />
             </Button>
@@ -646,7 +646,7 @@ export function DashboardView() {
                     {apt.time}
                   </span>
                   <Avatar className="size-7 border border-slate-200 dark:border-slate-700">
-                    <AvatarFallback className="text-[10px] font-bold bg-purple-100 text-purple-700">
+                    <AvatarFallback className="text-[10px] font-bold bg-teal-100 text-teal-700">
                       {apt.client.split(' ').map((n) => n[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
@@ -696,7 +696,7 @@ export function DashboardView() {
                 className={cn(
                   'px-2.5 py-1 rounded-xl text-xs font-bold transition-colors whitespace-nowrap',
                   activityFilter === pill.id
-                    ? 'bg-[#7C3AED] text-white shadow-2xs'
+                    ? 'bg-teal-600 text-white shadow-2xs'
                     : 'text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'
                 )}
               >
@@ -758,7 +758,7 @@ export function DashboardView() {
                   toast.success('Initiating AI Assistant Test Call');
                   setCurrentView('aiReceptionist');
                 }}
-                className="h-6 text-[11px] font-bold px-2 rounded-lg border-purple-200 text-[#7C3AED] hover:bg-purple-50"
+                className="h-6 text-[11px] font-bold px-2 rounded-lg border-teal-200 text-teal-600 hover:bg-teal-50"
               >
                 Test AI
               </Button>
@@ -766,8 +766,8 @@ export function DashboardView() {
           </div>
 
           {/* AI Mascot & Bio */}
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/50">
-            <div className="size-12 rounded-2xl bg-gradient-to-tr from-[#7C3AED] to-[#A855F7] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+          <div className="flex items-center gap-3 p-3 rounded-2xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-100 dark:border-teal-900/50">
+            <div className="size-12 rounded-2xl bg-gradient-to-tr from-[#00A884] to-[#007F73] text-white flex items-center justify-center flex-shrink-0 shadow-sm">
               <Bot className="size-7" />
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
@@ -838,7 +838,7 @@ export function DashboardView() {
               variant="ghost"
               size="sm"
               onClick={() => setCurrentView('leads')}
-              className="text-xs font-bold text-[#7C3AED] hover:text-[#6D28D9] p-0 h-auto flex items-center gap-1"
+              className="text-xs font-bold text-teal-600 hover:text-teal-700 p-0 h-auto flex items-center gap-1"
             >
               View All <ArrowRight className="size-3.5" />
             </Button>
@@ -857,7 +857,7 @@ export function DashboardView() {
                     className={cn(
                       'size-4 rounded-md mt-0.5 flex items-center justify-center border transition-colors flex-shrink-0',
                       task.completed
-                        ? 'bg-[#7C3AED] border-[#7C3AED] text-white'
+                        ? 'bg-teal-600 border-teal-600 text-white'
                         : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                     )}
                   >
@@ -901,20 +901,20 @@ export function DashboardView() {
         <button
           type="button"
           onClick={() => setCurrentView('campaigns')}
-          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-teal-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
         >
           <div className="space-y-1 min-w-0">
-            <div className="size-8 rounded-xl bg-purple-50 text-[#7C3AED] dark:bg-purple-950 flex items-center justify-center mb-1">
+            <div className="size-8 rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 flex items-center justify-center mb-1">
               <Send className="size-4" />
             </div>
-            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors truncate">
               Create Campaign
             </div>
             <div className="text-[10px] text-slate-400 line-clamp-2">
               Send promotions via Email, SMS or WhatsApp
             </div>
           </div>
-          <ArrowRight className="size-3 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all mt-1" />
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all mt-1" />
         </button>
 
         {/* Action 2: Find New Leads */}
@@ -941,20 +941,20 @@ export function DashboardView() {
         <button
           type="button"
           onClick={() => setCurrentView('formBuilder')}
-          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-teal-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
         >
           <div className="space-y-1 min-w-0">
-            <div className="size-8 rounded-xl bg-purple-50 text-[#7C3AED] dark:bg-purple-950 flex items-center justify-center mb-1">
+            <div className="size-8 rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 flex items-center justify-center mb-1">
               <FileText className="size-4" />
             </div>
-            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors truncate">
               Build a Form
             </div>
             <div className="text-[10px] text-slate-400 line-clamp-2">
               Create a lead or booking form
             </div>
           </div>
-          <ArrowRight className="size-3 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all mt-1" />
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all mt-1" />
         </button>
 
         {/* Action 4: Create Funnel */}
@@ -981,20 +981,20 @@ export function DashboardView() {
         <button
           type="button"
           onClick={() => setCurrentView('socialMedia')}
-          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-purple-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
+          className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-teal-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
         >
           <div className="space-y-1 min-w-0">
-            <div className="size-8 rounded-xl bg-purple-50 text-[#7C3AED] dark:bg-purple-950 flex items-center justify-center mb-1">
+            <div className="size-8 rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 flex items-center justify-center mb-1">
               <Sparkles className="size-4" />
             </div>
-            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#7C3AED] transition-colors truncate">
+            <div className="text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-teal-600 transition-colors truncate">
               Design a Post
             </div>
             <div className="text-[10px] text-slate-400 line-clamp-2">
               AI-powered social media content
             </div>
           </div>
-          <ArrowRight className="size-3 text-slate-300 group-hover:text-purple-600 group-hover:translate-x-0.5 transition-all mt-1" />
+          <ArrowRight className="size-3 text-slate-300 group-hover:text-teal-600 group-hover:translate-x-0.5 transition-all mt-1" />
         </button>
 
         {/* Action 6: Test Phone Agent */}

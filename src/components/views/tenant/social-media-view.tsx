@@ -14,7 +14,7 @@
  *   - Drilldown sub-tabs: Accounts, Composer, Posts History, Analytics
  */
 
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Megaphone,
   Sparkles,
@@ -68,6 +68,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { useAppStore } from '@/store/app-store';
 
 // Lazy-load existing sub-views for deep-dive tabs
 const SocialAccountsView = lazy(() =>
@@ -151,6 +152,7 @@ const QUICK_PROMPTS = [
 ];
 
 export function SocialMediaView() {
+  const setCurrentView = useAppStore((state) => state.setCurrentView);
   const [activeTab, setActiveTab] = useState<SocialTab>('overview');
   const [timeRange, setTimeRange] = useState('Last 30 days');
   const [timeRangeOpen, setTimeRangeOpen] = useState(false);
@@ -179,21 +181,21 @@ export function SocialMediaView() {
       title: 'Spring Cleaning Promo (IG, FB)',
       time: 'Today • 2:00 PM',
       status: 'Queued',
-      color: 'bg-purple-600',
+      color: 'bg-teal-600',
     },
     {
       id: 'cal-2',
       title: 'Google Business Weekly Update',
       time: 'Tomorrow • 10:30 AM',
       status: 'Scheduled',
-      color: 'bg-[#4648D4]',
+      color: 'bg-emerald-600',
     },
     {
       id: 'cal-3',
       title: 'Customer Review Spotlight Reel',
       time: 'Fri, Apr 25 • 4:00 PM',
       status: 'Draft',
-      color: 'bg-emerald-600',
+      color: 'bg-teal-700',
     },
   ]);
 
@@ -294,17 +296,76 @@ export function SocialMediaView() {
     }, 450);
   };
 
-  const handleSchedulePost = () => {
+  // Live Social Posts Fetching
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchSocialPosts() {
+      try {
+        const res = await fetch('/api/social/posts?limit=20');
+        if (res.ok) {
+          const json = await res.json();
+          const posts = json.data || [];
+          if (posts.length > 0 && isMounted) {
+            setGeneratedCount((prev) => Math.max(prev, posts.length));
+            const mappedItems = posts.map((p: any) => ({
+              id: p.id,
+              title: p.content ? p.content.slice(0, 35) + '...' : 'Social update',
+              time: p.scheduledAt
+                ? new Date(p.scheduledAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : 'Scheduled',
+              status: p.status === 'published' ? 'Published' : p.status === 'scheduled' ? 'Scheduled' : 'Draft',
+              color: p.status === 'published' ? 'bg-emerald-600' : 'bg-teal-600',
+            }));
+            setCalendarItems((prev) => {
+              const ids = new Set(mappedItems.map((m: any) => m.id));
+              return [...mappedItems, ...prev.filter((i) => !ids.has(i.id))];
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load social posts:', e);
+      }
+    }
+    fetchSocialPosts();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleSchedulePost = async () => {
     const newItem = {
       id: `cal-${Date.now()}`,
       title: `${currentHeadline} (${previewPlatform})`,
       time: 'Tomorrow • 3:00 PM',
       status: 'Scheduled',
-      color: 'bg-[#4648D4]',
+      color: 'bg-teal-600',
     };
     setCalendarItems([newItem, ...calendarItems]);
     setScheduleNotice(`Successfully scheduled to ${previewPlatform}! Added to Content Calendar.`);
     setTimeout(() => setScheduleNotice(null), 4000);
+
+    try {
+      const accRes = await fetch('/api/social/accounts');
+      if (accRes.ok) {
+        const accData = await accRes.json();
+        const accounts = accData.data || [];
+        const matching = accounts.find((a: any) => a.platform.toLowerCase() === previewPlatform.toLowerCase()) || accounts[0];
+        if (matching) {
+          await fetch('/api/social/posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: `${currentHeadline}\n\n${aiPrompt}`,
+              status: 'scheduled',
+              scheduledAt: new Date(Date.now() + 86400000).toISOString(),
+              targets: [{ platform: matching.platform, socialAccountId: matching.id }],
+            }),
+          });
+        }
+      }
+    } catch {
+      // Gracefully silent; state preview is already updated
+    }
   };
 
   const handleAddCampaign = () => {
@@ -353,18 +414,36 @@ export function SocialMediaView() {
   };
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full max-w-[1600px] mx-auto text-slate-900 dark:text-slate-100">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full text-slate-900 dark:text-slate-100">
       {/* ─── 1. Header Section with Actions ─────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#4648D4] to-[#712AE2] flex items-center justify-center text-white shadow-md shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (activeTab !== 'overview') {
+                setActiveTab('overview');
+              } else {
+                setCurrentView('dashboard');
+              }
+            }}
+            className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 -ml-1 gap-1 self-center"
+            title={activeTab !== 'overview' ? 'Back to Studio Overview' : 'Back to Dashboard'}
+          >
+            <ChevronLeft className="size-4" />
+            <span className="hidden sm:inline text-xs font-semibold">
+              {activeTab !== 'overview' ? 'Back to Overview' : 'Back'}
+            </span>
+          </Button>
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#00A884] to-[#007F73] flex items-center justify-center text-white shadow-md shrink-0">
             <Megaphone className="h-6 w-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold tracking-tight">Marketing Studio</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-xs font-semibold flex items-center gap-1 border border-purple-200/50 dark:border-purple-800/50">
-                <Sparkles className="size-3.5 text-purple-600 dark:text-purple-400" /> AI Enabled
+              <span className="px-2.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 text-xs font-semibold flex items-center gap-1 border border-teal-200/50 dark:border-teal-800/50">
+                <Sparkles className="size-3.5 text-teal-600 dark:text-teal-400" /> AI Enabled
               </span>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
@@ -399,7 +478,7 @@ export function SocialMediaView() {
                     className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between"
                   >
                     <span>{range}</span>
-                    {timeRange === range && <Check className="size-3 text-[#4648D4]" />}
+                    {timeRange === range && <Check className="size-3 text-teal-600" />}
                   </button>
                 ))}
               </div>
@@ -420,7 +499,7 @@ export function SocialMediaView() {
             size="sm"
             onClick={() => setCreateCampaignOpen(true)}
             variant="outline"
-            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-indigo-200 dark:border-indigo-900/50 text-[#4648D4] dark:text-indigo-400 font-semibold text-xs shadow-xs hover:bg-indigo-50/50"
+            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-teal-200 dark:border-teal-900/50 text-teal-700 dark:text-teal-400 font-semibold text-xs shadow-xs hover:bg-teal-50/50"
           >
             <Plus className="size-4" />
             <span>+ Create Campaign</span>
@@ -433,7 +512,7 @@ export function SocialMediaView() {
               const textarea = document.getElementById('ai-concept-box');
               textarea?.focus();
             }}
-            className="h-9 gap-2 bg-[#4648D4] hover:bg-[#383AC0] text-white font-semibold text-xs shadow-sm rounded-lg"
+            className="h-9 gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm rounded-lg"
           >
             <Plus className="size-4" />
             <span>Create Post</span>
@@ -454,7 +533,7 @@ export function SocialMediaView() {
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Posts Published</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center text-[#4648D4] dark:text-indigo-400">
+            <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
               <PenSquare className="size-4" />
             </div>
           </div>
@@ -464,7 +543,7 @@ export function SocialMediaView() {
               <ArrowUp className="size-3 mr-0.5" /> 40%
             </span>
           </div>
-          <div className="w-full h-6 mt-2 text-[#4648D4]">
+          <div className="w-full h-6 mt-2 text-teal-600">
             <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
               <path
                 d="M0,18 Q20,16 40,10 T80,12 T100,2"
@@ -508,7 +587,7 @@ export function SocialMediaView() {
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Engagements</span>
-            <div className="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center text-[#712AE2] dark:text-purple-400">
+            <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
               <Heart className="size-4" />
             </div>
           </div>
@@ -518,7 +597,7 @@ export function SocialMediaView() {
               <ArrowUp className="size-3 mr-0.5" /> 28%
             </span>
           </div>
-          <div className="w-full h-6 mt-2 text-[#712AE2]">
+          <div className="w-full h-6 mt-2 text-teal-600">
             <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
               <path
                 d="M0,16 Q20,20 40,12 T70,16 T100,4"
@@ -592,7 +671,7 @@ export function SocialMediaView() {
           onClick={() => setActiveTab('overview')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === 'overview'
-              ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800'
+              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
           }`}
         >
@@ -604,11 +683,11 @@ export function SocialMediaView() {
           onClick={() => setActiveTab('ai-generator')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === 'ai-generator'
-              ? 'bg-white dark:bg-slate-900 text-[#712AE2] dark:text-purple-400 shadow-xs border border-slate-200 dark:border-slate-800'
+              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
           }`}
         >
-          <Sparkles className="size-4 text-[#712AE2] dark:text-purple-400" />
+          <Sparkles className="size-4 text-teal-600 dark:text-teal-400" />
           <span>AI Post Generator</span>
         </button>
 
@@ -616,7 +695,7 @@ export function SocialMediaView() {
           onClick={() => setActiveTab('accounts')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === 'accounts'
-              ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800'
+              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
           }`}
         >
@@ -628,7 +707,7 @@ export function SocialMediaView() {
           onClick={() => setActiveTab('posts')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === 'posts'
-              ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800'
+              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
           }`}
         >
@@ -640,7 +719,7 @@ export function SocialMediaView() {
           onClick={() => setActiveTab('create')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === 'create'
-              ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800'
+              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
           }`}
         >
@@ -652,7 +731,7 @@ export function SocialMediaView() {
           onClick={() => setActiveTab('analytics')}
           className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
             activeTab === 'analytics'
-              ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs border border-slate-200 dark:border-slate-800'
+              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
           }`}
         >
@@ -695,14 +774,14 @@ export function SocialMediaView() {
             <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 shadow-xs flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-purple-100 dark:bg-purple-950/60 flex items-center justify-center text-[#712AE2] dark:text-purple-400">
+                  <div className="w-6 h-6 rounded bg-teal-100 dark:bg-teal-950/60 flex items-center justify-center text-teal-600 dark:text-teal-400">
                     <Sparkles className="size-3.5" />
                   </div>
                   <h2 className="text-sm font-bold">AI Post Generator</h2>
                 </div>
                 <button
                   onClick={() => handleApplyPrompt(QUICK_PROMPTS[0])}
-                  className="text-xs text-[#4648D4] dark:text-indigo-400 hover:underline font-medium"
+                  className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-medium"
                 >
                   Try Example
                 </button>
@@ -776,7 +855,7 @@ export function SocialMediaView() {
               <Button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#4648D4] to-[#712AE2] text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm hover:opacity-95 transition-opacity"
+                className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#00A884] to-[#007F73] text-white text-xs font-semibold flex items-center justify-center gap-2 shadow-sm hover:opacity-95 transition-opacity"
               >
                 {isGenerating ? (
                   <>
@@ -821,7 +900,7 @@ export function SocialMediaView() {
                       onClick={() => setPreviewPlatform(p)}
                       className={`px-2 py-1 rounded font-semibold text-xs transition-colors flex items-center gap-1 ${
                         previewPlatform === p
-                          ? 'bg-white dark:bg-slate-900 text-[#4648D4] dark:text-indigo-400 shadow-xs'
+                          ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/50'
                           : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
                     >
@@ -840,7 +919,7 @@ export function SocialMediaView() {
                 {/* Mock Account Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-[#4648D4] flex items-center justify-center text-white text-xs font-bold">
+                    <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold">
                       C
                     </div>
                     <div>
@@ -854,10 +933,10 @@ export function SocialMediaView() {
                 </div>
 
                 {/* Generated Banner Graphic */}
-                <div className="relative w-full h-52 rounded-lg overflow-hidden shadow-xs bg-gradient-to-br from-indigo-900 via-slate-800 to-purple-950 flex flex-col justify-end p-3 text-white">
+                <div className="relative w-full h-52 rounded-lg overflow-hidden shadow-xs bg-gradient-to-br from-teal-950 via-slate-800 to-emerald-950 flex flex-col justify-end p-3 text-white">
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent pointer-events-none" />
                   <div className="relative z-10 flex flex-col gap-1">
-                    <span className="text-[10px] uppercase tracking-wider bg-[#4648D4] text-white px-2 py-0.5 rounded self-start font-bold shadow-xs">
+                    <span className="text-[10px] uppercase tracking-wider bg-teal-600 text-white px-2 py-0.5 rounded self-start font-bold shadow-xs">
                       {currentBadge}
                     </span>
                     <p className="text-sm font-bold text-white mt-0.5 leading-snug">{currentHeadline}</p>
@@ -885,7 +964,7 @@ export function SocialMediaView() {
                       free reclean guarantee
                     </span>
                   </div>
-                  <p className="text-[#4648D4] dark:text-indigo-400 text-[11px] font-medium pt-1">
+                  <p className="text-teal-600 dark:text-teal-400 text-[11px] font-medium pt-1">
                     #SpringCleaning #TucsonHomes #CleanHome #CinderellaCleaners #ArizonaLiving
                   </p>
                 </div>
@@ -908,7 +987,7 @@ export function SocialMediaView() {
                   variant="outline"
                   size="sm"
                   onClick={handleGenerate}
-                  className="flex-1 h-8 text-xs gap-1.5 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+                  className="flex-1 h-8 text-xs gap-1.5 bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800"
                 >
                   <RefreshCw className="size-3.5" />
                   <span>Regenerate</span>
@@ -916,7 +995,7 @@ export function SocialMediaView() {
                 <Button
                   size="sm"
                   onClick={handleSchedulePost}
-                  className="flex-1 h-8 text-xs gap-1.5 bg-[#4648D4] hover:bg-[#383AC0] text-white font-semibold"
+                  className="flex-1 h-8 text-xs gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold"
                 >
                   <Clock className="size-3.5" />
                   <span>Schedule</span>
@@ -971,7 +1050,7 @@ export function SocialMediaView() {
                       onClick={() => setSelectedDay(item.day)}
                       className={`text-xs py-1 rounded transition-colors ${
                         selectedDay === item.day
-                          ? 'bg-[#4648D4] text-white font-bold'
+                          ? 'bg-teal-600 text-white font-bold'
                           : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
                       }`}
                     >
@@ -999,9 +1078,9 @@ export function SocialMediaView() {
                         variant="secondary"
                         className={`text-[10px] px-1.5 py-0.5 font-semibold ${
                           item.status === 'Queued'
-                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300'
+                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300'
                             : item.status === 'Scheduled'
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
                             : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
                         }`}
                       >
@@ -1018,7 +1097,7 @@ export function SocialMediaView() {
                   <h2 className="text-sm font-bold">Channel Integrations</h2>
                   <button
                     onClick={() => setActiveTab('accounts')}
-                    className="text-xs text-[#4648D4] dark:text-indigo-400 hover:underline font-semibold"
+                    className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-semibold"
                   >
                     Manage
                   </button>
@@ -1027,7 +1106,7 @@ export function SocialMediaView() {
                   {/* Instagram */}
                   <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-[#712AE2]">
+                      <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 flex items-center justify-center text-teal-600">
                         <Camera className="size-3.5" />
                       </div>
                       <div>
@@ -1055,7 +1134,7 @@ export function SocialMediaView() {
                   {/* Google Biz */}
                   <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-[#4648D4]">
+                      <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 flex items-center justify-center text-teal-600">
                         <Store className="size-3.5" />
                       </div>
                       <div>
@@ -1097,7 +1176,7 @@ export function SocialMediaView() {
                 </div>
                 <button
                   onClick={() => setActiveTab('posts')}
-                  className="text-xs text-[#4648D4] dark:text-indigo-400 hover:underline font-semibold"
+                  className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-semibold"
                 >
                   View All Posts
                 </button>
@@ -1113,7 +1192,7 @@ export function SocialMediaView() {
                     reach: '12.4K Reach',
                     engagement: '842 Engagements',
                     status: 'Published',
-                    color: 'text-purple-600',
+                    color: 'text-teal-600',
                   },
                   {
                     title: 'Customer Review: Elena M. (Catalina Foothills)',
@@ -1131,7 +1210,7 @@ export function SocialMediaView() {
                     reach: '22.5K Reach',
                     engagement: '1.2K Engagements',
                     status: 'Published',
-                    color: 'text-purple-600',
+                    color: 'text-teal-600',
                   },
                   {
                     title: 'Behind the Scenes: Tucson Route Crew',
@@ -1148,7 +1227,7 @@ export function SocialMediaView() {
                     className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border border-slate-200/50 dark:border-slate-800"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shrink-0 text-xs font-bold shadow-xs">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-600 to-emerald-700 flex items-center justify-center text-white shrink-0 text-xs font-bold shadow-xs">
                         {post.platform === 'Instagram' ? (
                           <Camera className="size-5" />
                         ) : post.platform === 'Facebook' ? (
@@ -1199,7 +1278,7 @@ export function SocialMediaView() {
                 <Button
                   size="sm"
                   onClick={() => setCreateCampaignOpen(true)}
-                  className="h-7 text-[11px] gap-1 px-2.5 rounded-lg bg-[#4648D4] hover:bg-[#383AC0] text-white font-semibold"
+                  className="h-7 text-[11px] gap-1 px-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold"
                 >
                   <Plus className="size-3.5" />
                   <span>New Campaign</span>
@@ -1223,7 +1302,7 @@ export function SocialMediaView() {
                         <h3 className="text-xs font-bold mt-1 leading-snug">{camp.name}</h3>
                         <p className="text-[11px] text-slate-500">{camp.dates}</p>
                       </div>
-                      <div className="w-6 h-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-[#4648D4] flex items-center justify-center shrink-0">
+                      <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center shrink-0">
                         {camp.icon === 'flower' && <Sparkles className="size-3.5" />}
                         {camp.icon === 'home' && <Store className="size-3.5" />}
                         {camp.icon === 'star' && <Star className="size-3.5" />}
@@ -1266,7 +1345,7 @@ export function SocialMediaView() {
                 </div>
                 <button
                   onClick={() => setActiveTab('analytics')}
-                  className="text-xs text-[#4648D4] dark:text-indigo-400 hover:underline font-semibold"
+                  className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-semibold"
                 >
                   Asset Analytics
                 </button>
@@ -1307,7 +1386,7 @@ export function SocialMediaView() {
                     <div
                       className={`relative rounded-lg overflow-hidden h-32 shadow-xs bg-gradient-to-br ${item.gradient} p-2.5 flex flex-col justify-between text-white group-hover:scale-[1.02] transition-transform`}
                     >
-                      <span className="self-start text-[10px] font-bold bg-[#4648D4] px-1.5 py-0.5 rounded shadow-xs">
+                      <span className="self-start text-[10px] font-bold bg-teal-600 text-white px-1.5 py-0.5 rounded shadow-xs">
                         {item.views}
                       </span>
                       <div className="self-end w-6 h-6 rounded-full bg-white/90 text-slate-900 flex items-center justify-center">
@@ -1327,12 +1406,12 @@ export function SocialMediaView() {
             <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 shadow-xs flex flex-col justify-between gap-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Lightbulb className="size-4 text-[#712AE2]" />
+                  <Lightbulb className="size-4 text-teal-600" />
                   <h2 className="text-sm font-bold">Content Suggestions</h2>
                 </div>
                 <Badge
                   variant="secondary"
-                  className="bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 text-[10px]"
+                  className="bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 text-[10px]"
                 >
                   AI Generated
                 </Badge>
@@ -1345,7 +1424,7 @@ export function SocialMediaView() {
                     className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between border border-slate-200/50 dark:border-slate-800"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <sug.icon className="size-4 text-[#712AE2] shrink-0" />
+                      <sug.icon className="size-4 text-teal-600 shrink-0" />
                       <div className="min-w-0">
                         <p className="text-xs font-semibold truncate leading-tight">{sug.title}</p>
                         <p className="text-[11px] text-slate-500 truncate leading-tight">{sug.desc}</p>
@@ -1358,7 +1437,7 @@ export function SocialMediaView() {
                         textarea?.focus();
                       }}
                       title="Load into AI Generator"
-                      className="p-1 rounded bg-white dark:bg-slate-900 text-[#4648D4] hover:bg-[#4648D4] hover:text-white transition-colors shrink-0 border border-slate-200 dark:border-slate-700"
+                      className="p-1 rounded bg-white dark:bg-slate-900 text-teal-600 hover:bg-teal-600 hover:text-white transition-colors shrink-0 border border-slate-200 dark:border-slate-700"
                     >
                       <Plus className="size-3.5" />
                     </button>
@@ -1385,7 +1464,7 @@ export function SocialMediaView() {
         <DialogContent className="sm:max-w-[440px]">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <Megaphone className="size-4 text-[#4648D4]" /> Create Marketing Campaign
+              <Megaphone className="size-4 text-teal-600" /> Create Marketing Campaign
             </DialogTitle>
           </DialogHeader>
 
@@ -1439,7 +1518,7 @@ export function SocialMediaView() {
             <Button
               size="sm"
               onClick={handleAddCampaign}
-              className="h-8 text-xs font-bold bg-[#4648D4] hover:bg-[#383AC0] text-white"
+              className="h-8 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white"
             >
               Launch Campaign
             </Button>

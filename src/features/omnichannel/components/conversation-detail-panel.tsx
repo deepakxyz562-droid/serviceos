@@ -85,15 +85,15 @@ export function ConversationDetailPanel({
     <ScrollArea className="flex-1 min-h-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
       <div className="p-4 space-y-4">
         {/* 1. Conversation Summary Card (AI Generated) */}
-        <Card className="shadow-none border-purple-200 dark:border-purple-900/60 bg-gradient-to-br from-purple-50/50 to-white dark:from-purple-950/20 dark:to-slate-900">
+        <Card className="shadow-none border-teal-200 dark:border-teal-900/60 bg-gradient-to-br from-teal-50/50 to-white dark:from-teal-950/20 dark:to-slate-900">
           <CardHeader className="pb-2 pt-3.5 px-3.5">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-[#7C3AED]" /> Conversation Summary
+                <Sparkles className="size-3.5 text-teal-600" /> Conversation Summary
               </CardTitle>
               <Badge
                 variant="secondary"
-                className="text-[10px] bg-purple-100 text-[#7C3AED] dark:bg-purple-950 dark:text-purple-300 border-none font-semibold py-0 h-4"
+                className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border-none font-semibold py-0 h-4"
               >
                 AI Generated
               </Badge>
@@ -109,7 +109,7 @@ export function ConversationDetailPanel({
                 if (onCreateBooking) onCreateBooking(conv);
                 else toast.success(`Initiating booking for ${conv.customerName}`);
               }}
-              className="w-full h-8 text-xs font-bold bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-xs rounded-xl"
+              className="w-full h-8 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-xs rounded-xl"
             >
               Create Booking
             </Button>
@@ -126,7 +126,7 @@ export function ConversationDetailPanel({
               <button
                 type="button"
                 onClick={() => toast.info(`Viewing ${conv.customerName} in CRM`)}
-                className="text-[11px] font-semibold text-[#7C3AED] hover:underline flex items-center gap-0.5"
+                className="text-[11px] font-semibold text-teal-600 hover:underline flex items-center gap-0.5"
               >
                 View in CRM &rarr;
               </button>
@@ -136,7 +136,7 @@ export function ConversationDetailPanel({
           <CardContent className="px-3.5 pb-3.5 space-y-3">
             <div className="flex items-center gap-3">
               <Avatar className="size-12 border-2 border-slate-100 dark:border-slate-800">
-                <AvatarFallback className="text-sm font-bold bg-purple-100 text-[#7C3AED] dark:bg-purple-950">
+                <AvatarFallback className="text-sm font-bold bg-teal-100 text-teal-700 dark:bg-teal-950">
                   {getInitials(conv.customerName)}
                 </AvatarFallback>
               </Avatar>
@@ -145,7 +145,7 @@ export function ConversationDetailPanel({
                   <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                     {conv.customerName}
                   </h4>
-                  <Badge className="text-[10px] bg-purple-100 text-[#7C3AED] dark:bg-purple-950 dark:text-purple-300 border-none font-semibold px-1.5 py-0">
+                  <Badge className="text-[10px] bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 border-none font-semibold px-1.5 py-0">
                     VIP Customer
                   </Badge>
                 </div>
@@ -201,7 +201,7 @@ export function ConversationDetailPanel({
                 <button
                   type="button"
                   onClick={() => toast.info('Tag management')}
-                  className="text-[10px] text-[#7C3AED] hover:underline"
+                  className="text-[10px] text-teal-600 hover:underline"
                 >
                   + Add Tag
                 </button>
@@ -210,7 +210,7 @@ export function ConversationDetailPanel({
                 {['Residential', 'Deep Cleaning', 'VIP'].map((tag) => (
                   <span
                     key={tag}
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-900"
+                    className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-900"
                   >
                     {tag}
                   </span>
@@ -225,7 +225,7 @@ export function ConversationDetailPanel({
                 <button
                   type="button"
                   onClick={() => toast.info('Add new note')}
-                  className="text-[10px] text-[#7C3AED] hover:underline"
+                  className="text-[10px] text-teal-600 hover:underline"
                 >
                   + Add Note
                 </button>
@@ -257,7 +257,7 @@ export function ConversationDetailPanel({
                 <button
                   type="button"
                   onClick={() => toast.info('Viewing all customer bookings')}
-                  className="text-[10px] text-[#7C3AED] hover:underline"
+                  className="text-[10px] text-teal-600 hover:underline"
                 >
                   View all
                 </button>
@@ -312,7 +312,7 @@ export function ConversationDetailPanel({
                   className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors group"
                 >
                   <div className="flex items-center gap-2">
-                    <ActionIcon className="size-3.5 text-[#7C3AED] group-hover:scale-105 transition-transform" />
+                    <ActionIcon className="size-3.5 text-teal-600 group-hover:scale-105 transition-transform" />
                     <span>{qa.label}</span>
                   </div>
                   <ChevronRight className="size-3 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
@@ -367,12 +367,12 @@ export function ConversationDetailPanel({
           <CardHeader className="pb-2 pt-3.5 px-3.5">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                <Sparkles className="size-3.5 text-[#7C3AED]" /> Automation &amp; AI
+                <Sparkles className="size-3.5 text-teal-600" /> Automation &amp; AI
               </CardTitle>
               <Switch
                 checked={isAiHandled}
                 onCheckedChange={handleAiToggle}
-                className="scale-75 data-[state=checked]:bg-[#7C3AED]"
+                className="scale-75 data-[state=checked]:bg-teal-600"
               />
             </div>
           </CardHeader>
@@ -395,7 +395,7 @@ export function ConversationDetailPanel({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Workflow:</span>
-              <span className="font-semibold text-[#7C3AED]">Booking Enquiry</span>
+              <span className="font-semibold text-teal-600">Booking Enquiry</span>
             </div>
           </CardContent>
         </Card>

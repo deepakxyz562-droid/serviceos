@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Target, Plus, Search, RefreshCw, Phone, Mail, MapPin,
   MoreHorizontal, Pencil, Trash2, Eye,
-  ArrowRight, Clock,
+  ArrowRight, ArrowLeft, Clock,
   BarChart3,
   List, ArrowUpDown, ChevronUp, ChevronDown,
   CheckCircle2, X,
@@ -130,6 +130,7 @@ export function LeadsView() {
   // user clicks "Convert" so the New Job form opens pre-filled.
   const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
   const setGlobalView = useAppStore((s) => s.setActiveView);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   // Cross-view "New X" create signal — when the sidebar's "+ Create" dropdown
   // or the dashboard's "Add Lead" quick action sets pendingCreate to 'lead',
   // we open the New Lead form and clear the signal so a refresh doesn't
@@ -1067,6 +1068,18 @@ export function LeadsView() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         {/* Title row with count badge */}
         <div className="flex items-center gap-3">
+          {isBgos && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentView('dashboard')}
+              className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 -ml-1 gap-1"
+              title="Back to Dashboard"
+            >
+              <ArrowLeft className="size-4" />
+              <span className="hidden sm:inline text-xs font-semibold">Back</span>
+            </Button>
+          )}
           <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm">
             <Target className="size-5 text-white" />
           </div>

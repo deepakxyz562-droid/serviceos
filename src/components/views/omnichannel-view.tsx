@@ -13,7 +13,7 @@ import {
   Paperclip, Smile, Image as ImageIcon,
   Calendar, Zap, RotateCcw, User,
   Plus, ChevronDown, Check, MoreHorizontal,
-  Tag, ArrowRight, ShieldCheck, FileText,
+  Tag, ArrowRight, ArrowLeft, ShieldCheck, FileText,
   TrendingUp, Flame, Timer, Monitor, Smartphone,
   Laptop, MapPin, Keyboard, Eye, RefreshCw, AlertCircle, Play,
 } from 'lucide-react';
@@ -570,6 +570,7 @@ export const LIVE_VISITORS_DATA: LiveVisitorTelemetry[] = [
 ];
 
 export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' | 'visitors' | 'tickets' } = {}) {
+  const setCurrentView = useAppStore((state) => state.setCurrentView);
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [selectedConversationId, setSelectedConversationId] = useState<string>('conv_sarah');
   const [activeChannelPill, setActiveChannelPill] = useState<string>('all');
@@ -806,9 +807,19 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP CHANNEL TRIAGE HEADER (Matching Reference Screenshot 2 & 3)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3 flex items-center justify-between shrink-0 z-30 shadow-2xs">
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="size-10 rounded-2xl bg-[#7C3AED] text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 z-30 shadow-2xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCurrentView('dashboard')}
+            className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 -ml-1 gap-1"
+            title="Back to Dashboard"
+          >
+            <ArrowLeft className="size-4" />
+            <span className="hidden sm:inline text-xs font-semibold">Back</span>
+          </Button>
+          <div className="size-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
             <Inbox className="size-5" />
           </div>
           <div className="min-w-0">
@@ -829,11 +840,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           {[
             { id: 'all', label: 'All', badge: 12, icon: Inbox, color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
             { id: 'whatsapp', label: 'WhatsApp', badge: 4, icon: MessageCircle, color: 'bg-emerald-500 text-white' },
-            { id: 'livechat', label: 'Live Chat', badge: 3, icon: MessageSquare, color: 'bg-[#7C3AED] text-white' },
+            { id: 'livechat', label: 'Live Chat', badge: 3, icon: MessageSquare, color: 'bg-teal-600 text-white' },
             { id: 'instagram', label: 'Instagram', badge: 2, icon: Instagram, color: 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white' },
             { id: 'facebook', label: 'Facebook', badge: 1, icon: MessageSquare, color: 'bg-blue-600 text-white' },
             { id: 'email', label: 'Email', badge: 1, icon: Mail, color: 'bg-sky-500 text-white' },
-            { id: 'sms', label: 'SMS', badge: 1, icon: MessageSquare, color: 'bg-purple-600 text-white' },
+            { id: 'sms', label: 'SMS', badge: 1, icon: MessageSquare, color: 'bg-teal-600 text-white' },
             { id: 'phone', label: 'Phone', badge: 1, icon: Phone, color: 'bg-indigo-600 text-white' },
           ].map((ch) => {
             const Icon = ch.icon;
@@ -846,7 +857,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 className={cn(
                   'relative size-9 rounded-full flex items-center justify-center transition-all hover:scale-108 shrink-0',
                   ch.color,
-                  isSelected ? 'ring-2 ring-offset-2 ring-[#7C3AED] shadow-sm' : 'opacity-85 hover:opacity-100'
+                  isSelected ? 'ring-2 ring-offset-2 ring-teal-600 shadow-sm' : 'opacity-85 hover:opacity-100'
                 )}
                 title={ch.label}
               >
@@ -876,7 +887,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               className={cn(
                 'flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center',
                 inboxTab === 'conversations'
-                  ? 'bg-purple-50 text-[#7C3AED] dark:bg-purple-950/50 dark:text-purple-300 shadow-2xs'
+                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 shadow-2xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               )}
             >
@@ -888,7 +899,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               className={cn(
                 'flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
                 inboxTab === 'visitors'
-                  ? 'bg-purple-50 text-[#7C3AED] dark:bg-purple-950/50 dark:text-purple-300 shadow-2xs'
+                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 shadow-2xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               )}
             >
@@ -903,12 +914,12 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               className={cn(
                 'flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
                 inboxTab === 'tickets'
-                  ? 'bg-purple-50 text-[#7C3AED] dark:bg-purple-950/50 dark:text-purple-300 shadow-2xs'
+                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 shadow-2xs'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               )}
             >
               Tickets
-              <span className="size-4 bg-purple-200 text-[#7C3AED] rounded-full text-[10px] flex items-center justify-center font-bold">
+              <span className="size-4 bg-teal-100 text-teal-700 rounded-full text-[10px] flex items-center justify-center font-bold">
                 5
               </span>
             </button>
@@ -923,7 +934,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search conversations..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-[#7C3AED]"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
               />
             </div>
             <button
@@ -975,7 +986,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     className={cn(
                       'p-2.5 rounded-2xl transition-all cursor-pointer relative group flex items-start gap-3',
                       isSelected
-                        ? 'bg-purple-50/60 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-800 shadow-2xs'
+                        ? 'bg-teal-50/60 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800 shadow-2xs'
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
                     )}
                   >
@@ -1043,7 +1054,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               <div className="p-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <Avatar className="size-10">
-                    <AvatarFallback className="text-xs font-bold bg-purple-100 text-[#7C3AED] dark:bg-purple-950">
+                    <AvatarFallback className="text-xs font-bold bg-teal-100 text-teal-700 dark:bg-teal-950">
                       {getInitials(selectedConversation.customerName)}
                     </AvatarFallback>
                   </Avatar>
@@ -1053,7 +1064,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                         {selectedConversation.customerName}
                       </h3>
                       {selectedConversation.vipStatus && (
-                        <Badge className="text-[10px] bg-purple-100 text-[#7C3AED] border-none font-bold py-0 h-4">
+                        <Badge className="text-[10px] bg-teal-100 text-teal-700 border-none font-bold py-0 h-4">
                           VIP
                         </Badge>
                       )}
@@ -1097,7 +1108,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       setMessageInput('Hi! I noticed you are interested in our 3BHK Deep Cleaning package. Let me confirm that right away for you.');
                       setComposerMode('reply');
                     }}
-                    className="h-8 text-xs font-bold rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-xs gap-1"
+                    className="h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs gap-1"
                   >
                     <Sparkles className="size-3.5" /> AI Reply
                   </Button>
@@ -1123,7 +1134,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       className={cn(
                         'py-2.5 border-b-2 transition-all',
                         active
-                          ? 'border-[#7C3AED] text-[#7C3AED] font-bold'
+                          ? 'border-teal-600 text-teal-600 font-bold'
                           : 'border-transparent hover:text-slate-900'
                       )}
                     >
@@ -1135,7 +1146,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
               {/* Chat Messages Stream */}
               <ScrollArea className="flex-1 min-h-0 p-4">
-                <div className="max-w-3xl mx-auto space-y-4">
+                <div className="w-full space-y-4">
                   {selectedConversation.messages.map((msg) => {
                     const isCustomer = msg.sender === 'customer';
                     const isAi = msg.sender === 'ai';
@@ -1143,7 +1154,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <div key={msg.id} className={cn('flex flex-col', isCustomer ? 'items-start' : 'items-end')}>
                         {/* Sender Label */}
                         {isAi && (
-                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#7C3AED] mb-1 pl-1">
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-600 mb-1 pl-1">
                             <Sparkles className="size-3" /> AI Assistant
                           </div>
                         )}
@@ -1154,27 +1165,27 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                             isCustomer
                               ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200/80 rounded-tl-xs'
                               : isAi
-                              ? 'bg-purple-50/70 dark:bg-purple-950/40 text-slate-900 dark:text-slate-100 border border-purple-200 dark:border-purple-800 rounded-tr-xs'
-                              : 'bg-[#7C3AED] text-white rounded-tr-xs'
+                              ? 'bg-teal-50/70 dark:bg-teal-950/40 text-slate-900 dark:text-slate-100 border border-teal-200 dark:border-teal-800 rounded-tr-xs'
+                              : 'bg-teal-600 text-white rounded-tr-xs'
                           )}
                         >
                           <p>{msg.content}</p>
 
                           {/* ── IN-CHAT INTERACTIVE PACKAGE CARDS (Screenshot 3 Parity) ── */}
                           {msg.packageCards && (
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 pt-2 border-t border-purple-200/60 dark:border-purple-800">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 pt-2 border-t border-teal-200/60 dark:border-teal-800">
                               {msg.packageCards.map((pkg) => (
                                 <div
                                   key={pkg.id}
                                   className={cn(
                                     'p-2.5 rounded-xl border text-center transition-all bg-white dark:bg-slate-900 relative shadow-2xs flex flex-col justify-between',
                                     pkg.isPopular
-                                      ? 'border-[#7C3AED] ring-1 ring-[#7C3AED]'
+                                      ? 'border-teal-600 ring-1 ring-teal-600'
                                       : 'border-slate-200 dark:border-slate-800'
                                   )}
                                 >
                                   {pkg.isPopular && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#7C3AED] text-white absolute -top-2 left-1/2 -translate-x-1/2">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-600 text-white absolute -top-2 left-1/2 -translate-x-1/2">
                                       Most Popular
                                     </span>
                                   )}
@@ -1182,7 +1193,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                     <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-1">
                                       {pkg.name}
                                     </div>
-                                    <div className="text-sm font-extrabold text-[#7C3AED] mt-0.5">
+                                    <div className="text-sm font-extrabold text-teal-600 mt-0.5">
                                       {pkg.price}
                                     </div>
                                     <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -1193,7 +1204,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                   <button
                                     type="button"
                                     onClick={() => handleSelectPackage(pkg)}
-                                    className="mt-2 w-full py-1 text-[11px] font-bold rounded-lg border border-[#7C3AED] text-[#7C3AED] hover:bg-[#7C3AED] hover:text-white transition-colors"
+                                    className="mt-2 w-full py-1 text-[11px] font-bold rounded-lg border border-teal-600 text-teal-600 hover:bg-teal-600 hover:text-white transition-colors"
                                   >
                                     Select
                                   </button>
@@ -1204,13 +1215,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
                           {/* ── IN-CHAT SCHEDULE CONFIRMATION CHIPS (Screenshot 3 Parity) ── */}
                           {msg.confirmationCard && (
-                            <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-purple-200/60">
+                            <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-teal-200/60">
                               {msg.confirmationCard.actions.map((chip) => (
                                 <button
                                   key={chip}
                                   type="button"
                                   onClick={() => handleConfirmChip(chip)}
-                                  className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white dark:bg-slate-900 border border-[#7C3AED]/40 text-[#7C3AED] hover:bg-[#7C3AED] hover:text-white transition-all shadow-2xs"
+                                  className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white dark:bg-slate-900 border border-teal-600/40 text-teal-600 hover:bg-teal-600 hover:text-white transition-all shadow-2xs"
                                 >
                                   {chip}
                                 </button>
@@ -1229,7 +1240,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
               {/* Composer Toolbar & Input */}
               <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
-                <div className="max-w-3xl mx-auto space-y-2">
+                <div className="w-full space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <button
@@ -1237,7 +1248,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                         onClick={() => setComposerMode('reply')}
                         className={cn(
                           'text-xs font-bold px-2.5 py-1 rounded-lg transition-colors',
-                          composerMode === 'reply' ? 'bg-[#7C3AED] text-white' : 'text-slate-500 hover:bg-slate-100'
+                          composerMode === 'reply' ? 'bg-teal-600 text-white' : 'text-slate-500 hover:bg-slate-100'
                         )}
                       >
                         Reply
@@ -1263,7 +1274,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     </button>
                   </div>
 
-                  <div className="flex items-end gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-2 focus-within:ring-1 focus-within:ring-[#7C3AED]">
+                  <div className="flex items-end gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-2 focus-within:ring-1 focus-within:ring-teal-500">
                     <textarea
                       rows={2}
                       value={messageInput}
@@ -1288,7 +1299,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <button
                         type="button"
                         onClick={handleSendMessage}
-                        className="size-8 rounded-xl bg-[#7C3AED] text-white flex items-center justify-center hover:bg-[#6D28D9] transition-transform hover:scale-105"
+                        className="size-8 rounded-xl bg-teal-600 text-white flex items-center justify-center hover:bg-teal-700 transition-transform hover:scale-105"
                       >
                         <Send className="size-3.5" />
                       </button>
@@ -1493,13 +1504,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       className={cn(
                         'p-4 rounded-2xl bg-white dark:bg-slate-900 border transition-all cursor-pointer shadow-2xs flex items-center justify-between gap-4',
                         isSelected
-                          ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-xs'
+                          ? 'border-teal-500 ring-2 ring-teal-500/20 shadow-xs'
                           : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
                       )}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="relative flex-shrink-0">
-                          <div className="size-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-[#7C3AED] flex items-center justify-center font-bold text-xs">
+                          <div className="size-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 flex items-center justify-center font-bold text-xs">
                             {vis.shortId}
                           </div>
                           <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
@@ -1514,7 +1525,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                 vis.status === 'stalled'
                                   ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50'
                                   : vis.status === 'high_intent'
-                                  ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/50'
+                                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50'
                                   : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50'
                               )}
                             >
@@ -1532,7 +1543,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                             <span>•</span>
                             <span>{vis.device}</span>
                             <span>•</span>
-                            <span className="text-purple-600 font-medium">{vis.referral}</span>
+                            <span className="text-teal-600 font-medium">{vis.referral}</span>
                           </div>
                         </div>
                       </div>
@@ -1545,7 +1556,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                           setInboxTab('conversations');
                           toast.success(`Engaged with ${vis.name}`);
                         }}
-                        className="h-8 text-xs font-bold rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white flex-shrink-0"
+                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white flex-shrink-0"
                       >
                         Engage with Chat
                       </Button>
@@ -1558,7 +1569,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                    <Keyboard className="size-4 text-purple-600" /> Real-Time Keystroke Telemetry Preview
+                    <Keyboard className="size-4 text-teal-600" /> Real-Time Keystroke Telemetry Preview
                   </span>
                   <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
                     <span className="size-2 rounded-full bg-emerald-500 animate-pulse" /> Live Keystroke Mirror
@@ -1566,7 +1577,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
                   <span>"{selectedVisitor.currentKeystroke || 'Listening for live visitor keystrokes on page...'}"</span>
-                  <span className="w-1.5 h-3.5 bg-purple-600 animate-pulse inline-block" />
+                  <span className="w-1.5 h-3.5 bg-teal-600 animate-pulse inline-block" />
                 </div>
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-semibold text-slate-500">Suggested 1-Click Instant Replies:</span>
@@ -1584,7 +1595,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                           setMessageInput(reply);
                           toast.success('Inserted reply into chat composer');
                         }}
-                        className="text-left p-2 rounded-xl bg-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:bg-slate-800 dark:hover:bg-purple-950 text-slate-700 dark:text-slate-300 text-xs transition-colors truncate"
+                        className="text-left p-2 rounded-xl bg-slate-100 hover:bg-teal-50 hover:text-teal-700 dark:bg-slate-800 dark:hover:bg-teal-950 text-slate-700 dark:text-slate-300 text-xs transition-colors truncate"
                       >
                         • "{reply}"
                       </button>
@@ -1600,7 +1611,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Proactive Radar Trigger Rules</h4>
                     <p className="text-[11px] text-slate-500">Automated conversion triggers executed by BGOS AI Receptionist</p>
                   </div>
-                  <Badge variant="outline" className="text-[10px] font-semibold text-purple-600">3 Rules Active</Badge>
+                  <Badge variant="outline" className="text-[10px] font-semibold text-teal-600">3 Rules Active</Badge>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 space-y-1">
@@ -1609,7 +1620,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <span className="size-2 rounded-full bg-emerald-500" />
                     </div>
                     <p className="text-[10px] text-slate-500">Dwell &gt; 40s on booking → Urgency availability nudge</p>
-                    <span className="text-[10px] text-purple-600 font-semibold">14 conversions today</span>
+                    <span className="text-[10px] text-teal-600 font-semibold">14 conversions today</span>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
@@ -1617,7 +1628,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <span className="size-2 rounded-full bg-emerald-500" />
                     </div>
                     <p className="text-[10px] text-slate-500">Quote &gt; $250 → Audio chime alert to live agent</p>
-                    <span className="text-[10px] text-purple-600 font-semibold">9 alerts dispatched</span>
+                    <span className="text-[10px] text-teal-600 font-semibold">9 alerts dispatched</span>
                   </div>
                   <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 space-y-1">
                     <div className="flex items-center justify-between">
@@ -1625,7 +1636,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <span className="size-2 rounded-full bg-emerald-500" />
                     </div>
                     <p className="text-[10px] text-slate-500">Visits &gt; 2 without booking → 10% welcome coupon</p>
-                    <span className="text-[10px] text-purple-600 font-semibold">22 offers delivered</span>
+                    <span className="text-[10px] text-teal-600 font-semibold">22 offers delivered</span>
                   </div>
                 </div>
               </div>
@@ -1636,13 +1647,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                    <Ticket className="size-5 text-[#7C3AED]" /> Customer Support Tickets
+                    <Ticket className="size-5 text-teal-600" /> Customer Support Tickets
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     Actionable tickets generated from conversations and forms.
                   </p>
                 </div>
-                <Badge variant="secondary" className="bg-purple-50 text-[#7C3AED] font-bold">
+                <Badge variant="secondary" className="bg-teal-50 text-teal-700 font-bold">
                   5 Open Tickets
                 </Badge>
               </div>
@@ -1669,7 +1680,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <Badge variant="outline" className="text-[10px]">
                         {ticket.priority}
                       </Badge>
-                      <Badge className="text-[10px] bg-purple-50 text-[#7C3AED]">
+                      <Badge className="text-[10px] bg-teal-50 text-teal-700">
                         {ticket.status}
                       </Badge>
                     </div>
@@ -1688,13 +1699,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               {/* Profile Header */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="size-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-[#7C3AED] flex items-center justify-center font-black text-sm">
+                  <div className="size-10 rounded-xl bg-teal-100 dark:bg-teal-950/60 text-teal-700 flex items-center justify-center font-black text-sm">
                     #{selectedVisitor.shortId}
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
                       <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{selectedVisitor.name}</h3>
-                      <Badge className="text-[9px] bg-purple-50 text-purple-700 dark:bg-purple-950/60 font-semibold border-none">
+                      <Badge className="text-[9px] bg-teal-50 text-teal-700 dark:bg-teal-950/60 font-semibold border-none">
                         Returning Lead
                       </Badge>
                     </div>
@@ -1715,7 +1726,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] text-slate-400 font-medium">Est. Value</span>
-                  <span className="text-xs font-bold text-purple-600">${selectedVisitor.quoteEstimate}.00</span>
+                  <span className="text-xs font-bold text-teal-600">${selectedVisitor.quoteEstimate}.00</span>
                 </div>
               </div>
 
@@ -1723,7 +1734,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Live Journey Timeline</span>
-                  <span className="text-[10px] font-semibold text-purple-600">Active Stream</span>
+                  <span className="text-[10px] font-semibold text-teal-600">Active Stream</span>
                 </div>
                 <div className="relative pl-4 space-y-3 before:absolute before:left-1.5 before:top-1 before:bottom-1 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
                   {selectedVisitor.timeline.map((step, idx) => (
@@ -1731,13 +1742,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <span
                         className={cn(
                           'absolute -left-4 top-1 size-2 rounded-full border-2 border-white dark:border-slate-900',
-                          step.isCurrent ? 'bg-rose-500 animate-ping' : 'bg-purple-500'
+                          step.isCurrent ? 'bg-rose-500 animate-ping' : 'bg-teal-500'
                         )}
                       />
                       <span
                         className={cn(
                           'absolute -left-4 top-1 size-2 rounded-full border-2 border-white dark:border-slate-900',
-                          step.isCurrent ? 'bg-rose-500' : 'bg-purple-500'
+                          step.isCurrent ? 'bg-rose-500' : 'bg-teal-500'
                         )}
                       />
                       <div className="flex items-center justify-between">
@@ -1753,16 +1764,16 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               </div>
 
               {/* AI Proactive Nudge Box */}
-              <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/50 space-y-2">
+              <div className="p-3 rounded-2xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/70 dark:border-teal-800/50 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-purple-600" /> AI Nudge Recommended
+                  <span className="text-xs font-bold text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-teal-600" /> AI Nudge Recommended
                   </span>
-                  <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-purple-700">
+                  <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-teal-700">
                     {selectedVisitor.aiNudge.rule}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 text-xs italic text-slate-700 dark:text-slate-300 shadow-2xs border border-purple-100 dark:border-purple-900">
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 text-xs italic text-slate-700 dark:text-slate-300 shadow-2xs border border-teal-100 dark:border-teal-900">
                   "{selectedVisitor.aiNudge.message}"
                 </div>
                 <div className="flex items-center gap-2 pt-0.5">
@@ -1772,7 +1783,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       setNudgeSent((prev) => ({ ...prev, [selectedVisitor.id]: true }));
                       toast.success(`AI Nudge dispatched to ${selectedVisitor.name}!`);
                     }}
-                    className="flex-1 h-8 text-xs font-bold rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
+                    className="flex-1 h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white"
                   >
                     {nudgeSent[selectedVisitor.id] ? 'Nudge Dispatched ✓' : 'Dispatch AI Nudge'}
                   </Button>
@@ -1794,7 +1805,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                   setInboxTab('conversations');
                   toast.success(`Instant human takeover initiated with ${selectedVisitor.name}`);
                 }}
-                className="w-full h-10 rounded-xl font-bold bg-[#7C3AED] hover:bg-[#6D28D9] text-white flex items-center justify-center gap-2 shadow-sm"
+                className="w-full h-10 rounded-xl font-bold bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center gap-2 shadow-sm"
               >
                 <Radio className="size-4 animate-pulse" /> Instant Human Takeover (Join As Agent)
               </Button>

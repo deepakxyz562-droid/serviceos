@@ -265,7 +265,7 @@ export function BgosLeadForm({
     setLeadForm((previous) => ({ ...previous, [field]: value }));
 
   return (
-    <div className="bgos-page space-y-6 max-w-4xl">
+    <div className="bgos-page space-y-6 w-full">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Leads &amp; CRM / Pipeline</p>
@@ -469,7 +469,7 @@ export function BgosLeadDetail({
   };
 
   return (
-    <div className="space-y-6 max-w-6xl animate-in fade-in duration-300">
+    <div className="space-y-6 w-full animate-in fade-in duration-300">
       {/* ── Top Workspace Context Header ── */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b">
         <div className="flex items-center gap-3">

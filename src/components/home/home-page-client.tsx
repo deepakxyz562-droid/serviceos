@@ -62,6 +62,18 @@ const ClaimCompletion = dynamic(
   () => import('@/components/marketplace/claim-completion').then(m => ({ default: m.ClaimCompletion })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
+const CustomerWebApp = dynamic(
+  () => import('@/components/customer-app/customer-web-app').then(m => ({ default: m.CustomerWebApp })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const ProWebApp = dynamic(
+  () => import('@/components/pro-app/pro-web-app').then(m => ({ default: m.ProWebApp })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const AdminWebApp = dynamic(
+  () => import('@/components/admin-app/admin-web-app').then(m => ({ default: m.AdminWebApp })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 
 import { useAppStore } from '@/store/app-store';
 import { authFetch, removeToken, refreshSession } from '@/lib/client-auth';
@@ -1226,6 +1238,37 @@ export default function HomePageClient() {
         <IOSInstallBanner />
       </>
     );
+  }
+
+  if (typeof window !== 'undefined') {
+    const hostProduct = productForHostname(window.location.hostname);
+    if (hostProduct === 'customer') {
+      return (
+        <>
+          <CustomerWebApp />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    if (hostProduct === 'pro') {
+      return (
+        <>
+          <ProWebApp />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    if (hostProduct === 'admin') {
+      return (
+        <>
+          <AdminWebApp />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
   }
 
   return (

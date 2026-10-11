@@ -20,9 +20,15 @@ export default function Index() {
   useEffect(() => {
     if (!mounted) return;
     if (isAuthenticated && role) {
-      router.replace(role === 'customer' ? '/(customer)/marketplace' : '/(employee)/today');
+      if (role === 'customer') {
+        router.replace('/(customer)/home');
+      } else if ((role as string) === 'pro') {
+        router.replace('/(pro)/home');
+      } else {
+        router.replace('/(employee)/today');
+      }
     } else if (isAuthenticated === false) {
-      router.replace('/(auth)/login');
+      router.replace('/(customer)/home');
     }
   }, [mounted, isAuthenticated, role]);
 

@@ -65,10 +65,10 @@ export function BgosDashboard() {
 
   // 6 Quick Action items from Screen 1
   const quickActions = [
-    { label: 'AI Post', icon: Sparkles, color: 'text-purple-600 bg-purple-500/10', action: () => navigate('socialMedia') },
+    { label: 'AI Post', icon: Sparkles, color: 'text-teal-600 bg-teal-500/10', action: () => navigate('socialMedia') },
     { label: 'Add Lead', icon: UserPlus, color: 'text-teal-600 bg-teal-500/10', action: handleAddLead },
     { label: 'Business Phone', icon: PhoneCall, color: 'text-blue-600 bg-blue-500/10', action: () => navigate('aiReceptionist') },
-    { label: 'Create Form', icon: FileInput, color: 'text-indigo-600 bg-indigo-500/10', action: () => navigate('formBuilder') },
+    { label: 'Create Form', icon: FileInput, color: 'text-emerald-600 bg-emerald-500/10', action: () => navigate('formBuilder') },
     { label: 'Book Appt', icon: CalendarCheck, color: 'text-amber-600 bg-amber-500/10', action: () => navigate('scheduling') },
     { label: 'Ask Review', icon: Star, color: 'text-emerald-600 bg-emerald-500/10', action: () => navigate('reviews') },
   ];
@@ -156,7 +156,7 @@ export function BgosDashboard() {
                 48
               </strong>
             </div>
-            <div className="flex size-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
               <PhoneCall size={18} />
             </div>
           </div>

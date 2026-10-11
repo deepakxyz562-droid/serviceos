@@ -329,14 +329,25 @@ html.bgos-theme.dark {
   color: var(--accent-foreground);
 }
 
-/* Page Container */
+/* Page Container — 100% Fluid Workstation Width */
 .bgos-page {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 24px 32px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+@media (min-width: 768px) {
+  .bgos-page {
+    padding: 20px 28px;
+  }
+}
+@media (min-width: 1280px) {
+  .bgos-page {
+    padding: 24px 32px;
+  }
 }
 
 /* Dashboard Specific Layout */
@@ -422,15 +433,15 @@ html.bgos-theme.dark .bgos-trend-pill {
 
 /* AI Assistant Card in Dashboard */
 .bgos-ai-card {
-  background: linear-gradient(135deg, #1e1b4b, #312e81);
+  background: linear-gradient(135deg, #022b2f, #075e54);
   color: white;
   border-radius: 16px;
   padding: 24px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  box-shadow: 0 10px 25px rgba(49, 46, 129, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 25px rgba(2, 43, 47, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   position: relative;
   overflow: hidden;
 }
