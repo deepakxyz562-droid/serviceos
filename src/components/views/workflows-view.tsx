@@ -1585,26 +1585,7 @@ export function WorkflowsView() {
               <div>
                 <h4 className="text-sm font-semibold mb-3">Recent Executions</h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {selectedWorkflow.executionCount > 0 ? [
-                    { id: 'ex1', status: 'success', time: '2 hours ago', duration: '1.2s' },
-                    { id: 'ex2', status: 'success', time: '5 hours ago', duration: '0.8s' },
-                    { id: 'ex3', status: 'error', time: '1 day ago', duration: '0.3s' },
-                    { id: 'ex4', status: 'success', time: '1 day ago', duration: '1.5s' },
-                    { id: 'ex5', status: 'success', time: '2 days ago', duration: '0.9s' },
-                  ].map(exec => (
-                    <div key={exec.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/50 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('size-2 rounded-full', exec.status === 'success' ? 'bg-emerald-500' : 'bg-red-500')} />
-                        <span className="capitalize font-medium">{exec.status}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-muted-foreground">
-                        <span>{exec.duration}</span>
-                        <span>{exec.time}</span>
-                      </div>
-                    </div>
-                  )) : (
-                    <p className="text-sm text-muted-foreground text-center py-4">No executions yet</p>
-                  )}
+                  <p className="text-sm text-muted-foreground text-center py-4">Execution details are unavailable in this view. Total recorded executions: {selectedWorkflow.executionCount}.</p>
                 </div>
               </div>
 

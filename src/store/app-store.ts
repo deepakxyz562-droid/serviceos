@@ -66,6 +66,9 @@ interface AppState {
   toggleDarkMode: () => void;
   setDarkMode: (dark: boolean) => void;
 
+  aiDrawerOpen: boolean;
+  setAiDrawerOpen: (open: boolean) => void;
+
   // Search
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -225,7 +228,7 @@ export const useAppStore = create<AppState>()(
     });
   },
   setAuthHydrated: (hydrated: boolean) => set({ authHydrated: hydrated }),
-  clearAuth: () => set({ auth: initialAuthState, authHydrated: true, blueprint: null, countryPack: getCountryPack('US') }),
+  clearAuth: () => set({ auth: initialAuthState, authHydrated: true, aiDrawerOpen: false, blueprint: null, countryPack: getCountryPack('US') }),
 
   // Business Blueprint & Country Pack
   blueprint: null,
@@ -277,6 +280,8 @@ export const useAppStore = create<AppState>()(
   setDarkMode: (dark: boolean) => set({ darkMode: dark }),
 
   // Search
+  aiDrawerOpen: false,
+  setAiDrawerOpen: (open: boolean) => set({ aiDrawerOpen: open }),
   searchQuery: '',
   setSearchQuery: (query: string) => set({ searchQuery: query }),
 

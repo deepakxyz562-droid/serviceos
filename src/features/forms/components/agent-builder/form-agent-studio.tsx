@@ -77,6 +77,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { isBgosWorkspace } from '../../../../../shared/product-context';
 
 // Complete 16 Channels Matching Jotform Screenshot
 //
@@ -172,6 +173,8 @@ export function FormAgentStudio({
   onBack,
   siteOrigin,
 }: FormAgentStudioProps) {
+  const isBgos = isBgosWorkspace(useAppStore(s => s.auth));
+  const visibleChannels = isBgos ? CHANNELS_LIST.filter(channel => !['shopify', 'crm', 'canva', 'presentation', 'platforms'].includes(channel.id)) : CHANNELS_LIST;
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
   const [studioTab, setStudioTab] = useState<StudioTabType>('overview');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
@@ -309,6 +312,7 @@ export function FormAgentStudio({
       });
 
       const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Agent could not be saved.');
 
       // If the API returned a saved agent (with real DB id/slug), update
       // the local state with the persisted values. This prevents duplicate
@@ -374,7 +378,7 @@ export function FormAgentStudio({
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP NAVIGATION BAR (Matching AI Assistant Studio Reference)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3.5 flex items-center justify-between shrink-0 z-30 shadow-2xs">
+      <header className="bgos-studio-header border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-3.5 flex items-center justify-between shrink-0 z-30 shadow-2xs">
         <div className="flex items-center gap-4 min-w-0">
           {onBack && (
             <Button
@@ -435,7 +439,7 @@ export function FormAgentStudio({
             className="h-9 text-xs font-bold px-4 rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-xs gap-1.5"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-            Publish Changes
+            Save Changes
           </Button>
         </div>
       </header>
@@ -452,6 +456,7 @@ export function FormAgentStudio({
           { id: 'skills', label: 'Skills', icon: Sparkles },
           { id: 'appearance', label: 'Appearance', icon: Paintbrush },
           { id: 'test', label: 'Test Lab', icon: Bot },
+          { id: 'publish', label: 'Publish', icon: Globe },
           { id: 'analytics', label: 'Analytics', icon: BarChart2 },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -489,6 +494,10 @@ export function FormAgentStudio({
           onNavigateTab={(tab) => setStudioTab(tab)}
           onOpenSettings={() => setSettingsOpen(true)}
           businessName={businessName}
+          channelStatus={channelBadgeMap}
+          onOpenInstagramModal={() => setIsInstagramModalOpen(true)}
+          onOpenWhatsAppModal={() => setIsWhatsAppModalOpen(true)}
+          onOpenForm={setActiveConnectedFormModal}
         />
       )}
 
@@ -627,12 +636,12 @@ export function FormAgentStudio({
                 CHANNELS &amp; INTEGRATIONS
               </span>
               <Badge variant="outline" className="text-[9px] text-slate-400 border-slate-700">
-                16 Available
+                {visibleChannels.length} channels
               </Badge>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-1">
-              {CHANNELS_LIST.map((c) => {
+              {visibleChannels.map((c) => {
                 const IconComponent = c.icon;
                 const isSelected = selectedChannel === c.id;
                 // Real per-channel connection state from the DB (or
@@ -1026,13 +1035,12 @@ export function FormAgentStudio({
         </div>
       )}
 
-      {/* ── ANALYTICS TAB ── */}
       {studioTab === 'analytics' && (
-        <div className="flex-1 overflow-y-auto p-6 bg-[#F4FAF9] dark:bg-slate-950">
-          <div className="max-w-5xl mx-auto space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
+          <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <BarChart2 className="size-5 text-[#7C3AED]" /> Assistant Performance &amp; Telemetry
                 </h2>
                 <p className="text-xs text-muted-foreground">
@@ -1162,6 +1170,8 @@ export function FormAgentStudio({
               onChange={setAgent}
               siteOrigin={siteOrigin}
               onSave={() => handleSave(agent)}
+              onOpenInstagramModal={() => setIsInstagramModalOpen(true)}
+              onOpenWhatsAppModal={() => setIsWhatsAppModalOpen(true)}
             />
           </div>
         </div>

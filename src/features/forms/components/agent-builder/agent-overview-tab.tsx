@@ -47,7 +47,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { FormAgentData, AgentChannelType } from '@/features/forms/types/agent-types';
+import { FormAgentData, AgentChannelType, ConnectedFormRef } from '@/features/forms/types/agent-types';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +57,10 @@ export interface AgentOverviewTabProps {
   onNavigateTab: (tab: any) => void;
   onOpenSettings?: () => void;
   businessName?: string;
+  channelStatus?: Partial<Record<AgentChannelType, 'ACTIVE' | 'Connect'>>;
+  onOpenInstagramModal?: () => void;
+  onOpenWhatsAppModal?: () => void;
+  onOpenForm?: (form: ConnectedFormRef) => void;
 }
 
 interface ChatMessage {
@@ -82,6 +86,10 @@ export function AgentOverviewTab({
   onNavigateTab,
   onOpenSettings,
   businessName = 'deepak chandra\'s Workspace',
+  channelStatus,
+  onOpenInstagramModal,
+  onOpenWhatsAppModal,
+  onOpenForm,
 }: AgentOverviewTabProps) {
   // Device Preview Mode (Desktop vs Mobile)
   const [deviceMode, setDeviceMode] = useState<'desktop' | 'mobile'>('desktop');
@@ -350,7 +358,7 @@ export function AgentOverviewTab({
                   name: 'Website Chat',
                   icon: MessageSquare,
                   colorClass: 'bg-purple-100 text-[#7C3AED] dark:bg-purple-950/60 dark:text-purple-300',
-                  status: 'Online',
+                  status: chatbotConfig.enabled !== false ? 'Online' : 'Disabled',
                   tabTarget: 'appearance',
                 },
                 {
@@ -358,7 +366,7 @@ export function AgentOverviewTab({
                   name: 'WhatsApp',
                   icon: MessageCircle,
                   colorClass: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-300',
-                  status: 'Connected',
+                  status: !channelStatus ? 'Connected' : channelStatus.whatsapp === 'ACTIVE' ? 'Connected' : 'Connect',
                   tabTarget: 'channels',
                 },
                 {
@@ -366,7 +374,7 @@ export function AgentOverviewTab({
                   name: 'Facebook Messenger',
                   icon: MessageSquare,
                   colorClass: 'bg-blue-100 text-blue-600 dark:bg-blue-950/60 dark:text-blue-300',
-                  status: 'Connected',
+                  status: !channelStatus ? 'Connected' : channelStatus.messenger === 'ACTIVE' ? 'Connected' : 'Connect',
                   tabTarget: 'channels',
                 },
                 {
@@ -374,7 +382,7 @@ export function AgentOverviewTab({
                   name: 'Instagram',
                   icon: Instagram,
                   colorClass: 'bg-pink-100 text-pink-600 dark:bg-pink-950/60 dark:text-pink-300',
-                  status: 'Connected',
+                  status: !channelStatus ? 'Connected' : channelStatus.instagram === 'ACTIVE' ? 'Connected' : 'Connect',
                   tabTarget: 'channels',
                 },
                 {
@@ -382,7 +390,7 @@ export function AgentOverviewTab({
                   name: 'Google Business',
                   icon: Globe,
                   colorClass: 'bg-amber-100 text-amber-600 dark:bg-amber-950/60 dark:text-amber-300',
-                  status: 'Connected',
+                  status: 'Connect',
                   tabTarget: 'channels',
                 },
                 {
@@ -390,7 +398,7 @@ export function AgentOverviewTab({
                   name: 'Email',
                   icon: Mail,
                   colorClass: 'bg-sky-100 text-sky-600 dark:bg-sky-950/60 dark:text-sky-300',
-                  status: 'Connected',
+                  status: !channelStatus ? 'Connected' : channelStatus.gmail === 'ACTIVE' ? 'Connected' : 'Connect',
                   tabTarget: 'channels',
                 },
                 {
@@ -398,7 +406,7 @@ export function AgentOverviewTab({
                   name: 'SMS',
                   icon: MessageSquare,
                   colorClass: 'bg-purple-100 text-purple-600 dark:bg-purple-950/60 dark:text-purple-300',
-                  status: 'Connected',
+                  status: !channelStatus ? 'Connected' : channelStatus.sms === 'ACTIVE' ? 'Connected' : 'Connect',
                   tabTarget: 'channels',
                 },
                 {
@@ -406,16 +414,27 @@ export function AgentOverviewTab({
                   name: 'Phone (AI Receptionist)',
                   icon: Phone,
                   colorClass: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300',
-                  status: 'Connected',
+                  status: !channelStatus ? 'Connected' : channelStatus.phone === 'ACTIVE' ? 'Connected' : 'Connect',
                   tabTarget: 'channels',
                 },
               ].map((ch) => {
                 const Icon = ch.icon;
+                const isOnlineOrConnected = ch.status === 'Connected' || ch.status === 'Online';
                 return (
                   <div
                     key={ch.id}
                     className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors group cursor-pointer"
-                    onClick={() => onNavigateTab(ch.tabTarget)}
+                    onClick={() => {
+                      if (ch.id === 'instagram' && onOpenInstagramModal) {
+                        onOpenInstagramModal();
+                        return;
+                      }
+                      if (ch.id === 'whatsapp' && onOpenWhatsAppModal) {
+                        onOpenWhatsAppModal();
+                        return;
+                      }
+                      onNavigateTab(ch.tabTarget);
+                    }}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={cn('size-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs', ch.colorClass)}>
@@ -423,8 +442,16 @@ export function AgentOverviewTab({
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">{ch.name}</div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-600 font-medium">
-                          <span className="size-1.5 rounded-full bg-emerald-500" />
+                        <div className={cn(
+                          'flex items-center gap-1.5 text-[10px] font-medium',
+                          isOnlineOrConnected
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-amber-600 dark:text-amber-400'
+                        )}>
+                          <span className={cn(
+                            'size-1.5 rounded-full',
+                            isOnlineOrConnected ? 'bg-emerald-500' : 'bg-amber-500'
+                          )} />
                           <span>{ch.status}</span>
                         </div>
                       </div>
@@ -435,9 +462,18 @@ export function AgentOverviewTab({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (ch.id === 'instagram' && onOpenInstagramModal) {
+                            onOpenInstagramModal();
+                            return;
+                          }
+                          if (ch.id === 'whatsapp' && onOpenWhatsAppModal) {
+                            onOpenWhatsAppModal();
+                            return;
+                          }
                           onNavigateTab(ch.tabTarget);
                         }}
                         className="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/60 flex items-center justify-center"
+                        title={`Configure ${ch.name}`}
                       >
                         <Settings className="size-3.5" />
                       </button>

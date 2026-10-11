@@ -1254,6 +1254,19 @@ export function FormStudioBuilder({
           >
             Settings
           </button>
+
+          <button
+            type="button"
+            onClick={() => { setStudioTab('publish'); setIsPreviewMode(false); }}
+            className={cn(
+              'px-3.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer',
+              studioTab === 'publish' && !isPreviewMode
+                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-zinc-200'
+            )}
+          >
+            Publish
+          </button>
         </div>
 
         {/* Right: Autosave Status, Undo/Redo, Preview Switch, Quick Actions */}

@@ -112,21 +112,7 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
       onChange={(updated) => {
         setActiveStudioAgent(updated);
       }}
-      onSave={async (savedAgent) => {
-        setActiveStudioAgent(savedAgent);
-        try {
-          const res = await fetch('/api/forms/agents', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(savedAgent),
-          });
-          if (res.ok) {
-            toast.success('AI Agent settings saved successfully!');
-          }
-        } catch {
-          toast.error('Failed to save AI Agent settings');
-        }
-      }}
+      onSave={(savedAgent) => setActiveStudioAgent(savedAgent)}
       onBack={() => {
         handleBackToDashboard();
       }}

@@ -8,6 +8,7 @@ export default async function BgosPage({ searchParams }: {
   for (const [key, value] of Object.entries(await searchParams)) {
     for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, item);
   }
+  query.set('product', 'bgos');
   if (!query.has('auth')) query.set('auth', 'login');
   redirect(`/app${query.size ? `?${query}` : ''}`);
 }

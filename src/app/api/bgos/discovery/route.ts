@@ -20,117 +20,6 @@ interface ProspectItem {
   provider: string;
 }
 
-const VERIFIED_B2B_DIRECTORY = [
-  {
-    id: 'dir_apex_01',
-    name: 'Sarah Jenkins',
-    company: 'Apex Cloud Solutions',
-    title: 'VP of Technology & Cloud Infrastructure',
-    email: 's.jenkins@apexcloud.io',
-    industry: 'technology cloud software it devops saas',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_beacon_02',
-    name: 'Marcus Vance',
-    company: 'Beacon Digital Growth Media',
-    title: 'Managing Director & Growth Strategist',
-    email: 'marcus@beacongrowthmedia.com',
-    industry: 'marketing media digital advertising seo agency content',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_vanguard_03',
-    name: 'Elena Rostova',
-    company: 'Vanguard Freight & Logistics',
-    title: 'Head of Global Fleet Operations',
-    email: 'elena.r@vanguardlogistics.com',
-    industry: 'logistics supply chain freight transport delivery shipping fleet operations',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_nova_04',
-    name: 'David Chen',
-    company: 'Nova Retail Ventures',
-    title: 'Chief Merchandising & Store Operations Officer',
-    email: 'david.chen@novaretail.com',
-    industry: 'retail commerce kirana store merchandise wholesale ecommerce inventory',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_pinnacle_05',
-    name: 'Rachel Sterling',
-    company: 'Pinnacle Field Services & MEP',
-    title: 'Director of Maintenance & Facilities',
-    email: 'rsterling@pinnaclefieldmep.com',
-    industry: 'field service maintenance facilities hvac electrical plumbing inspection construction',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_zenith_06',
-    name: 'Dr. Aris Thorne',
-    company: 'Zenith Health & Wellness Clinics',
-    title: 'Medical Director & Clinic Operations Head',
-    email: 'aris.thorne@zenithhealth.org',
-    industry: 'healthcare wellness clinic medical doctor salon spa health pharmacy',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_summit_07',
-    name: 'Kavita Patel',
-    company: 'Summit Advisory Partners',
-    title: 'Senior Partner, Financial & Tax Strategy',
-    email: 'kavita.patel@summitadvisory.in',
-    industry: 'finance consulting advisory accounting tax audit b2b legal',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_titan_08',
-    name: 'Michael Brandt',
-    company: 'Titan Precision Manufacturing',
-    title: 'VP Operations & Supply Chain',
-    email: 'm.brandt@titanprecisionmfg.com',
-    industry: 'manufacturing production engineering industrial factory supply operations',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_omni_09',
-    name: 'Aisha Al-Mansoor',
-    company: 'OmniTech Enterprise AI',
-    title: 'Head of B2B Solutions & Partnerships',
-    email: 'aisha@omnitech-ai.com',
-    industry: 'ai artificial intelligence technology software machine learning b2b enterprise',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_crest_10',
-    name: 'Liam Gallagher',
-    company: 'Crestview Commercial Construction',
-    title: 'General Contractor & Project Director',
-    email: 'lgallagher@crestviewbuilders.net',
-    industry: 'construction real estate building architecture civil contracting',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_starlight_11',
-    name: 'Pooja Sharma',
-    company: 'Starlight Salon & Aesthetics',
-    title: 'Founder & Managing Director',
-    email: 'pooja@starlightaesthetics.com',
-    industry: 'salon beauty aesthetics spa wellness personal care cosmetics',
-    verification: 'verified',
-  },
-  {
-    id: 'dir_blue_12',
-    name: 'Carlos Mendez',
-    company: 'BlueWave Hospitality & Food Services',
-    title: 'Director of Operations & Procurement',
-    email: 'carlos@bluewavehospitality.com',
-    industry: 'hospitality restaurant food catering beverage hotel services',
-    verification: 'verified',
-  },
-];
-
 async function getProviderKey(provider: 'apollo' | 'hunter'): Promise<string | null> {
   if (provider === 'apollo') {
     const envKey =
@@ -198,16 +87,17 @@ export async function POST(request: NextRequest) {
         if (c.email) seenEmails.add(c.email.toLowerCase());
         prospects.push({
           id: c.id,
-          name: c.name || 'Verified Contact',
+          name: c.name || 'Contact',
           company: c.company || 'Direct Organization',
-          title: 'Executive / Decision Maker',
+          title: '',
           email: c.email || null,
-          verification: c.emailVerified ? 'verified' : 'valid_domain',
+          verification: 'unknown',
           provider: 'directory',
         });
       }
     } catch (err) {
-      console.warn('[discovery] Error querying native contacts:', err);
+      console.error('[discovery] Contact lookup failed:', err);
+      return NextResponse.json({ error: 'Contacts could not be loaded. Please retry.' }, { status: 503 });
     }
 
     // 1b. Query tenant's native leads
@@ -231,50 +121,16 @@ export async function POST(request: NextRequest) {
         prospects.push({
           id: l.id,
           name: l.name || 'Sales Prospect',
-          company: l.serviceType || 'Commercial Lead',
+          company: '',
           title: l.title || 'Inbound Prospect',
           email: l.email || null,
-          verification: 'verified',
+          verification: 'unknown',
           provider: 'directory',
         });
       }
     } catch (err) {
-      console.warn('[discovery] Error querying native leads:', err);
-    }
-
-    // 1c. Supplement with curated verified industry directory entries matching query
-    const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean);
-    const curatedMatches = VERIFIED_B2B_DIRECTORY.filter((entry) => {
-      if (entry.email && seenEmails.has(entry.email.toLowerCase())) return false;
-      const haystack = `${entry.name} ${entry.company} ${entry.title} ${entry.email} ${entry.industry}`.toLowerCase();
-      return searchTerms.some((term) => haystack.includes(term));
-    });
-
-    for (const match of curatedMatches) {
-      prospects.push({
-        id: match.id,
-        name: match.name,
-        company: match.company,
-        title: match.title,
-        email: match.email,
-        verification: match.verification,
-        provider: 'directory',
-      });
-    }
-
-    // If query has no keyword match, provide default top directory records so results are never empty
-    if (prospects.length === 0) {
-      for (const item of VERIFIED_B2B_DIRECTORY.slice(0, 6)) {
-        prospects.push({
-          id: item.id,
-          name: item.name,
-          company: item.company,
-          title: item.title,
-          email: item.email,
-          verification: item.verification,
-          provider: 'directory',
-        });
-      }
+      console.error('[discovery] Lead lookup failed:', err);
+      return NextResponse.json({ error: 'Leads could not be loaded. Please retry.' }, { status: 503 });
     }
 
     const pageSize = 20;
@@ -295,7 +151,7 @@ export async function POST(request: NextRequest) {
     const providerLabel = provider === 'apollo' ? 'Apollo' : 'Hunter';
     return NextResponse.json(
       {
-        error: `${providerLabel} API key is not configured. Please configure it in SuperAdmin → Integration Credentials or ${provider === 'apollo' ? 'BGOS_APOLLO_API_KEY' : 'BGOS_HUNTER_API_KEY'} in server environment, or choose 'Verified B2B Directory' for instant results without external keys.`,
+        error: `${providerLabel} API key is not configured. Please configure it in SuperAdmin → Integration Credentials or ${provider === 'apollo' ? 'BGOS_APOLLO_API_KEY' : 'BGOS_HUNTER_API_KEY'} in server environment, or choose 'Workspace contacts' to search your saved records.`,
         code: 'PROVIDER_NOT_CONFIGURED',
       },
       { status: 409 },

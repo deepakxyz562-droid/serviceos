@@ -154,3 +154,6 @@ next-dev.pid
 # BGOS application identity assets
 !bgosmobile/assets/brand-mark.png
 !bgosmobile/assets/app-icon.png
+
+# Production BGOS brand asset
+!public/bgos/teal-mark.png

@@ -1,4 +1,5 @@
 'use client';
+import { useBgosDocumentBrand } from '@/components/bgos/document-brand';
 
 import type { ViewType } from '@/types/workflow';
 import { bgosView } from '../../../shared/bgos-navigation';
@@ -512,11 +513,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   const appProduct = getAppProduct(auth);
   const isBgos = appProduct === 'bgos' || appProduct === 'chatbotly';
-  useEffect(() => {
-    if (!isBgos) return;
-    document.documentElement.classList.add('bgos-theme');
-    return () => document.documentElement.classList.remove('bgos-theme');
-  }, [isBgos]);
+  useBgosDocumentBrand(isBgos);
   useEffect(() => {
     if (appProduct === 'bgos' || appProduct === 'chatbotly') {
       const allowed = bgosView(currentView) as ViewType;

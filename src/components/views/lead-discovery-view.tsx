@@ -155,7 +155,7 @@ export function LeadDiscoveryView() {
               onChange={(e) => setProvider(e.target.value)}
               className="h-10 w-full rounded-md border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="directory">Verified B2B Directory (Instant · No Key)</option>
+              <option value="directory">Workspace contacts (Instant · No Key)</option>
               <option value="apollo">Apollo · People search</option>
               <option value="hunter">Hunter · Domain search</option>
             </select>
@@ -197,7 +197,7 @@ export function LeadDiscoveryView() {
               <span>Multi-Source Intelligence</span>
             </div>
             <p>
-              <strong>Verified Directory:</strong> Works instantly with zero setup or API keys.
+              <strong>Workspace contacts:</strong> Works instantly with zero setup or API keys.
             </p>
             <p>
               <strong>Apollo & Hunter:</strong> Search global live business databases using credentials managed centrally in SuperAdmin or environment variables.

@@ -65,33 +65,33 @@ export function OverviewTab({ data, onNavigate, onTestCall }: OverviewTabProps) 
         <KpiCard
           icon={TrendingUp}
           title="AI Minutes"
-          value={usage ? `${usage.usedMinutes} / ${usage.includedMinutes}m` : '0 / 50m'}
+          value={usage ? `${usage.usedMinutes} / ${usage.includedMinutes}m` : '—'}
           subtext={
             usage
               ? `${usage.remainingMinutes}m left (~${Math.max(0, Math.floor(usage.remainingMinutes / 2))} calls)`
-              : '50m included'
+              : 'Usage unavailable'
           }
           color="emerald"
         />
         <KpiCard
           icon={PhoneCall}
           title="Concurrent Lines"
-          value={usage && usage.maxConcurrentCalls != null ? `${usage.activeCalls ?? 0} / ${usage.maxConcurrentCalls}` : '0 / 1'}
+          value={usage && usage.maxConcurrentCalls != null ? `${usage.activeCalls ?? 0} / ${usage.maxConcurrentCalls}` : '—'}
           subtext="Simultaneous call capacity"
           color="blue"
         />
         <KpiCard
           icon={Clock}
           title="Max Duration"
-          value={usage && usage.maxCallDurationSeconds ? `${Math.floor(usage.maxCallDurationSeconds / 60)} min` : '10 min'}
+          value={usage && usage.maxCallDurationSeconds ? `${Math.floor(usage.maxCallDurationSeconds / 60)} min` : '—'}
           subtext="Per call auto-limit"
           color="amber"
         />
         <KpiCard
           icon={Zap}
           title="Active Plan"
-          value={subscription?.addonPlan?.name || 'Starter Plan'}
-          subtext={subscription?.addonPlan ? `$${subscription.addonPlan.price}/month` : '$29/month'}
+          value={subscription?.addonPlan?.name || 'No plan loaded'}
+          subtext={subscription?.addonPlan ? `$${subscription.addonPlan.price}/month` : 'Check plan and usage'}
           color="violet"
         />
       </div>

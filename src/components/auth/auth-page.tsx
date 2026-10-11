@@ -1,6 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { BgosBrand } from '@/components/bgos/brand';
+import { useBgosDocumentBrand } from '@/components/bgos/document-brand';
+import { getAppProduct } from '../../../shared/product-context';
+import '@/components/bgos/workspace.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -126,6 +130,9 @@ const formVariants = {
 };
 
 export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedPlan }: AuthPageProps) {
+  const [isBgos, setIsBgos] = useState(false);
+  useEffect(() => { setIsBgos(getAppProduct() === 'bgos' || new URLSearchParams(window.location.search).get('product') === 'bgos'); }, []);
+  useBgosDocumentBrand(isBgos);
   const [isLoading, setIsLoading] = useState(false);
 
   // Business Login state
@@ -492,7 +499,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
 
   // ─── Main Render ───
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
+    <div className={`${isBgos ? "bgos-app " : ""}min-h-screen flex flex-col lg:flex-row`}>
       {/* Left Panel — Branding (desktop only) */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -531,12 +538,14 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 Back
               </button>
             )}
+            {isBgos ? <BgosBrand inverted /> : <>
             <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-400/30">
               <Zap className="w-5 h-5 text-emerald-400" />
             </div>
             <span className="text-white text-xl font-bold tracking-tight">
               Fieseros
             </span>
+            </>}
           </motion.div>
         </div>
 
@@ -548,9 +557,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.3, duration: 0.6 }}
             className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4"
           >
-            Operations OS for{' '}
+            {isBgos ? 'Business Growth OS for ' : 'Operations OS for '}
             <span className="bg-gradient-to-r from-emerald-300 to-teal-200 bg-clip-text text-transparent">
-              Service Businesses
+              {isBgos ? 'Your Business' : 'Service Businesses'}
             </span>
           </motion.h1>
           <motion.p
@@ -571,11 +580,11 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.6, duration: 0.5 }}
             className="mt-8 space-y-3"
           >
-            {[
+            {(isBgos ? ['Unified inbox and customer conversations', 'Leads, forms and appointments', 'AI assistant and business phone', 'Marketing and digital presence'] : [
               'Automated scheduling & dispatch',
               'Real-time job tracking & updates',
               'Customer management & invoicing',
-            ].map((feature, i) => (
+            ]).map((feature, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                   <ChevronRight className="w-3 h-3 text-emerald-400" />
@@ -638,12 +647,14 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
                 Back
               </button>
             )}
+            {isBgos ? <BgosBrand /> : <>
             <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200">
               <Zap className="w-4 h-4 text-emerald-600" />
             </div>
             <span className="text-lg font-bold text-slate-900 tracking-tight">
               Fieseros
             </span>
+            </>}
           </motion.div>
 
           {/* Business auth content (sign in / create account) */}
@@ -662,7 +673,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
             transition={{ delay: 0.8, duration: 0.5 }}
             className="text-center text-xs text-slate-400 mt-8"
           >
-            By continuing, you agree to Fieseros&apos;s{' '}
+            By continuing, you agree to {isBgos ? 'BGOS' : 'Fieseros'}&apos;s{' '}
             <span className="underline cursor-pointer hover:text-slate-500">Terms of Service</span>
             {' '}and{' '}
             <span className="underline cursor-pointer hover:text-slate-500">Privacy Policy</span>

@@ -1,11 +1,11 @@
 /* ==========================================================================
    BGOS (Business Growth OS) Design System & Tokens
    Official Brand: Teal / Emerald (#007F73) & Cyan Glow (#00BFAE)
-   AI Accent: Violet / Indigo (#7C3AED)
+   AI Accent: Teal, consistent with the BGOS brand
    ========================================================================== */
 
 html.bgos-theme {
-  --background: #f8fafc;
+  --background: #f4faf9;
   --foreground: #070b2d;
   --card: #ffffff;
   --card-foreground: #070b2d;
@@ -42,11 +42,11 @@ html.bgos-theme {
   --sidebar-border: #e2e8f0;
 
   /* AI Accent System */
-  --ai-primary: #7c3aed;
-  --ai-primary-glow: #8b5cf6;
-  --ai-accent: #ede9fe;
-  --ai-accent-foreground: #6d28d9;
-  --ai-border: #ddd6fe;
+  --ai-primary: #007f73;
+  --ai-primary-glow: #00bfae;
+  --ai-accent: #e3f6f2;
+  --ai-accent-foreground: #00665d;
+  --ai-border: #dcebe7;
 }
 
 html.bgos-theme.dark {
@@ -587,4 +587,56 @@ html.bgos-theme.dark .bgos-trend-pill {
   color: #991b1b;
   font-size: 11px;
   font-weight: 700;
+}
+
+/* Shared BGOS controls and legacy AI color migration, scoped to this product. */
+html.bgos-theme {
+  --color-purple-50: #f0fdfa;
+  --color-purple-100: #ccfbf1;
+  --color-purple-200: #99f6e4;
+  --color-purple-300: #5eead4;
+  --color-purple-400: #2dd4bf;
+  --color-purple-500: #00bfae;
+  --color-purple-600: #007f73;
+  --color-purple-700: #00665d;
+  --color-purple-800: #115e59;
+  --color-purple-900: #134e4a;
+  --color-purple-950: #042f2e;
+  --color-violet-50: #f0fdfa;
+  --color-violet-100: #ccfbf1;
+  --color-violet-200: #99f6e4;
+  --color-violet-300: #5eead4;
+  --color-violet-400: #2dd4bf;
+  --color-violet-500: #00bfae;
+  --color-violet-600: #007f73;
+  --color-violet-700: #00665d;
+  --color-violet-800: #115e59;
+  --color-violet-900: #134e4a;
+  --color-violet-950: #042f2e;
+  --color-indigo-50: #f0fdfa;
+  --color-indigo-100: #ccfbf1;
+  --color-indigo-200: #99f6e4;
+  --color-indigo-300: #5eead4;
+  --color-indigo-400: #2dd4bf;
+  --color-indigo-500: #00bfae;
+  --color-indigo-600: #007f73;
+  --color-indigo-700: #00665d;
+  --color-indigo-800: #115e59;
+  --color-indigo-900: #134e4a;
+  --color-indigo-950: #042f2e;
+}
+.bgos-app [data-slot="card"] { border-radius: 1rem; box-shadow: 0 2px 8px rgb(7 11 45 / .025); }
+.bgos-app [data-slot="button"], .bgos-app [data-slot="input"], .bgos-app [data-slot="select-trigger"] { border-radius: .65rem; }
+.bgos-app [data-slot="tabs-list"] { max-width: 100%; overflow-x: auto; justify-content: flex-start; }
+.bgos-app [class*="bg-[#7C3AED]"], .bgos-app [class*="bg-[#4648D4]"] { background-color: var(--primary); }
+.bgos-app [class*="text-[#7C3AED]"], .bgos-app [class*="text-[#4648D4]"] { color: var(--primary); }
+.bgos-app [class*="border-[#7C3AED]"] { border-color: var(--primary); }
+.bgos-app :is(button, a, input, textarea, select):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.bgos-app .bgos-studio-header { height: auto; min-height: 72px; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 767px) {
+  .bgos-header-tools { min-width: 0; }
+  .bgos-workspace-button { max-width: 180px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bgos-app *, .bgos-app *::before, .bgos-app *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }

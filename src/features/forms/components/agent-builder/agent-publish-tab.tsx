@@ -87,6 +87,8 @@ interface AgentPublishTabProps {
   onChange: (updated: FormAgentData) => void;
   siteOrigin?: string;
   onSave?: () => Promise<void> | void;
+  onOpenInstagramModal?: () => void;
+  onOpenWhatsAppModal?: () => void;
 }
 
 export function AgentPublishTab({
@@ -94,6 +96,8 @@ export function AgentPublishTab({
   onChange,
   siteOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://fieseros.com',
   onSave,
+  onOpenInstagramModal,
+  onOpenWhatsAppModal,
 }: AgentPublishTabProps) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -522,7 +526,13 @@ export function AgentPublishTab({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => useAppStore.getState().setCurrentView('whatsapp')}
+                  onClick={() => {
+                    if (onOpenWhatsAppModal) {
+                      onOpenWhatsAppModal();
+                    } else {
+                      useAppStore.getState().setCurrentView('whatsapp');
+                    }
+                  }}
                   className="text-[11px] h-6 px-2 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
                 >
                   Connect WhatsApp via Meta &rarr;
@@ -711,7 +721,13 @@ export function AgentPublishTab({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => useAppStore.getState().setCurrentView('integrations')}
+                  onClick={() => {
+                    if (onOpenInstagramModal) {
+                      onOpenInstagramModal();
+                    } else {
+                      useAppStore.getState().setCurrentView('integrations');
+                    }
+                  }}
                   className="text-[11px] h-6 px-2 text-pink-600 dark:text-pink-400 border-pink-300 dark:border-pink-800 hover:bg-pink-50 dark:hover:bg-pink-950/40"
                 >
                   Connect Instagram &rarr;

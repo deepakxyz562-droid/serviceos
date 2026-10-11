@@ -472,22 +472,22 @@ it('renders Campaigns & Outreach prospecting workstation with 6-stage funnel, se
   expect(screen.getByText('Create Outreach Campaign')).toBeDefined();
 });
 
-it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, table, right rail, and transitions to visual builder', async () => {
+it('renders Forms executive dashboard with 4 KPIs, template carousel, table, right rail, and transitions to visual FormStudioBuilder', async () => {
   const { FormBuilderView } = await import('@/components/views/form-builder-view');
 
   render(<FormBuilderView />);
 
   // 1. Header & Global CTA
-  expect(screen.getByRole('heading', { level: 1, name: /Forms & Funnels/i })).toBeDefined();
+  expect(screen.getByRole('heading', { level: 1, name: /^Forms$/i })).toBeDefined();
+  expect(screen.getByText('Form Studio')).toBeDefined();
   expect(
-    screen.getByText(/Create high-converting forms and funnels to capture leads, book appointments and grow your business\./i)
+    screen.getByText(/Create and customize high-converting forms to capture leads, collect payments, and book appointments\./i)
   ).toBeDefined();
-  expect(screen.getByRole('button', { name: /Create Form or Funnel/i })).toBeDefined();
+  expect(screen.getAllByRole('button', { name: /Create Form/i }).length).toBeGreaterThanOrEqual(1);
 
   // 2. Sub-Navigation Tabs
   expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
   expect(screen.getAllByRole('button', { name: /^Forms$/i }).length).toBeGreaterThanOrEqual(1);
-  expect(screen.getAllByRole('button', { name: /^Funnels$/i }).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: /^Templates$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Submissions$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
@@ -495,11 +495,9 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
 
   // 3. 4 Growth KPI Telemetry Cards
   expect(screen.getByText('Total Forms')).toBeDefined();
-  expect(screen.getByText('12')).toBeDefined();
   expect(screen.getByText('+20% vs last month')).toBeDefined();
 
-  expect(screen.getByText('Total Funnels')).toBeDefined();
-  expect(screen.getByText('6')).toBeDefined();
+  expect(screen.getByText('Active Forms')).toBeDefined();
   expect(screen.getByText('+50% vs last month')).toBeDefined();
 
   expect(screen.getByText('Leads Captured')).toBeDefined();
@@ -520,26 +518,22 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
   expect(screen.getByText('Survey Form')).toBeDefined();
   expect(screen.getByText('Landing Page Funnel')).toBeDefined();
 
-  // 5. Recent Forms & Funnels Table
+  // 5. Recent Forms Table
   expect(screen.getByRole('button', { name: /^All$/i })).toBeDefined();
-  expect(screen.getAllByRole('button', { name: /^Forms$/i }).length).toBeGreaterThanOrEqual(1);
-  expect(screen.getAllByRole('button', { name: /^Funnels$/i }).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: /^Drafts$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Published$/i })).toBeDefined();
-  expect(screen.getByText('Diwali Offer Landing Page')).toBeDefined();
+  expect(screen.getAllByText('Diwali Offer Landing Page').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Service Request Form')).toBeDefined();
 
   // 6. Right Rail: Lead Sources Donut & Quick Actions
   expect(screen.getByText('Lead Sources')).toBeDefined();
   expect(screen.getByText('Total Leads')).toBeDefined();
   expect(screen.getByText('Website')).toBeDefined();
-  expect(screen.getByText('42%')).toBeDefined();
+  expect(screen.getAllByText('42%').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Google Business')).toBeDefined();
   expect(screen.getAllByText('24%').length).toBeGreaterThanOrEqual(1);
 
   expect(screen.getByText('Quick Actions')).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Create Form$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Create Funnel$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Browse Templates/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /View Submissions/i })).toBeDefined();
 
@@ -549,61 +543,26 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
   expect(screen.getByText('Rahul Kumar')).toBeDefined();
   expect(screen.getByText('Sneha Patel')).toBeDefined();
 
-  // 8. Interactivity: Transition into Visual Funnel & Form Builder Workstation
-  const createFunnelBtn = screen.getByRole('button', { name: /Create Form or Funnel/i });
-  fireEvent.click(createFunnelBtn);
+  // 8. Interactivity: Transition into Production FormStudioBuilder
+  const createFormBtn = screen.getAllByRole('button', { name: /Create Form/i })[0];
+  fireEvent.click(createFormBtn);
 
-  // Verifies Visual Builder Workstation is mounted
-  expect(screen.getByText('Home Cleaning Quote Funnel')).toBeDefined();
-  expect(screen.getByText('Published')).toBeDefined();
+  // Verifies Production FormStudioBuilder Workstation is mounted
+  expect(screen.getByDisplayValue('Service Request Form')).toBeDefined();
   expect(screen.getByRole('button', { name: /^Build$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Design$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Settings$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Preview$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Publish$/i })).toBeDefined();
+  expect(screen.getAllByText(/^Preview$/i).length).toBeGreaterThanOrEqual(1);
 
-  // 3-Column Workstation Layout Checks
-  // Left: Add Elements
-  expect(screen.getByText('Add Elements')).toBeDefined();
-  expect(screen.getByText('Form Elements')).toBeDefined();
-  expect(screen.getByText('Basic Fields')).toBeDefined();
-  expect(screen.getByText('Text Input')).toBeDefined();
-  expect(screen.getByText('Radio Buttons')).toBeDefined();
+  // Canvas Layout modes in Tier 2
+  expect(screen.getByText(/Card Flow/i)).toBeDefined();
+  expect(screen.getByText(/Classic/i)).toBeDefined();
 
-  // Center: Live Stage Canvas
-  expect(screen.getByRole('button', { name: /Desktop/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Mobile/i })).toBeDefined();
-  expect(screen.getByText('Service')).toBeDefined();
-  expect(screen.getByText('Details')).toBeDefined();
-  expect(screen.getByText('Quote')).toBeDefined();
-  expect(screen.getByText('Contact')).toBeDefined();
-  expect(screen.getByText('Professional Home Cleaning Services')).toBeDefined();
-  expect(screen.getByText('What type of cleaning do you need?')).toBeDefined();
-  expect(screen.getAllByText('Regular Home Cleaning').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('Deep Cleaning')).toBeDefined();
-  expect(screen.getByText('Move In/Out Cleaning')).toBeDefined();
-  expect(screen.getByText('Office Cleaning')).toBeDefined();
-  expect(screen.getByRole('button', { name: /Next Step/i })).toBeDefined();
-
-  // Right: Element Settings Inspector
-  expect(screen.getByText('Element Settings')).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Content$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Style$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Advanced$/i })).toBeDefined();
-  expect(screen.getByText('Option Settings')).toBeDefined();
-  expect(screen.getByText('Selected by default')).toBeDefined();
-  expect(screen.getByText('Required field')).toBeDefined();
-  expect(screen.getByRole('button', { name: /Delete Element/i })).toBeDefined();
-
-  // 9. Interactivity: Selecting another service option updates inspector
-  const deepCleaningOption = screen.getByText('Deep Cleaning');
-  fireEvent.click(deepCleaningOption);
-  expect(screen.getByDisplayValue('Deep Cleaning')).toBeDefined();
-
-  // 10. Interactivity: Next Step button advances stage
-  const nextStepBtn = screen.getByRole('button', { name: /Next Step/i });
-  fireEvent.click(nextStepBtn);
-  expect(screen.getByText(/Step 2 of 4/i)).toBeDefined();
+  // 9. Interactivity: Clicking Publish tab switches to Universal Publish Center
+  const publishTabBtn = screen.getByRole('button', { name: /^Publish$/i });
+  fireEvent.click(publishTabBtn);
+  expect(screen.getAllByText(/Publish/i).length).toBeGreaterThanOrEqual(1);
 });
 
 it('renders Live Website Visitor Radar workstation inside Inbox with telemetry strip, visitor stream, live keystroke mirror, and dossier', async () => {

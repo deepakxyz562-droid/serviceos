@@ -17,10 +17,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   compress: true, // Enable gzip compression — critical for sitemaps (Google prefers compressed responses)
   typescript: {
-    // Next.js build runs typechecking in the same worker process which causes
-    // V8 heap exhaustion on large codebases. Type checking is handled locally
-    // and via CI instead of inside Docker production builds.
-    ignoreBuildErrors: true,
+    // Do not release a core application with unresolved TypeScript errors.
+    ignoreBuildErrors: false,
   },
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken"],

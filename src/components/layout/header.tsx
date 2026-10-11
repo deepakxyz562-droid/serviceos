@@ -228,7 +228,8 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false);
   const [messageDrawerOpen, setMessageDrawerOpen] = useState(false);
-  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
+  const aiDrawerOpen = useAppStore(s => s.aiDrawerOpen);
+  const setAiDrawerOpen = useAppStore(s => s.setAiDrawerOpen);
   const [blueprintWizardOpen, setBlueprintWizardOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -246,9 +247,10 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       const target = e.target as HTMLElement | null;
       const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       
+      if (isChatbotlyWorkspace(useAppStore.getState().auth)) return;
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
         e.preventDefault();
-        setAiDrawerOpen((prev) => !prev);
+        setAiDrawerOpen(!useAppStore.getState().aiDrawerOpen);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -724,7 +726,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     {!isAiAssistantDisabled && isAuthenticated && (
       <button
         type="button"
-        onClick={() => setAiDrawerOpen((prev) => !prev)}
+        onClick={() => setAiDrawerOpen(!useAppStore.getState().aiDrawerOpen)}
         className={cn(
           "fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-3.5 py-2.5 rounded-full shadow-lg transition-all cursor-pointer",
           "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white hover:shadow-2xl hover:scale-105 active:scale-95 border border-emerald-400/40",

@@ -12,7 +12,7 @@ export function BgosHeaderTools() {
   const [open, setOpen] = useState(false);
 
   const businessName = auth.tenant?.name || auth.workspace?.name || 'Your Business';
-  const allItems = BGOS_NAVIGATION.flatMap((group) => group.items);
+  const allItems = BGOS_NAVIGATION.flatMap((group) => group.items.map(item => ({ view: item.view, label: item.label })));
   const items = allItems.filter((item) =>
     item.label.toLowerCase().includes(query.toLowerCase())
   );
@@ -66,7 +66,7 @@ export function BgosHeaderTools() {
         <input
           id="bgos-search-input"
           aria-label="Find a BGOS page or tool"
-          placeholder="Search tools, leads, forms..."
+          placeholder="Find a page or tool…"
           value={query}
           onFocus={() => setOpen(true)}
           onChange={(event) => {
