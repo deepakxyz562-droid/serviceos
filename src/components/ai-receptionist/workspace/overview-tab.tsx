@@ -32,6 +32,9 @@ import {
   PhoneOutgoing as TestCallIcon,
   Sliders,
   Activity,
+  Sparkles,
+  Bot,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
