@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Text, Linking, View, Image, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { Text, Linking, View, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -13,11 +13,11 @@ import {
   Avatar,
   Badge,
   Chip,
-  MetricCard,
   colors,
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
+import { WEB_URL } from '../../src/lib/constants';
 import { useRouter } from 'expo-router';
 
 type Review = {
@@ -27,8 +27,14 @@ type Review = {
   comment?: string;
   source?: string;
   status?: string;
+  responseJson?: string;
   createdAt?: string;
 };
+
+function hasReply(review: Review): boolean {
+  try { return Boolean(JSON.parse(review.responseJson || '{}')?.text?.trim()); }
+  catch { return false; }
+}
 
 export default function GrowthScreen() {
   const router = useRouter();
@@ -42,18 +48,22 @@ export default function GrowthScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const reviewList = reviews.data?.reviews || [];
-  const pendingCount = reviewList.filter((r) => r.status === 'pending').length;
-  const repliedCount = reviewList.filter((r) => r.status === 'replied' || r.status === 'published').length;
+  const pendingCount = reviewList.filter((r) => !hasReply(r)).length;
+  const repliedCount = reviewList.filter((r) => hasReply(r)).length;
 
   const filteredReviews = reviewList.filter((r) => {
     if (reviewFilter === 'all') return true;
-    if (reviewFilter === 'pending') return r.status === 'pending';
-    if (reviewFilter === 'replied') return r.status === 'replied' || r.status === 'published';
+    if (reviewFilter === 'pending') return !hasReply(r);
+    if (reviewFilter === 'replied') return hasReply(r);
     return true;
   });
 
   async function requestReview() {
-    const reviewLink = workspace.data?.links.review || 'https://search.google.com/local/writereview';
+    const reviewLink = workspace.data?.links.review;
+    if (!reviewLink || !/^https:\/\//i.test(reviewLink)) {
+      setError('Configure your business review link in BGOS web before sending an invitation.');
+      return;
+    }
     const digits = phone.replace(/\D/g, '');
     if (digits.length < 8 || digits.length > 15) {
       setError('Enter a valid mobile number with country code.');
@@ -114,61 +124,29 @@ export default function GrowthScreen() {
           <Card style={{ gap: 12 }}>
             <View style={[ui.row, { justifyContent: 'space-between' }]}>
               <View style={[ui.row, { gap: 12, flex: 1 }]}>
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=200' }}
-                  style={{ width: 60, height: 60, borderRadius: 12 }}
-                  accessibilityLabel="Business storefront"
-                />
+                <Avatar name={workspace.data?.name || 'Business'} size={60} />
                 <View style={{ flex: 1 }}>
                   <Text style={[ui.heading, { fontSize: 17 }]}>
                     {workspace.data?.name || 'Your Business'}
                   </Text>
                   <Text style={ui.caption}>
-                    Verified Business Profile
+                    Business reviews
                   </Text>
                   <View style={[ui.row, { gap: 4, marginTop: 4 }]}>
                     <Text style={{ fontSize: 13, fontWeight: '800', color: '#D97706' }}>
-                      {reviewList.length ? (reviewList.reduce((acc, r) => acc + (r.rating || 5), 0) / reviewList.length).toFixed(1) : '5.0'} ★
+                      {reviewList.length ? (reviewList.reduce((acc, r) => acc + (r.rating || 0), 0) / reviewList.length).toFixed(1) : '—'} ★
                     </Text>
-                    <Text style={ui.caption}>({reviewList.length} verified reviews)</Text>
+                    <Text style={ui.caption}>({reviewList.length} loaded reviews)</Text>
                   </View>
                 </View>
               </View>
-              <Badge label="Connected" success />
             </View>
           </Card>
 
-          {/* 4 Stats Grid: Views, Searches, Calls, Directions */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            <MetricCard value="1,248" label="Profile Views" trend="+18%" trendPositive={true} icon="visibility" />
-            <MetricCard value="842" label="Search Appearances" trend="+12%" trendPositive={true} icon="search" />
-            <MetricCard value="406" label="Phone Calls" trend="+8%" trendPositive={true} icon="phone" />
-            <MetricCard value="326" label="Direction Requests" trend="+14%" trendPositive={true} icon="directions" />
-          </View>
-
-          {/* 30-Day Trend Chart Simulation Card */}
-          <Card style={{ gap: 10 }}>
-            <View style={[ui.row, { justifyContent: 'space-between' }]}>
-              <Text style={ui.heading}>Profile Views (Last 30 Days)</Text>
-              <Badge label="+18% vs Last Month" success />
-            </View>
-
-            {/* Sparkline Visual Simulation */}
-            <View style={styles.chartContainer}>
-              <View style={[styles.chartBar, { height: '40%' }]} />
-              <View style={[styles.chartBar, { height: '55%' }]} />
-              <View style={[styles.chartBar, { height: '45%' }]} />
-              <View style={[styles.chartBar, { height: '70%' }]} />
-              <View style={[styles.chartBar, { height: '85%' }]} />
-              <View style={[styles.chartBar, { height: '100%', backgroundColor: colors.brand }]} />
-            </View>
-            <View style={[ui.row, { justifyContent: 'space-between' }]}>
-              <Text style={ui.caption}>Week 1</Text>
-              <Text style={ui.caption}>Week 2</Text>
-              <Text style={ui.caption}>Week 3</Text>
-              <Text style={ui.caption}>Week 4</Text>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>This Week</Text>
-            </View>
+          <Card>
+            <Text style={ui.heading}>Google Business performance</Text>
+            <Text style={ui.body}>View account connection status and available Google metrics on BGOS web.</Text>
+            <Action secondary label="Open Google Business · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=reviews`).catch(() => setError('Could not open the browser.'))} />
           </Card>
 
           <Action
@@ -184,7 +162,7 @@ export default function GrowthScreen() {
         <View style={{ gap: 14 }}>
           {/* Ask for a Review Card */}
           <Card style={{ gap: 10 }}>
-            <Text style={ui.heading}>Ask for a Verified Review</Text>
+            <Text style={ui.heading}>Request a Customer Review</Text>
             <Text style={ui.body}>
               Send a personalized review invitation directly to your customer on WhatsApp with 1 tap.
             </Text>
@@ -197,7 +175,7 @@ export default function GrowthScreen() {
               placeholder="+91 98765 43210"
             />
             <Action
-              label="Send Review Request via WhatsApp"
+              label="Open Review Request in WhatsApp"
               icon="chat"
               disabled={!phone.trim()}
               onPress={requestReview}
@@ -244,9 +222,9 @@ export default function GrowthScreen() {
                     </View>
                   </View>
                   <Badge
-                    label={r.status === 'replied' || r.status === 'published' ? 'Replied' : 'Pending Reply'}
-                    success={r.status === 'replied' || r.status === 'published'}
-                    accent={r.status === 'pending'}
+                    label={hasReply(r) ? 'Replied' : 'Pending Reply'}
+                    success={hasReply(r)}
+                    accent={!hasReply(r)}
                   />
                 </View>
 
@@ -260,10 +238,10 @@ export default function GrowthScreen() {
 
                 {r.comment ? <Text style={ui.body}>{r.comment}</Text> : null}
 
-                {r.status === 'pending' && (
+                {!hasReply(r) && (
                   <Action
                     secondary
-                    label="Reply as AI / Owner"
+                    label="Reply in Google Business"
                     icon="reply"
                     onPress={() => Linking.openURL('https://business.google.com').catch(() => {})}
                   />
@@ -276,19 +254,3 @@ export default function GrowthScreen() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  chartContainer: {
-    height: 100,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    gap: 12,
-  },
-  chartBar: {
-    flex: 1,
-    backgroundColor: '#CCFBF1',
-    borderRadius: 6,
-  },
-});

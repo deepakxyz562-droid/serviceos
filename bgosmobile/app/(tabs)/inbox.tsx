@@ -26,7 +26,6 @@ import {
   Chip,
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
-import { useAuthStore } from '../../src/stores/auth-store';
 import { apiRequest } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
 import type { BgosConversation, BgosMessage, BgosWorkspace } from '../../../shared/bgos-contracts';
@@ -38,8 +37,7 @@ export default function InboxScreen() {
   const [selected, setSelected] = useState<BgosConversation | null>(null);
   const [channelFilter, setChannelFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const [ticketStatus, setTicketStatus] = useState('all');
-  const [engageFilter, setEngageFilter] = useState<'browsing' | 'queued' | 'chatting' | 'supervised'>('browsing');
+  const agents = useResource<{ agents: { id: string; slug?: string }[] }>('/api/forms/agents');
 
   const rawList = inbox.data || [];
 
@@ -49,15 +47,6 @@ export default function InboxScreen() {
     acc[ch] = (acc[ch] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
-
-  // Dynamic live ticket counts
-  const ticketCounts = {
-    all: rawList.length,
-    unassigned: rawList.filter((c) => !c.aiPaused && c.unreadCount > 0).length,
-    open: rawList.filter((c) => !c.aiPaused).length,
-    pending: rawList.filter((c) => c.aiPaused).length,
-    solved: rawList.filter((c) => c.status === 'closed' || c.status === 'solved').length,
-  };
 
   const items = rawList.filter((c) => {
     const matchesSearch = `${c.customerName || ''} ${c.lastMessage || ''}`
@@ -71,23 +60,16 @@ export default function InboxScreen() {
       return (c.channel || '').toLowerCase() === channelFilter.toLowerCase();
     }
 
-    if (activeTab === 'tickets') {
-      if (ticketStatus === 'all') return true;
-      if (ticketStatus === 'unassigned') return !c.aiPaused && c.unreadCount > 0;
-      if (ticketStatus === 'open') return !c.aiPaused;
-      if (ticketStatus === 'pending') return c.aiPaused;
-      if (ticketStatus === 'solved') return c.status === 'closed' || c.status === 'solved';
-      return true;
-    }
 
     return true;
   });
 
   const unreadTotal = rawList.reduce((s, c) => s + (c.unreadCount || 0), 0);
-  const user = useAuthStore((s) => s.user);
-  const chatLink = `${WEB_URL}/chat?workspace=${user?.workspaceId || 'live'}`;
+  const agent = agents.data?.agents?.[0];
+  const chatLink = agent ? `${WEB_URL}/chat/${encodeURIComponent(agent.slug || agent.id)}` : null;
 
   async function shareChatLink() {
+    if (!chatLink) { Alert.alert('Chat not configured', 'Configure an assistant in BGOS web before sharing its chat link.'); return; }
     try {
       await Share.share({
         title: `Chat with ${workspace.data?.name || 'our team'}`,
@@ -127,7 +109,6 @@ export default function InboxScreen() {
         />
         <Chip
           label="Tickets"
-          count={ticketCounts.open + ticketCounts.pending}
           selected={activeTab === 'tickets'}
           onPress={() => setActiveTab('tickets')}
         />
@@ -266,116 +247,20 @@ export default function InboxScreen() {
         </>
       )}
 
-      {/* ENGAGE (VISITOR RADAR) SCREEN */}
       {activeTab === 'engage' && (
-        <View style={{ gap: 16 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={ui.row}>
-              {(['browsing', 'queued', 'chatting', 'supervised'] as const).map((k) => (
-                <Chip
-                  key={k}
-                  label={k.charAt(0).toUpperCase() + k.slice(1)}
-                  selected={engageFilter === k}
-                  onPress={() => setEngageFilter(k)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-
-          {/* Radar Globe Graphic Card */}
-          <Card style={{ alignItems: 'center', paddingVertical: 32, gap: 14 }}>
-            <View style={styles.radarContainer}>
-              <View style={[styles.radarRing, { width: 140, height: 140, borderColor: colors.brand }]} />
-              <View style={[styles.radarRing, { width: 90, height: 90, borderColor: colors.accent }]} />
-              <View style={styles.radarCenter}>
-                <MaterialIcons name="public" size={36} color="#FFFFFF" />
-              </View>
-              <View style={[styles.radarBlip, { top: 25, right: 35 }]} />
-              <View style={[styles.radarBlip, { bottom: 30, left: 30 }]} />
-            </View>
-
-            <Text style={[ui.heading, { fontSize: 18 }]}>Live Visitor Radar</Text>
-            <Text style={[ui.body, { textAlign: 'center', maxWidth: 320 }]}>
-              Monitor real-time visitors on your website or digital catalog. Share your direct chat link to invite customers.
-            </Text>
-
-            <View style={{ width: '100%', gap: 10, marginTop: 8 }}>
-              <Action label="🔗 Share Chat Link" icon="share" onPress={shareChatLink} />
-              <Action
-                secondary
-                label="Preview Customer Web Chat"
-                icon="open-in-new"
-                onPress={() => Linking.openURL(chatLink).catch(() => {})}
-              />
-            </View>
-          </Card>
-        </View>
+        <Card>
+          <Text style={ui.heading}>Customer chat & live visitors</Text>
+          <Text style={ui.body}>Share your configured assistant chat. Live visitor monitoring is available in the web inbox.</Text>
+          <Action label="Share Chat Link" disabled={!chatLink} onPress={shareChatLink} />
+          <Action secondary label="Open Live Engage · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=liveChat`).catch(() => Alert.alert('Unable to open browser'))} />
+        </Card>
       )}
-
-      {/* TICKETS VIEW */}
       {activeTab === 'tickets' && (
-        <View style={{ gap: 14 }}>
-          <Field
-            label="Search Tickets"
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search in all tickets…"
-          />
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={ui.row}>
-              {[
-                { key: 'all', label: 'All Tickets', count: ticketCounts.all },
-                { key: 'unassigned', label: 'Unassigned', count: ticketCounts.unassigned },
-                { key: 'open', label: 'My Open', count: ticketCounts.open },
-                { key: 'pending', label: 'Pending', count: ticketCounts.pending },
-                { key: 'solved', label: 'Solved', count: ticketCounts.solved },
-              ].map((t) => (
-                <Chip
-                  key={t.key}
-                  label={t.label}
-                  count={t.count}
-                  selected={ticketStatus === t.key}
-                  onPress={() => setTicketStatus(t.key)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-
-          {inbox.loading ? (
-            <Loading />
-          ) : !items.length ? (
-            <Empty
-              title="No tickets found"
-              detail="Conversations requiring follow-up or customer resolution will appear here."
-            />
-          ) : (
-            <Card style={{ padding: 0 }}>
-              {items.map((c, i) => (
-                <Pressable
-                  key={c.id}
-                  onPress={() => setSelected(c)}
-                  style={[
-                    ui.menuRow,
-                    {
-                      paddingHorizontal: 16,
-                      borderBottomWidth: i === items.length - 1 ? 0 : 1,
-                    },
-                  ]}
-                >
-                  <Avatar name={c.customerName || 'Customer'} size={40} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={ui.heading}>{c.customerName || 'Customer'}</Text>
-                    <Text style={ui.caption}>
-                      Ticket #{c.id.slice(-4).toUpperCase()} · {c.channel}
-                    </Text>
-                  </View>
-                  <Badge label={c.aiPaused ? 'Pending' : 'Open'} success={!c.aiPaused} />
-                </Pressable>
-              ))}
-            </Card>
-          )}
-        </View>
+        <Card>
+          <Text style={ui.heading}>Tickets & Support</Text>
+          <Text style={ui.body}>Manage support tickets and their resolution status in BGOS web.</Text>
+          <Action label="Open Tickets · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=helpCenter`).catch(() => Alert.alert('Unable to open browser'))} />
+        </Card>
       )}
 
       {/* Chat Thread Modal with Back Button & Real AI Suggestions */}
@@ -397,7 +282,7 @@ export default function InboxScreen() {
 function Thread({ conversation, close }: { conversation: BgosConversation; close: () => void }) {
   const thread = useResource<BgosMessage[]>(`/api/omnichannel/conversations/${conversation.id}/messages`, 5000);
   const [paused, setPaused] = useState(conversation.aiPaused);
-  const [mode, setMode] = useState<'reply' | 'ai_reply' | 'note'>('reply');
+  const [mode, setMode] = useState<'reply' | 'ai_reply'>('reply');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -428,9 +313,10 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
           message: `Suggest a helpful professional customer reply for ${conversation.customerName} on ${conversation.channel}. Context: ${conversation.lastMessage || 'General inquiry'}`,
         },
       });
-      setText(res.reply || `Hi ${conversation.customerName}! Thank you for reaching out. How can we help you today?`);
-    } catch {
-      setText(`Hi ${conversation.customerName}! Thank you for reaching out. How can we assist you today?`);
+      if (!res.reply?.trim()) throw new Error('No AI suggestion returned. Please write your reply or try again.');
+      setText(res.reply);
+    } catch (e) {
+      setError((e as Error).message);
     } finally {
       setBusy(false);
       setMode('reply');
@@ -442,7 +328,7 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
     setBusy(true);
     setError(null);
     try {
-      const content = mode === 'note' ? `[INTERNAL NOTE] ${text.trim()}` : text.trim();
+      const content = text.trim();
       const result = await apiRequest<BgosMessage>(
         `/api/omnichannel/conversations/${conversation.id}/messages`,
         { method: 'POST', body: { content } }
@@ -467,15 +353,7 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
       onRefresh={thread.refresh}
       showBack={true}
       onBack={close}
-      rightAction={
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => Linking.openURL(`tel:${conversation.id}`).catch(() => {})}
-          style={styles.callIconBtn}
-        >
-          <MaterialIcons name="call" size={20} color={colors.brand} />
-        </Pressable>
-      }
+
     >
       <View style={[ui.row, { justifyContent: 'space-between' }]}>
         <Action label="← Back to Inbox" secondary onPress={close} />
@@ -499,26 +377,6 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
           ) : (
             thread.data.map((m) => {
               const isCustomer = m.sender === 'customer';
-              const isNote = m.content.startsWith('[INTERNAL NOTE]');
-
-              if (isNote) {
-                return (
-                  <View key={m.id} style={styles.noteBubble}>
-                    <View style={[ui.row, { gap: 6 }]}>
-                      <MaterialIcons name="lock" size={14} color={colors.noteText} />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: colors.noteText }}>
-                        Private Team Note
-                      </Text>
-                    </View>
-                    <Text style={{ fontSize: 13, color: colors.noteText, marginTop: 4 }}>
-                      {m.content.replace('[INTERNAL NOTE]', '').trim()}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: colors.muted, marginTop: 4, alignSelf: 'flex-end' }}>
-                      {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                );
-              }
 
               return (
                 <View
@@ -544,22 +402,23 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
             })
           )}
         </View>
+      </ScrollView>
       {/* Quick Action Chips (Screenshot 1 & 3 Parity) */}
       <View style={[ui.row, { flexWrap: 'wrap', gap: 6, marginVertical: 6 }]}>
         {['Get Quote', 'Book Appointment', 'Ask a Question'].map((chip) => (
           <Pressable
             key={chip}
-            onPress={() => setText(`I would like to ${chip.toLowerCase()}.`)}
+            onPress={() => setText(chip === 'Get Quote' ? 'Could you share the service you need so we can prepare a quote?' : chip === 'Book Appointment' ? 'What date and time would you prefer for your appointment?' : 'How can we help you today?')}
             style={{
               paddingHorizontal: 10,
               paddingVertical: 5,
               borderRadius: 14,
-              backgroundColor: '#EDE9FE',
+              backgroundColor: colors.soft,
               borderWidth: 1,
-              borderColor: '#DDD6FE',
+              borderColor: colors.line,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{chip}</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.brand }}>{chip}</Text>
           </Pressable>
         ))}
       </View>
@@ -568,26 +427,21 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
       <View style={[ui.row, { justifyContent: 'space-between', backgroundColor: colors.surface, padding: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.line }]}>
         <Chip label="✍️ Reply" selected={mode === 'reply'} onPress={() => setMode('reply')} />
         <Chip label="✨ AI Suggestion" selected={mode === 'ai_reply'} onPress={generateAiReply} />
-        <Chip label="🔒 Team Note" selected={mode === 'note'} onPress={() => setMode('note')} />
       </View>
 
       {/* Composer */}
       <Field
-        label={mode === 'note' ? 'Internal Team Note (Private)' : 'Message Composer'}
+        label="Message Composer"
         multiline
         value={text}
         onChangeText={setText}
         maxLength={5000}
-        placeholder={
-          mode === 'note'
-            ? 'Write a private note for your team (customer will NOT see this)…'
-            : 'Type your message…'
-        }
+        placeholder="Type your message…"
       />
 
       <Action
-        label={busy ? 'Sending…' : mode === 'note' ? 'Save Private Note' : 'Send Message'}
-        icon={mode === 'note' ? 'lock' : 'send'}
+        label={busy ? 'Sending…' : 'Send Message'}
+        icon="send"
         disabled={busy || !text.trim()}
         onPress={send}
       />

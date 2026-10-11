@@ -437,66 +437,12 @@ export function ErrorNotice({ message, retry }: { message: string | null; retry?
   ) : null;
 }
 
-export function AudioScrubber({
-  durationSec = 134,
-  onPlay,
-}: {
-  durationSec?: number;
-  onPlay?: () => void;
-}) {
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState<'1x' | '1.5x' | '2x'>('1x');
-  const formatTime = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
-
+export function AudioScrubber({ durationSec, onPlay }: { durationSec?: number; onPlay?: () => void }) {
   return (
-    <View style={[ui.card, { backgroundColor: colors.surface, padding: 14, gap: 10 }]}>
-      <View style={[ui.row, { justifyContent: 'space-between' }]}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => {
-            setPlaying(!playing);
-            onPlay?.();
-          }}
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 19,
-            backgroundColor: colors.brand,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <MaterialIcons name={playing ? 'pause' : 'play-arrow'} size={24} color="#FFFFFF" />
-        </Pressable>
-
-        <View style={{ flex: 1, marginHorizontal: 12 }}>
-          <View style={ui.meterTrack}>
-            <View style={[ui.meterFill, { width: playing ? '58%' : '20%', backgroundColor: colors.brand }]} />
-          </View>
-          <View style={[ui.row, { justifyContent: 'space-between', marginTop: 4 }]}>
-            <Text style={{ fontSize: 11, color: colors.muted }}>{playing ? '01:18' : '00:00'}</Text>
-            <Text style={{ fontSize: 11, color: colors.muted }}>{formatTime(durationSec)}</Text>
-          </View>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setSpeed(speed === '1x' ? '1.5x' : speed === '1.5x' ? '2x' : '1x')}
-          style={{
-            backgroundColor: colors.soft,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>{speed}</Text>
-        </Pressable>
-      </View>
-    </View>
+    <Card>
+      <Text style={ui.caption}>{durationSec == null ? 'Duration unavailable' : `${Math.max(0, Math.round(durationSec))} seconds`}</Text>
+      {onPlay ? <Action label="Open recording" icon="play-arrow" onPress={onPlay} /> : <Text style={ui.body}>Recording playback is unavailable here.</Text>}
+    </Card>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Linking, Modal, ScrollView, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -10,9 +10,7 @@ import {
   ErrorNotice,
   Loading,
   Chip,
-  Badge,
   Field,
-  MetricCard,
   ui,
   colors,
 } from '../../src/components/ui';
@@ -29,31 +27,18 @@ export default function AgentsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [builderModal, setBuilderModal] = useState(false);
 
-  // Channel toggles (Screen 10 in mockups)
-  const [toggles, setToggles] = useState({
-    website: true,
-    whatsapp: true,
-    instagram: true,
-    messenger: true,
-    twilio: false,
-  });
-
   // Test Lab Chat State (Module 4.5 in mockups)
   const [testMessages, setTestMessages] = useState<
     { role: 'user' | 'assistant'; text: string; time: string }[]
-  >([
-    {
-      role: 'assistant',
-      text: 'Hello! I am your AI Business Assistant. How can I assist you with services, bookings or pricing today?',
-      time: '10:00 AM',
-    },
-  ]);
+  >([]);
   const [testInput, setTestInput] = useState('');
   const [testBusy, setTestBusy] = useState(false);
 
   async function sendTestMessage(msg?: string) {
     const toSend = msg || testInput;
-    if (!toSend.trim()) return;
+    if (!toSend.trim() || testBusy) return;
+    if (!resource.data?.agents?.[0]?.id) { setError('Create an assistant in BGOS web first.'); return; }
+    setError(null);
     const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setTestMessages((prev) => [...prev, { role: 'user', text: toSend.trim(), time: now }]);
     setTestInput('');
@@ -64,22 +49,16 @@ export default function AgentsScreen() {
       const endpoint = activeAgent?.id ? `/api/forms/agents/${activeAgent.id}/chat` : '/api/forms/agents/preview/chat';
       const res = await apiRequest<{ reply?: string; response?: string; text?: string }>(endpoint, {
         method: 'POST',
-        body: { message: toSend.trim() },
+        body: { message: toSend.trim(), history: testMessages.map(m => ({ role: m.role, content: m.text })) },
       });
-      const replyText = res.reply || res.response || res.text || 'I have noted your message and will notify our team.';
+      const replyText = res.reply || res.response || res.text;
+      if (!replyText) throw new Error('The assistant did not return a response. Please try again.');
       setTestMessages((prev) => [
         ...prev,
         { role: 'assistant', text: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
       ]);
     } catch (e) {
-      setTestMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          text: `AI Assistant: ${(e as Error).message || 'Unable to reach agent service. Please verify agent status.'}`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
+      setError((e as Error).message || 'Unable to reach the assistant.');
     } finally {
       setTestBusy(false);
     }
@@ -109,7 +88,7 @@ export default function AgentsScreen() {
           onPress={() => setActiveTab('channels')}
         />
         <Chip
-          label="Interactive Test Lab"
+          label="Assistant Chat"
           selected={activeTab === 'testlab'}
           onPress={() => setActiveTab('testlab')}
         />
@@ -136,69 +115,14 @@ export default function AgentsScreen() {
             </View>
           </Card>
 
-          {/* Channel Bots with Toggles */}
-          <Card style={{ padding: 0 }}>
-            {[
-              {
-                key: 'website' as const,
-                title: 'Website Chatbot',
-                detail: 'Active 24x7 · Handles web queries & booking',
-                icon: 'language' as const,
-              },
-              {
-                key: 'whatsapp' as const,
-                title: 'WhatsApp Bot',
-                detail: 'Auto-reply to customer messages & brochures',
-                icon: 'chat' as const,
-              },
-              {
-                key: 'instagram' as const,
-                title: 'Instagram DM Bot',
-                detail: 'Instant replies to story mentions & DMs',
-                icon: 'camera-alt' as const,
-              },
-              {
-                key: 'messenger' as const,
-                title: 'Facebook Messenger',
-                detail: 'Answers inquiries on your business page',
-                icon: 'facebook' as const,
-              },
-              {
-                key: 'twilio' as const,
-                title: 'Twilio (SMS / Calls)',
-                detail: 'Voice deflection & SMS confirmations',
-                icon: 'phone' as const,
-              },
-            ].map((c, i) => (
-              <View
-                key={c.key}
-                style={[
-                  ui.row,
-                  {
-                    justifyContent: 'space-between',
-                    padding: 16,
-                    borderBottomWidth: i === 4 ? 0 : 1,
-                    borderBottomColor: colors.line,
-                  },
-                ]}
-              >
-                <View style={[ui.row, { gap: 12, flex: 1 }]}>
-                  <View style={ui.iconTile}>
-                    <MaterialIcons name={c.icon} size={22} color={colors.brand} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={ui.heading}>{c.title}</Text>
-                    <Text style={ui.caption}>{c.detail}</Text>
-                  </View>
-                </View>
-                <Switch
-                  value={toggles[c.key]}
-                  onValueChange={(val) => setToggles((prev) => ({ ...prev, [c.key]: val }))}
-                  trackColor={{ true: colors.brand }}
-                />
-              </View>
-            ))}
-          </Card>
+          {resource.loading ? <Loading /> : resource.data?.agents?.length ? resource.data.agents.map(agent => (
+            <Card key={agent.id}>
+              <Text style={ui.heading}>{agent.name}</Text>
+              <Text style={ui.body}>{agent.roleTitle || 'Business assistant'}</Text>
+              <Text style={ui.caption}>Channel availability is managed in Integrations.</Text>
+            </Card>
+          )) : !resource.error ? <Empty title="No assistants configured" detail="Create your business assistant in BGOS web." /> : null}
+          <Action secondary label="View channel connections" onPress={() => router.push('/(tabs)/integrations')} />
 
           <Action
             label="Monitor Active Chats in Inbox"
@@ -218,9 +142,9 @@ export default function AgentsScreen() {
       {activeTab === 'testlab' && (
         <View style={{ gap: 14 }}>
           <Card style={{ gap: 8 }}>
-            <Text style={ui.heading}>Live Assistant Test Lab</Text>
+            <Text style={ui.heading}>Chat with your assistant</Text>
             <Text style={ui.body}>
-              Test how your AI assistant responds to customer inquiries before deploying to live channels.
+              This uses your first configured assistant and its live actions. Requests may create bookings or leads.
             </Text>
 
             {/* Quick Test Prompts */}
@@ -267,7 +191,7 @@ export default function AgentsScreen() {
                         marginBottom: 2,
                       }}
                     >
-                      {m.role === 'user' ? 'You (Test User)' : '🤖 AI Assistant'}
+                      {m.role === 'user' ? 'You' : '🤖 AI Assistant'}
                     </Text>
                     <Text
                       style={{
@@ -306,7 +230,7 @@ export default function AgentsScreen() {
             placeholder="Ask about hours, pricing, bookings…"
           />
           <Action
-            label={testBusy ? 'Responding…' : 'Send Test Query'}
+            label={testBusy ? 'Responding…' : 'Send Message'}
             icon="send"
             disabled={testBusy || !testInput.trim()}
             onPress={() => sendTestMessage()}
@@ -314,42 +238,12 @@ export default function AgentsScreen() {
         </View>
       )}
 
-      {/* PERFORMANCE VIEW (Module 4.6 in mockups) */}
       {activeTab === 'performance' && (
-        <View style={{ gap: 14 }}>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            <MetricCard value="248" label="Total Conversations" trend="+34%" trendPositive={true} icon="chat" />
-            <MetricCard value="136" label="Staff Hours Saved" trend="+20%" trendPositive={true} icon="schedule" />
-            <MetricCard value="88%" label="Resolution Rate" trend="Optimal" trendPositive={true} icon="check-circle" />
-            <MetricCard value="48" label="Bookings Secured" trend="+15%" trendPositive={true} icon="event" />
-          </View>
-
-          <Card style={{ gap: 10 }}>
-            <Text style={ui.heading}>Most Frequent Customer Questions</Text>
-            {[
-              ['How much do your services cost?', '78 queries'],
-              ['Do you offer weekend appointments?', '54 queries'],
-              ['Where are you located?', '42 queries'],
-              ['Can I book an appointment online?', '36 queries'],
-            ].map(([q, count], i) => (
-              <View
-                key={i}
-                style={[
-                  ui.row,
-                  {
-                    justifyContent: 'space-between',
-                    paddingVertical: 10,
-                    borderBottomWidth: i === 3 ? 0 : 1,
-                    borderBottomColor: colors.line,
-                  },
-                ]}
-              >
-                <Text style={[ui.body, { flex: 1, color: colors.ink }]}>{q}</Text>
-                <Badge label={count} accent />
-              </View>
-            ))}
-          </Card>
-        </View>
+        <Card>
+          <Text style={ui.heading}>Assistant analytics</Text>
+          <Text style={ui.body}>Review conversation performance and activity in BGOS web.</Text>
+          <Action label="Open AI Studio · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=agentStudio`).catch(() => setError('Could not open the browser.'))} />
+        </Card>
       )}
 
       {/* 5-STEP AGENT BUILDER MODAL (Screen 11 in mockups) */}
@@ -366,7 +260,7 @@ export default function AgentsScreen() {
               { num: '2', title: 'Train with your data', desc: 'Websites, PDFs, FAQs & products' },
               { num: '3', title: 'Connect channels', desc: 'WhatsApp, Instagram, Web widget' },
               { num: '4', title: 'Test your agent', desc: 'Try sample customer conversations' },
-              { num: '5', title: 'Launch', desc: 'Go live in 5 minutes' },
+              { num: '5', title: 'Launch', desc: 'Review configuration and publish' },
             ].map((s) => (
               <View key={s.num} style={[ui.row, { gap: 14 }]}>
                 <View

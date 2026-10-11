@@ -22,6 +22,10 @@ const nextConfig: NextConfig = {
     // Type checking is handled locally and in dedicated CI jobs with 8GB heap.
     ignoreBuildErrors: true,
   },
+  eslint: {
+    // Skip ESLint in production Docker container builds to prevent memory spikes
+    ignoreDuringBuilds: true,
+  },
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken"],
   images: {

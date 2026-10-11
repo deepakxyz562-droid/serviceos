@@ -11,7 +11,7 @@ export default ({ config }: ConfigContext): any => ({
   slug: 'bgos',
   version: '1.0.0',
   icon: './assets/app-icon.png',
-  splash: { image: './assets/brand-mark.png', resizeMode: 'contain', backgroundColor: '#F7F6FE' },
+  splash: { image: './assets/brand-mark.png', resizeMode: 'contain', backgroundColor: '#F4FAF9' },
   orientation: 'portrait',
   scheme: SCHEME,
   userInterfaceStyle: 'light',

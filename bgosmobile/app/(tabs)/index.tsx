@@ -16,7 +16,7 @@ export default function HomeScreen() {
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 15000);
   const bookings = useResource<{ bookings: Booking[] }>('/api/bookings?limit=100');
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
-  const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1');
+  const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1&stats=true');
 
   const today = new Date().toDateString();
   const appointments = bookings.data?.bookings.filter(
@@ -34,13 +34,13 @@ export default function HomeScreen() {
     ]);
   };
 
-  const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : 0;
-  const leadTotal = leads.data?.pagination?.total ?? 0;
-  const callCount = calls.data?.stats?.todayCount ?? 0;
+  const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
+  const leadTotal = leads.data?.pagination?.total ?? '—';
+  const callCount = calls.data?.stats?.todayCount ?? '—';
 
   return (
     <Screen
-      title={`Good morning, ${user?.name?.split(' ')[0] || 'there'}! 👋`}
+      title={`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}, ${user?.name?.split(' ')[0] || 'there'}! 👋`}
       subtitle={`${workspace.data?.name || 'Your Business'} · ${agency ? 'Sales Workspace' : 'Your Day at a Glance'}`}
       onRefresh={refresh}
       rightAction={
@@ -50,7 +50,7 @@ export default function HomeScreen() {
       }
     >
       <ErrorNotice
-        message={workspace.error || inbox.error || bookings.error || leads.error}
+        message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
         retry={refresh}
       />
 
@@ -71,8 +71,8 @@ export default function HomeScreen() {
               <MaterialIcons name="smart-toy" size={26} color={colors.accent} />
             </View>
             <View>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>AI is working for you</Text>
-              <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '600' }}>Active 24/7 · Handling calls & chats</Text>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>Your AI Assistant</Text>
+              <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '600' }}>Review setup and connected channels</Text>
             </View>
           </View>
           <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accent }} />
@@ -81,15 +81,15 @@ export default function HomeScreen() {
         <View style={{ gap: 6, marginTop: 10 }}>
           <View style={[ui.row, { gap: 8 }]}>
             <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Handling customer chats on WhatsApp & Web</Text>
+            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Configure customer chat channels</Text>
           </View>
           <View style={[ui.row, { gap: 8 }]}>
             <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Answering incoming phone calls & booking slots</Text>
+            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Manage phone routing and booking actions</Text>
           </View>
           <View style={[ui.row, { gap: 8 }]}>
             <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Capturing qualified leads into CRM</Text>
+            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Review captured leads in CRM</Text>
           </View>
         </View>
       </Card>
@@ -98,29 +98,25 @@ export default function HomeScreen() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
         <MetricCard
           value={leadTotal}
-          label="New Leads"
-          trend="+28%"
+          label="Total Leads"
           trendPositive={true}
           icon="people-outline"
         />
         <MetricCard
           value={callCount}
           label="Calls Today"
-          trend="Saved"
           trendPositive={true}
           icon="phone-in-talk"
         />
         <MetricCard
           value={unreadCount}
-          label="Messages"
-          trend="+40%"
+          label="Unread Messages"
           trendPositive={true}
           icon="chat-bubble-outline"
         />
         <MetricCard
-          value={appointments?.length ?? 4}
-          label={agency ? 'Active Deals' : "Today's Schedule"}
-          trend="Ready"
+          value={appointments?.length ?? '—'}
+          label="Today's Schedule"
           trendPositive={true}
           icon="event"
         />
@@ -174,7 +170,7 @@ export default function HomeScreen() {
             <Text style={ui.body}>Review your leads and outreach before the next follow-up call.</Text>
             <MenuRow
               title="Lead Pipeline"
-              detail="24 qualified contacts"
+              detail="Review contacts and follow-ups"
               icon="people-outline"
               onPress={() => router.push('/(tabs)/leads')}
             />

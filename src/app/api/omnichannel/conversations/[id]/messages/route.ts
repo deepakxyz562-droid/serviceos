@@ -77,6 +77,13 @@ export async function POST(
       return NextResponse.json({ error: 'content is required' }, { status: 400 })
     }
 
+    // This endpoint delivers to customers. Never accept private-note intent,
+    // including legacy mobile clients that encode it in the message body.
+    if (/^\s*\[INTERNAL NOTE\]/i.test(content) || body.mode === 'note' ||
+        body.messageType === 'note' || body.isInternal === true || body.isPrivate === true) {
+      return NextResponse.json({ error: 'Private notes cannot be sent through the customer message endpoint.' }, { status: 400 })
+    }
+
     // Find the conversation by database id
     const conversation = await db.conversation.findUnique({
       where: { id },

@@ -4,8 +4,6 @@ import {
   Linking,
   Modal,
   Pressable,
-  ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -22,7 +20,6 @@ import {
   ErrorNotice,
   Loading,
   DialpadGrid,
-  AudioScrubber,
   Chip,
   ui,
   colors,
@@ -53,7 +50,6 @@ export default function PhoneScreen() {
   const [activeTab, setActiveTab] = useState<'dialpad' | 'recent' | 'voicemail'>('dialpad');
   const [dialNumber, setDialNumber] = useState('');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
-  const [activeCallModal, setActiveCallModal] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -70,14 +66,18 @@ export default function PhoneScreen() {
     setDialNumber((prev) => prev.slice(0, -1));
   }
 
-  function handleStartCall(numberToCall?: string) {
-    const num = numberToCall || dialNumber;
-    if (!num.trim()) {
+  async function handleStartCall(numberToCall?: string) {
+    const num = (numberToCall || dialNumber).replace(/[\s()-]/g, '');
+    if (!/^\+?\d{7,15}$/.test(num)) {
       setError('Please dial a valid phone number.');
       return;
     }
     setError(null);
-    setActiveCallModal(num);
+    try {
+      await Linking.openURL(`tel:${num}`);
+    } catch {
+      setError('Unable to open the device phone app. Please call from a phone-enabled device.');
+    }
   }
 
   return (
@@ -86,12 +86,7 @@ export default function PhoneScreen() {
       subtitle="AI Receptionist · Call deflection & voice logs."
       showBack={true}
       onRefresh={resource.refresh}
-      rightAction={
-        <View style={styles.onlinePill}>
-          <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
-          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.hero }}>Online</Text>
-        </View>
-      }
+
     >
       <ErrorNotice message={error || resource.error} retry={resource.refresh} />
 
@@ -100,10 +95,10 @@ export default function PhoneScreen() {
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
           <View>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.5 }}>
-              +91 98765 43210
+              Business calls
             </Text>
             <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '600' }}>
-              Main Business Inbound Number
+              Call history and device dialer
             </Text>
           </View>
           <View style={[ui.iconTile, { backgroundColor: 'rgba(255, 255, 255, 0.15)' }]}>
@@ -114,21 +109,21 @@ export default function PhoneScreen() {
         <View style={[ui.row, { justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.12)' }]}>
           <View>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }}>
-              {resource.data?.stats?.todayCount ?? 6}
+              {resource.data?.stats?.todayCount ?? '—'}
             </Text>
             <Text style={{ fontSize: 11, color: '#D1EAE5' }}>Calls Today</Text>
           </View>
           <View>
             <Text style={{ fontSize: 18, fontWeight: '700', color: '#FFFFFF' }}>
-              {Math.round((resource.data?.stats?.totalDurationSec ?? 7440) / 60)} min
+              {resource.data?.stats ? `${Math.round(resource.data.stats.totalDurationSec / 60)} min` : '—'}
             </Text>
             <Text style={{ fontSize: 11, color: '#D1EAE5' }}>Talk Time</Text>
           </View>
           <View>
             <Text style={{ fontSize: 18, fontWeight: '700', color: colors.accent }}>
-              92%
+              {resource.data?.stats?.total ?? '—'}
             </Text>
-            <Text style={{ fontSize: 11, color: '#D1EAE5' }}>Handled by AI</Text>
+            <Text style={{ fontSize: 11, color: '#D1EAE5' }}>Total Calls</Text>
           </View>
         </View>
       </Card>
@@ -142,13 +137,12 @@ export default function PhoneScreen() {
         />
         <Chip
           label="Recent Calls"
-          count={calls.length || 8}
+          count={calls.length}
           selected={activeTab === 'recent'}
           onPress={() => setActiveTab('recent')}
         />
         <Chip
           label="Voicemail"
-          count="1"
           selected={activeTab === 'voicemail'}
           onPress={() => setActiveTab('voicemail')}
         />
@@ -174,7 +168,7 @@ export default function PhoneScreen() {
             label="Call using device phone app"
             icon="open-in-new"
             disabled={!dialNumber.trim()}
-            onPress={() => Linking.openURL(`tel:${dialNumber.replace(/[^\d+]/g, '')}`).catch(() => {})}
+            onPress={() => handleStartCall(dialNumber)}
           />
         </Card>
       )}
@@ -190,7 +184,8 @@ export default function PhoneScreen() {
             placeholder="Search phone number or caller…"
           />
 
-          {resource.loading ? (
+          <ErrorNotice message={resource.error} retry={resource.refresh} />
+      {resource.loading ? (
             <Loading />
           ) : !calls.length ? (
             <Empty
@@ -200,7 +195,7 @@ export default function PhoneScreen() {
           ) : (
             <Card style={{ padding: 0 }}>
               {calls.map((c, i) => {
-                const number = c.customerPhone || c.fromNumber || '+91 98765 43210';
+                const number = c.customerPhone || c.fromNumber || c.toNumber || 'Unknown caller';
                 return (
                   <Pressable
                     key={c.id}
@@ -258,26 +253,8 @@ export default function PhoneScreen() {
         </>
       )}
 
-      {/* VOICEMAIL TAB */}
       {activeTab === 'voicemail' && (
-        <Card style={{ gap: 14 }}>
-          <Text style={ui.heading}>Recorded Voicemails</Text>
-          <View style={[ui.card, { padding: 14, gap: 8 }]}>
-            <View style={[ui.row, { justifyContent: 'space-between' }]}>
-              <Text style={ui.heading}>+91 98765 11223</Text>
-              <Badge label="New Voicemail" accent />
-            </View>
-            <Text style={ui.caption}>Left today at 11:42 AM · 48 seconds</Text>
-            <AudioScrubber durationSec={48} />
-            <Text style={ui.body}>
-              "Hi, I wanted to inquire if you do bridal salon packages this Saturday. Please call me back."
-            </Text>
-            <View style={[ui.row, { gap: 8 }]}>
-              <Action label="Call Back" icon="call" onPress={() => handleStartCall('+91 98765 11223')} />
-              <Action secondary label="Create Lead" icon="person-add" onPress={() => router.push('/(tabs)/leads?create=1')} />
-            </View>
-          </View>
-        </Card>
+        <Empty title="Voicemail is managed on the web" detail="Open Business Phone on BGOS web to review available voicemail records." />
       )}
 
       {/* AI Receptionist Status Footer */}
@@ -287,10 +264,9 @@ export default function PhoneScreen() {
             <MaterialIcons name="record-voice-over" size={24} color={colors.brand} />
             <View>
               <Text style={ui.heading}>AI Receptionist Settings</Text>
-              <Text style={ui.caption}>Call deflection & automatic meeting booking is active</Text>
+              <Text style={ui.caption}>Manage your business numbers, routing and assistant</Text>
             </View>
           </View>
-          <Badge label="Active" success />
         </View>
         <Action
           secondary
@@ -299,20 +275,6 @@ export default function PhoneScreen() {
           onPress={() => Linking.openURL(`${WEB_URL}/app?view=aiReceptionist`).catch(() => {})}
         />
       </Card>
-
-      {/* ACTIVE CALL SIMULATOR MODAL (Screen 10 in mockups) */}
-      <Modal visible={!!activeCallModal} animationType="slide">
-        {activeCallModal && (
-          <ActiveCallSimulator
-            number={activeCallModal}
-            onEndCall={() => {
-              const num = activeCallModal;
-              setActiveCallModal(null);
-              setSelectedCallId('last-call');
-            }}
-          />
-        )}
-      </Modal>
 
       {/* POST-CALL DETAILS & 4-ACTION SUITE MODAL (Screen 11 in mockups) */}
       <Modal visible={!!selectedCallId} animationType="slide" onRequestClose={() => setSelectedCallId(null)}>
@@ -331,115 +293,6 @@ export default function PhoneScreen() {
   );
 }
 
-// Active Call Screen (Screen 10 in reference mockup)
-function ActiveCallSimulator({ number, onEndCall }: { number: string; onEndCall: () => void }) {
-  const [muted, setMuted] = useState(false);
-  const [speaker, setSpeaker] = useState(false);
-  const [hold, setHold] = useState(false);
-  const [recording, setRecording] = useState(true);
-
-  return (
-    <View style={styles.callScreenContainer}>
-      {/* Top Bar with back / minimize */}
-      <View style={[ui.row, { justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }]}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onEndCall}
-          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}
-        >
-          <MaterialIcons name="keyboard-arrow-down" size={28} color="#FFFFFF" />
-        </Pressable>
-        <Text style={{ fontSize: 13, color: colors.accent, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-          Call in Progress
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={{ alignItems: 'center', marginTop: 20 }}>
-        <Text style={{ fontSize: 16, color: '#FFFFFF', marginTop: 4 }}>00:42</Text>
-
-        <View style={styles.callAvatar}>
-          <Text style={{ fontSize: 36, color: colors.brand, fontWeight: '800' }}>
-            {number.slice(-2)}
-          </Text>
-        </View>
-
-        <Text style={{ fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 14 }}>
-          {number}
-        </Text>
-        <Text style={{ fontSize: 14, color: '#D1EAE5', marginTop: 2 }}>Connected via BGOS AI Trunk</Text>
-
-        {recording && (
-          <View style={[ui.row, { gap: 6, marginTop: 10, backgroundColor: 'rgba(186, 53, 71, 0.2)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }]}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger }} />
-            <Text style={{ fontSize: 12, color: '#FFCCD0', fontWeight: '700' }}>AI Live Recording & Transcription</Text>
-          </View>
-        )}
-      </View>
-
-      {/* 6 In-call Controls: Mute, Keypad, Speaker, Add Call, Hold, Record */}
-      <View style={styles.callControlGrid}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setMuted(!muted)}
-          style={[styles.callControlBtn, muted && styles.callControlActive]}
-        >
-          <MaterialIcons name={muted ? 'mic-off' : 'mic'} size={26} color={muted ? colors.brand : '#FFFFFF'} />
-          <Text style={styles.callControlLabel}>{muted ? 'Muted' : 'Mute'}</Text>
-        </Pressable>
-
-        <Pressable accessibilityRole="button" style={styles.callControlBtn}>
-          <MaterialIcons name="dialpad" size={26} color="#FFFFFF" />
-          <Text style={styles.callControlLabel}>Keypad</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setSpeaker(!speaker)}
-          style={[styles.callControlBtn, speaker && styles.callControlActive]}
-        >
-          <MaterialIcons name={speaker ? 'volume-up' : 'volume-down'} size={26} color={speaker ? colors.brand : '#FFFFFF'} />
-          <Text style={styles.callControlLabel}>Speaker</Text>
-        </Pressable>
-
-        <Pressable accessibilityRole="button" style={styles.callControlBtn}>
-          <MaterialIcons name="person-add" size={26} color="#FFFFFF" />
-          <Text style={styles.callControlLabel}>Add Call</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setHold(!hold)}
-          style={[styles.callControlBtn, hold && styles.callControlActive]}
-        >
-          <MaterialIcons name="pause" size={26} color={hold ? colors.brand : '#FFFFFF'} />
-          <Text style={styles.callControlLabel}>{hold ? 'On Hold' : 'Hold'}</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setRecording(!recording)}
-          style={[styles.callControlBtn, recording && styles.callControlActive]}
-        >
-          <MaterialIcons name="fiber-manual-record" size={26} color={recording ? colors.danger : '#FFFFFF'} />
-          <Text style={styles.callControlLabel}>{recording ? 'Recording' : 'Record'}</Text>
-        </Pressable>
-      </View>
-
-      {/* End Call Button */}
-      <View style={{ alignItems: 'center', marginBottom: 40 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onEndCall}
-          style={styles.endCallBtn}
-        >
-          <MaterialIcons name="call-end" size={32} color="#FFFFFF" />
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
 // Post-Call Details & 4-Action Suite (Screen 11 in reference mockup)
 function CallDetailSheet({
   id,
@@ -451,10 +304,9 @@ function CallDetailSheet({
   onNavigate: (path: string) => void;
 }) {
   const resource = useResource<{ call: Call }>(
-    id === 'last-call' ? '/api/vapi/calls?limit=1' : `/api/vapi/calls?id=${encodeURIComponent(id)}`
+    `/api/vapi/calls?id=${encodeURIComponent(id)}`
   );
-  const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'notes'>('summary');
-  const [noteText, setNoteText] = useState('');
+  const [activeTab, setActiveTab] = useState<'summary' | 'transcript'>('summary');
 
   const call = resource.data?.call;
   const number = call?.customerPhone || call?.fromNumber || call?.toNumber || 'Unknown Caller';
@@ -480,6 +332,7 @@ function CallDetailSheet({
     >
       <Action label="← Back to Calls" secondary onPress={close} />
 
+      <ErrorNotice message={resource.error} retry={resource.refresh} />
       {resource.loading ? (
         <Loading />
       ) : !call ? (
@@ -503,7 +356,7 @@ function CallDetailSheet({
           </Card>
 
           {/* Audio Player Scrubber (Screen 11) */}
-          <AudioScrubber durationSec={call.durationSec || 60} />
+          <Text style={ui.caption}>Recordings can be reviewed securely in Business Phone on BGOS web.</Text>
 
           {/* 4 Instant Post-Call Actions (Screen 11 bottom bar) */}
           <Text style={ui.heading}>Immediate Next Steps</Text>
@@ -552,7 +405,6 @@ function CallDetailSheet({
           <View style={[ui.row, { justifyContent: 'space-between', marginTop: 10 }]}>
             <Chip label="AI Summary" selected={activeTab === 'summary'} onPress={() => setActiveTab('summary')} />
             <Chip label="Transcript" selected={activeTab === 'transcript'} onPress={() => setActiveTab('transcript')} />
-            <Chip label="Notes" selected={activeTab === 'notes'} onPress={() => setActiveTab('notes')} />
           </View>
 
           {activeTab === 'summary' && (
@@ -562,7 +414,7 @@ function CallDetailSheet({
                 <Text style={ui.heading}>AI Receptionist Summary</Text>
               </View>
               <Text style={[ui.body, { color: colors.ink, lineHeight: 22 }]}>
-                {call.summary || 'Summary generated automatically once call transcript is processed.'}
+                {call.summary || 'No summary is available for this call.'}
               </Text>
             </Card>
           )}
@@ -585,92 +437,9 @@ function CallDetailSheet({
             </Card>
           )}
 
-          {activeTab === 'notes' && (
-            <Card style={{ gap: 10 }}>
-              <Text style={ui.heading}>Internal Staff Notes</Text>
-              <Field
-                label="Add follow-up notes"
-                multiline
-                value={noteText}
-                onChangeText={setNoteText}
-                placeholder="e.g. Followed up with pricing details on WhatsApp…"
-              />
-              <Action label="Save Note" disabled={!noteText.trim()} onPress={() => Alert.alert('Note Saved', 'Staff note updated.')} />
-            </Card>
-          )}
+
         </>
       )}
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  onlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#CCFBF1',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  callScreenContainer: {
-    flex: 1,
-    backgroundColor: colors.hero,
-    justifyContent: 'space-between',
-    padding: 24,
-  },
-  callAvatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  callControlGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 18,
-    maxWidth: 320,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  callControlBtn: {
-    width: 86,
-    height: 86,
-    borderRadius: 43,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  callControlActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  callControlLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#E6F5F3',
-    marginTop: 4,
-  },
-  endCallBtn: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.danger,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-});

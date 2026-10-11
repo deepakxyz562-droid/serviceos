@@ -14,7 +14,7 @@ describe('AI Agent Studio Restoration & Channel Integration', () => {
       />
     );
 
-    const publishTab = screen.getByRole('button', { name: /Publish/i });
+    const publishTab = screen.getByRole('button', { name: /^Publish$/i });
     expect(publishTab).toBeInTheDocument();
 
     fireEvent.click(publishTab);

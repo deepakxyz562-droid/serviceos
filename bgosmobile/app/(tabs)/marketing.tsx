@@ -51,7 +51,7 @@ export default function MarketingScreen() {
   const [topic, setTopic] = useState('');
   const [content, setContent] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
-  const [media, setMedia] = useState('https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800');
+  const [media, setMedia] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [busy, setBusy] = useState(false);

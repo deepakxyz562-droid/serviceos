@@ -7,12 +7,10 @@ import {
   Card,
   Action,
   ErrorNotice,
-  Loading,
   ui,
   colors,
   Avatar,
   MenuRow,
-  MeterBar,
   Badge,
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
@@ -99,7 +97,7 @@ export default function ToolsScreen() {
               <Text style={ui.caption}>{user?.email || 'Registered Business Profile'}</Text>
             </View>
           </View>
-          <Badge label={data?.plan.code || 'All-in-One Pro'} accent />
+          <Badge label={data?.plan.code || 'Plan unavailable'} accent />
         </View>
       </Card>
 
@@ -108,14 +106,12 @@ export default function ToolsScreen() {
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
           <View>
             <Text style={ui.heading}>My Plan & Usage</Text>
-            <Text style={ui.caption}>All-in-One Pro · ₹1,499/month</Text>
+            <Text style={ui.caption}>{data?.plan.code || 'Plan unavailable'}</Text>
           </View>
-          <Badge label="Active" success />
+          <Badge label={data?.plan.status || 'Status unavailable'} />
         </View>
 
-        <MeterBar label="Outgoing Phone Minutes" current={82} max={120} unit="min" />
-        <MeterBar label="WhatsApp Outreach Credits" current={1245} max={5000} unit="credits" />
-        <MeterBar label="AI Agent Minutes" current={312} max={1000} unit="min" />
+        <Text style={ui.body}>Open billing to view current usage, limits and subscription details.</Text>
 
         <View style={[ui.row, { gap: 10, marginTop: 4 }]}>
           <View style={{ flex: 1 }}>
@@ -137,42 +133,10 @@ export default function ToolsScreen() {
         </View>
       </Card>
 
-      {/* TEAM & AGENTS ROSTER (Screen 7 in mockups) */}
-      <Card style={{ gap: 12 }}>
-        <View style={[ui.row, { justifyContent: 'space-between' }]}>
-          <Text style={ui.heading}>Team & AI Chatbots</Text>
-          <Badge label="5 Active" accent />
-        </View>
-
-        {[
-          { name: user?.name || 'Account Owner', email: user?.email || 'owner@bgos.com', badge: 'Owner', success: true },
-          { name: 'AI Receptionist', email: 'Auto-pilot phone & chat', badge: 'AI Agent', accent: true },
-          { name: 'Instagram Assistant', email: 'Story & DM automation', badge: 'Chatbot' },
-          { name: 'WhatsApp Catalog Bot', email: 'Brochures & order inquiry', badge: 'Chatbot' },
-          { name: 'Twilio SMS Dispatcher', email: 'SMS notifications', badge: 'Chatbot' },
-        ].map((m, i) => (
-          <View
-            key={i}
-            style={[
-              ui.row,
-              {
-                justifyContent: 'space-between',
-                paddingVertical: 8,
-                borderBottomWidth: i === 4 ? 0 : 1,
-                borderBottomColor: colors.line,
-              },
-            ]}
-          >
-            <View style={[ui.row, { gap: 10, flex: 1 }]}>
-              <Avatar name={m.name} size={36} />
-              <View style={{ flex: 1 }}>
-                <Text style={ui.heading}>{m.name}</Text>
-                <Text style={ui.caption}>{m.email}</Text>
-              </View>
-            </View>
-            <Badge label={m.badge} success={m.success} accent={m.accent} />
-          </View>
-        ))}
+      <Card>
+        <Text style={ui.heading}>Team & Assistants</Text>
+        <MenuRow title="Team permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(`${WEB_URL}/app?view=settings`))} />
+        <MenuRow title="AI Assistants" detail="View configured business assistants" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
       </Card>
 
       {/* OPERATIONAL NAVIGATION HUB (Side Menu Screen 7 in mockups) */}
@@ -180,12 +144,12 @@ export default function ToolsScreen() {
         <Text style={ui.heading}>Core Operations</Text>
         <MenuRow title="Unified Inbox & Chat" detail="WhatsApp, Instagram & visitor radar" icon="chat" onPress={() => router.push('/(tabs)/inbox')} />
         <MenuRow title="Business Phone & Keypad" detail="Dialpad, call logs & transcription" icon="phone" onPress={() => router.push('/(tabs)/phone')} />
-        <MenuRow title="Leads & CRM Pipeline" detail="24 qualified inquiries & follow-ups" icon="people-outline" onPress={() => router.push('/(tabs)/leads')} />
+        <MenuRow title="Leads & CRM Pipeline" detail="Manage leads, statuses & follow-ups" icon="people-outline" onPress={() => router.push('/(tabs)/leads')} />
         <MenuRow title="Appointments Calendar" detail="Review agenda & book time slots" icon="event" onPress={() => router.push('/(tabs)/appointments')} />
         <MenuRow title="Marketing Studio" detail="AI caption generator & post calendar" icon="auto-awesome" onPress={() => router.push('/(tabs)/marketing')} />
         <MenuRow title="Campaigns & Outreach" detail="WhatsApp & SMS broadcast sequences" icon="send" onPress={() => router.push('/(tabs)/outreach')} />
-        <MenuRow title="Google Business & Reviews" detail="4.1 ★ rating & WhatsApp review requests" icon="star-outline" onPress={() => router.push('/(tabs)/growth')} />
-        <MenuRow title="AI Assistant Studio" detail="Test lab sandbox & knowledge training" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
+        <MenuRow title="Google Business & Reviews" detail="Customer ratings & review requests" icon="star-outline" onPress={() => router.push('/(tabs)/growth')} />
+        <MenuRow title="AI Assistant Studio" detail="Assistant chat & knowledge configuration" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
         <MenuRow title="Form Inquiries & Surveys" detail="Intake forms & customer submissions" icon="description" onPress={() => router.push('/(tabs)/submissions')} />
         <MenuRow title="Channel Integrations" detail="Connected social and messaging accounts" icon="link" onPress={() => router.push('/(tabs)/integrations')} />
         <MenuRow title="Automated Workflows" detail="Instant trigger actions & follow-ups" icon="alt-route" onPress={() => router.push('/(tabs)/automations')} />
