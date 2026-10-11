@@ -172,3 +172,441 @@ it('supports selecting in-chat package cards and toggling AI automation in detai
   expect(screen.getAllByText(/I would like to select the Deep Clean package/i).length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByText(/Excellent choice! The/i).length).toBeGreaterThanOrEqual(1);
 });
+
+it('renders Tickets & Support Helpdesk workstation with 5 KPI cards, AI Triage, and Customer Dossier', async () => {
+  const { HelpCenterView } = await import('@/components/views/help-center-view');
+
+  render(<HelpCenterView />);
+
+  // 1. Header & Badge
+  expect(screen.getByRole('heading', { level: 1, name: /Tickets & Support Helpdesk/i })).toBeDefined();
+  expect(screen.getByText(/AI Copilot Triaging Active/i)).toBeDefined();
+  expect(screen.getByRole('button', { name: /Ticket Settings/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Export CSV/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Ticket/i })).toBeDefined();
+
+  // 2. 5 KPI Telemetry Cards
+  expect(screen.getByText('Open Backlog')).toBeDefined();
+  expect(screen.getByText('Unassigned')).toBeDefined();
+  expect(screen.getByText('Avg First Response')).toBeDefined();
+  expect(screen.getByText('Resolution Rate')).toBeDefined();
+  expect(screen.getByText('CSAT Satisfaction')).toBeDefined();
+  expect(screen.getByText('94.2%')).toBeDefined();
+  expect(screen.getByText('4.85')).toBeDefined();
+
+  // 3. Sub-Navigation Filter Tabs
+  expect(screen.getByRole('button', { name: /All Tickets/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /My Assigned/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Urgent & Escalated/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Reschedule Requests/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Quality & Complaints/i })).toBeDefined();
+
+  // 4. Column 1: Queue Feed Cards
+  expect(screen.getByText('Queue Feed')).toBeDefined();
+  expect(screen.getAllByText('#TK-1082').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('#TK-1081')).toBeDefined();
+  expect(screen.getByText('#TK-1080')).toBeDefined();
+  expect(screen.getByText('#TK-1079')).toBeDefined();
+  expect(screen.getByText('#TK-1078')).toBeDefined();
+
+  // 5. Column 2: Active Ticket & AI Triage
+  expect(screen.getAllByText(/Reschedule move-out clean to Monday, May 5/i).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText(/AI Copilot Smart Triage Summary/i)).toBeDefined();
+  expect(screen.getByText(/Triage Confidence 99.4%/i)).toBeDefined();
+  expect(screen.getByText(/Recommended 1-Click Resolution/i)).toBeDefined();
+  expect(screen.getByRole('button', { name: /Update Schedule & Send WhatsApp/i })).toBeDefined();
+
+  // 6. Column 3: Customer Dossier & Context
+  expect(screen.getByText('Customer Dossier')).toBeDefined();
+  expect(screen.getAllByText('Emily Davis').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('$780')).toBeDefined();
+  expect(screen.getByText('LTV Spent')).toBeDefined();
+  expect(screen.getByText('#ORD-4491')).toBeDefined();
+  expect(screen.getByText('Move-out Deep Clean')).toBeDefined();
+  expect(screen.getByText(/Property Notes:/i)).toBeDefined();
+  expect(screen.getByText(/SLA Target Milestones/i)).toBeDefined();
+
+  // 7. Interactivity: Clicking "Update Schedule & Send WhatsApp" applies resolution
+  const actionBtn = screen.getByRole('button', { name: /Update Schedule & Send WhatsApp/i });
+  fireEvent.click(actionBtn);
+
+  // Resolution message should be appended to the conversation thread
+  expect(screen.getAllByText(/Technician Kevin Harris is assigned/i).length).toBeGreaterThanOrEqual(1);
+
+  // 8. Interactivity: Clicking "Resolve" marks ticket as solved
+  const resolveBtn = screen.getByRole('button', { name: /^Resolve$/i });
+  fireEvent.click(resolveBtn);
+});
+
+it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview canvas, and campaign velocity', async () => {
+  const { SocialMediaView } = await import('@/components/views/tenant/social-media-view');
+
+  render(<SocialMediaView />);
+
+  // 1. Header & Primary Actions
+  expect(screen.getByRole('heading', { level: 1, name: /Marketing Studio/i })).toBeDefined();
+  expect(screen.getByText(/AI Enabled/i)).toBeDefined();
+  expect(screen.getByRole('button', { name: /\+ Create Campaign/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /View Analytics/i })).toBeDefined();
+
+  // 2. 5 KPI Telemetry Cards
+  expect(screen.getByText('Posts Published')).toBeDefined();
+  expect(screen.getByText('Total Reach')).toBeDefined();
+  expect(screen.getByText('Engagements')).toBeDefined();
+  expect(screen.getByText('New Leads')).toBeDefined();
+  expect(screen.getByText('Estimated Pipeline')).toBeDefined();
+  expect(screen.getByText('1.2M')).toBeDefined();
+  expect(screen.getByText('4,856')).toBeDefined();
+  expect(screen.getByText('342')).toBeDefined();
+  expect(screen.getByText('$18,420')).toBeDefined();
+
+  // 3. Sub-Navigation Tabs
+  expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /AI Post Generator/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Social Media Accounts/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Posts Feed/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Post Composer/i })).toBeDefined();
+
+  // 4. Column 1: AI Post Generator
+  expect(screen.getByText('Post Concept or Offer Details')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Generate 3 Posts/i })).toBeDefined();
+  expect(screen.getByText('Quick Prompts')).toBeDefined();
+  expect(screen.getByText('Spring Cleaning 20%')).toBeDefined();
+  expect(screen.getByText('Move-in Special')).toBeDefined();
+
+  // 5. Column 2: Post Preview Canvas
+  expect(screen.getByText('Post Preview')).toBeDefined();
+  expect(screen.getByText('Cinderella Cleaners')).toBeDefined();
+  expect(screen.getByText(/@cinderellacleaners • Tucson, AZ/i)).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Schedule$/i })).toBeDefined();
+
+  // 6. Column 3: Calendar & Platform Integrations
+  expect(screen.getByText('Content Calendar')).toBeDefined();
+  expect(screen.getByText('Apr 21 – Apr 27, 2025')).toBeDefined();
+  expect(screen.getByText('Channel Integrations')).toBeDefined();
+  expect(screen.getAllByText('Instagram').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Facebook').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Google Biz')).toBeDefined();
+  expect(screen.getByText('WhatsApp')).toBeDefined();
+
+  // 7. Lower Section: Recent Posts Velocity & Active Campaigns
+  expect(screen.getByText('Recent Posts & Content Velocity')).toBeDefined();
+  expect(screen.getByText('Spring Cleaning Promo 2025')).toBeDefined();
+  expect(screen.getByText('Active Campaigns')).toBeDefined();
+  expect(screen.getByText('Move-in Sanitization')).toBeDefined();
+  expect(screen.getByText('Google 5-Star Booster')).toBeDefined();
+  expect(screen.getByText('Give $30, Get $30')).toBeDefined();
+
+  // 8. Bottom Visual Bar: Creative Assets & AI Suggestions
+  expect(screen.getByText('Top Performing Creative Assets')).toBeDefined();
+  expect(screen.getByText('Spring Kitchen Reset')).toBeDefined();
+  expect(screen.getByText('Content Suggestions')).toBeDefined();
+  expect(screen.getByText('Dust storm recovery cleaning tips')).toBeDefined();
+
+  // 9. Interactivity: Clicking a Quick Prompt updates the concept text
+  const moveInPrompt = screen.getByText('Move-in Special');
+  fireEvent.click(moveInPrompt);
+  expect(screen.getByText('Move-in Ready')).toBeDefined();
+  expect(screen.getByText('Move-In Fresh Home Sanitization')).toBeDefined();
+
+  // 10. Interactivity: Clicking "Schedule" adds to calendar and shows confirmation notice
+  const scheduleBtn = screen.getByRole('button', { name: /^Schedule$/i });
+  fireEvent.click(scheduleBtn);
+  expect(screen.getByText(/Successfully scheduled to IG! Added to Content Calendar./i)).toBeDefined();
+});
+
+it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, and AI Review Reply', async () => {
+  const { ReviewsView } = await import('@/components/views/reviews-view');
+
+  render(<ReviewsView />);
+
+  // 1. Header & Navigation Tabs
+  expect(screen.getByRole('heading', { level: 1, name: /Google Business & Reviews/i })).toBeDefined();
+  expect(screen.getByText('Connected')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Sync GBP/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Reviews$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Posts$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Q&A$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Insights$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Photos$/i })).toBeDefined();
+
+  // 2. 5 KPI Telemetry Cards
+  expect(screen.getByText('Google Rating')).toBeDefined();
+  expect(screen.getByText('4.8')).toBeDefined();
+  expect(screen.getByText('(326 reviews)')).toBeDefined();
+  expect(screen.getByText('Total Reviews')).toBeDefined();
+  expect(screen.getByText('326')).toBeDefined();
+  expect(screen.getByText('New Reviews')).toBeDefined();
+  expect(screen.getByText('24')).toBeDefined();
+  expect(screen.getByText('Average Response Time')).toBeDefined();
+  expect(screen.getByText('2.4 hours')).toBeDefined();
+  expect(screen.getByText('Response Rate')).toBeDefined();
+  expect(screen.getByText('100%')).toBeDefined();
+
+  // 3. Middle Tier: Review Trend, Breakdown & Get More Reviews
+  expect(screen.getByText('Review Trend')).toBeDefined();
+  expect(screen.getByText('Review Breakdown')).toBeDefined();
+  expect(screen.getByText('5 stars')).toBeDefined();
+  expect(screen.getByText('72%')).toBeDefined();
+  expect(screen.getByText('Get More Reviews')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Copy Review Link/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Send via SMS/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Send via Email/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Download QR Code/i })).toBeDefined();
+
+  // 4. Column 1: Reviews List & Triage
+  expect(screen.getByText('Reviews (326)')).toBeDefined();
+  expect(screen.getByRole('button', { name: /All \(326\)/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Replied \(326\)/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /5 ★ \(235\)/i })).toBeDefined();
+  expect(screen.getByPlaceholderText(/Search reviews, customer name or keywords.../i)).toBeDefined();
+  expect(screen.getAllByText('Priya Singh').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Rahul Kumar').length).toBeGreaterThanOrEqual(1);
+
+  // 5. Column 2: Active Review Inspector
+  expect(screen.getAllByText(/Amazing service! The team was professional/i).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Your Reply')).toBeDefined();
+  expect(screen.getByText('Customer Details')).toBeDefined();
+  expect(screen.getByText('Tucson, AZ')).toBeDefined();
+  expect(screen.getByRole('button', { name: /View in Google/i })).toBeDefined();
+
+  // 6. Column 3: AI Review Reply (Beta), Insights & Quick Actions
+  expect(screen.getByText('AI Review Reply')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Generate Reply/i })).toBeDefined();
+  expect(screen.getByText('Review Insights')).toBeDefined();
+  expect(screen.getAllByText(/cleaning/i).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText(/professional/i).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Actions')).toBeDefined();
+  expect(screen.getByText('Request Reviews')).toBeDefined();
+  expect(screen.getByText('Set Auto-Reply Rules')).toBeDefined();
+
+  // 7. Interactivity: Selecting another review updates the inspector
+  const rahulItem = screen.getAllByText('Rahul Kumar')[0];
+  fireEvent.click(rahulItem);
+  expect(screen.getAllByText(/Great service. Very friendly staff and reasonable pricing/i).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Oro Valley, AZ')).toBeDefined();
+
+  // 8. Interactivity: Generate Reply button updates reply draft
+  const generateBtn = screen.getByRole('button', { name: /Generate Reply/i });
+  fireEvent.click(generateBtn);
+});
+
+it('renders Campaigns & Outreach prospecting workstation with 6-stage funnel, search filters, business table, and dossier', async () => {
+  const { BgosOutreach } = await import('@/components/bgos/outreach');
+  const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <BgosOutreach />
+    </QueryClientProvider>
+  );
+
+  // 1. Header & Navigation Tabs
+  expect(screen.getByRole('heading', { level: 1, name: /Campaigns & Outreach/i })).toBeDefined();
+  expect(screen.getByText('Multi-Channel')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Campaign/i })).toBeDefined();
+
+  // Sub-Navigation Tabs
+  expect(screen.getByRole('button', { name: /Find Prospects/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Campaigns/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Sequences/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Audience & Segments/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Reports/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Settings/i })).toBeDefined();
+
+  // 2. 6-Stage B2B Outreach Stepper
+  expect(screen.getByText('Discover')).toBeDefined();
+  expect(screen.getByText('Qualify')).toBeDefined();
+  expect(screen.getByText('Select Audience')).toBeDefined();
+  expect(screen.getByText('Personalize')).toBeDefined();
+  expect(screen.getByText('Review & Send')).toBeDefined();
+  expect(screen.getByText('Track & Follow Up')).toBeDefined();
+
+  // 3. Search Controls Card
+  expect(screen.getByText('Find Business Prospects')).toBeDefined();
+  expect(screen.getByDisplayValue('office cleaning')).toBeDefined();
+  expect(screen.getByDisplayValue('Tucson, Arizona')).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Search$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Saved Searches/i })).toBeDefined();
+
+  // 4. Results Table
+  expect(screen.getByText('Businesses Found (1,248)')).toBeDefined();
+  expect(screen.getByRole('button', { name: /AI Qualify/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Export/i })).toBeDefined();
+  expect(screen.getAllByText('Desert Sky Offices').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Pima Medical Center').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Arizona Law Group').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Riverside Accounting').length).toBeGreaterThanOrEqual(1);
+
+  // 5. Business Details Dossier (Default: Desert Sky Offices)
+  expect(screen.getByText('Business Details')).toBeDefined();
+  expect(screen.getByText('92% Match')).toBeDefined();
+  expect(screen.getAllByText('desertskyoffices.com').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Business Information')).toBeDefined();
+  expect(screen.getAllByText('AI Insights').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('High potential lead')).toBeDefined();
+  expect(screen.getByText('Recommended Message Angle')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Add to Outreach/i })).toBeDefined();
+
+  // 6. Interactivity: Selecting another business updates the dossier
+  const pimaRow = screen.getAllByText('Pima Medical Center')[0];
+  fireEvent.click(pimaRow);
+  expect(screen.getByText('88% Match')).toBeDefined();
+  expect(screen.getAllByText('pimamedical.com').length).toBeGreaterThanOrEqual(1);
+
+  // 7. Interactivity: Clicking Add to Outreach triggers action
+  const addBtn = screen.getByRole('button', { name: /Add to Outreach/i });
+  fireEvent.click(addBtn);
+
+  // 8. Interactivity: Clicking Create Campaign opens dialog modal
+  const createBtn = screen.getByRole('button', { name: /Create Campaign/i });
+  fireEvent.click(createBtn);
+  expect(screen.getByText('Create Outreach Campaign')).toBeDefined();
+});
+
+it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, table, right rail, and transitions to visual builder', async () => {
+  const { FormBuilderView } = await import('@/components/views/form-builder-view');
+
+  render(<FormBuilderView />);
+
+  // 1. Header & Global CTA
+  expect(screen.getByRole('heading', { level: 1, name: /Forms & Funnels/i })).toBeDefined();
+  expect(
+    screen.getByText(/Create high-converting forms and funnels to capture leads, book appointments and grow your business\./i)
+  ).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Form or Funnel/i })).toBeDefined();
+
+  // 2. Sub-Navigation Tabs
+  expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
+  expect(screen.getAllByRole('button', { name: /^Forms$/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByRole('button', { name: /^Funnels$/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByRole('button', { name: /^Templates$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Submissions$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Settings$/i })).toBeDefined();
+
+  // 3. 4 Growth KPI Telemetry Cards
+  expect(screen.getByText('Total Forms')).toBeDefined();
+  expect(screen.getByText('12')).toBeDefined();
+  expect(screen.getByText('+20% vs last month')).toBeDefined();
+
+  expect(screen.getByText('Total Funnels')).toBeDefined();
+  expect(screen.getByText('6')).toBeDefined();
+  expect(screen.getByText('+50% vs last month')).toBeDefined();
+
+  expect(screen.getByText('Leads Captured')).toBeDefined();
+  expect(screen.getAllByText('428').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('+38% vs last month')).toBeDefined();
+
+  expect(screen.getByText('Appointments Booked')).toBeDefined();
+  expect(screen.getByText('126')).toBeDefined();
+  expect(screen.getByText('+12% vs last month')).toBeDefined();
+
+  // 4. Popular Templates Carousel
+  expect(screen.getByText('Popular Templates')).toBeDefined();
+  expect(screen.getByText('View All Templates')).toBeDefined();
+  expect(screen.getAllByText('Home Cleaning Quote').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Appointment Booking').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Contact Us Form')).toBeDefined();
+  expect(screen.getAllByText('Service Request').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Survey Form')).toBeDefined();
+  expect(screen.getByText('Landing Page Funnel')).toBeDefined();
+
+  // 5. Recent Forms & Funnels Table
+  expect(screen.getByRole('button', { name: /^All$/i })).toBeDefined();
+  expect(screen.getAllByRole('button', { name: /^Forms$/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByRole('button', { name: /^Funnels$/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByRole('button', { name: /^Drafts$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Published$/i })).toBeDefined();
+  expect(screen.getByText('Diwali Offer Landing Page')).toBeDefined();
+  expect(screen.getByText('Service Request Form')).toBeDefined();
+
+  // 6. Right Rail: Lead Sources Donut & Quick Actions
+  expect(screen.getByText('Lead Sources')).toBeDefined();
+  expect(screen.getByText('Total Leads')).toBeDefined();
+  expect(screen.getByText('Website')).toBeDefined();
+  expect(screen.getByText('42%')).toBeDefined();
+  expect(screen.getByText('Google Business')).toBeDefined();
+  expect(screen.getAllByText('24%').length).toBeGreaterThanOrEqual(1);
+
+  expect(screen.getByText('Quick Actions')).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Create Form$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Create Funnel$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Browse Templates/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /View Submissions/i })).toBeDefined();
+
+  // 7. Form Submissions Live Triage
+  expect(screen.getByText('Form Submissions')).toBeDefined();
+  expect(screen.getByText('Priya Singh')).toBeDefined();
+  expect(screen.getByText('Rahul Kumar')).toBeDefined();
+  expect(screen.getByText('Sneha Patel')).toBeDefined();
+
+  // 8. Interactivity: Transition into Visual Funnel & Form Builder Workstation
+  const createFunnelBtn = screen.getByRole('button', { name: /Create Form or Funnel/i });
+  fireEvent.click(createFunnelBtn);
+
+  // Verifies Visual Builder Workstation is mounted
+  expect(screen.getByText('Home Cleaning Quote Funnel')).toBeDefined();
+  expect(screen.getByText('Published')).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Build$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Design$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Settings$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Preview$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Publish$/i })).toBeDefined();
+
+  // 3-Column Workstation Layout Checks
+  // Left: Add Elements
+  expect(screen.getByText('Add Elements')).toBeDefined();
+  expect(screen.getByText('Form Elements')).toBeDefined();
+  expect(screen.getByText('Basic Fields')).toBeDefined();
+  expect(screen.getByText('Text Input')).toBeDefined();
+  expect(screen.getByText('Radio Buttons')).toBeDefined();
+
+  // Center: Live Stage Canvas
+  expect(screen.getByRole('button', { name: /Desktop/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Mobile/i })).toBeDefined();
+  expect(screen.getByText('Service')).toBeDefined();
+  expect(screen.getByText('Details')).toBeDefined();
+  expect(screen.getByText('Quote')).toBeDefined();
+  expect(screen.getByText('Contact')).toBeDefined();
+  expect(screen.getByText('Professional Home Cleaning Services')).toBeDefined();
+  expect(screen.getByText('What type of cleaning do you need?')).toBeDefined();
+  expect(screen.getAllByText('Regular Home Cleaning').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Deep Cleaning')).toBeDefined();
+  expect(screen.getByText('Move In/Out Cleaning')).toBeDefined();
+  expect(screen.getByText('Office Cleaning')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Next Step/i })).toBeDefined();
+
+  // Right: Element Settings Inspector
+  expect(screen.getByText('Element Settings')).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Content$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Style$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Advanced$/i })).toBeDefined();
+  expect(screen.getByText('Option Settings')).toBeDefined();
+  expect(screen.getByText('Selected by default')).toBeDefined();
+  expect(screen.getByText('Required field')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Delete Element/i })).toBeDefined();
+
+  // 9. Interactivity: Selecting another service option updates inspector
+  const deepCleaningOption = screen.getByText('Deep Cleaning');
+  fireEvent.click(deepCleaningOption);
+  expect(screen.getByDisplayValue('Deep Cleaning')).toBeDefined();
+
+  // 10. Interactivity: Next Step button advances stage
+  const nextStepBtn = screen.getByRole('button', { name: /Next Step/i });
+  fireEvent.click(nextStepBtn);
+  expect(screen.getByText(/Step 2 of 4/i)).toBeDefined();
+});
+
+
+
+
+

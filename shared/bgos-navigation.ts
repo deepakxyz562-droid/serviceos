@@ -21,14 +21,11 @@ export const BGOS_NAVIGATION = [
     items: [
       { view: 'leads', label: 'Leads & CRM', iconName: 'Users' },
       { view: 'socialMedia', label: 'Marketing Studio', iconName: 'Sparkles' },
-      { view: 'reviews', label: 'Google Business', iconName: 'Star' },
+      { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Star' },
       { view: 'campaigns', label: 'Campaigns & Outreach', iconName: 'Send' },
-      { view: 'leadDiscovery', label: 'Lead Intelligence', iconName: 'Search' },
       { view: 'formBuilder', label: 'Forms & Funnels', iconName: 'FileInput' },
       { view: 'scheduling', label: 'Appointments', iconName: 'Calendar' },
-      { view: 'workflows', label: 'Automations', iconName: 'Workflow' },
       { view: 'creatorProfile', label: 'Digital Presence', iconName: 'Globe' },
-      { view: 'formsAnalytics', label: 'Analytics & Reports', iconName: 'BarChart3' },
     ],
   },
   {
@@ -47,7 +44,7 @@ const allowed = new Set<string>([
   'contacts', 'formSubmissions', 'booking', 'calendar', 'meetingTypes', 'appointmentTypes',
   'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
-  'aiCallHistory', 'aiAgents',
+  'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery',
 ]);
 
 export function bgosView(view: string): string {
@@ -64,5 +61,6 @@ export function bgosNavigationView(view: string): string {
   if (['socialAccounts', 'postComposer', 'postsList', 'socialAnalytics'].includes(view)) return 'socialMedia';
   if (['aiCallHistory', 'aiAgents'].includes(view)) return 'aiReceptionist';
   if (view === 'creatorOffers') return 'creatorProfile';
+  if (view === 'leadDiscovery') return 'campaigns';
   return bgosView(view);
 }
