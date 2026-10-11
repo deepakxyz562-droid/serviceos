@@ -5,7 +5,6 @@ export const BGOS_NAVIGATION = [
     items: [
       { view: 'dashboard', label: 'Home', iconName: 'Home' },
       { view: 'omnichannel', label: 'Inbox', iconName: 'MessageSquare', badge: '12' },
-      { view: 'liveChat', label: 'Live Engage', iconName: 'Radio' },
       { view: 'helpCenter', label: 'Tickets & Support', iconName: 'Ticket' },
     ],
   },
@@ -44,6 +43,7 @@ const allowed = new Set<string>([
   'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
   'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery', 'employees',
+  'liveChat',
 ]);
 
 export function bgosView(view: string): string {
@@ -62,5 +62,6 @@ export function bgosNavigationView(view: string): string {
   if (view === 'creatorOffers') return 'creatorProfile';
   if (view === 'leadDiscovery') return 'campaigns';
   if (view === 'employees') return 'settings';
+  if (view === 'liveChat') return 'omnichannel';
   return bgosView(view);
 }

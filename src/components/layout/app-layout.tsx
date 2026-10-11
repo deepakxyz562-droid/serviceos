@@ -222,7 +222,7 @@ const viewComponents: Record<string, any> = {
   marketingTemplates: MarketingTemplatesView,
   omnichannel: OmnichannelView,
   whatsapp: WhatsAppView,
-  liveChat: LiveChatView,
+  liveChat: (props: any) => <OmnichannelView {...props} initialTab="visitors" />,
   smsNumbers: SmsNumbersView,
   // Automation
   workflows: WorkflowsView,

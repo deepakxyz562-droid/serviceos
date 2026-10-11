@@ -14,6 +14,8 @@ import {
   Calendar, Zap, RotateCcw, User,
   Plus, ChevronDown, Check, MoreHorizontal,
   Tag, ArrowRight, ShieldCheck, FileText,
+  TrendingUp, Flame, Timer, Monitor, Smartphone,
+  Laptop, MapPin, Keyboard, Eye, RefreshCw, AlertCircle, Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -353,19 +355,249 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   },
 ];
 
-export function OmnichannelView() {
+export interface LiveVisitorTelemetry {
+  id: string;
+  name: string;
+  shortId: string;
+  location: string;
+  page: string;
+  duration: string;
+  intent: string;
+  intentScore: number;
+  device: string;
+  deviceCategory: 'desktop' | 'mobile';
+  referral: string;
+  referralCategory: 'maps' | 'organic' | 'instagram' | 'direct';
+  ip: string;
+  provider: string;
+  status: 'stalled' | 'high_intent' | 'chatting' | 'browsing' | 'idle';
+  statusLabel: string;
+  quoteEstimate: number;
+  timeline: { time: string; title: string; desc: string; isCurrent?: boolean }[];
+  currentKeystroke?: string;
+  suggestedReplies?: string[];
+  aiNudge: { rule: string; message: string };
+}
+
+export const LIVE_VISITORS_DATA: LiveVisitorTelemetry[] = [
+  {
+    id: 'vis_8487',
+    name: 'Visitor #8487',
+    shortId: '87',
+    location: 'Catalina Foothills (85718)',
+    page: '/book-appointment',
+    duration: '5m 20s',
+    intent: 'Intent 96%',
+    intentScore: 96,
+    device: 'Desktop Chrome',
+    deviceCategory: 'desktop',
+    referral: 'Tucson Maps (GBP)',
+    referralCategory: 'maps',
+    ip: '73.189.44.xx',
+    provider: 'Comcast Cable',
+    status: 'stalled',
+    statusLabel: 'Stalled at Booking (45s)',
+    quoteEstimate: 285,
+    timeline: [
+      { time: '14:02:11', title: 'Landed via Google Maps', desc: "Listing: 'Cinderella Cleaners - Catalina Foothills'" },
+      { time: '14:04:05', title: 'Navigated to /deep-cleaning', desc: 'Viewed: Eco-friendly package details & customer reviews' },
+      { time: '14:05:40', title: 'Configured Instant Calculator', desc: "Home size: 2,400 sq ft • 3 Bed / 2.5 Bath • Selected 'Deep Sanitization'" },
+      { time: '14:07:30', title: 'Stalled on /book-appointment', desc: 'Cursor paused on Saturday 10:00 AM slot for 45s without confirming.', isCurrent: true },
+    ],
+    currentKeystroke: 'do you guys bring your own organic supplies for hardwood fl',
+    suggestedReplies: [
+      'Yes! We bring 100% plant-based Eco-Cert supplies safe for hardwood & pets.',
+      'All equipment and gentle organic solutions are fully included at no extra fee.',
+    ],
+    aiNudge: {
+      rule: 'Hesitant-Booking-v2',
+      message: "Hi there! We noticed you're looking at Saturday deep cleaning in Catalina Foothills. We only have 2 weekend crews left in 85718—would you like me to reserve the 10:00 AM slot for you right now?",
+    },
+  },
+  {
+    id: 'vis_4821',
+    name: 'Visitor #4821',
+    shortId: '21',
+    location: 'Tucson, Arizona',
+    page: '/pricing',
+    duration: '2m 45s on pricing table',
+    intent: 'High Intent',
+    intentScore: 92,
+    device: 'Desktop Chrome',
+    deviceCategory: 'desktop',
+    referral: 'Google Organic',
+    referralCategory: 'organic',
+    ip: '198.51.100.14',
+    provider: 'CenturyLink Fiber',
+    status: 'high_intent',
+    statusLabel: 'High Intent',
+    quoteEstimate: 195,
+    timeline: [
+      { time: '14:06:12', title: 'Landed via Google Organic', desc: "Query: 'best house cleaning services tucson'" },
+      { time: '14:08:45', title: 'Scrolled to Commercial Kitchen Tier', desc: 'Active on commercial pricing toggle', isCurrent: true },
+    ],
+    currentKeystroke: 'what is the hourly rate for weekend commercial kitchen clean?',
+    suggestedReplies: [
+      'Our commercial kitchen rate starts at $149 with certified health-code sanitizer.',
+      'Would you like an instant quote sent directly to your WhatsApp or email?',
+    ],
+    aiNudge: {
+      rule: 'Commercial-Pricing-Intent',
+      message: 'Need pricing for commercial kitchens? We offer customized after-hours sanitization with free estimates.',
+    },
+  },
+  {
+    id: 'vis_5019',
+    name: 'Visitor #5019',
+    shortId: '19',
+    location: 'San Jose, California',
+    page: '/services/deep-cleaning',
+    duration: '1m 20s on deep cleaning',
+    intent: 'Exploring Services',
+    intentScore: 78,
+    device: 'Mobile Safari',
+    deviceCategory: 'mobile',
+    referral: 'Instagram Ads',
+    referralCategory: 'instagram',
+    ip: '67.180.21.88',
+    provider: 'AT&T Mobility',
+    status: 'browsing',
+    statusLabel: 'Exploring Services',
+    quoteEstimate: 220,
+    timeline: [
+      { time: '14:09:20', title: 'Landed from Instagram Ad', desc: 'Campaign: Spring Deep Cleaning Promo' },
+      { time: '14:10:40', title: 'Viewing Deep Cleaning FAQs', desc: 'Expanded: Are supplies pet safe?', isCurrent: true },
+    ],
+    currentKeystroke: 'do you travel to silicon valley?',
+    suggestedReplies: [
+      'Yes, we cover the entire South Bay area including San Jose and Santa Clara!',
+    ],
+    aiNudge: {
+      rule: 'Service-Area-Verification',
+      message: 'Looking for cleaning in San Jose? Enter your zip code to see today’s open appointment windows!',
+    },
+  },
+  {
+    id: 'vis_6284',
+    name: 'Visitor #6284',
+    shortId: '84',
+    location: 'Phoenix, Arizona',
+    page: '/booking-estimate',
+    duration: '3m 10s on booking form',
+    intent: 'High Intent',
+    intentScore: 94,
+    device: 'Desktop Edge',
+    deviceCategory: 'desktop',
+    referral: 'Direct URL',
+    referralCategory: 'direct',
+    ip: '72.204.12.9',
+    provider: 'Cox Communications',
+    status: 'stalled',
+    statusLabel: 'High Intent',
+    quoteEstimate: 310,
+    timeline: [
+      { time: '14:05:01', title: 'Direct Visit to Estimate Page', desc: 'Saved bookmark' },
+      { time: '14:08:11', title: 'Configured 3,200 sq ft Home', desc: 'Selected Deep Clean + Window Washing', isCurrent: true },
+    ],
+    currentKeystroke: 'can we add exterior windows to the quote?',
+    suggestedReplies: [
+      'Exterior windows can be added for just $45! Shall I add that to your estimate?',
+    ],
+    aiNudge: {
+      rule: 'Bundle-Upsell-Nudge',
+      message: 'Get $25 off when you bundle deep cleaning with window washing this month!',
+    },
+  },
+  {
+    id: 'vis_8490',
+    name: 'Visitor #8490',
+    shortId: '90',
+    location: 'Oro Valley (85737)',
+    page: '/pricing-plans',
+    duration: '1m 18s active',
+    intent: 'Nudge Ready',
+    intentScore: 88,
+    device: 'Mobile iOS',
+    deviceCategory: 'mobile',
+    referral: 'Instagram Ads',
+    referralCategory: 'instagram',
+    ip: '70.160.91.4',
+    provider: 'Verizon Wireless',
+    status: 'high_intent',
+    statusLabel: 'Nudge Ready',
+    quoteEstimate: 175,
+    timeline: [
+      { time: '14:08:15', title: 'Ad Click from Instagram', desc: 'Carousel ad 3' },
+      { time: '14:09:33', title: 'Scrolled to Bi-weekly plan', desc: 'Hovered on save 20% badge', isCurrent: true },
+    ],
+    currentKeystroke: 'is there a contract for bi-weekly?',
+    suggestedReplies: [
+      'No contracts at all! You can cancel or pause anytime with 24 hours notice.',
+    ],
+    aiNudge: {
+      rule: 'Recurring-Discount-Nudge',
+      message: 'Enjoy 20% off all bi-weekly cleanings with no commitments or contracts.',
+    },
+  },
+  {
+    id: 'vis_8488',
+    name: 'Visitor #8488',
+    shortId: '88',
+    location: 'University Area (85719)',
+    page: '/home-cleaning',
+    duration: '48s active',
+    intent: 'Casual Browsing',
+    intentScore: 45,
+    device: 'Mobile Android',
+    deviceCategory: 'mobile',
+    referral: 'Google Organic',
+    referralCategory: 'organic',
+    ip: '128.196.4.12',
+    provider: 'Univ of Arizona Wi-Fi',
+    status: 'browsing',
+    statusLabel: 'Casual Browsing',
+    quoteEstimate: 120,
+    timeline: [
+      { time: '14:10:02', title: 'Landed on Home Cleaning Overview', desc: 'Referral link', isCurrent: true },
+    ],
+    currentKeystroke: '',
+    suggestedReplies: [],
+    aiNudge: {
+      rule: 'Student-Welcome',
+      message: 'Welcome! Need a move-out or dorm turnaround clean? Check out our quick turnaround specials.',
+    },
+  },
+];
+
+export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' | 'visitors' | 'tickets' } = {}) {
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [selectedConversationId, setSelectedConversationId] = useState<string>('conv_sarah');
   const [activeChannelPill, setActiveChannelPill] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [composerMode, setComposerMode] = useState<'reply' | 'internal' | 'ai' | 'template'>('reply');
-  const [inboxTab, setInboxTab] = useState<'conversations' | 'visitors' | 'tickets'>('conversations');
+  const [inboxTab, setInboxTab] = useState<'conversations' | 'visitors' | 'tickets'>(() => {
+    if (initialTab) return initialTab;
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const tab = p.get('tab');
+      if (tab === 'visitors' || tab === 'tickets') return tab;
+      if (p.get('view') === 'liveChat') return 'visitors';
+    }
+    return 'conversations';
+  });
   const [filterPill, setFilterPill] = useState<'all' | 'unread' | 'assigned' | 'ai' | 'starred'>('all');
   const [centerSubTab, setCenterSubTab] = useState<'chat' | 'details' | 'notes' | 'orders' | 'appointments' | 'tickets'>('chat');
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
   const [customerContext, setCustomerContext] = useState<CustomerContext | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
+
+  // Live Visitor Radar state
+  const [selectedVisitorId, setSelectedVisitorId] = useState<string>('vis_8487');
+  const [visitorSubTab, setVisitorSubTab] = useState<'all' | 'high_intent' | 'chatting' | 'idle'>('all');
+  const [visitorDeviceFilter, setVisitorDeviceFilter] = useState<'all' | 'desktop' | 'mobile'>('all');
+  const [visitorReferralFilter, setVisitorReferralFilter] = useState<'all' | 'organic' | 'maps' | 'instagram' | 'direct'>('all');
+  const [nudgeSent, setNudgeSent] = useState<Record<string, boolean>>({});
 
   const messageEndRef = useRef<HTMLDivElement>(null);
 
@@ -399,6 +631,10 @@ export function OmnichannelView() {
   // Selected conversation
   const selectedConversation =
     conversations.find((c) => c.id === selectedConversationId) || conversations[0];
+
+  // Selected live visitor
+  const selectedVisitor =
+    LIVE_VISITORS_DATA.find((v) => v.id === selectedVisitorId) || LIVE_VISITORS_DATA[0];
 
   // Filtering
   const filteredConversations = conversations.filter((c) => {
@@ -1063,8 +1299,9 @@ export function OmnichannelView() {
             </>
           ) : inboxTab === 'visitors' ? (
             /* ── LIVE ENGAGE VISITOR RADAR (Integrated in Inbox) ── */
-            <div className="flex-1 p-6 space-y-5 overflow-y-auto">
-              <div className="flex items-center justify-between">
+            <div className="flex-1 p-5 space-y-5 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
+              {/* Header Strip */}
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Radio className="size-5 text-emerald-500 animate-pulse" /> Live Website Visitor Radar
@@ -1073,73 +1310,324 @@ export function OmnichannelView() {
                     Active visitors browsing your digital presence in real time. Engage them before they leave.
                   </p>
                 </div>
-                <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold">
-                  3 Online Now
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                    3 Online Now
+                  </Badge>
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100/70 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-semibold">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
+                    Real-Time Telemetry Active • 28 Active Visitors
+                  </span>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                {[
-                  {
-                    id: 'vis_4821',
-                    name: 'Visitor #4821',
-                    location: 'Tucson, Arizona',
-                    page: '/pricing',
-                    duration: '2m 45s on pricing table',
-                    intent: 'High Intent',
-                    device: 'Desktop Chrome',
-                  },
-                  {
-                    id: 'vis_5019',
-                    name: 'Visitor #5019',
-                    location: 'San Jose, California',
-                    page: '/services/deep-cleaning',
-                    duration: '1m 20s on deep cleaning',
-                    intent: 'Exploring Services',
-                    device: 'Mobile Safari',
-                  },
-                  {
-                    id: 'vis_6284',
-                    name: 'Visitor #6284',
-                    location: 'Phoenix, Arizona',
-                    page: '/booking-estimate',
-                    duration: '3m 10s on booking form',
-                    intent: 'High Intent',
-                    device: 'Desktop Edge',
-                  },
-                ].map((vis) => (
-                  <div
-                    key={vis.id}
-                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between shadow-2xs"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{vis.name}</span>
-                        <Badge className="text-[10px] bg-emerald-50 text-emerald-700 border-none font-bold">
-                          {vis.intent}
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Viewing <span className="font-semibold text-slate-800 dark:text-slate-200">{vis.page}</span> • {vis.duration}
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        {vis.location} • {vis.device}
-                      </div>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setSelectedConversationId('conv_visitor');
-                        setInboxTab('conversations');
-                        toast.success(`Engaged with ${vis.name}`);
-                      }}
-                      className="h-8 text-xs font-bold rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
-                    >
-                      Engage with Chat
-                    </Button>
+              {/* Telemetry 5-Card Metrics Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+                    Active Live Visitors
+                    <User className="size-3.5 text-purple-600" />
                   </div>
-                ))}
+                  <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
+                    28
+                    <span className="text-[10px] text-emerald-600 font-bold flex items-center"><TrendingUp className="size-3 inline" />+14%</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">vs yesterday peak</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+                    In Active Chat
+                    <MessageSquare className="size-3.5 text-purple-600" />
+                  </div>
+                  <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
+                    6
+                    <span className="text-[10px] text-purple-600 font-bold">5 AI / 1 Human</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">21.4% engagement</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+                    High Intent Lurkers
+                    <Flame className="size-3.5 text-rose-500" />
+                  </div>
+                  <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
+                    9
+                    <span className="text-[10px] text-rose-600 font-bold">Cart/Booking</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">Requires nudge</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+                    Avg Session Time
+                    <Timer className="size-3.5 text-blue-500" />
+                  </div>
+                  <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
+                    3m 42s
+                    <span className="text-[10px] text-emerald-600 font-bold">+22s</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">Benchmark 2m 15s</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs col-span-2 sm:col-span-1">
+                  <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
+                    Trigger Conversion
+                    <Zap className="size-3.5 text-amber-500" />
+                  </div>
+                  <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
+                    34.2%
+                    <span className="text-[10px] text-purple-600 font-bold">18 booked</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-1">Past 7 days</div>
+                </div>
+              </div>
+
+              {/* Sub-Tabs & Filters Strip */}
+              <div className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setVisitorSubTab('all')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
+                        visitorSubTab === 'all'
+                          ? 'bg-purple-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
+                      )}
+                    >
+                      Live Stream <span className="text-[10px] opacity-80">28</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisitorSubTab('high_intent')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
+                        visitorSubTab === 'high_intent'
+                          ? 'bg-purple-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
+                      )}
+                    >
+                      <Flame className="size-3 text-rose-500" /> High Intent <span className="text-[10px] opacity-80">9</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisitorSubTab('chatting')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
+                        visitorSubTab === 'chatting'
+                          ? 'bg-purple-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
+                      )}
+                    >
+                      <MessageSquare className="size-3 text-purple-500" /> Chatting <span className="text-[10px] opacity-80">6</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVisitorSubTab('idle')}
+                      className={cn(
+                        'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
+                        visitorSubTab === 'idle'
+                          ? 'bg-purple-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
+                      )}
+                    >
+                      Idle / Bounced <span className="text-[10px] opacity-80">13</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" /> Live Sync 1s
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[140px]">
+                    <Search className="size-3.5 absolute left-2.5 top-2.5 text-slate-400" />
+                    <Input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search active visitors by IP, city, or page..."
+                      className="h-8 pl-8 text-xs bg-slate-50 dark:bg-slate-950 rounded-xl"
+                    />
+                  </div>
+                  <select
+                    value={visitorDeviceFilter}
+                    onChange={(e) => setVisitorDeviceFilter(e.target.value as any)}
+                    className="h-8 px-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-slate-50 dark:bg-slate-950 font-medium text-slate-700 dark:text-slate-300"
+                  >
+                    <option value="all">All Devices</option>
+                    <option value="desktop">Desktop Only</option>
+                    <option value="mobile">Mobile iOS / Android</option>
+                  </select>
+                  <select
+                    value={visitorReferralFilter}
+                    onChange={(e) => setVisitorReferralFilter(e.target.value as any)}
+                    className="h-8 px-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs bg-slate-50 dark:bg-slate-950 font-medium text-slate-700 dark:text-slate-300"
+                  >
+                    <option value="all">All Referrals</option>
+                    <option value="maps">Tucson Maps (GBP)</option>
+                    <option value="organic">Google Organic</option>
+                    <option value="instagram">Instagram Ads</option>
+                    <option value="direct">Direct URL</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Visitor Stream Feed Cards */}
+              <div className="space-y-2.5">
+                {LIVE_VISITORS_DATA.filter((vis) => {
+                  if (visitorSubTab === 'high_intent' && vis.status !== 'high_intent' && vis.status !== 'stalled') return false;
+                  if (visitorSubTab === 'chatting' && vis.status !== 'chatting') return false;
+                  if (visitorSubTab === 'idle' && vis.status !== 'idle' && vis.status !== 'browsing') return false;
+                  if (visitorDeviceFilter !== 'all' && vis.deviceCategory !== visitorDeviceFilter) return false;
+                  if (visitorReferralFilter !== 'all' && vis.referralCategory !== visitorReferralFilter) return false;
+                  if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return vis.name.toLowerCase().includes(q) || vis.location.toLowerCase().includes(q) || vis.page.toLowerCase().includes(q);
+                  }
+                  return true;
+                }).map((vis) => {
+                  const isSelected = selectedVisitorId === vis.id;
+                  return (
+                    <div
+                      key={vis.id}
+                      onClick={() => setSelectedVisitorId(vis.id)}
+                      className={cn(
+                        'p-4 rounded-2xl bg-white dark:bg-slate-900 border transition-all cursor-pointer shadow-2xs flex items-center justify-between gap-4',
+                        isSelected
+                          ? 'border-purple-500 ring-2 ring-purple-500/20 shadow-xs'
+                          : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      )}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="relative flex-shrink-0">
+                          <div className="size-10 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-[#7C3AED] flex items-center justify-center font-bold text-xs">
+                            {vis.shortId}
+                          </div>
+                          <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+                        </div>
+
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{vis.name}</span>
+                            <Badge
+                              className={cn(
+                                'text-[10px] font-bold border-none',
+                                vis.status === 'stalled'
+                                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50'
+                                  : vis.status === 'high_intent'
+                                  ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/50'
+                                  : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50'
+                              )}
+                            >
+                              {vis.statusLabel}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] text-slate-500">
+                              {vis.intent}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-slate-500 truncate">
+                            Viewing <span className="font-semibold text-slate-800 dark:text-slate-200">{vis.page}</span> • {vis.duration}
+                          </div>
+                          <div className="text-[10px] text-slate-400 flex items-center gap-2">
+                            <span>{vis.location}</span>
+                            <span>•</span>
+                            <span>{vis.device}</span>
+                            <span>•</span>
+                            <span className="text-purple-600 font-medium">{vis.referral}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedConversationId('conv_visitor');
+                          setInboxTab('conversations');
+                          toast.success(`Engaged with ${vis.name}`);
+                        }}
+                        className="h-8 text-xs font-bold rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white flex-shrink-0"
+                      >
+                        Engage with Chat
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Real-Time Keystroke Telemetry Preview */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                    <Keyboard className="size-4 text-purple-600" /> Real-Time Keystroke Telemetry Preview
+                  </span>
+                  <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+                    <span className="size-2 rounded-full bg-emerald-500 animate-pulse" /> Live Keystroke Mirror
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                  <span>"{selectedVisitor.currentKeystroke || 'Listening for live visitor keystrokes on page...'}"</span>
+                  <span className="w-1.5 h-3.5 bg-purple-600 animate-pulse inline-block" />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500">Suggested 1-Click Instant Replies:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {(selectedVisitor.suggestedReplies || [
+                      'Yes! We bring 100% plant-based Eco-Cert supplies safe for hardwood & pets.',
+                      'All equipment and gentle organic solutions are fully included at no extra fee.'
+                    ]).map((reply, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                          setSelectedConversationId('conv_visitor');
+                          setInboxTab('conversations');
+                          setMessageInput(reply);
+                          toast.success('Inserted reply into chat composer');
+                        }}
+                        className="text-left p-2 rounded-xl bg-slate-100 hover:bg-purple-50 hover:text-purple-700 dark:bg-slate-800 dark:hover:bg-purple-950 text-slate-700 dark:text-slate-300 text-xs transition-colors truncate"
+                      >
+                        • "{reply}"
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Proactive Trigger Rules Engine */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">Proactive Radar Trigger Rules</h4>
+                    <p className="text-[11px] text-slate-500">Automated conversion triggers executed by BGOS AI Receptionist</p>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] font-semibold text-purple-600">3 Rules Active</Badge>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Cart/Booking Hesitation</span>
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Dwell &gt; 40s on booking → Urgency availability nudge</p>
+                    <span className="text-[10px] text-purple-600 font-semibold">14 conversions today</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200">High-Value Calculator</span>
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Quote &gt; $250 → Audio chime alert to live agent</p>
+                    <span className="text-[10px] text-purple-600 font-semibold">9 alerts dispatched</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-slate-800 dark:text-slate-200">Repeat Visitor Welcome</span>
+                      <span className="size-2 rounded-full bg-emerald-500" />
+                    </div>
+                    <p className="text-[10px] text-slate-500">Visits &gt; 2 without booking → 10% welcome coupon</p>
+                    <span className="text-[10px] text-purple-600 font-semibold">22 offers delivered</span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -1194,17 +1682,136 @@ export function OmnichannelView() {
 
         {/* ── RIGHT COLUMN: CUSTOMER 360 DOSSIER & AUTOMATION (3 Cols) ── */}
         <div className="hidden lg:block lg:col-span-3 min-h-0 overflow-hidden">
-          <ConversationDetailPanel
-            conversation={selectedConversation}
-            customerContext={customerContext}
-            contextLoading={contextLoading}
-            onToggleAssign={handleToggleAssign}
-            assignBusy={assignBusy}
-            onToggleAiHandled={handleToggleAiHandled}
-            onCreateBooking={() => toast.success(`Creating booking for ${selectedConversation.customerName}`)}
-            onCreateQuote={() => toast.success(`Generating quote for ${selectedConversation.customerName}`)}
-            onCreateTicket={() => toast.success(`Support ticket logged for ${selectedConversation.customerName}`)}
-          />
+          {inboxTab === 'visitors' ? (
+            /* ── VISITOR DOSSIER & PROACTIVE CO-PILOT TAKEOVER PANEL ── */
+            <div className="h-full flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-y-auto p-4 space-y-4">
+              {/* Profile Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="size-10 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-[#7C3AED] flex items-center justify-center font-black text-sm">
+                    #{selectedVisitor.shortId}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{selectedVisitor.name}</h3>
+                      <Badge className="text-[9px] bg-purple-50 text-purple-700 dark:bg-purple-950/60 font-semibold border-none">
+                        Returning Lead
+                      </Badge>
+                    </div>
+                    <p className="text-[11px] text-slate-500">{selectedVisitor.provider} • IP: {selectedVisitor.ip}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3 Quick Meta Stat Badges */}
+              <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-950 text-center border border-slate-100 dark:border-slate-800">
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-medium">Duration</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{selectedVisitor.duration.split(' ')[0]}</span>
+                </div>
+                <div className="flex flex-col border-x border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-400 font-medium">Lead Score</span>
+                  <span className="text-xs font-bold text-emerald-600">{selectedVisitor.intentScore} / 100</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-400 font-medium">Est. Value</span>
+                  <span className="text-xs font-bold text-purple-600">${selectedVisitor.quoteEstimate}.00</span>
+                </div>
+              </div>
+
+              {/* Real-Time Journey Stepper */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Live Journey Timeline</span>
+                  <span className="text-[10px] font-semibold text-purple-600">Active Stream</span>
+                </div>
+                <div className="relative pl-4 space-y-3 before:absolute before:left-1.5 before:top-1 before:bottom-1 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+                  {selectedVisitor.timeline.map((step, idx) => (
+                    <div key={idx} className="relative text-xs">
+                      <span
+                        className={cn(
+                          'absolute -left-4 top-1 size-2 rounded-full border-2 border-white dark:border-slate-900',
+                          step.isCurrent ? 'bg-rose-500 animate-ping' : 'bg-purple-500'
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          'absolute -left-4 top-1 size-2 rounded-full border-2 border-white dark:border-slate-900',
+                          step.isCurrent ? 'bg-rose-500' : 'bg-purple-500'
+                        )}
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className={cn('font-bold text-[11px]', step.isCurrent ? 'text-rose-600' : 'text-slate-800 dark:text-slate-200')}>
+                          {step.title}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-mono">{step.time}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{step.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* AI Proactive Nudge Box */}
+              <div className="p-3 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-purple-600" /> AI Nudge Recommended
+                  </span>
+                  <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-purple-700">
+                    {selectedVisitor.aiNudge.rule}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 text-xs italic text-slate-700 dark:text-slate-300 shadow-2xs border border-purple-100 dark:border-purple-900">
+                  "{selectedVisitor.aiNudge.message}"
+                </div>
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setNudgeSent((prev) => ({ ...prev, [selectedVisitor.id]: true }));
+                      toast.success(`AI Nudge dispatched to ${selectedVisitor.name}!`);
+                    }}
+                    className="flex-1 h-8 text-xs font-bold rounded-xl bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
+                  >
+                    {nudgeSent[selectedVisitor.id] ? 'Nudge Dispatched ✓' : 'Dispatch AI Nudge'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => toast.info('Opened nudge template editor')}
+                    className="h-8 text-xs font-semibold rounded-xl"
+                  >
+                    Edit
+                  </Button>
+                </div>
+              </div>
+
+              {/* Instant Human Takeover */}
+              <Button
+                onClick={() => {
+                  setSelectedConversationId('conv_visitor');
+                  setInboxTab('conversations');
+                  toast.success(`Instant human takeover initiated with ${selectedVisitor.name}`);
+                }}
+                className="w-full h-10 rounded-xl font-bold bg-[#7C3AED] hover:bg-[#6D28D9] text-white flex items-center justify-center gap-2 shadow-sm"
+              >
+                <Radio className="size-4 animate-pulse" /> Instant Human Takeover (Join As Agent)
+              </Button>
+            </div>
+          ) : (
+            <ConversationDetailPanel
+              conversation={selectedConversation}
+              customerContext={customerContext}
+              contextLoading={contextLoading}
+              onToggleAssign={handleToggleAssign}
+              assignBusy={assignBusy}
+              onToggleAiHandled={handleToggleAiHandled}
+              onCreateBooking={() => toast.success(`Creating booking for ${selectedConversation.customerName}`)}
+              onCreateQuote={() => toast.success(`Generating quote for ${selectedConversation.customerName}`)}
+              onCreateTicket={() => toast.success(`Support ticket logged for ${selectedConversation.customerName}`)}
+            />
+          )}
         </div>
       </div>
     </div>

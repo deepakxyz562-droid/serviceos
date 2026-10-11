@@ -606,6 +606,51 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
   expect(screen.getByText(/Step 2 of 4/i)).toBeDefined();
 });
 
+it('renders Live Website Visitor Radar workstation inside Inbox with telemetry strip, visitor stream, live keystroke mirror, and dossier', async () => {
+  const { OmnichannelView } = await import('@/components/views/omnichannel-view');
+
+  render(<OmnichannelView initialTab="visitors" />);
+
+  // 1. Radar Header & Online Badges
+  expect(screen.getByText(/Live Website Visitor Radar/i)).toBeDefined();
+  expect(screen.getByText(/3 Online Now/i)).toBeDefined();
+  expect(screen.getByText(/28 Active Visitors/i)).toBeDefined();
+
+  // 2. 5 Telemetry Metrics
+  expect(screen.getByText('Active Live Visitors')).toBeDefined();
+  expect(screen.getByText('In Active Chat')).toBeDefined();
+  expect(screen.getByText('High Intent Lurkers')).toBeDefined();
+  expect(screen.getByText('Avg Session Time')).toBeDefined();
+  expect(screen.getByText('Trigger Conversion')).toBeDefined();
+
+  // 3. Sub-filter tabs & Stream
+  expect(screen.getByRole('button', { name: /Live Stream/i })).toBeDefined();
+  expect(screen.getAllByRole('button', { name: /High Intent/i }).length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByRole('button', { name: /Chatting/i }).length).toBeGreaterThanOrEqual(1);
+
+  // 4. Real-time Keystroke Mirror
+  expect(screen.getByText(/Real-Time Keystroke Telemetry Preview/i)).toBeDefined();
+  expect(screen.getByText(/do you guys bring your own organic supplies for hardwood fl/i)).toBeDefined();
+
+  // 5. Proactive Rules Engine
+  expect(screen.getByText('Proactive Radar Trigger Rules')).toBeDefined();
+  expect(screen.getByText('Cart/Booking Hesitation')).toBeDefined();
+  expect(screen.getByText('High-Value Calculator')).toBeDefined();
+  expect(screen.getByText('Repeat Visitor Welcome')).toBeDefined();
+
+  // 6. Right Column: Visitor Dossier & Takeover
+  expect(screen.getAllByText('Visitor #8487').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Returning Lead')).toBeDefined();
+  expect(screen.getByText('AI Nudge Recommended')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Dispatch AI Nudge/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Instant Human Takeover/i })).toBeDefined();
+
+  // 7. Interactivity: Dispatch AI Nudge
+  const nudgeBtn = screen.getByRole('button', { name: /Dispatch AI Nudge/i });
+  fireEvent.click(nudgeBtn);
+  expect(screen.getByText(/Nudge Dispatched/i)).toBeDefined();
+});
+
 
 
 

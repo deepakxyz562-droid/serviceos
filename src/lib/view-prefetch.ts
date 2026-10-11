@@ -37,7 +37,7 @@ export function prefetchView(viewId: string): void {
     case 'marketingTemplates': void import('@/components/views/marketing-templates-view'); break;
     case 'omnichannel': void import('@/components/views/omnichannel-view'); break;
     case 'whatsapp': void import('@/components/views/whatsapp-view'); break;
-    case 'liveChat': void import('@/components/views/live-chat-view'); break;
+    case 'liveChat': void import('@/components/views/omnichannel-view'); break;
     case 'smsNumbers': void import('@/components/views/sms-numbers-view'); break;
     // Automation
     case 'workflows': void import('@/components/views/workflows-view'); break;
