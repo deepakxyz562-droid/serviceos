@@ -31,7 +31,6 @@ export const BGOS_NAVIGATION = [
   {
     title: 'Manage',
     items: [
-      { view: 'employees', label: 'Team Members', iconName: 'Shield' },
       { view: 'integrations', label: 'Integrations', iconName: 'Share2' },
       { view: 'billing', label: 'Billing & Subscription', iconName: 'CreditCard' },
       { view: 'settings', label: 'Settings', iconName: 'Settings' },
@@ -44,7 +43,7 @@ const allowed = new Set<string>([
   'contacts', 'formSubmissions', 'booking', 'calendar', 'meetingTypes', 'appointmentTypes',
   'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
-  'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery',
+  'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery', 'employees',
 ]);
 
 export function bgosView(view: string): string {
@@ -62,5 +61,6 @@ export function bgosNavigationView(view: string): string {
   if (['aiCallHistory', 'aiAgents'].includes(view)) return 'aiReceptionist';
   if (view === 'creatorOffers') return 'creatorProfile';
   if (view === 'leadDiscovery') return 'campaigns';
+  if (view === 'employees') return 'settings';
   return bgosView(view);
 }

@@ -21,7 +21,7 @@ describe('BGOS product boundaries', () => {
     expect(bgosView('canvas')).toBe('canvas');
   });
   it('groups existing child screens under one canonical feature', () => {
-    for (const [child, parent] of [['contacts', 'leads'], ['formSubmissions', 'formBuilder'], ['postsList', 'socialMedia'], ['socialAccounts', 'socialMedia'], ['aiCallHistory', 'aiReceptionist'], ['calendar', 'scheduling']]) {
+    for (const [child, parent] of [['contacts', 'leads'], ['formSubmissions', 'formBuilder'], ['postsList', 'socialMedia'], ['socialAccounts', 'socialMedia'], ['aiCallHistory', 'aiReceptionist'], ['calendar', 'scheduling'], ['employees', 'settings']]) {
       expect(bgosView(child)).toBe(child);
       expect(bgosNavigationView(child)).toBe(parent);
     }
