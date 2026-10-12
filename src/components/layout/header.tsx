@@ -425,15 +425,17 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       </Button>
 
       {/* ─── Desktop sidebar toggle ────────────────────────────────────── */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleLeftSidebar}
-        className="shrink-0 hidden lg:flex h-9 w-9"
-        aria-label="Toggle sidebar"
-      >
-        <Menu className="size-4" />
-      </Button>
+      {(!isChatbotlyWorkspace(auth) || !leftSidebarOpen) && (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleLeftSidebar}
+          className="shrink-0 hidden lg:flex h-9 w-9"
+          aria-label="Toggle sidebar"
+        >
+          <Menu className="size-4" />
+        </Button>
+      )}
 
       {/* ─── Prominent BGOS Logo (Always visible on mobile or when sidebar is collapsed) ─── */}
       {isChatbotlyWorkspace(auth) && (!leftSidebarOpen || isMobile) && (
@@ -447,7 +449,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         </button>
       )}
 
-      {/* ─── Current view title ────────────────────────────────────────── */}
+      {/* ─── Current view title / BGOS global search ───────────────────── */}
       {isChatbotlyWorkspace(auth) ? <BgosHeaderTools /> : (
       <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate min-w-0">
         {isChatbotlyWorkspace(auth) ? BGOS_NAVIGATION.flatMap(section => section.items.map(item => ({ view: item.view as string, label: item.label }))).find(item => item.view === bgosNavigationView(currentView))?.label || viewLabels[currentView] || 'Overview' : viewLabels[currentView] || 'Dashboard'}
@@ -531,9 +533,9 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       <div className="flex-1" />
 
       {/* ─── Right side actions ────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {/* ─── Global Offline Status Indicator / Sync Trigger ────────────── */}
-        <OfflineStatusBar variant="compact" />
+        {!isChatbotlyWorkspace(auth) && <OfflineStatusBar variant="compact" />}
 
         {/* ─── AI Assistant trigger button (opens right-side Copilot drawer) ── */}
         {!isAiAssistantDisabled && !isChatbotlyWorkspace(auth) && (
@@ -557,28 +559,30 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         )}
 
         {/* ─── Messages icon (opens Skype-style left drawer) ─────────────── */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 relative"
-          aria-label="Messages"
-          onClick={() => setMessageDrawerOpen(!messageDrawerOpen)}
-        >
-          <MessageSquare className="size-4" />
-          {messageUnreadCount > 0 && (
-            <span
-              className="absolute top-1 right-1 min-w-3.5 h-3.5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none"
-              aria-hidden="true"
-            >
-              {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+        {!isChatbotlyWorkspace(auth) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 relative"
+            aria-label="Messages"
+            onClick={() => setMessageDrawerOpen(!messageDrawerOpen)}
+          >
+            <MessageSquare className="size-4" />
+            {messageUnreadCount > 0 && (
+              <span
+                className="absolute top-1 right-1 min-w-3.5 h-3.5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none"
+                aria-hidden="true"
+              >
+                {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+              </span>
+            )}
+            <span className="sr-only">
+              {messageUnreadCount === 0
+                ? 'No unread messages'
+                : `${messageUnreadCount} unread message${messageUnreadCount === 1 ? '' : 's'}`}
             </span>
-          )}
-          <span className="sr-only">
-            {messageUnreadCount === 0
-              ? 'No unread messages'
-              : `${messageUnreadCount} unread message${messageUnreadCount === 1 ? '' : 's'}`}
-          </span>
-        </Button>
+          </Button>
+        )}
 
         {/* ─── Notifications bell ──────────────────────────────────────── */}
         <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
@@ -586,18 +590,27 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 relative"
+              className={cn(
+                'h-9 w-9 relative',
+                isChatbotlyWorkspace(auth) && 'rounded-full bg-slate-100/80 dark:bg-slate-800 hover:bg-slate-200/70'
+              )}
               aria-label="Notifications"
             >
-              <Bell className="size-4" />
-              {/* Notification badge — only renders when there's at least 1 unread */}
-              {unreadCount > 0 && (
+              <Bell className="size-4 text-slate-700 dark:text-slate-200" />
+              {isChatbotlyWorkspace(auth) ? (
                 <span
-                  className="absolute top-1 right-1 min-w-3.5 h-3.5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none"
+                  className="absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"
                   aria-hidden="true"
-                >
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
+                />
+              ) : (
+                unreadCount > 0 && (
+                  <span
+                    className="absolute top-1 right-1 min-w-3.5 h-3.5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none"
+                    aria-hidden="true"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )
               )}
               <span className="sr-only">
                 {unreadCount === 0
@@ -631,7 +644,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="text-center cursor-pointer text-emerald-600 dark:text-emerald-400 justify-center"
+              className="text-center cursor-pointer text-[#009F50] dark:text-emerald-400 justify-center"
               onClick={goNotifications}
             >
               View all notifications
@@ -639,47 +652,72 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* ─── Dark mode toggle (desktop only — mobile uses avatar dropdown) ── */}
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleToggleTheme}
-          className="hidden sm:flex h-9 w-9"
-          aria-label="Toggle dark mode"
-        >
-          {isDark ? (
-            <Sun className="size-4" />
-          ) : (
-            <Moon className="size-4" />
-          )}
-        </Button>
-
-        {/* ─── Separator (desktop only) ───────────────────────────────── */}
-        <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1 hidden sm:block" />
+        {/* ─── Dark mode toggle (desktop only — in BGOS mode inside user menu) ── */}
+        {!isChatbotlyWorkspace(auth) && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleTheme}
+              className="hidden sm:flex h-9 w-9"
+              aria-label="Toggle dark mode"
+            >
+              {isDark ? (
+                <Sun className="size-4" />
+              ) : (
+                <Moon className="size-4" />
+              )}
+            </Button>
+            <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1 hidden sm:block" />
+          </>
+        )}
 
         {/* ─── User avatar dropdown ────────────────────────────────────── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-9 w-9 rounded-full"
-            >
-              <Avatar className="size-7">
-                <AvatarFallback className="bg-emerald-600 text-white text-xs">
-                  {getUserInitials()}
-                </AvatarFallback>
-              </Avatar>
-            </Button>
+            {isChatbotlyWorkspace(auth) ? (
+              <button
+                type="button"
+                className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                aria-label="Account menu"
+              >
+                <Avatar className="size-9">
+                  <AvatarFallback className="bg-[#009F50] text-white text-xs font-bold">
+                    {getUserInitials() === 'U' ? 'JD' : getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">
+                    {auth.user?.name || 'John Doe'}
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Business Owner
+                  </span>
+                </div>
+                <ChevronDown className="size-3.5 text-slate-400 hidden sm:block" />
+              </button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full"
+              >
+                <Avatar className="size-7">
+                  <AvatarFallback className="bg-emerald-600 text-white text-xs">
+                    {getUserInitials()}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            )}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
                 <span className="font-medium">
-                  {auth.user?.name || 'Demo User'}
+                  {auth.user?.name || 'John Doe'}
                 </span>
                 <span className="text-xs text-muted-foreground font-normal">
-                  {auth.user?.email || 'demo@fieseros.com'}
+                  {auth.user?.email || 'owner@bgos.io'}
                 </span>
               </div>
             </DropdownMenuLabel>
@@ -696,12 +734,10 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
               <Settings className="size-4" />
               Settings
             </DropdownMenuItem>
-            {/* Dark mode toggle — mobile only (desktop has the icon button) */}
-            <DropdownMenuItem className="cursor-pointer gap-2 sm:hidden" onClick={handleToggleTheme}>
+            <DropdownMenuItem className="cursor-pointer gap-2" onClick={handleToggleTheme}>
               {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
               {isDark ? 'Light mode' : 'Dark mode'}
             </DropdownMenuItem>
-            {/* Install app — lets users re-trigger install after dismissing banner */}
             <DropdownMenuItem className="cursor-pointer gap-2" onClick={handleInstallClick}>
               <Download className="size-4" />
               Install app
@@ -737,7 +773,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     />
 
     {/* ─── Floating Omnipresent AI Copilot & Mic Trigger ───────────────── */}
-    {!isAiAssistantDisabled && isAuthenticated && (
+    {!isAiAssistantDisabled && isAuthenticated && !isChatbotlyWorkspace(auth) && (
       <button
         type="button"
         onClick={() => setAiDrawerOpen(!useAppStore.getState().aiDrawerOpen)}

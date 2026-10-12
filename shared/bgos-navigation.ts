@@ -4,23 +4,23 @@ export const BGOS_NAVIGATION = [
     title: 'Core',
     items: [
       { view: 'dashboard', label: 'Home', iconName: 'Home' },
-      { view: 'omnichannel', label: 'Inbox', iconName: 'MessageSquare' },
-      { view: 'helpCenter', label: 'Tickets & Support', iconName: 'Ticket' },
+      { view: 'omnichannel', label: 'Inbox', iconName: 'Mail', badge: '12' },
+      { view: 'helpCenter', label: 'Tickets & Support', iconName: 'CircleHelp', badge: '3' },
     ],
   },
   {
     title: 'AI & Phone',
     items: [
-      { view: 'agentStudio', label: 'AI Assistant', iconName: 'Bot', badge: 'AI' },
-      { view: 'aiReceptionist', label: 'Business Phone & AI', iconName: 'Phone', badge: 'VOICE' },
+      { view: 'agentStudio', label: 'AI Assistant', iconName: 'Bot' },
+      { view: 'aiReceptionist', label: 'Business Phone & AI Voice', iconName: 'PhoneCall' },
     ],
   },
   {
     title: 'Growth & CRM',
     items: [
       { view: 'leads', label: 'Leads & CRM', iconName: 'Users' },
-      { view: 'socialMedia', label: 'Marketing Studio', iconName: 'Sparkles' },
-      { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Star' },
+      { view: 'socialMedia', label: 'Marketing Studio', iconName: 'Send' },
+      { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Store' },
       { view: 'formBuilder', label: 'Forms', iconName: 'FileInput' },
       { view: 'scheduling', label: 'Appointments', iconName: 'Calendar' },
     ],
@@ -28,7 +28,7 @@ export const BGOS_NAVIGATION = [
   {
     title: 'Manage',
     items: [
-      { view: 'integrations', label: 'Integrations', iconName: 'Share2' },
+      { view: 'integrations', label: 'Integrations', iconName: 'Megaphone' },
       { view: 'settings', label: 'Settings', iconName: 'Settings' },
     ],
   },

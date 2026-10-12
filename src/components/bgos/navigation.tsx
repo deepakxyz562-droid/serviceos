@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import {
   BarChart3,
   Bot,
@@ -11,34 +10,32 @@ import {
   Globe,
   Home,
   LayoutDashboard,
-  LogOut,
+  Mail,
+  Megaphone,
   Menu,
   MessageSquare,
   Phone,
+  PhoneCall,
   Radio,
   Search,
   Send,
   Settings,
   Share2,
   Shield,
+  SlidersHorizontal,
   Sparkles,
   Star,
+  Store,
   Ticket,
   Users,
   Workflow,
-  ChevronDown,
   ChevronRight,
-  LayoutTemplate,
-  Tag,
-  QrCode,
   type LucideIcon,
 } from 'lucide-react';
 import { BgosBrand } from './brand';
 import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-navigation';
 import { useAppStore } from '@/store/app-store';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 
 import type { ViewType } from '@/types/workflow';
 
@@ -46,13 +43,17 @@ const icons: Record<string, LucideIcon> = {
   BarChart3,
   Bot,
   Calendar,
+  CircleHelp,
   CreditCard,
   FileInput,
   Globe,
   Home,
   LayoutDashboard,
+  Mail,
+  Megaphone,
   MessageSquare,
   Phone,
+  PhoneCall,
   Radio,
   Search,
   Send,
@@ -61,15 +62,14 @@ const icons: Record<string, LucideIcon> = {
   Shield,
   Sparkles,
   Star,
+  Store,
   Ticket,
   Users,
   Workflow,
 };
 
-export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
-  const { auth, currentView, setCurrentView, leftSidebarOpen, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
-  const [search, setSearch] = useState('');
-  const userName = auth.user?.name || auth.user?.email || 'Your Account';
+export function BgosNavigation({ onLogout: _onLogout }: { onLogout?: () => void }) {
+  const { currentView, setCurrentView, leftSidebarOpen, toggleLeftSidebar, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
   const activeView = bgosNavigationView(currentView);
 
   const navigate = (view: string) => {
@@ -79,34 +79,29 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
 
   const content = (
     <>
-      <button className="bgos-brand" onClick={() => navigate('dashboard')} aria-label="BGOS overview">
-        <BgosBrand />
-      </button>
-
-      <label className="bgos-nav-search">
-        <Search size={14} />
-        <input
-          aria-label="Find a BGOS feature"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter features..."
-        />
-      </label>
+      <div className="bgos-brand-header">
+        <button className="bgos-brand" onClick={() => navigate('dashboard')} aria-label="BGOS overview">
+          <BgosBrand />
+        </button>
+        <button
+          type="button"
+          onClick={toggleLeftSidebar}
+          aria-label="Collapse sidebar"
+          className="hidden lg:inline-flex items-center justify-center size-8 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <SlidersHorizontal size={15} />
+        </button>
+      </div>
 
       <nav aria-label="BGOS main navigation" className="bgos-nav-links">
         {BGOS_NAVIGATION.map((section) => {
-          const items = section.items.filter((item) =>
-            item.label.toLowerCase().includes(search.toLowerCase())
-          );
-          if (!items.length) return null;
-
           return (
             <section key={section.title}>
               <h2>{section.title}</h2>
-              {items.map((item) => {
+              {section.items.map((item) => {
                 const Icon = icons[item.iconName] || Globe;
                 const isActive = activeView === item.view;
-                const badge = 'badge' in item ? (item as any).badge : undefined;
+                const badge = 'badge' in item ? (item as { badge?: string }).badge : undefined;
 
                 return (
                   <button
@@ -115,17 +110,15 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
                     aria-current={isActive ? 'page' : undefined}
                     className="group"
                   >
-                    <Icon size={16} className={isActive ? 'text-teal-700 dark:text-teal-300' : 'text-slate-500'} />
+                    <Icon
+                      size={17}
+                      className={isActive ? 'text-[#009F50] dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}
+                    />
                     <span className="flex-1 truncate">{item.label}</span>
                     {badge && (
                       <span
-                        className={`ml-auto rounded-full px-1.5 py-0.2 text-[9px] font-bold leading-tight ${
-                          badge === '12'
-                            ? 'bg-rose-500 text-white'
-                            : badge === 'AI'
-                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
-                            : 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
-                        }`}
+                        aria-hidden="true"
+                        className="ml-auto inline-flex items-center justify-center rounded-full bg-[#009F50] px-2 py-0.5 text-[11px] font-bold leading-none text-white min-w-[24px] h-[20px]"
                       >
                         {badge}
                       </span>
@@ -136,27 +129,27 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
             </section>
           );
         })}
-        {!BGOS_NAVIGATION.some((section) =>
-          section.items.some((item) => item.label.toLowerCase().includes(search.toLowerCase()))
-        ) && <p className="bgos-nav-empty">No matching features.</p>}
       </nav>
 
       <footer className="bgos-nav-footer">
-        <button onClick={() => navigate('helpCenter')}>
-          <CircleHelp size={16} /> Help &amp; Support
-        </button>
-        <div className="bgos-account">
-          <span className="bgos-avatar">{userName.slice(0, 2).toUpperCase()}</span>
-          <div>
-            <strong>{userName}</strong>
-            <small>{auth.user?.role?.replaceAll('_', ' ') || 'Workspace Owner'}</small>
+        <button
+          type="button"
+          onClick={() => navigate('reviews')}
+          className="bgos-get-reviews-card group"
+        >
+          <div className="size-9 rounded-xl bg-white dark:bg-slate-900 border border-[#ccebd9] dark:border-emerald-800/50 flex items-center justify-center shrink-0 text-[#009F50] shadow-2xs">
+            <Star size={18} className="fill-[#009F50]/15 text-[#009F50]" />
           </div>
-          {onLogout && (
-            <button onClick={onLogout} aria-label="Sign out" className="text-muted-foreground hover:text-foreground">
-              <LogOut size={16} />
-            </button>
-          )}
-        </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-tight truncate">
+              Get More Reviews
+            </p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug mt-0.5 truncate">
+              Send review requests automatically
+            </p>
+          </div>
+          <ChevronRight size={15} className="text-slate-400 group-hover:text-[#009F50] group-hover:translate-x-0.5 transition-all shrink-0" />
+        </button>
       </footer>
     </>
   );
@@ -165,7 +158,7 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
     <>
       {leftSidebarOpen && <aside className="bgos-sidebar hidden lg:flex">{content}</aside>}
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
-        <SheetContent side="left" className="bgos-mobile-sidebar p-0 w-[270px] gap-0">
+        <SheetContent side="left" className="bgos-mobile-sidebar p-0 w-[268px] gap-0">
           <SheetHeader className="sr-only">
             <SheetTitle>BGOS Navigation</SheetTitle>
             <SheetDescription>Navigate your growth workspace</SheetDescription>

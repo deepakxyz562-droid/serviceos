@@ -1,39 +1,53 @@
 /* ==========================================================================
    BGOS (Business Growth OS) Design System & Tokens
-   Official Brand: Teal / Emerald (#007F73) & Cyan Glow (#00BFAE)
-   AI Accent: Teal, consistent with the BGOS brand
+   Official Brand: Vibrant Emerald Green (#009F50) & Mint Glow (#00C86F)
+   AI Accent: BGOS Green, consistent with the BGOS brand
    ========================================================================== */
 
 html.bgos-theme {
-  --background: #f4faf9;
+  --background: #f7faf9;
   --foreground: #070b2d;
   --card: #ffffff;
   --card-foreground: #070b2d;
   --popover: #ffffff;
   --popover-foreground: #070b2d;
-  --primary: #007f73;
+  --primary: #009f50;
   --primary-foreground: #ffffff;
-  --primary-glow: #00bfae;
-  --brand-deep: #00665d;
-  --brand-glow: #00bfae;
-  --primary-soft: #e6f5f3;
-  --brand-light: #99e4d9;
-  --color-teal-600: #007f73;
-  --color-teal-700: #00665d;
-  --secondary: #e8f6f3;
-  --secondary-foreground: #205950;
+  --primary-glow: #00c86f;
+  --brand-deep: #008040;
+  --brand-glow: #00c86f;
+  --primary-soft: #e8f8ef;
+  --brand-light: #a7f3d0;
+  --color-teal-50: #f0fdf4;
+  --color-teal-100: #dcfce7;
+  --color-teal-200: #bbf7d0;
+  --color-teal-300: #86efac;
+  --color-teal-400: #34d399;
+  --color-teal-500: #10b981;
+  --color-teal-600: #009f50;
+  --color-teal-700: #008040;
+  --color-teal-800: #065f46;
+  --color-teal-900: #064e3b;
+  --color-teal-950: #022c22;
+  --color-emerald-50: #f0fdf4;
+  --color-emerald-100: #dcfce7;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #009f50;
+  --color-emerald-700: #008040;
+  --secondary: #e8f8ef;
+  --secondary-foreground: #065f46;
   --muted: #f1f5f9;
   --muted-foreground: #64748b;
-  --accent: #e3f6f2;
-  --accent-foreground: #00665d;
-  --border: #e2e8f0;
+  --accent: #e8f8ef;
+  --accent-foreground: #009f50;
+  --border: #e5ece9;
   --input: #cbd5e1;
-  --ring: #008f81;
+  --ring: #009f50;
   --radius: 0.85rem;
 
   /* Charts */
-  --chart-1: #007f73;
-  --chart-2: #00bfae;
+  --chart-1: #009f50;
+  --chart-2: #00c86f;
   --chart-3: #2563eb;
   --chart-4: #f59e0b;
   --chart-5: #ec4899;
@@ -41,18 +55,18 @@ html.bgos-theme {
   /* Sidebar */
   --sidebar: #ffffff;
   --sidebar-foreground: #070b2d;
-  --sidebar-primary: #007f73;
+  --sidebar-primary: #009f50;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e3f6f2;
-  --sidebar-accent-foreground: #00665d;
-  --sidebar-border: #e2e8f0;
+  --sidebar-accent: #e8f8ef;
+  --sidebar-accent-foreground: #009f50;
+  --sidebar-border: #e5ece9;
 
   /* AI Accent System */
-  --ai-primary: #007f73;
-  --ai-primary-glow: #00bfae;
-  --ai-accent: #e3f6f2;
-  --ai-accent-foreground: #00665d;
-  --ai-border: #dcebe7;
+  --ai-primary: #009f50;
+  --ai-primary-glow: #00c86f;
+  --ai-accent: #e8f8ef;
+  --ai-accent-foreground: #008040;
+  --ai-border: #d1fae5;
 }
 
 html.bgos-theme.dark {
@@ -62,39 +76,39 @@ html.bgos-theme.dark {
   --card-foreground: #f8fafc;
   --popover: #0c4a48;
   --popover-foreground: #f8fafc;
-  --primary: #00bfae;
+  --primary: #00c86f;
   --primary-foreground: #042f2e;
-  --primary-glow: #4dd8c6;
-  --brand-deep: #007f73;
-  --brand-glow: #4dd8c6;
-  --primary-soft: #134e4a;
-  --brand-light: #205950;
-  --chart-1: #2dd4bf;
-  --chart-2: #99f6e4;
+  --primary-glow: #34d399;
+  --brand-deep: #009f50;
+  --brand-glow: #34d399;
+  --primary-soft: #064e3b;
+  --brand-light: #065f46;
+  --chart-1: #10b981;
+  --chart-2: #6ee7b7;
   --chart-3: #60a5fa;
   --chart-4: #fbbf24;
   --chart-5: #f472b6;
-  --ai-primary: #2dd4bf;
-  --ai-accent: #134e4a;
-  --ai-accent-foreground: #ccfbf1;
-  --ai-border: #205950;
-  --secondary: #134e4a;
-  --secondary-foreground: #ccfbf1;
-  --muted: #115e59;
-  --muted-foreground: #99f6e4;
-  --accent: #115e59;
-  --accent-foreground: #f0fdfa;
-  --border: #134e4a;
-  --input: #115e59;
-  --ring: #00bfae;
+  --ai-primary: #10b981;
+  --ai-accent: #064e3b;
+  --ai-accent-foreground: #d1fae5;
+  --ai-border: #065f46;
+  --secondary: #064e3b;
+  --secondary-foreground: #d1fae5;
+  --muted: #065f46;
+  --muted-foreground: #a7f3d0;
+  --accent: #065f46;
+  --accent-foreground: #ecfdf5;
+  --border: #064e3b;
+  --input: #065f46;
+  --ring: #00c86f;
 
   --sidebar: #083c3b;
   --sidebar-foreground: #f8fafc;
-  --sidebar-primary: #00bfae;
+  --sidebar-primary: #00c86f;
   --sidebar-primary-foreground: #042f2e;
-  --sidebar-accent: #115e59;
-  --sidebar-accent-foreground: #f0fdfa;
-  --sidebar-border: #134e4a;
+  --sidebar-accent: #065f46;
+  --sidebar-accent-foreground: #ecfdf5;
+  --sidebar-border: #064e3b;
 }
 
 .bgos-app {
@@ -105,7 +119,7 @@ html.bgos-theme.dark {
 /* Sidebar & Navigation */
 .bgos-sidebar,
 .bgos-mobile-sidebar {
-  width: 264px;
+  width: 260px;
   flex-shrink: 0;
   flex-direction: column;
   background: var(--card);
@@ -114,13 +128,19 @@ html.bgos-theme.dark {
   color: var(--foreground);
 }
 
-.bgos-brand {
+.bgos-brand-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 18px 16px;
-  text-align: left;
+  justify-content: space-between;
+  padding: 18px 18px 14px;
   width: 100%;
+}
+
+.bgos-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
 }
 
 .bgos-nav-search {
@@ -152,17 +172,17 @@ html.bgos-theme.dark {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 10px;
+  padding: 4px 12px 0;
 }
 .bgos-nav-links section {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 .bgos-nav-links h2 {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 1.2px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--muted-foreground);
+  color: #64748b;
   padding: 0 12px;
   margin-bottom: 6px;
 }
@@ -170,85 +190,74 @@ html.bgos-theme.dark {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-radius: 8px;
-  padding: 8px 12px;
-  min-height: 44px;
+  gap: 11px;
+  border-radius: 10px;
+  padding: 9px 12px;
+  min-height: 40px;
   text-align: left;
-  color: var(--muted-foreground);
-  font-size: 13px;
+  color: #334155;
+  font-size: 13.5px;
   font-weight: 500;
   position: relative;
-  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 .bgos-nav-links button:hover {
-  background: var(--muted);
-  color: var(--foreground);
+  background: #f1f5f9;
+  color: #0f172a;
 }
 .bgos-nav-links button[aria-current=page] {
-  background: var(--accent);
-  color: var(--accent-foreground);
+  background: #e8f8ef;
+  color: #009f50;
   font-weight: 600;
-  box-shadow: inset 3px 0 var(--primary);
+}
+html.bgos-theme.dark .bgos-nav-links button {
+  color: #cbd5e1;
+}
+html.bgos-theme.dark .bgos-nav-links button[aria-current=page] {
+  background: rgba(0, 159, 80, 0.22);
+  color: #34d399;
 }
 .bgos-nav-links svg {
   flex-shrink: 0;
 }
 
 .bgos-nav-footer {
-  border-top: 1px solid var(--border);
-  padding: 12px;
-}
-.bgos-nav-footer > button {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px;
-  font-size: 12px;
-  color: var(--muted-foreground);
-  width: 100%;
-  border-radius: 7px;
-}
-.bgos-nav-footer > button:hover {
-  background: var(--muted);
-  color: var(--foreground);
+  padding: 14px;
+  margin-top: auto;
 }
 
-.bgos-account {
+.bgos-get-reviews-card {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 9px;
-  background: var(--background);
-  border-radius: 10px;
-  padding: 8px 10px;
-  margin-top: 8px;
-  border: 1px solid var(--border);
+  gap: 11px;
+  padding: 12px 13px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f3fbf7 0%, #e8f8ef 100%);
+  border: 1px solid #ccebd9;
+  text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
 }
-.bgos-account > div {
-  flex: 1;
-  min-width: 0;
+.bgos-get-reviews-card:hover {
+  border-color: #009f50;
+  box-shadow: 0 4px 12px rgba(0, 159, 80, 0.1);
+  transform: translateY(-1px);
 }
-.bgos-account strong {
-  font-size: 12px;
-  display: block;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+html.bgos-theme.dark .bgos-get-reviews-card {
+  background: rgba(0, 159, 80, 0.14);
+  border-color: rgba(52, 211, 153, 0.25);
 }
-.bgos-account small {
-  display: block;
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
+
 .bgos-avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, #00BFAE, #007F73);
+  background: #009f50;
   color: white;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -621,39 +630,39 @@ html.bgos-theme.dark .bgos-trend-pill {
 
 /* Shared BGOS controls and legacy AI color migration, scoped to this product. */
 html.bgos-theme {
-  --color-purple-50: #f0fdfa;
-  --color-purple-100: #ccfbf1;
-  --color-purple-200: #99f6e4;
-  --color-purple-300: #5eead4;
-  --color-purple-400: #2dd4bf;
-  --color-purple-500: #00bfae;
-  --color-purple-600: #007f73;
-  --color-purple-700: #00665d;
-  --color-purple-800: #115e59;
-  --color-purple-900: #134e4a;
-  --color-purple-950: #042f2e;
-  --color-violet-50: #f0fdfa;
-  --color-violet-100: #ccfbf1;
-  --color-violet-200: #99f6e4;
-  --color-violet-300: #5eead4;
-  --color-violet-400: #2dd4bf;
-  --color-violet-500: #00bfae;
-  --color-violet-600: #007f73;
-  --color-violet-700: #00665d;
-  --color-violet-800: #115e59;
-  --color-violet-900: #134e4a;
-  --color-violet-950: #042f2e;
-  --color-indigo-50: #f0fdfa;
-  --color-indigo-100: #ccfbf1;
-  --color-indigo-200: #99f6e4;
-  --color-indigo-300: #5eead4;
-  --color-indigo-400: #2dd4bf;
-  --color-indigo-500: #00bfae;
-  --color-indigo-600: #007f73;
-  --color-indigo-700: #00665d;
-  --color-indigo-800: #115e59;
-  --color-indigo-900: #134e4a;
-  --color-indigo-950: #042f2e;
+  --color-purple-50: #f0fdf4;
+  --color-purple-100: #dcfce7;
+  --color-purple-200: #bbf7d0;
+  --color-purple-300: #86efac;
+  --color-purple-400: #34d399;
+  --color-purple-500: #00c86f;
+  --color-purple-600: #009f50;
+  --color-purple-700: #008040;
+  --color-purple-800: #065f46;
+  --color-purple-900: #064e3b;
+  --color-purple-950: #022c22;
+  --color-violet-50: #f0fdf4;
+  --color-violet-100: #dcfce7;
+  --color-violet-200: #bbf7d0;
+  --color-violet-300: #86efac;
+  --color-violet-400: #34d399;
+  --color-violet-500: #00c86f;
+  --color-violet-600: #009f50;
+  --color-violet-700: #008040;
+  --color-violet-800: #065f46;
+  --color-violet-900: #064e3b;
+  --color-violet-950: #022c22;
+  --color-indigo-50: #f0fdf4;
+  --color-indigo-100: #dcfce7;
+  --color-indigo-200: #bbf7d0;
+  --color-indigo-300: #86efac;
+  --color-indigo-400: #34d399;
+  --color-indigo-500: #00c86f;
+  --color-indigo-600: #009f50;
+  --color-indigo-700: #008040;
+  --color-indigo-800: #065f46;
+  --color-indigo-900: #064e3b;
+  --color-indigo-950: #022c22;
 }
 .bgos-app [data-slot="card"] { border-radius: 1rem; box-shadow: 0 2px 8px rgb(7 11 45 / .025); }
 .bgos-app [data-slot="button"], .bgos-app [data-slot="input"], .bgos-app [data-slot="select-trigger"] { border-radius: .65rem; }
@@ -684,15 +693,12 @@ html.bgos-theme {
 .bgos-app h1 { letter-spacing: -0.025em; line-height: 1.25; }
 .bgos-app p { overflow-wrap: break-word; }
 .bgos-app .bgos-nav-empty { padding: 12px; color: var(--muted-foreground); }
-.bgos-nav-links button { font-size: 14px; }
-.bgos-nav-footer > button { min-height: 44px; font-size: 13px; }
-.bgos-account button { display: grid; place-items: center; min-width: 40px; min-height: 40px; border-radius: 8px; }
-.bgos-account button:hover { background: var(--accent); }
-.bgos-workspace-button, .bgos-feature-finder { min-height: 44px; }
-.bgos-feature-results button { min-height: 44px; }
+.bgos-nav-links button { font-size: 13.5px; }
+.bgos-workspace-button, .bgos-feature-finder { min-height: 40px; }
+.bgos-feature-results button { min-height: 40px; }
 .bgos-feature-results { max-height: min(360px, 65dvh); }
 html.bgos-theme :is([data-slot="button"], [data-slot="input"], [data-slot="select-trigger"]) {
-  min-height: 40px;
+  min-height: 38px;
   border-radius: 10px;
 }
 html.bgos-theme :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
@@ -730,12 +736,12 @@ html.bgos-theme [data-slot="table-cell"] { padding-top: 14px; padding-bottom: 14
 }
 
 html.bgos-theme .bgos-auth {
-  --color-emerald-50: #f0fdfa;
-  --color-emerald-200: #99e4d9;
-  --color-emerald-300: #5eead4;
-  --color-emerald-400: #2dd4bf;
-  --color-emerald-500: #00bfae;
-  --color-emerald-600: #007f73;
-  --color-emerald-700: #00665d;
+  --color-emerald-50: #f0fdf4;
+  --color-emerald-200: #bbf7d0;
+  --color-emerald-300: #86efac;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #00c86f;
+  --color-emerald-600: #009f50;
+  --color-emerald-700: #008040;
 }
 html.bgos-theme [data-slot="dialog-close"] { min-width: 32px; min-height: 32px; display: grid; place-items: center; }

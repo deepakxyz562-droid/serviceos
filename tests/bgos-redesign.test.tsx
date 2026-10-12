@@ -335,6 +335,7 @@ it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, an
   expect(screen.getByRole('heading', { level: 1, name: /Google Business & Reviews/i })).toBeDefined();
   expect(screen.getByText('Connected')).toBeDefined();
   expect(screen.getByRole('button', { name: /Sync GBP/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Reviews$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Posts$/i })).toBeDefined();
@@ -342,11 +343,25 @@ it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, an
   expect(screen.getByRole('button', { name: /^Insights$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Photos$/i })).toBeDefined();
 
+  // 1b. Screenshot Overview Bento (Storefront Profile, 4 GBP KPIs, Review Growth, Rating Breakdown, Recent Reviews, Create a Post, Profile Performance, Customer Photos, Common Review Tags, Automate Review Requests)
+  expect(screen.getByText('BGOS Home Cleaning')).toBeDefined();
+  expect(screen.getByText('123 Green Park, Delhi, India')).toBeDefined();
+  expect(screen.getByText('12,480')).toBeDefined();
+  expect(screen.getByText('Review Growth')).toBeDefined();
+  expect(screen.getByText('Rating Breakdown')).toBeDefined();
+  expect(screen.getByText('Recent Reviews')).toBeDefined();
+  expect(screen.getByText('Create a Post')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Post to Google/i })).toBeDefined();
+  expect(screen.getByText('Profile Performance')).toBeDefined();
+  expect(screen.getByText('Customer Photos')).toBeDefined();
+  expect(screen.getByText('Common Review Tags')).toBeDefined();
+  expect(screen.getByText('Automate Review Requests')).toBeDefined();
+
   // 2. 5 KPI Telemetry Cards
   expect(screen.getByText('Google Rating')).toBeDefined();
-  expect(screen.getByText('4.8')).toBeDefined();
+  expect(screen.getAllByText('4.8').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('(326 reviews)')).toBeDefined();
-  expect(screen.getByText('Total Reviews')).toBeDefined();
+  expect(screen.getAllByText('Total Reviews').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('326')).toBeDefined();
   expect(screen.getByText('New Reviews')).toBeDefined();
   expect(screen.getByText('24')).toBeDefined();
@@ -359,7 +374,7 @@ it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, an
   expect(screen.getByText('Review Trend')).toBeDefined();
   expect(screen.getByText('Review Breakdown')).toBeDefined();
   expect(screen.getByText('5 stars')).toBeDefined();
-  expect(screen.getByText('72%')).toBeDefined();
+  expect(screen.getAllByText('72%').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Get More Reviews')).toBeDefined();
   expect(screen.getByRole('button', { name: /Copy Review Link/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Send via SMS/i })).toBeDefined();
