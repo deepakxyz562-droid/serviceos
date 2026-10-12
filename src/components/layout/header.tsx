@@ -493,7 +493,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         </>
       )}
 
-      {!isCanvas && (
+      {!isCanvas && !isChatbotlyWorkspace(auth) && (
         <>
           <Separator orientation="vertical" className="h-6 hidden sm:block bg-border/70" />
 
@@ -536,7 +536,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         <OfflineStatusBar variant="compact" />
 
         {/* ─── AI Assistant trigger button (opens right-side Copilot drawer) ── */}
-        {!isAiAssistantDisabled && (
+        {!isAiAssistantDisabled && !isChatbotlyWorkspace(auth) && (
           <Button
             variant="outline"
             size="sm"

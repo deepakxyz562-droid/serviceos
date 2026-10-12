@@ -21,7 +21,6 @@ export const BGOS_NAVIGATION = [
       { view: 'leads', label: 'Leads & CRM', iconName: 'Users' },
       { view: 'socialMedia', label: 'Marketing Studio', iconName: 'Sparkles' },
       { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Star' },
-      { view: 'campaigns', label: 'Campaigns & Outreach', iconName: 'Send' },
       { view: 'formBuilder', label: 'Forms', iconName: 'FileInput' },
       { view: 'scheduling', label: 'Appointments', iconName: 'Calendar' },
     ],
@@ -41,7 +40,7 @@ const allowed = new Set<string>([
   'creatorProfile', 'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
   'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery', 'employees',
-  'liveChat', 'billing',
+  'liveChat', 'billing', 'campaigns',
 ]);
 
 export function bgosView(view: string): string {
@@ -52,13 +51,12 @@ export function bgosView(view: string): string {
 }
 
 export function bgosNavigationView(view: string): string {
-  if (view === 'contacts') return 'leads';
+  if (view === 'contacts' || view === 'campaigns' || view === 'leadDiscovery') return 'leads';
   if (view === 'formSubmissions') return 'formBuilder';
   if (['booking', 'calendar', 'meetingTypes', 'appointmentTypes'].includes(view)) return 'scheduling';
   if (['socialAccounts', 'postComposer', 'postsList', 'socialAnalytics'].includes(view)) return 'socialMedia';
   if (['aiCallHistory', 'aiAgents'].includes(view)) return 'aiReceptionist';
   if (view === 'creatorOffers') return 'creatorProfile';
-  if (view === 'leadDiscovery') return 'campaigns';
   if (view === 'employees' || view === 'billing') return 'settings';
   if (view === 'liveChat') return 'omnichannel';
   return bgosView(view);

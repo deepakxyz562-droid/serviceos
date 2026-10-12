@@ -199,6 +199,14 @@ const COMMON_KEYWORDS = [
 
 export function ReviewsView() {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const auth = useAppStore((s) => s.auth);
+  const businessName = auth?.tenant?.name || auth?.workspace?.name || 'Cinderella Cleaners';
+  const businessSlug =
+    auth?.tenant?.slug ||
+    businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
+    'cinderella-cleaners';
+  const reviewLink = `https://g.page/r/${businessSlug}/review`;
+
   // Navigation & Sub-Tabs
   const [activeSubTab, setActiveSubTab] = useState('reviews');
   const [timeRange, setTimeRange] = useState('Last 30 days');
@@ -235,20 +243,36 @@ export function ReviewsView() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!mounted || !data || !data.reviews || data.reviews.length === 0) return;
-        const mapped: ReviewItem[] = data.reviews.map((r: any) => ({
-          id: r.id,
-          name: r.authorName || 'Verified Client',
-          source: (r.source === 'google' ? 'Google' : r.source === 'facebook' ? 'Facebook' : 'Direct') as any,
-          rating: r.rating || 5,
-          date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
-          text: r.comment || 'Outstanding service and quality execution.',
-          sentiment: (r.rating >= 4 ? 'positive' : r.rating === 3 ? 'neutral' : 'negative') as any,
-          replied: !!(r.responseJson && r.responseJson !== '{}'),
-          replyText: r.responseJson ? (safeJsonParse(r.responseJson)?.text || null) : null,
-          serviceCategory: 'Commercial & Residential',
-          tags: ['Reliable', 'Top Rated'],
-        }));
+        const avatarBgs = ['bg-teal-600', 'bg-emerald-600', 'bg-blue-600', 'bg-rose-600', 'bg-amber-600', 'bg-pink-600'];
+        const mapped: ReviewItem[] = data.reviews.map((r: any, idx: number) => {
+          const authorName = r.authorName || 'Verified Client';
+          const initials =
+            authorName
+              .split(' ')
+              .filter(Boolean)
+              .map((w: string) => w[0])
+              .slice(0, 2)
+              .join('')
+              .toUpperCase() || 'VC';
+          const parsedResp = safeJsonParse(r.responseJson);
+          return {
+            id: r.id,
+            name: authorName,
+            initials,
+            avatarBg: avatarBgs[idx % avatarBgs.length],
+            rating: Number(r.rating) || 5,
+            timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+            text: r.comment || 'Outstanding service and quality execution.',
+            keywords: ['professional', 'quality', 'recommend'],
+            replied: !!(parsedResp && parsedResp.text),
+            replyText: parsedResp?.text || undefined,
+            replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
+            location: 'Verified Customer',
+            reviewCount: 1,
+          };
+        });
         setReviewsList(mapped);
+        if (mapped[0]) setSelectedReviewId(mapped[0].id);
       })
       .catch(() => {});
     return () => {
@@ -272,26 +296,50 @@ export function ReviewsView() {
 
   // Copied review link handler
   const handleCopyReviewLink = () => {
-    navigator.clipboard.writeText('https://g.page/r/cinderella-cleaners/review');
+    navigator.clipboard.writeText(reviewLink);
     setCopiedLink(true);
     toast.success('Google Review link copied to clipboard!');
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  // AI Reply Generator (Beta)
-  const handleGenerateAiReply = () => {
+  // AI Reply Generator
+  const handleGenerateAiReply = async () => {
     if (!selectedReview) return;
     setIsGeneratingAi(true);
-    setTimeout(() => {
+    const firstName = selectedReview.name.split(' ')[0];
+    const fallbackReply =
+      selectedReview.rating >= 5
+        ? `Thank you so much for the glowing 5-star review, ${firstName}! We're thrilled that our team delivered sparkling results on time. We truly appreciate your support of ${businessName} and look forward to your next appointment!`
+        : `Thank you for sharing your feedback, ${firstName}! We're pleased you appreciated our team's work at ${businessName}, and we always strive to exceed expectations. We look forward to serving you again soon!`;
+
+    try {
+      const res = await authFetch('/api/social/ai-caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: `Write a warm, professional Google Business review reply from ${businessName} to customer ${selectedReview.name} (${selectedReview.rating} stars) who wrote: "${selectedReview.text}"`,
+          platforms: ['googlebusiness'],
+          tone: 'friendly, appreciative',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.caption) {
+          setReplyDraft(data.caption);
+          setIsEditingReply(true);
+          toast.success('AI crafted a personalized response!');
+          return;
+        }
+      }
+    } catch {
+      // Fallback below
+    } finally {
       setIsGeneratingAi(false);
-      const generated =
-        selectedReview.rating >= 5
-          ? `Thank you so much for the glowing 5-star review, ${selectedReview.name.split(' ')[0]}! We're thrilled that our team delivered sparkling results on time. We truly appreciate your support of Cinderella Cleaners and look forward to your next appointment!`
-          : `Thank you for sharing your feedback, ${selectedReview.name.split(' ')[0]}! We're pleased you appreciated our team's work, and we always strive to exceed expectations. We look forward to serving you again soon!`;
-      setReplyDraft(generated);
-      setIsEditingReply(true);
-      toast.success('AI crafted a personalized response!');
-    }, 400);
+    }
+
+    setReplyDraft(fallbackReply);
+    setIsEditingReply(true);
+    toast.success('AI crafted a personalized response!');
   };
 
   // Save Reply
@@ -341,7 +389,7 @@ export function ReviewsView() {
       const q = searchQuery.toLowerCase();
       const matchName = r.name.toLowerCase().includes(q);
       const matchText = r.text.toLowerCase().includes(q);
-      const matchKeyword = r.keywords.some((k) => k.toLowerCase().includes(q));
+      const matchKeyword = (r.keywords || []).some((k) => k.toLowerCase().includes(q));
       if (!matchName && !matchText && !matchKeyword) return false;
     }
     return true;
@@ -1205,7 +1253,7 @@ export function ReviewsView() {
               </svg>
             </div>
             <p className="text-xs font-semibold mt-3 text-slate-800 dark:text-slate-200">
-              Cinderella Cleaners • 5-Star Reviews
+              {businessName} • 5-Star Reviews
             </p>
           </div>
 
@@ -1272,7 +1320,7 @@ export function ReviewsView() {
               <label className="font-semibold text-slate-700 dark:text-slate-300">Message Preview</label>
               <Textarea
                 rows={3}
-                defaultValue="Hi {FirstName}, thank you for choosing Cinderella Cleaners! If you loved our service, would you take 30 seconds to leave us a quick Google review? https://g.page/r/cinderella-cleaners/review"
+                defaultValue={`Hi {FirstName}, thank you for choosing ${businessName}! If you loved our service, would you take 30 seconds to leave us a quick Google review? ${reviewLink}`}
                 className="text-xs resize-none bg-slate-50 dark:bg-slate-800"
               />
             </div>

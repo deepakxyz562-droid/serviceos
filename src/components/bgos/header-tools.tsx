@@ -1,20 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, ChevronRight, Building2, Sparkles, Command } from 'lucide-react';
+import { Search, ChevronRight, Command } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
-import { Button } from '@/components/ui/button';
-import { BGOS_NAVIGATION } from '../../../shared/bgos-navigation';
-
-import { BgosRibbonIcon } from './brand';
+import { BGOS_NAVIGATION, bgosNavigationView } from '../../../shared/bgos-navigation';
 
 export function BgosHeaderTools() {
-  const { auth, setCurrentView, aiDrawerOpen, setAiDrawerOpen } = useAppStore();
+  const { currentView, setCurrentView } = useAppStore();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
 
-  const businessName = auth.tenant?.name || auth.workspace?.name || 'Your Business';
-  const allItems = BGOS_NAVIGATION.flatMap((group) => group.items.map(item => ({ view: item.view, label: item.label })));
+  const allItems = BGOS_NAVIGATION.flatMap((group) =>
+    group.items.map((item) => ({ view: item.view, label: item.label }))
+  );
+  const activeNavView = bgosNavigationView(currentView);
+  const currentTitle =
+    allItems.find((item) => item.view === activeNavView)?.label || 'Overview';
+
   const items = allItems.filter((item) =>
     item.label.toLowerCase().includes(query.toLowerCase())
   );
@@ -34,26 +36,11 @@ export function BgosHeaderTools() {
   }, []);
 
   return (
-    <div className="bgos-header-tools flex items-center justify-between gap-3 w-full">
-      {/* Business Workspace Selector */}
-      <button
-        className="bgos-workspace-button group flex items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-1.5 text-left transition-all hover:border-primary/50 shadow-2xs"
-        onClick={() => setCurrentView('creatorProfile')}
-        aria-label="Open business profile"
-      >
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-700 dark:text-teal-400">
-          <BgosRibbonIcon size={20} />
-        </div>
-        <div className="min-w-0 pr-1">
-          <strong className="block truncate text-xs font-semibold leading-tight text-foreground">
-            {businessName}
-          </strong>
-          <small className="block text-[10px] font-medium text-muted-foreground leading-tight">
-            BGOS Workspace
-          </small>
-        </div>
-        <ChevronRight size={13} className="text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-      </button>
+    <div className="bgos-header-tools flex items-center justify-between gap-4 w-full">
+      {/* Current BGOS Page Title */}
+      <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate min-w-0 text-foreground">
+        {currentTitle}
+      </h1>
 
       {/* Center Search / Feature Finder */}
       <div
@@ -113,18 +100,7 @@ export function BgosHeaderTools() {
           </div>
         )}
       </div>
-
-      {/* Right AI Copilot Quick Action */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setAiDrawerOpen(!aiDrawerOpen)}
-        className="hidden sm:inline-flex h-8 items-center gap-1.5 rounded-lg border-teal-200 bg-teal-50 px-2.5 text-xs font-semibold text-teal-700 shadow-2xs hover:bg-teal-100 hover:text-teal-800 dark:border-teal-800/60 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-900/60"
-        title="Open AI Copilot"
-      >
-        <Sparkles size={13} className="text-teal-600 dark:text-teal-400" />
-        <span>AI Copilot</span>
-      </Button>
     </div>
   );
 }
+

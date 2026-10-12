@@ -648,7 +648,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!isAgentStudioTakeover && <AppHeader onLogout={onLogout} />}
         {!isAgentStudioTakeover && <PastDueBanner trialStatus={trialStatus} />}
-        {!isAgentStudioTakeover && <TrialBanner />}
+        {!isAgentStudioTakeover && !isBgos && <TrialBanner />}
 
         <main
           className={cn(

@@ -741,13 +741,33 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   const { FormAgentStudio } = await import('@/features/forms/components/agent-builder/form-agent-studio');
   const { DEFAULT_FORM_AGENT } = await import('@/features/forms/types/agent-types');
 
-  // 1. BGOS_NAVIGATION has no workflows, formsAnalytics, creatorProfile, or top-level billing
-  const allNavIds = BGOS_NAVIGATION.flatMap((section) => section.items.map((item) => item.id));
-  expect(allNavIds).not.toContain('workflows');
-  expect(allNavIds).not.toContain('formsAnalytics');
-  expect(allNavIds).not.toContain('creatorProfile');
-  expect(allNavIds).not.toContain('billing');
+  // 1. BGOS_NAVIGATION has no workflows, formsAnalytics, creatorProfile, campaigns, or top-level billing
+  const allNavViews = BGOS_NAVIGATION.flatMap((section) => section.items.map((item) => item.view));
+  expect(allNavViews).not.toContain('workflows');
+  expect(allNavViews).not.toContain('formsAnalytics');
+  expect(allNavViews).not.toContain('creatorProfile');
+  expect(allNavViews).not.toContain('billing');
+  expect(allNavViews).not.toContain('campaigns');
+  expect(allNavViews).toContain('socialMedia');
+  expect(allNavViews).toContain('reviews');
   expect(bgosNavigationView('billing')).toBe('settings');
+  expect(bgosNavigationView('campaigns')).toBe('leads');
+
+  // 1b. BgosViewNavigation does NOT render redundant 'Forms | Responses' bar on formBuilder
+  const { BgosViewNavigation } = await import('@/components/bgos/view-navigation');
+  useAppStore.setState({ currentView: 'formBuilder' });
+  const { container: viewNavContainer, unmount: unmountViewNav } = render(<BgosViewNavigation />);
+  expect(viewNavContainer.firstElementChild).toBeNull();
+  unmountViewNav();
+
+  // 1c. BgosHeaderTools renders clean page title and quick search without 'BGOS Workspace' or 'AI Copilot'
+  const { BgosHeaderTools } = await import('@/components/bgos/header-tools');
+  useAppStore.setState({ currentView: 'formBuilder' });
+  const { unmount: unmountHeaderTools } = render(<BgosHeaderTools />);
+  expect(screen.getByRole('heading', { level: 1, name: 'Forms' })).toBeDefined();
+  expect(screen.queryByText('BGOS Workspace')).toBeNull();
+  expect(screen.queryByText('AI Copilot')).toBeNull();
+  unmountHeaderTools();
 
   // 2. BgosSettings renders Billing & Subscription inside Settings
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -808,4 +828,5 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   expect(formsRoot?.className).toContain('h-full');
   expect(formsRoot?.className).toContain('min-h-0');
 });
+
 

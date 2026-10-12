@@ -58,11 +58,61 @@ function MiniBarChart({ values, color }: { values: number[]; color: string }) {
 export function BgosDashboard() {
   const { setCurrentView, auth } = useAppStore();
 
-  // Dynamic user name and greeting
+  // Dynamic user name and business identity
   const firstName = useMemo(() => {
     const raw = auth?.user?.name || auth?.user?.firstName || 'Deepak';
     return raw.trim().split(' ')[0];
   }, [auth?.user?.name, auth?.user?.firstName]);
+
+  const businessName = useMemo(() => {
+    return auth?.tenant?.name || auth?.workspace?.name || 'Cinderella Cleaners';
+  }, [auth?.tenant?.name, auth?.workspace?.name]);
+
+  const businessInitials = useMemo(() => {
+    return businessName
+      .split(' ')
+      .filter(Boolean)
+      .map((w: string) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'CC';
+  }, [businessName]);
+
+  const [leadCount, setLeadCount] = useState<number>(124);
+  const [reviewStats, setReviewStats] = useState<{ rating: string; count: number }>({
+    rating: '4.8',
+    count: 326,
+  });
+
+  React.useEffect(() => {
+    let mounted = true;
+    fetch('/api/leads?limit=10')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        const total = data.pagination?.total ?? data.leads?.length;
+        if (typeof total === 'number' && total > 0) {
+          setLeadCount(total);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/reviews?limit=50')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data?.reviews?.length) return;
+        const total = data.pagination?.total || data.reviews.length;
+        const avg =
+          data.reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) /
+          data.reviews.length;
+        setReviewStats({ rating: avg.toFixed(1), count: total });
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -216,15 +266,15 @@ export function BgosDashboard() {
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => toast.info('Workspace: Cinderella Cleaners (Tucson, AZ)')}
+            onClick={() => setCurrentView('settings')}
             className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-teal-300 transition-colors"
           >
             <div className="size-8 rounded-xl bg-teal-100 dark:bg-teal-950 flex items-center justify-center text-xs font-bold text-teal-700">
-              CC
+              {businessInitials}
             </div>
             <div className="text-left min-w-0">
               <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
-                Cinderella Cleaners
+                {businessName}
               </div>
               <div className="text-[10px] text-slate-500 leading-tight">Tucson, Arizona</div>
             </div>
@@ -245,7 +295,7 @@ export function BgosDashboard() {
             </div>
             <div>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
-                124
+                {leadCount}
               </div>
               <div className="text-xs text-slate-500 font-medium mt-1">New Leads</div>
             </div>
@@ -341,7 +391,7 @@ export function BgosDashboard() {
             </div>
             <div>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
-                4.8
+                {reviewStats.rating}
               </div>
               <div className="text-xs text-slate-500 font-medium mt-1">Google Rating</div>
             </div>
@@ -355,7 +405,7 @@ export function BgosDashboard() {
                 <Star key={s} className="size-3 fill-amber-400 text-amber-400" />
               ))}
             </div>
-            <span className="text-[9px] text-slate-400">326 reviews</span>
+            <span className="text-[9px] text-slate-400">{reviewStats.count} reviews</span>
           </div>
         </div>
       </div>
@@ -900,7 +950,7 @@ export function BgosDashboard() {
         {/* Action 1: Create Campaign */}
         <button
           type="button"
-          onClick={() => setCurrentView('campaigns')}
+          onClick={() => setCurrentView('socialMedia')}
           className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs hover:border-teal-300 hover:shadow-xs transition-all text-left flex items-start justify-between group"
         >
           <div className="space-y-1 min-w-0">

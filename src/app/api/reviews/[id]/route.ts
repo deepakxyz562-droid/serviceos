@@ -90,6 +90,8 @@ export async function PUT(
   }
 }
 
+export const PATCH = PUT;
+
 // DELETE /api/reviews/[id] — Delete review
 export async function DELETE(
   request: NextRequest,

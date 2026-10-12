@@ -153,6 +153,11 @@ const QUICK_PROMPTS = [
 
 export function SocialMediaView() {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
+  const auth = useAppStore((state) => state.auth);
+  const businessName = auth?.tenant?.name || auth?.workspace?.name || 'Cinderella Cleaners';
+  const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'C';
+  const businessHandle = `@${businessName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'cinderellacleaners'}`;
+
   const [activeTab, setActiveTab] = useState<SocialTab>('overview');
   const [timeRange, setTimeRange] = useState('Last 30 days');
   const [timeRangeOpen, setTimeRangeOpen] = useState(false);
@@ -166,6 +171,9 @@ export function SocialMediaView() {
   const [platform, setPlatform] = useState('All Platforms');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedCount, setGeneratedCount] = useState(28);
+  const [generatedCaption, setGeneratedCaption] = useState(
+    'Give your home the breath of fresh air it deserves this season! 🌸 Our certified team cleans every baseboard, appliance, and corner with eco-safe products.'
+  );
 
   // Preview Canvas state
   const [previewPlatform, setPreviewPlatform] = useState<'IG' | 'FB' | 'Google' | 'LinkedIn' | 'WhatsApp'>('IG');
@@ -281,9 +289,31 @@ export function SocialMediaView() {
     setCurrentHeadline(promptItem.headline);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
+    try {
+      const targetPlatforms =
+        platform === 'All Platforms'
+          ? ['instagram', 'facebook', 'linkedin', 'googlebusiness']
+          : [platform.toLowerCase().replace(/\s+/g, '')];
+      const res = await fetch('/api/social/ai-caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: aiPrompt || `${postType} post for ${businessName}`,
+          platforms: targetPlatforms,
+          tone: tone.toLowerCase(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.caption) {
+          setGeneratedCaption(data.caption);
+        }
+      }
+    } catch {
+      // Fallback handled below
+    } finally {
       setIsGenerating(false);
       setGeneratedCount((prev) => prev + 1);
       setCurrentHeadline(
@@ -293,7 +323,7 @@ export function SocialMediaView() {
           ? 'Pro Tips for a Cleaner, Fresher Home'
           : 'High-Standard Cleanliness Guaranteed'
       );
-    }, 450);
+    }
   };
 
   // Live Social Posts Fetching
@@ -916,16 +946,16 @@ export function SocialMediaView() {
 
               {/* Preview Mockup Card */}
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3.5 border border-slate-200/60 dark:border-slate-800 flex flex-col gap-3">
-                {/* Mock Account Header */}
+                {/* Account Header */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold">
-                      C
+                      {businessInitial}
                     </div>
                     <div>
-                      <p className="text-xs font-bold leading-tight">Cinderella Cleaners</p>
+                      <p className="text-xs font-bold leading-tight">{businessName}</p>
                       <p className="text-[11px] text-slate-500 leading-tight">
-                        @cinderellacleaners • Tucson, AZ
+                        {businessHandle} • Tucson, AZ
                       </p>
                     </div>
                   </div>
@@ -947,8 +977,7 @@ export function SocialMediaView() {
                 {/* Caption Body */}
                 <div className="flex flex-col gap-1.5 text-xs text-slate-700 dark:text-slate-300">
                   <p className="leading-relaxed">
-                    Give your home the breath of fresh air it deserves this season! 🌸 Our certified team
-                    cleans every baseboard, appliance, and corner with eco-safe products.
+                    {generatedCaption}
                   </p>
                   <div className="flex flex-col gap-1 text-[11px] text-slate-600 dark:text-slate-400 pt-1">
                     <span className="flex items-center gap-1.5">
@@ -965,7 +994,7 @@ export function SocialMediaView() {
                     </span>
                   </div>
                   <p className="text-teal-600 dark:text-teal-400 text-[11px] font-medium pt-1">
-                    #SpringCleaning #TucsonHomes #CleanHome #CinderellaCleaners #ArizonaLiving
+                    #SpringCleaning #TucsonHomes #CleanHome #{businessName.replace(/[^a-zA-Z0-9]/g, '') || 'CinderellaCleaners'} #ArizonaLiving
                   </p>
                 </div>
               </div>

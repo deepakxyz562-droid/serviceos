@@ -5,7 +5,6 @@ import type { ViewType } from '@/types/workflow';
 
 const groups: { view: ViewType; label: string }[][] = [
   [{ view: 'leads', label: 'Lead pipeline' }, { view: 'contacts', label: 'Contacts & segments' }],
-  [{ view: 'formBuilder', label: 'Forms' }, { view: 'formSubmissions', label: 'Responses' }],
 ];
 export function BgosViewNavigation() {
   const currentView = useAppStore(s => s.currentView);
