@@ -55,6 +55,7 @@ export interface AgentOverviewTabProps {
   agent: FormAgentData;
   onChange: (updated: FormAgentData | ((prev: FormAgentData) => FormAgentData)) => void;
   onNavigateTab: (tab: any) => void;
+  onSelectChannel?: (channelId: AgentChannelType) => void;
   onOpenSettings?: () => void;
   businessName?: string;
   channelStatus?: Partial<Record<AgentChannelType, 'ACTIVE' | 'Connect'>>;
@@ -84,6 +85,7 @@ export function AgentOverviewTab({
   agent,
   onChange,
   onNavigateTab,
+  onSelectChannel,
   onOpenSettings,
   businessName = 'deepak chandra\'s Workspace',
   channelStatus,
@@ -541,6 +543,101 @@ export function AgentOverviewTab({
             >
               <Plus className="size-3.5" /> Connect New Channel
             </Button>
+          </div>
+
+          {/* 3. Platform & Data Connectors Card (WordPress, Calendly, Shopify, CRM, Custom API) */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Platform &amp; Data Connectors</h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Sync your website, calendar, store catalog &amp; backend APIs
+                </p>
+              </div>
+              <Badge variant="outline" className="text-[10px] border-teal-500/30 text-teal-700 dark:text-teal-300 bg-teal-50/50 dark:bg-teal-950/30">
+                5 Connectors
+              </Badge>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                {
+                  id: 'wordpress',
+                  name: 'WordPress & WooCommerce',
+                  subtitle: '1-click PHP/WPCode snippet & page sync',
+                  icon: Globe,
+                  colorClass: 'bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300',
+                  badge: 'Ready',
+                  onClick: () => (onSelectChannel ? onSelectChannel('wordpress') : onNavigateTab('publish')),
+                },
+                {
+                  id: 'calendly',
+                  name: 'Calendly & Google Calendar',
+                  subtitle: 'Live appointment booking & slot picker',
+                  icon: Calendar,
+                  colorClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+                  badge: (agent as any).skillsConfig?.appointmentBooking?.provider === 'calendly' ? 'Calendly' : 'Built-in',
+                  onClick: () => onNavigateTab('skills'),
+                },
+                {
+                  id: 'shopify',
+                  name: 'Shopify Store & Catalog',
+                  subtitle: 'Sync products, pricing & inventory',
+                  icon: ShoppingBag,
+                  colorClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+                  badge: agent.channels?.shopify?.shopDomain ? 'Synced' : 'Connect',
+                  onClick: () => (onSelectChannel ? onSelectChannel('shopify') : onNavigateTab('channels')),
+                },
+                {
+                  id: 'crm',
+                  name: 'CRM (BGOS, HubSpot, Salesforce)',
+                  subtitle: 'Auto-create leads & sync transcripts',
+                  icon: Layers,
+                  colorClass: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300',
+                  badge: (agent.channels?.crm?.provider || 'fieseros').toUpperCase(),
+                  onClick: () => (onSelectChannel ? onSelectChannel('crm') : onNavigateTab('channels')),
+                },
+                {
+                  id: 'api_webhook',
+                  name: 'Custom API, Webhook & Zapier',
+                  subtitle: 'Safe backend & external data bridge',
+                  icon: Sliders,
+                  colorClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+                  badge: (agent as any).skillsConfig?.externalDataSync?.enabled ? 'Connected' : 'Configure',
+                  onClick: () => onNavigateTab('skills'),
+                },
+              ].map((conn) => {
+                const ConnIcon = conn.icon;
+                return (
+                  <div
+                    key={conn.id}
+                    onClick={conn.onClick}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={cn('size-9 rounded-xl flex items-center justify-center shrink-0 shadow-2xs', conn.colorClass)}>
+                        <ConnIcon className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
+                          {conn.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                          {conn.subtitle}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {conn.badge}
+                      </span>
+                      <ChevronRight className="size-3.5 text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 

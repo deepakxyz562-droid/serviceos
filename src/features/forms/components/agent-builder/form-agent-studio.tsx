@@ -121,7 +121,7 @@ const CHANNELS_LIST: Array<{
   { id: 'shopify', label: 'SHOPIFY AGENT', subtitle: 'Let your Agent use your store data', icon: ShoppingBag },
   { id: 'agent_app', label: 'AGENT APP', subtitle: 'Share your AI Agent with an app', icon: Smartphone },
   { id: 'sms', label: 'SMS AGENT', subtitle: 'Let your Agent send messages', icon: Send, hasBackendStatus: true },
-  { id: 'crm', label: 'Salesforce Agent', subtitle: 'Connect your agent to your CRM', icon: Layers },
+  { id: 'crm', label: 'CRM & HUBSPOT AGENT', subtitle: 'Sync leads with BGOS, HubSpot & Salesforce', icon: Layers },
   { id: 'canva', label: 'CANVA AI CHATBOT', subtitle: 'Add a chatbot into your Canva designs', icon: Sparkles },
   { id: 'platforms', label: 'PLATFORMS', subtitle: 'Add your Agent to other platforms', icon: LayoutTemplate },
 ];
@@ -174,7 +174,7 @@ export function FormAgentStudio({
   siteOrigin,
 }: FormAgentStudioProps) {
   const isBgos = isBgosWorkspace(useAppStore(s => s.auth));
-  const visibleChannels = isBgos ? CHANNELS_LIST.filter(channel => !['shopify', 'crm', 'canva', 'presentation', 'platforms'].includes(channel.id)) : CHANNELS_LIST;
+  const visibleChannels = isBgos ? CHANNELS_LIST.filter(channel => !['canva', 'presentation'].includes(channel.id)) : CHANNELS_LIST;
   const [agent, setAgentState] = useState<FormAgentData>(initialAgent);
   const [studioTab, setStudioTab] = useState<StudioTabType>('overview');
   const [selectedChannel, setSelectedChannel] = useState<AgentChannelType>('chatbot');
@@ -491,6 +491,12 @@ export function FormAgentStudio({
           agent={agent}
           onChange={setAgent}
           onNavigateTab={(tab) => setStudioTab(tab)}
+          onSelectChannel={(channelId) => {
+            setSelectedChannel(channelId);
+            setRightDrawerMode('channel_settings');
+            setRightDrawerOpen(true);
+            setStudioTab('channels');
+          }}
           onOpenSettings={() => setSettingsOpen(true)}
           businessName={businessName}
           channelStatus={channelBadgeMap}

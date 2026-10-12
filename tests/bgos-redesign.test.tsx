@@ -771,6 +771,26 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   expect(assistantStatusCard?.className).toContain('lg:overflow-y-auto');
   expect(chatbotSettingsCard?.className).toContain('lg:overflow-y-auto');
 
+  // Verify Platform & Data Connectors on Overview tab
+  expect(screen.getByText('Platform & Data Connectors')).toBeDefined();
+  expect(screen.getByText('WordPress & WooCommerce')).toBeDefined();
+  expect(screen.getByText('Calendly & Google Calendar')).toBeDefined();
+  expect(screen.getByText('Shopify Store & Catalog')).toBeDefined();
+  expect(screen.getByText('Custom API, Webhook & Zapier')).toBeDefined();
+
+  // Verify Skills tab has Calendly booking provider & External Data / Webhook API Sync
+  fireEvent.click(screen.getByRole('button', { name: /^Skills$/i }));
+  expect(screen.getByText(/3\. Automated Appointment Booking & Calendly Sync/i)).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: /^Calendly$/i }));
+  expect(screen.getByPlaceholderText('https://calendly.com/your-business/30min')).toBeDefined();
+  expect(screen.getByText(/8\. External Data, Webhook & Custom API Sync/i)).toBeDefined();
+
+  // Verify Channels tab has WordPress, Shopify, and CRM unlocked in BGOS
+  fireEvent.click(screen.getByRole('button', { name: /^Channels$/i }));
+  expect(screen.getByText('AI CHATBOT FOR WORDPRESS')).toBeDefined();
+  expect(screen.getByText('SHOPIFY AGENT')).toBeDefined();
+  expect(screen.getByText('CRM & HUBSPOT AGENT')).toBeDefined();
+
   fireEvent.click(screen.getByRole('button', { name: /^Setup$/i }));
   expect(screen.getByText('Assistant Identity & Persona')).toBeDefined();
   expect(screen.getByText(/Live Assistant Preview/i)).toBeDefined();
