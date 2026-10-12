@@ -125,23 +125,57 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     // 4. Customers
     clickNavItem('Customers');
-    expect(screen.getByText('Customer 360 & Khata Ledger')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Manage your customers, credit/udhar, payments and transaction history.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Total Receivable')).toBeTruthy();
+    expect(screen.getByText('Total Received')).toBeTruthy();
+    expect(screen.getByText('Overdue Amount')).toBeTruthy();
+    expect(screen.getByText('Record Payment')).toBeTruthy();
+    expect(screen.getByText('Recent Transactions')).toBeTruthy();
 
     // 5. Khata / Credit
     clickNavItem('Khata / Credit');
-    expect(screen.getByText('Total Khata Receivable')).toBeTruthy();
+    expect(screen.getByText('Send Reminder')).toBeTruthy();
 
     // 6. Invoices & Payments
     clickNavItem('Invoices & Payments');
-    expect(screen.getByText('Live Invoice Preview')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Create GST invoice with e-Way Bill. Add products, customer, tax details and collect payment.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('TAX INVOICE')).toBeTruthy();
+    expect(screen.getByText('Original for Recipient')).toBeTruthy();
+    expect(screen.getByText('Generate e-Way Bill')).toBeTruthy();
+    expect(screen.getByText('Generate e-Invoice')).toBeTruthy();
+    expect(screen.getByText('Download PDF')).toBeTruthy();
 
     // 7. Appointments
     clickNavItem('Appointments');
-    expect(screen.getByText('Booking Details')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Manage bookings, staff schedules and customer appointments.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Appointment Details')).toBeTruthy();
+    expect(screen.getByText('Customer History')).toBeTruthy();
+    expect(screen.getByText('Reschedule')).toBeTruthy();
+    expect(screen.getByText('Create Invoice')).toBeTruthy();
 
     // 8. Online Store
     clickNavItem('Online Store');
-    expect(screen.getByText('Store Information & Branding')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Create your digital storefront and start selling online. Share via WhatsApp, QR code or a link.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Store Status')).toBeTruthy();
+    expect(screen.getByText('Delivery & Ordering')).toBeTruthy();
+    expect(screen.getByText('Live Store Preview')).toBeTruthy();
+    expect(screen.getByText('Fresh Groceries at Your Doorstep')).toBeTruthy();
 
     // 9. Reports
     clickNavItem('Reports');
@@ -149,15 +183,42 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     // 10. Day Book
     clickNavItem('Day Book');
-    expect(screen.getByText('Opening Cash Balance')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Track all money in and money out for the day. Manage cash, UPI, card, expenses, supplier payments and closing balance.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Calculated Closing Balance')).toBeTruthy();
+    expect(screen.getByText('Payment Method Summary')).toBeTruthy();
+    expect(screen.getByText('Record Supplier Payment')).toBeTruthy();
 
     // 11. Marketing
     clickNavItem('Marketing');
-    expect(screen.getByText('Quick WhatsApp Campaign')).toBeTruthy();
+    expect(screen.getAllByText('Marketing & Promotions').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        'Grow your business with offers, customer campaigns, WhatsApp promotions and loyalty programs.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Campaigns Sent')).toBeTruthy();
+    expect(screen.getByText('Customers Reached')).toBeTruthy();
+    expect(screen.getByText('Recent Campaigns')).toBeTruthy();
+    expect(screen.getByText('Campaign Preview')).toBeTruthy();
+    expect(screen.getAllByText('Weekend Fresh Deals').length).toBeGreaterThan(0);
 
     // 12. AI Assistant
     clickNavItem('AI Assistant');
-    expect(screen.getByText('BOS AI Business Copilot')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Your business copilot. Ask questions, get insights and take actions — in simple language.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('How to use AI Assistant')).toBeTruthy();
+    expect(screen.getByText('Recent Chats')).toBeTruthy();
+    expect(screen.getByText("Today's sales report")).toBeTruthy();
+    expect(screen.getByText('Top 5 Products')).toBeTruthy();
+    expect(screen.getByText('Business Insights')).toBeTruthy();
+    expect(screen.getByText('Smart Suggestions')).toBeTruthy();
 
     // 13. Integrations
     clickNavItem('Integrations');
@@ -165,6 +226,16 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     // 14. Settings
     clickNavItem('Settings');
-    expect(screen.getByText('Business Profile & Store Identity')).toBeTruthy();
+    expect(screen.getByText('Settings & Business Configuration')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Manage your business profile, store settings, staff, invoices, taxes, notifications and more.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getAllByText('Business Information').length).toBeGreaterThan(0);
+    expect(screen.getByText('Store Preview')).toBeTruthy();
+    expect(screen.getByText('GST Information')).toBeTruthy();
+    expect(screen.getByText('Subscription Plan')).toBeTruthy();
+    expect(screen.getByText('+ Invite Team Member')).toBeTruthy();
   });
 });

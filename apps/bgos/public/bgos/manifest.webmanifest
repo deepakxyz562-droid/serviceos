@@ -1,6 +1,6 @@
 {
   "id": "/app?product=bgos",
-  "name": "BGOS — Business Growth OS",
+  "name": "BGOS \u2014 Business Growth OS",
   "short_name": "BGOS",
   "description": "Conversations, leads, appointments and business growth.",
   "start_url": "/app?product=bgos",
@@ -8,5 +8,24 @@
   "display": "standalone",
   "background_color": "#F4FAF9",
   "theme_color": "#007F73",
-  "icons": [{ "src": "/bgos/teal-mark.png", "type": "image/png", "sizes": "1254x1254", "purpose": "any" }]
+  "icons": [
+    {
+      "src": "/bgos/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/bgos/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/bgos/icon-maskable-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
 }

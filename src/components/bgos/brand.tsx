@@ -5,7 +5,7 @@ import Image from 'next/image';
 
 /**
  * Official BGOS Ribbon Icon Component
- * Approved folded-G artwork shared with the web favicon.
+ * Lowercase b mark matching the approved green reference.
  */
 export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; className?: string }) {
   return (
@@ -14,7 +14,7 @@ export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; c
       className={`relative shrink-0 flex items-center justify-center ${className}`}
     >
       <Image
-        src="/bgos/teal-mark.png"
+        src="/bgos/icon.svg"
         alt="BGOS Mark"
         width={size}
         height={size}
@@ -30,9 +30,8 @@ export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; c
  * BGOS Brand Identity Component
  * =============================
  * Implements the official BGOS design specifications:
- * - Teal/Cyan geometric ribbon loop logo mark (/bgos/teal-mark.png)
- * - Modern geometric bold typography (BGOS)
- * - Tracked uppercase sub-headline (BUSINESS GROWTH OS)
+ * - Green lowercase b logo mark (/bgos/icon.svg)
+ * - Lowercase wordmark (bgos)
  */
 export function BgosBrand({
   compact = false,
@@ -55,15 +54,9 @@ export function BgosBrand({
               inverted ? 'text-white' : 'text-foreground'
             }`}
           >
-            BGOS
+            bgos
           </strong>
-          <small
-            className={`mt-0.5 text-[10px] font-bold tracking-[0.2em] uppercase ${
-              inverted ? 'text-teal-200' : 'text-muted-foreground'
-            }`}
-          >
-            BUSINESS GROWTH OS
-          </small>
+
         </span>
       )}
     </span>

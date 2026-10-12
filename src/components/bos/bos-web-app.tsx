@@ -25,6 +25,7 @@ import {
   Printer,
   Receipt,
   Search,
+  Send,
   Settings,
   ShoppingBag,
   Sparkles,
@@ -86,7 +87,7 @@ const NAV_ICON_MAP: Record<BosNavId, React.ComponentType<{ className?: string }>
   onlineStore: Store,
   reports: BarChart3,
   daybook: BookOpen,
-  marketing: Megaphone,
+  marketing: Send,
   aiAssistant: Sparkles,
   integrations: Plug,
   settings: Settings,
@@ -1444,7 +1445,9 @@ export function BosWebApp({
                     isActive ? 'text-[#2DD4BF]' : 'text-[#8CC4B0]'
                   }`}
                 />
-                <span className="truncate">{item.label}</span>
+                <span className="truncate">
+                  {item.id === 'marketing' ? 'Marketing & Promotions' : item.label}
+                </span>
                 {item.id === 'aiAssistant' && (
                   <span className="ml-auto rounded-full bg-[#00B894]/25 px-1.5 py-0.5 text-[9.5px] font-bold text-[#6EE7B7]">
                     AI

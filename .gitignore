@@ -170,3 +170,9 @@ next-dev.pid
 
 # Shared approved BGOS web identity asset
 !/apps/bgos/public/bgos/teal-mark.png
+
+# BGOS generated branding exports (source: scripts/branding/build-bgos.cjs)
+!/public/bgos/*.png
+!/apps/bgos/public/bgos/*.png
+!/bgosmobile/assets/brand-mark-light.png
+!/bgosmobile/assets/adaptive-icon.png

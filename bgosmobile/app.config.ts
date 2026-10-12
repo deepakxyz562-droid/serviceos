@@ -26,6 +26,7 @@ export default ({ config }: ConfigContext): any => ({
   },
   android: {
     package: 'com.fieseros.bgos',
+    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#009F50' },
     permissions: ['POST_NOTIFICATIONS'],
   },
   plugins: ['expo-router', 'expo-secure-store', 'expo-notifications', 'expo-web-browser', 'expo-apple-authentication'],

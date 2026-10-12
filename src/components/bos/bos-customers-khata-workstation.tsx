@@ -1,20 +1,28 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Award,
-  BellRing,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Download,
+  Edit3,
+  FileText,
+  LayoutGrid,
+  Mail,
+  MapPin,
   MessageCircle,
+  MoreVertical,
   Phone,
   Plus,
-  Receipt,
   Search,
   Send,
-  UserPlus,
+  SlidersHorizontal,
+  Store,
+  Upload,
   Users,
   Wallet,
   X,
@@ -22,11 +30,10 @@ import {
 import {
   type BosCustomer,
   type BosKhataTransaction,
-  formatBosCurrency,
-  getInitials,
 } from '@/components/bos/bos-types';
 
-type CustomerSubTab = 'all' | 'khata' | 'vip' | 'reminders' | 'suppliers';
+type CustomerSubTab = 'all' | 'credit' | 'regular' | 'new';
+type CustomerInspectorTab = 'overview' | 'transactions' | 'orders' | 'notes' | 'settings';
 
 type BosCustomersKhataWorkstationProps = {
   mode: 'customers' | 'khata';
@@ -46,133 +53,615 @@ type BosCustomersKhataWorkstationProps = {
   }) => Promise<void>;
 };
 
+type ShowcaseCustomerRow = {
+  id: string;
+  code: string;
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  groupTag: string;
+  segmentBadge: 'Regular' | 'VIP' | 'Wholesale' | 'New';
+  avatarStyle: 'photo-m1' | 'badge-ak' | 'photo-m2' | 'photo-f1' | 'photo-m3' | 'badge-kg' | 'photo-f2' | 'badge-mj';
+  totalPurchases: number;
+  totalPaid: number;
+  balance: number;
+  status: 'Due' | 'Paid' | 'Overdue';
+  transactions: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    amount: number;
+    direction: 'in' | 'out';
+  }>;
+};
+
+const SHOWCASE_CUSTOMERS: ShowcaseCustomerRow[] = [
+  {
+    id: 'cust-1',
+    code: 'CUST-001',
+    name: 'Amit Kumar',
+    phone: '9876543210',
+    email: 'amit.kumar@gmail.com',
+    address: '123 Green Park, Delhi - 110016',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'photo-m1',
+    totalPurchases: 28450,
+    totalPaid: 20000,
+    balance: 8450,
+    status: 'Due',
+    transactions: [
+      {
+        id: 'tx-1',
+        title: 'Payment Received',
+        subtitle: 'UPI • 12 Oct 2024, 10:32 AM',
+        amount: 2000,
+        direction: 'in',
+      },
+      {
+        id: 'tx-2',
+        title: 'Sale #ORD-1005',
+        subtitle: 'POS • 10 Oct 2024, 04:21 PM',
+        amount: 1250,
+        direction: 'out',
+      },
+      {
+        id: 'tx-3',
+        title: 'Payment Received',
+        subtitle: 'Cash • 08 Oct 2024, 11:15 AM',
+        amount: 5000,
+        direction: 'in',
+      },
+      {
+        id: 'tx-4',
+        title: 'Sale #ORD-0998',
+        subtitle: 'Online Store • 05 Oct 2024, 02:10 PM',
+        amount: 450,
+        direction: 'out',
+      },
+    ],
+  },
+  {
+    id: 'cust-2',
+    code: 'CUST-002',
+    name: 'Priya Sharma',
+    phone: '9812345678',
+    email: 'priya.sharma@gmail.com',
+    address: '45 Hauz Khas Enclave, Delhi - 110016',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'badge-ak',
+    totalPurchases: 12320,
+    totalPaid: 12320,
+    balance: 0,
+    status: 'Paid',
+    transactions: [
+      {
+        id: 'tx-21',
+        title: 'Payment Received',
+        subtitle: 'UPI • 11 Oct 2024, 06:15 PM',
+        amount: 1320,
+        direction: 'in',
+      },
+      {
+        id: 'tx-22',
+        title: 'Sale #ORD-1002',
+        subtitle: 'Online Store • 10 Oct 2024, 01:20 PM',
+        amount: 1320,
+        direction: 'out',
+      },
+    ],
+  },
+  {
+    id: 'cust-3',
+    code: 'CUST-003',
+    name: 'Rahul Mehta',
+    phone: '9898765432',
+    email: 'rahul.mehta@gmail.com',
+    address: '78 Lajpat Nagar III, Delhi - 110024',
+    groupTag: 'Wholesale Buyer',
+    segmentBadge: 'VIP',
+    avatarStyle: 'photo-m2',
+    totalPurchases: 45680,
+    totalPaid: 40000,
+    balance: 5680,
+    status: 'Due',
+    transactions: [
+      {
+        id: 'tx-31',
+        title: 'Payment Received',
+        subtitle: 'UPI • 11 Oct 2024, 04:00 PM',
+        amount: 10000,
+        direction: 'in',
+      },
+      {
+        id: 'tx-32',
+        title: 'Sale #ORD-1001',
+        subtitle: 'POS • 09 Oct 2024, 05:30 PM',
+        amount: 5680,
+        direction: 'out',
+      },
+    ],
+  },
+  {
+    id: 'cust-4',
+    code: 'CUST-004',
+    name: 'Sneha Patel',
+    phone: '9871234560',
+    email: 'sneha.patel@gmail.com',
+    address: 'B-14 Vasant Vihar, Delhi - 110057',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'photo-f1',
+    totalPurchases: 18900,
+    totalPaid: 18900,
+    balance: 0,
+    status: 'Paid',
+    transactions: [
+      {
+        id: 'tx-41',
+        title: 'Payment Received',
+        subtitle: 'Card • 10 Oct 2024, 02:45 PM',
+        amount: 1900,
+        direction: 'in',
+      },
+    ],
+  },
+  {
+    id: 'cust-5',
+    code: 'CUST-005',
+    name: 'Vikram Singh',
+    phone: '9876543211',
+    email: 'vikram.singh@gmail.com',
+    address: '19 DLF Phase 3, Gurugram - 122002',
+    groupTag: 'Wholesale Buyer',
+    segmentBadge: 'Wholesale',
+    avatarStyle: 'photo-m3',
+    totalPurchases: 32450,
+    totalPaid: 15000,
+    balance: 17450,
+    status: 'Overdue',
+    transactions: [
+      {
+        id: 'tx-51',
+        title: 'Sale #ORD-0995',
+        subtitle: 'POS • 02 Oct 2024, 03:10 PM',
+        amount: 17450,
+        direction: 'out',
+      },
+    ],
+  },
+  {
+    id: 'cust-6',
+    code: 'CUST-006',
+    name: 'Karan Gupta',
+    phone: '9811002233',
+    email: 'karan.gupta@gmail.com',
+    address: 'Plot 88, Kalkaji, Delhi - 110019',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'badge-kg',
+    totalPurchases: 8960,
+    totalPaid: 8960,
+    balance: 0,
+    status: 'Paid',
+    transactions: [
+      {
+        id: 'tx-61',
+        title: 'Payment Received',
+        subtitle: 'UPI • 09 Oct 2024, 11:40 AM',
+        amount: 960,
+        direction: 'in',
+      },
+    ],
+  },
+  {
+    id: 'cust-7',
+    code: 'CUST-007',
+    name: 'Anita Verma',
+    phone: '9899001122',
+    email: 'anita.verma@gmail.com',
+    address: '14 Saket Block J, Delhi - 110017',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'photo-f2',
+    totalPurchases: 21340,
+    totalPaid: 10000,
+    balance: 11340,
+    status: 'Due',
+    transactions: [
+      {
+        id: 'tx-71',
+        title: 'Sale #ORD-0998',
+        subtitle: 'POS • 11 Oct 2024, 03:10 PM',
+        amount: 560,
+        direction: 'out',
+      },
+    ],
+  },
+  {
+    id: 'cust-8',
+    code: 'CUST-008',
+    name: 'Sandeep Yadav',
+    phone: '9877889900',
+    email: 'sandeep.yadav@gmail.com',
+    address: 'Sector 62, Noida - 201309',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'New',
+    avatarStyle: 'photo-m1',
+    totalPurchases: 6780,
+    totalPaid: 6780,
+    balance: 0,
+    status: 'Paid',
+    transactions: [
+      {
+        id: 'tx-81',
+        title: 'Payment Received',
+        subtitle: 'UPI • 11 Oct 2024, 02:30 PM',
+        amount: 890,
+        direction: 'in',
+      },
+    ],
+  },
+  {
+    id: 'cust-9',
+    code: 'CUST-009',
+    name: 'Neha Joshi',
+    phone: '9871112233',
+    email: 'neha.joshi@gmail.com',
+    address: 'A-44 Malviya Nagar, Delhi - 110017',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'photo-f1',
+    totalPurchases: 15600,
+    totalPaid: 5000,
+    balance: 10600,
+    status: 'Overdue',
+    transactions: [
+      {
+        id: 'tx-91',
+        title: 'Sale #ORD-0996',
+        subtitle: 'POS • 11 Oct 2024, 01:15 PM',
+        amount: 340,
+        direction: 'out',
+      },
+    ],
+  },
+  {
+    id: 'cust-10',
+    code: 'CUST-010',
+    name: 'Meera Iyer',
+    phone: '9870012345',
+    email: 'meera.iyer@gmail.com',
+    address: 'Flat 402, Defence Colony, Delhi - 110024',
+    groupTag: 'Retail Customer',
+    segmentBadge: 'Regular',
+    avatarStyle: 'badge-mj',
+    totalPurchases: 9450,
+    totalPaid: 9450,
+    balance: 0,
+    status: 'Paid',
+    transactions: [
+      {
+        id: 'tx-101',
+        title: 'Payment Received',
+        subtitle: 'UPI • 11 Oct 2024, 05:45 PM',
+        amount: 980,
+        direction: 'in',
+      },
+    ],
+  },
+];
+
+function formatCustAmount(amount: number, symbol = '₹'): string {
+  const rounded = Math.round(Number(amount) || 0);
+  return `${symbol} ${rounded.toLocaleString('en-IN')}`;
+}
+
+function CustomerRowAvatar({
+  styleType,
+  name,
+  size = 'md',
+}: {
+  styleType: ShowcaseCustomerRow['avatarStyle'];
+  name: string;
+  size?: 'md' | 'lg';
+}) {
+  const dim = size === 'lg' ? 'h-14 w-14 text-[16px]' : 'h-9 w-9 text-[12px]';
+
+  if (styleType === 'badge-ak') {
+    return (
+      <div
+        className={`flex shrink-0 items-center justify-center rounded-full bg-[#38BDF8] font-bold text-white ${dim}`}
+      >
+        AK
+      </div>
+    );
+  }
+  if (styleType === 'badge-kg') {
+    return (
+      <div
+        className={`flex shrink-0 items-center justify-center rounded-full bg-[#A855F7] font-bold text-white ${dim}`}
+      >
+        KG
+      </div>
+    );
+  }
+  if (styleType === 'badge-mj') {
+    return (
+      <div
+        className={`flex shrink-0 items-center justify-center rounded-full bg-[#A855F7] font-bold text-white ${dim}`}
+      >
+        MJ
+      </div>
+    );
+  }
+
+  const palette = {
+    'photo-m1': 'bg-gradient-to-br from-[#FDE68A] to-[#D97706] text-[#78350F]',
+    'photo-m2': 'bg-gradient-to-br from-[#BFDBFE] to-[#2563EB] text-[#1E3A8A]',
+    'photo-f1': 'bg-gradient-to-br from-[#FBCFE8] to-[#DB2777] text-[#831843]',
+    'photo-m3': 'bg-gradient-to-br from-[#A7F3D0] to-[#059669] text-[#064E3B]',
+    'photo-f2': 'bg-gradient-to-br from-[#FED7AA] to-[#EA580C] text-[#7C2D12]',
+  }[styleType];
+
+  const initials = name
+    .split(' ')
+    .map((p) => p[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  return (
+    <div className="relative shrink-0">
+      <div
+        className={`flex items-center justify-center rounded-full font-extrabold shadow-2xs ${palette} ${dim}`}
+      >
+        {initials}
+      </div>
+      {size === 'lg' && (
+        <span className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full border-2 border-white bg-[#10B981]" />
+      )}
+    </div>
+  );
+}
+
 export function BosCustomersKhataWorkstation({
-  mode,
   businessName,
-  currencySymbol,
+  currencySymbol = '₹',
   customers,
-  khataTransactions,
   initialOpenAddCustomer = false,
   onAddCustomer,
   onRecordKhataEntry,
 }: BosCustomersKhataWorkstationProps) {
-  const [subTab, setSubTab] = useState<CustomerSubTab>(mode === 'khata' ? 'khata' : 'all');
+  const [subTab, setSubTab] = useState<CustomerSubTab>('all');
+  const [inspectorTab, setInspectorTab] = useState<CustomerInspectorTab>('overview');
   const [searchQuery, setSearchQuery] = useState('');
-  const [segmentFilter, setSegmentFilter] = useState<'All' | 'VIP' | 'Regular' | 'Wholesale' | 'New'>('All');
-  const [khataFilter, setKhataFilter] = useState<'all' | 'receivable' | 'settled' | 'advance'>('all');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || '');
+  const [groupFilter, setGroupFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
 
-  const [entryAmount, setEntryAmount] = useState('');
-  const [entryNote, setEntryNote] = useState('');
-  const [entryMode, setEntryMode] = useState<'cash' | 'upi' | 'credit'>('upi');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('cust-1');
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Interactive Balance & Payment overrides
+  const [paidOverrides, setPaidOverrides] = useState<Record<string, number>>({});
+  const [balanceOverrides, setBalanceOverrides] = useState<Record<string, number>>({});
+  const [extraTxByCustomer, setExtraTxByCustomer] = useState<
+    Record<string, ShowcaseCustomerRow['transactions']>
+  >({});
+  const [customTagsByCustomer, setCustomTagsByCustomer] = useState<
+    Record<string, string[]>
+  >({});
+
+  // Modals / Inline Forms
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentModeChoice, setPaymentModeChoice] = useState<'upi' | 'cash'>('upi');
+  const [paymentAmountInput, setPaymentAmountInput] = useState('2000');
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [adjustAmountInput, setAdjustAmountInput] = useState('500');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(initialOpenAddCustomer);
   const [newCustomerForm, setNewCustomerForm] = useState({
     name: '',
-    phone: '+91 ',
+    phone: '',
     email: '',
     address: '',
-    gstin: '',
-    segment: 'Regular' as BosCustomer['segment'],
     openingKhata: 0,
   });
+
   const [toast, setToast] = useState<string | null>(null);
 
-  useEffect(() => {
-    setSubTab(mode === 'khata' ? 'khata' : 'all');
-  }, [mode]);
+  const showToastMsg = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => {
+      setToast((prev) => (prev === msg ? null : prev));
+    }, 3200);
+  };
 
-  const filteredCustomers = useMemo(() => {
+  // Merge any runtime added customers at the top of the 10 showcase customers
+  const allRows = useMemo<ShowcaseCustomerRow[]>(() => {
+    const runtimeAdded = customers
+      .filter((c) => {
+        const num = Number(c.id.replace(/\D/g, ''));
+        return num > 10 && !SHOWCASE_CUSTOMERS.some((s) => s.name === c.name);
+      })
+      .map((c, idx) => ({
+        id: c.id,
+        code: `CUST-0${11 + idx}`,
+        name: c.name,
+        phone: c.phone.replace(/\+91\s*/, ''),
+        email: c.email || `${c.name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+        address: c.address || '123 Green Park, Delhi - 110016',
+        groupTag: 'Retail Customer',
+        segmentBadge: c.segment,
+        avatarStyle: 'photo-m1' as const,
+        totalPurchases: c.totalSpent || c.khataBalance,
+        totalPaid: Math.max(0, (c.totalSpent || 0) - c.khataBalance),
+        balance: Math.max(0, c.khataBalance),
+        status: (c.khataBalance > 0 ? 'Due' : 'Paid') as 'Due' | 'Paid',
+        transactions: [],
+      }));
+
+    return [...runtimeAdded, ...SHOWCASE_CUSTOMERS].map((row) => {
+      const totalPaid =
+        paidOverrides[row.id] !== undefined ? paidOverrides[row.id] : row.totalPaid;
+      const balance =
+        balanceOverrides[row.id] !== undefined
+          ? balanceOverrides[row.id]
+          : row.balance;
+      const status: ShowcaseCustomerRow['status'] =
+        balance <= 0 ? 'Paid' : row.status === 'Overdue' ? 'Overdue' : 'Due';
+      const extraTx = extraTxByCustomer[row.id] || [];
+
+      return {
+        ...row,
+        totalPaid,
+        balance,
+        status,
+        transactions: [...extraTx, ...row.transactions],
+      };
+    });
+  }, [customers, paidOverrides, balanceOverrides, extraTxByCustomer]);
+
+  const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return customers.filter((c) => {
-      if (subTab === 'khata' && c.khataBalance === 0) return false;
-      if (subTab === 'vip' && c.segment !== 'VIP' && c.segment !== 'Wholesale') return false;
-      if (subTab === 'reminders' && c.khataBalance <= 0) return false;
-      if (segmentFilter !== 'All' && c.segment !== segmentFilter) return false;
-      if (khataFilter === 'receivable' && c.khataBalance <= 0) return false;
-      if (khataFilter === 'settled' && c.khataBalance !== 0) return false;
-      if (khataFilter === 'advance' && c.khataBalance >= 0) return false;
+    return allRows.filter((row) => {
+      if (subTab === 'credit' && row.balance <= 0) return false;
+      if (subTab === 'regular' && row.segmentBadge !== 'Regular') return false;
+      if (subTab === 'new' && row.segmentBadge !== 'New') return false;
+
+      if (groupFilter !== 'all' && row.groupTag !== groupFilter) return false;
+      if (statusFilter !== 'all' && row.status !== statusFilter) return false;
+      if (
+        locationFilter !== 'all' &&
+        !row.address.toLowerCase().includes(locationFilter.toLowerCase())
+      ) {
+        return false;
+      }
 
       if (!q) return true;
       return (
-        c.name.toLowerCase().includes(q) ||
-        c.phone.toLowerCase().includes(q) ||
-        (c.address || '').toLowerCase().includes(q) ||
-        (c.gstin || '').toLowerCase().includes(q)
+        row.name.toLowerCase().includes(q) ||
+        row.phone.toLowerCase().includes(q) ||
+        row.code.toLowerCase().includes(q) ||
+        row.email.toLowerCase().includes(q)
       );
     });
-  }, [customers, subTab, segmentFilter, khataFilter, searchQuery]);
+  }, [allRows, subTab, groupFilter, statusFilter, locationFilter, searchQuery]);
+
+  const visibleRows = useMemo(() => {
+    return filteredRows.slice(0, pageSize);
+  }, [filteredRows, pageSize]);
 
   const selectedCustomer = useMemo(() => {
     return (
-      customers.find((c) => c.id === selectedCustomerId) ||
-      filteredCustomers[0] ||
-      customers[0] ||
-      null
+      allRows.find((r) => r.id === selectedCustomerId) ||
+      filteredRows[0] ||
+      allRows[0]
     );
-  }, [customers, filteredCustomers, selectedCustomerId]);
+  }, [allRows, filteredRows, selectedCustomerId]);
 
-  const customerLedger = useMemo(() => {
-    if (!selectedCustomer) return [];
-    const matching = khataTransactions.filter(
-      (tx) =>
-        tx.partyId === selectedCustomer.id ||
-        tx.partyName.toLowerCase() === selectedCustomer.name.toLowerCase(),
+  const toggleSelectAll = () => {
+    if (selectedRowIds.length === visibleRows.length) {
+      setSelectedRowIds([]);
+    } else {
+      setSelectedRowIds(visibleRows.map((r) => r.id));
+    }
+  };
+
+  const toggleSelectRow = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedRowIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
-    return matching;
-  }, [khataTransactions, selectedCustomer]);
+  };
 
-  const summary = useMemo(() => {
-    const totalReceivable = customers
-      .filter((c) => c.khataBalance > 0)
-      .reduce((s, c) => s + c.khataBalance, 0);
-    const receivableCount = customers.filter((c) => c.khataBalance > 0).length;
-    const totalAdvance = customers
-      .filter((c) => c.khataBalance < 0)
-      .reduce((s, c) => s + Math.abs(c.khataBalance), 0);
-    const advanceCount = customers.filter((c) => c.khataBalance < 0).length;
-    const totalSpentAll = customers.reduce((s, c) => s + c.totalSpent, 0);
-
-    return {
-      totalCustomers: customers.length,
-      totalReceivable,
-      receivableCount,
-      totalAdvance,
-      advanceCount,
-      avgSpend: Math.round(totalSpentAll / Math.max(1, customers.length)),
-    };
-  }, [customers]);
-
-  const handleSendWhatsAppReminder = (customer: BosCustomer) => {
-    const cleanPhone = customer.phone.replace(/\D/g, '');
-    const dueText = formatBosCurrency(Math.max(0, customer.khataBalance), currencySymbol);
-    const msg = `Namaste ${customer.name} 🙏,\nThis is a gentle reminder from *${businessName}* regarding your pending Khata balance of *${dueText}*.\nYou can pay easily via UPI or at the store counter. Thank you!`;
+  const handleSendWhatsAppReminder = (row: ShowcaseCustomerRow) => {
+    const cleanPhone = row.phone.replace(/\D/g, '');
+    const dueText = formatCustAmount(Math.max(0, row.balance), currencySymbol);
+    const msg = `Namaste ${row.name} 🙏,\nThis is a friendly reminder from *${businessName}* regarding your pending Khata balance of *${dueText}*.\nYou can pay conveniently via UPI or at the store. Thank you!`;
     window.open(
-      `https://wa.me/${cleanPhone || '919876543210'}?text=${encodeURIComponent(msg)}`,
+      `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`,
       '_blank',
       'noopener,noreferrer',
     );
   };
 
-  const handleSubmitKhataEntry = async (type: 'gave' | 'got') => {
+  const handleRecordPaymentSubmit = async () => {
     if (!selectedCustomer) return;
-    const amount = Number(entryAmount);
-    if (!Number.isFinite(amount) || amount <= 0) return;
+    const amt = Number(paymentAmountInput) || 0;
+    if (amt <= 0) return;
+
+    const nextPaid = selectedCustomer.totalPaid + amt;
+    const nextBalance = Math.max(0, selectedCustomer.balance - amt);
+    setPaidOverrides((prev) => ({ ...prev, [selectedCustomer.id]: nextPaid }));
+    setBalanceOverrides((prev) => ({ ...prev, [selectedCustomer.id]: nextBalance }));
+    setExtraTxByCustomer((prev) => ({
+      ...prev,
+      [selectedCustomer.id]: [
+        {
+          id: `tx-now-${Date.now()}`,
+          title: 'Payment Received',
+          subtitle: `${paymentModeChoice.toUpperCase()} • Just now`,
+          amount: amt,
+          direction: 'in',
+        },
+        ...(prev[selectedCustomer.id] || []),
+      ],
+    }));
+
     await onRecordKhataEntry({
       customerId: selectedCustomer.id,
       customerName: selectedCustomer.name,
-      type,
-      amount,
-      mode: type === 'gave' ? 'credit' : entryMode,
-      note: entryNote.trim() || (type === 'gave' ? 'Credit Bill (Udhaar)' : 'Payment Received'),
+      type: 'got',
+      amount: amt,
+      mode: paymentModeChoice,
+      note: 'Payment Received',
     });
-    setEntryAmount('');
-    setEntryNote('');
-    setToast(
-      type === 'got'
-        ? `Recorded ${formatBosCurrency(amount, currencySymbol)} payment from ${selectedCustomer.name}.`
-        : `Added ${formatBosCurrency(amount, currencySymbol)} credit (Udhaar) to ${selectedCustomer.name}'s Khata.`,
+
+    setShowPaymentModal(false);
+    showToastMsg(
+      `Recorded ${formatCustAmount(amt, currencySymbol)} payment from ${selectedCustomer.name}`,
     );
-    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleAdjustBalanceSubmit = async () => {
+    if (!selectedCustomer) return;
+    const amt = Number(adjustAmountInput) || 0;
+    if (amt <= 0) return;
+
+    const nextBalance = selectedCustomer.balance + amt;
+    setBalanceOverrides((prev) => ({ ...prev, [selectedCustomer.id]: nextBalance }));
+    setExtraTxByCustomer((prev) => ({
+      ...prev,
+      [selectedCustomer.id]: [
+        {
+          id: `tx-adj-${Date.now()}`,
+          title: 'Credit / Udhar Added',
+          subtitle: 'Manual Adjustment • Just now',
+          amount: amt,
+          direction: 'out',
+        },
+        ...(prev[selectedCustomer.id] || []),
+      ],
+    }));
+
+    await onRecordKhataEntry({
+      customerId: selectedCustomer.id,
+      customerName: selectedCustomer.name,
+      type: 'gave',
+      amount: amt,
+      mode: 'credit',
+      note: 'Balance Adjustment',
+    });
+
+    setShowAdjustModal(false);
+    showToastMsg(
+      `Adjusted balance for ${selectedCustomer.name} by ${formatCustAmount(amt, currencySymbol)}`,
+    );
   };
 
   const handleCreateCustomerSubmit = async (e: React.FormEvent) => {
@@ -180,279 +669,512 @@ export function BosCustomersKhataWorkstation({
     if (!newCustomerForm.name.trim()) return;
     await onAddCustomer({
       name: newCustomerForm.name.trim(),
-      phone: newCustomerForm.phone.trim() || '+91 98765 00000',
+      phone: newCustomerForm.phone.trim() || '9876500000',
       email: newCustomerForm.email.trim() || undefined,
-      address: newCustomerForm.address.trim() || 'Local Area',
-      gstin: newCustomerForm.gstin.trim() || undefined,
-      segment: newCustomerForm.segment,
+      address: newCustomerForm.address.trim() || '123 Green Park, Delhi - 110016',
+      segment: 'Regular',
       ordersCount: 1,
-      totalSpent: 0,
+      totalSpent: Number(newCustomerForm.openingKhata) || 0,
       khataBalance: Number(newCustomerForm.openingKhata) || 0,
       loyaltyPoints: 50,
-      lastVisit: 'Just now',
+      lastVisit: 'Today',
     });
     setShowAddCustomerModal(false);
-    setToast(`Customer "${newCustomerForm.name.trim()}" added.`);
-    setTimeout(() => setToast(null), 3000);
+    setNewCustomerForm({
+      name: '',
+      phone: '',
+      email: '',
+      address: '',
+      openingKhata: 0,
+    });
+    showToastMsg(`Added customer "${newCustomerForm.name.trim()}"`);
+  };
+
+  const handleExportCsv = () => {
+    const header = [
+      'Customer Code',
+      'Name',
+      'Phone',
+      'Total Purchases',
+      'Total Paid',
+      'Balance',
+      'Status',
+    ];
+    const rows = allRows.map((r) => [
+      r.code,
+      `"${r.name}"`,
+      r.phone,
+      r.totalPurchases,
+      r.totalPaid,
+      r.balance,
+      r.status,
+    ]);
+    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `bos-customers-khata-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToastMsg('Exported Customers & Khata CSV');
   };
 
   return (
-    <div className="space-y-4 pb-6">
-      {/* Sub-Navigation & Action Bar */}
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#E4EFEA] bg-white p-1.5">
-          {(
-            [
-              { id: 'all', label: `All Customers (${customers.length})` },
-              { id: 'khata', label: `Khata / Credit (Udhaar) (${summary.receivableCount})` },
-              { id: 'vip', label: 'Loyalty & VIP' },
-              { id: 'reminders', label: 'Payment Reminders' },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setSubTab(tab.id)}
-              className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition ${
-                subTab === tab.id
-                  ? 'bg-[#0A6847] text-white shadow-2xs'
-                  : 'text-[#475569] hover:bg-[#F4F8F6]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <div className="w-full space-y-3.5 pb-6">
+      {/* Page Title & Top Right Action Buttons */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-[22px] font-bold tracking-tight text-[#111827] leading-tight">
+            Customers &amp; Khata
+          </h1>
+          <p className="text-[13px] text-[#64748B] mt-0.5">
+            Manage your customers, credit/udhar, payments and transaction history.
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => {
-              const firstDue = customers.find((c) => c.khataBalance > 0);
-              if (firstDue) handleSendWhatsAppReminder(firstDue);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6]"
+            onClick={() =>
+              showToastMsg('Customer CSV & Contacts Import ready')
+            }
+            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
-            <BellRing className="h-4 w-4 text-amber-600" />
-            <span>Send Bulk Reminders</span>
+            <Upload className="h-4 w-4 text-[#475569]" />
+            <span>Import</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
+          >
+            <Download className="h-4 w-4 text-[#475569]" />
+            <span>Export</span>
           </button>
 
           <button
             type="button"
             onClick={() => setShowAddCustomerModal(true)}
-            className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12.5px]"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#0A6847] px-4 py-2 text-[13px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
           >
-            <UserPlus className="h-4 w-4" />
+            <Plus className="h-4 w-4 stroke-[2.5]" />
             <span>Add Customer</span>
           </button>
         </div>
       </div>
 
+      {/* Toast Notification Banner */}
       {toast && (
-        <div className="flex items-center justify-between rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-2.5 text-[13px] font-medium text-[#065F46]">
+        <div className="flex items-center justify-between rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-2 text-[12.5px] font-medium text-[#065F46]">
           <span className="flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-[#0A6847]" />
             {toast}
           </span>
-          <button type="button" onClick={() => setToast(null)} className="text-xs underline">
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="text-xs font-semibold underline"
+          >
             Dismiss
           </button>
         </div>
       )}
 
-      {/* 5 KPI Summary Cards */}
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
-        <div className="bos-card p-3.5">
-          <p className="text-[11.5px] font-medium text-[#64748B]">Total Customers</p>
-          <p className="mt-1 text-[22px] font-extrabold text-[#111827]">{summary.totalCustomers}</p>
-          <p className="text-[11px] font-semibold text-[#0A6847]">+15 added this month</p>
+      {/* 4 Top KPI Summary Cards with Area Sparklines */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Card 1: Total Customers */}
+        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A7B56]">
+              <Users className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[12px] font-medium text-[#64748B]">
+                Total Customers
+              </p>
+              <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                248
+              </p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 12%</p>
+            </div>
+          </div>
+          <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
+            <defs>
+              <linearGradient id="custGreen1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10B981" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M2 30 L 18 24 L 34 26 L 52 16 L 68 18 L 82 6 L 82 34 L 2 34 Z"
+              fill="url(#custGreen1)"
+            />
+            <path
+              d="M2 30 L 18 24 L 34 26 L 52 16 L 68 18 L 82 6"
+              stroke="#0A7B56"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
 
-        <div className="bos-card p-3.5">
-          <p className="text-[11.5px] font-medium text-[#64748B]">Active Repeat Buyers</p>
-          <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
-            {Math.max(1, Math.round(summary.totalCustomers * 0.72))}
-          </p>
-          <p className="text-[11px] text-[#64748B]">72% retention rate</p>
+        {/* Card 2: Total Receivable */}
+        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
+              <Wallet className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[12px] font-medium text-[#64748B]">
+                Total Receivable
+              </p>
+              <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                {currencySymbol} 48,320
+              </p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">↑ 8%</p>
+            </div>
+          </div>
+          <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
+            <defs>
+              <linearGradient id="custRed1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#EF4444" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M2 30 L 18 25 L 34 27 L 52 16 L 68 19 L 82 7 L 82 34 L 2 34 Z"
+              fill="url(#custRed1)"
+            />
+            <path
+              d="M2 30 L 18 25 L 34 27 L 52 16 L 68 19 L 82 7"
+              stroke="#EF4444"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
 
-        <div className="bos-card p-3.5 border-red-100">
-          <p className="text-[11.5px] font-medium text-[#64748B]">Total Khata Receivable</p>
-          <p className="mt-1 text-[22px] font-extrabold text-red-600">
-            {formatBosCurrency(summary.totalReceivable, currencySymbol)}
-          </p>
-          <p className="text-[11px] font-semibold text-red-600">
-            &ldquo;You&apos;ll Get&rdquo; • {summary.receivableCount} customers
-          </p>
+        {/* Card 3: Total Received */}
+        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A7B56]">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[12px] font-medium text-[#64748B]">
+                Total Received
+              </p>
+              <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                {currencySymbol} 1,24,580
+              </p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 24%</p>
+            </div>
+          </div>
+          <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
+            <defs>
+              <linearGradient id="custGreen2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10B981" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#10B981" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M2 30 L 18 24 L 34 26 L 52 16 L 68 18 L 82 6 L 82 34 L 2 34 Z"
+              fill="url(#custGreen2)"
+            />
+            <path
+              d="M2 30 L 18 24 L 34 26 L 52 16 L 68 18 L 82 6"
+              stroke="#0A7B56"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
 
-        <div className="bos-card p-3.5">
-          <p className="text-[11.5px] font-medium text-[#64748B]">Total Advance / Credit</p>
-          <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
-            {formatBosCurrency(summary.totalAdvance || 6400, currencySymbol)}
-          </p>
-          <p className="text-[11px] text-[#0A6847]">
-            &ldquo;You&apos;ll Give&rdquo; • {summary.advanceCount || 3} customers
-          </p>
-        </div>
-
-        <div className="bos-card p-3.5 col-span-2 lg:col-span-1">
-          <p className="text-[11.5px] font-medium text-[#64748B]">Repeat Customer Rate</p>
-          <p className="mt-1 text-[22px] font-extrabold text-[#111827]">68.4%</p>
-          <p className="text-[11px] text-[#64748B]">
-            Avg Spend: {formatBosCurrency(summary.avgSpend, currencySymbol)}
-          </p>
+        {/* Card 4: Overdue Amount */}
+        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[12px] font-medium text-[#64748B]">
+                Overdue Amount
+              </p>
+              <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                {currencySymbol} 12,450
+              </p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">↑ 18%</p>
+            </div>
+          </div>
+          <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
+            <defs>
+              <linearGradient id="custRed2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#EF4444" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="#EF4444" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M2 30 L 18 25 L 34 27 L 52 16 L 68 19 L 82 7 L 82 34 L 2 34 Z"
+              fill="url(#custRed2)"
+            />
+            <path
+              d="M2 30 L 18 25 L 34 27 L 52 16 L 68 19 L 82 7"
+              stroke="#EF4444"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
       </div>
 
-      {/* Split Layout: Customer & Khata Table (8 cols) + Right Customer 360 & Khata Ledger (4 cols) */}
+      {/* Main Split Workspace: Left Customers Table (8 cols) + Right Customer Inspector (4 cols) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
-        <div className="bos-card p-4 lg:col-span-8 space-y-3.5">
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1">
+        {/* Left Panel: Sub-Tabs, Filter Toolbar, Table & Pagination */}
+        <div className="lg:col-span-8 rounded-2xl border border-[#DCE9E3] bg-white shadow-2xs overflow-hidden">
+          {/* Underline Sub-Tabs with Counts + More Filters */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EBF2EE] px-4 pt-2">
+            <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
+              {(
+                [
+                  { id: 'all', label: 'All Customers', count: 248 },
+                  { id: 'credit', label: 'Credit Customers', count: 62 },
+                  { id: 'regular', label: 'Regular Customers', count: 156 },
+                  { id: 'new', label: 'New Customers', count: 30 },
+                ] as const
+              ).map((tab) => {
+                const active = subTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSubTab(tab.id)}
+                    className={`relative inline-flex shrink-0 items-center gap-2 pb-3 pt-1 text-[13px] transition cursor-pointer ${
+                      active
+                        ? 'font-bold text-[#0A6847]'
+                        : 'font-medium text-[#475569] hover:text-[#111827]'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.2 text-[11px] font-bold ${
+                        active
+                          ? 'bg-[#0A6847] text-white'
+                          : 'bg-[#EEF2F6] text-[#475569]'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                    {active && (
+                      <span className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-full bg-[#0A6847]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSubTab('all');
+                setGroupFilter('all');
+                setStatusFilter('all');
+                setLocationFilter('all');
+                setSearchQuery('');
+              }}
+              className="mb-1.5 inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-medium text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 text-[#64748B]" />
+              <span>More Filters</span>
+            </button>
+          </div>
+
+          {/* Search & Dropdown Filter Bar */}
+          <div className="flex flex-wrap items-center gap-2 border-b border-[#EBF2EE] px-4 py-3">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#64748B]" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search customer by name, mobile (+91), GSTIN, or area..."
-                className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 pl-9 pr-3 text-[13px] text-[#111827] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+                placeholder="Search by name, phone, or customer code..."
+                className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] pl-9 pr-3 text-[12.5px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={segmentFilter}
-                onChange={(e) => setSegmentFilter(e.target.value as typeof segmentFilter)}
-                className="rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-medium text-[#334155]"
-              >
-                <option value="All">Segment: All</option>
-                <option value="VIP">VIP</option>
-                <option value="Regular">Regular</option>
-                <option value="Wholesale">Wholesale</option>
-                <option value="New">New</option>
-              </select>
+            <select
+              aria-label="Customer group filter"
+              value={groupFilter}
+              onChange={(e) => setGroupFilter(e.target.value)}
+              className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
+            >
+              <option value="all">All Groups</option>
+              <option value="Retail Customer">Retail Customer</option>
+              <option value="Wholesale Buyer">Wholesale Buyer</option>
+            </select>
 
-              <select
-                value={khataFilter}
-                onChange={(e) => setKhataFilter(e.target.value as typeof khataFilter)}
-                className="rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-medium text-[#334155]"
-              >
-                <option value="all">Khata Status: All</option>
-                <option value="receivable">Due (You&apos;ll Get)</option>
-                <option value="settled">Settled</option>
-                <option value="advance">Advance</option>
-              </select>
-            </div>
+            <select
+              aria-label="Customer status filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
+            >
+              <option value="all">All Status</option>
+              <option value="Due">Due</option>
+              <option value="Paid">Paid</option>
+              <option value="Overdue">Overdue</option>
+            </select>
+
+            <select
+              aria-label="Location filter"
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
+            >
+              <option value="all">All Locations</option>
+              <option value="Delhi">Delhi</option>
+              <option value="Gurugram">Gurugram</option>
+              <option value="Noida">Noida</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {}}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0A6847] text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+              title="Grid View"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
           </div>
 
+          {/* Customers & Khata Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#E4EFEA] text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                  <th className="py-2.5 pr-2">Customer</th>
-                  <th className="py-2.5 px-2">Phone & Location</th>
-                  <th className="py-2.5 px-2">Segment</th>
-                  <th className="py-2.5 px-2">Orders</th>
-                  <th className="py-2.5 px-2">Total Spent</th>
-                  <th className="py-2.5 px-2">Khata Balance</th>
-                  <th className="py-2.5 px-2">Last Visit</th>
-                  <th className="py-2.5 pl-2 text-right">Actions</th>
+                <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11.5px] font-semibold text-[#475569]">
+                  <th className="w-10 py-3 pl-4 pr-2">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all customers"
+                      checked={
+                        visibleRows.length > 0 &&
+                        selectedRowIds.length === visibleRows.length
+                      }
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-[#CBD5E1] accent-[#0A6847] cursor-pointer"
+                    />
+                  </th>
+                  <th className="py-3 px-2.5">Customer</th>
+                  <th className="py-3 px-2.5">Phone</th>
+                  <th className="py-3 px-2.5">Total Purchases</th>
+                  <th className="py-3 px-2.5">Total Paid</th>
+                  <th className="py-3 px-2.5">Balance ({currencySymbol})</th>
+                  <th className="py-3 px-2.5">Status</th>
+                  <th className="py-3 pl-2 pr-4 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#F1F6F3] text-[12.5px]">
-                {filteredCustomers.map((customer) => {
-                  const isSelected = selectedCustomer?.id === customer.id;
-                  const segCls =
-                    customer.segment === 'VIP'
-                      ? 'bg-purple-50 text-purple-700'
-                      : customer.segment === 'Wholesale'
-                        ? 'bg-amber-50 text-amber-700'
-                        : customer.segment === 'New'
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'bg-[#E6F6F0] text-[#0A6847]';
+              <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                {visibleRows.map((row) => {
+                  const isSelected = selectedCustomer?.id === row.id;
+                  const isChecked = selectedRowIds.includes(row.id);
+
+                  const statusPillCls =
+                    row.status === 'Paid'
+                      ? 'bg-[#E6F6F0] text-[#0A7B56]'
+                      : 'bg-[#FEE2E2] text-[#DC2626]';
 
                   return (
                     <tr
-                      key={customer.id}
-                      onClick={() => setSelectedCustomerId(customer.id)}
+                      key={row.id}
+                      onClick={() => setSelectedCustomerId(row.id)}
                       className={`cursor-pointer transition ${
-                        isSelected ? 'bg-[#E6F6F0]/60' : 'hover:bg-[#F8FCFA]'
+                        isSelected ? 'bg-[#F1FAF5]' : 'hover:bg-[#F9FCFA]'
                       }`}
                     >
-                      <td className="py-3 pr-2">
+                      <td
+                        className="py-2.5 pl-4 pr-2"
+                        onClick={(e) => toggleSelectRow(row.id, e)}
+                      >
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.name}`}
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="h-4 w-4 rounded border-[#CBD5E1] accent-[#0A6847] cursor-pointer"
+                        />
+                      </td>
+
+                      {/* Customer Avatar + Name + Code */}
+                      <td className="py-2.5 px-2.5">
                         <div className="flex items-center gap-2.5">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F6F0] text-[11.5px] font-bold text-[#0A6847]">
-                            {getInitials(customer.name)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-[#111827]">{customer.name}</p>
-                            <p className="text-[11px] text-[#64748B]">
-                              {customer.loyaltyPoints} Loyalty Pts
+                          <CustomerRowAvatar
+                            styleType={row.avatarStyle}
+                            name={row.name}
+                          />
+                          <div className="min-w-0">
+                            <p className="font-bold text-[#111827] truncate">
+                              {row.name}
+                            </p>
+                            <p className="text-[11px] font-medium text-[#64748B]">
+                              {row.code}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="py-3 px-2">
-                        <p className="font-medium text-[#334155]">{customer.phone}</p>
-                        <p className="text-[11px] text-[#64748B] truncate max-w-[140px]">
-                          {customer.address || 'Local Area'}
-                        </p>
+
+                      {/* Phone */}
+                      <td className="py-2.5 px-2.5 font-medium text-[#334155]">
+                        {row.phone}
                       </td>
-                      <td className="py-3 px-2">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${segCls}`}>
-                          {customer.segment}
+
+                      {/* Total Purchases */}
+                      <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
+                        {formatCustAmount(row.totalPurchases, currencySymbol)}
+                      </td>
+
+                      {/* Total Paid */}
+                      <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
+                        {formatCustAmount(row.totalPaid, currencySymbol)}
+                      </td>
+
+                      {/* Balance */}
+                      <td className="py-2.5 px-2.5">
+                        <span
+                          className={`font-extrabold ${
+                            row.balance === 0 ? 'text-[#0A7B56]' : 'text-[#111827]'
+                          }`}
+                        >
+                          {formatCustAmount(row.balance, currencySymbol)}
                         </span>
                       </td>
-                      <td className="py-3 px-2 font-semibold text-[#334155]">
-                        {customer.ordersCount} orders
+
+                      {/* Status */}
+                      <td className="py-2.5 px-2.5">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusPillCls}`}
+                        >
+                          {row.status}
+                        </span>
                       </td>
-                      <td className="py-3 px-2 font-bold text-[#111827]">
-                        {formatBosCurrency(customer.totalSpent, currencySymbol)}
-                      </td>
-                      <td className="py-3 px-2">
-                        {customer.khataBalance > 0 ? (
-                          <div>
-                            <span className="font-extrabold text-red-600">
-                              {formatBosCurrency(customer.khataBalance, currencySymbol)}
-                            </span>
-                            <span className="ml-1 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-bold text-red-600">
-                              You&apos;ll Get
-                            </span>
-                          </div>
-                        ) : customer.khataBalance < 0 ? (
-                          <div>
-                            <span className="font-extrabold text-[#0A6847]">
-                              {formatBosCurrency(Math.abs(customer.khataBalance), currencySymbol)}
-                            </span>
-                            <span className="ml-1 rounded bg-[#E6F6F0] px-1.5 py-0.5 text-[10px] font-bold text-[#0A6847]">
-                              Advance
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-[11.5px] font-semibold text-[#64748B]">
-                            {currencySymbol}0 Settled
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-2 text-[11.5px] text-[#64748B]">
-                        {customer.lastVisit}
-                      </td>
-                      <td className="py-3 pl-2 text-right">
-                        {customer.khataBalance > 0 ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSendWhatsAppReminder(customer);
-                            }}
-                            className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-100"
-                          >
-                            Remind
-                          </button>
-                        ) : (
-                          <span className="text-[11.5px] font-semibold text-[#0A6847]">View</span>
-                        )}
+
+                      {/* Actions Kebab */}
+                      <td className="py-2.5 pl-2 pr-4 text-center">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCustomerId(row.id);
+                          }}
+                          aria-label={`Actions for ${row.name}`}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#EBF2EE] hover:text-[#111827]"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -460,180 +1182,430 @@ export function BosCustomersKhataWorkstation({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer */}
+          <div className="flex flex-col gap-2.5 border-t border-[#EBF2EE] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[12.5px] font-medium text-[#64748B]">
+              Showing 1–{Math.min(pageSize, visibleRows.length)} of 248 customers
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                {[1, 2, 3, 4, 5].map((pg) => (
+                  <button
+                    key={pg}
+                    type="button"
+                    onClick={() => setCurrentPage(pg)}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-[12px] font-bold transition ${
+                      currentPage === pg
+                        ? 'bg-[#0A6847] text-white'
+                        : 'border border-[#DCE9E3] bg-white text-[#334155] hover:bg-[#F4F8F6]'
+                    }`}
+                  >
+                    {pg}
+                  </button>
+                ))}
+                <span className="px-1 text-[12px] text-[#64748B]">...</span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(25)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[12px] font-bold text-[#334155] hover:bg-[#F4F8F6]"
+                >
+                  25
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(25, p + 1))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              <select
+                aria-label="Customers per page"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="h-7 rounded-lg border border-[#DCE9E3] bg-white px-2 text-[12px] font-medium text-[#334155]"
+              >
+                <option value={10}>10 / page</option>
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Right: Customer 360 & Khata Ledger Inspector */}
+        {/* Right Panel: Customer Profile & Khata Inspector */}
         {selectedCustomer && (
-          <div className="bos-card p-4 lg:col-span-4 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3">
-              <h3 className="text-[14.5px] font-bold text-[#111827]">
-                Customer 360 & Khata Ledger
-              </h3>
+          <div className="lg:col-span-4 rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
+            {/* Profile Header */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <CustomerRowAvatar
+                  styleType={selectedCustomer.avatarStyle}
+                  name={selectedCustomer.name}
+                  size="lg"
+                />
+                <div>
+                  <h2 className="text-[17px] font-extrabold text-[#111827] leading-snug">
+                    {selectedCustomer.name}
+                  </h2>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <span className="text-[12px] font-medium text-[#64748B]">
+                      {selectedCustomer.code}
+                    </span>
+                    <span className="rounded-full bg-[#E6F6F0] px-2 py-0.2 text-[11px] font-bold text-[#0A7B56]">
+                      {selectedCustomer.segmentBadge}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    showToastMsg(`Editing profile for ${selectedCustomer.name}`)
+                  }
+                  className="inline-flex items-center gap-1 rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Edit3 className="h-3.5 w-3.5 text-[#0A7B56]" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {}}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                  aria-label="More customer options"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Underline Inspector Tabs: Overview | Transactions | Orders | Notes | Settings */}
+            <div className="flex items-center gap-4 border-b border-[#EBF2EE] overflow-x-auto no-scrollbar">
+              {(
+                [
+                  { id: 'overview', label: 'Overview' },
+                  { id: 'transactions', label: 'Transactions' },
+                  { id: 'orders', label: 'Orders' },
+                  { id: 'notes', label: 'Notes' },
+                  { id: 'settings', label: 'Settings' },
+                ] as const
+              ).map((t) => {
+                const active = inspectorTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setInspectorTab(t.id)}
+                    className={`relative shrink-0 pb-2 text-[12.5px] transition cursor-pointer ${
+                      active
+                        ? 'font-bold text-[#0A6847]'
+                        : 'font-medium text-[#64748B] hover:text-[#111827]'
+                    }`}
+                  >
+                    <span>{t.label}</span>
+                    {active && (
+                      <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[#0A6847]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Contact Info & Tag Pills */}
+            <div className="space-y-2 text-[12.5px]">
+              <div className="flex items-center gap-2 text-[#1E293B]">
+                <Phone className="h-3.5 w-3.5 text-[#64748B]" />
+                <span className="font-semibold">{selectedCustomer.phone}</span>
+                <button
+                  type="button"
+                  onClick={() => handleSendWhatsAppReminder(selectedCustomer)}
+                  className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-[#10B981] text-white"
+                  title="WhatsApp Customer"
+                >
+                  <MessageCircle className="h-3 w-3" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 text-[#475569]">
+                <Mail className="h-3.5 w-3.5 text-[#64748B]" />
+                <span>{selectedCustomer.email}</span>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-[#475569]">
+                <span className="flex items-center gap-2 truncate">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-[#64748B]" />
+                  <span className="truncate">{selectedCustomer.address}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.open(
+                      `https://maps.google.com/?q=${encodeURIComponent(selectedCustomer.address)}`,
+                      '_blank',
+                      'noopener,noreferrer',
+                    )
+                  }
+                  className="text-[11.5px] font-semibold text-[#2563EB] hover:underline shrink-0 cursor-pointer"
+                >
+                  View on Map
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2ECE7] bg-[#F8FCFA] px-2.5 py-1 text-[11.5px] font-medium text-[#334155]">
+                  <Store className="h-3 w-3 text-[#64748B]" />
+                  <span>{selectedCustomer.groupTag}</span>
+                </span>
+                {(customTagsByCustomer[selectedCustomer.id] || []).map((tg) => (
+                  <span
+                    key={tg}
+                    className="inline-flex items-center rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-semibold text-[#0A6847]"
+                  >
+                    {tg}
+                  </span>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomTagsByCustomer((prev) => ({
+                      ...prev,
+                      [selectedCustomer.id]: [
+                        ...(prev[selectedCustomer.id] || []),
+                        'Monthly Khata',
+                      ],
+                    }));
+                    showToastMsg(`Added tag to ${selectedCustomer.name}`);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#E2ECE7] bg-white px-2.5 py-1 text-[11.5px] font-medium text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Add Tag</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3-Column Financial Summary Box */}
+            <div className="grid grid-cols-3 divide-x divide-[#EBF2EE] rounded-xl border border-[#EBF2EE] bg-[#F9FCFA] p-3">
+              <div className="pr-2">
+                <p className="text-[11px] font-medium text-[#64748B]">
+                  Total Purchases
+                </p>
+                <p className="mt-0.5 text-[16px] font-extrabold text-[#111827]">
+                  {formatCustAmount(selectedCustomer.totalPurchases, currencySymbol)}
+                </p>
+              </div>
+              <div className="px-2">
+                <p className="text-[11px] font-medium text-[#64748B]">Total Paid</p>
+                <p className="mt-0.5 text-[16px] font-extrabold text-[#111827]">
+                  {formatCustAmount(selectedCustomer.totalPaid, currencySymbol)}
+                </p>
+              </div>
+              <div className="pl-2">
+                <p className="text-[11px] font-medium text-[#64748B]">Balance</p>
+                <p
+                  className={`mt-0.5 text-[16px] font-extrabold ${
+                    selectedCustomer.balance > 0
+                      ? 'text-[#EF4444]'
+                      : 'text-[#0A7B56]'
+                  }`}
+                >
+                  {formatCustAmount(selectedCustomer.balance, currencySymbol)}
+                </p>
+              </div>
+            </div>
+
+            {/* Inline Record Payment Drawer */}
+            {showPaymentModal && (
+              <div className="rounded-xl border border-[#BCE3D4] bg-[#F2FAF6] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#0A6847]">
+                    Record Payment ({selectedCustomer.name})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentModal(false)}
+                    className="text-[11px] font-semibold text-[#64748B]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={paymentAmountInput}
+                    onChange={(e) => setPaymentAmountInput(e.target.value)}
+                    className="w-28 rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12.5px] font-bold"
+                  />
+                  <select
+                    value={paymentModeChoice}
+                    onChange={(e) =>
+                      setPaymentModeChoice(e.target.value as 'upi' | 'cash')
+                    }
+                    className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1.5 text-[12px] font-semibold"
+                  >
+                    <option value="upi">UPI</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleRecordPaymentSubmit()}
+                    className="rounded-lg bg-[#0A6847] px-3 py-1.5 text-[12px] font-semibold text-white"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Inline Adjust Balance Drawer */}
+            {showAdjustModal && (
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] font-bold text-[#1E293B]">
+                    Add Credit / Adjust Balance ({currencySymbol})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdjustModal(false)}
+                    className="text-[11px] font-semibold text-[#64748B]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={adjustAmountInput}
+                    onChange={(e) => setAdjustAmountInput(e.target.value)}
+                    className="w-28 rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12.5px] font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAdjustBalanceSubmit()}
+                    className="rounded-lg bg-[#0A6847] px-3 py-1.5 text-[12px] font-semibold text-white"
+                  >
+                    Apply
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 2x2 Action Buttons Grid */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPaymentModal((prev) => !prev);
+                  setShowAdjustModal(false);
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0A6847] px-3 py-2.5 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+              >
+                <Send className="h-3.5 w-3.5" />
+                <span>Record Payment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  showToastMsg(`Invoice draft opened for ${selectedCustomer.name}`)
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#BCE3D4] bg-[#F2FAF6] px-3 py-2.5 text-[12.5px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] transition cursor-pointer"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                <span>Create Invoice</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAdjustModal((prev) => !prev);
+                  setShowPaymentModal(false);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-[12.5px] font-semibold text-[#334155] hover:bg-[#F1F5F9] transition cursor-pointer"
+              >
+                <span className="font-bold text-[#475569]">{currencySymbol}</span>
+                <span>Adjust Balance</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleSendWhatsAppReminder(selectedCustomer)}
-                className="inline-flex items-center gap-1 rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-semibold text-[#0A6847]"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2.5 text-[12.5px] font-semibold text-[#334155] hover:bg-[#F1F5F9] transition cursor-pointer"
               >
-                <MessageCircle className="h-3.5 w-3.5" />
-                <span>WhatsApp</span>
+                <Send className="h-3.5 w-3.5 text-[#475569]" />
+                <span>Send Reminder</span>
               </button>
             </div>
 
-            {/* Customer Profile Summary */}
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-[14px] font-bold text-white">
-                {getInitials(selectedCustomer.name)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <h4 className="text-[15.5px] font-extrabold text-[#111827]">
-                    {selectedCustomer.name}
-                  </h4>
-                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10.5px] font-bold text-purple-700">
-                    {selectedCustomer.segment}
-                  </span>
-                  <span className="rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[10.5px] font-bold text-[#0A6847]">
-                    ★ {selectedCustomer.loyaltyPoints} Pts
-                  </span>
-                </div>
-                <p className="text-[12px] text-[#475569] mt-0.5">{selectedCustomer.phone}</p>
-                {selectedCustomer.address && (
-                  <p className="text-[11.5px] text-[#64748B]">{selectedCustomer.address}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Khata Balance Banner */}
-            <div
-              className={`rounded-xl border p-3.5 ${
-                selectedCustomer.khataBalance > 0
-                  ? 'border-red-200 bg-red-50/50'
-                  : 'border-[#BCE3D4] bg-[#E6F6F0]/50'
-              }`}
-            >
+            {/* Recent Transactions List */}
+            <div className="pt-1 space-y-2.5">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B]">
-                    {selectedCustomer.khataBalance > 0
-                      ? "Khata Balance (You'll Get)"
-                      : 'Khata Balance'}
-                  </p>
-                  <p
-                    className={`mt-0.5 text-[24px] font-extrabold ${
-                      selectedCustomer.khataBalance > 0 ? 'text-red-600' : 'text-[#0A6847]'
-                    }`}
-                  >
-                    {formatBosCurrency(Math.abs(selectedCustomer.khataBalance), currencySymbol)}
-                  </p>
-                </div>
+                <h3 className="text-[13.5px] font-extrabold text-[#111827]">
+                  Recent Transactions
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setInspectorTab('transactions')}
+                  className="text-[12px] font-bold text-[#0A7B56] hover:underline cursor-pointer"
+                >
+                  View all
+                </button>
+              </div>
 
-                {selectedCustomer.khataBalance > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => handleSendWhatsAppReminder(selectedCustomer)}
-                    className="rounded-xl border border-red-200 bg-white px-3 py-1.5 text-[11.5px] font-bold text-red-600 shadow-2xs hover:bg-red-50"
-                  >
-                    Send Reminder
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Lifetime Metrics */}
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                <p className="text-[10.5px] text-[#64748B]">Total Spent</p>
-                <p className="text-[13.5px] font-extrabold text-[#111827]">
-                  {formatBosCurrency(selectedCustomer.totalSpent, currencySymbol)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                <p className="text-[10.5px] text-[#64748B]">Total Orders</p>
-                <p className="text-[13.5px] font-extrabold text-[#111827]">
-                  {selectedCustomer.ordersCount}
-                </p>
-              </div>
-              <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                <p className="text-[10.5px] text-[#64748B]">Avg Order</p>
-                <p className="text-[13.5px] font-extrabold text-[#111827]">
-                  {formatBosCurrency(
-                    Math.round(selectedCustomer.totalSpent / Math.max(1, selectedCustomer.ordersCount)),
-                    currencySymbol,
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* Recent Khata & Order Ledger */}
-            <div className="rounded-xl border border-[#E4EFEA] bg-white p-3">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] mb-2">
-                Recent Khata & Order Ledger
-              </p>
-              <div className="max-h-44 overflow-y-auto divide-y divide-[#F1F6F3] text-[12px]">
-                {customerLedger.length === 0 ? (
-                  <p className="py-4 text-center text-[#94A3B8]">
-                    No recent Khata entries for this customer.
-                  </p>
-                ) : (
-                  customerLedger.map((tx) => (
-                    <div key={tx.id} className="flex items-center justify-between py-2">
-                      <div>
-                        <p className="font-semibold text-[#111827]">{tx.note}</p>
-                        <p className="text-[10.5px] text-[#64748B]">
-                          {tx.createdAt} • {tx.mode.toUpperCase()}
-                        </p>
+              <div className="divide-y divide-[#EEF5F1]">
+                {selectedCustomer.transactions.map((tx) => {
+                  const isIn = tx.direction === 'in';
+                  return (
+                    <div
+                      key={tx.id}
+                      className="flex items-center justify-between gap-2 py-2.5"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                            isIn
+                              ? 'bg-[#E6F6F0] text-[#0A7B56]'
+                              : 'bg-[#FEE2E2] text-[#EF4444]'
+                          }`}
+                        >
+                          {isIn ? (
+                            <ArrowUp className="h-3.5 w-3.5 stroke-[2.5]" />
+                          ) : (
+                            <ArrowDown className="h-3.5 w-3.5 stroke-[2.5]" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] font-bold text-[#111827] truncate">
+                            {tx.title}
+                          </p>
+                          <p className="text-[11px] text-[#64748B] truncate">
+                            {tx.subtitle}
+                          </p>
+                        </div>
                       </div>
+
                       <span
-                        className={`font-bold ${
-                          tx.type === 'got' ? 'text-[#0A6847]' : 'text-red-600'
+                        className={`text-[13px] font-extrabold shrink-0 ${
+                          isIn ? 'text-[#0A7B56]' : 'text-[#EF4444]'
                         }`}
                       >
-                        {tx.type === 'got' ? '+' : '-'}
-                        {formatBosCurrency(tx.amount, currencySymbol)}{' '}
-                        <span className="text-[10px] font-normal">
-                          ({tx.type === 'got' ? 'Paid' : 'Credit'})
-                        </span>
+                        {isIn ? '+' : '-'} {formatCustAmount(tx.amount, currencySymbol)}
                       </span>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Add Khata Entry Form */}
-            <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2.5">
-              <p className="text-[11.5px] font-bold text-[#111827]">Add Khata Entry</p>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="number"
-                  value={entryAmount}
-                  onChange={(e) => setEntryAmount(e.target.value)}
-                  placeholder={`Amount (${currencySymbol})`}
-                  className="rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-bold text-[#111827]"
-                />
-                <input
-                  type="text"
-                  value={entryNote}
-                  onChange={(e) => setEntryNote(e.target.value)}
-                  placeholder="Note / Bill #"
-                  className="rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] text-[#111827]"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => void handleSubmitKhataEntry('gave')}
-                  className="flex items-center justify-center gap-1 rounded-xl border border-red-200 bg-red-50 py-2 text-[12px] font-bold text-red-600 hover:bg-red-100"
-                >
-                  <span>- You Gave ({currencySymbol})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void handleSubmitKhataEntry('got')}
-                  className="bos-btn-primary flex items-center justify-center gap-1 rounded-xl py-2 text-[12px]"
-                >
-                  <span>+ You Got ({currencySymbol})</span>
-                </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -643,9 +1615,11 @@ export function BosCustomersKhataWorkstation({
       {/* Add Customer Modal */}
       {showAddCustomerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3">
-              <h3 className="text-[16px] font-bold text-[#111827]">Add New Customer</h3>
+          <div className="w-full max-w-md rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <h3 className="text-[16px] font-bold text-[#111827]">
+                Add New Customer
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowAddCustomerModal(false)}
@@ -655,73 +1629,42 @@ export function BosCustomersKhataWorkstation({
               </button>
             </div>
 
-            <form onSubmit={handleCreateCustomerSubmit} className="mt-4 space-y-3 text-[13px]">
+            <form onSubmit={handleCreateCustomerSubmit} className="mt-4 space-y-3">
               <div>
-                <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
+                <label className="block text-[11.5px] font-semibold text-[#334155]">
                   Customer Name *
                 </label>
                 <input
                   type="text"
                   required
                   value={newCustomerForm.name}
-                  onChange={(e) => setNewCustomerForm((s) => ({ ...s, name: e.target.value }))}
+                  onChange={(e) =>
+                    setNewCustomerForm((s) => ({ ...s, name: e.target.value }))
+                  }
                   placeholder="e.g. Rajesh Sharma"
-                  className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2"
+                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
-                    Mobile Number *
+                  <label className="block text-[11.5px] font-semibold text-[#334155]">
+                    Phone Number *
                   </label>
                   <input
                     type="text"
                     required
                     value={newCustomerForm.phone}
-                    onChange={(e) => setNewCustomerForm((s) => ({ ...s, phone: e.target.value }))}
-                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2"
+                    onChange={(e) =>
+                      setNewCustomerForm((s) => ({ ...s, phone: e.target.value }))
+                    }
+                    placeholder="9876543210"
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
-                    Segment
-                  </label>
-                  <select
-                    value={newCustomerForm.segment}
-                    onChange={(e) =>
-                      setNewCustomerForm((s) => ({
-                        ...s,
-                        segment: e.target.value as BosCustomer['segment'],
-                      }))
-                    }
-                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 bg-white"
-                  >
-                    <option value="Regular">Regular</option>
-                    <option value="VIP">VIP</option>
-                    <option value="Wholesale">Wholesale</option>
-                    <option value="New">New</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
-                  Address / Area
-                </label>
-                <input
-                  type="text"
-                  value={newCustomerForm.address}
-                  onChange={(e) => setNewCustomerForm((s) => ({ ...s, address: e.target.value }))}
-                  placeholder="e.g. Indiranagar, Bengaluru"
-                  className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
-                    Opening Khata Due ({currencySymbol})
+                  <label className="block text-[11.5px] font-semibold text-[#334155]">
+                    Opening Khata ({currencySymbol})
                   </label>
                   <input
                     type="number"
@@ -732,26 +1675,42 @@ export function BosCustomersKhataWorkstation({
                         openingKhata: Number(e.target.value),
                       }))
                     }
-                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
-                    GSTIN (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newCustomerForm.gstin}
-                    onChange={(e) =>
-                      setNewCustomerForm((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))
-                    }
-                    placeholder="29ABCDE1234F1Z5"
-                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 uppercase"
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#EDF4F0]">
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155]">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  value={newCustomerForm.email}
+                  onChange={(e) =>
+                    setNewCustomerForm((s) => ({ ...s, email: e.target.value }))
+                  }
+                  placeholder="customer@gmail.com"
+                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155]">
+                  Address
+                </label>
+                <input
+                  type="text"
+                  value={newCustomerForm.address}
+                  onChange={(e) =>
+                    setNewCustomerForm((s) => ({ ...s, address: e.target.value }))
+                  }
+                  placeholder="123 Green Park, Delhi - 110016"
+                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
                 <button
                   type="button"
                   onClick={() => setShowAddCustomerModal(false)}
@@ -761,9 +1720,9 @@ export function BosCustomersKhataWorkstation({
                 </button>
                 <button
                   type="submit"
-                  className="bos-btn-primary rounded-xl px-5 py-2 text-[12.5px]"
+                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[#085238]"
                 >
-                  Save Customer
+                  Add Customer
                 </button>
               </div>
             </form>

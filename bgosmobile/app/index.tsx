@@ -30,11 +30,11 @@ export default function Index() {
           <Image
             source={require('../assets/app-icon.png')}
             style={styles.icon}
-            accessibilityLabel="BGOS ribbon logo"
+            accessibilityLabel="BGOS lowercase b logo"
           />
         </View>
 
-        <Text style={styles.name}>BGOS</Text>
+        <Text style={styles.name}>bgos</Text>
         <Text style={styles.subtitle}>Business Growth OS</Text>
 
         <View style={styles.badgeRow}>

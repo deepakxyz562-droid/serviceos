@@ -40,19 +40,15 @@ export function Brand({ large = false, light = false }: { large?: boolean; light
   return (
     <View style={[ui.row, { gap: 8 }]}>
       <Image
-        source={require('../../assets/brand-mark.png')}
+        source={light ? require('../../assets/brand-mark-light.png') : require('../../assets/brand-mark.png')}
         style={{ width: large ? 54 : 28, height: large ? 54 : 28, resizeMode: 'contain' }}
         accessibilityIgnoresInvertColors
       />
       <View>
         <Text style={{ fontSize: large ? 32 : 19, fontWeight: '800', color: light ? '#FFFFFF' : colors.ink, letterSpacing: -0.8 }}>
-          BGOS
+          bgos
         </Text>
-        {large ? (
-          <Text style={{ fontSize: 11, fontWeight: '700', color: light ? '#99F6E4' : colors.brand, letterSpacing: 1.2 }}>
-            BUSINESS GROWTH OS
-          </Text>
-        ) : null}
+
       </View>
     </View>
   );

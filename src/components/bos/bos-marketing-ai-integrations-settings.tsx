@@ -2,20 +2,40 @@
 
 import React, { useEffect, useState } from 'react';
 import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
   Bot,
+  Briefcase,
   Building2,
+  Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
   CreditCard,
   Crown,
   ExternalLink,
   FileText,
   Gift,
   Globe,
+  HelpCircle,
+  Image as ImageIcon,
+  IndianRupee,
+  Mail,
+  MapPin,
   Megaphone,
   MessageCircle,
+  Mic,
+  MoreHorizontal,
+  MoreVertical,
   Package,
+  Palette,
+  Paperclip,
   Percent,
+  Phone,
+  Play,
   Plug,
   Plus,
   Printer,
@@ -24,12 +44,18 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  ShoppingCart,
+  Smile,
   Sparkles,
   Store,
   Tag,
+  Ticket,
   Truck,
+  Upload,
+  UserPlus,
   Users,
   Wallet,
+  X,
 } from 'lucide-react';
 import {
   type BosCoupon,
@@ -72,33 +98,131 @@ export function BosMarketingAiIntegrationsSettings({
   const currencySymbol = storeSettings.currencySymbol || '₹';
   const [toast, setToast] = useState<string | null>(null);
 
-  /* Marketing state */
+  /* Marketing state (Matches Marketing & Promotions screenshot 1:1) */
   const [marketingTab, setMarketingTab] = useState<
-    'overview' | 'whatsapp' | 'coupons' | 'loyalty' | 'templates'
-  >('overview');
-  const [campaignTitle, setCampaignTitle] = useState('Weekend Super Saver — Flat 15% OFF');
-  const [campaignAudience, setCampaignAudience] = useState('All Active Customers (684)');
-  const [campaignCoupon, setCampaignCoupon] = useState('WEEKEND15 (15% OFF)');
+    | 'Overview'
+    | 'Offers & Discounts'
+    | 'WhatsApp Campaigns'
+    | 'Coupons'
+    | 'Loyalty Program'
+    | 'Customer Communication'
+    | 'Templates'
+  >('Overview');
+  const [previewChannel, setPreviewChannel] = useState<'WhatsApp' | 'SMS' | 'Email'>('WhatsApp');
+  const [createCampaignModalOpen, setCreateCampaignModalOpen] = useState(false);
+  const [createCouponModalOpen, setCreateCouponModalOpen] = useState(false);
+  const [campaignTitle, setCampaignTitle] = useState('Weekend Fresh Deals');
+  const [campaignDiscountText, setCampaignDiscountText] = useState('Up to 30% OFF');
+  const [campaignValidTill, setCampaignValidTill] = useState('15 Oct 2024');
+  const [campaignAudience, setCampaignAudience] = useState('All Customers');
+  const [campaignType, setCampaignType] = useState<'WhatsApp' | 'Discount' | 'Loyalty' | 'Coupon'>(
+    'WhatsApp',
+  );
   const [campaignText, setCampaignText] = useState(
-    `Hi {{customer_name}}! 🎉 Weekend Super Saver is LIVE at ${storeSettings.businessName}. Get Flat 15% OFF on Groceries & Personal Care. Use code: WEEKEND15.`,
+    'Fresh fruits, vegetables and daily essentials at special prices this weekend!',
   );
   const [newCouponCode, setNewCouponCode] = useState('');
-  const [newCouponValue, setNewCouponValue] = useState(15);
+  const [newCouponValue, setNewCouponValue] = useState(20);
   const [newCouponMinOrder, setNewCouponMinOrder] = useState(499);
-
-  /* AI Assistant state */
-  const [aiInput, setAiInput] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiMessages, setAiMessages] = useState<
-    Array<{ id: string; role: 'assistant' | 'user'; text: string; time: string }>
+  const [recentCampaigns, setRecentCampaigns] = useState<
+    Array<{
+      id: number;
+      name: string;
+      bannerTheme: 'fresh' | 'diwali' | 'arrivals' | 'loyalty' | 'clearance';
+      type: 'WhatsApp' | 'Discount' | 'Loyalty' | 'Coupon';
+      audience: string;
+      sent: string;
+      orders: number;
+      revenue: number;
+      status: string;
+      discountHeadline: string;
+      messageBody: string;
+      validTill: string;
+    }>
   >([
     {
-      id: 'ai-welcome',
-      role: 'assistant',
-      text: `Namaste! I'm your **BOS AI Business Copilot** for **${storeSettings.businessName}**.\n\nHere is a quick snapshot of your store right now:\n• **Catalog:** ${products.length} products (${products.filter((p) => p.stockQuantity <= 5).length} low stock alerts)\n• **Recent Orders:** ${orders.length} active orders\n• **Khata Receivables:** ${formatBosCurrency(customers.filter((c) => c.khataBalance > 0).reduce((s, c) => s + c.khataBalance, 0), currencySymbol)} across ${customers.filter((c) => c.khataBalance > 0).length} customers\n\nAsk me anything or click a quick business action below!`,
-      time: 'Just now',
+      id: 1,
+      name: 'Weekend Fresh Deals',
+      bannerTheme: 'fresh',
+      type: 'WhatsApp',
+      audience: 'All Customers',
+      sent: '1,250',
+      orders: 186,
+      revenue: 12480,
+      status: 'Completed',
+      discountHeadline: 'Up to 30% OFF',
+      messageBody: 'Fresh fruits, vegetables and daily essentials at special prices this weekend!',
+      validTill: '15 Oct 2024',
+    },
+    {
+      id: 2,
+      name: 'Diwali Special Offer',
+      bannerTheme: 'diwali' as const,
+      type: 'Discount' as const,
+      audience: 'All Customers',
+      sent: '980',
+      orders: 142,
+      revenue: 10560,
+      status: 'Completed',
+      discountHeadline: 'Flat 25% Festive OFF',
+      messageBody: 'Celebrate Diwali with special festive gift packs, dry fruits & sweets!',
+      validTill: '02 Nov 2024',
+    },
+    {
+      id: 3,
+      name: 'New Arrivals Alert',
+      bannerTheme: 'arrivals' as const,
+      type: 'WhatsApp' as const,
+      audience: 'VIP Customers',
+      sent: '320',
+      orders: 68,
+      revenue: 5780,
+      status: 'Completed',
+      discountHeadline: 'New Organic Range',
+      messageBody: 'Explore newly arrived organic staples, snacks & imported beverages in store!',
+      validTill: '20 Oct 2024',
+    },
+    {
+      id: 4,
+      name: 'Loyalty Points Reminder',
+      bannerTheme: 'loyalty' as const,
+      type: 'Loyalty' as const,
+      audience: 'Loyalty Members',
+      sent: '450',
+      orders: 56,
+      revenue: 3960,
+      status: 'Completed',
+      discountHeadline: '2X Reward Points',
+      messageBody: 'Redeem your BOS Loyalty Points on your next shopping bill before month end!',
+      validTill: '31 Oct 2024',
+    },
+    {
+      id: 5,
+      name: 'Clearance Sale',
+      bannerTheme: 'clearance' as const,
+      type: 'Coupon' as const,
+      audience: 'Selected Customers',
+      sent: '280',
+      orders: 34,
+      revenue: 1500,
+      status: 'Completed',
+      discountHeadline: 'Up to 50% OFF',
+      messageBody: 'Mega month-end clearance on snacks, personal care & home essentials!',
+      validTill: '28 Oct 2024',
     },
   ]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<number>(1);
+
+  /* AI Assistant state (Matches BOS AI Assistant screenshot 1:1) */
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [activeAiThreadId, setActiveAiThreadId] = useState<string>('todays-sales');
+  const [aiInsightsPeriod, setAiInsightsPeriod] = useState<'This Week' | 'This Month'>(
+    'This Week',
+  );
+  const [aiMessages, setAiMessages] = useState<
+    Array<{ id: string; role: 'assistant' | 'user'; text: string; time: string }>
+  >([]);
 
   /* Integrations state */
   const [integrationCategory, setIntegrationCategory] = useState('All Integrations');
@@ -114,10 +238,52 @@ export function BosMarketingAiIntegrationsSettings({
     zoho: false,
   });
 
-  /* Settings state */
+  /* Settings state (Matches Settings & Business Configuration screenshot) */
+  const [settingsTopTab, setSettingsTopTab] = useState<
+    | 'Business Profile'
+    | 'Store Settings'
+    | 'GST & Tax'
+    | 'Users & Staff'
+    | 'Invoice Templates'
+    | 'Notifications'
+    | 'Subscription'
+    | 'Security'
+    | 'Preferences'
+  >('Business Profile');
   const [settingsSection, setSettingsSection] = useState<
-    'profile' | 'pos' | 'gst' | 'payments' | 'staff' | 'plan'
-  >('profile');
+    | 'businessInfo'
+    | 'businessHours'
+    | 'locations'
+    | 'contact'
+    | 'logoBranding'
+    | 'businessType'
+    | 'documents'
+  >('businessInfo');
+  const [settingsBusinessName, setSettingsBusinessName] = useState('Ravi Store');
+  const [settingsBusinessType, setSettingsBusinessType] = useState('Grocery Store');
+  const [settingsOwnerName, setSettingsOwnerName] = useState('Ravi Kumar');
+  const [settingsPhoneNumber, setSettingsPhoneNumber] = useState('98765 43210');
+  const [settingsEmailAddress, setSettingsEmailAddress] = useState('ravi.store@gmail.com');
+  const [settingsWebsite, setSettingsWebsite] = useState('https://bos.fieseros.com/ravi-store');
+  const [settingsAddress, setSettingsAddress] = useState(
+    '123 Main Road, Sector 15, Noida, Uttar Pradesh, 201301',
+  );
+  const [settingsCity, setSettingsCity] = useState('Noida');
+  const [settingsState, setSettingsState] = useState('Uttar Pradesh');
+  const [settingsPinCode, setSettingsPinCode] = useState('201301');
+  const [settingsDescription, setSettingsDescription] = useState(
+    'Daily essentials, fresh groceries, snacks, beverages and home care products at best prices.',
+  );
+  const [settingsGstin, setSettingsGstin] = useState('09ABCDE1234F1Z5');
+  const [settingsRegType, setSettingsRegType] = useState('Regular');
+  const [settingsEInvoiceEnabled, setSettingsEInvoiceEnabled] = useState(true);
+  const [editingHours, setEditingHours] = useState(false);
+  const [defaultDayHours, setDefaultDayHours] = useState('9:00 AM - 10:00 PM');
+  const [gstModalOpen, setGstModalOpen] = useState(false);
+  const [inviteStaffModalOpen, setInviteStaffModalOpen] = useState(false);
+  const [inviteStaffName, setInviteStaffName] = useState('');
+  const [inviteStaffRole, setInviteStaffRole] = useState('Staff');
+  const [activeUsersCount, setActiveUsersCount] = useState(5);
 
   const generateSmartAiReply = (prompt: string): string => {
     const lower = prompt.toLowerCase();
@@ -209,480 +375,1653 @@ export function BosMarketingAiIntegrationsSettings({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, initialAiPrompt]);
 
-  /* 1. MARKETING MODE */
+  /* 1. MARKETING MODE — 1:1 Match with Marketing & Promotions Screenshot */
   if (mode === 'marketing') {
+    const activePreviewCampaign =
+      recentCampaigns.find((c) => c.id === selectedCampaignId) || recentCampaigns[0];
+
+    const renderCampaignBannerBadge = (
+      theme: 'fresh' | 'diwali' | 'arrivals' | 'loyalty' | 'clearance',
+    ) => {
+      switch (theme) {
+        case 'fresh':
+          return (
+            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-amber-300 bg-gradient-to-br from-[#FEF08A] via-[#FACC15] to-[#16A34A] shadow-2xs">
+              <span className="text-[12px] leading-none">🧺</span>
+              <span className="mt-0.5 rounded-xs bg-white/95 px-1 text-[6px] font-black uppercase text-[#15803D]">
+                30% OFF
+              </span>
+            </div>
+          );
+        case 'diwali':
+          return (
+            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-red-800 bg-gradient-to-br from-[#450A0A] via-[#991B1B] to-[#D97706] shadow-2xs">
+              <span className="text-[11px] leading-none">🪔</span>
+              <span className="mt-0.5 text-[6.5px] font-extrabold tracking-tight text-[#FEF08A]">
+                Diwali
+              </span>
+            </div>
+          );
+        case 'arrivals':
+          return (
+            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-amber-400 bg-gradient-to-b from-[#FDE047] to-[#EA580C] shadow-2xs">
+              <span className="text-[11px] leading-none">🛍️</span>
+              <span className="mt-0.5 rounded-xs bg-[#991B1B] px-1 text-[6px] font-black uppercase text-white">
+                NEW
+              </span>
+            </div>
+          );
+        case 'loyalty':
+          return (
+            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-emerald-700 bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#10B981] shadow-2xs">
+              <span className="text-[10px] leading-none">🎁</span>
+              <span className="mt-0.5 text-[6px] font-extrabold uppercase text-[#A7F3D0]">
+                LOYALTY
+              </span>
+            </div>
+          );
+        case 'clearance':
+          return (
+            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-red-600 bg-gradient-to-br from-[#DC2626] via-[#EA580C] to-[#FACC15] shadow-2xs">
+              <span className="rounded-xs bg-[#FEF08A] px-1 text-[6px] font-black uppercase text-[#991B1B]">
+                CLEARANCE
+              </span>
+              <span className="mt-0.5 text-[6.5px] font-black uppercase text-white">
+                50% OFF
+              </span>
+            </div>
+          );
+      }
+    };
+
+    const renderCampaignTypeBadge = (type: 'WhatsApp' | 'Discount' | 'Loyalty' | 'Coupon') => {
+      switch (type) {
+        case 'WhatsApp':
+          return (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#16A34A] text-white">
+                <MessageCircle className="h-3 w-3" />
+              </span>
+              <span>WhatsApp</span>
+            </span>
+          );
+        case 'Discount':
+          return (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#FEE2E2] text-[#EF4444]">
+                <Percent className="h-3 w-3" />
+              </span>
+              <span>Discount</span>
+            </span>
+          );
+        case 'Loyalty':
+          return (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FEF3C7] text-[#D97706]">
+                <Gift className="h-3 w-3" />
+              </span>
+              <span>Loyalty</span>
+            </span>
+          );
+        case 'Coupon':
+          return (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#F3E8FF] text-[#9333EA]">
+                <Ticket className="h-3 w-3" />
+              </span>
+              <span>Coupon</span>
+            </span>
+          );
+      }
+    };
+
     return (
-      <div className="space-y-4 pb-6">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#E4EFEA] bg-white p-1.5">
-            {(
-              [
-                { id: 'overview', label: 'Overview' },
-                { id: 'whatsapp', label: 'WhatsApp Campaigns' },
-                { id: 'coupons', label: `Coupons & Offers (${coupons.length})` },
-                { id: 'loyalty', label: 'Loyalty & Cashback' },
-                { id: 'templates', label: 'Festival Templates' },
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setMarketingTab(t.id)}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${
-                  marketingTab === t.id
-                    ? 'bg-[#0A6847] text-white shadow-2xs'
-                    : 'text-[#475569] hover:bg-[#F4F8F6]'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setToast(`Launched WhatsApp Campaign "${campaignTitle}" to ${campaignAudience}!`);
-              setTimeout(() => setToast(null), 3500);
-            }}
-            className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12.5px]"
-          >
-            <Send className="h-4 w-4" />
-            <span>Launch WhatsApp Broadcast</span>
-          </button>
-        </div>
-
+      <div className="w-full max-w-none space-y-4 pb-6">
         {toast && (
           <div className="flex items-center justify-between rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-2.5 text-[13px] font-medium text-[#065F46]">
-            <span>{toast}</span>
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-[#0A6847]" />
+              {toast}
+            </span>
             <button type="button" onClick={() => setToast(null)} className="text-xs underline">
               Dismiss
             </button>
           </div>
         )}
 
-        {/* 5 Marketing KPI Cards */}
-        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">Campaign Revenue</p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
-              {formatBosCurrency(84600, currencySymbol)}
+        {/* Top Page Title & + Create Campaign Button */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-[22px] font-extrabold tracking-tight text-[#111827]">
+              Marketing &amp; Promotions
+            </h1>
+            <p className="mt-0.5 text-[13px] text-[#64748B]">
+              Grow your business with offers, customer campaigns, WhatsApp promotions and loyalty programs.
             </p>
-            <p className="text-[11px] font-semibold text-[#0A6847]">+28.4% ROI: 14.2x</p>
           </div>
 
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">Messages Sent</p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#111827]">4,820</p>
-            <p className="text-[11px] text-[#0A6847]">82.4% Read Rate on WhatsApp</p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setCreateCampaignModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2.5 text-[13px] font-bold text-white shadow-2xs hover:bg-[#085238] transition"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Create Campaign</span>
+          </button>
+        </div>
 
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">Coupon Redemptions</p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#111827]">318</p>
-            <p className="text-[11px] text-[#64748B]">{coupons.length} Active Promo Codes</p>
-          </div>
-
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">Customer Retention</p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#0A6847]">68.5%</p>
-            <p className="text-[11px] text-[#64748B]">412 Loyalty Members</p>
-          </div>
-
-          <div className="bos-card p-3.5 col-span-2 lg:col-span-1">
-            <p className="text-[11.5px] font-medium text-[#64748B]">WhatsApp Credits</p>
-            <p className="mt-1 text-[21px] font-extrabold text-purple-700">2,450</p>
-            <p className="text-[11px] text-[#0A6847] font-semibold">Official WABA Verified</p>
+        {/* 7 Top Underline Sub-Tabs */}
+        <div className="border-b border-[#DCE9E3] overflow-x-auto">
+          <div className="flex items-center gap-6 min-w-max">
+            {(
+              [
+                'Overview',
+                'Offers & Discounts',
+                'WhatsApp Campaigns',
+                'Coupons',
+                'Loyalty Program',
+                'Customer Communication',
+                'Templates',
+              ] as const
+            ).map((tab) => {
+              const isActive = marketingTab === tab;
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setMarketingTab(tab)}
+                  className={`relative pb-3 text-[13px] font-bold transition ${
+                    isActive
+                      ? 'text-[#0A6847]'
+                      : 'text-[#475569] hover:text-[#111827]'
+                  }`}
+                >
+                  {tab}
+                  {isActive && (
+                    <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-[#0A6847]" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Main Split Layout: Active Campaigns & Coupons (8 cols) + Quick WhatsApp Builder (4 cols) */}
+        {/* 4 Top KPI Summary Cards with Sparklines */}
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              label: 'Campaigns Sent',
+              value: String(13 + recentCampaigns.length),
+              trend: '↑ 28%',
+              icon: Megaphone,
+              points: '0,28 18,22 36,24 54,14 72,16 90,4',
+            },
+            {
+              label: 'Customers Reached',
+              value: '2,450',
+              trend: '↑ 32%',
+              icon: Users,
+              points: '0,28 18,24 36,18 54,20 72,11 90,3',
+            },
+            {
+              label: 'Orders from Campaigns',
+              value: '486',
+              trend: '↑ 45%',
+              icon: ShoppingCart,
+              points: '0,29 18,23 36,21 54,13 72,14 90,4',
+            },
+            {
+              label: 'Campaign Revenue',
+              value: `${currencySymbol} 34,280`,
+              trend: '↑ 38%',
+              icon: IndianRupee,
+              points: '0,28 18,24 36,19 54,15 72,12 90,3',
+            },
+          ].map((kpi) => {
+            const Icon = kpi.icon;
+            return (
+              <div
+                key={kpi.label}
+                className="bos-card p-4 flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-[12px] font-medium text-[#64748B]">{kpi.label}</p>
+                    <p className="mt-0.5 text-[22px] font-extrabold leading-tight text-[#111827]">
+                      {kpi.value}
+                    </p>
+                    <p className="mt-1 text-[11.5px] font-bold text-[#10B981]">{kpi.trend}</p>
+                  </div>
+                </div>
+
+                {/* Mini Rising Green Sparkline */}
+                <svg className="h-9 w-20 shrink-0 overflow-visible" viewBox="0 0 92 32">
+                  <polyline
+                    fill="none"
+                    stroke="#10B981"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={kpi.points}
+                  />
+                </svg>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Main 2-Column Content Grid: Left 9 cols (Quick Actions + Recent Campaigns + 4 Bottom Cards) + Right 3 cols (Campaign Preview) */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
-          <div className="lg:col-span-8 space-y-4">
-            {/* Active Campaigns Table */}
+          {/* Left Column (9 cols) */}
+          <div className="lg:col-span-9 space-y-4">
+            {/* Section A: Quick Actions */}
+            <div className="bos-card p-4 space-y-3">
+              <h2 className="text-[15px] font-extrabold text-[#111827]">Quick Actions</h2>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
+                {[
+                  {
+                    label: 'Send WhatsApp Offer Message',
+                    icon: MessageCircle,
+                    iconBg: 'bg-[#E6F6F0] text-[#16A34A]',
+                    action: () => {
+                      setCampaignType('WhatsApp');
+                      setCreateCampaignModalOpen(true);
+                    },
+                  },
+                  {
+                    label: 'Create Discount or Offer',
+                    icon: Percent,
+                    iconBg: 'bg-[#FEE2E2] text-[#EF4444]',
+                    action: () => {
+                      setCampaignType('Discount');
+                      setCreateCampaignModalOpen(true);
+                    },
+                  },
+                  {
+                    label: 'Create Coupon Code',
+                    icon: Ticket,
+                    iconBg: 'bg-[#F3E8FF] text-[#9333EA]',
+                    action: () => setCreateCouponModalOpen(true),
+                  },
+                  {
+                    label: 'Start Loyalty Program',
+                    icon: Users,
+                    iconBg: 'bg-[#FEF3C7] text-[#D97706]',
+                    action: () => {
+                      setMarketingTab('Loyalty Program');
+                      setToast('Loyalty Program: 1 Point per ₹100 spent is active.');
+                      setTimeout(() => setToast(null), 2500);
+                    },
+                  },
+                  {
+                    label: 'Send SMS / Email Campaign',
+                    icon: Mail,
+                    iconBg: 'bg-[#DBEAFE] text-[#2563EB]',
+                    action: () => {
+                      setPreviewChannel('SMS');
+                      setCreateCampaignModalOpen(true);
+                    },
+                  },
+                ].map((qa) => {
+                  const Icon = qa.icon;
+                  return (
+                    <button
+                      key={qa.label}
+                      type="button"
+                      onClick={qa.action}
+                      className="flex items-center justify-between gap-2.5 rounded-xl border border-[#E4EFEA] bg-white p-3 text-left hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${qa.iconBg}`}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span className="text-[12px] font-bold leading-snug text-[#111827] line-clamp-2">
+                          {qa.label}
+                        </span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[#94A3B8]" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Section B: Recent Campaigns Table */}
             <div className="bos-card p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-[14.5px] font-bold text-[#111827]">
-                  Active Campaigns & Promotions
-                </h3>
-                <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                  4 Active
-                </span>
+                <h2 className="text-[15px] font-extrabold text-[#111827]">Recent Campaigns</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast(`Showing all ${recentCampaigns.length} marketing campaigns.`);
+                    setTimeout(() => setToast(null), 2500);
+                  }}
+                  className="text-[12.5px] font-bold text-[#0A6847] hover:underline"
+                >
+                  View All
+                </button>
               </div>
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-[12.5px]">
                   <thead>
-                    <tr className="border-b border-[#E4EFEA] text-[10.5px] font-bold uppercase text-[#64748B]">
-                      <th className="py-2">Campaign Name</th>
-                      <th className="py-2">Channel</th>
-                      <th className="py-2">Audience</th>
-                      <th className="py-2">Reach / Open</th>
-                      <th className="py-2">Orders</th>
-                      <th className="py-2">Revenue</th>
-                      <th className="py-2 text-right">Status</th>
+                    <tr className="border-b border-[#E4EFEA] bg-[#F8FCFA] text-[11px] font-semibold text-[#64748B]">
+                      <th className="py-2.5 pl-3 pr-2">#</th>
+                      <th className="py-2.5 px-2">Campaign Name</th>
+                      <th className="py-2.5 px-2">Type</th>
+                      <th className="py-2.5 px-2">Audience</th>
+                      <th className="py-2.5 px-2">Sent</th>
+                      <th className="py-2.5 px-2">Orders</th>
+                      <th className="py-2.5 px-2">Revenue</th>
+                      <th className="py-2.5 px-2">Status</th>
+                      <th className="py-2.5 pl-2 pr-3 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#F1F6F3]">
-                    {[
-                      {
-                        name: 'Weekend Grocery Mega Sale (15% OFF)',
-                        channel: 'WhatsApp',
-                        audience: 'All Active (684)',
-                        reach: '91% Read',
-                        orders: 64,
-                        revenue: 34800,
-                        status: 'Active',
-                      },
-                      {
-                        name: 'Win-Back Inactive Buyers (₹100 Cashback)',
-                        channel: 'WhatsApp + SMS',
-                        audience: 'Inactive 30d (180)',
-                        reach: '78% Read',
-                        orders: 28,
-                        revenue: 16400,
-                        status: 'Active',
-                      },
-                      {
-                        name: 'VIP Loyalty Double Points Week',
-                        channel: 'VIP Club',
-                        audience: 'VIP Tier (128)',
-                        reach: '86% Read',
-                        orders: 42,
-                        revenue: 24900,
-                        status: 'Active',
-                      },
-                    ].map((c) => (
-                      <tr key={c.name} className="hover:bg-[#F8FCFA]">
-                        <td className="py-3 font-bold text-[#111827]">{c.name}</td>
-                        <td className="py-3">
-                          <span className="rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-semibold text-[#0A6847]">
-                            {c.channel}
-                          </span>
-                        </td>
-                        <td className="py-3 text-[#475569]">{c.audience}</td>
-                        <td className="py-3 font-semibold text-[#0A6847]">{c.reach}</td>
-                        <td className="py-3 font-bold">{c.orders}</td>
-                        <td className="py-3 font-extrabold text-[#0A6847]">
-                          {formatBosCurrency(c.revenue, currencySymbol)}
-                        </td>
-                        <td className="py-3 text-right">
-                          <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                            {c.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                  <tbody className="divide-y divide-[#EDF4F0]">
+                    {recentCampaigns.map((camp, idx) => {
+                      const isSelected = camp.id === selectedCampaignId;
+                      return (
+                        <tr
+                          key={camp.id}
+                          onClick={() => setSelectedCampaignId(camp.id)}
+                          className={`cursor-pointer transition ${
+                            isSelected ? 'bg-[#F3FAF7]' : 'hover:bg-[#F8FCFA]'
+                          }`}
+                        >
+                          <td className="py-3 pl-3 pr-2 font-semibold text-[#475569]">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="flex items-center gap-2.5">
+                              {renderCampaignBannerBadge(camp.bannerTheme)}
+                              <span className="font-bold text-[#111827]">{camp.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-2">{renderCampaignTypeBadge(camp.type)}</td>
+                          <td className="py-3 px-2 text-[#475569] font-medium">{camp.audience}</td>
+                          <td className="py-3 px-2 font-bold text-[#111827]">{camp.sent}</td>
+                          <td className="py-3 px-2 font-bold text-[#111827]">{camp.orders}</td>
+                          <td className="py-3 px-2 font-extrabold text-[#111827]">
+                            {currencySymbol} {camp.revenue.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-2">
+                            <span className="inline-flex items-center rounded-md bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                              {camp.status}
+                            </span>
+                          </td>
+                          <td className="py-3 pl-2 pr-3 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedCampaignId(camp.id);
+                                setToast(`Previewing "${camp.name}" on ${previewChannel}`);
+                                setTimeout(() => setToast(null), 2500);
+                              }}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#E6F6F0] hover:text-[#0A6847]"
+                              aria-label={`Actions for ${camp.name}`}
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {/* Active Discount Coupons */}
-            <div className="bos-card p-4 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-[14.5px] font-bold text-[#111827]">
-                    Active Discount Coupons (POS & Online Store)
-                  </h3>
-                  <p className="text-[11.5px] text-[#64748B]">
-                    Coupons work automatically at your POS billing counter and Online Storefront.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {coupons.map((cp) => (
-                  <div
-                    key={cp.id}
-                    className="rounded-xl border border-dashed border-[#0A6847]/40 bg-[#F8FCFA] p-3 flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <span className="rounded-lg bg-[#0A6847] px-2.5 py-0.5 font-mono text-[12px] font-extrabold text-white">
-                          {cp.code}
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={cp.active}
-                          onChange={() => onToggleCoupon(cp.id)}
-                          className="h-4 w-4 accent-[#0A6847]"
-                        />
-                      </div>
-                      <p className="mt-2 text-[13.5px] font-extrabold text-[#111827]">
-                        {cp.type === 'percentage'
-                          ? `${cp.value}% OFF`
-                          : `${formatBosCurrency(cp.value, currencySymbol)} Flat OFF`}
-                      </p>
-                      <p className="text-[11px] text-[#64748B]">
-                        Min Order: {formatBosCurrency(cp.minOrder, currencySymbol)}
-                      </p>
-                    </div>
+            {/* Section C: Bottom 4 Feature Cards */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+              {/* 1. Offers & Discounts */}
+              <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
+                    <Percent className="h-5 w-5" />
                   </div>
-                ))}
-              </div>
-
-              {/* Quick Create Coupon Bar */}
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#EDF4F0] text-[12px]">
-                <input
-                  type="text"
-                  value={newCouponCode}
-                  onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
-                  placeholder="NEWCODE (e.g. SAVE20)"
-                  className="rounded-xl border border-[#DCE9E3] px-3 py-1.5 font-mono font-bold uppercase"
-                />
-                <input
-                  type="number"
-                  value={newCouponValue}
-                  onChange={(e) => setNewCouponValue(Number(e.target.value) || 10)}
-                  placeholder="Discount %"
-                  className="w-24 rounded-xl border border-[#DCE9E3] px-3 py-1.5 font-bold"
-                />
-                <input
-                  type="number"
-                  value={newCouponMinOrder}
-                  onChange={(e) => setNewCouponMinOrder(Number(e.target.value) || 299)}
-                  placeholder="Min Order"
-                  className="w-28 rounded-xl border border-[#DCE9E3] px-3 py-1.5"
-                />
+                  <div>
+                    <h3 className="text-[14px] font-extrabold text-[#111827]">
+                      Offers &amp; Discounts
+                    </h3>
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-[#64748B]">
+                      Create product discounts, combo offers and category promotions.
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
-                    if (!newCouponCode.trim()) return;
+                    setCampaignType('Discount');
+                    setCreateCampaignModalOpen(true);
+                  }}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
+                >
+                  Create Offer
+                </button>
+              </div>
+
+              {/* 2. Coupons */}
+              <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F3E8FF] text-[#9333EA]">
+                    <Ticket className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-extrabold text-[#111827]">Coupons</h3>
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-[#64748B]">
+                      Generate coupon codes for online and in-store orders.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateCouponModalOpen(true)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
+                >
+                  Create Coupon
+                </button>
+              </div>
+
+              {/* 3. Loyalty Program */}
+              <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-[#D97706]">
+                    <Gift className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-extrabold text-[#111827]">Loyalty Program</h3>
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-[#64748B]">
+                      Reward your customers with points, cashback or special offers.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMarketingTab('Loyalty Program');
+                    setToast('Loyalty Program setup opened: Earn 5% points on every order.');
+                    setTimeout(() => setToast(null), 2500);
+                  }}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
+                >
+                  Setup Loyalty
+                </button>
+              </div>
+
+              {/* 4. Customer Segments */}
+              <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                    <Users className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-extrabold text-[#111827]">
+                      Customer Segments
+                    </h3>
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-[#64748B]">
+                      Target specific customers based on purchase history, location and more.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast('Customer Segments: All (684) • VIP (128) • Loyalty (450)');
+                    setTimeout(() => setToast(null), 2500);
+                  }}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
+                >
+                  Manage Segments
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column (3 cols) — Campaign Preview Card with Smartphone Frame */}
+          <div className="bos-card p-4 lg:col-span-3 space-y-3.5">
+            <h2 className="text-[15px] font-extrabold text-[#111827]">Campaign Preview</h2>
+
+            {/* 3 Channel Toggle Tabs: WhatsApp | SMS | Email */}
+            <div className="grid grid-cols-3 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-1 text-[12px] font-bold">
+              {(['WhatsApp', 'SMS', 'Email'] as const).map((ch) => {
+                const isActive = previewChannel === ch;
+                return (
+                  <button
+                    key={ch}
+                    type="button"
+                    onClick={() => setPreviewChannel(ch)}
+                    className={`rounded-lg py-1.5 transition ${
+                      isActive
+                        ? 'bg-[#0A6847] text-white shadow-2xs'
+                        : 'text-[#475569] hover:text-[#111827]'
+                    }`}
+                  >
+                    {ch}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Realistic Smartphone Mockup Frame */}
+            <div className="mx-auto max-w-[290px] rounded-[34px] border-[7px] border-[#1E293B] bg-[#ECE5DD] shadow-xl overflow-hidden">
+              {/* Top Phone Status Bar & Notch */}
+              <div className="relative flex items-center justify-between bg-[#075E54] px-4 pt-2 pb-1 text-[10px] font-bold text-white">
+                <span>9:41</span>
+                <div className="h-3 w-20 rounded-full bg-black/80" />
+                <span>5G 100%</span>
+              </div>
+
+              {/* WhatsApp Store Header Bar */}
+              <div className="flex items-center justify-between bg-[#075E54] px-3 py-2.5 text-white">
+                <div className="flex items-center gap-2">
+                  <ArrowLeft className="h-4 w-4 text-white/90" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#10B981] text-white">
+                    <Store className="h-4 w-4" />
+                  </div>
+                  <div className="leading-tight">
+                    <p className="text-[12.5px] font-extrabold">Ravi Store</p>
+                    <p className="text-[10px] text-white/80">Online</p>
+                  </div>
+                </div>
+                <MessageCircle className="h-4 w-4 text-white/90" />
+              </div>
+
+              {/* Chat Wallpaper & Message Card */}
+              <div className="p-2.5 space-y-2 bg-[#ECE5DD]">
+                <div className="rounded-2xl bg-white p-2 shadow-xs space-y-2">
+                  {/* Promotional Graphic Banner (Matches Screenshot 1:1) */}
+                  <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#FDE047] via-[#FACC15] to-[#F59E0B] p-2.5">
+                    <div className="flex items-center justify-between gap-1.5">
+                      {/* Left Fresh Produce Basket Visual */}
+                      <div className="flex h-14 w-16 shrink-0 items-center justify-center rounded-xl bg-white/85 text-[24px] shadow-2xs">
+                        🥦🍎🥕
+                      </div>
+
+                      {/* Center Green Circular Badge: FRESH & HEALTHY */}
+                      <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-full border-2 border-white bg-[#15803D] text-center text-[7px] font-black leading-tight uppercase text-white shadow-xs">
+                        <span>FRESH &amp;</span>
+                        <span>HEALTHY</span>
+                      </div>
+
+                      {/* Right Tag: FRESH & GROCERY */}
+                      <div className="rounded-md bg-white/95 px-1.5 py-1 text-center text-[7px] font-extrabold leading-tight uppercase text-[#92400E] shadow-2xs">
+                        <div>FRESH &amp;</div>
+                        <div>GROCERY</div>
+                      </div>
+                    </div>
+
+                    {/* White Overlay Headline Card */}
+                    <div className="mt-2 rounded-xl bg-white/95 px-3 py-1.5 text-center shadow-sm">
+                      <p className="text-[11.5px] font-extrabold text-[#111827]">
+                        {activePreviewCampaign.name}
+                      </p>
+                      <p className="text-[15px] font-black text-[#111827]">
+                        {activePreviewCampaign.discountHeadline}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Message Copy */}
+                  <div className="px-1.5 pb-1 space-y-2 text-[11.5px] leading-relaxed text-[#1E293B]">
+                    <p className="font-semibold">Hi {'{{name}}'} 👋</p>
+                    <p>{activePreviewCampaign.messageBody}</p>
+                    <div className="space-y-0.5 font-semibold text-[#111827]">
+                      <p>🛒 {activePreviewCampaign.discountHeadline}</p>
+                      <p>⏰ Valid till {activePreviewCampaign.validTill}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Order now from our store 👇</p>
+                      <p className="text-[#2563EB] underline break-all">
+                        https://bos.fieseros.com/ravi-store
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-[#64748B]">
+                      <span>10:30 AM</span>
+                      <span className="font-bold text-[#0EA5E9]">✓✓</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom WhatsApp Input Bar */}
+              <div className="flex items-center gap-2 bg-[#F0F2F5] px-2.5 py-2">
+                <div className="flex flex-1 items-center justify-between rounded-full bg-white px-3 py-1.5 text-[#64748B]">
+                  <Smile className="h-4 w-4" />
+                  <span className="text-[11px] text-[#94A3B8]">Message</span>
+                  <Paperclip className="h-4 w-4" />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast(
+                      `Sent "${activePreviewCampaign.name}" via ${previewChannel} to ${activePreviewCampaign.audience}!`,
+                    );
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs hover:bg-[#085238]"
+                  aria-label="Send campaign test"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal 1: + Create Campaign Modal */}
+        {createCampaignModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3">
+                <h3 className="text-[15px] font-extrabold text-[#111827]">
+                  Create Marketing Campaign
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setCreateCampaignModalOpen(false)}
+                  className="rounded-lg p-1 text-[#64748B]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-[12.5px]">
+                <div>
+                  <label className="mb-1 block font-semibold text-[#334155]">Campaign Name</label>
+                  <input
+                    type="text"
+                    value={campaignTitle}
+                    onChange={(e) => setCampaignTitle(e.target.value)}
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-semibold"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="mb-1 block font-semibold text-[#334155]">Channel / Type</label>
+                    <select
+                      value={campaignType}
+                      onChange={(e) =>
+                        setCampaignType(
+                          e.target.value as 'WhatsApp' | 'Discount' | 'Loyalty' | 'Coupon',
+                        )
+                      }
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 font-semibold"
+                    >
+                      <option value="WhatsApp">WhatsApp</option>
+                      <option value="Discount">Discount</option>
+                      <option value="Loyalty">Loyalty</option>
+                      <option value="Coupon">Coupon</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-[#334155]">Audience</label>
+                    <select
+                      value={campaignAudience}
+                      onChange={(e) => setCampaignAudience(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 font-semibold"
+                    >
+                      <option value="All Customers">All Customers</option>
+                      <option value="VIP Customers">VIP Customers</option>
+                      <option value="Loyalty Members">Loyalty Members</option>
+                      <option value="Selected Customers">Selected Customers</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="mb-1 block font-semibold text-[#334155]">Offer Headline</label>
+                    <input
+                      type="text"
+                      value={campaignDiscountText}
+                      onChange={(e) => setCampaignDiscountText(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-[#334155]">Valid Till</label>
+                    <input
+                      type="text"
+                      value={campaignValidTill}
+                      onChange={(e) => setCampaignValidTill(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-semibold"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-[#334155]">Message Text</label>
+                  <textarea
+                    rows={3}
+                    value={campaignText}
+                    onChange={(e) => setCampaignText(e.target.value)}
+                    className="w-full rounded-xl border border-[#DCE9E3] p-2.5"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateCampaignModalOpen(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12.5px] font-semibold text-[#475569]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextId = recentCampaigns.length + 1;
+                    setRecentCampaigns((prev) => [
+                      {
+                        id: nextId,
+                        name: campaignTitle || 'Special Store Promotion',
+                        bannerTheme: 'fresh',
+                        type: campaignType,
+                        audience: campaignAudience,
+                        sent: '684',
+                        orders: 42,
+                        revenue: 6400,
+                        status: 'Completed',
+                        discountHeadline: campaignDiscountText,
+                        messageBody: campaignText,
+                        validTill: campaignValidTill,
+                      },
+                      ...prev,
+                    ]);
+                    setSelectedCampaignId(nextId);
+                    setCreateCampaignModalOpen(false);
+                    setToast(`Launched "${campaignTitle}" to ${campaignAudience}!`);
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white"
+                >
+                  Launch Campaign
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal 2: Create Coupon Modal */}
+        {createCouponModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3">
+                <h3 className="text-[15px] font-extrabold text-[#111827]">Create Coupon Code</h3>
+                <button
+                  type="button"
+                  onClick={() => setCreateCouponModalOpen(false)}
+                  className="rounded-lg p-1 text-[#64748B]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-[12.5px]">
+                <div>
+                  <label className="mb-1 block font-semibold text-[#334155]">Coupon Code</label>
+                  <input
+                    type="text"
+                    value={newCouponCode}
+                    onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. FRESH30"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-mono font-bold uppercase"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="mb-1 block font-semibold text-[#334155]">Discount (%)</label>
+                    <input
+                      type="number"
+                      value={newCouponValue}
+                      onChange={(e) => setNewCouponValue(Number(e.target.value) || 10)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-[#334155]">
+                      Min Order ({currencySymbol})
+                    </label>
+                    <input
+                      type="number"
+                      value={newCouponMinOrder}
+                      onChange={(e) => setNewCouponMinOrder(Number(e.target.value) || 299)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setCreateCouponModalOpen(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12.5px] font-semibold text-[#475569]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = newCouponCode.trim() || 'FRESH20';
                     void onAddCoupon({
-                      code: newCouponCode.trim(),
+                      code,
                       type: 'percentage',
                       value: newCouponValue,
                       minOrder: newCouponMinOrder,
                       active: true,
                     });
                     setNewCouponCode('');
+                    setCreateCouponModalOpen(false);
+                    setToast(`Created coupon "${code}" (${newCouponValue}% OFF)!`);
+                    setTimeout(() => setToast(null), 3000);
                   }}
-                  className="bos-btn-primary rounded-xl px-3.5 py-1.5 font-semibold"
+                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white"
                 >
-                  + Add Coupon
+                  Save Coupon
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* 2. AI ASSISTANT MODE — 1:1 Match with BOS AI Assistant Screenshot */
+  if (mode === 'aiAssistant') {
+    const recentChatsList = [
+      {
+        id: 'todays-sales',
+        title: "Today's sales report",
+        sub: "Show me today's sales and...",
+        prompt: "Show me today's sales and top 5 products",
+        icon: RefreshCw,
+      },
+      {
+        id: 'low-stock',
+        title: 'Low stock items',
+        sub: 'Which items are low in stock?',
+        prompt: 'Which items are low in stock?',
+        icon: Package,
+      },
+      {
+        id: 'create-invoice',
+        title: 'Create invoice',
+        sub: 'Create invoice for Sneha Patel',
+        prompt: 'Create invoice for Sneha Patel',
+        icon: FileText,
+      },
+      {
+        id: 'customer-outstanding',
+        title: 'Customer outstanding',
+        sub: 'Show me customer due amount',
+        prompt: 'Show me customer due amount',
+        icon: IndianRupee,
+      },
+      {
+        id: 'appointments',
+        title: 'Next 7 days appointments',
+        sub: 'Check my salon appointments',
+        prompt: 'Check my salon appointments for next 7 days',
+        icon: Calendar,
+      },
+      {
+        id: 'marketing-msg',
+        title: 'Marketing message',
+        sub: 'Create WhatsApp offer for Diwali',
+        prompt: 'Create WhatsApp offer for Diwali',
+        icon: Megaphone,
+      },
+      {
+        id: 'monthly-profit',
+        title: 'Monthly profit',
+        sub: 'Show profit and loss for September',
+        prompt: 'Show profit and loss for September',
+        icon: Wallet,
+      },
+      {
+        id: 'top-selling',
+        title: 'Top selling products',
+        sub: 'Which products sold the most?',
+        prompt: 'Which products sold the most?',
+        icon: BarChart3,
+      },
+      {
+        id: 'add-product',
+        title: 'Add new product',
+        sub: 'Add new product shampoo',
+        prompt: 'Add new product shampoo',
+        icon: Plus,
+      },
+      {
+        id: 'help-eway',
+        title: 'Help',
+        sub: 'How to generate e-way bill?',
+        prompt: 'How to generate e-way bill?',
+        icon: HelpCircle,
+      },
+    ];
+
+    const top5Products = [
+      { rank: 1, name: 'Hair Shampoo', qty: 24, sales: '7,680', badgeBg: 'bg-amber-100 text-amber-800' },
+      { rank: 2, name: 'Hair Conditioner', qty: 18, sales: '5,940', badgeBg: 'bg-orange-100 text-orange-800' },
+      { rank: 3, name: 'Hair Color', qty: 12, sales: '4,800', badgeBg: 'bg-rose-100 text-rose-800' },
+      { rank: 4, name: 'Facial Kit', qty: 10, sales: '4,500', badgeBg: 'bg-emerald-100 text-emerald-800' },
+      { rank: 5, name: 'Hair Serum', qty: 8, sales: '3,920', badgeBg: 'bg-purple-100 text-purple-800' },
+    ];
+
+    const weeklyBars = [
+      { day: 'Mon', height: 22, active: false },
+      { day: 'Tue', height: 32, active: false },
+      { day: 'Wed', height: 26, active: false },
+      { day: 'Thu', height: 44, active: false },
+      { day: 'Fri', height: 38, active: false },
+      { day: 'Sat', height: 54, active: false },
+      { day: 'Sun', height: 74, active: true },
+    ];
+
+    return (
+      <div className="w-full max-w-none space-y-4 pb-6">
+        {toast && (
+          <div className="flex items-center justify-between rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-2.5 text-[13px] font-medium text-[#065F46]">
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-[#0A6847]" />
+              {toast}
+            </span>
+            <button type="button" onClick={() => setToast(null)} className="text-xs underline">
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        {/* Top Page Header & How to use AI Assistant Button */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-[22px] font-extrabold tracking-tight text-[#111827]">
+                BOS AI Assistant
+              </h1>
+              <Sparkles className="h-5 w-5 text-[#10B981] fill-[#10B981]" />
+            </div>
+            <p className="mt-0.5 text-[13px] text-[#64748B]">
+              Your business copilot. Ask questions, get insights and take actions — in simple language.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setToast(
+                'Tip: Ask BOS AI in plain English or Hindi to check sales, restock items, create GST bills, or draft WhatsApp offers!',
+              );
+              setTimeout(() => setToast(null), 3500);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[12.5px] font-bold text-[#1E293B] shadow-2xs hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
+          >
+            <Play className="h-3.5 w-3.5 text-[#0A6847]" />
+            <span>How to use AI Assistant</span>
+          </button>
+        </div>
+
+        {/* Main 3-Column Workspace: Left Recent Chats (3 cols) + Center AI Copilot Chat (6 cols) + Right Insights & Actions (3 cols) */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
+          {/* Left Column (3 cols) — Recent Chats Sidebar Card */}
+          <div className="bos-card p-3.5 lg:col-span-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAiMessages([]);
+                  setActiveAiThreadId('todays-sales');
+                  setToast('Started a new BOS AI Assistant conversation.');
+                  setTimeout(() => setToast(null), 2000);
+                }}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0A6847] py-2.5 text-[13px] font-bold text-white shadow-2xs hover:bg-[#085238] transition"
+              >
+                <Plus className="h-4 w-4" />
+                <span>New Chat</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setToast('Chat history synced with store cloud.');
+                  setTimeout(() => setToast(null), 2000);
+                }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] text-[#475569] hover:border-[#0A6847] hover:text-[#0A6847]"
+                aria-label="Chat history archive"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="px-1 text-[11.5px] font-semibold text-[#64748B]">Recent Chats</p>
+
+            <div className="space-y-1">
+              {recentChatsList.map((chat) => {
+                const Icon = chat.icon;
+                const isActive = activeAiThreadId === chat.id;
+                return (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveAiThreadId(chat.id);
+                      if (chat.id !== 'todays-sales') {
+                        void handleSendAiMessage(chat.prompt);
+                      }
+                    }}
+                    className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition ${
+                      isActive
+                        ? 'bg-[#E6F6F0] text-[#0A6847]'
+                        : 'text-[#1E293B] hover:bg-[#F4F8F6]'
+                    }`}
+                  >
+                    <div
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                        isActive
+                          ? 'bg-[#0A6847]/15 text-[#0A6847]'
+                          : 'bg-[#F1F6F3] text-[#475569]'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-[12.5px] font-bold truncate ${
+                          isActive ? 'text-[#064E3B]' : 'text-[#111827]'
+                        }`}
+                      >
+                        {chat.title}
+                      </p>
+                      <p className="text-[11px] text-[#64748B] truncate">{chat.sub}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Center Column (6 cols) — Interactive AI Conversation & Rich Summary Card */}
+          <div className="bos-card p-4 lg:col-span-6 flex flex-col justify-between space-y-4">
+            <div className="space-y-4">
+              {/* Message 1: Assistant Greeting & Quick Prompt Pills */}
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs">
+                  <Bot className="h-5 w-5" />
+                </div>
+
+                <div className="flex-1 space-y-2.5">
+                  <div className="rounded-2xl rounded-tl-xs border border-[#EDF4F0] bg-[#F8FCFA] px-4 py-3 text-[13px] leading-relaxed text-[#1E293B]">
+                    <p className="font-semibold text-[#111827]">Hi Ravi! 👋</p>
+                    <p className="mt-0.5">
+                      I&apos;m BOS AI Assistant. I can help you with sales, inventory, customers,
+                      invoices, appointments, marketing and much more.
+                    </p>
+                    <p className="mt-1.5 font-medium text-[#111827]">
+                      What would you like to do today?
+                    </p>
+                  </div>
+
+                  {/* 4 Quick Suggestion Pills */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      "Show today's sales",
+                      'Check low stock',
+                      'Create invoice',
+                      'Next appointments',
+                    ].map((pill) => (
+                      <button
+                        key={pill}
+                        type="button"
+                        onClick={() => void handleSendAiMessage(pill)}
+                        className="rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
+                      >
+                        {pill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Message 2: User Prompt Bubble (Right Aligned Mint) */}
+              <div className="flex justify-end">
+                <div className="rounded-2xl rounded-tr-xs bg-[#E6F6F0] px-4 py-2.5 text-[13px] font-semibold text-[#064E3B] shadow-2xs">
+                  Show me today&apos;s sales and top 5 products
+                </div>
+              </div>
+
+              {/* Message 3: Assistant Rich Structured Response Card */}
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs">
+                  <Bot className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  <div className="inline-block rounded-2xl rounded-tl-xs border border-[#EDF4F0] bg-[#F8FCFA] px-4 py-2 text-[13px] text-[#1E293B]">
+                    Here is your summary for today (
+                    <span className="font-extrabold text-[#111827]">12 Oct 2024</span>):
+                  </div>
+
+                  {/* Rich Structured Summary Card */}
+                  <div className="rounded-2xl border border-[#E4EFEA] bg-white p-3.5 shadow-2xs space-y-3.5">
+                    {/* 4 Mini KPI Tiles */}
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                      {/* Total Sales */}
+                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E6F6F0] text-[#0A6847]">
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="text-[11px] font-medium text-[#64748B]">
+                            Total Sales
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">
+                          {currencySymbol} 48,320
+                        </p>
+                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">
+                          ↑ 12% vs yesterday
+                        </p>
+                      </div>
+
+                      {/* Orders */}
+                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#DBEAFE] text-[#2563EB]">
+                            <Users className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="text-[11px] font-medium text-[#64748B]">Orders</span>
+                        </div>
+                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">28</p>
+                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">↑ 17%</p>
+                      </div>
+
+                      {/* Avg. Order Value */}
+                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E0E7FF] text-[#4F46E5]">
+                            <IndianRupee className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="text-[11px] font-medium text-[#64748B] truncate">
+                            Avg. Order Value
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">
+                          {currencySymbol} 1,725
+                        </p>
+                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">↑ 8%</p>
+                      </div>
+
+                      {/* Profit (Est.) */}
+                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F3E8FF] text-[#9333EA]">
+                            <Wallet className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="text-[11px] font-medium text-[#64748B]">
+                            Profit (Est.)
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">
+                          {currencySymbol} 12,460
+                        </p>
+                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">↑ 10%</p>
+                      </div>
+                    </div>
+
+                    {/* Top 5 Products Table */}
+                    <div className="space-y-2">
+                      <h3 className="text-[13.5px] font-extrabold text-[#111827]">
+                        Top 5 Products
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse text-[12px]">
+                          <thead>
+                            <tr className="border-b border-[#EDF4F0] bg-[#F8FCFA] text-[11px] font-semibold text-[#64748B]">
+                              <th className="py-2 pl-2.5 pr-2">#</th>
+                              <th className="py-2 px-2">Product</th>
+                              <th className="py-2 px-2 text-center">Quantity Sold</th>
+                              <th className="py-2 pl-2 pr-2.5 text-right">
+                                Sales ({currencySymbol})
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#F1F6F3]">
+                            {top5Products.map((item) => (
+                              <tr key={item.rank} className="hover:bg-[#F8FCFA]">
+                                <td className="py-2 pl-2.5 pr-2 font-semibold text-[#475569]">
+                                  {item.rank}
+                                </td>
+                                <td className="py-2 px-2">
+                                  <div className="flex items-center gap-2.5">
+                                    <span
+                                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-extrabold ${item.badgeBg}`}
+                                    >
+                                      {item.name.slice(0, 2).toUpperCase()}
+                                    </span>
+                                    <span className="font-semibold text-[#111827]">
+                                      {item.name}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 text-center font-semibold text-[#111827]">
+                                  {item.qty}
+                                </td>
+                                <td className="py-2 pl-2 pr-2.5 text-right font-bold text-[#111827]">
+                                  {item.sales}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* 3 Action Buttons below table */}
+                    <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToast("Opened full Today's Sales & Product Velocity report.");
+                          setTimeout(() => setToast(null), 2500);
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 px-3 text-[12px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
+                      >
+                        <BarChart3 className="h-3.5 w-3.5 text-[#0A6847]" />
+                        <span>View Full Report</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToast('Prepared draft GST Sales Invoice from AI summary.');
+                          setTimeout(() => setToast(null), 2500);
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 px-3 text-[12px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-[#0A6847]" />
+                        <span>Create Sales Invoice</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setToast("Shared Today's Sales Summary (₹48,320) on WhatsApp!");
+                          setTimeout(() => setToast(null), 2500);
+                        }}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 px-3 text-[12px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 text-[#16A34A]" />
+                        <span>Share on WhatsApp</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Interactive Messages Appended During Session */}
+              {aiMessages.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`flex items-start gap-2.5 ${
+                    msg.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                  )}
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[12.5px] whitespace-pre-line leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'rounded-tr-xs bg-[#E6F6F0] font-semibold text-[#064E3B]'
+                        : 'rounded-tl-xs border border-[#E4EFEA] bg-[#F8FCFA] text-[#1E293B]'
+                    }`}
+                  >
+                    <div>{msg.text}</div>
+                    <div className="mt-1 text-[10px] text-[#94A3B8]">{msg.time}</div>
+                  </div>
+                </div>
+              ))}
+
+              {aiLoading && (
+                <div className="text-[12.5px] font-semibold text-[#0A6847] animate-pulse">
+                  ✨ BOS AI Assistant is analyzing your store data...
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Composer & 6 Quick Action Chips */}
+            <div className="pt-3 border-t border-[#EDF4F0] space-y-2.5">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSendAiMessage(aiInput);
+                }}
+                className="flex items-center gap-2 rounded-2xl border border-[#DCE9E3] bg-[#F8FCFA] px-3.5 py-2 focus-within:border-[#0A6847] focus-within:bg-white transition"
+              >
+                <Paperclip className="h-4 w-4 shrink-0 text-[#64748B]" />
+                <input
+                  type="text"
+                  value={aiInput}
+                  onChange={(e) => setAiInput(e.target.value)}
+                  placeholder="Ask anything about your business..."
+                  className="flex-1 bg-transparent text-[13px] text-[#111827] placeholder:text-[#64748B] focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast('Voice input ready — speak your business query.');
+                    setTimeout(() => setToast(null), 2000);
+                  }}
+                  className="rounded-lg p-1 text-[#64748B] hover:text-[#0A6847]"
+                  aria-label="Voice input"
+                >
+                  <Mic className="h-4 w-4" />
+                </button>
+                <button
+                  type="submit"
+                  disabled={aiLoading}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs hover:bg-[#085238] transition"
+                  aria-label="Send message"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              </form>
+
+              {/* 6 Bottom Quick Chips */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  {
+                    label: 'Create Invoice',
+                    icon: FileText,
+                    color: 'text-[#0A6847]',
+                    prompt: 'Create invoice for Sneha Patel',
+                  },
+                  {
+                    label: 'Check Stock',
+                    icon: Percent,
+                    color: 'text-[#EF4444]',
+                    prompt: 'Show low stock items to reorder',
+                  },
+                  {
+                    label: 'Add Customer',
+                    icon: UserPlus,
+                    color: 'text-[#2563EB]',
+                    prompt: 'Show customer outstanding dues',
+                  },
+                  {
+                    label: 'Book Appointment',
+                    icon: Calendar,
+                    color: 'text-[#9333EA]',
+                    prompt: 'Show next 7 days appointments',
+                  },
+                  {
+                    label: 'Create Offer',
+                    icon: Gift,
+                    color: 'text-[#D97706]',
+                    prompt: 'Draft a WhatsApp promo for weekend sale',
+                  },
+                ].map((chip) => {
+                  const Icon = chip.icon;
+                  return (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => void handleSendAiMessage(chip.prompt)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#E4EFEA] bg-[#F8FCFA] px-2.5 py-1 text-[11.5px] font-semibold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
+                    >
+                      <Icon className={`h-3.5 w-3.5 ${chip.color}`} />
+                      <span>{chip.label}</span>
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => void handleSendAiMessage("Analyze this week's profit margins")}
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#E4EFEA] bg-[#F8FCFA] px-2.5 py-1 text-[11.5px] font-semibold text-[#475569] hover:border-[#0A6847]"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <span>More</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Right: Quick WhatsApp Campaign Builder with Live Preview */}
-          <div className="bos-card p-4 lg:col-span-4 space-y-3.5">
-            <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-2.5">
-              <h3 className="text-[14.5px] font-bold text-[#111827]">
-                Quick WhatsApp Campaign
-              </h3>
-              <span className="rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[10.5px] font-bold text-[#0A6847]">
-                ✨ AI Assisted
-              </span>
-            </div>
-
-            <div className="space-y-2.5 text-[12px]">
-              <div>
-                <label className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-1">
-                  Campaign Title
-                </label>
-                <input
-                  type="text"
-                  value={campaignTitle}
-                  onChange={(e) => setCampaignTitle(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 font-semibold text-[#111827]"
-                />
+          {/* Right Column (3 cols) — Quick Actions + Business Insights + Smart Suggestions */}
+          <div className="lg:col-span-3 space-y-4">
+            {/* Card 1: Quick Actions (2x4 Grid) */}
+            <div className="bos-card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[14.5px] font-extrabold text-[#111827]">Quick Actions</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToast('All 8 AI Quick Actions are enabled for your store.');
+                    setTimeout(() => setToast(null), 2000);
+                  }}
+                  className="text-[11.5px] font-bold text-[#0A6847] hover:underline"
+                >
+                  See All
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-1">
-                    Target Audience
-                  </label>
-                  <select
-                    value={campaignAudience}
-                    onChange={(e) => setCampaignAudience(e.target.value)}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 font-medium"
-                  >
-                    <option>All Active Customers (684)</option>
-                    <option>VIP Customers (128)</option>
-                    <option>Inactive 30 Days (180)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-1">
-                    Attach Coupon
-                  </label>
-                  <select
-                    value={campaignCoupon}
-                    onChange={(e) => setCampaignCoupon(e.target.value)}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 font-medium"
-                  >
-                    <option>WEEKEND15 (15% OFF)</option>
-                    <option>WELCOME100 (₹100 OFF)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-[10.5px] font-bold uppercase text-[#64748B]">
-                    Message Content
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setCampaignText(
-                        `Namaste {{customer_name}}! 🌟 Special Weekend Offer at ${storeSettings.businessName}: Get Flat 15% OFF + Free Home Delivery in 30 mins! Use code WEEKEND15 at checkout.`,
-                      )
-                    }
-                    className="text-[11px] font-bold text-[#0A6847] hover:underline"
-                  >
-                    ✨ Rewrite with BOS AI
-                  </button>
-                </div>
-                <textarea
-                  rows={3}
-                  value={campaignText}
-                  onChange={(e) => setCampaignText(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5 text-[12px] text-[#111827]"
-                />
-              </div>
-            </div>
-
-            {/* Live WhatsApp Bubble Preview */}
-            <div className="rounded-xl bg-[#ECE5DD] p-3">
-              <p className="text-[10px] font-bold uppercase text-[#54656F] mb-1.5">
-                Live WhatsApp Preview
-              </p>
-              <div className="rounded-xl bg-[#DCF8C6] p-3 text-[12px] text-[#111B21] shadow-2xs space-y-2">
-                <p className="leading-relaxed">{campaignText}</p>
-                <div className="border-t border-black/10 pt-1.5 text-center font-bold text-[#00A884]">
-                  🛍️ Order Now on Online Store
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setToast(`Sent WhatsApp campaign "${campaignTitle}" to ${campaignAudience}!`);
-                setTimeout(() => setToast(null), 3500);
-              }}
-              className="w-full bos-btn-primary rounded-xl py-2.5 text-[13px]"
-            >
-              Launch Campaign →
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /* 2. AI ASSISTANT MODE */
-  if (mode === 'aiAssistant') {
-    const quickChips = [
-      "Predict tomorrow's top-selling items",
-      'Show low stock items to reorder',
-      'Draft a WhatsApp promo for weekend sale',
-      "Analyze this week's profit margins",
-      'Send payment reminders for pending dues',
-    ];
-
-    return (
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 pb-6">
-        <div className="bos-card p-5 lg:col-span-8 flex flex-col justify-between min-h-[580px]">
-          <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3.5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0A6847] text-white">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-[16px] font-bold text-[#111827]">
-                    BOS AI Business Copilot
-                  </h2>
-                  <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[10.5px] font-bold text-[#0A6847]">
-                    Live Store Context
-                  </span>
-                </div>
-                <p className="text-[12px] text-[#64748B]">
-                  Connected to your POS sales, inventory, Khata ledger, and GST reports.
-                </p>
+                {[
+                  {
+                    label: 'Create Invoice',
+                    icon: FileText,
+                    bg: 'bg-[#E6F6F0] text-[#0A6847]',
+                    prompt: 'Create invoice for Sneha Patel',
+                  },
+                  {
+                    label: 'Add Customer',
+                    icon: UserPlus,
+                    bg: 'bg-[#DBEAFE] text-[#2563EB]',
+                    prompt: 'Show customer outstanding dues',
+                  },
+                  {
+                    label: 'Check Stock',
+                    icon: Package,
+                    bg: 'bg-[#FEF3C7] text-[#D97706]',
+                    prompt: 'Show low stock items to reorder',
+                  },
+                  {
+                    label: 'Book Appointment',
+                    icon: Calendar,
+                    bg: 'bg-[#F3E8FF] text-[#9333EA]',
+                    prompt: 'Check my salon appointments',
+                  },
+                  {
+                    label: 'Send WhatsApp',
+                    icon: MessageCircle,
+                    bg: 'bg-[#E6F6F0] text-[#16A34A]',
+                    prompt: 'Draft a WhatsApp promo for weekend sale',
+                  },
+                  {
+                    label: 'Create Offer',
+                    icon: Percent,
+                    bg: 'bg-[#FEE2E2] text-[#EF4444]',
+                    prompt: 'Create WhatsApp offer for Diwali',
+                  },
+                  {
+                    label: 'View Reports',
+                    icon: BarChart3,
+                    bg: 'bg-[#DBEAFE] text-[#2563EB]',
+                    prompt: "Analyze this week's profit margins",
+                  },
+                  {
+                    label: 'Add Expense',
+                    icon: Wallet,
+                    bg: 'bg-[#FEE2E2] text-[#EF4444]',
+                    prompt: 'Show profit and loss for September',
+                  },
+                ].map((act) => {
+                  const Icon = act.icon;
+                  return (
+                    <button
+                      key={act.label}
+                      type="button"
+                      onClick={() => void handleSendAiMessage(act.prompt)}
+                      className="flex items-center gap-2 rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5 text-left hover:border-[#0A6847] hover:bg-white transition"
+                    >
+                      <span
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${act.bg}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <span className="text-[11.5px] font-bold text-[#111827] truncate">
+                        {act.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          </div>
 
-          {/* Chat Messages */}
-          <div className="my-4 flex-1 space-y-3 overflow-y-auto max-h-[420px] pr-1">
-            {aiMessages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-[13px] whitespace-pre-line leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-[#0A6847] text-white'
-                      : 'border border-[#E4EFEA] bg-[#F8FCFA] text-[#1E293B]'
-                  }`}
+            {/* Card 2: Business Insights */}
+            <div className="bos-card p-4 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[14.5px] font-extrabold text-[#111827]">Business Insights</h2>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAiInsightsPeriod((prev) =>
+                      prev === 'This Week' ? 'This Month' : 'This Week',
+                    )
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-1 text-[11px] font-bold text-[#334155]"
                 >
-                  <div>{msg.text}</div>
-                  <div
-                    className={`mt-1 text-[10px] ${
-                      msg.role === 'user' ? 'text-white/75' : 'text-[#94A3B8]'
-                    }`}
-                  >
-                    {msg.time}
+                  <span>{aiInsightsPeriod}</span>
+                  <ChevronDown className="h-3 w-3 text-[#64748B]" />
+                </button>
+              </div>
+
+              <div>
+                <p className="text-[11.5px] font-medium text-[#64748B]">Sales</p>
+                <div className="mt-0.5 flex items-baseline gap-2">
+                  <span className="text-[20px] font-extrabold text-[#111827]">
+                    {currencySymbol} 3,42,180
+                  </span>
+                  <span className="text-[11.5px] font-bold text-[#10B981]">↑ 18%</span>
+                </div>
+              </div>
+
+              {/* 7-Day Bar Chart (Mon - Sun) */}
+              <div className="flex items-end justify-between gap-2 pt-2 h-24">
+                {weeklyBars.map((bar) => (
+                  <div key={bar.day} className="flex flex-1 flex-col items-center gap-1.5">
+                    <div
+                      style={{ height: `${bar.height}px` }}
+                      className={`w-full max-w-[22px] rounded-t-md transition-all ${
+                        bar.active ? 'bg-[#0A6847]' : 'bg-[#6EE7B7]'
+                      }`}
+                    />
+                    <span className="text-[10px] font-medium text-[#64748B]">{bar.day}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bottom 2 Mini Cards: Orders | New Customers */}
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5 flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#E6F6F0] text-[#0A6847]">
+                    <ShoppingCart className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[10.5px] font-medium text-[#64748B]">Orders</p>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">186</p>
+                    <p className="text-[10px] font-bold text-[#10B981]">↑ 16%</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5 flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#DBEAFE] text-[#2563EB]">
+                    <Users className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-[10.5px] font-medium text-[#64748B] truncate">
+                      New Customers
+                    </p>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">24</p>
+                    <p className="text-[10px] font-bold text-[#10B981]">↑ 33%</p>
                   </div>
                 </div>
               </div>
-            ))}
-            {aiLoading && (
-              <div className="text-[12.5px] text-[#0A6847] font-semibold animate-pulse">
-                ✨ BOS AI is analyzing your store data...
+            </div>
+
+            {/* Card 3: Smart Suggestions */}
+            <div className="bos-card p-4 space-y-3">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-[#F59E0B] fill-[#F59E0B]" />
+                <h2 className="text-[14.5px] font-extrabold text-[#111827]">Smart Suggestions</h2>
               </div>
-            )}
-          </div>
 
-          {/* Input Bar */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              void handleSendAiMessage(aiInput);
-            }}
-            className="flex gap-2 pt-3 border-t border-[#EDF4F0]"
-          >
-            <input
-              type="text"
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              placeholder="Ask BOS AI about sales, low stock, Khata dues, GST, or marketing..."
-              className="flex-1 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-4 py-2.5 text-[13px] text-[#111827] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
-            />
-            <button
-              type="submit"
-              disabled={aiLoading}
-              className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-[13px]"
-            >
-              <Send className="h-4 w-4" />
-              <span>Ask AI</span>
-            </button>
-          </form>
-        </div>
-
-        {/* Right: Quick AI Prompts & Store Context */}
-        <div className="bos-card p-5 lg:col-span-4 space-y-4">
-          <h3 className="text-[14.5px] font-bold text-[#111827]">
-            One-Click Business Prompts
-          </h3>
-          <div className="space-y-2">
-            {quickChips.map((chip) => (
-              <button
-                key={chip}
-                type="button"
-                onClick={() => void handleSendAiMessage(chip)}
-                className="w-full rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-3 text-left text-[12.5px] font-semibold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
-              >
-                ✨ {chip}
-              </button>
-            ))}
+              <div className="space-y-2">
+                {[
+                  {
+                    title: '5 products are low in stock',
+                    sub: 'Restock to avoid stockout.',
+                    icon: AlertTriangle,
+                    bg: 'bg-[#FEE2E2] text-[#EF4444]',
+                    prompt: 'Show low stock items to reorder',
+                  },
+                  {
+                    title: "12 customers haven't purchased in 45+ days",
+                    sub: 'Send a WhatsApp offer.',
+                    icon: Package,
+                    bg: 'bg-[#FEF3C7] text-[#D97706]',
+                    prompt: 'Draft a WhatsApp promo for weekend sale',
+                  },
+                  {
+                    title: "Today's appointments end at 7:00 PM",
+                    sub: 'Send reminder to 3 customers.',
+                    icon: Calendar,
+                    bg: 'bg-[#DBEAFE] text-[#2563EB]',
+                    prompt: 'Check my salon appointments',
+                  },
+                  {
+                    title: 'Create a Diwali offer for your top customers',
+                    sub: 'I can create a ready-to-send message.',
+                    icon: Bot,
+                    bg: 'bg-[#E6F6F0] text-[#0A6847]',
+                    prompt: 'Create WhatsApp offer for Diwali',
+                  },
+                ].map((sug) => {
+                  const Icon = sug.icon;
+                  return (
+                    <button
+                      key={sug.title}
+                      type="button"
+                      onClick={() => void handleSendAiMessage(sug.prompt)}
+                      className="flex w-full items-center justify-between gap-2.5 rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5 text-left hover:border-[#0A6847] hover:bg-white transition"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span
+                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${sug.bg}`}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-bold text-[#111827] truncate">
+                            {sug.title}
+                          </p>
+                          <p className="text-[11px] text-[#64748B] truncate">{sug.sub}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-[#94A3B8]" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -886,9 +2225,64 @@ export function BosMarketingAiIntegrationsSettings({
     );
   }
 
-  /* 4. SETTINGS MODE */
+  /* 4. SETTINGS MODE — 1:1 Match with Settings & Business Configuration Screenshot */
+  const leftNavItems = [
+    {
+      id: 'businessInfo' as const,
+      title: 'Business Information',
+      sub: 'Basic details about your business',
+      icon: Building2,
+    },
+    {
+      id: 'businessHours' as const,
+      title: 'Business Hours',
+      sub: 'Opening hours and holidays',
+      icon: Clock,
+    },
+    {
+      id: 'locations' as const,
+      title: 'Locations / Branches',
+      sub: 'Manage multiple outlets',
+      icon: MapPin,
+    },
+    {
+      id: 'contact' as const,
+      title: 'Contact & Communication',
+      sub: 'Phone, email and website',
+      icon: Phone,
+    },
+    {
+      id: 'logoBranding' as const,
+      title: 'Logo & Branding',
+      sub: 'Logo, colors and default settings',
+      icon: Palette,
+    },
+    {
+      id: 'businessType' as const,
+      title: 'Business Type',
+      sub: 'Industry and feature settings',
+      icon: Briefcase,
+    },
+    {
+      id: 'documents' as const,
+      title: 'Documents',
+      sub: 'PAN, GST, licenses and more',
+      icon: FileText,
+    },
+  ];
+
+  const daysOfWeek = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
   return (
-    <div className="space-y-4 pb-6">
+    <div className="w-full max-w-none space-y-4 pb-6">
       {toast && (
         <div className="flex items-center justify-between rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-2.5 text-[13px] font-medium text-[#065F46]">
           <span className="flex items-center gap-2">
@@ -901,248 +2295,702 @@ export function BosMarketingAiIntegrationsSettings({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
-        {/* Left Settings Sub-Menu */}
-        <div className="bos-card p-3 lg:col-span-3 space-y-1">
+      {/* Top Page Title & Subtitle */}
+      <div>
+        <h1 className="text-[22px] font-extrabold tracking-tight text-[#111827]">
+          Settings &amp; Business Configuration
+        </h1>
+        <p className="mt-0.5 text-[13px] text-[#64748B]">
+          Manage your business profile, store settings, staff, invoices, taxes, notifications and more.
+        </p>
+      </div>
+
+      {/* 9 Top Underline Sub-Tabs */}
+      <div className="border-b border-[#DCE9E3] overflow-x-auto">
+        <div className="flex items-center gap-6 min-w-max">
           {(
             [
-              { id: 'profile', label: 'Business Profile', sub: 'Store name, address, logo' },
-              { id: 'pos', label: 'Store & POS Preferences', sub: 'Billing, barcode, rounding' },
-              { id: 'gst', label: 'GST & Tax Configuration', sub: 'GSTIN, HSN/SAC, E-Invoicing' },
-              { id: 'payments', label: 'Payments & Bank Details', sub: 'UPI QR, bank account' },
-              { id: 'staff', label: 'Users, Staff & Roles', sub: 'Cashiers, managers, permissions' },
-              { id: 'plan', label: 'Subscription & Plan', sub: 'BOS Pro Plan & billing' },
+              'Business Profile',
+              'Store Settings',
+              'GST & Tax',
+              'Users & Staff',
+              'Invoice Templates',
+              'Notifications',
+              'Subscription',
+              'Security',
+              'Preferences',
             ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setSettingsSection(item.id)}
-              className={`w-full rounded-xl p-3 text-left transition ${
-                settingsSection === item.id
-                  ? 'bg-[#0A6847] text-white shadow-2xs'
-                  : 'hover:bg-[#F4F8F6] text-[#1E293B]'
-              }`}
-            >
-              <p className="text-[13px] font-bold">{item.label}</p>
-              <p
-                className={`text-[11px] ${
-                  settingsSection === item.id ? 'text-white/80' : 'text-[#64748B]'
+          ).map((tab) => {
+            const isActive = settingsTopTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setSettingsTopTab(tab)}
+                className={`relative pb-3 text-[13px] font-bold transition ${
+                  isActive
+                    ? 'text-[#0A6847]'
+                    : 'text-[#475569] hover:text-[#111827]'
                 }`}
               >
-                {item.sub}
-              </p>
-            </button>
-          ))}
+                {tab}
+                {isActive && (
+                  <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-[#0A6847]" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Middle 3-Column Grid: Left Menu (3 cols) + Center Business Information Form (6 cols) + Right Preview Cards (3 cols) */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
+        {/* Left Vertical Navigation Menu Card (3 cols) */}
+        <div className="bos-card p-2.5 lg:col-span-3 space-y-1">
+          {leftNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = settingsSection === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSettingsSection(item.id)}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                  isActive
+                    ? 'border-l-[3.5px] border-l-[#0A6847] bg-[#E6F6F0]/80 text-[#0A6847]'
+                    : 'text-[#1E293B] hover:bg-[#F4F8F6]'
+                }`}
+              >
+                <div
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                    isActive
+                      ? 'bg-[#0A6847]/15 text-[#0A6847]'
+                      : 'bg-[#F1F6F3] text-[#0A6847]'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className={`text-[13px] font-bold truncate ${
+                      isActive ? 'text-[#064E3B]' : 'text-[#111827]'
+                    }`}
+                  >
+                    {item.title}
+                  </p>
+                  <p className="text-[11px] text-[#64748B] truncate">{item.sub}</p>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Right Settings Workspace */}
-        <div className="lg:col-span-9 space-y-4">
-          <div className="bos-card p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-3">
+        {/* Center Main Form Card: Business Information (6 cols) */}
+        <div className="bos-card p-5 lg:col-span-6 space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+            <div className="max-w-lg">
+              <h2 className="text-[16px] font-extrabold text-[#111827]">
+                Business Information
+              </h2>
+              <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                Update your business details. This information will be used in invoices, receipts and customer communications.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                await onUpdateStoreSettings({
+                  businessName: settingsBusinessName,
+                  businessType: settingsBusinessType,
+                  phone: `+91 ${settingsPhoneNumber}`,
+                  whatsappNumber: `+91 ${settingsPhoneNumber}`,
+                  email: settingsEmailAddress,
+                  address: settingsAddress,
+                  gstin: settingsGstin,
+                });
+                setToast('Business Information & Store Configuration saved successfully!');
+                setTimeout(() => setToast(null), 3000);
+              }}
+              className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition"
+            >
+              Save Changes
+            </button>
+          </div>
+
+          {/* Form Fields Grid */}
+          <div className="space-y-3.5 text-[12.5px]">
+            {/* Row 1: Business Name * | Business Type * */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div>
-                <h2 className="text-[16px] font-bold text-[#111827]">
-                  Business Profile & Store Identity
-                </h2>
-                <p className="text-[12px] text-[#64748B]">
-                  Appears on your GST Invoices, 80mm Thermal Receipts, Online Store, and WhatsApp
-                  messages.
-                </p>
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Business Name <span className="text-[#EF4444]">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={settingsBusinessName}
+                  onChange={(e) => setSettingsBusinessName(e.target.value)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                />
               </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  await onUpdateStoreSettings(storeSettings);
-                  setToast('Saved Business Settings & GST configuration!');
-                  setTimeout(() => setToast(null), 3000);
-                }}
-                className="bos-btn-primary rounded-xl px-4 py-2 text-[12.5px]"
-              >
-                Save All Changes
-              </button>
+
+              <div>
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Business Type <span className="text-[#EF4444]">*</span>
+                </label>
+                <div className="relative flex items-center">
+                  <Store className="pointer-events-none absolute left-3 h-4 w-4 text-[#0A6847]" />
+                  <select
+                    value={settingsBusinessType}
+                    onChange={(e) => setSettingsBusinessType(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-9 pr-8 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                  >
+                    <option value="Grocery Store">Grocery Store</option>
+                    <option value="Supermarket & Kirana">Supermarket &amp; Kirana</option>
+                    <option value="Pharmacy & Medical">Pharmacy &amp; Medical</option>
+                    <option value="Electronics & Mobile">Electronics &amp; Mobile</option>
+                    <option value="Salon & Spa">Salon &amp; Spa</option>
+                    <option value="Restaurant & Cafe">Restaurant &amp; Cafe</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 text-[13px]">
+            {/* Row 2: Owner Name | Phone Number * */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Business / Trade Name *
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Owner Name
                 </label>
                 <input
                   type="text"
-                  value={storeSettings.businessName}
-                  onChange={(e) => void onUpdateStoreSettings({ businessName: e.target.value })}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-bold text-[#111827]"
+                  value={settingsOwnerName}
+                  onChange={(e) => setSettingsOwnerName(e.target.value)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Business Category
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Phone Number <span className="text-[#EF4444]">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={storeSettings.businessType}
-                  onChange={(e) => void onUpdateStoreSettings({ businessType: e.target.value })}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-semibold text-[#111827]"
-                />
+                <div className="flex items-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-white focus-within:border-[#0A6847]">
+                  <div className="flex items-center gap-1 border-r border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-2 text-[12.5px] font-semibold text-[#334155]">
+                    <span>🇮🇳</span>
+                    <span>+91</span>
+                    <ChevronDown className="h-3.5 w-3.5 text-[#64748B]" />
+                  </div>
+                  <input
+                    type="text"
+                    value={settingsPhoneNumber}
+                    onChange={(e) => setSettingsPhoneNumber(e.target.value)}
+                    className="w-full bg-white px-3 py-2 text-[13px] font-semibold text-[#111827] focus:outline-hidden"
+                  />
+                </div>
               </div>
+            </div>
 
+            {/* Row 3: Email Address | Website (Optional) */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
               <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Primary Phone / WhatsApp
-                </label>
-                <input
-                  type="text"
-                  value={storeSettings.phone}
-                  onChange={(e) =>
-                    void onUpdateStoreSettings({
-                      phone: e.target.value,
-                      whatsappNumber: e.target.value,
-                    })
-                  }
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-semibold text-[#111827]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Business Email
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Email Address
                 </label>
                 <input
                   type="email"
-                  value={storeSettings.email}
-                  onChange={(e) => void onUpdateStoreSettings({ email: e.target.value })}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 text-[#111827]"
+                  value={settingsEmailAddress}
+                  onChange={(e) => setSettingsEmailAddress(e.target.value)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Registered Store Address
+              <div>
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Website <span className="font-normal text-[#64748B]">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  value={storeSettings.address}
-                  onChange={(e) => void onUpdateStoreSettings({ address: e.target.value })}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 text-[#111827]"
+                  value={settingsWebsite}
+                  onChange={(e) => setSettingsWebsite(e.target.value)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
                 />
+              </div>
+            </div>
+
+            {/* Row 4: Full-Width Business Address * */}
+            <div>
+              <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                Business Address <span className="text-[#EF4444]">*</span>
+              </label>
+              <input
+                type="text"
+                value={settingsAddress}
+                onChange={(e) => setSettingsAddress(e.target.value)}
+                className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+              />
+            </div>
+
+            {/* Row 5: City | State | PIN Code */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  City
+                </label>
+                <input
+                  type="text"
+                  value={settingsCity}
+                  onChange={(e) => setSettingsCity(e.target.value)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  State
+                </label>
+                <div className="relative flex items-center">
+                  <select
+                    value={settingsState}
+                    onChange={(e) => setSettingsState(e.target.value)}
+                    className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-3.5 pr-8 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                  >
+                    <option value="Uttar Pradesh">Uttar Pradesh</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Maharashtra">Maharashtra</option>
+                    <option value="Karnataka">Karnataka</option>
+                    <option value="Gujarat">Gujarat</option>
+                    <option value="Tamil Nadu">Tamil Nadu</option>
+                    <option value="Haryana">Haryana</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  PIN Code
+                </label>
+                <input
+                  type="text"
+                  value={settingsPinCode}
+                  onChange={(e) => setSettingsPinCode(e.target.value)}
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            {/* Row 6: Business Logo (left) | Business Description (Optional) (right) */}
+            <div className="grid grid-cols-1 gap-4 pt-2 border-t border-[#EDF4F0] sm:grid-cols-12">
+              {/* Business Logo (5 cols) */}
+              <div className="sm:col-span-5 space-y-2">
+                <label className="block text-[12px] font-semibold text-[#334155]">
+                  Business Logo
+                </label>
+                <div className="flex items-center gap-3">
+                  {/* Storefront Logo Thumbnail */}
+                  <div className="relative flex h-16 w-16 shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-gradient-to-b from-[#E6F6F0] to-[#FEF3C7] shadow-2xs">
+                    <div className="w-full bg-[#D97706] py-0.5 text-center text-[7px] font-extrabold uppercase tracking-wider text-white">
+                      {settingsBusinessName}
+                    </div>
+                    <Store className="mt-1 h-7 w-7 text-[#0A6847]" />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setToast('Store logo updated successfully!');
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-[#0A6847]" />
+                      <span>Upload Logo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setToast('Reset store logo to default.');
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className="rounded-lg border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-slate-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#64748B]">
+                  Recommended size: 512 x 512 px (JPG, PNG)
+                </p>
+              </div>
+
+              {/* Business Description (Optional) (7 cols) */}
+              <div className="sm:col-span-7 flex flex-col">
+                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                  Business Description <span className="font-normal text-[#64748B]">(Optional)</span>
+                </label>
+                <div className="relative flex-1">
+                  <textarea
+                    rows={3}
+                    maxLength={300}
+                    value={settingsDescription}
+                    onChange={(e) => setSettingsDescription(e.target.value)}
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white p-3 pb-6 text-[12.5px] leading-relaxed text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                  />
+                  <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] font-medium text-[#94A3B8]">
+                    {settingsDescription.length}/300
+                  </span>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          {/* GST & Bank Card */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="bos-card p-5 space-y-3 text-[13px]">
-              <div className="flex items-center justify-between">
-                <h3 className="text-[14.5px] font-bold text-[#111827]">
-                  GST & Tax Configuration
-                </h3>
-                <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[10.5px] font-bold text-[#0A6847]">
-                  ✓ GST Active
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  GSTIN Number (15-Digit)
-                </label>
-                <input
-                  type="text"
-                  value={storeSettings.gstin}
-                  onChange={(e) =>
-                    void onUpdateStoreSettings({ gstin: e.target.value.toUpperCase() })
-                  }
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-mono font-bold text-[#0A6847]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Business PAN
-                </label>
-                <input
-                  type="text"
-                  value={storeSettings.pan}
-                  onChange={(e) =>
-                    void onUpdateStoreSettings({ pan: e.target.value.toUpperCase() })
-                  }
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-mono"
-                />
-              </div>
+        {/* Right Stacked Preview Cards (3 cols): Store Preview + Business Hours */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Card 1: Store Preview */}
+          <div className="bos-card p-4 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14.5px] font-extrabold text-[#111827]">Store Preview</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setToast(`Opening live store preview: ${settingsWebsite}`);
+                  setTimeout(() => setToast(null), 2500);
+                }}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+              >
+                View Store
+              </button>
             </div>
 
-            <div className="bos-card p-5 space-y-3 text-[13px]">
-              <h3 className="text-[14.5px] font-bold text-[#111827]">
-                UPI QR & Settlement Bank Account
-              </h3>
-
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                  Merchant UPI ID (For Dynamic QR)
-                </label>
-                <input
-                  type="text"
-                  value={storeSettings.upiId}
-                  onChange={(e) => void onUpdateStoreSettings({ upiId: e.target.value })}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-bold text-[#0A6847]"
-                />
+            <div className="flex items-start gap-3">
+              {/* Circular Store Thumbnail */}
+              <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center overflow-hidden rounded-full border-2 border-[#A7F3D0] bg-gradient-to-b from-[#E6F6F0] to-[#FEF3C7] shadow-2xs">
+                <Store className="h-6 w-6 text-[#0A6847]" />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                    Bank Name
-                  </label>
-                  <input
-                    type="text"
-                    value={storeSettings.bankName}
-                    onChange={(e) => void onUpdateStoreSettings({ bankName: e.target.value })}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2"
-                  />
+              <div className="min-w-0 flex-1 space-y-1">
+                <h4 className="text-[14.5px] font-extrabold text-[#111827] truncate">
+                  {settingsBusinessName}
+                </h4>
+                <p className="text-[11.5px] text-[#64748B] line-clamp-2 leading-snug">
+                  Daily essentials, fresh groceries and more.
+                </p>
+                <div className="pt-1 space-y-1 text-[11.5px] text-[#334155]">
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <Phone className="h-3.5 w-3.5 shrink-0 text-[#0A6847]" />
+                    <span>+91 {settingsPhoneNumber}</span>
+                  </p>
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <MapPin className="h-3.5 w-3.5 shrink-0 text-[#0A6847]" />
+                    <span className="truncate">
+                      {settingsCity}, {settingsState}
+                    </span>
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase text-[#64748B] mb-1">
-                    IFSC Code
-                  </label>
-                  <input
-                    type="text"
-                    value={storeSettings.ifscCode}
-                    onChange={(e) => void onUpdateStoreSettings({ ifscCode: e.target.value })}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-mono"
-                  />
+                <div className="pt-1">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                    <span className="h-2 w-2 rounded-full bg-[#10B981]" />
+                    Store is Live
+                  </span>
                 </div>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsSection('logoBranding');
+                setToast('Switched to Store Appearance & Branding settings.');
+                setTimeout(() => setToast(null), 2500);
+              }}
+              className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/40 transition"
+            >
+              Edit Store Appearance
+            </button>
           </div>
 
-          {/* Subscription & Plan Card */}
-          <div className="bos-card p-5 bg-gradient-to-r from-[#06392A] to-[#0A6847] text-white flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-[#A7F3D0]">
-                <Crown className="h-6 w-6" />
+          {/* Card 2: Business Hours */}
+          <div className="bos-card p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14.5px] font-extrabold text-[#111827]">Business Hours</h3>
+              <button
+                type="button"
+                onClick={() => setEditingHours((prev) => !prev)}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+              >
+                {editingHours ? 'Done' : 'Edit'}
+              </button>
+            </div>
+
+            {editingHours && (
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5">
+                <label className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-1">
+                  Standard Daily Hours
+                </label>
+                <input
+                  type="text"
+                  value={defaultDayHours}
+                  onChange={(e) => setDefaultDayHours(e.target.value)}
+                  className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#111827]"
+                />
+              </div>
+            )}
+
+            <div className="space-y-2 text-[12px]">
+              {daysOfWeek.map((day) => (
+                <div key={day} className="flex items-center justify-between">
+                  <span className="font-medium text-[#475569]">{day}</span>
+                  <span className="font-semibold text-[#111827]">{defaultDayHours}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 border-t border-[#EDF4F0] pt-2.5 text-[11.5px]">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-[#10B981]" />
+              <span className="font-bold text-[#0A6847]">Open Now</span>
+              <span className="text-[#CBD5E1]">|</span>
+              <span className="font-medium text-[#64748B]">Closes at 10:00 PM</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom 4 Summary Cards Row: GST Information | Subscription Plan | Users & Staff | Security */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {/* 1. GST Information Card */}
+        <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14.5px] font-extrabold text-[#111827]">GST Information</h3>
+              <button
+                type="button"
+                onClick={() => setGstModalOpen((prev) => !prev)}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+              >
+                Configure
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[10px] font-extrabold text-[#0A6847]">
+                GST
               </div>
               <div>
-                <span className="rounded-full bg-[#00B894] px-2.5 py-0.5 text-[10.5px] font-bold uppercase">
-                  BOS Pro Plan
-                </span>
-                <h3 className="mt-1 text-[16px] font-extrabold">
-                  Unlimited POS Registers, Multi-Store, WhatsApp API & AI Copilot
-                </h3>
-                <p className="text-[12px] text-white/80">
-                  Manage multiple branches, staff roles, and automated GST filings.
+                <p className="text-[11px] font-medium text-[#64748B]">GSTIN</p>
+                <p className="font-mono text-[14px] font-extrabold text-[#111827]">
+                  {settingsGstin}
                 </p>
               </div>
             </div>
 
-            {onOpenUpgradeModal && (
+            {gstModalOpen && (
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5 space-y-2">
+                <input
+                  type="text"
+                  value={settingsGstin}
+                  onChange={(e) => setSettingsGstin(e.target.value.toUpperCase())}
+                  placeholder="Enter 15-digit GSTIN"
+                  className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 font-mono text-[12px] font-bold text-[#111827]"
+                />
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="font-semibold text-[#475569]">e-Invoice Active</span>
+                  <input
+                    type="checkbox"
+                    checked={settingsEInvoiceEnabled}
+                    onChange={(e) => setSettingsEInvoiceEnabled(e.target.checked)}
+                    className="h-4 w-4 accent-[#0A6847]"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 border-t border-[#EDF4F0] pt-3 text-[12px]">
+            <div>
+              <p className="text-[11px] text-[#64748B]">Registration Type</p>
+              <p className="mt-0.5 font-extrabold text-[#111827]">{settingsRegType}</p>
+            </div>
+            <div>
+              <p className="text-[11px] text-[#64748B]">e-Invoice Status</p>
+              <p className="mt-0.5 inline-flex items-center gap-1.5 font-extrabold text-[#0A6847]">
+                <span className="h-2 w-2 rounded-full bg-[#10B981]" />
+                {settingsEInvoiceEnabled ? 'Enabled' : 'Disabled'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Subscription Plan Card */}
+        <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14.5px] font-extrabold text-[#111827]">Subscription Plan</h3>
               <button
                 type="button"
-                onClick={onOpenUpgradeModal}
-                className="shrink-0 rounded-xl bg-[#00B894] px-4 py-2.5 text-[12.5px] font-bold text-white shadow-sm hover:bg-[#00A181]"
+                onClick={() => {
+                  if (onOpenUpgradeModal) {
+                    onOpenUpgradeModal();
+                  } else {
+                    setSettingsTopTab('Subscription');
+                  }
+                }}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
               >
-                Manage Pro Plan
+                Manage
               </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-[#D97706]">
+                <Crown className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[14.5px] font-extrabold text-[#111827]">Pro Plan</p>
+                <p className="text-[11.5px] text-[#64748B]">Valid till 12 Jan 2026</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 border-t border-[#EDF4F0] pt-2.5 text-[12px]">
+            {[
+              'All Features',
+              'Up to 5 Staff Members',
+              'Online Store',
+              'Priority Support',
+            ].map((feat) => (
+              <div key={feat} className="flex items-center gap-2 text-[#334155]">
+                <Check className="h-3.5 w-3.5 shrink-0 text-[#0A6847] stroke-[2.5]" />
+                <span className="font-medium">{feat}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3. Users & Staff Card */}
+        <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14.5px] font-extrabold text-[#111827]">Users &amp; Staff</h3>
+              <button
+                type="button"
+                onClick={() => setSettingsTopTab('Users & Staff')}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+              >
+                Manage
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[14.5px] font-extrabold text-[#111827]">
+                  {activeUsersCount} Active Users
+                </p>
+                <p className="text-[11.5px] text-[#64748B]">2 Admin • 3 Staff</p>
+              </div>
+            </div>
+
+            {/* Avatar Stack */}
+            <div className="flex items-center -space-x-2 pt-0.5">
+              {[
+                { initials: 'RK', bg: 'bg-[#0A6847]' },
+                { initials: 'AS', bg: 'bg-[#0D9488]' },
+                { initials: 'PK', bg: 'bg-[#2563EB]' },
+                { initials: 'VR', bg: 'bg-[#D97706]' },
+              ].map((av) => (
+                <div
+                  key={av.initials}
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[10.5px] font-bold text-white ${av.bg}`}
+                >
+                  {av.initials}
+                </div>
+              ))}
+              <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#E6F6F0] text-[10.5px] font-extrabold text-[#0A6847]">
+                +2
+              </div>
+            </div>
+
+            {inviteStaffModalOpen && (
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5 space-y-2">
+                <input
+                  type="text"
+                  value={inviteStaffName}
+                  onChange={(e) => setInviteStaffName(e.target.value)}
+                  placeholder="Staff Name or Mobile"
+                  className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-[12px] font-medium"
+                />
+                <div className="flex gap-1.5">
+                  <select
+                    value={inviteStaffRole}
+                    onChange={(e) => setInviteStaffRole(e.target.value)}
+                    className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[11.5px]"
+                  >
+                    <option value="Staff">Staff</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Cashier">Cashier</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!inviteStaffName.trim()) return;
+                      setActiveUsersCount((c) => c + 1);
+                      setToast(`Invited ${inviteStaffName} (${inviteStaffRole}) to ${settingsBusinessName}!`);
+                      setInviteStaffName('');
+                      setInviteStaffModalOpen(false);
+                      setTimeout(() => setToast(null), 3000);
+                    }}
+                    className="flex-1 rounded-lg bg-[#0A6847] py-1 text-[11.5px] font-bold text-white"
+                  >
+                    Send Invite
+                  </button>
+                </div>
+              </div>
             )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setInviteStaffModalOpen((prev) => !prev)}
+            className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/40 transition"
+          >
+            + Invite Team Member
+          </button>
+        </div>
+
+        {/* 4. Security Card */}
+        <div className="bos-card p-4 flex flex-col justify-between space-y-3.5">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[14.5px] font-extrabold text-[#111827]">Security</h3>
+              <button
+                type="button"
+                onClick={() => setSettingsTopTab('Security')}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+              >
+                Manage
+              </button>
+            </div>
+
+            <div className="space-y-2.5 pt-1 text-[12px]">
+              {[
+                { label: 'Two-Factor Authentication', status: 'Enabled' },
+                { label: 'Login Activity Monitoring', status: 'Enabled' },
+                { label: 'Data Backup', status: 'Daily' },
+                { label: 'Account Security', status: 'Protected' },
+              ].map((sec) => (
+                <div key={sec.label} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ShieldCheck className="h-4 w-4 shrink-0 text-[#0A6847]" />
+                    <span className="text-[#334155] font-medium truncate">{sec.label}</span>
+                  </div>
+                  <span className="shrink-0 font-extrabold text-[#0A6847]">{sec.status}</span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

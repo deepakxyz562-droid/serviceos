@@ -338,6 +338,7 @@ export function BosInventoryWorkstation({
   const [showProductModal, setShowProductModal] = useState(initialOpenAddModal);
   const [editingProduct, setEditingProduct] = useState<BosProductItem | null>(null);
   const [fetchingPublicImage, setFetchingPublicImage] = useState(false);
+  const [modalFetchMessage, setModalFetchMessage] = useState<string | null>(null);
   const [formState, setFormState] = useState({
     name: '',
     category: 'Grocery',
@@ -538,6 +539,7 @@ export function BosInventoryWorkstation({
 
   const openAddProductModal = () => {
     setEditingProduct(null);
+    setModalFetchMessage(null);
     setFormState({
       name: '',
       category: 'Grocery',
@@ -548,7 +550,7 @@ export function BosInventoryWorkstation({
       stockQuantity: 40,
       lowStockThreshold: 10,
       sku: `PRD-${Math.floor(100 + Math.random() * 899)}`,
-      barcode: '8901058000012',
+      barcode: '',
       unit: '1kg',
       gstRate: 5,
       hsnCode: '1006',
@@ -560,6 +562,7 @@ export function BosInventoryWorkstation({
   const openEditProductModal = (product: BosProductItem) => {
     const meta = getResolvedRowMeta(product);
     setEditingProduct(product);
+    setModalFetchMessage(null);
     setFormState({
       name: meta.displayName,
       category: meta.categoryPill,
@@ -581,10 +584,13 @@ export function BosInventoryWorkstation({
 
   const handleAutoFetchPublicImage = async () => {
     if (!formState.barcode.trim() && !formState.name.trim()) {
-      showToast('Enter a barcode or product name first to look up the public catalog');
+      const msg = 'Enter a product name or barcode first to auto-fetch image';
+      setModalFetchMessage(msg);
+      showToast(msg);
       return;
     }
     setFetchingPublicImage(true);
+    setModalFetchMessage('Searching centralized catalog & public barcode CDNs...');
     try {
       const result = await lookupPublicProductByBarcodeOrName({
         barcode: formState.barcode,
@@ -593,15 +599,22 @@ export function BosInventoryWorkstation({
       if (result?.imageUrl) {
         setFormState((prev) => ({
           ...prev,
-          imageUrl: result.imageUrl || prev.imageUrl,
+          imageUrl: result.imageUrl || '',
           brand: result.brand || prev.brand,
           unit: result.unit || prev.unit,
         }));
-        showToast(`Fetched image from ${result.source || 'Public Barcode CDN'}`);
+        const okMsg = `✓ Image fetched from ${result.source || 'Public Barcode CDN'}`;
+        setModalFetchMessage(okMsg);
+        showToast(okMsg);
       } else {
-        showToast(
-          'No external packshot found — BOS will automatically display the Category Icon + Product Name badge',
-        );
+        setFormState((prev) => ({
+          ...prev,
+          imageUrl: '',
+        }));
+        const fallbackMsg =
+          'No external image found — showing Category Icon + Product Name badge';
+        setModalFetchMessage(fallbackMsg);
+        showToast(fallbackMsg);
       }
     } finally {
       setFetchingPublicImage(false);
@@ -1598,39 +1611,57 @@ export function BosInventoryWorkstation({
 
             <form onSubmit={handleProductFormSubmit} className="mt-4 space-y-3">
               {/* Live Thumbnail Preview (Image or Icon + Product Name fallback) */}
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3">
-                <div className="flex items-center gap-3">
-                  <BosProductThumbnail
-                    product={{
-                      name: formState.name || 'New Product',
-                      category: formState.category,
-                      barcode: formState.barcode,
-                      imageUrl: formState.imageUrl,
-                    }}
-                    size="md"
-                  />
-                  <div>
-                    <p className="text-[12.5px] font-bold text-[#111827]">
-                      {formState.name || 'Product Preview'}
-                    </p>
-                    <p className="text-[11px] text-[#64748B]">
-                      {formState.imageUrl
-                        ? 'Using Centralized / Public CDN Image URL'
-                        : 'No hosted image needed — auto-resolves or shows Icon + Product Name'}
-                    </p>
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <BosProductThumbnail
+                      product={{
+                        name: formState.name || 'New Product',
+                        category: formState.category,
+                        barcode: formState.barcode,
+                        imageUrl: formState.imageUrl,
+                      }}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[12.5px] font-bold text-[#111827] truncate">
+                        {formState.name || 'Product Preview'}
+                      </p>
+                      <p className="text-[11px] text-[#64748B] truncate">
+                        {modalFetchMessage
+                          ? modalFetchMessage
+                          : formState.imageUrl
+                            ? 'Using Centralized / Public CDN Image URL'
+                            : 'No hosted image needed — auto-resolves or shows Icon + Product Name'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {formState.imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormState((s) => ({ ...s, imageUrl: '' }));
+                          setModalFetchMessage('Cleared external image — using Icon + Product Name');
+                        }}
+                        className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1.5 text-[11px] font-semibold text-[#475569] hover:bg-[#F1F5F9] cursor-pointer"
+                      >
+                        Use Icon
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={fetchingPublicImage}
+                      onClick={handleAutoFetchPublicImage}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A6847] px-2.5 py-1.5 text-[11.5px] font-semibold text-white hover:bg-[#085238] disabled:opacity-50 shrink-0 cursor-pointer"
+                    >
+                      <Globe className="h-3.5 w-3.5" />
+                      <span>
+                        {fetchingPublicImage ? 'Looking up...' : 'Auto-Fetch Image'}
+                      </span>
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled={fetchingPublicImage}
-                  onClick={handleAutoFetchPublicImage}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A6847] px-2.5 py-1.5 text-[11.5px] font-semibold text-white hover:bg-[#085238] disabled:opacity-50 shrink-0 cursor-pointer"
-                >
-                  <Globe className="h-3.5 w-3.5" />
-                  <span>
-                    {fetchingPublicImage ? 'Looking up...' : 'Auto-Fetch Image'}
-                  </span>
-                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1642,9 +1673,11 @@ export function BosInventoryWorkstation({
                     type="text"
                     required
                     value={formState.name}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, name: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      setModalFetchMessage(null);
+                      setFormState((s) => ({ ...s, name: nextName }));
+                    }}
                     placeholder="e.g. Loose Basmati Rice"
                     className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
                   />

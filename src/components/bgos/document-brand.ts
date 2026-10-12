@@ -21,7 +21,8 @@ export function useBgosDocumentBrand(active: boolean) {
       }
       elements.forEach(element => { saved.push({ element, attribute, value: element.getAttribute(attribute) }); element.setAttribute(attribute, value); });
     };
-    set('link[rel="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]', 'link', { rel: 'icon' }, 'href', '/bgos/teal-mark.png');
+    set('link[rel="icon"], link[rel="shortcut icon"]', 'link', { rel: 'icon' }, 'href', '/bgos/icon.svg');
+    set('link[rel="apple-touch-icon"]', 'link', { rel: 'apple-touch-icon' }, 'href', '/bgos/apple-touch-icon.png');
     set('link[rel="manifest"]', 'link', { rel: 'manifest' }, 'href', '/bgos/manifest.webmanifest');
     set('meta[name="theme-color"]', 'meta', { name: 'theme-color' }, 'content', '#007F73');
     return () => {
