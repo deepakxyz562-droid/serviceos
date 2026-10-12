@@ -8,7 +8,12 @@ const mark = '<path fill="currentColor" fill-rule="evenodd" d="M12 13a7 7 0 0 1 
 const svg = (body, viewBox='0 0 80 88', color=green) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" color="${color}">${body}</svg>`;
 const standalone = svg(mark);
 const square = (background, color, scale=9, offset=152) => svg(`<rect width="1024" height="1024" fill="${background}"/><g transform="translate(${offset} 116) scale(${scale})">${mark}</g>`, '0 0 1024 1024', color);
-async function png(source, file, size) { await sharp(Buffer.from(source)).resize(size,size,{fit:'contain',background:'#00000000'}).png().toFile(path.join(root,file)); }
+async function png(source, file, size) {
+ const raster = sharp(Buffer.from(source)).resize(size,size,{fit:'contain',background:'#00000000'});
+ // Store icons are opaque; standalone marks and adaptive foregrounds retain alpha.
+ if (source.includes('<rect')) raster.removeAlpha();
+ await raster.png().toFile(path.join(root,file));
+}
 (async()=>{
  const web='public/bgos';
  await fs.writeFile(path.join(root,web,'icon.svg'), standalone);
@@ -28,5 +33,11 @@ async function png(source, file, size) { await sharp(Buffer.from(source)).resize
  const adaptive=svg(`<g transform="translate(232 204) scale(7)">${mark}</g>`,'0 0 1024 1024','#FFFFFF');
  await png(adaptive,'bgosmobile/assets/adaptive-icon.png',1024);
  for(const file of ['icon.svg','logo.svg','logo-dark.svg','brand-mark.png','teal-mark.png','apple-touch-icon.png','icon-192.png','icon-512.png','icon-maskable-512.png']) await fs.copyFile(path.join(root,web,file),path.join(root,'apps/bgos/public/bgos',file));
+ const faviconPng = await sharp(Buffer.from(square('#FFFFFF',green))).resize(32,32).removeAlpha().png().toBuffer();
+ const ico = Buffer.alloc(22);
+ ico.writeUInt16LE(1,2); ico.writeUInt16LE(1,4);
+ ico[6]=32; ico[7]=32; ico.writeUInt16LE(1,10); ico.writeUInt16LE(32,12);
+ ico.writeUInt32LE(faviconPng.length,14); ico.writeUInt32LE(22,18);
+ await fs.writeFile(path.join(root,'apps/bgos/public/favicon.ico'),Buffer.concat([ico,faviconPng]));
  console.log('Generated matching BGOS web and native brand assets.');
 })();
