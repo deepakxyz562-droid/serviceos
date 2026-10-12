@@ -40,8 +40,12 @@ import {
   ArrowUpRight,
 } from 'lucide-react-native';
 
+import { useAuthStore } from '@/stores/auth-store';
+
 export default function ProProfileScreen() {
+  const { user, tenant, isAuthenticated, logout } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'earnings' | 'trust'>('overview');
+  const businessName = tenant?.name || user?.name || 'Apex Plumbing & HVAC Enterprises';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }} edges={['top']}>
@@ -60,25 +64,36 @@ export default function ProProfileScreen() {
           <View>
             <Text style={{ fontSize: 20, fontWeight: '700', color: '#0F172A' }}>Business & Payouts</Text>
             <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-              Apex Plumbing & HVAC Enterprises
+              {businessName}
             </Text>
           </View>
 
-          {/* Consumer App Link */}
+          {/* Sign In / Sign Out Button */}
           <Pressable
-            onPress={() => Linking.openURL('https://fieseros.com').catch(() => {})}
+            onPress={() => {
+              if (isAuthenticated) {
+                logout().then(() => router.replace('/(auth)/login'));
+              } else {
+                router.push('/(auth)/login');
+              }
+            }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: '#F1F5F9',
-              paddingHorizontal: 10,
+              backgroundColor: isAuthenticated ? '#FEF2F2' : '#ECFDF5',
+              paddingHorizontal: 12,
               paddingVertical: 6,
               borderRadius: 20,
             }}
           >
-            <Repeat size={14} color="#475569" />
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginLeft: 4 }}>
-              Customer Portal
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '700',
+                color: isAuthenticated ? '#DC2626' : '#059669',
+              }}
+            >
+              {isAuthenticated ? 'Sign Out' : 'Sign In'}
             </Text>
           </Pressable>
         </View>

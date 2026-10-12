@@ -527,7 +527,7 @@ export function BgosLeadDetail({
           <div className="rounded-2xl border bg-card p-5 shadow-xs space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3.5 min-w-0">
-                <div className="size-14 rounded-2xl bg-gradient-to-br from-primary to-violet-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                <div className="size-14 rounded-2xl bg-gradient-to-br from-primary to-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
                   {initials}
                 </div>
                 <div className="min-w-0">
@@ -612,7 +612,7 @@ export function BgosLeadDetail({
               {lead.email ? (
                 <a
                   href={`mailto:${lead.email}`}
-                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 font-semibold text-xs transition-colors"
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 dark:text-teal-400 font-semibold text-xs transition-colors"
                 >
                   <Mail className="size-3.5" />
                   <span>Email</span>
@@ -711,9 +711,9 @@ export function BgosLeadDetail({
 
             {/* Customer Needs & Notes */}
             {lead.description && (
-              <div className="rounded-xl bg-gradient-to-br from-violet-500/5 via-primary/5 to-transparent p-4 border border-violet-500/10 space-y-1.5">
+              <div className="rounded-xl bg-gradient-to-br from-teal-500/5 via-primary/5 to-transparent p-4 border border-teal-500/10 space-y-1.5">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-                  <Sparkles className="size-3.5 text-violet-600 dark:text-violet-400" />
+                  <Sparkles className="size-3.5 text-teal-600 dark:text-teal-400" />
                   <span>Customer Needs &amp; Service Details</span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">

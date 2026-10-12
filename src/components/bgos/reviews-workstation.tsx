@@ -91,7 +91,7 @@ const INITIAL_REVIEWS: ReviewItem[] = [
     id: 'rev-1',
     name: 'Priya Singh',
     initials: 'PS',
-    avatarBg: 'bg-purple-600',
+    avatarBg: 'bg-teal-600',
     rating: 5,
     timeAgo: '2 days ago',
     text: 'Amazing service! The team was professional, on time and did a fantastic job. Highly recommend Cinderella Cleaners!',
@@ -660,8 +660,8 @@ export function ReviewsView() {
 
           <div className="space-y-2.5 my-auto">
             {[
-              { stars: '5 stars', pct: '72%', count: 235, color: 'bg-purple-600' },
-              { stars: '4 stars', pct: '18%', count: 59, color: 'bg-purple-500' },
+              { stars: '5 stars', pct: '72%', count: 235, color: 'bg-teal-600' },
+              { stars: '4 stars', pct: '18%', count: 59, color: 'bg-teal-500' },
               { stars: '3 stars', pct: '6%', count: 20, color: 'bg-amber-400' },
               { stars: '2 stars', pct: '3%', count: 8, color: 'bg-amber-500' },
               { stars: '1 star', pct: '1%', count: 4, color: 'bg-rose-500' },
@@ -874,7 +874,7 @@ export function ReviewsView() {
                   {item.keywords.map((k) => (
                     <span
                       key={k}
-                      className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] text-purple-700 dark:text-purple-300 font-medium"
+                      className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] text-teal-700 dark:text-teal-300 font-medium"
                     >
                       {k}
                     </span>
@@ -957,7 +957,7 @@ export function ReviewsView() {
               {selectedReview.keywords.map((k) => (
                 <span
                   key={k}
-                  className="px-2 py-0.5 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-semibold border border-purple-200 dark:border-purple-800"
+                  className="px-2 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 text-xs font-semibold border border-teal-200 dark:border-teal-800"
                 >
                   {k}
                 </span>
@@ -1141,7 +1141,7 @@ export function ReviewsView() {
               onClick={() => setRequestReviewsOpen(true)}
               className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 text-left text-xs transition-colors"
             >
-              <Send className="size-4 text-purple-600 shrink-0" />
+              <Send className="size-4 text-teal-600 shrink-0" />
               <div>
                 <p className="font-semibold text-slate-800 dark:text-slate-200">Request Reviews</p>
                 <p className="text-[10px] text-slate-400">Send automated review requests</p>
@@ -1174,7 +1174,7 @@ export function ReviewsView() {
               onClick={() => setActiveSubTab('insights')}
               className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/60 text-left text-xs transition-colors"
             >
-              <BarChart3 className="size-4 text-indigo-600 shrink-0" />
+              <BarChart3 className="size-4 text-teal-600 shrink-0" />
               <div>
                 <p className="font-semibold text-slate-800 dark:text-slate-200">View Reports</p>
                 <p className="text-[10px] text-slate-400">Detailed analytics and insights</p>

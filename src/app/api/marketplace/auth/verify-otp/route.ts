@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import {
+  issueAuthTokens,
+  getRefreshSessionMetadata,
+  setAuthCookies,
+} from '@/lib/auth';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
@@ -8,10 +13,10 @@ export const dynamic = 'force-dynamic';
  * POST /api/marketplace/auth/verify-otp
  *
  * Verifies the OTP code and marks the MarketplaceCustomer as verified.
- * Sets a cookie with the customer ID for session management.
+ * Sets both mc_session and standard JWT cookies for unified web + mobile auth.
  *
- * Body: { customerId: string, otpCode: string }
- * Returns: { success: true, customer: { id, name, phone, email } }
+ * Body: { customerId?: string, otpCode?: string, code?: string, phone?: string, email?: string }
+ * Returns: { success: true, customer: { id, name, phone, email }, token, refreshToken }
  */
 export async function POST(req: NextRequest) {
   try {
@@ -75,7 +80,22 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Set session cookie (7 days)
+    const tokens = await issueAuthTokens(
+      {
+        id: updated.id,
+        email: updated.email || updated.phone,
+        name: updated.name || 'Customer',
+        role: 'customer',
+        tenantId: null,
+        workspaceId: null,
+        avatar: updated.avatarUrl || null,
+        isSuperAdmin: false,
+      },
+      getRefreshSessionMetadata(req),
+      'customer'
+    );
+
+    // Set session cookies (mc_session + standard JWT cookies)
     const cookieStore = await cookies();
     cookieStore.set('mc_session', customer.id, {
       httpOnly: true,
@@ -84,6 +104,7 @@ export async function POST(req: NextRequest) {
       maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/',
     });
+    setAuthCookies(cookieStore, tokens);
 
     return NextResponse.json({
       success: true,
@@ -93,6 +114,15 @@ export async function POST(req: NextRequest) {
         phone: updated.phone,
         email: updated.email,
       },
+      user: {
+        id: updated.id,
+        name: updated.name || 'Customer',
+        phone: updated.phone,
+        email: updated.email,
+        role: 'customer',
+      },
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     });
   } catch (error: any) {
     console.error('[marketplace/auth/verify-otp]', error);

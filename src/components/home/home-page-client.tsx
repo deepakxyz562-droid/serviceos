@@ -1060,6 +1060,40 @@ export default function HomePageClient() {
     return <ClaimCompletion token={claimToken} />;
   }
 
+  // Dedicated subdomain routing for app.fieseros.com (Customer), pro.fieseros.com (Provider),
+  // and admin.fieseros.com (Superadmin). Must run before legacy CRM onboarding/AppLayout checks
+  // so authenticated users remain on their dedicated Fieseros web application.
+  if (typeof window !== 'undefined') {
+    const hostProduct = productForHostname(window.location.hostname);
+    if (hostProduct === 'customer') {
+      return (
+        <>
+          <CustomerWebApp />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    if (hostProduct === 'pro') {
+      return (
+        <>
+          <ProWebApp />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+    if (hostProduct === 'admin') {
+      return (
+        <>
+          <AdminWebApp />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+  }
+
   // Onboarding screens (Step 0 mode selector / SaaS wizard / listing mini
   // wizard) are TENANT-only flows. Platform admins, customers, and employees
   // must never see them. This role check is the final safety net on top of
@@ -1238,37 +1272,6 @@ export default function HomePageClient() {
         <IOSInstallBanner />
       </>
     );
-  }
-
-  if (typeof window !== 'undefined') {
-    const hostProduct = productForHostname(window.location.hostname);
-    if (hostProduct === 'customer') {
-      return (
-        <>
-          <CustomerWebApp />
-          <PWAInstallBanner />
-          <IOSInstallBanner />
-        </>
-      );
-    }
-    if (hostProduct === 'pro') {
-      return (
-        <>
-          <ProWebApp />
-          <PWAInstallBanner />
-          <IOSInstallBanner />
-        </>
-      );
-    }
-    if (hostProduct === 'admin') {
-      return (
-        <>
-          <AdminWebApp />
-          <PWAInstallBanner />
-          <IOSInstallBanner />
-        </>
-      );
-    }
   }
 
   return (

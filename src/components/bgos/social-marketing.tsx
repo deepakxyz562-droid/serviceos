@@ -1365,14 +1365,14 @@ export function SocialMediaView() {
                     views: '10.8K',
                     ctr: '+16% CTR',
                     platform: Globe,
-                    gradient: 'from-blue-600 to-indigo-900',
+                    gradient: 'from-blue-600 to-[#312E81]',
                   },
                   {
                     title: 'Client Review Highlights',
                     views: '8.1K',
                     ctr: '+14% CTR',
                     platform: Camera,
-                    gradient: 'from-purple-600 to-fuchsia-900',
+                    gradient: 'from-[#9333EA] to-fuchsia-900',
                   },
                   {
                     title: 'Meet the Team Story',

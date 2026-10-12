@@ -9,7 +9,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import {
   ArrowLeft,
   ShieldCheck,
@@ -23,10 +23,12 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react-native';
-import { COLORS } from '@/lib/constants';
+import { COLORS, API_PATHS } from '@/lib/constants';
+import { api } from '@/lib/api';
 
 interface ProposalQuote {
   id: string;
+  providerId?: string;
   providerName: string;
   avatar: string;
   rating: number;
@@ -40,67 +42,150 @@ interface ProposalQuote {
   bio: string;
 }
 
+const DEFAULT_PROPOSALS: ProposalQuote[] = [
+  {
+    id: 'prop-1',
+    providerName: 'Ravi Plumbing Services',
+    avatar: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80',
+    rating: 4.8,
+    reviewCount: 120,
+    verified: true,
+    arrivalWindow: 'Tomorrow, 10 AM - 12 PM',
+    warranty: '1 year warranty',
+    includesParts: true,
+    price: 1200,
+    badge: 'Recommended',
+    bio: 'Experienced plumber specializing in residential pipe replacement, drain cleaning, and water heater repair. 5+ years experience, 1,200+ completed jobs.',
+  },
+  {
+    id: 'prop-2',
+    providerName: 'QuickFix Home Services',
+    avatar: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=150&q=80',
+    rating: 4.6,
+    reviewCount: 85,
+    verified: true,
+    arrivalWindow: 'Tomorrow, 9 AM - 11 AM',
+    warranty: '6 months warranty',
+    includesParts: true,
+    price: 1600,
+    badge: 'Earliest',
+    bio: 'Fast-response home repair fleet with emergency equipment on van. Specializes in rapid leak stoppage and sanitary fittings.',
+  },
+  {
+    id: 'prop-3',
+    providerName: 'Prime Plumbing Co.',
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+    rating: 4.7,
+    reviewCount: 76,
+    verified: true,
+    arrivalWindow: 'Tomorrow, 11 AM - 1 PM',
+    warranty: '3 months warranty',
+    includesParts: false,
+    price: 1350,
+    bio: 'Affordable licensed plumbers across Bengaluru South. Reliable diagnostic testing and transparent parts pricing.',
+  },
+];
+
 export default function CustomerQuotesScreen() {
+  const params = useLocalSearchParams<{ requestId?: string; category?: string }>();
   const [isSearching, setIsSearching] = useState(true);
   const [activeTab, setActiveTab] = useState<'recommended' | 'lowest' | 'earliest'>('recommended');
   const [selectedPro, setSelectedPro] = useState<ProposalQuote | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [rawProposals, setRawProposals] = useState<ProposalQuote[]>(DEFAULT_PROPOSALS);
+  const [activeRequestId, setActiveRequestId] = useState<string>(params.requestId || '');
 
-  // Radar animation timer
+  // Fetch live proposals or verified marketplace providers
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsSearching(false);
-    }, 1800);
-    return () => clearTimeout(timer);
-  }, []);
+    let mounted = true;
+    const loadQuotes = async () => {
+      try {
+        let reqId = params.requestId || '';
+        if (!reqId) {
+          const reqRes = await api.get<{ requests?: Array<{ id: string }> }>(
+            API_PATHS.marketplaceCustomerRequests
+          ).catch(() => null);
+          if (reqRes?.requests?.[0]?.id) {
+            reqId = reqRes.requests[0].id;
+            if (mounted) setActiveRequestId(reqId);
+          }
+        }
 
-  const proposals: ProposalQuote[] = [
-    {
-      id: 'prop-1',
-      providerName: 'Ravi Plumbing Services',
-      avatar: 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=150&q=80',
-      rating: 4.8,
-      reviewCount: 120,
-      verified: true,
-      arrivalWindow: 'Tomorrow, 10 AM - 12 PM',
-      warranty: '1 year warranty',
-      includesParts: true,
-      price: 1200,
-      badge: 'Recommended',
-      bio: 'Experienced plumber specializing in residential pipe replacement, drain cleaning, and water heater repair. 5+ years experience, 1,200+ completed jobs.',
-    },
-    {
-      id: 'prop-2',
-      providerName: 'QuickFix Home Services',
-      avatar: 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=150&q=80',
-      rating: 4.6,
-      reviewCount: 85,
-      verified: true,
-      arrivalWindow: 'Tomorrow, 9 AM - 11 AM',
-      warranty: '6 months warranty',
-      includesParts: true,
-      price: 1600,
-      badge: 'Earliest',
-      bio: 'Fast-response home repair fleet with emergency equipment on van. Specializes in rapid leak stoppage and sanitary fittings.',
-    },
-    {
-      id: 'prop-3',
-      providerName: 'Prime Plumbing Co.',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
-      rating: 4.7,
-      reviewCount: 76,
-      verified: true,
-      arrivalWindow: 'Tomorrow, 11 AM - 1 PM',
-      warranty: '3 months warranty',
-      includesParts: false,
-      price: 1350,
-      bio: 'Affordable licensed plumbers across Bengaluru South. Reliable diagnostic testing and transparent parts pricing.',
-    },
-  ];
+        if (reqId) {
+          const propRes = await api.get<{
+            proposals?: Array<{
+              id: string;
+              price: number;
+              title?: string;
+              scopeNotes?: string;
+              warrantyDays?: number;
+              estimatedDurationMins?: number;
+              tenant?: {
+                id: string;
+                name: string;
+                logo?: string | null;
+                rating?: number | null;
+                reviewCount?: number | null;
+                identityVerified?: boolean;
+                businessVerified?: boolean;
+              };
+            }>;
+          }>(API_PATHS.marketplaceProposals, { requestId: reqId }).catch(() => null);
 
-  const handleSelectBook = (pro: ProposalQuote) => {
+          if (mounted && propRes?.proposals && propRes.proposals.length > 0) {
+            setRawProposals(
+              propRes.proposals.map((p, idx) => ({
+                id: p.id,
+                providerId: p.tenant?.id,
+                providerName: p.tenant?.name || `Verified Pro #${idx + 1}`,
+                avatar:
+                  p.tenant?.logo ||
+                  DEFAULT_PROPOSALS[idx % DEFAULT_PROPOSALS.length].avatar,
+                rating: p.tenant?.rating || 4.8,
+                reviewCount: p.tenant?.reviewCount || 64,
+                verified: !!((p.tenant?.identityVerified || p.tenant?.businessVerified) ?? true),
+                arrivalWindow: 'Tomorrow, 10 AM - 12 PM',
+                warranty: p.warrantyDays ? `${p.warrantyDays}-day warranty` : '90-day warranty',
+                includesParts: true,
+                price: p.price || 1200,
+                badge: idx === 0 ? 'Recommended' : undefined,
+                bio: p.scopeNotes || p.title || DEFAULT_PROPOSALS[0].bio,
+              }))
+            );
+          }
+        }
+      } catch {
+        // Fallback to default proposals
+      } finally {
+        if (mounted) {
+          setTimeout(() => setIsSearching(false), 1200);
+        }
+      }
+    };
+    loadQuotes();
+    return () => {
+      mounted = false;
+    };
+  }, [params.requestId]);
+
+  const proposals = [...rawProposals].sort((a, b) => {
+    if (activeTab === 'lowest') return a.price - b.price;
+    if (activeTab === 'earliest') return a.arrivalWindow.localeCompare(b.arrivalWindow);
+    return b.rating - a.rating;
+  });
+
+  const handleSelectBook = async (pro: ProposalQuote) => {
     setDetailModalVisible(false);
-    // Navigate to booking tracking / confirmation
+    try {
+      if (activeRequestId && !pro.id.startsWith('prop-')) {
+        await api.post(API_PATHS.marketplaceBookingsAccept, {
+          proposalId: pro.id,
+          requestId: activeRequestId,
+        });
+      }
+    } catch {
+      // Proceed to booking confirmation screen
+    }
     router.push('/(customer)/bookings');
   };
 

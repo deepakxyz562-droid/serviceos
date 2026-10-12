@@ -5,7 +5,7 @@ import Image from 'next/image';
 
 /**
  * Official BGOS Ribbon Icon Component
- * Vector gradient ribbon loop matching the official brand identity sheet.
+ * Approved folded-G artwork shared with the web favicon.
  */
 export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; className?: string }) {
   return (
@@ -14,19 +14,13 @@ export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; c
       className={`relative shrink-0 flex items-center justify-center ${className}`}
     >
       <Image
-        src="/bgos/icon.svg"
+        src="/bgos/teal-mark.png"
         alt="BGOS Mark"
         width={size}
         height={size}
         priority
         unoptimized
-        className="size-full object-contain filter drop-shadow-xs"
-        onError={(e) => {
-          const target = e.currentTarget;
-          if (!target.src.includes('icon-mark.png')) {
-            target.src = '/bgos/icon-mark.png';
-          }
-        }}
+        className="size-full object-contain"
       />
     </div>
   );
@@ -36,7 +30,7 @@ export function BgosRibbonIcon({ size = 36, className = '' }: { size?: number; c
  * BGOS Brand Identity Component
  * =============================
  * Implements the official BGOS design specifications:
- * - Teal/Cyan geometric ribbon loop logo mark (/bgos/icon-mark.png or /bgos/icon.svg)
+ * - Teal/Cyan geometric ribbon loop logo mark (/bgos/teal-mark.png)
  * - Modern geometric bold typography (BGOS)
  * - Tracked uppercase sub-headline (BUSINESS GROWTH OS)
  */
@@ -58,14 +52,14 @@ export function BgosBrand({
         <span className="bgos-logo-copy flex flex-col text-left leading-none">
           <strong
             className={`text-[20px] font-black tracking-tight ${
-              inverted ? 'text-white' : 'text-slate-900 dark:text-white'
+              inverted ? 'text-white' : 'text-foreground'
             }`}
           >
             BGOS
           </strong>
           <small
-            className={`mt-0.5 text-[8.5px] font-bold tracking-[0.2em] uppercase ${
-              inverted ? 'text-teal-200' : 'text-slate-500 dark:text-teal-400'
+            className={`mt-0.5 text-[10px] font-bold tracking-[0.2em] uppercase ${
+              inverted ? 'text-teal-200' : 'text-muted-foreground'
             }`}
           >
             BUSINESS GROWTH OS

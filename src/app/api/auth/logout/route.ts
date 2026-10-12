@@ -30,6 +30,13 @@ export async function POST(request: NextRequest) {
       value: '',
       maxAge: 0,
     });
+    response.cookies.set('mc_session', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
 
     return response;
   } catch (error) {

@@ -43,9 +43,46 @@ import {
   Zap,
 } from 'lucide-react-native';
 
+import { useAuthStore } from '@/stores/auth-store';
+import { api } from '@/lib/api';
+import { API_PATHS } from '@/lib/constants';
+
 export default function ProHomeScreen() {
+  const { user, tenant, isAuthenticated } = useAuthStore();
   const [isOnline, setIsOnline] = useState(true);
   const [verificationDismissed, setVerificationDismissed] = useState(false);
+  const [nearbyLeadsCount, setNearbyLeadsCount] = useState(5);
+  const [activeJobsCount, setActiveJobsCount] = useState(2);
+
+  const businessName = tenant?.name || user?.name || 'Apex Plumbing & HVAC';
+  const initials = businessName
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('') || 'AP';
+
+  React.useEffect(() => {
+    let mounted = true;
+    api
+      .get<{ opportunities?: unknown[]; total?: number }>(API_PATHS.providerOpportunities)
+      .then((res) => {
+        if (mounted && Array.isArray(res?.opportunities) && res.opportunities.length > 0) {
+          setNearbyLeadsCount(res.opportunities.length);
+        }
+      })
+      .catch(() => {});
+    api
+      .get<{ jobs?: unknown[] }>(API_PATHS.jobs)
+      .then((res) => {
+        if (mounted && Array.isArray(res?.jobs) && res.jobs.length > 0) {
+          setActiveJobsCount(res.jobs.length);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const toggleOnline = () => {
     setIsOnline((prev) => {
@@ -74,7 +111,10 @@ export default function ProHomeScreen() {
         }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable
+            onPress={() => router.push(isAuthenticated ? '/(pro)/profile' : '/(auth)/login')}
+            style={{ flexDirection: 'row', alignItems: 'center' }}
+          >
             <View
               style={{
                 width: 44,
@@ -85,12 +125,12 @@ export default function ProHomeScreen() {
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>AP</Text>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#fff' }}>{initials}</Text>
             </View>
             <View style={{ marginLeft: 12 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>
-                  Apex Plumbing & HVAC
+                  {businessName}
                 </Text>
                 <View
                   style={{
@@ -111,10 +151,12 @@ export default function ProHomeScreen() {
                 <Text style={{ fontSize: 12, fontWeight: '600', color: '#0F172A', marginLeft: 3 }}>4.9</Text>
                 <Text style={{ fontSize: 12, color: '#64748B', marginLeft: 2 }}>(142 reviews)</Text>
                 <Text style={{ fontSize: 12, color: '#CBD5E1', marginHorizontal: 6 }}>•</Text>
-                <Text style={{ fontSize: 12, color: '#059669', fontWeight: '600' }}>96% response</Text>
+                <Text style={{ fontSize: 12, color: '#059669', fontWeight: '600' }}>
+                  {isAuthenticated ? '96% response' : 'Tap to Sign In'}
+                </Text>
               </View>
             </View>
-          </View>
+          </Pressable>
 
           {/* Online Toggle */}
           <View style={{ alignItems: 'flex-end' }}>
@@ -214,7 +256,9 @@ export default function ProHomeScreen() {
             }}
           >
             <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>Active Pipeline</Text>
-            <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>2 Jobs</Text>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+              {activeJobsCount} Jobs
+            </Text>
             <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>1 in progress</Text>
           </View>
 
@@ -229,7 +273,9 @@ export default function ProHomeScreen() {
             }}
           >
             <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>Leads Nearby</Text>
-            <Text style={{ fontSize: 20, fontWeight: '800', color: '#D97706', marginTop: 4 }}>5 New</Text>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#D97706', marginTop: 4 }}>
+              {nearbyLeadsCount} New
+            </Text>
             <Text style={{ fontSize: 11, color: '#D97706', marginTop: 2 }}>Within 12 km</Text>
           </View>
         </View>
@@ -259,7 +305,9 @@ export default function ProHomeScreen() {
                 <Radio size={20} color="#fff" />
               </View>
               <View style={{ marginLeft: 12 }}>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>5 High-Intent Leads Waiting</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>
+                  {nearbyLeadsCount} High-Intent Leads Waiting
+                </Text>
                 <Text style={{ fontSize: 12, color: '#A7F3D0', marginTop: 2 }}>
                   Customers ready for quotes · Plumbing & AC
                 </Text>

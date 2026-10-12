@@ -160,11 +160,11 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
                                 className={cn(
                                   "w-full flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs transition-colors text-left",
                                   isSubActive
-                                    ? "bg-purple-100 text-purple-900 font-bold dark:bg-purple-950/60 dark:text-purple-300 shadow-2xs"
+                                    ? "bg-teal-100 text-teal-900 font-bold dark:bg-teal-950/60 dark:text-teal-300 shadow-2xs"
                                     : "text-slate-600 dark:text-slate-400 hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
                                 )}
                               >
-                                <SubIcon size={13} className={isSubActive ? "text-purple-600 dark:text-purple-400" : "text-slate-400"} />
+                                <SubIcon size={13} className={isSubActive ? "text-teal-600 dark:text-teal-400" : "text-slate-400"} />
                                 <span className="truncate">{sub.label}</span>
                               </button>
                             );
@@ -190,7 +190,7 @@ export function BgosNavigation({ onLogout }: { onLogout?: () => void }) {
                           badge === '12'
                             ? 'bg-rose-500 text-white'
                             : badge === 'AI'
-                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300'
+                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300'
                             : 'bg-teal-100 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300'
                         }`}
                       >

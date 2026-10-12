@@ -803,11 +803,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col w-full bg-[#F8FAFC] dark:bg-slate-950 overflow-hidden select-none">
+    <div className="flex-1 min-h-0 flex flex-col w-full bg-background dark:bg-slate-950 overflow-hidden">
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP CHANNEL TRIAGE HEADER (Matching Reference Screenshot 2 & 3)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 z-30 shadow-2xs">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-3 flex flex-wrap gap-3 items-center justify-between shrink-0 z-30 shadow-2xs">
         <div className="flex items-center gap-3 min-w-0">
           <Button
             variant="ghost"
@@ -841,11 +841,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
             { id: 'all', label: 'All', badge: 12, icon: Inbox, color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
             { id: 'whatsapp', label: 'WhatsApp', badge: 4, icon: MessageCircle, color: 'bg-emerald-500 text-white' },
             { id: 'livechat', label: 'Live Chat', badge: 3, icon: MessageSquare, color: 'bg-teal-600 text-white' },
-            { id: 'instagram', label: 'Instagram', badge: 2, icon: Instagram, color: 'bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white' },
+            { id: 'instagram', label: 'Instagram', badge: 2, icon: Instagram, color: 'bg-gradient-to-tr from-amber-500 via-rose-500 to-[#9333EA] text-white' },
             { id: 'facebook', label: 'Facebook', badge: 1, icon: MessageSquare, color: 'bg-blue-600 text-white' },
             { id: 'email', label: 'Email', badge: 1, icon: Mail, color: 'bg-sky-500 text-white' },
             { id: 'sms', label: 'SMS', badge: 1, icon: MessageSquare, color: 'bg-teal-600 text-white' },
-            { id: 'phone', label: 'Phone', badge: 1, icon: Phone, color: 'bg-indigo-600 text-white' },
+            { id: 'phone', label: 'Phone', badge: 1, icon: Phone, color: 'bg-teal-600 text-white' },
           ].map((ch) => {
             const Icon = ch.icon;
             const isSelected = activeChannelPill === ch.id;
@@ -1047,7 +1047,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
         </div>
 
         {/* ── CENTER COLUMN: ACTIVE CONVERSATION / LIVE RADAR (5.5 Cols) ── */}
-        <div className="md:col-span-8 lg:col-span-6 flex flex-col min-h-0 bg-[#F8FAFC] dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800">
+        <div className="md:col-span-8 lg:col-span-6 flex flex-col min-h-0 bg-background dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800">
           {inboxTab === 'conversations' ? (
             <>
               {/* Center Customer Header */}
@@ -1337,7 +1337,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
                   <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
                     Active Live Visitors
-                    <User className="size-3.5 text-purple-600" />
+                    <User className="size-3.5 text-teal-600" />
                   </div>
                   <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
                     28
@@ -1348,11 +1348,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs">
                   <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between">
                     In Active Chat
-                    <MessageSquare className="size-3.5 text-purple-600" />
+                    <MessageSquare className="size-3.5 text-teal-600" />
                   </div>
                   <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
                     6
-                    <span className="text-[10px] text-purple-600 font-bold">5 AI / 1 Human</span>
+                    <span className="text-[10px] text-teal-600 font-bold">5 AI / 1 Human</span>
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1">21.4% engagement</div>
                 </div>
@@ -1385,7 +1385,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                   </div>
                   <div className="text-xl font-black text-slate-900 dark:text-slate-100 mt-1 flex items-baseline gap-1.5">
                     34.2%
-                    <span className="text-[10px] text-purple-600 font-bold">18 booked</span>
+                    <span className="text-[10px] text-teal-600 font-bold">18 booked</span>
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1">Past 7 days</div>
                 </div>
@@ -1401,7 +1401,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
                         visitorSubTab === 'all'
-                          ? 'bg-purple-600 text-white shadow-2xs'
+                          ? 'bg-teal-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
                       )}
                     >
@@ -1413,7 +1413,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
                         visitorSubTab === 'high_intent'
-                          ? 'bg-purple-600 text-white shadow-2xs'
+                          ? 'bg-teal-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
                       )}
                     >
@@ -1425,11 +1425,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
                         visitorSubTab === 'chatting'
-                          ? 'bg-purple-600 text-white shadow-2xs'
+                          ? 'bg-teal-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
                       )}
                     >
-                      <MessageSquare className="size-3 text-purple-500" /> Chatting <span className="text-[10px] opacity-80">6</span>
+                      <MessageSquare className="size-3 text-teal-500" /> Chatting <span className="text-[10px] opacity-80">6</span>
                     </button>
                     <button
                       type="button"
@@ -1437,7 +1437,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       className={cn(
                         'px-2.5 py-1 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5',
                         visitorSubTab === 'idle'
-                          ? 'bg-purple-600 text-white shadow-2xs'
+                          ? 'bg-teal-600 text-white shadow-2xs'
                           : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400'
                       )}
                     >

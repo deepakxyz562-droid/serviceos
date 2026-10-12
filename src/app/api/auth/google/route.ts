@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { getAppUrl } from '@/lib/auth';
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-
 /**
  * Compute the canonical OAuth redirect URI.
  *
@@ -28,31 +26,52 @@ function getRedirectUri(): string {
 }
 
 export async function GET(request: NextRequest) {
+  const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
   const rateLimited = applyRateLimit(authLimiter, request);
   if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
 
-  if (!GOOGLE_CLIENT_ID) {
-    console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
-    const baseUrl = getAppUrl();
-    return NextResponse.redirect(
-      new URL('/?auth_error=google_not_configured', baseUrl)
-    );
-  }
-
   const { searchParams } = new URL(request.url);
-  const mode = searchParams.get('mode') || 'login'; // login or register
+  const mode = searchParams.get('mode') || 'login'; // login, register, or mobile
   const redirectTo = searchParams.get('redirect') || '';
   const plan = searchParams.get('plan') || '';
   const signupMode = searchParams.get('signupMode') || '';
-  // NOTE: `origin` query param is intentionally ignored. Previously the
-  // client passed `window.location.origin` here, which let a user on
-  // serviceos.cc (or any other alias) hijack the OAuth redirect URI.
-  // The server now always uses the canonical app URL.
+  const rawApp = searchParams.get('app') || '';
 
   const rawHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || '';
   const host = rawHost.toLowerCase().split(':')[0];
   const originProto = request.headers.get('x-forwarded-proto') || (request.url.startsWith('https') ? 'https' : 'http');
   const originHost = host ? `${originProto}://${rawHost}` : getAppUrl();
+
+  // Infer target Fieseros app surface (customer | pro | admin | business)
+  const inferredApp =
+    rawApp ||
+    (redirectTo.startsWith('/app') || redirectTo.startsWith('fieseros://') || host.startsWith('app.')
+      ? 'customer'
+      : redirectTo.startsWith('/pro') || redirectTo.startsWith('fieserospro://') || host.startsWith('pro.')
+        ? 'pro'
+        : redirectTo.startsWith('/admin') || host.startsWith('admin.')
+          ? 'admin'
+          : 'business');
+
+  if (!GOOGLE_CLIENT_ID) {
+    console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
+    if (
+      mode === 'mobile' ||
+      redirectTo.startsWith('fieseros://') ||
+      redirectTo.startsWith('fieserospro://') ||
+      redirectTo.startsWith('quoteflow://') ||
+      redirectTo.startsWith('exp://')
+    ) {
+      const sep = redirectTo.includes('?') ? '&' : '?';
+      return NextResponse.redirect(`${redirectTo}${sep}error=google_not_configured`);
+    }
+    const baseUrl = getAppUrl();
+    const fallbackPath =
+      inferredApp === 'customer' ? '/app' : inferredApp === 'pro' ? '/pro' : inferredApp === 'admin' ? '/admin' : '/';
+    return NextResponse.redirect(
+      new URL(`${fallbackPath}?auth_error=google_not_configured`, baseUrl)
+    );
+  }
 
   // Derive the canonical redirect URI from NEXT_PUBLIC_APP_URL.
   const redirectUri = getRedirectUri();
@@ -61,12 +80,21 @@ export async function GET(request: NextRequest) {
     host: request.headers.get('host'),
     'x-forwarded-host': request.headers.get('x-forwarded-host'),
     originHost,
+    app: inferredApp,
   });
 
-  // Build state parameter to pass mode, redirect info, plan, signupMode, originHost, AND the redirect URI
+  // Build state parameter to pass mode, redirect info, plan, signupMode, app, originHost, AND the redirect URI
   // used so the callback can verify it matches and return the user to the initiating domain.
   const state = Buffer.from(
-    JSON.stringify({ mode, redirect: redirectTo, plan, signupMode, redirectUri, originHost })
+    JSON.stringify({
+      mode,
+      redirect: redirectTo,
+      plan,
+      signupMode,
+      app: inferredApp,
+      redirectUri,
+      originHost,
+    })
   ).toString('base64');
 
   // Google OAuth 2.0 authorization URL

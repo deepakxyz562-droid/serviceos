@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
@@ -8,35 +9,52 @@ export const dynamic = 'force-dynamic';
  * GET /api/marketplace/customer/requests
  *
  * Returns the logged-in customer's marketplace requests with proposal counts.
- * Used by the "My Requests" dashboard.
- *
- * Query params:
- *   status — filter by status (active | completed | all). Default: all
- *
- * Returns: { requests: [{ id, publicSlug, title, categorySlug, status, city, state,
- *            urgency, budgetMin, budgetMax, createdAt, proposalsCount, bookingStatus }] }
+ * Used by the "My Requests" dashboard on Web & Mobile.
  */
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const customerId = cookieStore.get('mc_session')?.value;
+    const sessionCustomerId = cookieStore.get('mc_session')?.value;
 
-    if (!customerId) {
-      return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 },
-      );
+    let customer = sessionCustomerId
+      ? await db.marketplaceCustomer.findUnique({
+          where: { id: sessionCustomerId },
+          select: { id: true, otpVerified: true, phone: true, email: true },
+        })
+      : null;
+
+    if (!customer) {
+      const authUser = await getAuthUser();
+      if (authUser) {
+        const emailLower = authUser.email?.toLowerCase().trim();
+        if (emailLower && emailLower.includes('@')) {
+          customer = await db.marketplaceCustomer.findUnique({
+            where: { email: emailLower },
+            select: { id: true, otpVerified: true, phone: true, email: true },
+          });
+          if (!customer) {
+            customer = await db.marketplaceCustomer.create({
+              data: {
+                email: emailLower,
+                phone: `user-${authUser.id}`,
+                name: authUser.name || emailLower.split('@')[0],
+                otpVerified: true,
+              },
+              select: { id: true, otpVerified: true, phone: true, email: true },
+            });
+          }
+        } else {
+          customer = await db.marketplaceCustomer.findUnique({
+            where: { id: authUser.id },
+            select: { id: true, otpVerified: true, phone: true, email: true },
+          });
+        }
+      }
     }
-
-    // Verify customer exists + is verified
-    const customer = await db.marketplaceCustomer.findUnique({
-      where: { id: customerId },
-      select: { id: true, otpVerified: true, phone: true, email: true },
-    });
 
     if (!customer || !customer.otpVerified) {
       return NextResponse.json(
-        { error: 'Not verified' },
+        { error: 'Not authenticated' },
         { status: 401 },
       );
     }

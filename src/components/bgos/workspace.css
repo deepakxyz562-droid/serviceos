@@ -14,6 +14,12 @@ html.bgos-theme {
   --primary: #007f73;
   --primary-foreground: #ffffff;
   --primary-glow: #00bfae;
+  --brand-deep: #00665d;
+  --brand-glow: #00bfae;
+  --primary-soft: #e6f5f3;
+  --brand-light: #99e4d9;
+  --color-teal-600: #007f73;
+  --color-teal-700: #00665d;
   --secondary: #e8f6f3;
   --secondary-foreground: #205950;
   --muted: #f1f5f9;
@@ -28,7 +34,7 @@ html.bgos-theme {
   /* Charts */
   --chart-1: #007f73;
   --chart-2: #00bfae;
-  --chart-3: #6366f1;
+  --chart-3: #2563eb;
   --chart-4: #f59e0b;
   --chart-5: #ec4899;
 
@@ -59,6 +65,19 @@ html.bgos-theme.dark {
   --primary: #00bfae;
   --primary-foreground: #042f2e;
   --primary-glow: #4dd8c6;
+  --brand-deep: #007f73;
+  --brand-glow: #4dd8c6;
+  --primary-soft: #134e4a;
+  --brand-light: #205950;
+  --chart-1: #2dd4bf;
+  --chart-2: #99f6e4;
+  --chart-3: #60a5fa;
+  --chart-4: #fbbf24;
+  --chart-5: #f472b6;
+  --ai-primary: #2dd4bf;
+  --ai-accent: #134e4a;
+  --ai-accent-foreground: #ccfbf1;
+  --ai-border: #205950;
   --secondary: #134e4a;
   --secondary-foreground: #ccfbf1;
   --muted: #115e59;
@@ -86,7 +105,7 @@ html.bgos-theme.dark {
 /* Sidebar & Navigation */
 .bgos-sidebar,
 .bgos-mobile-sidebar {
-  width: 248px;
+  width: 264px;
   flex-shrink: 0;
   flex-direction: column;
   background: var(--card);
@@ -121,7 +140,7 @@ html.bgos-theme.dark {
   width: 100%;
   min-width: 0;
   outline: none;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--foreground);
 }
 .bgos-nav-search:focus-within {
@@ -139,7 +158,7 @@ html.bgos-theme.dark {
   margin-bottom: 20px;
 }
 .bgos-nav-links h2 {
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.2px;
   text-transform: uppercase;
@@ -154,13 +173,13 @@ html.bgos-theme.dark {
   gap: 10px;
   border-radius: 8px;
   padding: 8px 12px;
-  min-height: 38px;
+  min-height: 44px;
   text-align: left;
   color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 500;
   position: relative;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .bgos-nav-links button:hover {
   background: var(--muted);
@@ -218,7 +237,7 @@ html.bgos-theme.dark {
 }
 .bgos-account small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 .bgos-avatar {
@@ -265,7 +284,7 @@ html.bgos-theme.dark {
   white-space: nowrap;
 }
 .bgos-workspace-button small {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted-foreground);
 }
 
@@ -287,7 +306,7 @@ html.bgos-theme.dark {
   background: transparent;
   min-width: 0;
   width: 100%;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--foreground);
 }
 .bgos-feature-finder:focus-within {
@@ -332,8 +351,8 @@ html.bgos-theme.dark {
 /* Page Container — 100% Fluid Workstation Width */
 .bgos-page {
   width: 100%;
-  max-width: none;
-  margin: 0;
+  max-width: 1680px;
+  margin: 0 auto;
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
@@ -413,7 +432,7 @@ html.bgos-theme.dark .bgos-trend-pill {
   font-size: 13px;
   font-weight: 600;
   color: var(--foreground);
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
 }
 .bgos-action-pill:hover {
@@ -465,7 +484,7 @@ html.bgos-theme.dark .bgos-trend-pill {
   justify-content: center;
   gap: 4px;
   min-height: 48px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--muted-foreground);
 }
@@ -651,3 +670,72 @@ html.bgos-theme {
 @media (prefers-reduced-motion: reduce) {
   .bgos-app *, .bgos-app *::before, .bgos-app *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Web-wide interaction rhythm, including Radix content rendered in portals. */
+html.bgos-theme {
+  scroll-padding-top: 5rem;
+}
+.bgos-app {
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--background);
+}
+.bgos-app :is(h1, h2, h3) { text-wrap: balance; }
+.bgos-app h1 { letter-spacing: -0.025em; line-height: 1.25; }
+.bgos-app p { overflow-wrap: break-word; }
+.bgos-app .bgos-nav-empty { padding: 12px; color: var(--muted-foreground); }
+.bgos-nav-links button { font-size: 14px; }
+.bgos-nav-footer > button { min-height: 44px; font-size: 13px; }
+.bgos-account button { display: grid; place-items: center; min-width: 40px; min-height: 40px; border-radius: 8px; }
+.bgos-account button:hover { background: var(--accent); }
+.bgos-workspace-button, .bgos-feature-finder { min-height: 44px; }
+.bgos-feature-results button { min-height: 44px; }
+.bgos-feature-results { max-height: min(360px, 65dvh); }
+html.bgos-theme :is([data-slot="button"], [data-slot="input"], [data-slot="select-trigger"]) {
+  min-height: 40px;
+  border-radius: 10px;
+}
+html.bgos-theme :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
+  border-color: var(--input);
+}
+html.bgos-theme [data-slot="textarea"] { border-radius: 10px; line-height: 1.6; }
+html.bgos-theme [data-slot="tabs-list"] { max-width: 100%; overflow-x: auto; justify-content: flex-start; height: auto; min-height: 44px; }
+html.bgos-theme [data-slot="tabs-trigger"] { min-height: 36px; flex-shrink: 0; }
+html.bgos-theme [data-slot="tabs-trigger"][data-state="active"] { background: var(--accent); color: var(--accent-foreground); }
+html.bgos-theme :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border-radius: 16px;
+  border-color: var(--border);
+}
+html.bgos-theme :is([data-slot="dropdown-menu-item"], [data-slot="select-item"]) { min-height: 36px; }
+html.bgos-theme :is(button, a, input, textarea, select, [role="tab"]):focus-visible {
+  outline: 2px solid var(--ring); outline-offset: 3px;
+}
+html.bgos-theme [data-slot="table-container"] { overscroll-behavior-x: contain; }
+html.bgos-theme [data-slot="table-head"] { color: var(--muted-foreground); font-size: 12px; font-weight: 600; }
+html.bgos-theme [data-slot="table-cell"] { padding-top: 14px; padding-bottom: 14px; }
+.bgos-app .text-\[9px\], .bgos-app .text-\[10px\], .bgos-app .text-\[11px\] { font-size: 12px; }
+.bgos-app ::selection { background: var(--accent); color: var(--accent-foreground); }
+@media (max-width: 767px) {
+  html.bgos-theme :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]) { max-width: calc(100vw - 32px); }
+  html.bgos-theme :is([data-slot="button"], [data-slot="input"], [data-slot="select-trigger"]) { min-height: 44px; }
+  html.bgos-theme :is([data-slot="input"], [data-slot="textarea"]) { font-size: 16px; }
+  .bgos-page { gap: 20px; }
+  .bgos-header-tools { gap: 8px; }
+  .bgos-workspace-button { max-width: min(180px, 46vw); }
+  .bgos-workstation { flex-direction: column; overflow: auto; min-height: 0; }
+  .bgos-master-pane { width: 100%; max-height: 40dvh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .bgos-fluid-canvas { padding: 16px; overflow: visible; }
+}
+
+html.bgos-theme .bgos-auth {
+  --color-emerald-50: #f0fdfa;
+  --color-emerald-200: #99e4d9;
+  --color-emerald-300: #5eead4;
+  --color-emerald-400: #2dd4bf;
+  --color-emerald-500: #00bfae;
+  --color-emerald-600: #007f73;
+  --color-emerald-700: #00665d;
+}
+html.bgos-theme [data-slot="dialog-close"] { min-width: 32px; min-height: 32px; display: grid; place-items: center; }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Home,
   Sparkles,
@@ -43,6 +43,9 @@ import {
   Send,
   Sliders,
   Check,
+  LogIn,
+  LogOut,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -82,10 +85,32 @@ interface QuoteItem {
   description: string;
 }
 
+interface CustomerUserProfile {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  avatar?: string | null;
+}
+
 export function CustomerWebApp() {
   const [currentScreen, setCurrentScreen] = useState<CustomerScreenId>('home');
   const [selectedLocation, setSelectedLocation] = useState('Bengaluru, KA');
   const [searchQuery, setSearchQuery] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Auth & Session State
+  const [customerUser, setCustomerUser] = useState<CustomerUserProfile | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authTab, setAuthTab] = useState<'otp' | 'password'>('otp');
+  const [authContact, setAuthContact] = useState('');
+  const [authName, setAuthName] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [devCodeHint, setDevCodeHint] = useState<string | null>(null);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
   // AI Intake State
   const [problemDescription, setProblemDescription] = useState('My AC is blowing warm air and humming');
@@ -96,6 +121,11 @@ export function CustomerWebApp() {
   const [attachedPhoto, setAttachedPhoto] = useState<string | null>(
     'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80'
   );
+  const [triageLoading, setTriageLoading] = useState(false);
+  const [dispatchingRequest, setDispatchingRequest] = useState(false);
+  const [aiCostRange, setAiCostRange] = useState('₹900 – ₹1,800 (Fair Price Range)');
+  const [aiDetectedCategory, setAiDetectedCategory] = useState('HVAC & Cooling Repair');
+  const [activeRequestId, setActiveRequestId] = useState<string>('REQ-1042');
 
   // Selected Quote & Booking State
   const [selectedQuote, setSelectedQuote] = useState<QuoteItem | null>(null);
@@ -108,12 +138,12 @@ export function CustomerWebApp() {
   // Chat State
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'pro' | 'user'; text: string; time: string }>>([
-    { sender: 'pro', text: "Hi Rahul! I'm on the way to your location. Will reach in 10 minutes.", time: '9:40 AM' },
+    { sender: 'pro', text: "Hi! I'm on the way to your location. Will reach in 10 minutes.", time: '9:40 AM' },
     { sender: 'user', text: 'Great, thanks! Please check the copper line joint as well.', time: '9:42 AM' },
     { sender: 'pro', text: 'Sure thing, I have the full diagnostic kit with me.', time: '9:45 AM' },
   ]);
 
-  const quotes: QuoteItem[] = [
+  const defaultQuotes: QuoteItem[] = [
     {
       id: 'q1',
       providerName: 'CoolAir Solutions',
@@ -158,9 +188,306 @@ export function CustomerWebApp() {
     },
   ];
 
+  const [quotes, setQuotes] = useState<QuoteItem[]>(defaultQuotes);
+  const [liveRequests, setLiveRequests] = useState<Array<{
+    id: string;
+    service: string;
+    status: string;
+    date: string;
+    statusColor: string;
+  }>>([]);
+
+  // Hydrate Session & Live Data on Mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('google_login') === 'success') {
+        toast.success('Signed in with Google successfully!');
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      } else if (params.get('auth_error')) {
+        toast.error(`Google Sign-In failed: ${params.get('auth_error')}`);
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    }
+
+    async function loadSessionAndData() {
+      setAuthLoading(true);
+      try {
+        const res = await fetch('/api/marketplace/auth/me', { credentials: 'include' });
+        const data = await res.json();
+        if (data?.authenticated && data?.customer) {
+          setCustomerUser({
+            id: data.customer.id,
+            name: data.customer.name || 'Customer',
+            email: data.customer.email,
+            phone: data.customer.phone,
+            avatar: data.customer.avatar,
+          });
+        } else {
+          const fallbackRes = await fetch('/api/auth/me', { credentials: 'include' });
+          if (fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData?.user) {
+              setCustomerUser({
+                id: fallbackData.user.id,
+                name: fallbackData.user.name || 'Customer',
+                email: fallbackData.user.email,
+                phone: fallbackData.user.phone,
+                avatar: fallbackData.user.avatar,
+              });
+            }
+          }
+        }
+      } catch {
+        // Guest session
+      } finally {
+        setAuthLoading(false);
+      }
+
+      // Fetch live customer requests if logged in
+      try {
+        const reqRes = await fetch('/api/marketplace/customer/requests', { credentials: 'include' });
+        if (reqRes.ok) {
+          const reqData = await reqRes.json();
+          if (Array.isArray(reqData?.requests) && reqData.requests.length > 0) {
+            setLiveRequests(
+              reqData.requests.slice(0, 5).map((r: any) => ({
+                id: r.requestNumber || r.id,
+                service: r.serviceSubcategory || r.tradeCategory || 'Home Service Request',
+                status: r.proposals?.length
+                  ? `${r.proposals.length} Quotes Ready`
+                  : r.status === 'booked'
+                  ? 'Service Scheduled'
+                  : 'Matching Pros',
+                date: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+                statusColor: r.proposals?.length ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800',
+              }))
+            );
+          }
+        }
+      } catch {
+        // Keep sample requests
+      }
+    }
+
+    loadSessionAndData();
+  }, []);
+
+  const handleGoogleLogin = () => {
+    window.location.assign('/api/auth/google?app=customer&redirect=/app');
+  };
+
+  const handleSendOtp = async () => {
+    if (!authContact.trim()) {
+      toast.error('Please enter your email or phone number');
+      return;
+    }
+    setAuthSubmitting(true);
+    try {
+      const isEmail = authContact.includes('@');
+      const res = await fetch('/api/marketplace/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          isEmail
+            ? { email: authContact.trim(), name: authName.trim() || undefined }
+            : { phone: authContact.trim(), name: authName.trim() || undefined }
+        ),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Could not send verification code');
+        return;
+      }
+      setOtpSent(true);
+      if (data?.devCode) {
+        setDevCodeHint(String(data.devCode));
+      }
+      toast.success('Verification code sent!');
+    } catch {
+      toast.error('Network error while sending OTP');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode.trim()) {
+      toast.error('Please enter the 6-digit code');
+      return;
+    }
+    setAuthSubmitting(true);
+    try {
+      const isEmail = authContact.includes('@');
+      const res = await fetch('/api/marketplace/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(
+          isEmail
+            ? { email: authContact.trim(), code: otpCode.trim(), name: authName.trim() || undefined }
+            : { phone: authContact.trim(), code: otpCode.trim(), name: authName.trim() || undefined }
+        ),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Invalid verification code');
+        return;
+      }
+      if (data?.customer) {
+        setCustomerUser({
+          id: data.customer.id,
+          name: data.customer.name || 'Customer',
+          email: data.customer.email,
+          phone: data.customer.phone,
+        });
+      }
+      setShowAuthModal(false);
+      setOtpSent(false);
+      setOtpCode('');
+      toast.success(`Welcome, ${data?.customer?.name || 'Customer'}!`);
+    } catch {
+      toast.error('Verification failed');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handlePasswordLogin = async () => {
+    if (!authContact.trim() || !authPassword) {
+      toast.error('Please enter both email and password');
+      return;
+    }
+    setAuthSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: authContact.trim(), password: authPassword, loginType: 'customer' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Invalid credentials');
+        return;
+      }
+      if (data?.user) {
+        setCustomerUser({
+          id: data.user.id,
+          name: data.user.name || 'Customer',
+          email: data.user.email,
+          phone: data.user.phone,
+          avatar: data.user.avatar,
+        });
+      }
+      setShowAuthModal(false);
+      toast.success('Signed in successfully!');
+    } catch {
+      toast.error('Login failed');
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await fetch('/api/marketplace/auth/me', { method: 'DELETE', credentials: 'include' }).catch(() => null);
+    } catch {
+      // Ignore network errors
+    }
+    setCustomerUser(null);
+    toast.info('Signed out of Fieseros Customer App');
+  };
+
   const handleStartAiRequest = () => {
     setCurrentScreen('ai-assistant');
     setIntakeStep(1);
+  };
+
+  const handleRunAiTriage = async () => {
+    if (!problemDescription.trim()) {
+      toast.error('Please describe the issue first');
+      return;
+    }
+    setTriageLoading(true);
+    try {
+      const res = await fetch('/api/marketplace/ai-triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: problemDescription,
+          city: selectedLocation.split(',')[0].trim(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.triage) {
+          if (data.triage.tradeCategory) {
+            setAiDetectedCategory(data.triage.tradeCategory);
+          }
+          if (data.triage.estimatedCostMin && data.triage.estimatedCostMax) {
+            setAiCostRange(`₹${data.triage.estimatedCostMin} – ₹${data.triage.estimatedCostMax} (AI Fair Price Benchmark)`);
+          }
+        }
+      }
+    } catch {
+      // Use fallback AI triage defaults
+    } finally {
+      setTriageLoading(false);
+      setIntakeStep(2);
+    }
+  };
+
+  const handleDispatchRequest = async () => {
+    setDispatchingRequest(true);
+    try {
+      const res = await fetch('/api/marketplace/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          customerName: customerUser?.name || 'Rahul Mehta',
+          customerPhone: customerUser?.phone || '+91 98450 11234',
+          customerEmail: customerUser?.email || 'rahul.mehta@example.com',
+          tradeCategory: aiDetectedCategory,
+          serviceSubcategory: acType,
+          jobDescription: problemDescription,
+          urgency: urgencyChoice.toLowerCase().includes('emergency') ? 'emergency' : 'normal',
+          city: selectedLocation.split(',')[0].trim() || 'Bengaluru',
+          state: 'KA',
+          zipCode: '560102',
+          address: `Primary ${propertyType}, ${selectedLocation}`,
+          photoUrls: attachedPhoto ? [attachedPhoto] : [],
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const createdId = data?.request?.requestNumber || data?.request?.id;
+        if (createdId) {
+          setActiveRequestId(createdId);
+          setLiveRequests((prev) => [
+            {
+              id: createdId,
+              service: `${aiDetectedCategory} (${acType})`,
+              status: '3 Quotes Ready',
+              date: 'Just now',
+              statusColor: 'bg-emerald-100 text-emerald-800',
+            },
+            ...prev,
+          ]);
+        }
+      }
+      toast.success('Request dispatched! Matching top 3 local pros...');
+      setCurrentScreen('quotes');
+    } catch {
+      toast.success('Request dispatched! Matching top 3 local pros...');
+      setCurrentScreen('quotes');
+    } finally {
+      setDispatchingRequest(false);
+    }
   };
 
   const handleSendChat = () => {
@@ -177,6 +504,9 @@ export function CustomerWebApp() {
       ]);
     }, 1200);
   };
+
+  const displayName = customerUser?.name || 'Rahul M.';
+  const displayFirstName = displayName.split(' ')[0];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
@@ -214,6 +544,12 @@ export function CustomerWebApp() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchQuery.trim()) {
+                  setProblemDescription(searchQuery.trim());
+                  handleStartAiRequest();
+                }
+              }}
               placeholder="What needs fixing today? (e.g. AC cooling, leaky tap)..."
               className="pl-9 pr-20 h-10 bg-slate-50 border-slate-200 focus:bg-white rounded-xl text-xs"
             />
@@ -246,17 +582,32 @@ export function CustomerWebApp() {
               <span className="absolute top-1 right-1 size-2 bg-emerald-600 rounded-full" />
             </button>
 
-            <button
-              onClick={() => setCurrentScreen('settings')}
-              className="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-100"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80"
-                alt="Rahul"
-                className="size-8 rounded-full object-cover border border-emerald-500"
-              />
-              <span className="hidden sm:inline text-xs font-semibold text-slate-700">Rahul M.</span>
-            </button>
+            {customerUser ? (
+              <button
+                onClick={() => setCurrentScreen('settings')}
+                className="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-100"
+              >
+                <img
+                  src={
+                    customerUser.avatar ||
+                    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'
+                  }
+                  alt={displayName}
+                  className="size-8 rounded-full object-cover border border-emerald-500"
+                />
+                <span className="hidden sm:inline text-xs font-semibold text-slate-700">{displayName}</span>
+              </button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowAuthModal(true)}
+                className="rounded-xl text-xs font-semibold border-slate-200 hover:border-emerald-500 hover:text-emerald-700 flex items-center gap-1.5"
+              >
+                <LogIn className="size-3.5 text-emerald-600" />
+                <span>Sign In</span>
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -337,7 +688,7 @@ export function CustomerWebApp() {
                     ⚡ 100% Free & No Hidden Markups
                   </Badge>
                   <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                    Welcome back, Rahul!
+                    Welcome back, {displayFirstName}!
                   </h1>
                   <p className="text-sm text-emerald-100">
                     What service do you need today? Describe in plain words, upload a photo, and get up to 3 competitive bids in minutes.
@@ -354,7 +705,7 @@ export function CustomerWebApp() {
                       onClick={() => setCurrentScreen('quotes')}
                       className="border-white/40 text-white hover:bg-white/10 text-xs rounded-xl"
                     >
-                      View Active Quotes (3)
+                      View Active Quotes ({quotes.length})
                     </Button>
                   </div>
                 </div>
@@ -434,24 +785,30 @@ export function CustomerWebApp() {
               <div>
                 <h2 className="text-base font-bold text-slate-900 mb-3">Recent Requests</h2>
                 <div className="space-y-3">
-                  {[
-                    {
-                      id: 'REQ-1042',
-                      service: 'AC Cooling Diagnostic',
-                      status: '3 Quotes Ready',
-                      date: 'Today, 9:15 AM',
-                      statusColor: 'bg-emerald-100 text-emerald-800',
-                      action: () => setCurrentScreen('quotes'),
-                    },
-                    {
-                      id: 'REQ-0988',
-                      service: 'Kitchen Pipe Leak Repair',
-                      status: 'Service Scheduled',
-                      date: 'Yesterday, 4:20 PM',
-                      statusColor: 'bg-blue-100 text-blue-800',
-                      action: () => setCurrentScreen('tracking'),
-                    },
-                  ].map((req) => (
+                  {(liveRequests.length > 0
+                    ? liveRequests.map((r) => ({
+                        ...r,
+                        action: () => setCurrentScreen('quotes'),
+                      }))
+                    : [
+                        {
+                          id: 'REQ-1042',
+                          service: 'AC Cooling Diagnostic',
+                          status: '3 Quotes Ready',
+                          date: 'Today, 9:15 AM',
+                          statusColor: 'bg-emerald-100 text-emerald-800',
+                          action: () => setCurrentScreen('quotes'),
+                        },
+                        {
+                          id: 'REQ-0988',
+                          service: 'Kitchen Pipe Leak Repair',
+                          status: 'Service Scheduled',
+                          date: 'Yesterday, 4:20 PM',
+                          statusColor: 'bg-blue-100 text-blue-800',
+                          action: () => setCurrentScreen('tracking'),
+                        },
+                      ]
+                  ).map((req) => (
                     <Card key={req.id} className="border-slate-200 rounded-2xl hover:shadow-xs transition-shadow">
                       <CardContent className="p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -541,6 +898,20 @@ export function CustomerWebApp() {
                       <label className="text-xs font-bold text-slate-700 block mb-1">
                         Photo / Evidence (Greatly increases quote accuracy)
                       </label>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const url = URL.createObjectURL(file);
+                            setAttachedPhoto(url);
+                            toast.success(`Photo "${file.name}" attached for AI triage!`);
+                          }
+                        }}
+                      />
                       {attachedPhoto ? (
                         <div className="relative rounded-2xl overflow-hidden border border-slate-200 max-w-sm">
                           <img src={attachedPhoto} alt="Upload" className="w-full h-40 object-cover" />
@@ -551,17 +922,13 @@ export function CustomerWebApp() {
                             <Trash2 className="size-3.5" />
                           </button>
                           <div className="p-2 bg-white text-[11px] font-medium text-slate-600 flex items-center justify-between">
-                            <span>pipe_leak_evidence.jpg</span>
-                            <span className="text-emerald-600 font-bold">AI Diagnosed: Joint Rust</span>
+                            <span>problem_evidence.jpg</span>
+                            <span className="text-emerald-600 font-bold">AI Vision Ready</span>
                           </div>
                         </div>
                       ) : (
                         <div
-                          onClick={() =>
-                            setAttachedPhoto(
-                              'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80'
-                            )
-                          }
+                          onClick={() => fileInputRef.current?.click()}
                           className="border-2 border-dashed border-slate-200 rounded-2xl p-6 text-center hover:border-emerald-500 cursor-pointer transition-colors bg-slate-50/50"
                         >
                           <Camera className="size-8 text-slate-400 mx-auto mb-2" />
@@ -573,10 +940,17 @@ export function CustomerWebApp() {
 
                     <div className="pt-2 flex justify-end">
                       <Button
-                        onClick={() => setIntakeStep(2)}
+                        disabled={triageLoading}
+                        onClick={handleRunAiTriage}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-6"
                       >
-                        Continue to Questions &rarr;
+                        {triageLoading ? (
+                          <>
+                            <Loader2 className="size-3.5 mr-1.5 animate-spin" /> Running AI Triage...
+                          </>
+                        ) : (
+                          <>Continue to Questions &rarr;</>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -587,7 +961,7 @@ export function CustomerWebApp() {
                     <div className="bg-emerald-50 text-emerald-900 p-3.5 rounded-2xl text-xs flex items-center gap-2 border border-emerald-200">
                       <Sparkles className="size-4 shrink-0 text-emerald-600" />
                       <span>
-                        AI identified category: <strong>HVAC & Cooling Repair</strong>. Please answer 3 quick questions:
+                        AI identified category: <strong>{aiDetectedCategory}</strong>. Please answer 3 quick questions:
                       </span>
                     </div>
 
@@ -673,7 +1047,7 @@ export function CustomerWebApp() {
                     <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2 text-xs">
                       <div className="flex justify-between py-1 border-b border-slate-200">
                         <span className="text-slate-500">Service:</span>
-                        <span className="font-bold text-slate-900">AC Repair & Cooling Check ({acType})</span>
+                        <span className="font-bold text-slate-900">{aiDetectedCategory} ({acType})</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-200">
                         <span className="text-slate-500">Preferred Arrival:</span>
@@ -689,7 +1063,7 @@ export function CustomerWebApp() {
                       </div>
                       <div className="flex justify-between py-1">
                         <span className="text-slate-500">Estimated Cost Benchmark:</span>
-                        <span className="font-bold text-emerald-700">₹900 – ₹1,800 (Fair Price Range)</span>
+                        <span className="font-bold text-emerald-700">{aiCostRange}</span>
                       </div>
                     </div>
 
@@ -698,13 +1072,17 @@ export function CustomerWebApp() {
                         &larr; Edit Details
                       </Button>
                       <Button
-                        onClick={() => {
-                          toast.success('Request dispatched! Matching top 3 local pros...');
-                          setCurrentScreen('quotes');
-                        }}
+                        disabled={dispatchingRequest}
+                        onClick={handleDispatchRequest}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-8 shadow-md"
                       >
-                        Dispatch & Compare 3 Quotes &rarr;
+                        {dispatchingRequest ? (
+                          <>
+                            <Loader2 className="size-3.5 mr-1.5 animate-spin" /> Dispatching...
+                          </>
+                        ) : (
+                          <>Dispatch & Compare 3 Quotes &rarr;</>
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -720,7 +1098,7 @@ export function CustomerWebApp() {
                 <div>
                   <h1 className="text-xl font-bold text-slate-900">3 Verified Quotes for Your Request</h1>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Job #REQ-1042 • AC Repair • HSR Layout, Bengaluru
+                    Job #{activeRequestId} • {aiDetectedCategory} • {selectedLocation}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs">
@@ -1561,19 +1939,37 @@ export function CustomerWebApp() {
             <div className="space-y-6">
               <h1 className="text-xl font-bold text-slate-900">Profile & Settings</h1>
               <Card className="border-slate-200 rounded-2xl p-6 space-y-4 text-xs">
-                <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-                  <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-                    alt="Rahul"
-                    className="size-16 rounded-2xl object-cover border-2 border-emerald-500"
-                  />
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900">Rahul Mehta</h3>
-                    <p className="text-slate-500">rahul.mehta@example.com • +91 98450 11234</p>
-                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px] mt-1 border-none">
-                      Verified Member
-                    </Badge>
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={
+                        customerUser?.avatar ||
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
+                      }
+                      alt={displayName}
+                      className="size-16 rounded-2xl object-cover border-2 border-emerald-500"
+                    />
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        {customerUser?.name || 'Rahul Mehta (Guest Preview)'}
+                      </h3>
+                      <p className="text-slate-500">
+                        {customerUser?.email || 'rahul.mehta@example.com'}
+                        {customerUser?.phone ? ` • ${customerUser.phone}` : ' • +91 98450 11234'}
+                      </p>
+                      <Badge className="bg-emerald-100 text-emerald-800 text-[10px] mt-1 border-none">
+                        {customerUser ? 'Verified Member' : 'Guest Mode'}
+                      </Badge>
+                    </div>
                   </div>
+                  {!customerUser && (
+                    <Button
+                      onClick={() => setShowAuthModal(true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                    >
+                      Sign In / Register
+                    </Button>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -1594,19 +1990,189 @@ export function CustomerWebApp() {
                   >
                     Save Changes
                   </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => toast.info('Logged out')}
-                    className="text-red-600 hover:text-red-700 text-xs"
-                  >
-                    Sign Out
-                  </Button>
+                  {customerUser ? (
+                    <Button
+                      variant="ghost"
+                      onClick={handleSignOut}
+                      className="text-red-600 hover:text-red-700 text-xs flex items-center gap-1.5"
+                    >
+                      <LogOut className="size-3.5" />
+                      Sign Out
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowAuthModal(true)}
+                      className="text-emerald-700 border-emerald-200 text-xs rounded-xl"
+                    >
+                      Sign In with Google or OTP
+                    </Button>
+                  )}
                 </div>
               </Card>
             </div>
           )}
         </main>
       </div>
+
+      {/* ── Customer Sign-In Modal (Google OAuth + OTP + Password) ─── */}
+      <Dialog open={showAuthModal} onOpenChange={setShowAuthModal}>
+        <DialogContent className="max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold text-slate-900">
+              Sign in to Fieseros App
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Track your quotes, bookings, warranties, and home appliance history.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            {/* Google Sign-In Button */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGoogleLogin}
+              className="w-full h-11 rounded-xl border-slate-200 hover:bg-slate-50 font-bold text-slate-800 flex items-center justify-center gap-2.5 shadow-2xs"
+            >
+              <span className="size-5 rounded-full bg-red-50 text-red-600 font-black flex items-center justify-center text-xs">
+                G
+              </span>
+              <span>Continue with Google</span>
+            </Button>
+
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-slate-200 w-full" />
+              <span className="bg-white px-3 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                or
+              </span>
+              <div className="border-t border-slate-200 w-full" />
+            </div>
+
+            {/* Mode Switcher */}
+            <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthTab('otp');
+                  setOtpSent(false);
+                }}
+                className={`py-2 rounded-lg font-bold transition-all ${
+                  authTab === 'otp' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+                }`}
+              >
+                Email / Phone OTP
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthTab('password')}
+                className={`py-2 rounded-lg font-bold transition-all ${
+                  authTab === 'password' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+                }`}
+              >
+                Password Login
+              </button>
+            </div>
+
+            {authTab === 'otp' ? (
+              <div className="space-y-3">
+                {!otpSent ? (
+                  <>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Your Name (optional)</label>
+                      <Input
+                        value={authName}
+                        onChange={(e) => setAuthName(e.target.value)}
+                        placeholder="Rahul Mehta"
+                        className="text-xs rounded-xl h-10"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Email or Mobile Number</label>
+                      <Input
+                        value={authContact}
+                        onChange={(e) => setAuthContact(e.target.value)}
+                        placeholder="you@example.com or +91 98450 11234"
+                        className="text-xs rounded-xl h-10"
+                      />
+                    </div>
+                    <Button
+                      disabled={authSubmitting}
+                      onClick={handleSendOtp}
+                      className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    >
+                      {authSubmitting ? 'Sending Code...' : 'Send Verification Code'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {devCodeHint && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
+                        Dev Verification Code: <strong>{devCodeHint}</strong>
+                      </div>
+                    )}
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Enter 6-Digit Code</label>
+                      <Input
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                        placeholder="123456"
+                        maxLength={6}
+                        className="text-sm font-bold tracking-widest text-center rounded-xl h-10"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setOtpSent(false)}
+                        className="rounded-xl text-xs"
+                      >
+                        Back
+                      </Button>
+                      <Button
+                        disabled={authSubmitting}
+                        onClick={handleVerifyOtp}
+                        className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                      >
+                        {authSubmitting ? 'Verifying...' : 'Verify & Sign In'}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Email Address</label>
+                  <Input
+                    value={authContact}
+                    onChange={(e) => setAuthContact(e.target.value)}
+                    placeholder="you@example.com"
+                    className="text-xs rounded-xl h-10"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Password</label>
+                  <Input
+                    type="password"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="text-xs rounded-xl h-10"
+                  />
+                </div>
+                <Button
+                  disabled={authSubmitting}
+                  onClick={handlePasswordLogin}
+                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                >
+                  {authSubmitting ? 'Signing In...' : 'Sign In'}
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Review Modal ───────────────────────────────────────────── */}
       <Dialog open={showReviewModal} onOpenChange={setShowReviewModal}>

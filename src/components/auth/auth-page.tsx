@@ -499,7 +499,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
 
   // ─── Main Render ───
   return (
-    <div className={`${isBgos ? "bgos-app " : ""}min-h-screen flex flex-col lg:flex-row`}>
+    <div className={`${isBgos ? "bgos-app bgos-auth " : ""}min-h-screen flex flex-col lg:flex-row`}>
       {/* Left Panel — Branding (desktop only) */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -507,8 +507,9 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab, selectedP
         transition={{ duration: 0.6 }}
         className="hidden lg:flex lg:w-[52%] relative overflow-hidden flex-col justify-between p-10 xl:p-14"
         style={{
-          background:
-            'linear-gradient(135deg, #0f2027 0%, #1a3a2a 40%, #1e4d3a 70%, #0d1f17 100%)',
+          background: isBgos
+            ? 'linear-gradient(135deg, #003E43 0%, #00665D 60%, #007F73 100%)'
+            : 'linear-gradient(135deg, #0f2027 0%, #1a3a2a 40%, #1e4d3a 70%, #0d1f17 100%)',
         }}
       >
         {/* Subtle pattern overlay */}

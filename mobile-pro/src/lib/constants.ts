@@ -5,8 +5,8 @@
  */
 
 export const BRAND = {
-  name: 'Fieseros',
-  tagline: 'The Operating System for Service Businesses',
+  name: 'Fieseros Pro',
+  tagline: 'Win Leads, Send Quotes & Manage Field Jobs',
   domain: 'fieseros.com',
 } as const;
 
@@ -21,19 +21,16 @@ export const API_BASE_URL =
 export const API_TIMEOUT_MS = 30000;
 
 export const STORAGE_KEYS = {
-  AUTH_TOKEN: 'fieseros_auth_token',
-  REFRESH_TOKEN: 'fieseros_refresh_token',
-  USER_DATA: 'fieseros_user_data',
-  ACTIVE_ROLE: 'fieseros_active_role',
-  SELECTED_CITY: 'fieseros_selected_city',
-  THEME: 'fieseros_theme',
-  LAST_COMPANY_SLUG: 'fieseros_last_company_slug',
-  LAST_COMPANY_DATA: 'fieseros_last_company_data',
-  // Active job context for the background GPS task (employeeId + jobId).
-  // Written by useLiveTracking when tracking starts; read by the module-level
-  // TaskManager task to know which employee/job a background ping belongs to.
-  LIVE_TRACKING_CTX: 'fieseros_live_tracking_ctx',
-  ACTIVE_TRAVEL_STATE: 'fieseros_active_travel_state',
+  AUTH_TOKEN: 'fieseros_pro_auth_token',
+  REFRESH_TOKEN: 'fieseros_pro_refresh_token',
+  USER_DATA: 'fieseros_pro_user_data',
+  ACTIVE_ROLE: 'fieseros_pro_active_role',
+  SELECTED_CITY: 'fieseros_pro_selected_city',
+  THEME: 'fieseros_pro_theme',
+  LAST_COMPANY_SLUG: 'fieseros_pro_last_company_slug',
+  LAST_COMPANY_DATA: 'fieseros_pro_last_company_data',
+  LIVE_TRACKING_CTX: 'fieseros_pro_live_tracking_ctx',
+  ACTIVE_TRAVEL_STATE: 'fieseros_pro_active_travel_state',
 } as const;
 
 /**
@@ -52,10 +49,21 @@ export const API_PATHS = {
   customerMagicLink: '/api/auth/customer/exchange-magic-link',
   customerActivate: '/api/auth/customer/activate',
 
-  // Employee / admin auth
+  // Google OAuth
+  googleAuth: '/api/auth/google',
+
+  // Employee / Provider auth
   companyLogin: '/api/auth/company-login',
-  // Direct login (no company selection required — tenant resolved from User.tenantId)
   directLogin: '/api/auth/login',
+  claimSendOtp: '/api/marketplace/claim/send-otp',
+  claimVerifyOtp: '/api/marketplace/claim/verify-otp',
+
+  // Provider Marketplace & Field Ops
+  aiTriage: '/api/marketplace/ai-triage',
+  providerOpportunities: '/api/marketplace/provider/opportunities',
+  providerStats: '/api/marketplace/provider-stats',
+  marketplaceProposals: '/api/marketplace/proposals',
+  jobs: '/api/jobs',
 
   // Shared
   authMe: '/api/auth/me',

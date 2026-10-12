@@ -195,8 +195,8 @@ async function exchangeCodeForTokens(code: string, redirectUri: string): Promise
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       code,
-      client_id: GOOGLE_CLIENT_ID || '',
-      client_secret: GOOGLE_CLIENT_SECRET || '',
+      client_id: process.env.GOOGLE_CLIENT_ID || '',
+      client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
       redirect_uri: redirectUri,
       grant_type: 'authorization_code',
     }),
@@ -302,7 +302,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse state parameter early to extract originHost for error redirects
-    let state: { mode?: string; redirect?: string; plan?: string; signupMode?: string; redirectUri?: string; originHost?: string } = {};
+    let state: {
+      mode?: string;
+      redirect?: string;
+      plan?: string;
+      signupMode?: string;
+      app?: string;
+      redirectUri?: string;
+      originHost?: string;
+    } = {};
     try {
       if (stateParam) {
         state = JSON.parse(Buffer.from(stateParam, 'base64').toString());
@@ -312,32 +320,78 @@ export async function GET(request: NextRequest) {
     }
 
     const baseUrl = getBaseUrl(request, state.originHost);
+    const originHostLower = (state.originHost || '').toLowerCase();
+    const redirectParam = state.redirect || '';
+
+    const isCustomerApp =
+      state.app === 'customer' ||
+      redirectParam.startsWith('/app') ||
+      redirectParam.startsWith('fieseros://') ||
+      originHostLower.includes('://app.');
+
+    const isProApp =
+      state.app === 'pro' ||
+      redirectParam.startsWith('/pro') ||
+      redirectParam.startsWith('fieserospro://') ||
+      originHostLower.includes('://pro.');
+
+    const isAdminApp =
+      state.app === 'admin' ||
+      redirectParam.startsWith('/admin') ||
+      originHostLower.includes('://admin.');
+
+    const isMobileMode =
+      state.mode === 'mobile' ||
+      redirectParam.includes('auth-callback') ||
+      redirectParam.startsWith('quoteflow://') ||
+      redirectParam.startsWith('fieseros://') ||
+      redirectParam.startsWith('fieserospro://') ||
+      redirectParam.startsWith('exp://');
+
+    const fallbackWebPath = isCustomerApp
+      ? '/app'
+      : isProApp
+        ? '/pro'
+        : isAdminApp
+          ? '/admin'
+          : '/';
 
     // Handle Google OAuth errors (e.g., user denied access, redirect_uri_mismatch)
     if (error) {
       console.error('Google OAuth callback error:', error, 'Full URL:', request.url);
       const errorDetail = searchParams.get('error_description') || error;
-      // Map specific errors to user-friendly messages
       let errorMessage = errorDetail;
       if (error === 'redirect_uri_mismatch') {
         errorMessage = 'Google OAuth redirect URI not configured. Please add this app\'s URL to your Google Cloud Console authorized redirect URIs.';
       }
+      if (isMobileMode && redirectParam) {
+        const sep = redirectParam.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${redirectParam}${sep}error=${encodeURIComponent(errorMessage)}`);
+      }
       return NextResponse.redirect(
-        new URL(`/?auth_error=${encodeURIComponent(errorMessage)}`, baseUrl)
+        new URL(`${fallbackWebPath}?auth_error=${encodeURIComponent(errorMessage)}`, baseUrl)
       );
     }
 
     if (!code) {
       console.error('Google OAuth: No authorization code received');
+      if (isMobileMode && redirectParam) {
+        const sep = redirectParam.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${redirectParam}${sep}error=google_no_code`);
+      }
       return NextResponse.redirect(
-        new URL('/?auth_error=google_no_code', baseUrl)
+        new URL(`${fallbackWebPath}?auth_error=google_no_code`, baseUrl)
       );
     }
 
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
       console.error('Google OAuth: Client ID or Secret not configured');
+      if (isMobileMode && redirectParam) {
+        const sep = redirectParam.includes('?') ? '&' : '?';
+        return NextResponse.redirect(`${redirectParam}${sep}error=google_not_configured`);
+      }
       return NextResponse.redirect(
-        new URL('/?auth_error=google_not_configured', baseUrl)
+        new URL(`${fallbackWebPath}?auth_error=google_not_configured`, baseUrl)
       );
     }
 
@@ -350,10 +404,29 @@ export async function GET(request: NextRequest) {
     console.log('[Google OAuth Callback] Using redirect URI:', redirectUri, {
       stateRedirectUri: state.redirectUri || '(none)',
       validated: redirectUri === state.redirectUri,
+      app: state.app,
+      isCustomerApp,
+      isProApp,
+      isMobileMode,
     });
 
     // Helper to build canonical success redirect URL
     const buildSuccessUrl = (baseUrl: string, isStandalone: boolean, needsOnboarding = false) => {
+      if (isCustomerApp) {
+        const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/app';
+        const sep = targetPath.includes('?') ? '&' : '?';
+        return `${baseUrl}${targetPath}${sep}google_login=success`;
+      }
+      if (isProApp) {
+        const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/pro';
+        const sep = targetPath.includes('?') ? '&' : '?';
+        return `${baseUrl}${targetPath}${sep}google_login=success`;
+      }
+      if (isAdminApp) {
+        const targetPath = state.redirect && state.redirect.startsWith('/') ? state.redirect : '/admin';
+        const sep = targetPath.includes('?') ? '&' : '?';
+        return `${baseUrl}${targetPath}${sep}google_login=success`;
+      }
       // If the tenant hasn't completed onboarding, always route to root with google_login=success
       // so HomePageClient can render the onboarding wizard or mode selector.
       // Do NOT send un-onboarded tenants to static landing pages like /gptform.
@@ -376,11 +449,6 @@ export async function GET(request: NextRequest) {
       return `${baseUrl}/?google_login=success`;
     };
 
-    const isMobileMode = state.mode === 'mobile' ||
-      state.redirect?.includes('auth-callback') ||
-      state.redirect?.startsWith('quoteflow://') ||
-      state.redirect?.startsWith('exp://');
-
     const buildMobileSuccessUrl = (
       token: string,
       email: string,
@@ -391,7 +459,12 @@ export async function GET(request: NextRequest) {
       refreshToken: string,
       tenantName?: string | null
     ) => {
-      const target = state.redirect || 'quoteflow://auth-callback';
+      const defaultScheme = isCustomerApp
+        ? 'fieseros://auth-callback'
+        : isProApp
+          ? 'fieserospro://auth-callback'
+          : 'quoteflow://auth-callback';
+      const target = state.redirect || defaultScheme;
       const sep = target.includes('?') ? '&' : '?';
       const params = new URLSearchParams();
       params.set('token', token);
@@ -413,10 +486,118 @@ export async function GET(request: NextRequest) {
       console.error('Google OAuth: No email in user info');
       const baseUrl = getBaseUrl(request);
       return NextResponse.redirect(
-        new URL('/?auth_error=google_no_email', baseUrl)
+        new URL(`${fallbackWebPath}?auth_error=google_no_email`, baseUrl)
       );
     }
 
+    const normalizedEmail = userInfo.email.toLowerCase().trim();
+    const displayName = userInfo.name || userInfo.given_name || normalizedEmail.split('@')[0] || 'Fieseros User';
+
+    // ─── CUSTOMER APP FLOW (app.fieseros.com, /app, or mobile-customer) ───
+    // Do NOT create a fake Business OS Tenant/Workspace for a homeowner/customer!
+    if (isCustomerApp) {
+      let mpCustomer = await db.marketplaceCustomer.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      if (!mpCustomer) {
+        mpCustomer = await db.marketplaceCustomer.create({
+          data: {
+            email: normalizedEmail,
+            phone: `google-${userInfo.sub || Date.now()}`,
+            name: displayName,
+            avatarUrl: userInfo.picture || null,
+            otpVerified: true,
+          },
+        });
+      } else {
+        mpCustomer = await db.marketplaceCustomer.update({
+          where: { id: mpCustomer.id },
+          data: {
+            name: mpCustomer.name || displayName,
+            avatarUrl: userInfo.picture || mpCustomer.avatarUrl,
+            otpVerified: true,
+          },
+        });
+      }
+
+      // Also ensure a Customer record exists so /api/auth/me works seamlessly for mobile-customer & web
+      let crmCustomer = await db.customer.findFirst({
+        where: { email: normalizedEmail },
+        include: { workspace: { include: { tenant: true } } },
+      });
+
+      if (!crmCustomer) {
+        const defaultTenant = await db.tenant.findFirst({
+          where: { planStatus: { in: ['active', 'trial'] } },
+          orderBy: { createdAt: 'asc' },
+        });
+        const workspace = defaultTenant
+          ? await db.workspace.findFirst({ where: { tenantId: defaultTenant.id } })
+          : null;
+
+        crmCustomer = await db.customer.create({
+          data: {
+            name: displayName,
+            email: normalizedEmail,
+            phone: (mpCustomer.phone || '').startsWith('google-') ? '' : (mpCustomer.phone || ''),
+            lastLoginAt: new Date(),
+            ...(workspace ? { workspaceId: workspace.id } : {}),
+          },
+          include: { workspace: { include: { tenant: true } } },
+        });
+      } else {
+        await db.customer.update({
+          where: { id: crmCustomer.id },
+          data: { lastLoginAt: new Date() },
+        });
+      }
+
+      const customerAuthPayload = {
+        id: crmCustomer.id,
+        email: normalizedEmail,
+        name: crmCustomer.name || displayName,
+        role: 'customer',
+        tenantId: crmCustomer.workspace?.tenantId || null,
+        workspaceId: crmCustomer.workspaceId || null,
+        avatar: userInfo.picture || null,
+        isSuperAdmin: false,
+      };
+
+      const tokens = await issueAuthTokens(
+        customerAuthPayload,
+        getRefreshSessionMetadata(request),
+        'customer'
+      );
+
+      if (isMobileMode) {
+        return NextResponse.redirect(
+          buildMobileSuccessUrl(
+            tokens.accessToken,
+            normalizedEmail,
+            customerAuthPayload.name,
+            crmCustomer.id,
+            customerAuthPayload.tenantId,
+            'customer',
+            tokens.refreshToken,
+            crmCustomer.workspace?.tenant?.name || null
+          )
+        );
+      }
+
+      const response = NextResponse.redirect(buildSuccessUrl(baseUrl, false, false));
+      setAuthCookies(response.cookies, tokens);
+      response.cookies.set('mc_session', mpCustomer.id, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60,
+        path: '/',
+      });
+      return response;
+    }
+
+    // ─── PRO / BUSINESS / ADMIN FLOW ───
     // Check if user already exists
     const existingUser = await db.user.findUnique({
       where: { email: userInfo.email },
@@ -425,7 +606,6 @@ export async function GET(request: NextRequest) {
 
     if (existingUser) {
       // ─── EXISTING USER: Log them in ───
-      // Update their Google auth info if not already set
       if (existingUser.authProvider !== 'google' || !existingUser.authProviderId) {
         await db.user.update({
           where: { id: existingUser.id },
@@ -447,7 +627,7 @@ export async function GET(request: NextRequest) {
       if (!existingUser.isActive) {
         const baseUrl = getBaseUrl(request);
         return NextResponse.redirect(
-          new URL('/?auth_error=account_deactivated', baseUrl)
+          new URL(`${fallbackWebPath}?auth_error=account_deactivated`, baseUrl)
         );
       }
 
@@ -500,7 +680,11 @@ export async function GET(request: NextRequest) {
         return response;
       }
 
-      await getOrCreateBusinessForUser(existingUser.id, existingUser.tenantId || undefined, existingUser.name || 'My Business');
+      try {
+        await getOrCreateBusinessForUser(existingUser.id, existingUser.tenantId || undefined, existingUser.name || 'My Business');
+      } catch (qfErr) {
+        console.warn('[Google Callback] Best-effort getOrCreateBusinessForUser skipped:', qfErr);
+      }
       const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
       const token = tokens.accessToken;
 
@@ -563,7 +747,11 @@ export async function GET(request: NextRequest) {
     const tokens = await issueAuthTokens(authUser, getRefreshSessionMetadata(request));
     const token = tokens.accessToken;
 
-    await getOrCreateBusinessForUser(tempUser.id, tenant.id, tempUser.name || 'My Business');
+    try {
+      await getOrCreateBusinessForUser(tempUser.id, tenant.id, tempUser.name || 'My Business');
+    } catch (qfErr) {
+      console.warn('[Google Callback] Best-effort getOrCreateBusinessForUser skipped:', qfErr);
+    }
 
     if (isMobileMode) {
       return NextResponse.redirect(

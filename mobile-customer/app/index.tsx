@@ -10,17 +10,17 @@ import { useAuthStore } from '@/stores/auth-store';
 import { BRAND } from '@/lib/constants';
 
 export default function Index() {
-  const { isAuthenticated, role, bootstrap } = useAuthStore();
+  const { isAuthenticated, isBooted, role, bootstrap } = useAuthStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     bootstrap();
-  }, []);
+  }, [bootstrap]);
 
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || !isBooted) return;
     router.replace('/(customer)/home');
-  }, [mounted, isAuthenticated, role]);
+  }, [mounted, isBooted, isAuthenticated, role]);
 
   // Mark as mounted after the first render cycle (navigation is ready by then)
   useEffect(() => {

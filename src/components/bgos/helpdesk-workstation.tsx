@@ -817,19 +817,19 @@ export function HelpCenterView() {
           <Card className="shadow-2xs border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 rounded-2xl flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Avg First Response</span>
-              <div className="p-1.5 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-300">
+              <div className="p-1.5 rounded-lg bg-teal-50 text-teal-600 dark:bg-teal-950/60 dark:text-teal-300">
                 <Zap className="size-4" />
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
               <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">4m 12s</span>
-              <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 font-mono text-[10px] font-bold">
+              <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300 font-mono text-[10px] font-bold">
                 AI Copilot
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
               <span className="text-[11px] font-mono text-emerald-600 font-medium">Target &lt;15m (Pass)</span>
-              <svg className="w-16 h-4 text-purple-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 20">
+              <svg className="w-16 h-4 text-teal-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 20">
                 <path d="M0 14 Q20 4 40 8 T80 3" strokeLinecap="round" />
               </svg>
             </div>

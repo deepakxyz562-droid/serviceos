@@ -192,7 +192,7 @@ export function BgosDashboard() {
   });
 
   return (
-    <div className="flex-1 min-h-screen bg-[#F8FAFC] dark:bg-slate-950 p-4 md:p-6 lg:p-8 space-y-6 overflow-y-auto">
+    <div className="flex-1 min-h-screen bg-background dark:bg-slate-950 p-4 md:p-6 lg:p-8 space-y-6 overflow-y-auto">
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP HEADER BANNER & BUSINESS IDENTIFIER
          ═══════════════════════════════════════════════════════════════════════ */}
@@ -219,7 +219,7 @@ export function BgosDashboard() {
             onClick={() => toast.info('Workspace: Cinderella Cleaners (Tucson, AZ)')}
             className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-teal-300 transition-colors"
           >
-            <div className="size-8 rounded-xl bg-purple-100 dark:bg-purple-950 flex items-center justify-center text-xs font-bold text-purple-700">
+            <div className="size-8 rounded-xl bg-teal-100 dark:bg-teal-950 flex items-center justify-center text-xs font-bold text-teal-700">
               CC
             </div>
             <div className="text-left min-w-0">
@@ -240,7 +240,7 @@ export function BgosDashboard() {
         {/* Card 1: New Leads */}
         <div className="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="size-11 rounded-2xl bg-purple-500 text-white flex items-center justify-center shadow-xs">
+            <div className="size-11 rounded-2xl bg-teal-500 text-white flex items-center justify-center shadow-xs">
               <Target className="size-5" />
             </div>
             <div>
@@ -256,7 +256,7 @@ export function BgosDashboard() {
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
-              <MiniBarChart values={[3, 5, 4, 7, 6, 8, 9, 11]} color="#8B5CF6" />
+              <MiniBarChart values={[3, 5, 4, 7, 6, 8, 9, 11]} color="var(--chart-1)" />
             </div>
           </div>
         </div>
@@ -280,7 +280,7 @@ export function BgosDashboard() {
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
-              <MiniBarChart values={[2, 4, 3, 5, 6, 5, 7, 8]} color="#3B82F6" />
+              <MiniBarChart values={[2, 4, 3, 5, 6, 5, 7, 8]} color="var(--chart-3)" />
             </div>
           </div>
         </div>
@@ -386,10 +386,10 @@ export function BgosDashboard() {
           {/* Legend */}
           <div className="flex items-center gap-4 text-xs">
             <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400">
-              <span className="size-2 rounded-full bg-[#8B5CF6]" /> Leads
+              <span className="size-2 rounded-full bg-chart-1" /> Leads
             </div>
             <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400">
-              <span className="size-2 rounded-full bg-[#3B82F6]" /> Appointments
+              <span className="size-2 rounded-full bg-chart-3" /> Appointments
             </div>
             <div className="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-400">
               <span className="size-2 rounded-full bg-[#10B981]" /> Revenue (Est.)
@@ -401,12 +401,12 @@ export function BgosDashboard() {
             <svg viewBox="0 0 500 180" className="w-full h-full overflow-visible">
               <defs>
                 <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#8B5CF6" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="var(--chart-1)" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="var(--chart-1)" stopOpacity="0.0" />
                 </linearGradient>
                 <linearGradient id="blueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.2" />
-                  <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
+                  <stop offset="0%" stopColor="var(--chart-3)" stopOpacity="0.2" />
+                  <stop offset="100%" stopColor="var(--chart-3)" stopOpacity="0.0" />
                 </linearGradient>
               </defs>
 
@@ -431,7 +431,7 @@ export function BgosDashboard() {
               <path
                 d="M 40,130 C 90,120 120,95 170,105 C 220,115 250,70 300,60 C 350,50 380,80 430,65 C 460,55 480,45 490,40"
                 fill="none"
-                stroke="#8B5CF6"
+                stroke="var(--chart-1)"
                 strokeWidth="2.5"
               />
 
@@ -443,7 +443,7 @@ export function BgosDashboard() {
               <path
                 d="M 40,145 C 90,135 120,120 170,115 C 220,110 250,130 300,120 C 350,110 380,115 430,95 C 460,85 480,75 490,70"
                 fill="none"
-                stroke="#3B82F6"
+                stroke="var(--chart-3)"
                 strokeWidth="2"
               />
 
@@ -463,7 +463,7 @@ export function BgosDashboard() {
                 { cx: 430, cy: 65 },
                 { cx: 490, cy: 40 },
               ].map((p, idx) => (
-                <circle key={idx} cx={p.cx} cy={p.cy} r="3.5" fill="#8B5CF6" stroke="#fff" strokeWidth="1.5" />
+                <circle key={idx} cx={p.cx} cy={p.cy} r="3.5" fill="var(--chart-1)" stroke="#fff" strokeWidth="1.5" />
               ))}
 
               {/* X Axis Date Labels */}
@@ -496,7 +496,7 @@ export function BgosDashboard() {
                   cy="50"
                   r="38"
                   fill="transparent"
-                  stroke="#3B82F6"
+                  stroke="var(--chart-3)"
                   strokeWidth="16"
                   strokeDasharray="76.4 238.7"
                   strokeDashoffset="0"
@@ -507,7 +507,7 @@ export function BgosDashboard() {
                   cy="50"
                   r="38"
                   fill="transparent"
-                  stroke="#8B5CF6"
+                  stroke="var(--chart-1)"
                   strokeWidth="16"
                   strokeDasharray="57.3 238.7"
                   strokeDashoffset="-76.4"
@@ -569,8 +569,8 @@ export function BgosDashboard() {
             {/* Source Legend List */}
             <div className="space-y-1.5 text-xs flex-1">
               {[
-                { name: 'Website', pct: '32%', color: 'bg-[#3B82F6]' },
-                { name: 'Google Business', pct: '24%', color: 'bg-[#8B5CF6]' },
+                { name: 'Website', pct: '32%', color: 'bg-chart-3' },
+                { name: 'Google Business', pct: '24%', color: 'bg-chart-1' },
                 { name: 'Social Media', pct: '18%', color: 'bg-[#F97316]' },
                 { name: 'WhatsApp', pct: '14%', color: 'bg-[#10B981]' },
                 { name: 'Referral', pct: '8%', color: 'bg-[#EC4899]' },
@@ -803,7 +803,7 @@ export function BgosDashboard() {
                 onClick={() => setCurrentView('agentStudio')}
                 className="h-8 text-[10px] font-bold px-1 rounded-xl flex items-center gap-1 truncate"
               >
-                <BookOpen className="size-3 text-purple-600 flex-shrink-0" />
+                <BookOpen className="size-3 text-teal-600 flex-shrink-0" />
                 <span className="truncate">Train Knowledge</span>
               </Button>
               <Button

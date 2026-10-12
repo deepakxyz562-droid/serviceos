@@ -871,7 +871,7 @@ export function BgosOutreach() {
                             <div className="flex items-center gap-1.5 text-slate-400">
                               <Globe className="size-3 text-blue-500" />
                               <Phone className="size-3 text-emerald-500" />
-                              <Mail className="size-3 text-purple-500" />
+                              <Mail className="size-3 text-teal-500" />
                               <Linkedin className="size-3 text-blue-600" />
                             </div>
                           </td>

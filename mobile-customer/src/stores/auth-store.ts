@@ -101,6 +101,18 @@ interface AuthState {
   // ── Customer — activation ───────────────────────────────────────────
   activateCustomer: (token: string, password: string) => Promise<void>;
 
+  // ── Google OAuth completion ─────────────────────────────────────────
+  completeOAuthLogin: (params: {
+    token: string;
+    refreshToken?: string;
+    email?: string;
+    name?: string;
+    userId?: string;
+    tenantId?: string | null;
+    tenantName?: string | null;
+    role?: string;
+  }) => Promise<void>;
+
   // ── Shared ──────────────────────────────────────────────────────────
   logout: () => Promise<void>;
   bootstrap: () => Promise<void>;
@@ -556,6 +568,77 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Activation failed',
+      });
+      throw error;
+    }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Google OAuth completion
+  // ─────────────────────────────────────────────────────────────────────
+
+  completeOAuthLogin: async ({
+    token,
+    refreshToken,
+    email,
+    name,
+    userId,
+    tenantId,
+    tenantName,
+  }) => {
+    set({ isLoading: true, error: null, multiCompanyConflict: null });
+    try {
+      await setTokens(token, refreshToken);
+      await setActiveRole('customer');
+
+      // Hydrate from /api/auth/me if reachable, fallback to callback params
+      let resolvedUser: User = {
+        id: userId || `cust_${Date.now()}`,
+        email: email || '',
+        name: name || email?.split('@')[0] || 'Customer',
+        role: 'CUSTOMER',
+        tenantId: tenantId || null,
+      };
+      let resolvedTenant: Tenant | null = tenantId
+        ? {
+            id: tenantId,
+            name: tenantName || 'Fieseros',
+            slug: 'fieseros',
+            logo: null,
+            logoUrl: null,
+            industry: null,
+            email: null,
+            phone: null,
+            country: null,
+            city: null,
+            address: null,
+            currency: 'INR',
+            plan: null,
+            onboardingCompleted: true,
+          }
+        : null;
+
+      try {
+        const meRes = await api.get<{ user?: User; tenant?: unknown }>(API_PATHS.authMe);
+        if (meRes?.user) resolvedUser = meRes.user;
+        if (meRes?.tenant) resolvedTenant = toTenant(meRes.tenant);
+      } catch {
+        // Use callback payload if /api/auth/me is unreachable
+      }
+
+      await setStoredUserData(resolvedUser);
+      set({
+        user: resolvedUser,
+        role: 'customer',
+        tenant: resolvedTenant,
+        isAuthenticated: true,
+        isLoading: false,
+        isBooted: true,
+      });
+    } catch (error) {
+      set({
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Google sign-in failed',
       });
       throw error;
     }

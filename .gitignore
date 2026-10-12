@@ -161,3 +161,6 @@ next-dev.pid
 
 # Production BGOS brand asset
 !public/bgos/teal-mark.png
+
+# Shared approved BGOS web identity asset
+!/apps/bgos/public/bgos/teal-mark.png

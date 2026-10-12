@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/marketplace/customer/bookings
- * Returns the logged-in customer's marketplace bookings.
+ * Returns the logged-in customer's marketplace bookings (Web & Mobile).
  *
  * Query params:
  *   status — upcoming | past | all. Default: all
@@ -14,7 +15,34 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const customerId = cookieStore.get('mc_session')?.value;
+    let customerId = cookieStore.get('mc_session')?.value || null;
+
+    if (!customerId) {
+      const authUser = await getAuthUser();
+      if (authUser) {
+        const emailLower = authUser.email?.toLowerCase().trim();
+        if (emailLower && emailLower.includes('@')) {
+          let mpCustomer = await db.marketplaceCustomer.findUnique({
+            where: { email: emailLower },
+            select: { id: true },
+          });
+          if (!mpCustomer) {
+            mpCustomer = await db.marketplaceCustomer.create({
+              data: {
+                email: emailLower,
+                phone: `user-${authUser.id}`,
+                name: authUser.name || emailLower.split('@')[0],
+                otpVerified: true,
+              },
+              select: { id: true },
+            });
+          }
+          customerId = mpCustomer.id;
+        } else {
+          customerId = authUser.id;
+        }
+      }
+    }
 
     if (!customerId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });

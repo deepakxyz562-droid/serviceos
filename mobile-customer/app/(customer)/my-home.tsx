@@ -184,6 +184,43 @@ export default function MyHomeScreen() {
   const [appliances, setAppliances] = useState<Appliance[]>(INITIAL_APPLIANCES);
   const [showAddModal, setShowAddModal] = useState(false);
 
+  // Sync recent customer bookings into Appliance Vault service dates
+  React.useEffect(() => {
+    let mounted = true;
+    import('@/lib/api')
+      .then(({ api }) =>
+        api.get<{
+          bookings?: Array<{
+            id: string;
+            status: string;
+            scheduledStart?: string;
+            request?: { title?: string; categorySlug?: string };
+            provider?: { name?: string };
+          }>;
+        }>('/api/marketplace/customer/bookings')
+      )
+      .then((res) => {
+        if (!mounted || !res?.bookings?.length) return;
+        const latest = res.bookings[0];
+        if (latest?.request?.title) {
+          setAppliances((prev) =>
+            prev.map((app, i) =>
+              i === 0
+                ? {
+                    ...app,
+                    lastService: `${latest.request?.title} (${latest.provider?.name || 'Verified Pro'})`,
+                  }
+                : app
+            )
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // New appliance form
   const [newBrand, setNewBrand] = useState('');
   const [newModel, setNewModel] = useState('');

@@ -6,7 +6,7 @@
 
 export const BRAND = {
   name: 'Fieseros',
-  tagline: 'The Operating System for Service Businesses',
+  tagline: 'Book Verified Home Service Pros Instantly',
   domain: 'fieseros.com',
 } as const;
 
@@ -21,17 +21,14 @@ export const API_BASE_URL =
 export const API_TIMEOUT_MS = 30000;
 
 export const STORAGE_KEYS = {
-  AUTH_TOKEN: 'fieseros_auth_token',
-  REFRESH_TOKEN: 'fieseros_refresh_token',
-  USER_DATA: 'fieseros_user_data',
-  ACTIVE_ROLE: 'fieseros_active_role',
+  AUTH_TOKEN: 'fieseros_customer_auth_token',
+  REFRESH_TOKEN: 'fieseros_customer_refresh_token',
+  USER_DATA: 'fieseros_customer_user_data',
+  ACTIVE_ROLE: 'fieseros_customer_active_role',
   SELECTED_CITY: 'fieseros_selected_city',
   THEME: 'fieseros_theme',
   LAST_COMPANY_SLUG: 'fieseros_last_company_slug',
   LAST_COMPANY_DATA: 'fieseros_last_company_data',
-  // Active job context for the background GPS task (employeeId + jobId).
-  // Written by useLiveTracking when tracking starts; read by the module-level
-  // TaskManager task to know which employee/job a background ping belongs to.
   LIVE_TRACKING_CTX: 'fieseros_live_tracking_ctx',
   ACTIVE_TRAVEL_STATE: 'fieseros_active_travel_state',
 } as const;
@@ -51,11 +48,26 @@ export const API_PATHS = {
   customerLogin: '/api/auth/customer/login',
   customerMagicLink: '/api/auth/customer/exchange-magic-link',
   customerActivate: '/api/auth/customer/activate',
+  marketplaceSendOtp: '/api/marketplace/auth/send-otp',
+  marketplaceVerifyOtp: '/api/marketplace/auth/verify-otp',
+  marketplaceMe: '/api/marketplace/auth/me',
+
+  // Google OAuth
+  googleAuth: '/api/auth/google',
 
   // Employee / admin auth
   companyLogin: '/api/auth/company-login',
-  // Direct login (no company selection required — tenant resolved from User.tenantId)
   directLogin: '/api/auth/login',
+
+  // Marketplace & AI endpoints
+  aiTriage: '/api/marketplace/ai-triage',
+  marketplaceProviders: '/api/marketplace/providers',
+  marketplaceRequests: '/api/marketplace/requests',
+  marketplaceCustomerRequests: '/api/marketplace/customer/requests',
+  marketplaceCustomerBookings: '/api/marketplace/customer/bookings',
+  marketplaceProposals: '/api/marketplace/proposals',
+  marketplaceBookInstant: '/api/marketplace/book/instant',
+  marketplaceBookingsAccept: '/api/marketplace/bookings/accept',
 
   // Shared
   authMe: '/api/auth/me',

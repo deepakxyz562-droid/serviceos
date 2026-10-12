@@ -52,6 +52,31 @@ export async function GET() {
       });
 
       if (!customer) {
+        const mpCustomer = await db.marketplaceCustomer.findUnique({
+          where: { id: customerId },
+        });
+        if (mpCustomer) {
+          const mpResponse = {
+            user: {
+              id: mpCustomer.id,
+              name: mpCustomer.name || 'Customer',
+              email: mpCustomer.email || mpCustomer.phone,
+              phone: mpCustomer.phone,
+              role: 'customer',
+              tenantId: null,
+              workspaceId: null,
+              avatar: mpCustomer.avatarUrl || null,
+              isSuperAdmin: false,
+              isActive: true,
+              lastLoginAt: mpCustomer.updatedAt,
+              createdAt: mpCustomer.createdAt,
+              employeeId: null,
+            },
+            tenant: null,
+          };
+          cache.set(cacheKey, mpResponse, AUTH_ME_TTL);
+          return NextResponse.json(mpResponse);
+        }
         return NextResponse.json(
           { error: 'Customer not found' },
           { status: 404 }

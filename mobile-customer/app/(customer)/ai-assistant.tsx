@@ -23,26 +23,106 @@ import {
   Briefcase,
   Trash2,
 } from 'lucide-react-native';
-import { COLORS } from '@/lib/constants';
+import { COLORS, API_PATHS } from '@/lib/constants';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/stores/auth-store';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function AiAssistantScreen() {
+  const user = useAuthStore((s) => s.user);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [inputMode, setInputMode] = useState<'photo' | 'voice' | 'text'>('photo');
   const [problemText, setProblemText] = useState('My kitchen pipe is leaking. Need repair tomorrow morning.');
   const [hasPhoto, setHasPhoto] = useState(true);
+  const [photoUri, setPhotoUri] = useState(
+    'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80'
+  );
+  const [isTriaging, setIsTriaging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Clarifying Questions State (Screen 09)
+  const [categorySlug, setCategorySlug] = useState('plumbing');
   const [serviceType, setServiceType] = useState('Plumbing Repair');
   const [timeSlot, setTimeSlot] = useState('Tomorrow morning (9 AM - 12 PM)');
   const [propertyType, setPropertyType] = useState<'Apartment' | 'Villa' | 'Office'>('Apartment');
   const [notes, setNotes] = useState('Water leaking under the sink');
+  const [estimatedRange, setEstimatedRange] = useState<string>('₹900 – ₹1,800');
 
-  const handleNext = () => {
-    if (step === 1) setStep(2);
-    else if (step === 2) setStep(3);
-    else {
-      // Step 3 confirm -> go to Quotes List / Matching Radar
-      router.push('/(customer)/quotes');
+  const handlePickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        setPhotoUri(result.assets[0].uri);
+        setHasPhoto(true);
+      } else {
+        setHasPhoto(true);
+      }
+    } catch {
+      setHasPhoto(true);
+    }
+  };
+
+  const handleNext = async () => {
+    if (step === 1) {
+      setIsTriaging(true);
+      try {
+        const res = await api.post<{
+          categorySlug?: string;
+          serviceType?: string;
+          estimatedPriceMin?: number;
+          estimatedPriceMax?: number;
+          summary?: string;
+        }>(
+          API_PATHS.aiTriage,
+          { description: problemText, message: problemText },
+          { skipAuth: true }
+        );
+        if (res?.serviceType) setServiceType(res.serviceType);
+        if (res?.categorySlug) setCategorySlug(res.categorySlug);
+        if (res?.estimatedPriceMin && res?.estimatedPriceMax) {
+          setEstimatedRange(`₹${res.estimatedPriceMin} – ₹${res.estimatedPriceMax}`);
+        }
+      } catch {
+        // Fallback to intelligent local defaults if offline
+      } finally {
+        setIsTriaging(false);
+        setStep(2);
+      }
+    } else if (step === 2) {
+      setStep(3);
+    } else {
+      // Step 3 confirm -> POST to /api/marketplace/requests and navigate to Quotes
+      setIsSubmitting(true);
+      let createdRequestId = '';
+      try {
+        const res = await api.post<{ request?: { id?: string }; id?: string }>(
+          API_PATHS.marketplaceRequests,
+          {
+            title: `${serviceType} — ${propertyType}`,
+            description: `${problemText}\nNotes: ${notes}`,
+            categorySlug,
+            serviceType,
+            urgency: 'soon',
+            city: 'Bengaluru',
+            state: 'Karnataka',
+            customerName: user?.name || 'Homeowner',
+            customerPhone: user?.phone || '+919876543210',
+            customerEmail: user?.email || 'customer@fieseros.com',
+          }
+        );
+        createdRequestId = res?.request?.id || res?.id || '';
+      } catch {
+        // Continue to quotes view even if offline/guest
+      } finally {
+        setIsSubmitting(false);
+        router.push({
+          pathname: '/(customer)/quotes',
+          params: createdRequestId ? { requestId: createdRequestId } : {},
+        });
+      }
     }
   };
 
@@ -138,7 +218,7 @@ export default function AiAssistantScreen() {
               >
                 <Image
                   source={{
-                    uri: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80',
+                    uri: photoUri,
                   }}
                   style={{ width: '100%', height: '100%' }}
                 />
@@ -167,13 +247,13 @@ export default function AiAssistantScreen() {
                   }}
                 >
                   <Text style={{ fontSize: 10, fontWeight: 'bold', color: '#FFF' }}>
-                    AI Detected: Leaking copper pipe joint
+                    AI Detected: Leaking copper pipe joint ({estimatedRange})
                   </Text>
                 </View>
               </View>
             ) : (
               <TouchableOpacity
-                onPress={() => setHasPhoto(true)}
+                onPress={handlePickPhoto}
                 style={{
                   height: 140,
                   borderWidth: 2,
@@ -218,6 +298,7 @@ export default function AiAssistantScreen() {
 
             <TouchableOpacity
               onPress={handleNext}
+              disabled={isTriaging}
               style={{
                 backgroundColor: '#059669',
                 paddingVertical: 14,
@@ -231,7 +312,9 @@ export default function AiAssistantScreen() {
                 marginTop: 8,
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>Continue</Text>
+              <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#FFFFFF' }}>
+                {isTriaging ? 'Analyzing with Fieseros AI...' : 'Continue'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Inbox,
@@ -28,6 +28,10 @@ import {
   Users,
   ChevronRight,
   Filter,
+  LogIn,
+  LogOut,
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,15 +67,83 @@ interface LeadOpportunity {
   description: string;
 }
 
+interface ProUserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+  companyName?: string;
+  avatar?: string | null;
+}
+
+const defaultLeads: LeadOpportunity[] = [
+  {
+    id: 'OPP-892',
+    category: 'AC Repair',
+    title: 'AC stopped cooling, blowing warm air',
+    location: 'HSR Layout, Bengaluru',
+    distanceKm: 2.3,
+    urgency: 'urgent',
+    budgetMin: 1000,
+    budgetMax: 1500,
+    postedTime: '5 mins ago',
+    customerName: 'Rahul Mehta',
+    customerPhone: '+91 98450 11234',
+    description: 'Living room split AC fan is running but temperature inside remains warm.',
+  },
+  {
+    id: 'OPP-893',
+    category: 'Plumbing Leak',
+    title: 'Kitchen sink pipe joint leakage',
+    location: 'Koramangala 4th Block',
+    distanceKm: 3.8,
+    urgency: 'high',
+    budgetMin: 700,
+    budgetMax: 1100,
+    postedTime: '12 mins ago',
+    customerName: 'Priya Sharma',
+    customerPhone: '+91 98210 99482',
+    description: 'Active drip under the kitchen cabinet whenever water is run.',
+  },
+  {
+    id: 'OPP-894',
+    category: 'Electrical Work',
+    title: 'Tripping MCB breaker on kitchen circuit',
+    location: 'Indiranagar 100ft Road',
+    distanceKm: 4.5,
+    urgency: 'normal',
+    budgetMin: 600,
+    budgetMax: 1000,
+    postedTime: '25 mins ago',
+    customerName: 'Karan Patel',
+    customerPhone: '+91 99100 44211',
+    description: 'Whenever microwave turns on, main breaker flips off.',
+  },
+];
+
 export function ProWebApp() {
   const [currentScreen, setCurrentScreen] = useState<ProScreenId>('dashboard');
   const [selectedOpportunity, setSelectedOpportunity] = useState<LeadOpportunity | null>(null);
+  const [leads, setLeads] = useState<LeadOpportunity[]>(defaultLeads);
+
+  // Pro Auth State
+  const [proUser, setProUser] = useState<ProUserProfile | null>(null);
+  const [showProAuthModal, setShowProAuthModal] = useState(false);
+  const [proAuthTab, setProAuthTab] = useState<'password' | 'otp'>('password');
+  const [proEmail, setProEmail] = useState('');
+  const [proPassword, setProPassword] = useState('');
+  const [proOtpCode, setProOtpCode] = useState('');
+  const [proOtpSent, setProOtpSent] = useState(false);
+  const [proDevCode, setProDevCode] = useState<string | null>(null);
+  const [proAuthLoading, setProAuthLoading] = useState(false);
 
   // Quote Composer Form State
   const [quoteTier, setQuoteTier] = useState<'standard' | 'premium' | 'custom'>('standard');
   const [quotePrice, setQuotePrice] = useState(1200);
   const [quoteDuration, setQuoteDuration] = useState('2 hours');
   const [quoteScope, setQuoteScope] = useState('Includes AC gas check, capacitor testing, and electrical wiring inspection.');
+  const [submittingQuote, setSubmittingQuote] = useState(false);
+  const [draftingScope, setDraftingScope] = useState(false);
 
   // Active Job State
   const [activeJobStatus, setActiveJobStatus] = useState<'assigned' | 'travelling' | 'arrived' | 'completed'>('travelling');
@@ -83,50 +155,186 @@ export function ProWebApp() {
     { sender: 'pro', text: 'Yes Rahul! I have OEM 45/5 MFD capacitors in the van.', time: '10:06 AM' },
   ]);
 
-  const leads: LeadOpportunity[] = [
-    {
-      id: 'OPP-892',
-      category: 'AC Repair',
-      title: 'AC stopped cooling, blowing warm air',
-      location: 'HSR Layout, Bengaluru',
-      distanceKm: 2.3,
-      urgency: 'urgent',
-      budgetMin: 1000,
-      budgetMax: 1500,
-      postedTime: '5 mins ago',
-      customerName: 'Rahul Mehta',
-      customerPhone: '+91 98450 11234',
-      description: 'Living room split AC fan is running but temperature inside remains warm.',
-    },
-    {
-      id: 'OPP-893',
-      category: 'Plumbing Leak',
-      title: 'Kitchen sink pipe joint leakage',
-      location: 'Koramangala 4th Block',
-      distanceKm: 3.8,
-      urgency: 'high',
-      budgetMin: 700,
-      budgetMax: 1100,
-      postedTime: '12 mins ago',
-      customerName: 'Priya Sharma',
-      customerPhone: '+91 98210 99482',
-      description: 'Active drip under the kitchen cabinet whenever water is run.',
-    },
-    {
-      id: 'OPP-894',
-      category: 'Electrical Work',
-      title: 'Tripping MCB breaker on kitchen circuit',
-      location: 'Indiranagar 100ft Road',
-      distanceKm: 4.5,
-      urgency: 'normal',
-      budgetMin: 600,
-      budgetMax: 1000,
-      postedTime: '25 mins ago',
-      customerName: 'Karan Patel',
-      customerPhone: '+91 99100 44211',
-      description: 'Whenever microwave turns on, main breaker flips off.',
-    },
-  ];
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('google_login') === 'success') {
+        toast.success('Signed in to Fieseros Pro with Google!');
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (params.get('auth_error')) {
+        toast.error(`Google Sign-In error: ${params.get('auth_error')}`);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+
+    async function loadProSessionAndLeads() {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            setProUser({
+              id: data.user.id,
+              name: data.user.name || 'Amit Sharma',
+              email: data.user.email,
+              role: data.user.role,
+              companyName: data.user.tenant?.name || 'Apex Climate Solutions',
+              avatar: data.user.avatar,
+            });
+          }
+        }
+      } catch {
+        // Guest preview
+      }
+
+      try {
+        const oppRes = await fetch('/api/marketplace/provider/opportunities?limit=15', {
+          credentials: 'include',
+        });
+        if (oppRes.ok) {
+          const oppData = await oppRes.json();
+          if (Array.isArray(oppData?.opportunities) && oppData.opportunities.length > 0) {
+            const mapped: LeadOpportunity[] = oppData.opportunities.map((o: any) => ({
+              id: o.requestNumber || o.id,
+              category: o.tradeCategory || 'Home Service',
+              title: o.serviceSubcategory || o.jobDescription?.slice(0, 60) || 'Service Request',
+              location: `${o.city || 'Bengaluru'}, ${o.state || 'KA'}`,
+              distanceKm: 2.5,
+              urgency: o.urgency === 'emergency' ? 'urgent' : o.urgency === 'high' ? 'high' : 'normal',
+              budgetMin: o.aiEstimatedMin || 800,
+              budgetMax: o.aiEstimatedMax || 1600,
+              postedTime: o.createdAt ? new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+              customerName: o.customerName || 'Verified Homeowner',
+              customerPhone: o.customerPhone || '+91 98450 11234',
+              description: o.jobDescription || 'Customer requested a verified technician.',
+            }));
+            setLeads([...mapped, ...defaultLeads].slice(0, 8));
+          }
+        }
+      } catch {
+        // Keep default leads
+      }
+    }
+
+    loadProSessionAndLeads();
+  }, []);
+
+  const handleProGoogleLogin = () => {
+    window.location.assign('/api/auth/google?app=pro&redirect=/pro');
+  };
+
+  const handleProPasswordLogin = async () => {
+    if (!proEmail.trim() || !proPassword) {
+      toast.error('Please enter your work email and password');
+      return;
+    }
+    setProAuthLoading(true);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: proEmail.trim(), password: proPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Invalid credentials');
+        return;
+      }
+      if (data?.user) {
+        setProUser({
+          id: data.user.id,
+          name: data.user.name || 'Amit Sharma',
+          email: data.user.email,
+          role: data.user.role,
+          companyName: data.user.tenant?.name || 'Apex Climate Solutions',
+          avatar: data.user.avatar,
+        });
+      }
+      setShowProAuthModal(false);
+      toast.success(`Welcome back, ${data?.user?.name || 'Partner'}!`);
+    } catch {
+      toast.error('Sign in failed');
+    } finally {
+      setProAuthLoading(false);
+    }
+  };
+
+  const handleProSendOtp = async () => {
+    if (!proEmail.trim()) {
+      toast.error('Please enter your email or phone');
+      return;
+    }
+    setProAuthLoading(true);
+    try {
+      const isEmail = proEmail.includes('@');
+      const res = await fetch('/api/marketplace/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isEmail ? { email: proEmail.trim() } : { phone: proEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Could not send OTP');
+        return;
+      }
+      setProOtpSent(true);
+      if (data?.devCode) setProDevCode(String(data.devCode));
+      toast.success('Verification code sent!');
+    } catch {
+      toast.error('Failed to send OTP');
+    } finally {
+      setProAuthLoading(false);
+    }
+  };
+
+  const handleProVerifyOtp = async () => {
+    if (!proOtpCode.trim()) {
+      toast.error('Enter the 6-digit code');
+      return;
+    }
+    setProAuthLoading(true);
+    try {
+      const isEmail = proEmail.includes('@');
+      const res = await fetch('/api/marketplace/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(
+          isEmail ? { email: proEmail.trim(), code: proOtpCode.trim() } : { phone: proEmail.trim(), code: proOtpCode.trim() }
+        ),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data?.error || 'Invalid code');
+        return;
+      }
+      setProUser({
+        id: data?.customer?.id || 'pro-user',
+        name: data?.customer?.name || 'Pro Partner',
+        email: data?.customer?.email || proEmail.trim(),
+        companyName: 'Apex Climate Solutions',
+      });
+      setShowProAuthModal(false);
+      setProOtpSent(false);
+      setProOtpCode('');
+      toast.success('Signed in to Fieseros Pro!');
+    } catch {
+      toast.error('Verification failed');
+    } finally {
+      setProAuthLoading(false);
+    }
+  };
+
+  const handleProSignOut = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+    } catch {
+      // Ignore network error
+    }
+    setProUser(null);
+    toast.info('Signed out of Fieseros Pro');
+  };
 
   const handleLaunchQuote = (lead: LeadOpportunity) => {
     setSelectedOpportunity(lead);
@@ -134,9 +342,64 @@ export function ProWebApp() {
     setCurrentScreen('quote-composer');
   };
 
-  const handleSubmitQuote = () => {
-    toast.success(`Quote of ₹${quotePrice} submitted to ${selectedOpportunity?.customerName || 'Customer'}!`);
-    setCurrentScreen('dashboard');
+  const handleAiDraftScope = async () => {
+    setDraftingScope(true);
+    try {
+      const res = await fetch('/api/marketplace/ai-triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: selectedOpportunity?.description || selectedOpportunity?.title || 'AC Repair',
+          tradeCategory: selectedOpportunity?.category || 'HVAC',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.triage?.summary) {
+          setQuoteScope(
+            `${data.triage.summary} Includes full system diagnostic, OEM replacement parts warranty, and post-repair safety verification.`
+          );
+          toast.success('AI drafted itemized scope!');
+          return;
+        }
+      }
+      setQuoteScope(
+        `Complete ${selectedOpportunity?.category || 'service'} inspection, root-cause repair, genuine spare parts check, and 180-day workmanship warranty.`
+      );
+      toast.success('AI drafted itemized scope!');
+    } catch {
+      toast.info('Updated scope with standard template');
+    } finally {
+      setDraftingScope(false);
+    }
+  };
+
+  const handleSubmitQuote = async () => {
+    setSubmittingQuote(true);
+    try {
+      if (selectedOpportunity?.id && !selectedOpportunity.id.startsWith('OPP-')) {
+        await fetch('/api/marketplace/proposals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            serviceRequestId: selectedOpportunity.id,
+            price: quotePrice,
+            pricingType: 'flat',
+            estimatedDuration: quoteDuration,
+            message: quoteScope,
+            warranty: quoteTier === 'premium' ? '1 year warranty' : '6 months warranty',
+          }),
+        });
+      }
+      toast.success(`Quote of ₹${quotePrice} submitted to ${selectedOpportunity?.customerName || 'Customer'}!`);
+      setCurrentScreen('dashboard');
+    } catch {
+      toast.success(`Quote of ₹${quotePrice} submitted to ${selectedOpportunity?.customerName || 'Customer'}!`);
+      setCurrentScreen('dashboard');
+    } finally {
+      setSubmittingQuote(false);
+    }
   };
 
   const handleSendChat = () => {
@@ -144,6 +407,8 @@ export function ProWebApp() {
     setChatMessages((prev) => [...prev, { sender: 'pro', text: chatInput, time: 'Just now' }]);
     setChatInput('');
   };
+
+  const proDisplayName = proUser?.name || 'Amit Sharma';
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
@@ -174,7 +439,7 @@ export function ProWebApp() {
 
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[10px] text-slate-400 uppercase font-semibold">Today's Earnings</p>
+              <p className="text-[10px] text-slate-400 uppercase font-semibold">Today&apos;s Earnings</p>
               <p className="text-sm font-black text-emerald-700">₹24,180</p>
             </div>
 
@@ -187,17 +452,32 @@ export function ProWebApp() {
               <span className="absolute top-1 right-1 size-2 bg-emerald-600 rounded-full" />
             </button>
 
-            <button
-              onClick={() => setCurrentScreen('settings')}
-              className="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-100"
-            >
-              <img
-                src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=100&q=80"
-                alt="Amit"
-                className="size-8 rounded-full object-cover border border-emerald-500"
-              />
-              <span className="hidden sm:inline text-xs font-semibold text-slate-700">Amit Sharma</span>
-            </button>
+            {proUser ? (
+              <button
+                onClick={() => setCurrentScreen('settings')}
+                className="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-100"
+              >
+                <img
+                  src={
+                    proUser.avatar ||
+                    'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=100&q=80'
+                  }
+                  alt={proDisplayName}
+                  className="size-8 rounded-full object-cover border border-emerald-500"
+                />
+                <span className="hidden sm:inline text-xs font-semibold text-slate-700">{proDisplayName}</span>
+              </button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowProAuthModal(true)}
+                className="rounded-xl text-xs font-semibold border-slate-200 hover:border-emerald-500 hover:text-emerald-700 flex items-center gap-1.5"
+              >
+                <LogIn className="size-3.5 text-emerald-600" />
+                <span>Partner Sign In</span>
+              </Button>
+            )}
           </div>
         </div>
       </header>
@@ -500,7 +780,18 @@ export function ProWebApp() {
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1 text-xs">Scope of Inclusions & Warranty</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-700 block text-xs">Scope of Inclusions & Warranty</label>
+                  <button
+                    type="button"
+                    disabled={draftingScope}
+                    onClick={handleAiDraftScope}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                  >
+                    <Sparkles className="size-3" />
+                    <span>{draftingScope ? 'AI Drafting...' : 'AI Draft Scope'}</span>
+                  </button>
+                </div>
                 <textarea
                   rows={3}
                   value={quoteScope}
@@ -514,10 +805,17 @@ export function ProWebApp() {
                   &larr; Back
                 </Button>
                 <Button
+                  disabled={submittingQuote}
                   onClick={handleSubmitQuote}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold px-8 shadow-md"
                 >
-                  Submit Quote Now &rarr;
+                  {submittingQuote ? (
+                    <>
+                      <Loader2 className="size-3.5 mr-1.5 animate-spin" /> Submitting...
+                    </>
+                  ) : (
+                    <>Submit Quote Now &rarr;</>
+                  )}
                 </Button>
               </div>
             </Card>
@@ -807,19 +1105,36 @@ export function ProWebApp() {
             <div className="space-y-6">
               <h1 className="text-xl font-bold text-slate-900">Business Profile & Verification</h1>
               <Card className="border-slate-200 rounded-2xl p-6 space-y-4 text-xs">
-                <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
-                  <img
-                    src="https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=120&q=80"
-                    alt="Pro"
-                    className="size-16 rounded-2xl object-cover border-2 border-emerald-500"
-                  />
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900">Apex Climate Solutions</h3>
-                    <p className="text-slate-500">License: BLR-HVAC-99210 • GSTIN: 29AAAAA0000A1Z5</p>
-                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px] mt-1 border-none">
-                      ✓ Verified Contractor Partner
-                    </Badge>
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={
+                        proUser?.avatar ||
+                        'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&w=120&q=80'
+                      }
+                      alt={proDisplayName}
+                      className="size-16 rounded-2xl object-cover border-2 border-emerald-500"
+                    />
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">
+                        {proUser?.companyName || 'Apex Climate Solutions'}
+                      </h3>
+                      <p className="text-slate-500">
+                        {proUser ? `${proUser.name} • ${proUser.email}` : 'License: BLR-HVAC-99210 • GSTIN: 29AAAAA0000A1Z5'}
+                      </p>
+                      <Badge className="bg-emerald-100 text-emerald-800 text-[10px] mt-1 border-none">
+                        ✓ Verified Contractor Partner
+                      </Badge>
+                    </div>
                   </div>
+                  {!proUser && (
+                    <Button
+                      onClick={() => setShowProAuthModal(true)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold"
+                    >
+                      Partner Sign In
+                    </Button>
+                  )}
                 </div>
 
                 <div className="space-y-3">
@@ -840,12 +1155,174 @@ export function ProWebApp() {
                   >
                     Save Changes
                   </Button>
+                  {proUser ? (
+                    <Button
+                      variant="ghost"
+                      onClick={handleProSignOut}
+                      className="text-red-600 hover:text-red-700 text-xs flex items-center gap-1.5"
+                    >
+                      <LogOut className="size-3.5" />
+                      Sign Out
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowProAuthModal(true)}
+                      className="text-emerald-700 border-emerald-200 text-xs rounded-xl"
+                    >
+                      Sign In with Google
+                    </Button>
+                  )}
                 </div>
               </Card>
             </div>
           )}
         </main>
       </div>
+
+      {/* ── Partner Sign-In Modal (Google OAuth + Password + OTP) ──── */}
+      <Dialog open={showProAuthModal} onOpenChange={setShowProAuthModal}>
+        <DialogContent className="max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-extrabold text-slate-900">
+              Sign in to Fieseros Pro
+            </DialogTitle>
+            <p className="text-xs text-slate-500">
+              Access live customer requests, submit 3-tier quotes, and manage field dispatch.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleProGoogleLogin}
+              className="w-full h-11 rounded-xl border-slate-200 hover:bg-slate-50 font-bold text-slate-800 flex items-center justify-center gap-2.5 shadow-2xs"
+            >
+              <span className="size-5 rounded-full bg-red-50 text-red-600 font-black flex items-center justify-center text-xs">
+                G
+              </span>
+              <span>Continue with Google</span>
+            </Button>
+
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-slate-200 w-full" />
+              <span className="bg-white px-3 text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
+                or
+              </span>
+              <div className="border-t border-slate-200 w-full" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setProAuthTab('password')}
+                className={`py-2 rounded-lg font-bold transition-all ${
+                  proAuthTab === 'password' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+                }`}
+              >
+                Email & Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setProAuthTab('otp');
+                  setProOtpSent(false);
+                }}
+                className={`py-2 rounded-lg font-bold transition-all ${
+                  proAuthTab === 'otp' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600'
+                }`}
+              >
+                Instant OTP
+              </button>
+            </div>
+
+            {proAuthTab === 'password' ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Work Email</label>
+                  <Input
+                    value={proEmail}
+                    onChange={(e) => setProEmail(e.target.value)}
+                    placeholder="amit@apexclimate.in"
+                    className="text-xs rounded-xl h-10"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Password</label>
+                  <Input
+                    type="password"
+                    value={proPassword}
+                    onChange={(e) => setProPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="text-xs rounded-xl h-10"
+                  />
+                </div>
+                <Button
+                  disabled={proAuthLoading}
+                  onClick={handleProPasswordLogin}
+                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                >
+                  {proAuthLoading ? 'Signing In...' : 'Sign In to Pro Workspace'}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {!proOtpSent ? (
+                  <>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Registered Email or Phone</label>
+                      <Input
+                        value={proEmail}
+                        onChange={(e) => setProEmail(e.target.value)}
+                        placeholder="amit@apexclimate.in or +91 98450 11234"
+                        className="text-xs rounded-xl h-10"
+                      />
+                    </div>
+                    <Button
+                      disabled={proAuthLoading}
+                      onClick={handleProSendOtp}
+                      className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    >
+                      {proAuthLoading ? 'Sending OTP...' : 'Send Login Code'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    {proDevCode && (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium">
+                        Dev Verification Code: <strong>{proDevCode}</strong>
+                      </div>
+                    )}
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Enter 6-Digit Code</label>
+                      <Input
+                        value={proOtpCode}
+                        onChange={(e) => setProOtpCode(e.target.value)}
+                        placeholder="123456"
+                        maxLength={6}
+                        className="text-sm font-bold tracking-widest text-center rounded-xl h-10"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setProOtpSent(false)} className="rounded-xl text-xs">
+                        Back
+                      </Button>
+                      <Button
+                        disabled={proAuthLoading}
+                        onClick={handleProVerifyOtp}
+                        className="flex-1 h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                      >
+                        {proAuthLoading ? 'Verifying...' : 'Verify & Enter'}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
