@@ -64,6 +64,12 @@ db/*.db-journal
 *.gif
 *.webp
 
+# BOS brand assets are required by both web deployments and their manifests.
+!/public/bos/*.png
+!/public/bos/products/*.png
+!/apps/bos/public/bos/*.png
+!/apps/bos/public/bos/products/*.png
+
 # Mobile app assets MUST NOT be ignored (required for EAS Build)
 # The *.png rule above excludes ALL png files globally. EAS Build
 # reads this .gitignore when creating the build archive, which causes

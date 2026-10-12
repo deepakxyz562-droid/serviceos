@@ -21,7 +21,6 @@ export function BosLogoIcon({
       alt="BOS"
       width={size}
       height={size}
-      draggable={false}
       className={cn(
         'shrink-0 rounded-[11px] object-contain select-none shadow-[0_2px_8px_rgba(0,0,0,0.22)]',
         className,
@@ -42,7 +41,10 @@ export function BosBrand({
 }) {
   if (compact) {
     return (
-      <div className={cn('inline-flex items-center justify-center', className)} aria-label="BOS — Business Operating System">
+      <div
+        className={cn('inline-flex items-center justify-center', className)}
+        aria-label="BOS — Business Operating System"
+      >
         <BosLogoIcon size={38} />
       </div>
     );

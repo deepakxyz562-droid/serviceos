@@ -76,7 +76,24 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     // 1. Sales / POS
     clickNavItem('Sales / POS');
-    expect(screen.getByText(/Sales \/ POS Billing Counter/i)).toBeTruthy();
+    expect(
+      screen.getByText('Create a new sale, search products, or scan a barcode.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Hold Bill')).toBeTruthy();
+    expect(screen.getByText('Recent Bills')).toBeTruthy();
+    expect(screen.getByText('Drafts')).toBeTruthy();
+    expect(screen.getByText("Today's Sales")).toBeTruthy();
+    expect(screen.getByText('Avg. Bill Value')).toBeTruthy();
+    expect(screen.getByText('Current Bill')).toBeTruthy();
+    expect(screen.getByText('Clear Cart')).toBeTruthy();
+    expect(screen.getByText('Walk-in Customer')).toBeTruthy();
+    expect(screen.getByText('Existing Customer')).toBeTruthy();
+    expect(screen.getByText('Tata Salt (1kg)')).toBeTruthy();
+    expect(screen.getByText('Maggi Noodles (70g)')).toBeTruthy();
+    expect(screen.getByText('Ariel Detergent (1kg)')).toBeTruthy();
+    expect(screen.getByText('Items (7)')).toBeTruthy();
+    expect(screen.getByText('Save as Draft')).toBeTruthy();
+    expect(screen.getByText('Complete Sale')).toBeTruthy();
 
     // 2. Products & Inventory
     clickNavItem('Products & Inventory');
