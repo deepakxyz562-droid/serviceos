@@ -97,11 +97,31 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
 
     // 2. Products & Inventory
     clickNavItem('Products & Inventory');
-    expect(screen.getByText('Inventory Value')).toBeTruthy();
+    expect(
+      screen.getByText('Manage your products, stock, categories and suppliers.'),
+    ).toBeTruthy();
+    expect(screen.getByText('Total Inventory Value')).toBeTruthy();
+    expect(screen.getByText('Maggi Noodles 70g')).toBeTruthy();
+    expect(screen.getByText('Sales (Last 30 days)')).toBeTruthy();
+    expect(screen.getByText('Recent Sales')).toBeTruthy();
+    expect(screen.getByText('Update Stock')).toBeTruthy();
+    expect(screen.getByText('Edit Product')).toBeTruthy();
+    expect(screen.getByText('Duplicate')).toBeTruthy();
+    expect(screen.getByText('Delete Product')).toBeTruthy();
 
     // 3. Orders
     clickNavItem('Orders');
-    expect(screen.getByText('Order Revenue')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Manage all your orders from POS, online store, WhatsApp and manual entries.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Total Revenue')).toBeTruthy();
+    expect(screen.getByText('Avg. Order Value')).toBeTruthy();
+    expect(screen.getByText('Order #ORD-1005')).toBeTruthy();
+    expect(screen.getByText('Print Bill')).toBeTruthy();
+    expect(screen.getByText('Share')).toBeTruthy();
+    expect(screen.getByText('Create Return')).toBeTruthy();
 
     // 4. Customers
     clickNavItem('Customers');

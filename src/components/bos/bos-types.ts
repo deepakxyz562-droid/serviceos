@@ -12,6 +12,8 @@ export type BosProductItem = {
   unit?: string;
   gstRate?: number;
   hsnCode?: string;
+  brand?: string;
+  location?: string;
   imageUrl?: string;
   description?: string;
   onlineVisible?: boolean;

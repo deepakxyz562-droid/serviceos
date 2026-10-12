@@ -1862,9 +1862,9 @@ export function BosWebApp({
           </div>
         </header>
 
-        {/* Main Scrollable Canvas (#F4F8F6) */}
-        <main className="flex-1 overflow-y-auto px-4 py-5 lg:px-6">
-          <div className="mx-auto max-w-[1440px]">
+        {/* Main Scrollable Canvas (#F4F8F6) — 100% Full Width */}
+        <main className="w-full flex-1 overflow-y-auto px-4 py-5 lg:px-6">
+          <div className="w-full max-w-none">
             {activeView === 'dashboard' && (
               <BosDashboardWorkstation
                 userName={userName}

@@ -30,6 +30,7 @@ import {
   type BosOrder,
   type BosProductItem,
 } from '@/components/bos/bos-types';
+import { BosProductThumbnail } from '@/components/bos/bos-product-image-resolver';
 
 type CartItem = {
   product: BosProductItem;
@@ -1070,19 +1071,8 @@ export function BosPosWorkstation({
                     <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
                   </button>
 
-                  {/* Product Packshot Image */}
-                  <div className="flex h-[88px] w-full items-center justify-center rounded-xl bg-[#F9FCFA] p-1.5 overflow-hidden">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-105"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Package className="h-10 w-10 text-[#0A6847]/40" />
-                    )}
-                  </div>
+                  {/* Product Packshot Image (or Icon + Product Name fallback) */}
+                  <BosProductThumbnail product={product} size="xl" />
 
                   {/* Product Info */}
                   <div className="mt-2">
@@ -1286,17 +1276,7 @@ export function BosPosWorkstation({
                   >
                     {/* Thumbnail + Name + Unit */}
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#E6EFEA] bg-[#F9FCFA] p-1 overflow-hidden">
-                        {product.imageUrl ? (
-                          <img
-                            src={product.imageUrl}
-                            alt={product.name}
-                            className="h-full w-full object-contain"
-                          />
-                        ) : (
-                          <Package className="h-5 w-5 text-[#0A6847]" />
-                        )}
-                      </div>
+                      <BosProductThumbnail product={product} size="md" />
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-bold text-[#1E293B]">
                           {product.name.replace(/\s*\([^)]+\)\s*$/, '')}
