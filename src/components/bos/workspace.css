@@ -1,0 +1,125 @@
+/* BOS — Business Operating System Theme & Design Tokens */
+
+html.bos-theme,
+.bos-app-shell {
+  --bos-sidebar-bg-start: #06392A;
+  --bos-sidebar-bg-end: #04291E;
+  --bos-sidebar-active: #0E5A43;
+  --bos-sidebar-hover: rgba(255, 255, 255, 0.07);
+  --bos-sidebar-border: rgba(255, 255, 255, 0.09);
+  --bos-sidebar-text: #D1EAE0;
+  --bos-sidebar-text-active: #FFFFFF;
+  --bos-sidebar-icon: #8CC4B0;
+  --bos-sidebar-icon-active: #2DD4BF;
+  --bos-upgrade-card-bg: rgba(13, 92, 70, 0.65);
+  --bos-upgrade-btn: #00B894;
+  --bos-upgrade-btn-hover: #00A383;
+  --bos-canvas-bg: #F4F8F6;
+  --bos-card-bg: #FFFFFF;
+  --bos-card-border: #E4EFEA;
+  --bos-primary: #0A6847;
+  --bos-primary-hover: #08553A;
+  --bos-accent-mint: #E6F6F0;
+  --bos-text-heading: #111827;
+  --bos-text-body: #334155;
+  --bos-text-muted: #64748B;
+}
+
+.bos-app-shell {
+  background-color: var(--bos-canvas-bg);
+  color: var(--bos-text-heading);
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.bos-sidebar {
+  background: linear-gradient(180deg, #063B2B 0%, #053124 55%, #04261C 100%);
+  color: var(--bos-sidebar-text);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.bos-sidebar-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.bos-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bos-sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 9999px;
+}
+
+.bos-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #CFE7DD;
+  transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+}
+
+.bos-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.bos-nav-item-active {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.26) 0%, rgba(13, 148, 136, 0.18) 100%);
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.24);
+}
+
+.bos-upgrade-card {
+  background: linear-gradient(145deg, rgba(14, 94, 71, 0.78) 0%, rgba(7, 56, 41, 0.92) 100%);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 0.875rem;
+}
+
+.bos-card {
+  background: #FFFFFF;
+  border: 1px solid #E4EFEA;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 2px rgba(6, 57, 42, 0.04);
+}
+
+.bos-card-interactive {
+  background: #FFFFFF;
+  border: 1px solid #E4EFEA;
+  border-radius: 0.875rem;
+  box-shadow: 0 1px 2px rgba(6, 57, 42, 0.04);
+  transition: all 150ms ease;
+}
+
+.bos-card-interactive:hover {
+  border-color: #B9DFD0;
+  box-shadow: 0 6px 16px -6px rgba(6, 57, 42, 0.09);
+}
+
+.bos-btn-primary {
+  background: #0A6847;
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 150ms ease;
+}
+
+.bos-btn-primary:hover:not(:disabled) {
+  background: #08553A;
+}
+
+.bos-btn-mint {
+  background: #00B894;
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: all 150ms ease;
+}
+
+.bos-btn-mint:hover:not(:disabled) {
+  background: #00A181;
+}

@@ -399,7 +399,7 @@ export const LIVE_VISITORS_DATA: LiveVisitorTelemetry[] = [
     statusLabel: 'Stalled at Booking (45s)',
     quoteEstimate: 285,
     timeline: [
-      { time: '14:02:11', title: 'Landed via Google Maps', desc: "Listing: 'Cinderella Cleaners - Catalina Foothills'" },
+      { time: '14:02:11', title: 'Landed via Google Maps', desc: "Listing: 'Google Business Profile - Local Maps'" },
       { time: '14:04:05', title: 'Navigated to /deep-cleaning', desc: 'Viewed: Eco-friendly package details & customer reviews' },
       { time: '14:05:40', title: 'Configured Instant Calculator', desc: "Home size: 2,400 sq ft • 3 Bed / 2.5 Bath • Selected 'Deep Sanitization'" },
       { time: '14:07:30', title: 'Stalled on /book-appointment', desc: 'Cursor paused on Saturday 10:00 AM slot for 45s without confirming.', isCurrent: true },
@@ -571,12 +571,18 @@ export const LIVE_VISITORS_DATA: LiveVisitorTelemetry[] = [
 
 export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' | 'visitors' | 'tickets' } = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
+  const auth = useAppStore((state) => state.auth);
+  const businessName = auth.tenant?.name || auth.workspace?.name || 'our team';
+
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
   const [selectedConversationId, setSelectedConversationId] = useState<string>('conv_sarah');
   const [activeChannelPill, setActiveChannelPill] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [composerMode, setComposerMode] = useState<'reply' | 'internal' | 'ai' | 'template'>('reply');
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [centerNoteInput, setCenterNoteInput] = useState('');
+  const [conversationNotes, setConversationNotes] = useState<Record<string, { id: string; text: string; author: string; date: string }[]>>({});
   const [inboxTab, setInboxTab] = useState<'conversations' | 'visitors' | 'tickets'>(() => {
     if (initialTab) return initialTab;
     if (typeof window !== 'undefined') {
@@ -637,6 +643,20 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   const selectedVisitor =
     LIVE_VISITORS_DATA.find((v) => v.id === selectedVisitorId) || LIVE_VISITORS_DATA[0];
 
+  // Dynamic channel & filter counts
+  const totalConversationsCount = conversations.length;
+  const unreadConversationsCount = conversations.filter((c) => c.unreadCount > 0).length;
+  const channelCounts: Record<string, number> = {
+    all: conversations.length,
+    whatsapp: conversations.filter((c) => c.channel === 'whatsapp').length,
+    livechat: conversations.filter((c) => c.channel === 'livechat' || c.channel === 'website').length,
+    instagram: conversations.filter((c) => c.channel === 'instagram').length,
+    facebook: conversations.filter((c) => c.channel === 'messenger' || c.channel === 'facebook').length,
+    email: conversations.filter((c) => c.channel === 'email').length,
+    sms: conversations.filter((c) => c.channel === 'sms').length,
+    phone: conversations.filter((c) => c.channel === 'phone').length,
+  };
+
   // Filtering
   const filteredConversations = conversations.filter((c) => {
     // Channel filter
@@ -654,6 +674,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     if (filterPill === 'unread' && c.unreadCount === 0) return false;
     if (filterPill === 'assigned' && !c.assigneeId) return false;
     if (filterPill === 'ai' && c.aiPaused) return false;
+    if (filterPill === 'starred' && !c.vipStatus) return false;
 
     // Search query
     if (searchQuery.trim()) {
@@ -677,7 +698,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       conversationId: selectedConversation.id,
       content,
       sender: composerMode === 'internal' ? 'system' : 'agent',
-      senderName: composerMode === 'internal' ? 'Internal Note' : 'You',
+      senderName: composerMode === 'internal' ? 'Internal Note' : (auth.user?.name || 'You'),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: selectedConversation.channel,
     };
@@ -690,6 +711,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               messages: [...c.messages, newMsg],
               lastMessage: content,
               lastMessageTime: new Date().toISOString(),
+              unreadCount: 0,
             }
           : c
       )
@@ -703,21 +725,55 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     }).catch(() => {});
   };
 
+  const handleToggleCloseConversation = (conv: Conversation) => {
+    const nextStatus = conv.status === 'closed' ? 'active' : 'closed';
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conv.id
+          ? { ...c, status: nextStatus, unreadCount: nextStatus === 'closed' ? 0 : c.unreadCount }
+          : c
+      )
+    );
+    fetch(`/api/conversations/${conv.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: nextStatus }),
+    }).catch(() => {});
+    toast.success(nextStatus === 'closed' ? 'Conversation marked as closed' : 'Conversation reopened');
+  };
+
+  const handleGenerateAiReply = () => {
+    const lastText = (selectedConversation.lastMessage || '').toLowerCase();
+    let draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! Thank you for reaching out to ${businessName}. How can I help you confirm your appointment today?`;
+    if (lastText.includes('3bhk') || lastText.includes('deep cleaning') || lastText.includes('saturday')) {
+      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! I noticed you are interested in our 3BHK Deep Cleaning package. I can lock in Saturday at 10:00 AM right away for you—shall I send the booking confirmation?`;
+    } else if (lastText.includes('quote') || lastText.includes('pricing') || lastText.includes('cost')) {
+      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is a tailored estimate from ${businessName} based on your request. Let me know if you'd like to schedule a walkthrough or reserve a time slot!`;
+    } else if (lastText.includes('reschedule') || lastText.includes('monday')) {
+      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! We have availability on Monday morning at 9:00 AM or 1:00 PM. Which window works best for you?`;
+    }
+    setCenterSubTab('chat');
+    setComposerMode('reply');
+    setMessageInput(draft);
+    toast.success('AI draft generated in composer');
+  };
+
   const handleToggleAssign = (conv: Conversation, e: React.MouseEvent) => {
     e.stopPropagation();
     const isAssigned = !!conv.assigneeId;
+    const assigneeName = auth.user?.name || 'You';
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conv.id
           ? {
               ...c,
-              assigneeId: isAssigned ? undefined : 'me',
-              assigneeName: isAssigned ? undefined : 'You',
+              assigneeId: isAssigned ? undefined : (auth.user?.id || 'me'),
+              assigneeName: isAssigned ? undefined : assigneeName,
             }
           : c
       )
     );
-    toast.success(isAssigned ? 'Unassigned' : 'Assigned to you');
+    toast.success(isAssigned ? 'Unassigned' : `Assigned to ${assigneeName}`);
   };
 
   const handleToggleAiHandled = (convId: string, aiPaused: boolean) => {
@@ -807,26 +863,16 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP CHANNEL TRIAGE HEADER (Matching Reference Screenshot 2 & 3)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-3 flex flex-wrap gap-3 items-center justify-between shrink-0 z-30 shadow-2xs">
+      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 flex flex-wrap gap-3 items-center justify-between shrink-0 z-30 shadow-2xs">
         <div className="flex items-center gap-3 min-w-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCurrentView('dashboard')}
-            className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 -ml-1 gap-1"
-            title="Back to Dashboard"
-          >
-            <ArrowLeft className="size-4" />
-            <span className="hidden sm:inline text-xs font-semibold">Back</span>
-          </Button>
-          <div className="size-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-            <Inbox className="size-5" />
+          <div className="size-9 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
+            <Inbox className="size-4" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Inbox</h1>
+              <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">Inbox</h1>
               <Badge className="text-[10px] bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900 font-bold py-0 h-4">
-                12
+                {totalConversationsCount}
               </Badge>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate hidden md:block">
@@ -835,17 +881,17 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           </div>
         </div>
 
-        {/* Circular Channel Triage Row (Matching Screenshot 2 & 3) */}
+        {/* Circular Channel Triage Row */}
         <div className="flex items-center gap-2 shrink-0 overflow-x-auto py-1">
           {[
-            { id: 'all', label: 'All', badge: 12, icon: Inbox, color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
-            { id: 'whatsapp', label: 'WhatsApp', badge: 4, icon: MessageCircle, color: 'bg-emerald-500 text-white' },
-            { id: 'livechat', label: 'Live Chat', badge: 3, icon: MessageSquare, color: 'bg-teal-600 text-white' },
-            { id: 'instagram', label: 'Instagram', badge: 2, icon: Instagram, color: 'bg-gradient-to-tr from-amber-500 via-rose-500 to-[#9333EA] text-white' },
-            { id: 'facebook', label: 'Facebook', badge: 1, icon: MessageSquare, color: 'bg-blue-600 text-white' },
-            { id: 'email', label: 'Email', badge: 1, icon: Mail, color: 'bg-sky-500 text-white' },
-            { id: 'sms', label: 'SMS', badge: 1, icon: MessageSquare, color: 'bg-teal-600 text-white' },
-            { id: 'phone', label: 'Phone', badge: 1, icon: Phone, color: 'bg-teal-600 text-white' },
+            { id: 'all', label: 'All', badge: channelCounts.all, icon: Inbox, color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
+            { id: 'whatsapp', label: 'WhatsApp', badge: channelCounts.whatsapp, icon: MessageCircle, color: 'bg-emerald-500 text-white' },
+            { id: 'livechat', label: 'Live Chat', badge: channelCounts.livechat, icon: MessageSquare, color: 'bg-teal-600 text-white' },
+            { id: 'instagram', label: 'Instagram', badge: channelCounts.instagram, icon: Instagram, color: 'bg-gradient-to-tr from-amber-500 via-rose-500 to-[#9333EA] text-white' },
+            { id: 'facebook', label: 'Facebook', badge: channelCounts.facebook, icon: MessageSquare, color: 'bg-blue-600 text-white' },
+            { id: 'email', label: 'Email', badge: channelCounts.email, icon: Mail, color: 'bg-sky-500 text-white' },
+            { id: 'sms', label: 'SMS', badge: channelCounts.sms, icon: MessageSquare, color: 'bg-teal-600 text-white' },
+            { id: 'phone', label: 'Phone', badge: channelCounts.phone, icon: Phone, color: 'bg-teal-600 text-white' },
           ].map((ch) => {
             const Icon = ch.icon;
             const isSelected = activeChannelPill === ch.id;
@@ -905,7 +951,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
             >
               Live Visitors
               <span className="size-4 bg-emerald-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
-                3
+                {LIVE_VISITORS_DATA.length}
               </span>
             </button>
             <button
@@ -939,18 +985,23 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
             </div>
             <button
               type="button"
-              onClick={() => toast.info('Advanced conversation filters')}
+              onClick={() => {
+                setFilterPill('all');
+                setActiveChannelPill('all');
+                setSearchQuery('');
+              }}
+              title="Reset filters"
               className="size-8 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 flex items-center justify-center text-slate-500"
             >
               <Filter className="size-3.5" />
             </button>
           </div>
 
-          {/* Filter Pills: All 12 | Unread 12 | Assigned | AI | Starred */}
+          {/* Filter Pills: All | Unread | Assigned | AI | Starred */}
           <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
             {[
-              { id: 'all', label: 'All 12' },
-              { id: 'unread', label: 'Unread 12' },
+              { id: 'all', label: `All ${totalConversationsCount}` },
+              { id: 'unread', label: `Unread ${unreadConversationsCount}` },
               { id: 'assigned', label: 'Assigned' },
               { id: 'ai', label: 'AI' },
               { id: 'starred', label: 'Starred' },
@@ -1032,6 +1083,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                             {t}
                           </span>
                         ))}
+                        {conv.status === 'closed' && (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                            Closed
+                          </span>
+                        )}
                         {conv.unreadCount > 0 && (
                           <span className="size-4 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center ml-auto">
                             {conv.unreadCount}
@@ -1068,6 +1124,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                           VIP
                         </Badge>
                       )}
+                      {selectedConversation.status === 'closed' && (
+                        <Badge className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-bold py-0 h-4">
+                          Closed
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                       <span>{selectedConversation.customerPhone || '+91 98765 43210'}</span>
@@ -1075,7 +1136,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <span className="capitalize">{selectedConversation.channel}</span>
                       <span>•</span>
                       <span className="text-emerald-600 font-medium flex items-center gap-1">
-                        <span className="size-1 rounded-full bg-emerald-500" /> Last seen today at 10:24 AM
+                        <span className="size-1 rounded-full bg-emerald-500" /> Active conversation
                       </span>
                     </div>
                   </div>
@@ -1096,18 +1157,23 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => toast.success('Conversation marked as closed')}
+                    onClick={() => handleToggleCloseConversation(selectedConversation)}
                     className="h-8 text-xs font-semibold rounded-xl gap-1 border-slate-200"
                   >
-                    <CheckCircle2 className="size-3.5" /> Mark closed
+                    {selectedConversation.status === 'closed' ? (
+                      <>
+                        <RotateCcw className="size-3.5" /> Reopen
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="size-3.5" /> Mark closed
+                      </>
+                    )}
                   </Button>
                   <Button
                     type="button"
                     size="sm"
-                    onClick={() => {
-                      setMessageInput('Hi! I noticed you are interested in our 3BHK Deep Cleaning package. Let me confirm that right away for you.');
-                      setComposerMode('reply');
-                    }}
+                    onClick={handleGenerateAiReply}
                     className="h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs gap-1"
                   >
                     <Sparkles className="size-3.5" /> AI Reply
@@ -1116,14 +1182,14 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               </div>
 
               {/* Sub-Navigation Tabs (Chat | Details | Notes | Orders | Appointments | Tickets) */}
-              <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex items-center gap-4 text-xs font-semibold text-slate-600 dark:text-slate-400 shrink-0">
+              <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex items-center gap-4 text-xs font-semibold text-slate-600 dark:text-slate-400 shrink-0 overflow-x-auto scrollbar-none">
                 {[
                   { id: 'chat', label: 'Chat' },
                   { id: 'details', label: 'Customer Details' },
-                  { id: 'notes', label: 'Notes (2)' },
+                  { id: 'notes', label: `Notes (${(conversationNotes[selectedConversation.id]?.length || 0) + 2})` },
                   { id: 'orders', label: 'Orders (1)' },
                   { id: 'appointments', label: 'Appointments (1)' },
-                  { id: 'tickets', label: 'Tickets (0)' },
+                  { id: 'tickets', label: 'Tickets (1)' },
                 ].map((tab) => {
                   const active = centerSubTab === tab.id;
                   return (
@@ -1132,7 +1198,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       type="button"
                       onClick={() => setCenterSubTab(tab.id as any)}
                       className={cn(
-                        'py-2.5 border-b-2 transition-all',
+                        'py-2.5 border-b-2 transition-all whitespace-nowrap',
                         active
                           ? 'border-teal-600 text-teal-600 font-bold'
                           : 'border-transparent hover:text-slate-900'
@@ -1144,99 +1210,252 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 })}
               </div>
 
-              {/* Chat Messages Stream */}
-              <ScrollArea className="flex-1 min-h-0 p-4">
-                <div className="w-full space-y-4">
-                  {selectedConversation.messages.map((msg) => {
-                    const isCustomer = msg.sender === 'customer';
-                    const isAi = msg.sender === 'ai';
-                    return (
-                      <div key={msg.id} className={cn('flex flex-col', isCustomer ? 'items-start' : 'items-end')}>
-                        {/* Sender Label */}
-                        {isAi && (
-                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-600 mb-1 pl-1">
-                            <Sparkles className="size-3" /> AI Assistant
-                          </div>
-                        )}
-
-                        <div
-                          className={cn(
-                            'p-3.5 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-2xs whitespace-pre-line',
-                            isCustomer
-                              ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200/80 rounded-tl-xs'
-                              : isAi
-                              ? 'bg-teal-50/70 dark:bg-teal-950/40 text-slate-900 dark:text-slate-100 border border-teal-200 dark:border-teal-800 rounded-tr-xs'
-                              : 'bg-teal-600 text-white rounded-tr-xs'
+              {/* Center Sub-Tab Content */}
+              {centerSubTab === 'chat' ? (
+                <ScrollArea className="flex-1 min-h-0 p-4">
+                  <div className="w-full space-y-4">
+                    {selectedConversation.messages.map((msg) => {
+                      const isCustomer = msg.sender === 'customer';
+                      const isAi = msg.sender === 'ai';
+                      return (
+                        <div key={msg.id} className={cn('flex flex-col', isCustomer ? 'items-start' : 'items-end')}>
+                          {/* Sender Label */}
+                          {isAi && (
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-600 mb-1 pl-1">
+                              <Sparkles className="size-3" /> AI Assistant
+                            </div>
                           )}
-                        >
-                          <p>{msg.content}</p>
 
-                          {/* ── IN-CHAT INTERACTIVE PACKAGE CARDS (Screenshot 3 Parity) ── */}
-                          {msg.packageCards && (
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 pt-2 border-t border-teal-200/60 dark:border-teal-800">
-                              {msg.packageCards.map((pkg) => (
-                                <div
-                                  key={pkg.id}
-                                  className={cn(
-                                    'p-2.5 rounded-xl border text-center transition-all bg-white dark:bg-slate-900 relative shadow-2xs flex flex-col justify-between',
-                                    pkg.isPopular
-                                      ? 'border-teal-600 ring-1 ring-teal-600'
-                                      : 'border-slate-200 dark:border-slate-800'
-                                  )}
-                                >
-                                  {pkg.isPopular && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-600 text-white absolute -top-2 left-1/2 -translate-x-1/2">
-                                      Most Popular
-                                    </span>
-                                  )}
-                                  <div>
-                                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-1">
-                                      {pkg.name}
-                                    </div>
-                                    <div className="text-sm font-extrabold text-teal-600 mt-0.5">
-                                      {pkg.price}
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                                      {pkg.duration}
-                                    </div>
-                                  </div>
+                          <div
+                            className={cn(
+                              'p-3.5 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-2xs whitespace-pre-line',
+                              isCustomer
+                                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200/80 rounded-tl-xs'
+                                : isAi
+                                ? 'bg-teal-50/70 dark:bg-teal-950/40 text-slate-900 dark:text-slate-100 border border-teal-200 dark:border-teal-800 rounded-tr-xs'
+                                : 'bg-teal-600 text-white rounded-tr-xs'
+                            )}
+                          >
+                            <p>{msg.content}</p>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectPackage(pkg)}
-                                    className="mt-2 w-full py-1 text-[11px] font-bold rounded-lg border border-teal-600 text-teal-600 hover:bg-teal-600 hover:text-white transition-colors"
+                            {/* ── IN-CHAT INTERACTIVE PACKAGE CARDS (Screenshot 3 Parity) ── */}
+                            {msg.packageCards && (
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 pt-2 border-t border-teal-200/60 dark:border-teal-800">
+                                {msg.packageCards.map((pkg) => (
+                                  <div
+                                    key={pkg.id}
+                                    className={cn(
+                                      'p-2.5 rounded-xl border text-center transition-all bg-white dark:bg-slate-900 relative shadow-2xs flex flex-col justify-between',
+                                      pkg.isPopular
+                                        ? 'border-teal-600 ring-1 ring-teal-600'
+                                        : 'border-slate-200 dark:border-slate-800'
+                                    )}
                                   >
-                                    Select
+                                    {pkg.isPopular && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-600 text-white absolute -top-2 left-1/2 -translate-x-1/2">
+                                        Most Popular
+                                      </span>
+                                    )}
+                                    <div>
+                                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-1">
+                                        {pkg.name}
+                                      </div>
+                                      <div className="text-sm font-extrabold text-teal-600 mt-0.5">
+                                        {pkg.price}
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                                        {pkg.duration}
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectPackage(pkg)}
+                                      className="mt-2 w-full py-1 text-[11px] font-bold rounded-lg border border-teal-600 text-teal-600 hover:bg-teal-600 hover:text-white transition-colors"
+                                    >
+                                      Select
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* ── IN-CHAT SCHEDULE CONFIRMATION CHIPS (Screenshot 3 Parity) ── */}
+                            {msg.confirmationCard && (
+                              <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-teal-200/60">
+                                {msg.confirmationCard.actions.map((chip) => (
+                                  <button
+                                    key={chip}
+                                    type="button"
+                                    onClick={() => handleConfirmChip(chip)}
+                                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white dark:bg-slate-900 border border-teal-600/40 text-teal-600 hover:bg-teal-600 hover:text-white transition-all shadow-2xs"
+                                  >
+                                    {chip}
                                   </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                                ))}
+                              </div>
+                            )}
+                          </div>
 
-                          {/* ── IN-CHAT SCHEDULE CONFIRMATION CHIPS (Screenshot 3 Parity) ── */}
-                          {msg.confirmationCard && (
-                            <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-teal-200/60">
-                              {msg.confirmationCard.actions.map((chip) => (
-                                <button
-                                  key={chip}
-                                  type="button"
-                                  onClick={() => handleConfirmChip(chip)}
-                                  className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white dark:bg-slate-900 border border-teal-600/40 text-teal-600 hover:bg-teal-600 hover:text-white transition-all shadow-2xs"
-                                >
-                                  {chip}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          <span className="text-[10px] text-slate-400 mt-0.5 px-1">{msg.timestamp}</span>
                         </div>
-
-                        <span className="text-[10px] text-slate-400 mt-0.5 px-1">{msg.timestamp}</span>
+                      );
+                    })}
+                    <div ref={messageEndRef} />
+                  </div>
+                </ScrollArea>
+              ) : centerSubTab === 'details' ? (
+                <ScrollArea className="flex-1 min-h-0 p-5">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">Customer Contact Record</h4>
+                        <Button size="sm" variant="outline" onClick={() => setCurrentView('leads')} className="h-7 text-xs rounded-xl">
+                          Open in Leads &amp; CRM
+                        </Button>
                       </div>
-                    );
-                  })}
-                  <div ref={messageEndRef} />
-                </div>
-              </ScrollArea>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                          <span className="text-slate-400 block text-[10px] uppercase font-bold">Full Name</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">{selectedConversation.customerName}</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                          <span className="text-slate-400 block text-[10px] uppercase font-bold">Phone Number</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">{selectedConversation.customerPhone || '+91 98765 43210'}</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                          <span className="text-slate-400 block text-[10px] uppercase font-bold">Email Address</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">
+                            {selectedConversation.customerEmail || `${selectedConversation.customerName.toLowerCase().replace(/\s+/g, '.')}@email.com`}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                          <span className="text-slate-400 block text-[10px] uppercase font-bold">Service Address</span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100">{selectedConversation.address || 'Primary Service Area'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+              ) : centerSubTab === 'notes' ? (
+                <ScrollArea className="flex-1 min-h-0 p-5">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">Internal Team Notes</h4>
+                      <div className="flex gap-2">
+                        <Input
+                          value={centerNoteInput}
+                          onChange={(e) => setCenterNoteInput(e.target.value)}
+                          placeholder="Add an internal note for this customer..."
+                          className="h-9 text-xs rounded-xl"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            if (!centerNoteInput.trim()) return;
+                            const next = {
+                              id: `note_${Date.now()}`,
+                              text: centerNoteInput.trim(),
+                              author: auth.user?.name || 'You',
+                              date: 'Just now',
+                            };
+                            setConversationNotes((prev) => ({
+                              ...prev,
+                              [selectedConversation.id]: [next, ...(prev[selectedConversation.id] || [])],
+                            }));
+                            setCenterNoteInput('');
+                            toast.success('Internal note added');
+                          }}
+                          className="h-9 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold"
+                        >
+                          Save Note
+                        </Button>
+                      </div>
+                      <div className="space-y-2 pt-2">
+                        {[
+                          ...(conversationNotes[selectedConversation.id] || []),
+                          { id: 'n1', text: 'Customer prefers morning appointment slots (9 AM – 11 AM).', author: 'Team', date: 'Apr 15, 2025' },
+                          { id: 'n2', text: 'Requested eco-friendly / plant-based supplies.', author: 'Team', date: 'Apr 12, 2025' },
+                        ].map((n) => (
+                          <div key={n.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800 text-xs">
+                            <p className="font-medium text-slate-800 dark:text-slate-200">{n.text}</p>
+                            <span className="text-[10px] text-slate-400 mt-1 block">{n.date} • {n.author}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+              ) : centerSubTab === 'orders' ? (
+                <ScrollArea className="flex-1 min-h-0 p-5">
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">Orders &amp; Estimates</h4>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setCenterSubTab('chat');
+                          setMessageInput(`Hi ${selectedConversation.customerName.split(' ')[0]}, here is your service estimate for the requested package. Let me know to confirm!`);
+                        }}
+                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                      >
+                        Send Estimate in Chat
+                      </Button>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100">Order #ORD-1042 — Deep Cleaning Package</div>
+                        <div className="text-slate-500 mt-0.5">Total: ₹{(selectedConversation.totalSpent || 3999).toLocaleString()}</div>
+                      </div>
+                      <Badge className="bg-emerald-50 text-emerald-700 border-none text-[10px]">Completed</Badge>
+                    </div>
+                  </div>
+                </ScrollArea>
+              ) : centerSubTab === 'appointments' ? (
+                <ScrollArea className="flex-1 min-h-0 p-5">
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">Customer Appointments</h4>
+                      <Button
+                        size="sm"
+                        onClick={() => setCurrentView('scheduling')}
+                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                      >
+                        Schedule in Appointments
+                      </Button>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100">Saturday, Apr 26 at 10:00 AM</div>
+                        <div className="text-slate-500 mt-0.5">Service Visit • {selectedConversation.customerName}</div>
+                      </div>
+                      <Badge className="bg-teal-50 text-teal-700 border-none text-[10px]">Scheduled</Badge>
+                    </div>
+                  </div>
+                </ScrollArea>
+              ) : (
+                <ScrollArea className="flex-1 min-h-0 p-5">
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">Linked Support Tickets</h4>
+                      <Button
+                        size="sm"
+                        onClick={() => setCurrentView('helpCenter')}
+                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                      >
+                        Open Tickets &amp; Support
+                      </Button>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100">Support Inquiry — {selectedConversation.customerName}</div>
+                        <div className="text-slate-500 mt-0.5">Channel: {selectedConversation.channel}</div>
+                      </div>
+                      <Badge className="bg-teal-50 text-teal-700 border-none text-[10px]">Active</Badge>
+                    </div>
+                  </div>
+                </ScrollArea>
+              )}
 
               {/* Composer Toolbar & Input */}
               <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
@@ -1267,12 +1486,35 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
                     <button
                       type="button"
-                      onClick={() => toast.info('Saved message macros')}
+                      onClick={() => setShowTemplates((prev) => !prev)}
                       className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
                     >
                       <FileText className="size-3.5" /> Templates
                     </button>
                   </div>
+
+                  {showTemplates && (
+                    <div className="flex items-center gap-1.5 flex-wrap pb-1">
+                      {[
+                        { label: 'Booking Confirmed', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Your appointment with ${businessName} is confirmed. We look forward to seeing you!` },
+                        { label: 'Share Quote', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is your customized service estimate from ${businessName}. Let us know if you'd like to book a slot.` },
+                        { label: 'Reschedule Options', text: `No problem! We have open slots tomorrow at 10:00 AM or 2:00 PM. Which time works best for you?` },
+                        { label: 'Review Request', text: `Thank you for choosing ${businessName}! If you loved your service today, we'd really appreciate a quick Google review.` },
+                      ].map((tpl) => (
+                        <button
+                          key={tpl.label}
+                          type="button"
+                          onClick={() => {
+                            setMessageInput(tpl.text);
+                            setShowTemplates(false);
+                          }}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200/70 transition-colors"
+                        >
+                          + {tpl.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   <div className="flex items-end gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-2 focus-within:ring-1 focus-within:ring-teal-500">
                     <textarea
@@ -1818,9 +2060,23 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               onToggleAssign={handleToggleAssign}
               assignBusy={assignBusy}
               onToggleAiHandled={handleToggleAiHandled}
-              onCreateBooking={() => toast.success(`Creating booking for ${selectedConversation.customerName}`)}
-              onCreateQuote={() => toast.success(`Generating quote for ${selectedConversation.customerName}`)}
-              onCreateTicket={() => toast.success(`Support ticket logged for ${selectedConversation.customerName}`)}
+              onCreateBooking={() => {
+                toast.success(`Opening Appointments for ${selectedConversation.customerName}`);
+                setCurrentView('scheduling');
+              }}
+              onCreateQuote={() => {
+                setCenterSubTab('chat');
+                setComposerMode('reply');
+                setMessageInput(`Hi ${selectedConversation.customerName.split(' ')[0]}, here is your personalized service estimate from ${businessName}. Please reply to confirm your preferred slot!`);
+                toast.success(`Estimate drafted for ${selectedConversation.customerName}`);
+              }}
+              onCreateTicket={() => {
+                toast.success(`Opening Tickets & Support for ${selectedConversation.customerName}`);
+                setCurrentView('helpCenter');
+              }}
+              onViewInCrm={() => {
+                setCurrentView('leads');
+              }}
             />
           )}
         </div>

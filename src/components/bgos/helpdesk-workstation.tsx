@@ -60,6 +60,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ const INITIAL_TICKETS: HelpdeskTicket[] = [
     aiTriage: {
       confidence: '99.4%',
       slotAvailability: 'Monday May 5 at 10:00 AM has 2 field crew leads free: Kevin Harris & Angela King.',
-      policyCheck: 'Reschedule requested 72 hours prior to job (complies with Cinderella Cleaners 48h notice guarantee). $0 reschedule penalty applies.',
+      policyCheck: 'Reschedule requested 72 hours prior to job (complies with 48h notice guarantee). $0 reschedule penalty applies.',
       lockboxAccess: 'Gate code #4912 remains identical. Key lockbox in patio planter.',
       recommendedDraft: 'Hi Emily! No worries at all — moving delays happen. We have successfully rescheduled your Move-out Deep Clean to Monday, May 5 at 10:00 AM. Technician Kevin Harris is assigned. Your $50 deposit carries over automatically. Good luck with the moving truck!',
     },
@@ -178,7 +179,7 @@ const INITIAL_TICKETS: HelpdeskTicket[] = [
         id: 'msg_1',
         sender: 'customer',
         senderName: 'Emily Davis',
-        content: 'Hi Cinderella Cleaners team! Our moving truck got delayed until Sunday night due to mechanical issues. Can we please push our move-out cleaning from this Saturday 9:00 AM to Monday, May 5 at 10:00 AM instead? We really don\'t want to forfeit our landlord deposit!',
+        content: 'Hi team! Our moving truck got delayed until Sunday night due to mechanical issues. Can we please push our move-out cleaning from this Saturday 9:00 AM to Monday, May 5 at 10:00 AM instead? We really don\'t want to forfeit our landlord deposit!',
         timestamp: '10:14 AM (WhatsApp)',
         channel: 'whatsapp',
       },
@@ -281,7 +282,7 @@ const INITIAL_TICKETS: HelpdeskTicket[] = [
       slotAvailability: 'Accounting team documents ready: W-9 form and Form W-9 PDF on file.',
       policyCheck: 'Commercial billing compliance verified. Standard Net-30 agreement active.',
       lockboxAccess: 'N/A — Digital invoice delivery.',
-      recommendedDraft: 'Hello Desert Vista Med Accounts Payable, attached is Cinderella Cleaners signed Form W-9 along with updated Invoice #ORD-4475 displaying our Federal EIN #XX-XXXXXXX.',
+      recommendedDraft: 'Hello Desert Vista Med Accounts Payable, attached is our signed Form W-9 along with updated Invoice #ORD-4475 displaying our Federal EIN #XX-XXXXXXX.',
     },
     messages: [
       {
@@ -407,6 +408,11 @@ const INITIAL_TICKETS: HelpdeskTicket[] = [
 ];
 
 export function HelpCenterView() {
+  const auth = useAppStore((state) => state.auth);
+  const setCurrentView = useAppStore((state) => state.setCurrentView);
+  const currentUserName = auth.user?.name || 'Deepak Chandra';
+  const businessName = auth.tenant?.name || auth.workspace?.name || 'our team';
+
   const [tickets, setTickets] = useState<HelpdeskTicket[]>(INITIAL_TICKETS);
   const [selectedTicketId, setSelectedTicketId] = useState<string>('tk_1082');
   const [searchQuery, setSearchQuery] = useState('');
@@ -455,13 +461,13 @@ export function HelpCenterView() {
               category: (t.type || 'general') as any,
               categoryLabel: (t.type || 'General').toUpperCase(),
               priority: (t.priority || 'medium') as any,
-              status: (t.status || 'open') as any,
+              status: (t.status === 'resolved' ? 'solved' : t.status || 'open') as any,
               source: (t.source || 'web') as any,
               sourceLabel: (t.source || 'Web').toUpperCase(),
               customerName: t.reporterName || 'Customer',
               customerPhone: '+1 (520) 555-0100',
               customerEmail: t.reporterEmail || 'customer@example.com',
-              customerAddress: 'Tucson, Arizona',
+              customerAddress: 'Primary Service Area',
               customerTier: 'Standard Tier',
               customerTags: ['Support'],
               cleaningsCount: 1,
@@ -469,11 +475,11 @@ export function HelpCenterView() {
               avgRating: 5.0,
               createdAt: t.createdAt,
               timeAgo: 'Recently',
-              slaRemaining: '4h left',
+              slaRemaining: t.status === 'resolved' || t.status === 'closed' ? 'Resolved' : '4h left',
               slaProgressPercent: 25,
               firstTouchSla: 'Met',
               channelId: t.source || 'web',
-              assigneeName: 'Deepak Chandra',
+              assigneeName: t.assigneeName || currentUserName,
               messages: [
                 {
                   id: `msg_${t.id}`,
@@ -499,14 +505,22 @@ export function HelpCenterView() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [currentUserName]);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
+
+  // Dynamic KPI & Filter Counts
+  const openBacklogCount = tickets.filter((t) => t.status !== 'solved' && t.status !== 'closed').length;
+  const unassignedCount = tickets.filter((t) => !t.assigneeName).length;
+  const solvedCount = tickets.filter((t) => t.status === 'solved' || t.status === 'closed').length;
+  const whatsappCount = tickets.filter((t) => t.source === 'whatsapp').length;
+  const callsCount = tickets.filter((t) => t.source === 'phone').length;
+  const urgentCount = tickets.filter((t) => t.priority === 'urgent').length;
 
   // Filtering tickets
   const filteredTickets = tickets.filter((t) => {
     // Sub-nav tab filter
-    if (activeFilterTab === 'assigned' && t.assigneeName !== 'Deepak Chandra') return false;
+    if (activeFilterTab === 'assigned' && t.assigneeName !== currentUserName && t.assigneeName !== 'Deepak Chandra') return false;
     if (activeFilterTab === 'urgent' && t.priority !== 'urgent' && t.priority !== 'high') return false;
     if (activeFilterTab === 'reschedule' && t.category !== 'reschedule') return false;
     if (activeFilterTab === 'quality' && t.category !== 'reclean') return false;
@@ -541,7 +555,7 @@ export function HelpCenterView() {
     const newMsg: HelpdeskMessage = {
       id: `msg_${Date.now()}`,
       sender: 'agent',
-      senderName: 'Deepak Chandra',
+      senderName: currentUserName,
       content: resolutionText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' (WhatsApp)',
       channel: 'whatsapp',
@@ -559,7 +573,20 @@ export function HelpCenterView() {
           : t
       )
     );
-    toast.success('Schedule updated in Dispatch Calendar & WhatsApp confirmation dispatched to customer');
+
+    fetch(`/api/support/tickets/${selectedTicket.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: resolutionText, isInternal: false }),
+    }).catch(() => {});
+
+    fetch(`/api/support/tickets/${selectedTicket.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'resolved', resolution: resolutionText }),
+    }).catch(() => {});
+
+    toast.success('Appointment schedule updated & WhatsApp confirmation dispatched to customer');
   };
 
   // Action: Send Message via Composer
@@ -571,7 +598,7 @@ export function HelpCenterView() {
     const newMsg: HelpdeskMessage = {
       id: `msg_${Date.now()}`,
       sender: composerMode === 'internal' ? 'system' : 'agent',
-      senderName: composerMode === 'internal' ? 'Private Staff Note' : 'Deepak Chandra',
+      senderName: composerMode === 'internal' ? 'Private Staff Note' : currentUserName,
       content,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: composerMode,
@@ -587,6 +614,13 @@ export function HelpCenterView() {
           : t
       )
     );
+
+    fetch(`/api/support/tickets/${selectedTicket.id}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, isInternal: composerMode === 'internal' }),
+    }).catch(() => {});
+
     toast.success(composerMode === 'internal' ? 'Private staff note logged' : 'Message dispatched to customer');
   };
 
@@ -603,6 +637,11 @@ export function HelpCenterView() {
           : t
       )
     );
+    fetch(`/api/support/tickets/${ticketId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'resolved' }),
+    }).catch(() => {});
     toast.success(`Ticket ${selectedTicket.ticketNumber} marked as Resolved`);
   };
 
@@ -611,6 +650,11 @@ export function HelpCenterView() {
     setTickets((prev) =>
       prev.map((t) => (t.id === selectedTicket.id ? { ...t, status } : t))
     );
+    fetch(`/api/support/tickets/${selectedTicket.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status === 'solved' ? 'resolved' : status }),
+    }).catch(() => {});
     toast.success(`Ticket status updated to ${status.replace('_', ' ')}`);
   };
 
@@ -636,7 +680,7 @@ export function HelpCenterView() {
       customerName: newCustomer.trim(),
       customerPhone: newPhone.trim() || '+1 (520) 555-0100',
       customerEmail: `${newCustomer.toLowerCase().replace(/\s+/g, '.')}@email.com`,
-      customerAddress: 'Tucson, Arizona',
+      customerAddress: 'Primary Service Area',
       customerTier: 'Standard Tier',
       customerTags: ['New Inquiry'],
       cleaningsCount: 1,
@@ -648,7 +692,7 @@ export function HelpCenterView() {
       slaProgressPercent: 10,
       firstTouchSla: 'Pending',
       channelId: newPhone.trim() || '+1 (520) 555-0100',
-      assigneeName: 'Deepak Chandra',
+      assigneeName: currentUserName,
       messages: [
         {
           id: `msg_${Date.now()}`,
@@ -716,7 +760,7 @@ export function HelpCenterView() {
     <div className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 p-4 lg:p-6 select-none">
       <div className="w-full space-y-5">
         {/* ═══════════════════════════════════════════════════════════════════
-            1. PAGE HEADER & PRIMARY ACTIONS (Stitch Reference Parity)
+            1. PAGE HEADER & PRIMARY ACTIONS
            ═══════════════════════════════════════════════════════════════════ */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -730,7 +774,7 @@ export function HelpCenterView() {
               </div>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 max-w-3xl leading-relaxed">
-              Manage service complaints, rescheduling requests, damage inquiries, and quality audits across all channels with automated SLA tracking.
+              Manage service inquiries, rescheduling requests, quality follow-ups, and billing questions across all channels with automated SLA tracking.
             </p>
           </div>
 
@@ -739,7 +783,7 @@ export function HelpCenterView() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => toast.info('SLA policies and routing rules')}
+              onClick={() => setCurrentView('settings')}
               className="h-9 px-3 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 gap-1.5 shadow-2xs"
             >
               <SlidersHorizontal className="size-3.5 text-slate-500" />
@@ -768,7 +812,7 @@ export function HelpCenterView() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            2. 5 KPI TELEMETRY CARDS (With Sparklines & Micro-Telemetry)
+            2. 5 KPI TELEMETRY CARDS
            ═══════════════════════════════════════════════════════════════════ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
           {/* Card 1: Open Backlog */}
@@ -780,13 +824,13 @@ export function HelpCenterView() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">14</span>
+              <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">{openBacklogCount}</span>
               <span className="inline-flex items-center text-xs text-emerald-600 dark:text-emerald-400 font-semibold gap-0.5">
                 <ArrowDown className="size-3" /> 18% vs wk
               </span>
             </div>
             <div className="mt-3 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-              <span className="text-[11px] font-mono text-slate-500">11 within SLA</span>
+              <span className="text-[11px] font-mono text-slate-500">{openBacklogCount} within SLA</span>
               <svg className="w-16 h-4 text-teal-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 20">
                 <path d="M0 16 Q20 18 35 10 T70 4 T80 8" strokeLinecap="round" />
               </svg>
@@ -802,11 +846,13 @@ export function HelpCenterView() {
               </div>
             </div>
             <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-2xl font-bold text-rose-600 dark:text-rose-400">3</span>
-              <span className="text-xs text-rose-600 dark:text-rose-400 font-semibold">Needs routing</span>
+              <span className="text-2xl font-bold text-rose-600 dark:text-rose-400">{unassignedCount}</span>
+              <span className="text-xs text-rose-600 dark:text-rose-400 font-semibold">
+                {unassignedCount === 0 ? 'All assigned' : 'Needs routing'}
+              </span>
             </div>
             <div className="mt-3 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-              <span className="text-[11px] font-mono text-slate-500">Max age: 14m</span>
+              <span className="text-[11px] font-mono text-slate-500">Auto-routed</span>
               <svg className="w-16 h-4 text-rose-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 80 20">
                 <path d="M0 4 Q25 12 45 6 T80 14" strokeLinecap="round" />
               </svg>
@@ -870,7 +916,7 @@ export function HelpCenterView() {
               <span className="text-xs text-slate-400">/ 5.0</span>
             </div>
             <div className="mt-3 flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
-              <span className="text-[11px] font-mono text-slate-500">142 verified audits</span>
+              <span className="text-[11px] font-mono text-slate-500">Verified reviews</span>
               <div className="flex items-center gap-0.5 text-amber-500">
                 <Star className="size-2.5 fill-amber-500" />
                 <Star className="size-2.5 fill-amber-500" />
@@ -883,18 +929,18 @@ export function HelpCenterView() {
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            3. SUB-NAVIGATION FILTER TABS (With Counters)
+            3. SUB-NAVIGATION FILTER TABS (With Live Counters)
            ═══════════════════════════════════════════════════════════════════ */}
         <div className="flex items-center justify-between overflow-x-auto pb-1 gap-2">
           <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-xl shadow-2xs border border-slate-200/80 dark:border-slate-800 min-w-max">
             {[
               { id: 'all', label: 'All Tickets', count: tickets.length },
-              { id: 'assigned', label: 'My Assigned', count: tickets.filter((t) => t.assigneeName === 'Deepak Chandra').length },
+              { id: 'assigned', label: 'My Assigned', count: tickets.filter((t) => t.assigneeName === currentUserName || t.assigneeName === 'Deepak Chandra').length },
               { id: 'urgent', label: 'Urgent & Escalated', count: tickets.filter((t) => t.priority === 'urgent' || t.priority === 'high').length, isUrgent: true },
               { id: 'reschedule', label: 'Reschedule Requests', count: tickets.filter((t) => t.category === 'reschedule').length },
               { id: 'quality', label: 'Quality & Complaints', count: tickets.filter((t) => t.category === 'reclean').length },
               { id: 'billing', label: 'Billing & Invoices', count: tickets.filter((t) => t.category === 'billing').length },
-              { id: 'archived', label: 'Archived & Solved', count: 240 },
+              { id: 'archived', label: 'Archived & Solved', count: solvedCount },
             ].map((tab) => {
               const isSelected = activeFilterTab === tab.id;
               return (
@@ -953,7 +999,10 @@ export function HelpCenterView() {
           {/* ─────────────────────────────────────────────────────────────
               COLUMN 1: TICKET QUEUE FEED (~3.2 Cols)
              ───────────────────────────────────────────────────────────── */}
-          <div id="tickets-list-column" className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+          <div
+            id="tickets-list-column"
+            className="lg:col-span-4 xl:col-span-3 flex flex-col gap-2.5 bg-white dark:bg-slate-900 rounded-2xl p-3.5 border border-slate-200/90 dark:border-slate-800 shadow-2xs lg:max-h-[calc(100vh-250px)] lg:overflow-y-auto"
+          >
             {/* Header with Live Counter and Actions */}
             <div className="flex items-center justify-between pb-1">
               <div className="flex items-center gap-2">
@@ -963,10 +1012,16 @@ export function HelpCenterView() {
                 </span>
               </div>
               <div className="flex items-center gap-1 text-slate-400">
-                <button type="button" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 rounded-md">
-                  <SlidersHorizontal className="size-3.5" />
-                </button>
-                <button type="button" className="p-1 hover:text-slate-700 dark:hover:text-slate-200 rounded-md">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChannelFilter('all');
+                    setActiveFilterTab('all');
+                    setSearchQuery('');
+                  }}
+                  title="Reset filters"
+                  className="p-1 hover:text-slate-700 dark:hover:text-slate-200 rounded-md"
+                >
                   <Filter className="size-3.5" />
                 </button>
               </div>
@@ -988,9 +1043,9 @@ export function HelpCenterView() {
             <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
               {[
                 { id: 'all', label: 'All Channels' },
-                { id: 'whatsapp', label: 'WhatsApp (6)' },
-                { id: 'calls', label: 'Calls (4)' },
-                { id: 'urgent', label: 'Urgent (2)' },
+                { id: 'whatsapp', label: `WhatsApp (${whatsappCount})` },
+                { id: 'calls', label: `Calls (${callsCount})` },
+                { id: 'urgent', label: `Urgent (${urgentCount})` },
               ].map((ch) => (
                 <button
                   key={ch.id}
@@ -1009,7 +1064,7 @@ export function HelpCenterView() {
             </div>
 
             {/* Scrollable Ticket List */}
-            <div className="space-y-2 mt-1 max-h-[640px] overflow-y-auto pr-0.5">
+            <div className="space-y-2 mt-1 flex-1 overflow-y-auto pr-0.5">
               {filteredTickets.map((ticket) => {
                 const isSelected = selectedTicket.id === ticket.id;
                 const isUrgent = ticket.priority === 'urgent';
@@ -1082,22 +1137,12 @@ export function HelpCenterView() {
                 );
               })}
             </div>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => toast.info('Loading full ticket history archive')}
-              className="w-full h-8 text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
-            >
-              Load 9 More Tickets
-            </Button>
           </div>
 
           {/* ─────────────────────────────────────────────────────────────
               COLUMN 2: ACTIVE TICKET RESOLUTION WORKSTATION (~5.8 Cols)
              ───────────────────────────────────────────────────────────── */}
-          <div className="lg:col-span-8 xl:col-span-6 flex flex-col gap-3.5">
+          <div className="lg:col-span-8 xl:col-span-6 flex flex-col gap-3.5 lg:max-h-[calc(100vh-250px)] lg:overflow-y-auto">
             {/* Ticket Canvas Header & Metadata Bar */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1122,7 +1167,7 @@ export function HelpCenterView() {
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1">
                     <span className="size-1.5 rounded-full bg-emerald-500" />
-                    <span>SLA: 1h 42m remaining</span>
+                    <span>SLA: {selectedTicket.slaRemaining}</span>
                   </span>
                 </div>
 
@@ -1138,15 +1183,6 @@ export function HelpCenterView() {
                     title="Print Ticket"
                   >
                     <Printer className="size-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => toast.info('Additional ticket actions')}
-                    className="size-8 rounded-lg text-slate-500 hover:bg-slate-100"
-                  >
-                    <MoreVertical className="size-4" />
                   </Button>
                   <Button
                     type="button"
@@ -1167,7 +1203,7 @@ export function HelpCenterView() {
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Created {selectedTicket.timeAgo} via{' '}
                   <strong className="text-slate-800 dark:text-slate-200 font-semibold">
-                    {selectedTicket.sourceLabel} Business API
+                    {selectedTicket.sourceLabel}
                   </strong>{' '}
                   • Channel ID:{' '}
                   <span className="font-mono text-slate-600 dark:text-slate-300">
@@ -1185,9 +1221,10 @@ export function HelpCenterView() {
                     onChange={(e) => handleStatusChange(e.target.value as any)}
                     className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-semibold py-1 px-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs focus:outline-none"
                   >
+                    <option value="open">Open</option>
                     <option value="in_progress">In Progress</option>
                     <option value="waiting_customer">Waiting on Customer</option>
-                    <option value="pending_approval">Pending Tech Approval</option>
+                    <option value="pending_approval">Pending Review</option>
                     <option value="escalated">Escalated</option>
                     <option value="solved">Solved</option>
                   </select>
@@ -1198,7 +1235,7 @@ export function HelpCenterView() {
                   <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
                     <Avatar className="size-4">
                       <AvatarFallback className="text-[9px] font-bold bg-teal-600 text-white">
-                        DC
+                        {selectedTicket.assigneeName.slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
@@ -1233,29 +1270,54 @@ export function HelpCenterView() {
 
               {/* Thread Timeline */}
               <div className="space-y-3.5">
-                {/* Incoming Message from Customer */}
-                {selectedTicket.messages.map((msg) => (
-                  <div key={msg.id} className="flex items-start gap-3">
-                    <Avatar className="size-8 mt-0.5 shrink-0">
-                      <AvatarFallback className="text-xs font-bold bg-teal-50 text-teal-700">
-                        {selectedTicket.customerName.slice(0, 2).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col max-w-[85%]">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
-                          {selectedTicket.customerName}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {msg.timestamp}
-                        </span>
-                      </div>
-                      <div className="p-3.5 rounded-2xl rounded-tl-xs bg-slate-100 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 leading-relaxed shadow-2xs whitespace-pre-line">
-                        {msg.content}
+                {selectedTicket.messages.map((msg) => {
+                  const isCustomer = msg.sender === 'customer';
+                  const isInternal = msg.sender === 'system';
+                  const displayName = isCustomer ? selectedTicket.customerName : msg.senderName;
+                  return (
+                    <div
+                      key={msg.id}
+                      className={cn('flex items-start gap-3', !isCustomer && 'flex-row-reverse')}
+                    >
+                      <Avatar className="size-8 mt-0.5 shrink-0">
+                        <AvatarFallback
+                          className={cn(
+                            'text-xs font-bold',
+                            isCustomer
+                              ? 'bg-teal-50 text-teal-700'
+                              : isInternal
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-teal-600 text-white'
+                          )}
+                        >
+                          {displayName.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className={cn('flex flex-col max-w-[85%]', !isCustomer && 'items-end')}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                            {displayName}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {msg.timestamp}
+                          </span>
+                        </div>
+                        <div
+                          className={cn(
+                            'p-3.5 rounded-2xl text-xs leading-relaxed shadow-2xs whitespace-pre-line',
+                            isCustomer
+                              ? 'rounded-tl-xs bg-slate-100 dark:bg-slate-800/80 text-slate-800 dark:text-slate-200'
+                              : isInternal
+                              ? 'rounded-tr-xs bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800'
+                              : 'rounded-tr-xs bg-teal-600 text-white'
+                          )}
+                        >
+                          {msg.content}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* AI Copilot Smart Triage Summary Card */}
                 {selectedTicket.aiTriage && (
@@ -1327,10 +1389,10 @@ export function HelpCenterView() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => toast.info('Viewing field team Monday dispatch schedule')}
+                        onClick={() => setCurrentView('scheduling')}
                         className="h-8 px-3 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700"
                       >
-                        View Monday Schedule
+                        View Appointments
                       </Button>
                     </div>
                   </div>
@@ -1389,7 +1451,7 @@ export function HelpCenterView() {
                       onChange={(e) => {
                         setSavedTemplate(e.target.value);
                         if (e.target.value === 'Quality Guarantee Reclean') {
-                          setMessageInput('Hi! We take quality very seriously under our 100% Satisfaction Guarantee. We would be happy to send a crew lead back for a free touch-up visit.');
+                          setMessageInput('Hi! We take quality very seriously under our 100% Satisfaction Guarantee. We would be happy to send a specialist back for a complimentary touch-up visit.');
                         } else if (e.target.value === 'Reschedule Confirmation') {
                           setMessageInput('Hi! Your appointment has been successfully rescheduled. Your deposit carries over automatically.');
                         }
@@ -1436,7 +1498,7 @@ export function HelpCenterView() {
                       type="button"
                       onClick={() => {
                         if (messageInput.trim()) {
-                          setMessageInput((prev) => prev + '\n\nThank you for choosing Cinderella Cleaners!');
+                          setMessageInput((prev) => `${prev}\n\nThank you for choosing ${businessName}!`);
                           toast.success('AI Tone Polish applied');
                         }
                       }}
@@ -1485,7 +1547,7 @@ export function HelpCenterView() {
           {/* ─────────────────────────────────────────────────────────────
               COLUMN 3: CUSTOMER 360 & SERVICE CONTEXT DRAWER (~3.0 Cols)
              ───────────────────────────────────────────────────────────── */}
-          <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-3.5">
+          <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-3.5 lg:max-h-[calc(100vh-250px)] lg:overflow-y-auto">
             {/* Customer Dossier Card */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
               <div className="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800">
@@ -1494,7 +1556,7 @@ export function HelpCenterView() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => toast.info(`Viewing ${selectedTicket.customerName} in CRM profile`)}
+                  onClick={() => setCurrentView('leads')}
                   className="text-xs font-semibold text-teal-600 hover:underline flex items-center gap-0.5"
                 >
                   <span>View in CRM</span>
@@ -1516,7 +1578,7 @@ export function HelpCenterView() {
                     <CheckCircle className="size-3.5 text-emerald-500 fill-emerald-500" />
                   </div>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                    Residential Client • Tucson, AZ
+                    Verified Customer • {selectedTicket.customerAddress}
                   </p>
                   <div className="flex items-center gap-1 mt-1">
                     <span className="px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300 text-[10px] font-bold">
@@ -1563,7 +1625,7 @@ export function HelpCenterView() {
                   <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">
                     {selectedTicket.cleaningsCount}
                   </span>
-                  <span className="text-[10px] text-slate-500">Cleanings</span>
+                  <span className="text-[10px] text-slate-500">Bookings</span>
                 </div>
                 <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800">
                   <span className="block text-sm font-bold text-teal-600">
@@ -1624,7 +1686,7 @@ export function HelpCenterView() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-slate-500">
-                      <span>Assigned Tech:</span>
+                      <span>Assigned Specialist:</span>
                       <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1">
                         <span className="size-1.5 rounded-full bg-emerald-500" />
                         {selectedTicket.associatedOrder.assignedTech}
@@ -1647,11 +1709,14 @@ export function HelpCenterView() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => toast.success('Dispatch Calendar opened for rescheduling')}
+                    onClick={() => {
+                      toast.success('Opening Appointments for rescheduling');
+                      setCurrentView('scheduling');
+                    }}
                     className="w-full h-8 text-xs font-bold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 gap-1.5 shadow-2xs"
                   >
                     <Calendar className="size-3.5 text-teal-600" />
-                    <span>Reschedule in Dispatch Calendar</span>
+                    <span>Reschedule in Appointments</span>
                   </Button>
                   <div className="grid grid-cols-2 gap-1.5">
                     <Button
@@ -1668,11 +1733,17 @@ export function HelpCenterView() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => toast.success('Re-clean service work order dispatched')}
+                      onClick={() => {
+                        setCreateTicketOpen(true);
+                        setNewCustomer(selectedTicket.customerName);
+                        setNewPhone(selectedTicket.customerPhone);
+                        setNewCategory('reclean');
+                        setNewSubject(`Follow-up service for ${selectedTicket.customerName}`);
+                      }}
                       className="h-8 text-xs font-semibold rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 gap-1"
                     >
                       <RotateCcw className="size-3 text-teal-600" />
-                      <span>Re-clean Ticket</span>
+                      <span>Follow-up Ticket</span>
                     </Button>
                   </div>
                 </div>

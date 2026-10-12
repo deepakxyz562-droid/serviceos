@@ -39,6 +39,7 @@ export interface ConversationDetailPanelProps {
   onCreateBooking?: (conv: Conversation) => void;
   onCreateQuote?: (conv: Conversation) => void;
   onCreateTicket?: (conv: Conversation) => void;
+  onViewInCrm?: (conv: Conversation) => void;
 }
 
 export function ConversationDetailPanel({
@@ -51,10 +52,21 @@ export function ConversationDetailPanel({
   onCreateBooking,
   onCreateQuote,
   onCreateTicket,
+  onViewInCrm,
 }: ConversationDetailPanelProps) {
   const channelMeta = getChannelMeta(conv.channel);
   const [copied, setCopied] = useState(false);
   const [isAiHandled, setIsAiHandled] = useState(!conv.aiPaused);
+  const [customTags, setCustomTags] = useState<Record<string, string[]>>({});
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [customNotes, setCustomNotes] = useState<Record<string, { text: string; date: string; author: string }[]>>({});
+  const [addingNote, setAddingNote] = useState(false);
+  const [newNoteInput, setNewNoteInput] = useState('');
+
+  React.useEffect(() => {
+    setIsAiHandled(!conv.aiPaused);
+  }, [conv.id, conv.aiPaused]);
 
   // Derived or fallback data for Customer 360 Dossier
   const totalSpent = conv.totalSpent ?? 12450;
@@ -62,8 +74,14 @@ export function ConversationDetailPanel({
   const ratingScore = conv.rating ?? 4.8;
   const location = conv.address || 'Pune, Maharashtra';
 
+  const activeTags = customTags[conv.id] ?? conv.tags ?? ['Residential', 'Deep Cleaning', 'VIP'];
+  const activeNotes = customNotes[conv.id] ?? [
+    { text: 'Prefers morning slots', date: 'Apr 15, 2025', author: 'Team' },
+    { text: 'Allergic to strong chemicals', date: 'Apr 12, 2025', author: 'Team' },
+  ];
+
   const defaultSummary = conv.aiSummary ||
-    `Customer is interested in booking a one-time deep cleaning service for a 3BHK apartment. Showing interest in the ₹3,999 package for Saturday morning. Ready to confirm.`;
+    `Customer is inquiring via ${conv.channel} ("${conv.lastMessage.slice(0, 90)}${conv.lastMessage.length > 90 ? '...' : ''}"). Ready for follow-up or booking confirmation.`;
 
   const copyPhone = () => {
     if (conv.customerPhone) {
@@ -79,6 +97,31 @@ export function ConversationDetailPanel({
     const aiPaused = !checked;
     onToggleAiHandled?.(conv.id, aiPaused);
     toast.success(checked ? 'AI Assistant is now handling this conversation' : 'Human operator took over conversation');
+  };
+
+  const handleAddTag = () => {
+    const trimmed = newTagInput.trim();
+    if (!trimmed) return;
+    if (!activeTags.includes(trimmed)) {
+      setCustomTags((prev) => ({ ...prev, [conv.id]: [...activeTags, trimmed] }));
+      toast.success(`Tag "${trimmed}" added`);
+    }
+    setNewTagInput('');
+    setAddingTag(false);
+  };
+
+  const handleAddNote = () => {
+    const trimmed = newNoteInput.trim();
+    if (!trimmed) return;
+    const nextNote = {
+      text: trimmed,
+      date: 'Just now',
+      author: 'You',
+    };
+    setCustomNotes((prev) => ({ ...prev, [conv.id]: [nextNote, ...activeNotes] }));
+    setNewNoteInput('');
+    setAddingNote(false);
+    toast.success('Customer note saved');
   };
 
   return (
@@ -125,7 +168,10 @@ export function ConversationDetailPanel({
               </CardTitle>
               <button
                 type="button"
-                onClick={() => toast.info(`Viewing ${conv.customerName} in CRM`)}
+                onClick={() => {
+                  if (onViewInCrm) onViewInCrm(conv);
+                  else toast.info(`Viewing ${conv.customerName} in CRM`);
+                }}
                 className="text-[11px] font-semibold text-teal-600 hover:underline flex items-center gap-0.5"
               >
                 View in CRM &rarr;
@@ -200,14 +246,29 @@ export function ConversationDetailPanel({
                 <span>Tags</span>
                 <button
                   type="button"
-                  onClick={() => toast.info('Tag management')}
+                  onClick={() => setAddingTag((prev) => !prev)}
                   className="text-[10px] text-teal-600 hover:underline"
                 >
-                  + Add Tag
+                  {addingTag ? 'Cancel' : '+ Add Tag'}
                 </button>
               </div>
+              {addingTag && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={newTagInput}
+                    onChange={(e) => setNewTagInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                    placeholder="New tag..."
+                    className="flex-1 px-2 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  />
+                  <Button size="sm" onClick={handleAddTag} className="h-6 px-2 text-[10px] bg-teal-600 text-white">
+                    Add
+                  </Button>
+                </div>
+              )}
               <div className="flex flex-wrap gap-1.5">
-                {['Residential', 'Deep Cleaning', 'VIP'].map((tag) => (
+                {activeTags.map((tag) => (
                   <span
                     key={tag}
                     className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-900"
@@ -224,29 +285,37 @@ export function ConversationDetailPanel({
                 <span>Notes</span>
                 <button
                   type="button"
-                  onClick={() => toast.info('Add new note')}
+                  onClick={() => setAddingNote((prev) => !prev)}
                   className="text-[10px] text-teal-600 hover:underline"
                 >
-                  + Add Note
+                  {addingNote ? 'Cancel' : '+ Add Note'}
                 </button>
               </div>
+              {addingNote && (
+                <div className="space-y-1.5">
+                  <textarea
+                    rows={2}
+                    value={newNoteInput}
+                    onChange={(e) => setNewNoteInput(e.target.value)}
+                    placeholder="Write an internal note..."
+                    className="w-full p-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 resize-none"
+                  />
+                  <Button size="sm" onClick={handleAddNote} className="w-full h-7 text-[11px] bg-teal-600 text-white">
+                    Save Note
+                  </Button>
+                </div>
+              )}
               <div className="space-y-1.5">
-                <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
-                  <p className="text-slate-700 dark:text-slate-300 font-medium leading-snug">
-                    Prefers morning slots
-                  </p>
-                  <span className="text-[10px] text-muted-foreground block mt-0.5">
-                    Apr 15, 2025 • Deepak
-                  </span>
-                </div>
-                <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
-                  <p className="text-slate-700 dark:text-slate-300 font-medium leading-snug">
-                    Allergic to strong chemicals
-                  </p>
-                  <span className="text-[10px] text-muted-foreground block mt-0.5">
-                    Apr 12, 2025 • Team
-                  </span>
-                </div>
+                {activeNotes.map((note, idx) => (
+                  <div key={idx} className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs">
+                    <p className="text-slate-700 dark:text-slate-300 font-medium leading-snug">
+                      {note.text}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">
+                      {note.date} • {note.author}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -256,7 +325,7 @@ export function ConversationDetailPanel({
                 <span>Recent Bookings</span>
                 <button
                   type="button"
-                  onClick={() => toast.info('Viewing all customer bookings')}
+                  onClick={() => onCreateBooking?.(conv)}
                   className="text-[10px] text-teal-600 hover:underline"
                 >
                   View all
@@ -296,12 +365,16 @@ export function ConversationDetailPanel({
           <CardContent className="px-3.5 pb-3.5 space-y-1">
             {[
               { label: 'Create Booking', icon: Calendar, action: () => onCreateBooking?.(conv) },
-              { label: 'Create Lead', icon: Sparkles, action: () => toast.success(`Lead created for ${conv.customerName}`) },
               { label: 'Send Quote', icon: FileText, action: () => onCreateQuote?.(conv) },
-              { label: 'Share Catalog', icon: Share2, action: () => toast.success('Catalog link sent') },
               { label: 'Create Ticket', icon: Ticket, action: () => onCreateTicket?.(conv) },
-              { label: 'Add to Campaign', icon: Send, action: () => toast.success('Customer added to marketing campaign') },
-              { label: 'View in CRM', icon: Eye, action: () => toast.info('Redirecting to CRM dossier') },
+              {
+                label: 'View in CRM',
+                icon: Eye,
+                action: () => {
+                  if (onViewInCrm) onViewInCrm(conv);
+                  else toast.info(`Viewing ${conv.customerName} in CRM`);
+                },
+              },
             ].map((qa) => {
               const ActionIcon = qa.icon;
               return (

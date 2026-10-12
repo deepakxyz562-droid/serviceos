@@ -66,8 +66,10 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {};
 
-    // Tenant users can only update certain fields
-    if (isSuperAdmin) {
+    // Tenant members and super-admins can update ticket fields within their tenant scope
+    const canManageTicket = isSuperAdmin || (user.tenantId && existing.tenantId === user.tenantId);
+
+    if (canManageTicket) {
       if (body.status !== undefined) {
         updateData.status = body.status;
         if (body.status === 'resolved') updateData.resolvedAt = new Date().toISOString();
@@ -88,8 +90,8 @@ export async function PATCH(
     if (body.satisfactionRating !== undefined) updateData.satisfactionRating = body.satisfactionRating;
     if (body.satisfactionComment !== undefined) updateData.satisfactionComment = body.satisfactionComment;
 
-    // Tenant can close/resolved their own tickets
-    if (!isSuperAdmin && existing.reporterId === user.id) {
+    // Reporter can close/resolve their own tickets
+    if (!canManageTicket && existing.reporterId === user.id) {
       if (body.status === 'closed') {
         updateData.status = 'closed';
         updateData.closedAt = new Date().toISOString();

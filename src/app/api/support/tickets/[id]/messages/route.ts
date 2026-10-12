@@ -22,7 +22,8 @@ export async function GET(
     }
 
     const where: Record<string, unknown> = { ticketId: id };
-    if (!isSuperAdmin) where.isInternal = false;
+    const canManageTicket = isSuperAdmin || (user.tenantId && ticket.tenantId === user.tenantId);
+    if (!canManageTicket) where.isInternal = false;
 
     const messages = await db.ticketMessage.findMany({
       where,
@@ -61,14 +62,15 @@ export async function POST(
     }
 
     const isSuperAdmin = user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin';
+    const canManageTicket = isSuperAdmin || (user.tenantId && ticket.tenantId === user.tenantId);
 
     // Access control
-    if (!isSuperAdmin && ticket.reporterId !== user.id) {
+    if (!canManageTicket && ticket.reporterId !== user.id) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Only admins can create internal notes
-    const messageIsInternal = isSuperAdmin && isInternal;
+    // Tenant agents and super-admins can create internal notes
+    const messageIsInternal = Boolean(canManageTicket && isInternal);
 
     const message = await db.ticketMessage.create({
       data: {
@@ -77,7 +79,7 @@ export async function POST(
         contentType: contentType || 'text',
         authorId: user.id,
         authorName: user.name || user.email,
-        authorRole: isSuperAdmin ? 'admin' : 'user',
+        authorRole: canManageTicket ? 'admin' : 'user',
         isInternal: messageIsInternal,
       },
     });
@@ -85,12 +87,12 @@ export async function POST(
     // Update ticket's lastMessageAt and status
     const ticketUpdate: Record<string, unknown> = { lastMessageAt: new Date().toISOString() };
 
-    if (isSuperAdmin && ticket.status === 'open') {
+    if (canManageTicket && ticket.status === 'open') {
       ticketUpdate.status = 'in_progress';
       if (!ticket.firstResponseAt) ticketUpdate.firstResponseAt = new Date().toISOString();
     }
 
-    if (!isSuperAdmin && ticket.status === 'waiting_customer') {
+    if (!canManageTicket && ticket.status === 'waiting_customer') {
       ticketUpdate.status = 'in_progress';
     }
 

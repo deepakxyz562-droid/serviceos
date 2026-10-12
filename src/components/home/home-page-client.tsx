@@ -74,6 +74,10 @@ const AdminWebApp = dynamic(
   () => import('@/components/admin-app/admin-web-app').then(m => ({ default: m.AdminWebApp })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
+const BosWebApp = dynamic(
+  () => import('@/components/bos/bos-web-app').then(m => ({ default: m.BosWebApp })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 
 import { useAppStore } from '@/store/app-store';
 import { authFetch, removeToken, refreshSession } from '@/lib/client-auth';
@@ -1243,6 +1247,21 @@ export default function HomePageClient() {
       return (
         <>
           <EmployeePortalLayout onLogout={handleLogout} />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+
+    const isBosHostOrQuery =
+      typeof window !== 'undefined' &&
+      (productForHostname(window.location.hostname) === 'bos' ||
+        new URLSearchParams(window.location.search).get('product') === 'bos');
+
+    if (isBosWorkspace(auth as any) || isBosHostOrQuery) {
+      return (
+        <>
+          <BosWebApp />
           <PWAInstallBanner />
           <IOSInstallBanner />
         </>

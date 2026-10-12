@@ -48,10 +48,9 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {};
 
-    // Super-admin sees all tickets; tenant users see only their own
+    // Super-admin sees all tickets; tenant users see all tickets in their tenant
     if (!isSuperAdmin) {
       where.tenantId = user.tenantId;
-      where.reporterId = user.id;
     } else {
       // Super-admin can filter by tenantId
       const tenantId = searchParams.get('tenantId');

@@ -1,9 +1,5 @@
-import { CommerceView } from '@/components/views/commerce-view';
+import { BosWebApp } from '@/components/bos/bos-web-app';
 
 export default function BosPage() {
-  return (
-    <main className="min-h-screen">
-      <CommerceView />
-    </main>
-  );
+  return <BosWebApp />;
 }

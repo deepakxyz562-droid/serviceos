@@ -1,0 +1,12 @@
+{
+  "id": "/app?product=bos",
+  "name": "BOS — Business Operating System",
+  "short_name": "BOS",
+  "description": "POS, inventory, orders, Khata, GST billing, appointments, and online store.",
+  "start_url": "/app?product=bos",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F8F6",
+  "theme_color": "#06392A",
+  "icons": [{ "src": "/bos/logo-mark.png", "type": "image/png", "sizes": "128x128", "purpose": "any" }]
+}

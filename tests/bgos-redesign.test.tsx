@@ -118,9 +118,9 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
   expect(screen.getByRole('button', { name: /Live Visitors/i })).toBeDefined();
   expect(screen.getAllByRole('button', { name: /Tickets/i }).length).toBeGreaterThanOrEqual(1);
 
-  // 3. Filter Pills
-  expect(screen.getByText('All 12')).toBeDefined();
-  expect(screen.getByText('Unread 12')).toBeDefined();
+  // 3. Dynamic Filter Pills
+  expect(screen.getByText('All 9')).toBeDefined();
+  expect(screen.getByText('Unread 4')).toBeDefined();
 
   // 4. In-Chat Interactive Package Cards (Screenshot 3 Parity)
   expect(screen.getByText('Deep Clean')).toBeDefined();
@@ -140,6 +140,15 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
   expect(screen.getByText('Total Spent')).toBeDefined();
   expect(screen.getByText('₹12,450')).toBeDefined();
   expect(screen.getByText('Automation & AI')).toBeDefined();
+
+  // 6b. Center Sub-Tabs switch to Customer Details and back to Chat
+  fireEvent.click(screen.getByRole('button', { name: 'Customer Details' }));
+  expect(screen.getByText('Customer Contact Record')).toBeDefined();
+  fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
+
+  // 6c. Mark closed toggles conversation status to Closed / Reopen
+  fireEvent.click(screen.getByRole('button', { name: /Mark closed/i }));
+  expect(screen.getByRole('button', { name: /Reopen/i })).toBeDefined();
 
   // 7. Interactivity: Switch to Live Visitors radar
   fireEvent.click(screen.getByRole('button', { name: /Live Visitors/i }));
