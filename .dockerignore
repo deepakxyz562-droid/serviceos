@@ -1,5 +1,7 @@
 node_modules
+**/node_modules
 .next
+**/.next
 .git
 .gitignore
 .env*
@@ -16,3 +18,12 @@ coverage
 *.pem
 *.key
 scripts/gsc_data
+tests
+bosmobile/*
+!bosmobile/package.json
+bgosmobile/*
+!bgosmobile/package.json
+mobile-customer/*
+!mobile-customer/package.json
+mobile-pro/*
+!mobile-pro/package.json

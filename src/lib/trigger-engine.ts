@@ -826,7 +826,11 @@ class TriggerEngineClass {
 
 export const TriggerEngine = new TriggerEngineClass()
 
-// Auto-initialize when imported on server side
-if (typeof window === 'undefined') {
+// Auto-initialize when imported on server side at runtime (skip during next build page-data collection)
+if (
+  typeof window === 'undefined' &&
+  process.env.BUILDING !== '1' &&
+  process.env.NEXT_PHASE !== 'phase-production-build'
+) {
   TriggerEngine.initialize()
 }

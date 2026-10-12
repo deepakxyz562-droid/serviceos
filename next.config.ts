@@ -22,10 +22,7 @@ const nextConfig: NextConfig = {
     // Type checking is handled locally and in dedicated CI jobs with 8GB heap.
     ignoreBuildErrors: true,
   },
-  eslint: {
-    // Skip ESLint in production Docker container builds to prevent memory spikes
-    ignoreDuringBuilds: true,
-  },
+  staticPageGenerationTimeout: 180,
   reactStrictMode: false,
   serverExternalPackages: ["bcryptjs", "jsonwebtoken"],
   images: {
@@ -60,8 +57,9 @@ const nextConfig: NextConfig = {
     // page — they then have to scroll back down to find their place, which
     // feels slow even if the page rendered instantly.
     scrollRestoration: true,
-    // Disable Webpack worker threads to prevent OOM kills on memory-constrained servers
-    webpackBuildWorker: false,
+    // Run Webpack inside an isolated worker process so its ~2.5GB AST/module heap
+    // is completely reclaimed before "Collecting page data" starts.
+    webpackBuildWorker: true,
     cpus: 1,
     optimizePackageImports: [
       'lucide-react',
