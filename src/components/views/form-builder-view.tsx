@@ -871,7 +871,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   // ═══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full text-slate-900 dark:text-slate-100">
+    <div className="flex-1 min-h-0 h-full overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-6 w-full text-slate-900 dark:text-slate-100">
       {/* ─── 1. Header Section ─────────────────────────────────────────── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">

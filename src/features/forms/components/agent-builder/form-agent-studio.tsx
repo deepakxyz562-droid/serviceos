@@ -374,7 +374,7 @@ export function FormAgentStudio({
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none">
+    <div className="h-full flex-1 min-h-0 flex flex-col w-full bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden select-none">
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP NAVIGATION BAR (Matching AI Assistant Studio Reference)
          ═══════════════════════════════════════════════════════════════════════ */}
@@ -502,9 +502,9 @@ export function FormAgentStudio({
 
       {/* ── SETUP / PERSONALITY TAB (SPLIT WORKSPACE: IDENTITY & BEHAVIOR + LIVE SIMULATOR) ── */}
       {(studioTab === 'setup' || studioTab === 'personality') && (
-        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <div className="flex-1 min-h-0 h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
           {/* Left: Assistant Persona, Instructions & Channel Behavior */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 min-h-0 h-full overflow-y-auto p-6 space-y-6">
             <div className="max-w-4xl mx-auto space-y-6">
               {/* Card 1: Core Identity & Persona */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-5">
@@ -651,8 +651,8 @@ export function FormAgentStudio({
           </div>
 
           {/* Right: Live Interactive Simulator */}
-          <aside className="w-full lg:w-[410px] border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-sm">
-            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 dark:border-slate-800">
+          <aside className="w-full lg:w-[410px] lg:h-full min-h-0 overflow-y-auto border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-sm">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <span className="text-xs font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                 <Bot className="size-3.5 text-teal-600" /> Live Assistant Preview
               </span>
@@ -660,7 +660,7 @@ export function FormAgentStudio({
                 Interactive
               </Badge>
             </div>
-            <div className="flex-1 min-h-[520px]">
+            <div className="flex-1 min-h-[460px]">
               <AgentDeviceSimulator
                 agent={agent}
                 isTestMode={true}
@@ -675,9 +675,9 @@ export function FormAgentStudio({
 
       {/* ── APPEARANCE / CHAT WIDGET DESIGNER TAB (LIVE STAGE + AVATAR & STYLE INSPECTOR) ── */}
       {(studioTab === 'appearance' || studioTab === 'widget') && (
-        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+        <div className="flex-1 min-h-0 h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
           {/* Center/Left: Website Embed Stage & Live Widget Simulator */}
-          <div className="flex-1 min-h-0 flex flex-col justify-between p-6 relative overflow-hidden">
+          <div className="flex-1 min-h-0 h-full flex flex-col justify-between p-6 relative overflow-hidden">
             <div
               className={cn(
                 'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
@@ -779,7 +779,7 @@ export function FormAgentStudio({
           </div>
 
           {/* Right: Avatar & Style Designer Panel */}
-          <aside className="w-full lg:w-[390px] border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0">
+          <aside className="w-full lg:w-[390px] lg:h-full min-h-0 overflow-hidden border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0">
             <AgentBuildTab
               agent={agent}
               onChange={setAgent}
@@ -891,10 +891,10 @@ export function FormAgentStudio({
           CHANNELS WORKSPACE (16 CHANNELS | CANVAS | RIGHT DRAWER)
          ═══════════════════════════════════════════════════════════════════════ */}
       {(studioTab === 'channels' || studioTab === 'build') && (
-        <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
+        <div className="flex-1 min-h-0 h-full flex flex-row overflow-hidden">
           {/* ── LEFT DRAWER: 16 CHANNELS (Matching Screenshot) ── */}
-          <aside className="w-64 border-r border-slate-800 bg-slate-900 text-slate-100 flex flex-col shrink-0">
-            <div className="p-3 border-b border-slate-800 flex items-center justify-between px-4">
+          <aside className="w-64 h-full min-h-0 overflow-hidden border-r border-slate-800 bg-slate-900 text-slate-100 flex flex-col shrink-0">
+            <div className="p-3 border-b border-slate-800 flex items-center justify-between px-4 shrink-0">
               <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                 CHANNELS &amp; INTEGRATIONS
               </span>
@@ -903,7 +903,7 @@ export function FormAgentStudio({
               </Badge>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            <div className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1">
               {visibleChannels.map((c) => {
                 const IconComponent = c.icon;
                 const isSelected = selectedChannel === c.id;
@@ -967,7 +967,7 @@ export function FormAgentStudio({
           </aside>
 
           {/* ── CENTER CANVAS ── */}
-          <main className="flex-1 min-h-0 flex flex-col justify-between p-6 relative overflow-hidden bg-slate-50/60 dark:bg-slate-950/60">
+          <main className="flex-1 h-full min-h-0 flex flex-col justify-between p-6 relative overflow-hidden bg-slate-50/60 dark:bg-slate-950/60">
             {/* 1. PRESENTATION AGENT HUB */}
             {selectedChannel === 'presentation' ? (
               <AgentPresentationHub
@@ -1191,7 +1191,7 @@ export function FormAgentStudio({
           {rightDrawerOpen && (
             <aside
               className={cn(
-                'border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0 animate-in slide-in-from-right-4 duration-200',
+                'h-full min-h-0 overflow-hidden border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0 animate-in slide-in-from-right-4 duration-200',
                 selectedChannel === 'voice'
                   ? 'w-[410px]'
                   : selectedChannel === 'phone' || selectedChannel === 'sms'
@@ -1219,15 +1219,15 @@ export function FormAgentStudio({
 
       {/* ── SKILLS TAB (TEXT.COM PARITY) ── */}
       {studioTab === 'skills' && (
-        <div className="flex-1 min-h-0 flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
-          <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 h-full flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <div className="flex-1 min-h-0 h-full overflow-y-auto p-6">
             <div className="max-w-4xl mx-auto">
               <AgentSkillsTab agent={agent} onChange={setAgent} />
             </div>
           </div>
           {showSideSimulator && (
-            <aside className="w-[390px] border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-lg">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+            <aside className="w-[390px] h-full min-h-0 overflow-y-auto border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-lg">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60 shrink-0">
                 <span className="text-xs font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                   <Bot className="size-3.5 text-blue-600" /> Live Skills Simulator
                 </span>
@@ -1239,7 +1239,7 @@ export function FormAgentStudio({
                   <X className="size-3.5" />
                 </button>
               </div>
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-[460px]">
                 <AgentDeviceSimulator
                   agent={agent}
                   isTestMode={true}
@@ -1255,15 +1255,15 @@ export function FormAgentStudio({
 
       {/* ── KNOWLEDGE (TRAIN) TAB ── */}
       {(studioTab === 'knowledge' || studioTab === 'train') && (
-        <div className="flex-1 min-h-0 flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
-          <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 h-full flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+          <div className="flex-1 min-h-0 h-full overflow-y-auto p-6">
             <div className="max-w-4xl mx-auto">
               <AgentTrainTab agent={agent} onChange={setAgent} />
             </div>
           </div>
           {showSideSimulator && (
-            <aside className="w-[390px] border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-lg">
-              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60">
+            <aside className="w-[390px] h-full min-h-0 overflow-y-auto border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-lg">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border/60 shrink-0">
                 <span className="text-xs font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
                   <Bot className="size-3.5 text-blue-600" /> Live RAG Simulator
                 </span>
@@ -1275,7 +1275,7 @@ export function FormAgentStudio({
                   <X className="size-3.5" />
                 </button>
               </div>
-              <div className="flex-1 min-h-0">
+              <div className="flex-1 min-h-[460px]">
                 <AgentDeviceSimulator
                   agent={agent}
                   isTestMode={true}

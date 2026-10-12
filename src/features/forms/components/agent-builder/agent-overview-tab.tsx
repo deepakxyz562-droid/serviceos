@@ -314,12 +314,12 @@ export function AgentOverviewTab({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F8FAFC] dark:bg-slate-950 p-4 lg:p-6 text-slate-900 dark:text-slate-100 select-none">
-      <div className="max-w-[1680px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+    <div className="flex-1 min-h-0 h-full overflow-y-auto lg:overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 p-4 lg:p-5 text-slate-900 dark:text-slate-100 select-none">
+      <div className="max-w-[1680px] mx-auto h-full min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* ═══════════════════════════════════════════════════════════════════
             LEFT COLUMN: ASSISTANT STATUS & CONNECTED CHANNELS (~3 Cols)
            ═══════════════════════════════════════════════════════════════════ */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1 space-y-4 pb-4">
           {/* 1. Assistant Status Card */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs">
             <div className="flex items-center justify-between mb-2">
@@ -547,9 +547,9 @@ export function AgentOverviewTab({
         {/* ═══════════════════════════════════════════════════════════════════
             CENTER COLUMN: WEBSITE CANVAS PREVIEW & OVERLAID CHATBOT WIDGET (~6 Cols)
            ═══════════════════════════════════════════════════════════════════ */}
-        <div className="lg:col-span-6 space-y-4">
+        <div className="lg:col-span-6 lg:h-full lg:min-h-0 lg:overflow-hidden flex flex-col gap-3">
           {/* Top Bar: Channel Filter Pills & Device Switcher */}
-          <div className="flex items-center justify-between gap-3 flex-wrap bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
+          <div className="flex items-center justify-between gap-3 flex-wrap bg-white dark:bg-slate-900 p-2.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs shrink-0">
             {/* Left Channel Pills */}
             <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
               {[
@@ -630,10 +630,10 @@ export function AgentOverviewTab({
           {/* Browser Window Mockup Canvas */}
           <div
             className={cn(
-              'relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden flex flex-col transition-all',
+              'relative rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden flex flex-col transition-all flex-1 min-h-[420px]',
               deviceMode === 'desktop'
-                ? 'h-[580px]'
-                : 'h-[620px] max-w-[380px] mx-auto border-[6px] border-slate-800 rounded-[36px]'
+                ? 'w-full'
+                : 'max-w-[380px] w-full mx-auto border-[6px] border-slate-800 rounded-[36px]'
             )}
           >
             {/* Desktop Chrome Bar with Mac Dots */}
@@ -725,7 +725,7 @@ export function AgentOverviewTab({
                     layoutMode === 'sidebar'
                       ? 'absolute top-0 bottom-0 right-0 w-[340px] sm:w-[360px] bg-white border-l border-slate-200'
                       : cn(
-                          'absolute w-[330px] sm:w-[350px] max-h-[480px] h-[480px] bg-white rounded-2xl border border-slate-200 overflow-hidden',
+                          'absolute w-[330px] sm:w-[350px] max-h-[calc(100%-2rem)] h-[460px] bg-white rounded-2xl border border-slate-200 overflow-hidden',
                           position === 'left' ? 'left-4 bottom-4' : 'right-4 bottom-4'
                         )
                   )}
@@ -917,7 +917,7 @@ export function AgentOverviewTab({
           </div>
 
           {/* Quick Action Cards Beneath Canvas (Matching Screenshot) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
             {[
               {
                 id: 'book',
@@ -982,7 +982,7 @@ export function AgentOverviewTab({
         {/* ═══════════════════════════════════════════════════════════════════
             RIGHT COLUMN: CHATBOT SETTINGS INSPECTOR (~3 Cols)
            ═══════════════════════════════════════════════════════════════════ */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pl-1 space-y-4 pb-4">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-5 shadow-xs space-y-4">
             {/* Header with Title and Device Icons */}
             <div className="flex items-start justify-between">

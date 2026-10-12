@@ -761,7 +761,16 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   unmount();
 
   // 3. FormAgentStudio Setup and Appearance split views
-  render(<FormAgentStudio initialAgent={DEFAULT_FORM_AGENT} />);
+  const { container: studioContainer, unmount: unmountStudio } = render(<FormAgentStudio initialAgent={DEFAULT_FORM_AGENT} />);
+  expect((studioContainer.firstElementChild as HTMLElement)?.className).toContain('h-full');
+  expect((studioContainer.firstElementChild as HTMLElement)?.className).toContain('overflow-hidden');
+
+  // Verify Overview tab has fixed desktop outer viewport and independent left/right scroll columns
+  const assistantStatusCard = screen.getByText('Assistant Status').closest('.lg\\:col-span-3');
+  const chatbotSettingsCard = screen.getByText('Chatbot Settings').closest('.lg\\:col-span-3');
+  expect(assistantStatusCard?.className).toContain('lg:overflow-y-auto');
+  expect(chatbotSettingsCard?.className).toContain('lg:overflow-y-auto');
+
   fireEvent.click(screen.getByRole('button', { name: /^Setup$/i }));
   expect(screen.getByText('Assistant Identity & Persona')).toBeDefined();
   expect(screen.getByText(/Live Assistant Preview/i)).toBeDefined();
@@ -769,4 +778,14 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   fireEvent.click(screen.getByRole('button', { name: /^Appearance$/i }));
   expect(screen.getByText(/Live Website Widget Preview/i)).toBeDefined();
   expect(screen.getByRole('button', { name: /Conversation View/i })).toBeDefined();
+  unmountStudio();
+
+  // 4. FormBuilderView root container has vertical scroller (overflow-y-auto h-full min-h-0)
+  const { FormBuilderView } = await import('@/components/views/form-builder-view');
+  const { container: formsContainer } = render(<FormBuilderView />);
+  const formsRoot = formsContainer.firstElementChild as HTMLElement;
+  expect(formsRoot?.className).toContain('overflow-y-auto');
+  expect(formsRoot?.className).toContain('h-full');
+  expect(formsRoot?.className).toContain('min-h-0');
 });
+
