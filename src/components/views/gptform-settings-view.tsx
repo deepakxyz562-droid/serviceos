@@ -36,14 +36,31 @@ import { useAppStore } from '@/store/app-store';
 import { CURRENCIES, currencyMap, formatCurrency, resolveEffectiveCurrency, detectGeoCurrency } from '@/lib/currency-resolver';
 import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
 import { CreatorProfileData } from '@/lib/creator-profile';
+import { BillingView } from '@/components/views/billing-view';
 import { cn } from '@/lib/utils';
 
 export function GptFormSettingsView() {
   const auth = useAppStore((s) => s.auth);
   const setAuth = useAppStore((s) => s.setAuth);
   const setActiveView = useAppStore((s) => s.setActiveView);
+  const pendingSettingsSection = useAppStore((s) => s.pendingSettingsSection);
+  const setPendingSettingsSection = useAppStore((s) => s.setPendingSettingsSection);
 
-  const [activeTab, setActiveTab] = useState<'currency' | 'branding' | 'notifications' | 'payments'>('currency');
+  const [activeTab, setActiveTab] = useState<'currency' | 'branding' | 'notifications' | 'payments' | 'billing'>(() => {
+    if (pendingSettingsSection === 'subscription' || pendingSettingsSection === 'billing') {
+      return 'billing';
+    }
+    return 'currency';
+  });
+
+  useEffect(() => {
+    if (pendingSettingsSection) {
+      if (pendingSettingsSection === 'subscription' || pendingSettingsSection === 'billing') {
+        setActiveTab('billing');
+      }
+      setPendingSettingsSection(null);
+    }
+  }, [pendingSettingsSection, setPendingSettingsSection]);
   const [loading, setLoading] = useState(true);
   const [savingCurrency, setSavingCurrency] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
@@ -252,7 +269,7 @@ export function GptFormSettingsView() {
         className="w-full space-y-6"
       >
         <div className="w-full bg-muted/60 p-1.5 rounded-2xl border flex items-center gap-1 overflow-x-auto shadow-2xs">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto p-0 bg-transparent gap-1.5">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto p-0 bg-transparent gap-1.5">
             <TabsTrigger
               value="currency"
               className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
@@ -280,6 +297,13 @@ export function GptFormSettingsView() {
             >
               <CreditCard className="size-4 text-teal-600" />
               <span>Payments (Creem)</span>
+            </TabsTrigger>
+            <TabsTrigger
+              value="billing"
+              className="gap-2 text-xs sm:text-sm font-bold py-2.5 rounded-xl data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm transition-all"
+            >
+              <CreditCard className="size-4 text-indigo-600" />
+              <span>Billing &amp; Subscription</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -601,6 +625,11 @@ export function GptFormSettingsView() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ─── TAB 5: BILLING & SUBSCRIPTION ─── */}
+        <TabsContent value="billing" className="mt-0 space-y-6">
+          <BillingView />
         </TabsContent>
       </Tabs>
 

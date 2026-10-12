@@ -571,7 +571,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       if (viewId === 'helpCenter' || viewId === 'helpTicketDetail') return <BgosHelpdeskWorkstation />;
       if (viewId === 'socialMedia') return <BgosSocialMarketing />;
       if (viewId === 'campaigns') return <BgosOutreach />;
-      if (viewId === 'billing') return <BgosBilling />;
+      if (viewId === 'billing') return <BgosSettings initialTab="billing" />;
       if (viewId === 'settings') return <BgosSettings />;
       if (viewId === 'contacts') {
         const ContactsComp = viewComponents.contacts;

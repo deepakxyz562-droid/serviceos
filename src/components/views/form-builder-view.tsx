@@ -118,7 +118,6 @@ import {
 } from '@/features/forms/components/form-action-dialogs';
 import { AiWebsiteFormDialog } from '@/features/forms/components/ai-website-form-dialog';
 import { FormSubmissionsView } from '@/components/views/form-submissions-view';
-import { FormsAnalyticsView } from '@/components/views/forms-analytics-view';
 import { TemplateExplorer } from '@/features/forms/components/builder/template-explorer';
 import { getTemplateSync } from '@/lib/forms/templates';
 import type { FormTemplate } from '@/lib/forms/templates';
@@ -319,7 +318,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   const setCurrentView = useAppStore((state) => state.setCurrentView);
   // Navigation & View Sub-Tabs
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'forms' | 'funnels' | 'templates' | 'submissions' | 'analytics' | 'settings'
+    'overview' | 'forms' | 'funnels' | 'templates' | 'submissions'
   >('overview');
   const [filterType, setFilterType] = useState<'all' | 'forms' | 'funnels' | 'drafts' | 'published'>('all');
 
@@ -332,53 +331,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
   // Studio Builder State (When in edit/create mode)
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
-  const [studioMode, setStudioMode] = useState<'funnel' | 'full_studio'>('funnel');
-  const [builderDevice, setBuilderDevice] = useState<'desktop' | 'mobile'>('desktop');
-  const [builderStep, setBuilderStep] = useState<number>(1);
-  const [builderModeTab, setBuilderModeTab] = useState<'build' | 'design' | 'settings' | 'integrations' | 'analytics'>('build');
-  const [paletteTab, setPaletteTab] = useState<'form_elements' | 'page_elements'>('form_elements');
-  const [inspectorTab, setInspectorTab] = useState<'content' | 'style' | 'advanced'>('content');
+  const [studioMode, setStudioMode] = useState<'funnel' | 'full_studio'>('full_studio');
 
   // Active builder form data
   const [funnelName, setFunnelName] = useState('Home Cleaning Quote Funnel');
   const [funnelSubtitle, setFunnelSubtitle] = useState('Multi-step funnel to capture leads and generate quotes for home cleaning services.');
-  const [selectedServiceOption, setSelectedServiceOption] = useState<string>('regular_cleaning');
-
-  // Option Inspector Settings State
-  const [optionTitle, setOptionTitle] = useState('Regular Home Cleaning');
-  const [optionDescription, setOptionDescription] = useState('Routine cleaning for a fresh home');
-  const [optionIcon, setOptionIcon] = useState('Home');
-  const [optionValue, setOptionValue] = useState('regular_cleaning');
-  const [optionDefault, setOptionDefault] = useState(true);
-  const [optionRequired, setOptionRequired] = useState(false);
-  const [optionErrorMessage, setOptionErrorMessage] = useState('Please select a service type');
-
-  // Dynamic field add handler for visual builder
-  const handleAddField = (label: string) => {
-    const typeMap: Record<string, string> = {
-      'Text Input': 'text',
-      'Email': 'email',
-      'Phone': 'phone',
-      'Textarea': 'textarea',
-      'Dropdown': 'select',
-      'Radio Buttons': 'radio',
-      'Checkboxes': 'checkbox',
-      'Date Picker': 'date',
-      'File Upload': 'file',
-    };
-    const newField: FormField = {
-      id: `f_${Date.now()}`,
-      type: (typeMap[label] || 'text') as any,
-      label: label,
-      required: false,
-      options: label === 'Radio Buttons' || label === 'Dropdown' ? ['Option 1', 'Option 2'] : undefined,
-    };
-    setFormData((prev) => ({
-      ...prev,
-      fields: [...(prev.fields || []), newField],
-    }));
-    toast.success(`Added ${label} field to form`);
-  };
 
   // Dialogs
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -464,25 +421,68 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
   // ─── Actions & Handlers ───────────────────────────────────────────────────
 
   const handleOpenCreate = (type: 'form' | 'funnel' = 'form') => {
-    setFunnelName(type === 'funnel' ? 'Home Cleaning Quote Funnel' : 'Service Request Form');
-    setFunnelSubtitle(
-      type === 'funnel'
-        ? 'Multi-step funnel to capture leads and generate quotes for home cleaning services.'
-        : 'Capture inquiries, customer details, and service requirements directly.'
-    );
+    const isFunnel = type === 'funnel';
+    const nextName = isFunnel ? 'Home Cleaning Quote Funnel' : 'Service Request Form';
+    const nextSubtitle = isFunnel
+      ? 'Multi-step funnel to capture leads and generate quotes for home cleaning services.'
+      : 'Capture inquiries, customer details, and service requirements directly.';
+    setFunnelName(nextName);
+    setFunnelSubtitle(nextSubtitle);
     setFormData({
-      name: type === 'funnel' ? 'Home Cleaning Quote Funnel' : 'Service Request Form',
-      description: 'Lead generation and appointment scheduling',
+      name: nextName,
+      description: nextSubtitle,
       type: 'lead_capture',
       status: 'active',
-      fields: [],
+      isMultiStep: isFunnel,
+      steps: isFunnel
+        ? [
+            { id: 'step_1', title: 'Step 1: Service' },
+            { id: 'step_2', title: 'Step 2: Details' },
+            { id: 'step_3', title: 'Step 3: Contact' },
+          ]
+        : [{ id: 'step_1', title: 'Step 1: Details' }],
+      fields: [
+        {
+          id: 'field_service',
+          type: 'radio' as any,
+          label: 'What type of cleaning do you need?',
+          required: true,
+          options: ['Regular Home Cleaning', 'Deep Cleaning', 'Move In/Out Cleaning', 'Office Cleaning'],
+          stepId: 'step_1',
+        },
+        {
+          id: 'field_name',
+          type: 'text' as any,
+          label: 'Full Name',
+          placeholder: 'Enter your full name',
+          required: true,
+          stepId: isFunnel ? 'step_3' : 'step_1',
+        },
+        {
+          id: 'field_email',
+          type: 'email' as any,
+          label: 'Email Address',
+          placeholder: 'you@example.com',
+          required: true,
+          stepId: isFunnel ? 'step_3' : 'step_1',
+        },
+        {
+          id: 'field_phone',
+          type: 'phone' as any,
+          label: 'Phone Number',
+          placeholder: '+91 98765 43210',
+          required: true,
+          stepId: isFunnel ? 'step_3' : 'step_1',
+        },
+      ],
       submissionActions: getDefaultActions('lead_capture'),
       fieldMappings: [],
       welcomeMessage: '',
-      completionMessage: '',
+      completionMessage: 'Thank you! Our team will contact you shortly.',
     });
     setEditMode(false);
     setEditFormId(null);
+    setStudioMode('full_studio');
     setIsBuilderOpen(true);
   };
 
@@ -851,602 +851,18 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
 
   if (isBuilderOpen) {
     return (
-      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 w-full">
-        {/* ─── Builder Top Header Bar ────────────────────────────────────────── */}
-        <header className="h-16 px-4 md:px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4 sticky top-0 z-30 shadow-xs">
-          {/* Breadcrumbs & Editable Title */}
-          <div className="flex items-center gap-3 min-w-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsBuilderOpen(false)}
-              className="h-9 px-3 text-xs font-semibold border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 shadow-2xs shrink-0"
-            >
-              <ArrowLeft className="size-4 text-teal-600 dark:text-teal-400" />
-              <span>Back to Forms</span>
-            </Button>
-
-            <div className="h-5 w-px bg-slate-200 dark:bg-slate-800" />
-
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400 font-medium">Funnels</span>
-                <ChevronRight className="size-3 text-slate-300 dark:text-slate-700" />
-                <h1 className="text-sm md:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
-                  {funnelName}
-                </h1>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6 text-slate-400 hover:text-slate-600"
-                  onClick={() => {
-                    const next = prompt('Rename Funnel:', funnelName);
-                    if (next && next.trim()) setFunnelName(next.trim());
-                  }}
-                >
-                  <Pencil className="size-3" />
-                </Button>
-                <Badge
-                  variant="secondary"
-                  className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Published
-                </Badge>
-              </div>
-              <p className="text-[11px] text-slate-400 truncate max-w-md hidden sm:block">
-                {funnelSubtitle}
-              </p>
-            </div>
-          </div>
-
-          {/* Builder Mode Pills (Build | Design | Settings | Integrations | Analytics) */}
-          <div className="hidden lg:flex items-center bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800 text-xs font-semibold">
-            {[
-              { id: 'build', label: 'Build' },
-              { id: 'design', label: 'Design' },
-              { id: 'settings', label: 'Settings' },
-              { id: 'integrations', label: 'Integrations' },
-              { id: 'analytics', label: 'Analytics' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setBuilderModeTab(tab.id as any)}
-                className={cn(
-                  'px-3.5 py-1.5 rounded-lg transition-all',
-                  builderModeTab === tab.id
-                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs font-bold'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Action CTAs */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStudioMode(studioMode === 'funnel' ? 'full_studio' : 'funnel')}
-              className="h-8 text-xs font-semibold gap-1.5 border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/40"
-              title="Toggle between Funnel Workstation and Full Form Studio Builder"
-            >
-              <Sliders className="size-3.5 text-teal-600" />
-              <span>{studioMode === 'funnel' ? 'Full Form Studio' : 'Funnel Workstation'}</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toast.info('Opening interactive test view in current modal')}
-              className="h-8 text-xs font-semibold gap-1.5"
-            >
-              <Eye className="size-3.5 text-slate-500" />
-              <span>Preview</span>
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={saving}
-              onClick={() => handleSave({ silent: true })}
-              className="h-8 text-xs font-semibold gap-1.5"
-            >
-              <Bookmark className="size-3.5 text-slate-500" />
-              <span>Save Draft</span>
-            </Button>
-
-            <Button
-              size="sm"
-              disabled={saving}
-              onClick={() => handleSave()}
-              className="h-8 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white shadow-sm gap-1.5"
-            >
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              <span>Publish</span>
-            </Button>
-          </div>
-        </header>
-
-        {/* ─── 3-Column Visual Studio Workstation OR Full Form Studio Builder ─── */}
-        {studioMode === 'full_studio' ? (
-          <div className="flex-1 w-full overflow-hidden bg-white dark:bg-slate-900">
-            <FormStudioBuilder
-              formData={formData}
-              onFormDataChange={setFormData}
-              editMode={editMode}
-              saving={saving}
-              onSave={handleSave}
-              onExit={() => {
-                setIsBuilderOpen(false);
-                fetchForms();
-              }}
-              siteOrigin={siteOrigin}
-            />
-          </div>
-        ) : (
-          <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-0 overflow-hidden">
-            {/* ── Left Column (3/12 cols): Add Elements Palette ──────────────── */}
-            <div className="xl:col-span-3 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-64px)]">
-              <div>
-                <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Add Elements
-                </h2>
-              </div>
-
-              {/* Sub-Tabs: Form Elements | Page Elements */}
-              <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
-                <button
-                  onClick={() => setPaletteTab('form_elements')}
-                  className={cn(
-                    'py-1.5 rounded-lg transition-all text-center',
-                    paletteTab === 'form_elements'
-                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                      : 'text-slate-500'
-                  )}
-                >
-                  Form Elements
-                </button>
-                <button
-                  onClick={() => setPaletteTab('page_elements')}
-                  className={cn(
-                    'py-1.5 rounded-lg transition-all text-center',
-                    paletteTab === 'page_elements'
-                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                      : 'text-slate-500'
-                  )}
-                >
-                  Page Elements
-                </button>
-              </div>
-
-              {/* Element Search */}
-              <div className="relative">
-                <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <Input
-                  placeholder="Search elements..."
-                  className="h-8 pl-8 text-xs bg-slate-50 dark:bg-slate-800/60"
-                />
-              </div>
-
-              {/* Basic Fields Grid */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Basic Fields</h3>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    { label: 'Text Input', icon: Type },
-                    { label: 'Email', icon: Mail },
-                    { label: 'Phone', icon: Phone },
-                    { label: 'Textarea', icon: AlignLeft },
-                    { label: 'Dropdown', icon: ChevronDown },
-                    { label: 'Radio Buttons', icon: CircleDot },
-                    { label: 'Checkboxes', icon: CheckSquare },
-                    { label: 'Date Picker', icon: CalendarDays },
-                    { label: 'File Upload', icon: Upload },
-                  ].map((item) => (
-                    <button
-                      key={item.label}
-                      onClick={() => handleAddField(item.label)}
-                      className="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:border-indigo-300 transition-all text-left group"
-                    >
-                      <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                        <item.icon className="size-3.5" />
-                      </div>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 truncate text-[11px]">
-                        {item.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-            {/* Layout Fields Grid */}
-            <div className="space-y-2 pt-2">
-              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Layout</h3>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                {[
-                  { label: 'Heading', icon: Type },
-                  { label: 'Text', icon: FileText },
-                  { label: 'Image', icon: Image },
-                ].map((item) => (
-                  <button
-                    key={item.label}
-                    onClick={() => toast.info(`Added ${item.label} block`)}
-                    className="flex flex-col items-center justify-center gap-1.5 p-2 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:bg-slate-50 transition-all text-center"
-                  >
-                    <item.icon className="size-4 text-teal-600" />
-                    <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                      {item.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Center Column (6/12 cols): Live Funnel Stage Canvas ─────────── */}
-          <div className="xl:col-span-6 bg-slate-100/60 dark:bg-slate-950 p-4 md:p-6 overflow-y-auto max-h-[calc(100vh-64px)] flex flex-col items-center space-y-6">
-            {/* Viewport Switcher (Desktop | Mobile) */}
-            <div className="flex items-center gap-1 p-1 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
-              <button
-                onClick={() => setBuilderDevice('desktop')}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
-                  builderDevice === 'desktop'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                )}
-              >
-                <Monitor className="size-3.5" />
-                <span>Desktop</span>
-              </button>
-              <button
-                onClick={() => setBuilderDevice('mobile')}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
-                  builderDevice === 'mobile'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
-                )}
-              >
-                <Smartphone className="size-3.5" />
-                <span>Mobile</span>
-              </button>
-            </div>
-
-            {/* Funnel Step Stepper (1. Service -> 2. Details -> 3. Quote -> 4. Contact) */}
-            <div className="w-full max-w-xl bg-white dark:bg-slate-900 px-4 py-3 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
-              <div className="flex items-center justify-between text-xs">
-                {[
-                  { num: 1, label: 'Service' },
-                  { num: 2, label: 'Details' },
-                  { num: 3, label: 'Quote' },
-                  { num: 4, label: 'Contact' },
-                ].map((st, idx) => (
-                  <React.Fragment key={st.num}>
-                    <button
-                      onClick={() => setBuilderStep(st.num)}
-                      className="flex items-center gap-2 group cursor-pointer"
-                    >
-                      <div
-                        className={cn(
-                          'w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs transition-colors',
-                          builderStep === st.num
-                            ? 'bg-teal-600 text-white shadow-xs'
-                            : builderStep > st.num
-                            ? 'bg-emerald-500 text-white'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                        )}
-                      >
-                        {builderStep > st.num ? <Check className="size-3" /> : st.num}
-                      </div>
-                      <span
-                        className={cn(
-                          'font-bold text-xs',
-                          builderStep === st.num
-                            ? 'text-teal-700 dark:text-teal-400'
-                            : 'text-slate-600 dark:text-slate-400'
-                        )}
-                      >
-                        {st.label}
-                      </span>
-                    </button>
-                    {idx < 3 && <div className="h-px flex-1 mx-3 bg-slate-200 dark:bg-slate-800" />}
-                  </React.Fragment>
-                ))}
-              </div>
-            </div>
-
-            {/* Live Interactive Funnel Stage Card (Split-Hero Layout) */}
-            <div
-              className={cn(
-                'w-full transition-all duration-300 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-md overflow-hidden',
-                builderDevice === 'mobile' ? 'max-w-sm' : 'max-w-3xl'
-              )}
-            >
-              <div className={cn('grid', builderDevice === 'mobile' ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2')}>
-                {/* Hero Side */}
-                <div className="relative min-h-[220px] md:min-h-[420px] bg-slate-900 p-6 flex flex-col justify-end text-white overflow-hidden">
-                  <img
-                    src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80"
-                    alt="Professional Cleaning"
-                    className="absolute inset-0 w-full h-full object-cover opacity-45"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent" />
-                  <div className="relative z-10 space-y-3">
-                    <h2 className="text-xl md:text-2xl font-black leading-tight tracking-tight">
-                      Professional Home Cleaning Services
-                    </h2>
-                    <ul className="space-y-1.5 text-xs text-slate-200 font-medium">
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
-                        <span>Trusted & Verified Cleaners</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
-                        <span>Flexible Scheduling</span>
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
-                        <span>100% Satisfaction Guarantee</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Question & Options Side */}
-                <div className="p-6 md:p-8 flex flex-col justify-between space-y-5">
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
-                        Step {builderStep} of 4
-                      </span>
-                      <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100">
-                        What type of cleaning do you need?
-                      </h3>
-                      <p className="text-xs text-slate-500">
-                        Select the service that best fits your needs.
-                      </p>
-                    </div>
-
-                    {/* Interactive Service Cards */}
-                    <div className="space-y-2.5">
-                      {[
-                        {
-                          id: 'regular_cleaning',
-                          title: 'Regular Home Cleaning',
-                          desc: 'Routine cleaning for a fresh home',
-                          icon: Home,
-                        },
-                        {
-                          id: 'deep_cleaning',
-                          title: 'Deep Cleaning',
-                          desc: 'Detailed cleaning for every corner',
-                          icon: Sparkles,
-                        },
-                        {
-                          id: 'move_cleaning',
-                          title: 'Move In/Out Cleaning',
-                          desc: 'Perfect for moving',
-                          icon: Briefcase,
-                        },
-                        {
-                          id: 'office_cleaning',
-                          title: 'Office Cleaning',
-                          desc: 'Keep your workspace clean',
-                          icon: ShieldCheck,
-                        },
-                      ].map((opt) => {
-                        const isSelected = selectedServiceOption === opt.id;
-                        return (
-                          <div
-                            key={opt.id}
-                            onClick={() => {
-                              setSelectedServiceOption(opt.id);
-                              setOptionTitle(opt.title);
-                              setOptionDescription(opt.desc);
-                              setOptionValue(opt.id);
-                            }}
-                            className={cn(
-                              'p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start gap-3',
-                              isSelected
-                                ? 'border-teal-600 bg-teal-50/50 dark:bg-purple-950/20 ring-1 ring-teal-600'
-                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900/60'
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
-                                isSelected
-                                  ? 'bg-teal-600 text-white shadow-2xs'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                              )}
-                            >
-                              <opt.icon className="size-4" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
-                                {opt.title}
-                              </p>
-                              <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
-                                {opt.desc}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Funnel Stage CTA */}
-                  <Button
-                    onClick={() => {
-                      if (builderStep < 4) {
-                        setBuilderStep(builderStep + 1);
-                        toast.success(`Progressed to Step ${builderStep + 1}`);
-                      } else {
-                        toast.success('Funnel complete! Test response logged.');
-                      }
-                    }}
-                    className="w-full h-9 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white gap-2 shadow-sm rounded-xl"
-                  >
-                    <span>Next Step</span>
-                    <ArrowRight className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Right Column (3/12 cols): Element Settings Inspector ────────── */}
-          <div className="xl:col-span-3 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-64px)]">
-            <div>
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Element Settings
-              </h2>
-            </div>
-
-            {/* Sub-Tabs: Content | Style | Advanced */}
-            <div className="grid grid-cols-3 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs font-semibold">
-              <button
-                onClick={() => setInspectorTab('content')}
-                className={cn(
-                  'py-1.5 rounded-lg transition-all text-center',
-                  inspectorTab === 'content'
-                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-500'
-                )}
-              >
-                Content
-              </button>
-              <button
-                onClick={() => setInspectorTab('style')}
-                className={cn(
-                  'py-1.5 rounded-lg transition-all text-center',
-                  inspectorTab === 'style'
-                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-500'
-                )}
-              >
-                Style
-              </button>
-              <button
-                onClick={() => setInspectorTab('advanced')}
-                className={cn(
-                  'py-1.5 rounded-lg transition-all text-center',
-                  inspectorTab === 'advanced'
-                    ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
-                    : 'text-slate-500'
-                )}
-              >
-                Advanced
-              </button>
-            </div>
-
-            {/* Option Settings */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Option Settings</h3>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-500">Title</label>
-                <Input
-                  value={optionTitle}
-                  onChange={(e) => setOptionTitle(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-500">Description</label>
-                <Input
-                  value={optionDescription}
-                  onChange={(e) => setOptionDescription(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-500">Icon</label>
-                  <select
-                    value={optionIcon}
-                    onChange={(e) => setOptionIcon(e.target.value)}
-                    className="w-full h-8 px-2 rounded-md border border-input bg-background text-xs"
-                  >
-                    <option value="Home">Home</option>
-                    <option value="Sparkles">Sparkles</option>
-                    <option value="Briefcase">Briefcase</option>
-                    <option value="Shield">Shield</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-slate-500">Value</label>
-                  <Input
-                    value={optionValue}
-                    onChange={(e) => setOptionValue(e.target.value)}
-                    className="h-8 text-xs font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Selected by default
-                </label>
-                <input
-                  type="checkbox"
-                  checked={optionDefault}
-                  onChange={(e) => setOptionDefault(e.target.checked)}
-                  className="rounded text-teal-600 size-4"
-                />
-              </div>
-            </div>
-
-            {/* Validation Settings */}
-            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300">Validation</h3>
-
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Required field
-                </label>
-                <input
-                  type="checkbox"
-                  checked={optionRequired}
-                  onChange={(e) => setOptionRequired(e.target.checked)}
-                  className="rounded text-teal-600 size-4"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-slate-500">Error message</label>
-                <Input
-                  value={optionErrorMessage}
-                  onChange={(e) => setOptionErrorMessage(e.target.value)}
-                  className="h-8 text-xs"
-                />
-              </div>
-            </div>
-
-            {/* Delete Element Action */}
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toast.success('Element deleted')}
-                className="w-full text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1.5 h-8 font-semibold"
-              >
-                <Trash2 className="size-3.5" />
-                <span>Delete Element</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-        )}
-      </div>
+      <FormStudioBuilder
+        formData={formData}
+        onFormDataChange={setFormData}
+        editMode={editMode}
+        saving={saving}
+        onSave={handleSave}
+        onExit={() => {
+          setIsBuilderOpen(false);
+          fetchForms();
+        }}
+        siteOrigin={siteOrigin}
+      />
     );
   }
 
@@ -1493,6 +909,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         {/* Global Toolbar */}
         <div className="flex items-center flex-wrap gap-2">
           <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAiWebsiteDialog(true)}
+            className="h-9 gap-1.5 border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300 hover:bg-teal-50 dark:hover:bg-teal-950/40 font-semibold text-xs rounded-lg"
+          >
+            <Sparkles className="size-3.5 text-teal-600" />
+            <span>AI Form Generator</span>
+          </Button>
+          <Button
             size="sm"
             onClick={() => handleOpenCreate('form')}
             className="h-9 gap-1.5 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm rounded-lg"
@@ -1511,12 +936,15 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           { id: 'funnels', label: 'Funnels', icon: Layers },
           { id: 'templates', label: 'Templates', icon: Sparkles },
           { id: 'submissions', label: 'Submissions', icon: Inbox },
-          { id: 'analytics', label: 'Analytics', icon: TrendingUp },
-          { id: 'settings', label: 'Settings', icon: SettingsIcon },
         ].map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => {
+              setActiveTab(tab.id as any);
+              if (tab.id === 'forms') setFilterType('forms');
+              else if (tab.id === 'funnels') setFilterType('funnels');
+              else if (tab.id === 'overview') setFilterType('all');
+            }}
             className={cn(
               'px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap',
               activeTab === tab.id
@@ -1535,10 +963,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         <FormSubmissionsView embedded={true} />
       )}
 
-      {activeTab === 'analytics' && (
-        <FormsAnalyticsView />
-      )}
-
       {activeTab === 'templates' && (
         <div className="space-y-4">
           <TemplateExplorer
@@ -1551,7 +975,7 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
         </div>
       )}
 
-      {(activeTab === 'overview' || activeTab === 'forms' || activeTab === 'funnels' || activeTab === 'settings') && (
+      {(activeTab === 'overview' || activeTab === 'forms' || activeTab === 'funnels') && (
         <div className="space-y-6">
           {/* ─── 4 KPI Summary Telemetry Cards ─────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -1810,15 +1234,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                               >
                                 <Pencil className="size-3" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setActiveTab('analytics')}
-                                className="size-7 text-slate-500 hover:text-slate-900"
-                                title="View Analytics"
-                              >
-                                <BarChart3 className="size-3" />
-                              </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
@@ -1843,19 +1258,6 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                                     }}
                                   >
                                     <Sliders className="size-3.5 mr-2 text-teal-600" /> Edit in Form Studio
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      if (item.rawForm) {
-                                        handleOpenEdit(item.rawForm, 'funnel');
-                                      } else {
-                                        setFunnelName(item.name);
-                                        setStudioMode('funnel');
-                                        setIsBuilderOpen(true);
-                                      }
-                                    }}
-                                  >
-                                    <Pencil className="size-3.5 mr-2 text-purple-600" /> Edit in Funnel Workstation
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => {
@@ -2205,6 +1607,36 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
           if (!open) setShowDeleteConfirm(null);
         }}
         onConfirm={handleDelete}
+      />
+
+      {/* ─── AI Form Generator Dialog ──────────────────────────────────────── */}
+      <AiWebsiteFormDialog
+        open={showAiWebsiteDialog}
+        onOpenChange={setShowAiWebsiteDialog}
+        onFormGenerated={(generated) => {
+          setFunnelName(generated.name);
+          setFunnelSubtitle(generated.description);
+          setFormData({
+            name: generated.name,
+            description: generated.description,
+            type: 'lead_capture',
+            status: 'active',
+            fields: generated.fields || [],
+            submissionActions: getDefaultActions('lead_capture'),
+            fieldMappings: [],
+            welcomeMessage: '',
+            completionMessage: 'Thank you for your submission!',
+            isMultiStep: generated.isMultiStep,
+            steps: generated.steps,
+            theme: generated.theme,
+            mediaPanel: generated.mediaPanel,
+            settings: generated.settings,
+          });
+          setEditMode(false);
+          setEditFormId(null);
+          setStudioMode('full_studio');
+          setIsBuilderOpen(true);
+        }}
       />
     </div>
   );

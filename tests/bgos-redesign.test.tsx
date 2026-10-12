@@ -98,7 +98,8 @@ it('renders FormAgentStudio header with AI Studio title, actions, and 8 canonica
   expect(screen.getByRole('button', { name: /^Skills$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Appearance$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Test Lab$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Publish$/i })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /^Analytics$/i })).toBeNull();
 });
 
 it('renders Unified Inbox with circular channel triage, 3-segment switch, in-chat package cards, and Customer 360 dossier', async () => {
@@ -482,16 +483,17 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
   expect(
     screen.getByText(/Create high-converting forms.*to capture leads, book appointments and grow your business\./i)
   ).toBeDefined();
+  expect(screen.getByRole('button', { name: /AI Form Generator/i })).toBeDefined();
   expect(screen.getAllByRole('button', { name: /Create Form/i }).length).toBeGreaterThanOrEqual(1);
 
-  // 2. Sub-Navigation Tabs
+  // 2. Sub-Navigation Tabs (5 clean tabs: Overview | Forms | Funnels | Templates | Submissions)
   expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
   expect(screen.getAllByRole('button', { name: /^Forms$/i }).length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByRole('button', { name: /^Funnels$/i }).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: /^Templates$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Submissions$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Settings$/i })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /^Analytics$/i })).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Settings$/i })).toBeNull();
 
   // 3. 4 Growth KPI Telemetry Cards
   expect(screen.getByText('Total Forms')).toBeDefined();
@@ -549,61 +551,24 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
   expect(screen.getByText('Rahul Kumar')).toBeDefined();
   expect(screen.getByText('Sneha Patel')).toBeDefined();
 
-  // 8. Interactivity: Transition into Visual Funnel & Form Builder Workstation
-  const createFunnelBtn = screen.getAllByRole('button', { name: /Create Form/i })[0];
-  fireEvent.click(createFunnelBtn);
+  // 8. Interactivity: Transition directly into real FormStudioBuilder Workstation
+  const createFormBtn = screen.getAllByRole('button', { name: /Create Form/i })[0];
+  fireEvent.click(createFormBtn);
 
-  // Verifies Visual Builder Workstation is mounted
-  expect(screen.getByText(/Service Request Form|Home Cleaning Quote Funnel/i)).toBeDefined();
-  expect(screen.getByText('Published')).toBeDefined();
+  // Verifies real FormStudioBuilder Workstation is mounted without duplicate headers
+  expect(screen.getByRole('button', { name: /Back to dashboard/i })).toBeDefined();
+  expect(screen.getByDisplayValue('Service Request Form')).toBeDefined();
+  expect(screen.getAllByText('Published').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByRole('button', { name: /^Build$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Design$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Settings$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Preview$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Publish$/i })).toBeDefined();
 
-  // 3-Column Workstation Layout Checks
-  // Left: Add Elements
-  expect(screen.getByText('Add Elements')).toBeDefined();
-  expect(screen.getByText('Form Elements')).toBeDefined();
-  expect(screen.getByText('Basic Fields')).toBeDefined();
-  expect(screen.getByText('Text Input')).toBeDefined();
-  expect(screen.getByText('Radio Buttons')).toBeDefined();
-
-  // Center: Live Stage Canvas
-  expect(screen.getByRole('button', { name: /Desktop/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Mobile/i })).toBeDefined();
-  expect(screen.getByText('Service')).toBeDefined();
-  expect(screen.getByText('Details')).toBeDefined();
-  expect(screen.getByText('Quote')).toBeDefined();
-  expect(screen.getByText('Contact')).toBeDefined();
-  expect(screen.getByText('Professional Home Cleaning Services')).toBeDefined();
-  expect(screen.getByText('What type of cleaning do you need?')).toBeDefined();
-  expect(screen.getAllByText('Regular Home Cleaning').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('Deep Cleaning')).toBeDefined();
-  expect(screen.getByText('Move In/Out Cleaning')).toBeDefined();
-  expect(screen.getByText('Office Cleaning')).toBeDefined();
-  expect(screen.getByRole('button', { name: /Next Step/i })).toBeDefined();
-
-  // Right: Element Settings Inspector
-  expect(screen.getByText('Element Settings')).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Content$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Style$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Advanced$/i })).toBeDefined();
-  expect(screen.getByText('Option Settings')).toBeDefined();
-  expect(screen.getByText('Selected by default')).toBeDefined();
-  expect(screen.getByText('Required field')).toBeDefined();
-  expect(screen.getByRole('button', { name: /Delete Element/i })).toBeDefined();
-
-  // 9. Interactivity: Selecting another service option updates inspector
-  const deepCleaningOption = screen.getByText('Deep Cleaning');
-  fireEvent.click(deepCleaningOption);
-  expect(screen.getByDisplayValue('Deep Cleaning')).toBeDefined();
-
-  // 10. Interactivity: Next Step button advances stage
-  const nextStepBtn = screen.getByRole('button', { name: /Next Step/i });
-  fireEvent.click(nextStepBtn);
-  expect(screen.getByText(/Step 2 of 4/i)).toBeDefined();
+  // Starter fields rendered inside FormStudioBuilder canvas
+  expect(screen.getAllByText('What type of cleaning do you need?').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Full Name').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Email Address').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Phone Number').length).toBeGreaterThanOrEqual(1);
 });
 
 it('renders Live Website Visitor Radar workstation inside Inbox with telemetry strip, visitor stream, live keystroke mirror, and dossier', async () => {
@@ -769,8 +734,39 @@ it('renders Digital Presence Website Builder workstation with 3-column studio la
   expect(screen.getByText('Rewrite Copy')).toBeDefined();
 });
 
+it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStudio Setup & Appearance split views', async () => {
+  const { BGOS_NAVIGATION, bgosNavigationView } = await import('../shared/bgos-navigation');
+  const { BgosSettings } = await import('@/components/bgos/settings');
+  const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+  const { FormAgentStudio } = await import('@/features/forms/components/agent-builder/form-agent-studio');
+  const { DEFAULT_FORM_AGENT } = await import('@/features/forms/types/agent-types');
 
+  // 1. BGOS_NAVIGATION has no workflows, formsAnalytics, creatorProfile, or top-level billing
+  const allNavIds = BGOS_NAVIGATION.flatMap((section) => section.items.map((item) => item.id));
+  expect(allNavIds).not.toContain('workflows');
+  expect(allNavIds).not.toContain('formsAnalytics');
+  expect(allNavIds).not.toContain('creatorProfile');
+  expect(allNavIds).not.toContain('billing');
+  expect(bgosNavigationView('billing')).toBe('settings');
 
+  // 2. BgosSettings renders Billing & Subscription inside Settings
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const { unmount } = render(
+    <QueryClientProvider client={queryClient}>
+      <BgosSettings initialTab="billing" />
+    </QueryClientProvider>
+  );
+  expect(screen.getByRole('tab', { name: /Billing & Subscription/i })).toBeDefined();
+  expect(screen.getByText(/Room for your next stage\./i)).toBeDefined();
+  unmount();
 
+  // 3. FormAgentStudio Setup and Appearance split views
+  render(<FormAgentStudio initialAgent={DEFAULT_FORM_AGENT} />);
+  fireEvent.click(screen.getByRole('button', { name: /^Setup$/i }));
+  expect(screen.getByText('Assistant Identity & Persona')).toBeDefined();
+  expect(screen.getByText(/Live Assistant Preview/i)).toBeDefined();
 
-
+  fireEvent.click(screen.getByRole('button', { name: /^Appearance$/i }));
+  expect(screen.getByText(/Live Website Widget Preview/i)).toBeDefined();
+  expect(screen.getByRole('button', { name: /Conversation View/i })).toBeDefined();
+});

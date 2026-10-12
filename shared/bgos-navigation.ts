@@ -23,17 +23,13 @@ export const BGOS_NAVIGATION = [
       { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Star' },
       { view: 'campaigns', label: 'Campaigns & Outreach', iconName: 'Send' },
       { view: 'formBuilder', label: 'Forms', iconName: 'FileInput' },
-      { view: 'workflows', label: 'Automations', iconName: 'Workflow' },
-      { view: 'formsAnalytics', label: 'Form Analytics', iconName: 'BarChart3' },
       { view: 'scheduling', label: 'Appointments', iconName: 'Calendar' },
-      { view: 'creatorProfile', label: 'Digital Presence', iconName: 'Globe' },
     ],
   },
   {
     title: 'Manage',
     items: [
       { view: 'integrations', label: 'Integrations', iconName: 'Share2' },
-      { view: 'billing', label: 'Billing & Subscription', iconName: 'CreditCard' },
       { view: 'settings', label: 'Settings', iconName: 'Settings' },
     ],
   },
@@ -42,10 +38,10 @@ export const BGOS_NAVIGATION = [
 const allowed = new Set<string>([
   ...BGOS_NAVIGATION.flatMap((section) => section.items.map((item) => item.view)),
   'contacts', 'formSubmissions', 'booking', 'calendar', 'meetingTypes', 'appointmentTypes',
-  'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
+  'creatorProfile', 'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',
   'aiCallHistory', 'aiAgents', 'workflows', 'formsAnalytics', 'leadDiscovery', 'employees',
-  'liveChat',
+  'liveChat', 'billing',
 ]);
 
 export function bgosView(view: string): string {
@@ -63,7 +59,7 @@ export function bgosNavigationView(view: string): string {
   if (['aiCallHistory', 'aiAgents'].includes(view)) return 'aiReceptionist';
   if (view === 'creatorOffers') return 'creatorProfile';
   if (view === 'leadDiscovery') return 'campaigns';
-  if (view === 'employees') return 'settings';
+  if (view === 'employees' || view === 'billing') return 'settings';
   if (view === 'liveChat') return 'omnichannel';
   return bgosView(view);
 }

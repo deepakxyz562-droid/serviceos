@@ -510,7 +510,6 @@ export function getStandaloneNavSectionsForBlueprint(
   sections.push({
     title: 'Account',
     items: [
-      { view: 'billing', label: 'Plan & Billing', iconName: 'CreditCard' },
       { view: 'settings', label: 'Settings', iconName: 'Settings' },
     ],
   });

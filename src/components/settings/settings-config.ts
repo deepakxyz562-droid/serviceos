@@ -148,22 +148,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     keywords: ['expenses', 'receipts', 'mileage', 'vendor', 'export', 'tax'],
   },
   {
-    id: 'automations',
-    label: 'Automations',
-    icon: 'Zap',
-    description: 'Workflow builder, triggers, conditions, actions, templates, approvals, scheduled jobs',
-    group: 'business',
-    keywords: ['workflow', 'triggers', 'conditions', 'actions', 'templates', 'approvals', 'scheduled', 'automation'],
-  },
-  {
-    id: 'workflows',
-    label: 'Workflows',
-    icon: 'Workflow',
-    description: 'Visual workflow builder — multi-step automations with branching logic',
-    group: 'business',
-    keywords: ['workflow', 'visual builder', 'automation', 'branching', 'multi-step'],
-  },
-  {
     id: 'google-business-profile',
     label: 'Google Business Profile',
     icon: 'Search',
@@ -370,20 +354,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
   // ─── Account & System (merged old 'billing' + 'system') ─────────────────
   {
     id: 'subscription',
-    label: 'Subscription',
+    label: 'Billing & Subscription',
     icon: 'CreditCard',
-    description: 'Current plan, upgrade/downgrade, billing cycle, plan features',
+    description: 'Current plan, upgrade/downgrade, billing cycle, invoices, and payment methods',
     group: 'account-system',
-    keywords: ['subscription', 'plan', 'upgrade', 'downgrade', 'billing cycle'],
-  },
-  {
-    id: 'invoices-payments',
-    label: 'Invoices & Payments',
-    icon: 'Receipt',
-    description: 'Billing history, invoice download, payment receipts, tax documents',
-    group: 'account-system',
-    comingSoon: true,
-    keywords: ['invoices', 'payments', 'history', 'receipts', 'tax', 'billing'],
+    fullWidth: true,
+    keywords: ['subscription', 'billing', 'plan', 'upgrade', 'downgrade', 'billing cycle', 'invoices', 'payments'],
   },
   {
     id: 'expenses',
@@ -392,15 +368,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Business expenses, receipt upload, categorization, export for tax',
     group: 'account-system',
     keywords: ['expenses', 'receipts', 'upload', 'categorize', 'export', 'tax'],
-  },
-  {
-    id: 'payment-methods',
-    label: 'Payment Methods',
-    icon: 'CreditCard',
-    description: 'Saved cards, bank accounts, default payment method, auto-pay',
-    group: 'account-system',
-    comingSoon: true,
-    keywords: ['payment method', 'card', 'bank', 'auto-pay', 'default'],
   },
   {
     id: 'audit-logs',

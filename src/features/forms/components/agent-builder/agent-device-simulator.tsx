@@ -556,7 +556,7 @@ export function AgentDeviceSimulator({
   }, [agent.welcomeGreeting, agent.name, agent.roleTitle, agent.quickActions, agent.channels?.chatbot?.showButtons]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, activeTab, sending]);
 
   // ── Poll for live specialist responses when session escalated ─────────────

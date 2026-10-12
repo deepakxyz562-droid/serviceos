@@ -445,7 +445,7 @@ export function FormAgentStudio({
       </header>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          STUDIO NAVIGATION TABS (8 Canonical Pillars Matching Reference Screenshot)
+          STUDIO NAVIGATION TABS (8 Canonical Pillars)
          ═══════════════════════════════════════════════════════════════════════ */}
       <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center gap-1 overflow-x-auto shrink-0 shadow-2xs">
         {[
@@ -457,7 +457,6 @@ export function FormAgentStudio({
           { id: 'appearance', label: 'Appearance', icon: Paintbrush },
           { id: 'test', label: 'Test Lab', icon: Bot },
           { id: 'publish', label: 'Publish', icon: Globe },
-          { id: 'analytics', label: 'Analytics', icon: BarChart2 },
         ].map((tab) => {
           const Icon = tab.icon;
           const active =
@@ -501,32 +500,296 @@ export function FormAgentStudio({
         />
       )}
 
-      {/* ── SETUP / PERSONALITY TAB ── */}
+      {/* ── SETUP / PERSONALITY TAB (SPLIT WORKSPACE: IDENTITY & BEHAVIOR + LIVE SIMULATOR) ── */}
       {(studioTab === 'setup' || studioTab === 'personality') && (
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-4xl mx-auto">
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+          {/* Left: Assistant Persona, Instructions & Channel Behavior */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="max-w-4xl mx-auto space-y-6">
+              {/* Card 1: Core Identity & Persona */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-5">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 flex items-center justify-center shrink-0">
+                      <Bot className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Assistant Identity &amp; Persona</h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Configure how your AI Assistant introduces itself, speaks to customers, and handles inquiries.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSettingsOpen(true)}
+                    className="h-8 text-xs font-semibold rounded-xl gap-1.5"
+                  >
+                    <Sliders className="size-3.5 text-teal-600" />
+                    Advanced Settings
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                      Assistant Name
+                    </label>
+                    <input
+                      type="text"
+                      value={agent.name || ''}
+                      onChange={(e) => setAgent((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g. Sarah — AI Concierge"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                      Role / Title
+                    </label>
+                    <input
+                      type="text"
+                      value={agent.roleTitle || ''}
+                      onChange={(e) => setAgent((prev) => ({ ...prev, roleTitle: e.target.value }))}
+                      placeholder="e.g. Customer Support & Booking Specialist"
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                    Welcome Greeting Message
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={agent.welcomeGreeting || ''}
+                    onChange={(e) => setAgent((prev) => ({ ...prev, welcomeGreeting: e.target.value }))}
+                    placeholder="Hi! How can I help you today?"
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      AI System Instructions &amp; Business Guidelines
+                    </label>
+                    <span className="text-[11px] text-slate-400">Guides AI responses across all channels</span>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={agent.systemPrompt || ''}
+                    onChange={(e) => setAgent((prev) => ({ ...prev, systemPrompt: e.target.value }))}
+                    placeholder="You are a helpful AI assistant for our business. Answer customer questions accurately, provide service quotes, and help visitors book appointments..."
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4 flex-wrap pt-1">
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Conversation Tone</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {(['friendly', 'professional', 'empathetic', 'casual'] as const).map((tone) => (
+                        <button
+                          key={tone}
+                          type="button"
+                          onClick={() => setAgent((prev) => ({ ...prev, voiceTone: tone }))}
+                          className={cn(
+                            'px-3 py-1.5 rounded-xl text-xs font-semibold capitalize border transition-all',
+                            (agent.voiceTone || 'friendly') === tone
+                              ? 'bg-teal-50 dark:bg-teal-950/50 border-teal-500 text-teal-700 dark:text-teal-300 shadow-2xs'
+                              : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                          )}
+                        >
+                          {tone}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setStudioTab('appearance')}
+                      className="h-9 text-xs font-semibold rounded-xl gap-1.5"
+                    >
+                      <Paintbrush className="size-3.5 text-teal-600" />
+                      Customize Appearance
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleSave(agent, false)}
+                      disabled={saving}
+                      className="h-9 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white rounded-xl gap-1.5"
+                    >
+                      {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                      Save Setup
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Widget Behavior, Welcome Actions & Connected Intake Forms */}
+              <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs">
+                <AgentBuildTab
+                  agent={agent}
+                  onChange={setAgent}
+                  availableForms={accountForms}
+                  activeChannel="chatbot"
+                  mode="channel_settings"
+                  onPreviewPageChange={(page) => setPreviewPage(page)}
+                  siteOrigin={siteOrigin}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Live Interactive Simulator */}
+          <aside className="w-full lg:w-[410px] border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-col shrink-0 shadow-sm">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200 dark:border-slate-800">
+              <span className="text-xs font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-200">
+                <Bot className="size-3.5 text-teal-600" /> Live Assistant Preview
+              </span>
+              <Badge variant="outline" className="text-[10px] border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/30">
+                Interactive
+              </Badge>
+            </div>
+            <div className="flex-1 min-h-[520px]">
+              <AgentDeviceSimulator
+                agent={agent}
+                isTestMode={true}
+                previewPage={previewPage}
+                onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
+                onSwitchPage={(page) => setPreviewPage(page)}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* ── APPEARANCE / CHAT WIDGET DESIGNER TAB (LIVE STAGE + AVATAR & STYLE INSPECTOR) ── */}
+      {(studioTab === 'appearance' || studioTab === 'widget') && (
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
+          {/* Center/Left: Website Embed Stage & Live Widget Simulator */}
+          <div className="flex-1 min-h-0 flex flex-col justify-between p-6 relative overflow-hidden">
+            <div
+              className={cn(
+                'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
+                isSidebar && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
+              )}
+              style={
+                agent.style?.pageBackgroundStart && agent.style?.pageBackgroundEnd
+                  ? {
+                      background: `linear-gradient(135deg, ${agent.style.pageBackgroundStart}25, ${agent.style.pageBackgroundEnd}45)`,
+                      borderColor: agent.brandColor ? `${agent.brandColor}40` : undefined,
+                    }
+                  : undefined
+              }
+            >
+              {/* Website Mockup Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200/60 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <div className="size-3 rounded-full bg-rose-400/80" />
+                  <div className="size-3 rounded-full bg-amber-400/80" />
+                  <div className="size-3 rounded-full bg-emerald-400/80" />
+                  <span className="ml-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {businessName} — Live Website Widget Preview
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-semibold">
+                  {isSidebar ? 'Sidebar Layout' : 'Floating Widget'} ({isLeftPos ? 'Left' : 'Right'})
+                </Badge>
+              </div>
+
+              {/* Website Mockup Content */}
+              <div className="space-y-3 pt-6 flex-1 max-w-md">
+                <div className="w-3/4 h-5 rounded-lg bg-slate-200/80 dark:bg-slate-800/80" />
+                <div className="w-full h-3.5 rounded-full bg-slate-200/60 dark:bg-slate-800/60" />
+                <div className="w-5/6 h-3.5 rounded-full bg-slate-200/60 dark:bg-slate-800/60" />
+                <div className="w-2/3 h-3.5 rounded-full bg-slate-200/60 dark:bg-slate-800/60" />
+              </div>
+
+              {/* Positioned Live Simulator */}
+              <div
+                className={cn(
+                  'absolute z-20 transition-all duration-300 flex flex-col',
+                  isSidebar
+                    ? cn('top-0 bottom-0 w-[360px]', isLeftPos ? 'left-0' : 'right-0')
+                    : cn('bottom-4 max-h-[560px] h-[560px] w-[350px] justify-end', isLeftPos ? 'left-4' : 'right-4')
+                )}
+              >
+                <AgentDeviceSimulator
+                  agent={agent}
+                  isTestMode={true}
+                  previewPage={previewPage}
+                  onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
+                  onSwitchPage={(page) => setPreviewPage(page)}
+                />
+              </div>
+            </div>
+
+            {/* Bottom Stage Bar */}
+            <div className="max-w-4xl mx-auto w-full pt-3 flex items-center justify-between z-20">
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 rounded-xl shadow-xs text-xs">
+                <button
+                  type="button"
+                  onClick={() => setPreviewPage('conversation')}
+                  className={cn(
+                    'px-3 py-1 rounded-lg font-semibold transition-all',
+                    previewPage === 'conversation'
+                      ? 'bg-teal-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  )}
+                >
+                  Conversation View
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPage('greeting')}
+                  className={cn(
+                    'px-3 py-1 rounded-lg font-semibold transition-all',
+                    previewPage === 'greeting'
+                      ? 'bg-teal-600 text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  )}
+                >
+                  Greeting View
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleSave(agent, false)}
+                  disabled={saving}
+                  className="h-8 text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white rounded-xl gap-1.5"
+                >
+                  {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                  Save Appearance
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Avatar & Style Designer Panel */}
+          <aside className="w-full lg:w-[390px] border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-slate-900 flex flex-col shrink-0">
             <AgentBuildTab
               agent={agent}
               onChange={setAgent}
               availableForms={accountForms}
+              activeChannel="chatbot"
+              mode="designer"
+              onPreviewPageChange={(page) => setPreviewPage(page)}
               siteOrigin={siteOrigin}
             />
-          </div>
-        </div>
-      )}
-
-      {/* ── APPEARANCE / CHAT WIDGET TAB ── */}
-      {(studioTab === 'appearance' || studioTab === 'widget') && (
-        <div className="flex-1 overflow-hidden p-6 bg-slate-50 dark:bg-slate-950 flex flex-col justify-center items-center">
-          <div className="max-w-4xl w-full h-full flex flex-col items-center justify-center">
-            <AgentDeviceSimulator
-              agent={agent}
-              isTestMode={true}
-              previewPage={previewPage}
-              onOpenFormInModal={(form) => setActiveConnectedFormModal(form)}
-              onSwitchPage={(page) => setPreviewPage(page)}
-            />
-          </div>
+          </aside>
         </div>
       )}
 

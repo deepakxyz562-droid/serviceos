@@ -449,6 +449,7 @@ export function SettingsView() {
   // settings open doesn't re-target the same section unexpectedly.
   useEffect(() => {
     if (pendingSettingsSection) {
+      setActiveSection(pendingSettingsSection === 'billing' ? 'subscription' : pendingSettingsSection);
       setPendingSettingsSection(null);
     }
   }, [pendingSettingsSection, setPendingSettingsSection]);
@@ -590,7 +591,8 @@ export function SettingsView() {
       case 'developer':
         return <DeveloperSettings />;
       case 'billing':
-        return <BillingSettings />;
+      case 'subscription':
+        return <BillingView />;
       case 'google-business-profile':
         return <GoogleBusinessProfileSettings />;
       case 'dedicated-phone':
@@ -628,8 +630,6 @@ export function SettingsView() {
         return <HistoryView />;
       case 'help-support':
         return <HelpCenterView />;
-      case 'subscription':
-        return <BillingView />;
       case 'expenses':
         return <ExpensesView />;
 

@@ -193,12 +193,9 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'Inbox & Automation',
+    title: 'Inbox & Channels',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
-      { view: 'triggers', label: 'Triggers', icon: Zap },
-      { view: 'variables', label: 'Variables', icon: Variable },
       // Social Media — consolidated into one tabbed page (Accounts, Create Post, Posts, Analytics)
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
     ],
@@ -219,7 +216,7 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   // The 'Content' section was removed — Social Accounts, Create Post,
-  // Posts, and Social Analytics have been moved into 'Inbox & Automation'
+  // Posts, and Social Analytics have been moved into 'Inbox & Channels'
   // above so all communication channels live together.
   {
     title: 'Setup & Admin',
@@ -263,13 +260,11 @@ const standaloneNavSections: NavSection[] = [
     title: 'Growth & Outreach',
     items: [
       { view: 'integrations', label: 'Integrations & Webhooks', icon: Share2 },
-      { view: 'formsAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
   {
     title: 'Account',
     items: [
-      { view: 'billing', label: 'Plan & Billing', icon: CreditCard },
       { view: 'settings', label: 'Settings', icon: Settings },
     ],
   },
@@ -426,13 +421,10 @@ const superadminNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'Inbox & Automation',
+    title: 'Inbox & Channels',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
-      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
-      { view: 'triggers', label: 'Triggers', icon: Zap },
-      { view: 'variables', label: 'Variables', icon: Variable },
       { view: 'socialMedia', label: 'Social Media', icon: Share2 },
     ],
   },
