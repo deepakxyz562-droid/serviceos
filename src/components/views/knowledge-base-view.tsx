@@ -58,6 +58,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ── Types ──────────────────────────────────────────────────────
 interface KnowledgeArticle {
@@ -171,6 +172,9 @@ function truncate(str: string, max: number): string {
 
 // ── Component ──────────────────────────────────────────────────
 export function KnowledgeBaseView() {
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
+
   // State
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -197,7 +201,7 @@ export function KnowledgeBaseView() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
       params.set('isActive', 'false'); // Show all articles (both active and inactive)
       if (search.trim()) params.set('search', search.trim());
       if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter);
@@ -212,7 +216,7 @@ export function KnowledgeBaseView() {
     } finally {
       setLoading(false);
     }
-  }, [search, categoryFilter, publicFilter]);
+  }, [search, categoryFilter, publicFilter, demoPageSize]);
 
   useEffect(() => {
     fetchArticles();

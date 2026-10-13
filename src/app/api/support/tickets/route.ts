@@ -77,6 +77,9 @@ export async function GET(request: NextRequest) {
         orderBy: { [sortBy]: sortOrder === 'desc' ? 'desc' : 'asc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: {
+          category: { select: { id: true, name: true, slug: true } },
+        },
       }),
       db.supportTicket.count({ where }),
     ]);
@@ -100,13 +103,43 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { subject, description, categoryId, priority, type, source, tagsJson, metadataJson } = body;
+    const {
+      subject,
+      description,
+      categoryId,
+      priority,
+      type,
+      source,
+      tagsJson,
+      metadataJson,
+      reporterName,
+      reporterEmail,
+      reporterPhone,
+      reporterAddress,
+    } = body;
 
     if (!subject || !description) {
       return NextResponse.json({ error: 'Subject and description are required' }, { status: 400 });
     }
 
     const ticketNumber = await generateTicketNumber();
+
+    // Merge caller-supplied metadataJson with phone/address (which don't have
+    // dedicated schema columns — see prisma/schema.prisma SupportTicket).
+    let callerMeta: Record<string, unknown> = {};
+    if (metadataJson) {
+      try {
+        callerMeta =
+          typeof metadataJson === 'string'
+            ? (JSON.parse(metadataJson) as Record<string, unknown>)
+            : (metadataJson as Record<string, unknown>);
+      } catch {
+        callerMeta = {};
+      }
+    }
+    const finalMeta: Record<string, unknown> = { ...callerMeta };
+    if (reporterPhone) finalMeta.phone = reporterPhone;
+    if (reporterAddress) finalMeta.address = reporterAddress;
 
     const ticket = await db.supportTicket.create({
       data: {
@@ -118,10 +151,13 @@ export async function POST(request: NextRequest) {
         type: type || 'general',
         source: source || 'web',
         tagsJson: tagsJson ? (typeof tagsJson === 'string' ? tagsJson : JSON.stringify(tagsJson)) : '[]',
-        metadataJson: metadataJson ? (typeof metadataJson === 'string' ? metadataJson : JSON.stringify(metadataJson)) : '{}',
+        metadataJson: JSON.stringify(finalMeta),
         reporterId: user.id,
-        reporterEmail: user.email,
-        reporterName: user.name,
+        // Allow callers (e.g. the helpdesk UI creating a ticket on behalf of a
+        // customer) to override the reporter identity. Fall back to the
+        // authenticated user's identity when not supplied.
+        reporterEmail: reporterEmail || user.email,
+        reporterName: reporterName || user.name,
         tenantId: user.tenantId,
         lastMessageAt: new Date().toISOString(),
       },

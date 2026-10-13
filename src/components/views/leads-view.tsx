@@ -53,6 +53,7 @@ import {
   useChangeLeadStatus,
   useAddLeadNote,
 } from '@/hooks/use-crm-data';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // Phase 4: lead types + helpers + sub-components extracted to src/features/leads/
 import type { Lead, LeadFormData, CustomerOption, LeadDateFilter } from '@/features/leads/types';
@@ -164,9 +165,9 @@ export function LeadsView() {
   const [viewLayout, setViewLayout] = useState<'grid' | 'table'>('grid');
   const [page, setPage] = useState(1);
   // pageSize is stateful so the PaginationBar's rows-per-page selector can
-  // change it (and reset back to page 1 on change). Defaults to 10 — the
-  // canonical page size used across invoices-view / jobs-view / etc.
-  const [pageSize, setPageSize] = useState(10);
+  // change it (and reset back to page 1 on change). Defaults to demoPageSize (5 for demo, 10 normal).
+  const demoPageSize = useDemoPageSize(10);
+  const [pageSize, setPageSize] = useState(demoPageSize);
 
   // Sort state (table view)
   const [sortField, setSortField] = useState<string>('createdAt');

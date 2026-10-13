@@ -43,6 +43,7 @@ import {
   useImportContactsCsv,
   useImportContactsFormData,
 } from '@/hooks/use-crm-data';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -199,7 +200,8 @@ export function ContactsView() {
   const [countryFilter, setCountryFilter] = useState<string>('');
 
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number | 'all'>(20);
+  const demoPageSize = useDemoPageSize();
+  const [pageSize, setPageSize] = useState<number | 'all'>(demoPageSize);
 
   // Available tags / groups (fetched once)
   const [availableTags, setAvailableTags] = useState<TagOption[]>([]);

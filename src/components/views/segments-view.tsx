@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -137,7 +138,7 @@ const FILTER_FIELDS: FilterFieldDef[] = [
 const getFieldDef = (field: string): FilterFieldDef | undefined =>
   FILTER_FIELDS.find(f => f.value === field);
 
-const PREVIEW_PAGE_SIZE = 10;
+const PREVIEW_PAGE_SIZE = 10; // module-level fallback; the live value comes from useDemoPageSize()
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,9 @@ const rulesToContactParams = (rules: FilterRow[], matchLogic: string): Record<st
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function SegmentsView() {
+  // Demo-mode preview page size cap (5 for demo tenant, else 10)
+  const previewPageSize = useDemoPageSize(PREVIEW_PAGE_SIZE);
+
   const [segments, setSegments] = useState<Segment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -429,11 +433,11 @@ export function SegmentsView() {
         // Use the /api/contacts endpoint with translated rules (live preview)
         const params = rulesToContactParams(rules, segment.matchLogic);
         params.page = String(pageNum);
-        params.limit = String(PREVIEW_PAGE_SIZE);
+        params.limit = String(previewPageSize);
         res = await fetch(`/api/contacts?${new URLSearchParams(params).toString()}`);
       } else {
         // Existing segment: use dedicated preview endpoint
-        res = await fetch(`/api/segments/${segment.id}/preview?page=${pageNum}&limit=${PREVIEW_PAGE_SIZE}`);
+        res = await fetch(`/api/segments/${segment.id}/preview?page=${pageNum}&limit=${previewPageSize}`);
       }
 
       if (res.ok) {
@@ -452,7 +456,7 @@ export function SegmentsView() {
         // Preview endpoint not implemented for this segment — fall back to translating rules client-side
         const params = rulesToContactParams(rules, segment.matchLogic);
         params.page = String(pageNum);
-        params.limit = String(PREVIEW_PAGE_SIZE);
+        params.limit = String(previewPageSize);
         const fallbackRes = await fetch(`/api/contacts?${new URLSearchParams(params).toString()}`);
         if (fallbackRes.ok) {
           const json = await fallbackRes.json();

@@ -62,6 +62,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { toast } from 'sonner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -227,9 +228,12 @@ function isThisMonth(dateStr: string): boolean {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function DocumentCenterView() {
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
+
   // State
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 0 });
+  const [pagination, setPagination] = useState({ page: 1, limit: demoPageSize, total: 0, totalPages: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -254,7 +258,7 @@ export function DocumentCenterView() {
       if (typeFilter !== 'all') params.set('type', typeFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       params.set('page', '1');
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
 
       const query = params.toString() ? `?${params.toString()}` : '';
       const data = await apiGet<DocumentsResponse>(`/api/documents${query}`);

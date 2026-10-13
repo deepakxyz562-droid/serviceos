@@ -63,7 +63,7 @@ import {
 } from '@/features/booking/components/booking-columns';
 import { BookingCard } from '@/features/booking/components/booking-card';
 import { BookingStatusChips } from '@/features/booking/components/booking-status-chips';
-
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -73,11 +73,13 @@ export function BookingView() {
   const isStandalone = useIsStandalone();
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+  // Demo-mode page size cap (5 for demo tenant, else 20)
+  const demoPageSize = useDemoPageSize(20);
 
   // State
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
-    limit: 50,
+    limit: demoPageSize,
     total: 0,
     totalPages: 0,
   });

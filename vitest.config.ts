@@ -68,7 +68,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
       'react-native': resolve(__dirname, 'tests/mocks/react-native.ts'),
-      'expo-secure-store': resolve(__dirname, 'node_modules/expo-secure-store'),
+      'expo-secure-store': resolve(__dirname, 'tests/mocks/expo-secure-store.ts'),
     },
   },
 })

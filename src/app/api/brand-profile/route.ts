@@ -44,6 +44,14 @@ interface BrandProfileInput {
   currentOffers?: string | null;
   competitors?: StringList | null;
   hours?: unknown;
+  // Contact + tax/compliance fields (persisted on the Tenant row, not the
+  // BrandProfile row — they're operational metadata, not brand identity).
+  phoneNumber?: string | null;
+  emailAddress?: string | null;
+  whatsappNumber?: string | null;
+  gstNumber?: string | null;
+  invoicePrefix?: string | null;
+  defaultTaxRate?: string | null;
   // Allow caller to skip the (slow) AI summary regeneration.
   skipAiSummary?: boolean;
 }
@@ -144,7 +152,16 @@ export async function GET() {
     const profile = await getBrandContextRaw(tenantId);
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
-      select: { businessHoursJson: true },
+      select: {
+        businessHoursJson: true,
+        phone: true,
+        email: true,
+        whatsappPhone: true,
+        address: true,
+        slug: true,
+        logo: true,
+        settingsJson: true,
+      },
     });
     let hours: unknown = null;
     if (tenant?.businessHoursJson) {
@@ -152,7 +169,40 @@ export async function GET() {
         hours = JSON.parse(tenant.businessHoursJson);
       } catch {}
     }
-    return NextResponse.json({ profile, hours });
+
+    // Parse the tax/compliance fields out of settingsJson (if present).
+    // settingsJson is a generic JSON blob on Tenant — see prisma/schema.prisma
+    // line ~61. We store gstNumber/invoicePrefix/defaultTaxRate under a
+    // `taxCompliance` sub-key so future settings don't collide.
+    let gstNumber: string | null = null;
+    let invoicePrefix: string | null = null;
+    let defaultTaxRate: string | null = null;
+    if (tenant?.settingsJson) {
+      try {
+        const parsed = JSON.parse(tenant.settingsJson) as Record<string, unknown>;
+        const taxCompliance = (parsed.taxCompliance ?? {}) as Record<string, unknown>;
+        if (typeof taxCompliance.gstNumber === 'string') gstNumber = taxCompliance.gstNumber;
+        if (typeof taxCompliance.invoicePrefix === 'string') invoicePrefix = taxCompliance.invoicePrefix;
+        if (typeof taxCompliance.defaultTaxRate === 'string') defaultTaxRate = taxCompliance.defaultTaxRate;
+      } catch {}
+    }
+
+    return NextResponse.json({
+      profile,
+      hours,
+      // Tenant-scoped operational metadata (contact + tax/compliance).
+      // Returned here so the Settings page can hydrate its form fields in
+      // one round-trip alongside the brand-profile data.
+      phoneNumber: tenant?.phone ?? null,
+      emailAddress: tenant?.email ?? null,
+      whatsappNumber: tenant?.whatsappPhone ?? null,
+      businessAddress: tenant?.address ?? null,
+      tenantSlug: tenant?.slug ?? null,
+      logo: tenant?.logo ?? null,
+      gstNumber,
+      invoicePrefix,
+      defaultTaxRate,
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[/api/brand-profile GET] error:', error);
@@ -242,11 +292,77 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    if (body.hours !== undefined) {
-      const hoursJson = typeof body.hours === 'string' ? body.hours : JSON.stringify(body.hours);
+    if (
+      body.hours !== undefined ||
+      body.phoneNumber !== undefined ||
+      body.emailAddress !== undefined ||
+      body.whatsappNumber !== undefined ||
+      body.gstNumber !== undefined ||
+      body.invoicePrefix !== undefined ||
+      body.defaultTaxRate !== undefined ||
+      body.location !== undefined
+    ) {
+      const hasTaxFields =
+        body.gstNumber !== undefined ||
+        body.invoicePrefix !== undefined ||
+        body.defaultTaxRate !== undefined;
+
+      let settingsJson: string | undefined = undefined;
+      if (hasTaxFields) {
+        // Read the existing settingsJson so we can MERGE the tax/compliance
+        // sub-key rather than overwrite the whole blob. This is important
+        // because settingsJson is shared by other features (e.g. notifications,
+        // marketplace flags) — blowing it away would silently drop their config.
+        const existingTenant = await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { settingsJson: true },
+        });
+        let existingSettings: Record<string, unknown> = {};
+        if (existingTenant?.settingsJson) {
+          try {
+            const parsed = JSON.parse(existingTenant.settingsJson) as Record<string, unknown>;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              existingSettings = parsed;
+            }
+          } catch {
+            existingSettings = {};
+          }
+        }
+        const existingTaxCompliance = (existingSettings.taxCompliance ?? {}) as Record<string, unknown>;
+        const mergedTaxCompliance: Record<string, unknown> = { ...existingTaxCompliance };
+        if (body.gstNumber !== undefined) mergedTaxCompliance.gstNumber = (body.gstNumber || '').trim() || null;
+        if (body.invoicePrefix !== undefined) mergedTaxCompliance.invoicePrefix = (body.invoicePrefix || '').trim() || null;
+        if (body.defaultTaxRate !== undefined) mergedTaxCompliance.defaultTaxRate = (body.defaultTaxRate || '').trim() || null;
+        settingsJson = JSON.stringify({
+          ...existingSettings,
+          taxCompliance: mergedTaxCompliance,
+        });
+      }
+
+      const hoursJson =
+        body.hours === undefined
+          ? undefined
+          : typeof body.hours === 'string'
+            ? body.hours
+            : JSON.stringify(body.hours);
+
       await db.tenant.update({
         where: { id: tenantId },
-        data: { businessHoursJson: hoursJson },
+        data: {
+          ...(hoursJson !== undefined ? { businessHoursJson: hoursJson } : {}),
+          // Contact fields — only overwrite when the caller actually sent
+          // the field (so a partial PUT doesn't null out existing data).
+          ...(body.phoneNumber !== undefined ? { phone: (body.phoneNumber || '').trim() || null } : {}),
+          ...(body.emailAddress !== undefined ? { email: (body.emailAddress || '').trim() || null } : {}),
+          ...(body.whatsappNumber !== undefined ? { whatsappPhone: (body.whatsappNumber || '').trim() || null } : {}),
+          // businessAddress maps to Tenant.address (we accept `location` from
+          // the existing brand-profile shape so the form's "Business Address"
+          // input is persisted even if the caller only sent `location`).
+          ...(body.location !== undefined ? { address: (body.location || '').trim() || null } : {}),
+          // Tax/compliance fields live inside settingsJson.taxCompliance so
+          // we don't need a schema migration to add new operational columns.
+          ...(settingsJson !== undefined ? { settingsJson } : {}),
+        },
       });
     }
 

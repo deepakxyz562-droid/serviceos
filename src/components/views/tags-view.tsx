@@ -23,6 +23,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,9 @@ const PRESET_COLORS = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function TagsView() {
+  // Demo-mode page size cap for the tag contacts pagination (5 for demo tenant, else 20)
+  const contactsPageSize = useDemoPageSize(20);
+
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,7 +197,7 @@ export function TagsView() {
     setTagContacts([]);
     try {
       // Use the contacts API with tagId filter (paginated)
-      const res = await fetch(`/api/contacts?tagId=${tag.id}&page=${page}&limit=20`);
+      const res = await fetch(`/api/contacts?tagId=${tag.id}&page=${page}&limit=${contactsPageSize}`);
       if (res.ok) {
         const result = await res.json();
         const list = Array.isArray(result) ? result : (result.data || []);
@@ -209,7 +213,7 @@ export function TagsView() {
     }
   };
 
-  const contactsTotalPages = Math.max(1, Math.ceil(contactsTotal / 20));
+  const contactsTotalPages = Math.max(1, Math.ceil(contactsTotal / contactsPageSize));
 
   // ── Render ──
   if (isLoading) {

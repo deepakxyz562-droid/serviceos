@@ -14,7 +14,12 @@ export async function GET(
     }
 
     const { id } = await params;
-    const ticket = await db.supportTicket.findUnique({ where: { id } });
+    const ticket = await db.supportTicket.findUnique({
+      where: { id },
+      include: {
+        category: { select: { id: true, name: true, slug: true } },
+      },
+    });
 
     if (!ticket) {
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });

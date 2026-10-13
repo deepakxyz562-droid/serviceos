@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,7 @@ export function ContactImportsView() {
   ]);
   const [manualAutoGroupId, setManualAutoGroupId] = useState<string>('none');
 
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = useDemoPageSize(10);
 
   // ── Load imports ──
   const loadImports = useCallback(async (p: number) => {
@@ -152,7 +153,7 @@ export function ContactImportsView() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [PAGE_SIZE]);
 
   useEffect(() => { loadImports(1); }, [loadImports]);
 

@@ -21,6 +21,7 @@ import {
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export function ContactExportsView() {
   const [formFilter, setFormFilter] = useState('{}');
   const [formTotal, setFormTotal] = useState('');
 
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = useDemoPageSize(10);
 
   // ── Load exports ──
   const loadExports = useCallback(async (p: number) => {
@@ -140,7 +141,7 @@ export function ContactExportsView() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [PAGE_SIZE]);
 
   useEffect(() => { loadExports(1); }, [loadExports]);
 
