@@ -79,6 +79,7 @@ export function BgosDashboard() {
   }, [businessName]);
 
   const [leadCount, setLeadCount] = useState<number>(124);
+  const [appointmentCount, setAppointmentCount] = useState<number>(86);
   const [reviewStats, setReviewStats] = useState<{ rating: string; count: number }>({
     rating: '4.8',
     count: 326,
@@ -93,6 +94,17 @@ export function BgosDashboard() {
         const total = data.pagination?.total ?? (Array.isArray(data.leads) ? data.leads.length : undefined);
         if (typeof total === 'number') {
           setLeadCount(total);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/bookings?limit=10')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        const total = data.pagination?.total ?? (Array.isArray(data.bookings) ? data.bookings.length : undefined);
+        if (typeof total === 'number') {
+          setAppointmentCount(total);
         }
       })
       .catch(() => {});
@@ -325,7 +337,7 @@ export function BgosDashboard() {
             </div>
             <div>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
-                86
+                {appointmentCount}
               </div>
               <div className="text-xs text-slate-500 font-medium mt-1">Appointments</div>
             </div>

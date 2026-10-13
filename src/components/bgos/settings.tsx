@@ -193,6 +193,13 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           if (data?.hours && Array.isArray(data.hours) && data.hours.length > 0) {
             setHours(data.hours);
           }
+          if (data?.phoneNumber) setPhoneNumber(data.phoneNumber);
+          if (data?.emailAddress) setEmailAddress(data.emailAddress);
+          if (data?.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
+          if (data?.businessAddress) setBusinessAddress(data.businessAddress);
+          if (data?.gstNumber) setGstNumber(data.gstNumber);
+          if (data?.invoicePrefix) setInvoicePrefix(data.invoicePrefix);
+          if (data?.defaultTaxRate) setDefaultTaxRate(data.defaultTaxRate);
         }
       } catch {
         // preserve standard defaults
@@ -233,16 +240,25 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           voiceDescription: description,
           usps: tagline,
           hours,
+          phoneNumber,
+          emailAddress,
+          whatsappNumber,
+          businessAddress,
+          gstNumber,
+          invoicePrefix,
+          defaultTaxRate,
           skipAiSummary: true,
         }),
       });
       if (res.ok) {
         toast.success('Business settings saved to database!');
       } else {
+        setSavedToast(false);
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to save settings to server. Please try again.');
       }
     } catch {
+      setSavedToast(false);
       toast.error('Network error saving settings. Please try again.');
     } finally {
       setIsSaving(false);

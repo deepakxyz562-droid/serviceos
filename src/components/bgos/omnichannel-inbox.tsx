@@ -785,7 +785,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       )
     );
     try {
-      await fetch('/api/customers', {
+      const res = await fetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -794,9 +794,35 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           notes: `Converted from omnichannel inbox (${conv.channel})`,
         }),
       });
+      if (!res.ok) {
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === conv.id
+              ? {
+                  ...c,
+                  leadStatusBadge: conv.leadStatusBadge,
+                  tags: conv.tags,
+                }
+              : c
+          )
+        );
+        toast.error('Failed to convert customer in CRM on server.');
+        return;
+      }
       toast.success(`${conv.customerName} converted to Customer in CRM!`);
     } catch {
-      toast.success(`${conv.customerName} marked as Customer locally`);
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conv.id
+            ? {
+                ...c,
+                leadStatusBadge: conv.leadStatusBadge,
+                tags: conv.tags,
+              }
+            : c
+        )
+      );
+      toast.error('Network error converting customer in CRM.');
     }
   };
 

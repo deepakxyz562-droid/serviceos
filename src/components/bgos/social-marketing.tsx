@@ -499,6 +499,12 @@ export function SocialMediaView() {
         const accData = await accRes.json();
         const accounts = accData?.data || (Array.isArray(accData) ? accData : []);
         const matching = accounts.find((a: any) => a.platform?.toLowerCase() === previewPlatform.toLowerCase());
+        if (accounts.length > 0 && !matching) {
+          setCalendarItems((prev) => prev.filter((i) => i.id !== newItem.id));
+          setScheduleNotice(null);
+          toast.error(`No connected ${previewPlatform} account found. Please connect your account in Settings.`);
+          return;
+        }
         if (matching) {
           const res = await fetch('/api/social/posts', {
             method: 'POST',
@@ -514,6 +520,8 @@ export function SocialMediaView() {
             setCalendarItems((prev) => prev.filter((i) => i.id !== newItem.id));
             setScheduleNotice(null);
             toast.error('Failed to schedule social post on server.');
+          } else {
+            toast.success(`Post scheduled to ${matching.platform}!`);
           }
         }
       }
