@@ -236,7 +236,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
     <div className="min-h-screen w-full bg-[#F8FAFC] text-slate-900">
       {/* Top Page Header */}
       <div className="border-b border-slate-200 bg-white px-6 pt-5">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3.5">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#009F50] text-white shadow-xs">
               <SettingsIcon className="size-5" />
@@ -270,7 +270,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
         <div
           role="tablist"
           aria-label="Settings Categories"
-          className="mx-auto mt-5 flex max-w-[1440px] items-center gap-1 overflow-x-auto no-scrollbar"
+          className="mt-5 flex w-full items-center gap-1 overflow-x-auto no-scrollbar"
         >
           {topTabs.map((item) => {
             const Icon = item.icon;
@@ -298,7 +298,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
       </div>
 
       {/* Main Content Area */}
-      <div className="mx-auto max-w-[1440px] p-6">
+      <div className="w-full p-6">
         {tab === 'business' && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             {/* Left Vertical Sub-Sidebar (10 items) */}

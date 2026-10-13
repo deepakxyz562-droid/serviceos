@@ -652,7 +652,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
         <main
           className={cn(
-            'flex-1 overflow-auto animate-fade-in bg-background',
+            'flex-1 w-full overflow-auto animate-fade-in bg-background',
             (isFullHeight || isAgentStudioTakeover)
               ? 'flex flex-col min-h-0 p-0 overflow-hidden'
               : isMobile

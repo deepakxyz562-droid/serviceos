@@ -460,7 +460,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
     <div className={embedded ? 'w-full' : 'min-h-screen w-full bg-[#F8FAFC] text-slate-900'}>
       {/* 1. TOP PAGE HEADER & SUB-NAVIGATION TABS */}
       <div className="border-b border-slate-200 bg-white px-6 pt-5">
-        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex w-full flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3.5">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#009F50] text-white shadow-xs">
               <CalendarIcon className="size-5" />
@@ -498,7 +498,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
         <div
           role="tablist"
           aria-label="Appointments Navigation"
-          className="mx-auto mt-5 flex max-w-[1440px] items-center gap-2 overflow-x-auto no-scrollbar"
+          className="mt-5 flex w-full items-center gap-2 overflow-x-auto no-scrollbar"
         >
           {navTabs.map((t) => {
             const Icon = t.icon;
@@ -525,7 +525,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
       </div>
 
       {/* 2. MAIN WORKSPACE */}
-      <div className="mx-auto max-w-[1440px] p-6">
+      <div className="w-full p-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* LEFT 9-COLUMN WORKSPACE */}
           <div className="space-y-5 lg:col-span-9">

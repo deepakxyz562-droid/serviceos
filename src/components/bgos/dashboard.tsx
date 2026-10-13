@@ -242,7 +242,7 @@ export function BgosDashboard() {
   });
 
   return (
-    <div className="flex-1 min-h-screen bg-background dark:bg-slate-950 p-4 md:p-6 lg:p-8 space-y-6 overflow-y-auto">
+    <div className="flex-1 w-full min-h-screen bg-background dark:bg-slate-950 p-4 md:p-6 lg:p-8 space-y-6 overflow-y-auto">
       {/* ═══════════════════════════════════════════════════════════════════════
           1. TOP HEADER BANNER & BUSINESS IDENTIFIER
          ═══════════════════════════════════════════════════════════════════════ */}

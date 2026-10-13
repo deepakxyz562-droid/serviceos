@@ -650,7 +650,7 @@ export function HelpCenterView() {
 
   return (
     <div className="min-h-screen w-full bg-[#F8FAFC] p-4 text-slate-900 sm:p-6">
-      <div className="mx-auto max-w-[1440px] space-y-4">
+      <div className="w-full space-y-4">
         {/* 1. TOP PAGE HEADER */}
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
