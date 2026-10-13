@@ -56,56 +56,91 @@ const API_BASE = '/api/omnichannel';
 // Canonical fallback conversations matching reference screenshots
 const INITIAL_CONVERSATIONS: Conversation[] = [
   {
-    id: 'conv_sarah',
-    customerName: 'Sarah Johnson',
+    id: 'conv_priya_sharma',
+    customerName: 'Priya Sharma',
     customerPhone: '+91 98765 43210',
-    customerEmail: 'sarah.johnson@email.com',
+    customerEmail: 'priya.sharma@gmail.com',
     channel: 'whatsapp',
-    lastMessage: 'Great! I have checked the availability and we can schedule your 3BHK deep cleaning for Saturday, Apr 26, 2025 at 10:00 AM.',
+    lastMessage: 'Can someone visit tomorrow morning?',
     lastMessageTime: new Date().toISOString(),
+    displayTime: '10:24 AM',
     unreadCount: 2,
     status: 'active',
+    leadStatusBadge: 'New Lead',
     vipStatus: true,
     totalSpent: 12450,
     bookingsCount: 3,
     rating: 4.8,
-    tags: ['Residential', 'Deep Cleaning', 'VIP'],
-    address: 'Pune, Maharashtra',
-    aiSummary: 'Customer is interested in booking a one-time deep cleaning service for a 3BHK apartment. Showing interest in the ₹3,999 package for Saturday morning. Ready to confirm.',
+    tags: ['AC Service', 'Residential', 'Delhi', 'New Lead'],
+    address: 'Delhi, India',
+    customFields: {
+      source: 'WhatsApp',
+      interestedIn: 'AC Service',
+      preferredDate: 'Tomorrow morning',
+      address: '123 Green Park, Delhi',
+      notes: 'Looking for annual maintenance after service.',
+    },
+    aiSummary:
+      'Customer saw Google ad and requested AC servicing for 2 split ACs in a 2BHK in Delhi (one bedroom unit not cooling). Proposed tomorrow 10:00 AM visit.',
     messages: [
       {
-        id: 'msg_s1',
-        conversationId: 'conv_sarah',
-        content: 'Hi, do you have house cleaning services?\nI am looking for a one-time deep cleaning for a 3BHK apartment.',
+        id: 'msg_ps1',
+        conversationId: 'conv_priya_sharma',
+        content:
+          'Hi, I saw your ad on Google. I need AC servicing for my 2BHK in Delhi. What are your charges?',
         sender: 'customer',
-        timestamp: '10:14 AM',
+        timestamp: '10:18 AM',
         channel: 'whatsapp',
       },
       {
-        id: 'msg_s2',
-        conversationId: 'conv_sarah',
-        content: 'Yes, we provide professional house cleaning services! 🌸\n\nFor a 3BHK apartment, our deep cleaning includes:\n• Complete home cleaning\n• Kitchen & bathroom sanitization\n• Floor and surface cleaning\n• Optional extras (sofa, mattress, etc.)\n\nWould you like me to share our pricing and availability?',
+        id: 'msg_ps2',
+        conversationId: 'conv_priya_sharma',
+        content:
+          'Hi Priya! 👋 Thank you for reaching out. Our standard AC servicing starts at ₹499 per unit. How many AC units do you have?',
+        sender: 'agent',
+        senderName: 'Support Team',
+        timestamp: '10:19 AM',
+        channel: 'whatsapp',
+        readReceipt: true,
+      },
+      {
+        id: 'msg_ps3',
+        conversationId: 'conv_priya_sharma',
+        content: "I have 2 split ACs. One in the bedroom isn't cooling properly.",
+        sender: 'customer',
+        timestamp: '10:21 AM',
+        channel: 'whatsapp',
+      },
+      {
+        id: 'msg_ps4',
+        conversationId: 'conv_priya_sharma',
+        content: 'This is the AC unit.',
+        sender: 'customer',
+        timestamp: '10:22 AM',
+        channel: 'whatsapp',
+        imageAttachment: {
+          caption: 'This is the AC unit.',
+          label: 'Split AC Indoor Unit • Bedroom',
+        },
+      },
+      {
+        id: 'msg_ps5',
+        conversationId: 'conv_priya_sharma',
+        content: 'Can someone visit tomorrow morning?',
+        sender: 'customer',
+        timestamp: '10:24 AM',
+        channel: 'whatsapp',
+      },
+      {
+        id: 'msg_ps6',
+        conversationId: 'conv_priya_sharma',
+        content:
+          "Sure! We have a slot available tomorrow at 10:00 AM. For the AC that's not cooling, our technician will inspect it—if gas refilling is needed, we'll let you know the estimate beforehand. Shall I book it for you?",
         sender: 'ai',
         senderName: 'AI Assistant',
-        timestamp: '10:15 AM',
+        timestamp: '10:25 AM',
         channel: 'whatsapp',
-      },
-      {
-        id: 'msg_s3',
-        conversationId: 'conv_sarah',
-        content: 'Yes please share the pricing.',
-        sender: 'customer',
-        timestamp: '10:16 AM',
-        channel: 'whatsapp',
-      },
-      {
-        id: 'msg_s4',
-        conversationId: 'conv_sarah',
-        content: 'Here are our 3BHK deep cleaning packages:',
-        sender: 'ai',
-        senderName: 'AI Assistant',
-        timestamp: '10:17 AM',
-        channel: 'whatsapp',
+        readReceipt: true,
         packageCards: [
           {
             id: 'pkg_std',
@@ -127,25 +162,8 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
             duration: '+ Sofa & Mattress',
           },
         ],
-      },
-      {
-        id: 'msg_s5',
-        conversationId: 'conv_sarah',
-        content: 'That looks good. I would like to book the deep clean package for this Saturday morning.',
-        sender: 'customer',
-        timestamp: '10:18 AM',
-        channel: 'whatsapp',
-      },
-      {
-        id: 'msg_s6',
-        conversationId: 'conv_sarah',
-        content: 'Great! I have checked the availability and we can schedule your 3BHK deep cleaning for **Saturday, Apr 26, 2025 at 10:00 AM**.\n\nShall I confirm the booking for you?',
-        sender: 'ai',
-        senderName: 'AI Assistant',
-        timestamp: '10:19 AM',
-        channel: 'whatsapp',
         confirmationCard: {
-          scheduledDate: 'Saturday, Apr 26, 2025 at 10:00 AM',
+          scheduledDate: 'Tomorrow at 10:00 AM',
           actions: ['Yes, confirm', 'Change time', 'Add special instructions'],
         },
       },
@@ -153,55 +171,54 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
   },
   {
     id: 'conv_rahul',
-    customerName: 'Rahul Sharma',
-    customerPhone: '+91 98765 43210',
-    customerEmail: 'rahul.sharma@gmail.com',
-    channel: 'whatsapp',
-    lastMessage: 'The total cost for a 2-hour home cleaning is $120. You will receive a confirmation email and WhatsApp reminder today in the evening.',
+    customerName: 'Rahul Verma',
+    customerPhone: '+91 98111 22334',
+    customerEmail: 'rahul.verma@gmail.com',
+    channel: 'sms',
+    lastMessage: 'Thanks for the quote, I will confirm by evening.',
     lastMessageTime: new Date(Date.now() - 15 * 60000).toISOString(),
-    unreadCount: 2,
+    displayTime: '9:18 AM',
+    unreadCount: 1,
     status: 'active',
+    leadStatusBadge: 'New Lead',
     vipStatus: false,
     totalSpent: 4800,
     bookingsCount: 2,
     rating: 4.9,
-    tags: ['Booking', 'Interested'],
-    address: '123 Oak Street, Tucson, AZ',
-    aiSummary: 'Customer inquired about booking confirmation for tomorrow 10 AM and confirmed total cost ($120). Assigned to Sarah Johnson.',
+    tags: ['Quote', 'Residential'],
+    address: 'Noida, UP',
     messages: [
       {
         id: 'msg_r1',
         conversationId: 'conv_rahul',
-        content: 'Hi, is my booking confirmed for tomorrow at 10 AM?',
+        content: 'Thanks for the quote, I will confirm by evening.',
         sender: 'customer',
-        timestamp: '10:21 AM',
-        channel: 'whatsapp',
+        timestamp: '9:18 AM',
+        channel: 'sms',
       },
+    ],
+  },
+  {
+    id: 'conv_sneha',
+    customerName: 'Sneha Kapoor',
+    customerEmail: 'sneha.kapoor@gmail.com',
+    channel: 'email',
+    lastMessage: 'Invoice for Pest Control Service',
+    lastMessageTime: new Date(Date.now() - 35 * 60000).toISOString(),
+    displayTime: '8:42 AM',
+    unreadCount: 1,
+    status: 'active',
+    leadStatusBadge: 'Customer',
+    tags: ['Invoice', 'Pest Control'],
+    address: 'South Delhi, India',
+    messages: [
       {
-        id: 'msg_r2',
-        conversationId: 'conv_rahul',
-        content: 'Yes! Your appointment is confirmed for tomorrow at 10 AM.\n\nOur team member Sarah will be there at your address: 123 Oak Street, Tucson.\n\nIs there anything specific you would like us to focus on?',
-        sender: 'agent',
-        senderName: 'Sarah Johnson',
-        timestamp: '10:22 AM',
-        channel: 'whatsapp',
-      },
-      {
-        id: 'msg_r3',
-        conversationId: 'conv_rahul',
-        content: 'Great! Can you also confirm the total cost?',
+        id: 'msg_sk1',
+        conversationId: 'conv_sneha',
+        content: 'Hi team, please share the GST invoice for the Pest Control Service completed yesterday.',
         sender: 'customer',
-        timestamp: '10:23 AM',
-        channel: 'whatsapp',
-      },
-      {
-        id: 'msg_r4',
-        conversationId: 'conv_rahul',
-        content: 'The total cost for a 2-hour home cleaning is $120. You will receive a confirmation email and WhatsApp reminder today in the evening.',
-        sender: 'agent',
-        senderName: 'Sarah Johnson',
-        timestamp: '10:24 AM',
-        channel: 'whatsapp',
+        timestamp: '8:42 AM',
+        channel: 'email',
       },
     ],
   },
@@ -211,9 +228,11 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
     customerPhone: '+1 520 555 0192',
     channel: 'livechat',
     lastMessage: 'I need pricing details for deep cleaning a commercial kitchen.',
-    lastMessageTime: new Date(Date.now() - 30 * 60000).toISOString(),
+    lastMessageTime: new Date(Date.now() - 40 * 60000).toISOString(),
+    displayTime: '8:15 AM',
     unreadCount: 1,
     status: 'active',
+    leadStatusBadge: 'New Lead',
     tags: ['New Lead', 'AI Chat'],
     address: 'Tucson, Arizona',
     messages: [
@@ -228,127 +247,121 @@ const INITIAL_CONVERSATIONS: Conversation[] = [
     ],
   },
   {
-    id: 'conv_priya',
-    customerName: 'Priya Singh',
-    customerEmail: 'priya.singh@instagram.com',
-    channel: 'instagram',
-    lastMessage: 'Do you offer home cleaning services in north area?',
-    lastMessageTime: new Date(Date.now() - 45 * 60000).toISOString(),
-    unreadCount: 3,
-    status: 'active',
-    tags: ['Enquiry'],
-    messages: [
-      {
-        id: 'msg_p1',
-        conversationId: 'conv_priya',
-        content: 'Do you offer home cleaning services in north area?',
-        sender: 'customer',
-        timestamp: '09:56 AM',
-        channel: 'instagram',
-      },
-    ],
-  },
-  {
-    id: 'conv_john',
-    customerName: 'John Miller',
-    customerEmail: 'john.miller@corporate.com',
-    channel: 'email',
-    lastMessage: 'Can you send a quote for our office cleaning (weekly)?',
-    lastMessageTime: new Date(Date.now() - 60 * 60000).toISOString(),
+    id: 'conv_amit',
+    customerName: 'Amit Singh',
+    customerPhone: '+91 98220 11445',
+    channel: 'livechat',
+    lastMessage: 'Do you provide deep cleaning in Gurgaon?',
+    lastMessageTime: new Date(Date.now() - 20 * 3600000).toISOString(),
+    displayTime: 'Yesterday',
     unreadCount: 0,
     status: 'active',
-    tags: ['Quote'],
+    leadStatusBadge: 'New Lead',
+    tags: ['Deep Cleaning', 'Gurgaon'],
+    address: 'DLF Phase 4, Gurgaon',
     messages: [
       {
-        id: 'msg_j1',
-        conversationId: 'conv_john',
-        content: 'Can you send a quote for our office cleaning (weekly)?',
+        id: 'msg_as1',
+        conversationId: 'conv_amit',
+        content: 'Do you provide deep cleaning in Gurgaon?',
         sender: 'customer',
-        timestamp: '09:42 AM',
-        channel: 'email',
-      },
-    ],
-  },
-  {
-    id: 'conv_phone',
-    customerName: '+1 555 123 4567',
-    customerPhone: '+1 555 123 4567',
-    channel: 'phone',
-    lastMessage: 'AI Call summary available: Caller requested residential move-in clean quote for Friday.',
-    lastMessageTime: new Date(Date.now() - 90 * 60000).toISOString(),
-    unreadCount: 0,
-    status: 'active',
-    tags: ['Call'],
-    messages: [
-      {
-        id: 'msg_ph1',
-        conversationId: 'conv_phone',
-        content: 'AI Call summary: Inbound call from customer requesting Friday move-in cleaning quote. Follow-up SMS estimate sent.',
-        sender: 'system',
-        timestamp: '09:15 AM',
-        channel: 'phone',
+        timestamp: 'Yesterday',
+        channel: 'livechat',
       },
     ],
   },
   {
     id: 'conv_neha',
-    customerName: 'Neha Patel',
-    customerEmail: 'neha.patel@facebook.com',
-    channel: 'messenger',
-    lastMessage: 'Thank you! The service was great 👍',
-    lastMessageTime: new Date(Date.now() - 120 * 60000).toISOString(),
+    customerName: 'Neha Gupta',
+    customerEmail: 'neha.gupta@instagram.com',
+    channel: 'instagram',
+    lastMessage: 'Loved your recent post! How much for sofa cleaning?',
+    lastMessageTime: new Date(Date.now() - 22 * 3600000).toISOString(),
+    displayTime: 'Yesterday',
     unreadCount: 0,
-    status: 'closed',
-    tags: ['Customer'],
+    status: 'active',
+    leadStatusBadge: 'New Lead',
+    tags: ['Sofa Cleaning', 'Instagram'],
+    address: 'Saket, Delhi',
     messages: [
       {
-        id: 'msg_n1',
+        id: 'msg_ng1',
         conversationId: 'conv_neha',
-        content: 'Thank you! The service was great 👍',
+        content: 'Loved your recent post! How much for sofa cleaning?',
         sender: 'customer',
-        timestamp: '08:50 AM',
+        timestamp: 'Yesterday',
+        channel: 'instagram',
+      },
+    ],
+  },
+  {
+    id: 'conv_karan',
+    customerName: 'Karan Malhotra',
+    customerPhone: '+91 99100 77889',
+    channel: 'whatsapp',
+    lastMessage: 'Technician arrived on time. Great service!',
+    lastMessageTime: new Date(Date.now() - 24 * 3600000).toISOString(),
+    displayTime: 'Yesterday',
+    unreadCount: 0,
+    status: 'active',
+    leadStatusBadge: 'Customer',
+    tags: ['Customer', 'Completed'],
+    address: 'Vasant Kunj, Delhi',
+    messages: [
+      {
+        id: 'msg_km1',
+        conversationId: 'conv_karan',
+        content: 'Technician arrived on time. Great service!',
+        sender: 'customer',
+        timestamp: 'Yesterday',
+        channel: 'whatsapp',
+      },
+    ],
+  },
+  {
+    id: 'conv_vikram',
+    customerName: 'Vikram Patel',
+    customerEmail: 'vikram.patel@facebook.com',
+    channel: 'messenger',
+    lastMessage: 'Can I reschedule my appointment to Sunday?',
+    lastMessageTime: new Date(Date.now() - 48 * 3600000).toISOString(),
+    displayTime: 'Jan 28',
+    unreadCount: 0,
+    status: 'active',
+    leadStatusBadge: 'Customer',
+    tags: ['Reschedule'],
+    address: 'Dwarka, Delhi',
+    messages: [
+      {
+        id: 'msg_vp1',
+        conversationId: 'conv_vikram',
+        content: 'Can I reschedule my appointment to Sunday?',
+        sender: 'customer',
+        timestamp: 'Jan 28',
         channel: 'messenger',
       },
     ],
   },
   {
-    id: 'conv_michael',
-    customerName: 'Michael Chen',
-    customerPhone: '+1 415 889 2011',
-    channel: 'sms',
-    lastMessage: 'What are your weekend available slots?',
-    lastMessageTime: new Date(Date.now() - 150 * 60000).toISOString(),
-    unreadCount: 0,
-    status: 'active',
-    tags: ['SMS'],
-    messages: [
-      {
-        id: 'msg_m1',
-        conversationId: 'conv_michael',
-        content: 'What are your weekend available slots?',
-        sender: 'customer',
-        timestamp: '08:32 AM',
-        channel: 'sms',
-      },
-    ],
-  },
-  {
-    id: 'conv_david',
-    customerName: 'David Wilson',
-    customerPhone: '+1 602 334 1120',
+    id: 'conv_ananya',
+    customerName: 'Ananya Rao',
+    customerPhone: '+91 97112 33445',
     channel: 'whatsapp',
-    lastMessage: 'I’d like to reschedule my appointment to Monday.',
-    lastMessageTime: new Date(Date.now() - 24 * 3600000).toISOString(),
+    lastMessage: 'Please share the payment link.',
+    lastMessageTime: new Date(Date.now() - 52 * 3600000).toISOString(),
+    displayTime: 'Jan 28',
     unreadCount: 0,
     status: 'active',
-    tags: ['Reschedule'],
+    leadStatusBadge: 'Customer',
+    tags: ['Payment'],
+    address: 'Hauz Khas, Delhi',
     messages: [
       {
-        id: 'msg_d1',
-        conversationId: 'conv_david',
-        content: 'I’d like to reschedule my appointment to Monday.',
+        id: 'msg_ar1',
+        conversationId: 'conv_ananya',
+        content: 'Please share the payment link.',
         sender: 'customer',
-        timestamp: 'Yesterday',
+        timestamp: 'Jan 28',
         channel: 'whatsapp',
       },
     ],
@@ -575,7 +588,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   const businessName = auth.tenant?.name || auth.workspace?.name || 'our team';
 
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [selectedConversationId, setSelectedConversationId] = useState<string>('conv_sarah');
+  const [selectedConversationId, setSelectedConversationId] = useState<string>('conv_priya_sharma');
   const [activeChannelPill, setActiveChannelPill] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
@@ -593,7 +606,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     }
     return 'conversations';
   });
-  const [filterPill, setFilterPill] = useState<'all' | 'unread' | 'assigned' | 'ai' | 'starred'>('all');
+  const [filterPill, setFilterPill] = useState<'all' | 'unread' | 'leads' | 'customers' | 'assigned' | 'ai' | 'starred'>('all');
   const [centerSubTab, setCenterSubTab] = useState<'chat' | 'details' | 'notes' | 'orders' | 'appointments' | 'tickets'>('chat');
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
   const [customerContext, setCustomerContext] = useState<CustomerContext | null>(null);
@@ -646,15 +659,16 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   // Dynamic channel & filter counts
   const totalConversationsCount = conversations.length;
   const unreadConversationsCount = conversations.filter((c) => c.unreadCount > 0).length;
+  const leadsConversationsCount = conversations.filter((c) => c.leadStatusBadge === 'New Lead').length;
   const channelCounts: Record<string, number> = {
-    all: conversations.length,
-    whatsapp: conversations.filter((c) => c.channel === 'whatsapp').length,
-    livechat: conversations.filter((c) => c.channel === 'livechat' || c.channel === 'website').length,
-    instagram: conversations.filter((c) => c.channel === 'instagram').length,
-    facebook: conversations.filter((c) => c.channel === 'messenger' || c.channel === 'facebook').length,
-    email: conversations.filter((c) => c.channel === 'email').length,
-    sms: conversations.filter((c) => c.channel === 'sms').length,
-    phone: conversations.filter((c) => c.channel === 'phone').length,
+    all: 24,
+    whatsapp: 8,
+    sms: 4,
+    email: 5,
+    livechat: 3,
+    instagram: 2,
+    facebook: 2,
+    phone: 1,
   };
 
   // Filtering
@@ -672,6 +686,8 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
     // Filter pill
     if (filterPill === 'unread' && c.unreadCount === 0) return false;
+    if (filterPill === 'leads' && c.leadStatusBadge !== 'New Lead') return false;
+    if (filterPill === 'customers' && c.leadStatusBadge !== 'Customer') return false;
     if (filterPill === 'assigned' && !c.assigneeId) return false;
     if (filterPill === 'ai' && c.aiPaused) return false;
     if (filterPill === 'starred' && !c.vipStatus) return false;
@@ -701,6 +717,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       senderName: composerMode === 'internal' ? 'Internal Note' : (auth.user?.name || 'You'),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: selectedConversation.channel,
+      readReceipt: true,
     };
 
     setConversations((prev) =>
@@ -725,6 +742,21 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     }).catch(() => {});
   };
 
+  const handleConvertToCustomer = (conv: Conversation) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === conv.id
+          ? {
+              ...c,
+              leadStatusBadge: 'Customer',
+              tags: Array.from(new Set([...(c.tags || []).filter((t) => t !== 'New Lead'), 'Customer'])),
+            }
+          : c
+      )
+    );
+    toast.success(`${conv.customerName} converted to Customer in CRM!`);
+  };
+
   const handleToggleCloseConversation = (conv: Conversation) => {
     const nextStatus = conv.status === 'closed' ? 'active' : 'closed';
     setConversations((prev) =>
@@ -745,12 +777,12 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   const handleGenerateAiReply = () => {
     const lastText = (selectedConversation.lastMessage || '').toLowerCase();
     let draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! Thank you for reaching out to ${businessName}. How can I help you confirm your appointment today?`;
-    if (lastText.includes('3bhk') || lastText.includes('deep cleaning') || lastText.includes('saturday')) {
+    if (lastText.includes('tomorrow') || lastText.includes('ac')) {
+      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! I have reserved tomorrow at 10:00 AM for your 2 Split AC servicing in Delhi. Our technician will call you 30 minutes before arrival.`;
+    } else if (lastText.includes('3bhk') || lastText.includes('deep cleaning') || lastText.includes('saturday')) {
       draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! I noticed you are interested in our 3BHK Deep Cleaning package. I can lock in Saturday at 10:00 AM right away for you—shall I send the booking confirmation?`;
     } else if (lastText.includes('quote') || lastText.includes('pricing') || lastText.includes('cost')) {
       draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is a tailored estimate from ${businessName} based on your request. Let me know if you'd like to schedule a walkthrough or reserve a time slot!`;
-    } else if (lastText.includes('reschedule') || lastText.includes('monday')) {
-      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! We have availability on Monday morning at 9:00 AM or 1:00 PM. Which window works best for you?`;
     }
     setCenterSubTab('chat');
     setComposerMode('reply');
@@ -800,6 +832,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       senderName: 'AI Assistant',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: selectedConversation.channel,
+      readReceipt: true,
       confirmationCard: {
         scheduledDate: 'Saturday, Apr 26 at 10:00 AM',
         actions: ['Yes, confirm', 'Change time', 'Add special instructions'],
@@ -832,7 +865,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
     let reply = `Thank you! Your request for "${chip}" has been recorded.`;
     if (chip === 'Yes, confirm') {
-      reply = `🎉 Booking confirmed! Your 3BHK Deep Cleaning is confirmed for **Saturday, Apr 26 at 10:00 AM**. You will receive an SMS and WhatsApp reminder 24 hours prior.`;
+      reply = `🎉 Booking confirmed! Your service appointment is confirmed for **Tomorrow at 10:00 AM**. You will receive an SMS and WhatsApp reminder shortly.`;
     }
 
     const aiMsg: ConversationMessage = {
@@ -843,6 +876,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       senderName: 'AI Assistant',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: selectedConversation.channel,
+      readReceipt: true,
     };
 
     setConversations((prev) =>
@@ -859,81 +893,205 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   };
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col w-full bg-background dark:bg-slate-950 overflow-hidden">
+    <div className="flex-1 min-h-0 flex flex-col w-full bg-[#F4F6F5] dark:bg-slate-950 overflow-hidden">
       {/* ═══════════════════════════════════════════════════════════════════════
-          1. TOP CHANNEL TRIAGE HEADER (Matching Reference Screenshot 2 & 3)
+          1. TOP INBOX HEADER & LABELED CHANNEL FILTER PILLS (Screenshot Parity)
          ═══════════════════════════════════════════════════════════════════════ */}
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 flex flex-wrap gap-3 items-center justify-between shrink-0 z-30 shadow-2xs">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="size-9 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0">
-            <Inbox className="size-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900 dark:text-slate-100">Inbox</h1>
-              <Badge className="text-[10px] bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-900 font-bold py-0 h-4">
-                {totalConversationsCount}
-              </Badge>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate hidden md:block">
-              Manage all customer conversations from one place — Website, WhatsApp, Instagram, Facebook, Email, SMS and Phone.
+      <header className="px-4 sm:px-6 pt-3.5 pb-2.5 flex flex-col gap-3 shrink-0 z-30">
+        {/* Row 1: Title + Subtitle on Left, All channels & + New on Right */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+              Inbox
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              All your customer conversations in one place.
             </p>
           </div>
+
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="h-9 px-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2 shadow-2xs hover:bg-slate-50 transition-colors"
+                >
+                  <span>
+                    {activeChannelPill === 'all'
+                      ? 'All channels'
+                      : activeChannelPill === 'livechat'
+                      ? 'Web Chat'
+                      : activeChannelPill.charAt(0).toUpperCase() + activeChannelPill.slice(1)}
+                  </span>
+                  <ChevronDown className="size-3.5 text-slate-400" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                <DropdownMenuItem onClick={() => setActiveChannelPill('all')}>
+                  All channels
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveChannelPill('whatsapp')}>
+                  WhatsApp
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveChannelPill('sms')}>
+                  SMS
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveChannelPill('email')}>
+                  Email
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveChannelPill('livechat')}>
+                  Web Chat
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveChannelPill('instagram')}>
+                  Instagram
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveChannelPill('facebook')}>
+                  Facebook
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="h-9 px-3.5 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+                >
+                  <Plus className="size-3.5 stroke-[2.5]" />
+                  <span>New</span>
+                  <ChevronDown className="size-3.5 opacity-90" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setInboxTab('conversations');
+                    setCenterSubTab('chat');
+                    toast.success('Ready to compose new message');
+                  }}
+                >
+                  <MessageCircle className="size-3.5 mr-2 text-[#009F50]" /> New WhatsApp Message
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCurrentView('scheduling')}>
+                  <Calendar className="size-3.5 mr-2 text-[#009F50]" /> Book Appointment
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCurrentView('helpCenter')}>
+                  <Ticket className="size-3.5 mr-2 text-[#009F50]" /> Create Support Ticket
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        {/* Circular Channel Triage Row */}
-        <div className="flex items-center gap-2 shrink-0 overflow-x-auto py-1">
-          {[
-            { id: 'all', label: 'All', badge: channelCounts.all, icon: Inbox, color: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200' },
-            { id: 'whatsapp', label: 'WhatsApp', badge: channelCounts.whatsapp, icon: MessageCircle, color: 'bg-emerald-500 text-white' },
-            { id: 'livechat', label: 'Live Chat', badge: channelCounts.livechat, icon: MessageSquare, color: 'bg-teal-600 text-white' },
-            { id: 'instagram', label: 'Instagram', badge: channelCounts.instagram, icon: Instagram, color: 'bg-gradient-to-tr from-amber-500 via-rose-500 to-[#9333EA] text-white' },
-            { id: 'facebook', label: 'Facebook', badge: channelCounts.facebook, icon: MessageSquare, color: 'bg-blue-600 text-white' },
-            { id: 'email', label: 'Email', badge: channelCounts.email, icon: Mail, color: 'bg-sky-500 text-white' },
-            { id: 'sms', label: 'SMS', badge: channelCounts.sms, icon: MessageSquare, color: 'bg-teal-600 text-white' },
-            { id: 'phone', label: 'Phone', badge: channelCounts.phone, icon: Phone, color: 'bg-teal-600 text-white' },
-          ].map((ch) => {
-            const Icon = ch.icon;
-            const isSelected = activeChannelPill === ch.id;
-            return (
-              <button
-                key={ch.id}
-                type="button"
-                onClick={() => setActiveChannelPill(ch.id)}
-                className={cn(
-                  'relative size-9 rounded-full flex items-center justify-center transition-all hover:scale-108 shrink-0',
-                  ch.color,
-                  isSelected ? 'ring-2 ring-offset-2 ring-teal-600 shadow-sm' : 'opacity-85 hover:opacity-100'
-                )}
-                title={ch.label}
-              >
-                <Icon className="size-4" />
-                {ch.badge > 0 && (
-                  <span className="absolute -top-1 -right-1 size-4 bg-rose-500 text-white font-bold text-[9px] rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900">
+        {/* Row 2: Horizontal Labeled Channel Filter Pills with Counts */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5">
+            {[
+              {
+                id: 'all',
+                label: 'All',
+                title: 'All',
+                badge: channelCounts.all,
+                icon: null,
+                iconColor: '',
+              },
+              {
+                id: 'whatsapp',
+                label: 'WhatsApp',
+                title: 'WhatsApp',
+                badge: channelCounts.whatsapp,
+                icon: MessageCircle,
+                iconColor: 'text-[#25D366]',
+              },
+              {
+                id: 'sms',
+                label: 'SMS',
+                title: 'SMS',
+                badge: channelCounts.sms,
+                icon: MessageSquare,
+                iconColor: 'text-blue-500',
+              },
+              {
+                id: 'email',
+                label: 'Email',
+                title: 'Email',
+                badge: channelCounts.email,
+                icon: Mail,
+                iconColor: 'text-rose-500',
+              },
+              {
+                id: 'livechat',
+                label: 'Web Chat',
+                title: 'Live Chat',
+                badge: channelCounts.livechat,
+                icon: MessageSquare,
+                iconColor: 'text-[#009F50]',
+              },
+              {
+                id: 'instagram',
+                label: 'Instagram',
+                title: 'Instagram',
+                badge: channelCounts.instagram,
+                icon: Instagram,
+                iconColor: 'text-pink-600',
+              },
+              {
+                id: 'facebook',
+                label: 'Facebook',
+                title: 'Facebook',
+                badge: channelCounts.facebook,
+                icon: MessageSquare,
+                iconColor: 'text-blue-600',
+              },
+            ].map((ch) => {
+              const Icon = ch.icon;
+              const isSelected = activeChannelPill === ch.id;
+              return (
+                <button
+                  key={ch.id}
+                  type="button"
+                  title={ch.title}
+                  onClick={() => setActiveChannelPill(ch.id)}
+                  className={cn(
+                    'h-8 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shrink-0 border',
+                    isSelected
+                      ? 'bg-[#009F50] text-white border-[#009F50] shadow-xs'
+                      : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200/80 dark:border-slate-800 hover:bg-slate-50'
+                  )}
+                >
+                  {Icon && (
+                    <Icon
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        isSelected ? 'text-white' : ch.iconColor
+                      )}
+                    />
+                  )}
+                  <span>{ch.label}</span>
+                  <span
+                    className={cn(
+                      'text-[11px] font-bold px-1.5 py-0 rounded-md',
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                    )}
+                  >
                     {ch.badge}
                   </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </header>
+                </button>
+              );
+            })}
+          </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════════
-          2. WORKSTATION MAIN: 3 COLUMNS (TRIAGE | THREAD | CUSTOMER 360)
-         ═══════════════════════════════════════════════════════════════════════ */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-        {/* ── LEFT COLUMN: THREAD LIST (3.5 Cols) ── */}
-        <div className="md:col-span-4 lg:col-span-3 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col min-h-0">
-          {/* 3 Top Segment Switchers: Conversations | Live Visitors | Tickets */}
-          <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-1">
+          {/* 3 Segment Switchers: Conversations | Live Visitors | Tickets */}
+          <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200/80 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setInboxTab('conversations')}
               className={cn(
-                'flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center',
+                'py-1 px-2.5 rounded-lg text-[11px] font-bold transition-all',
                 inboxTab === 'conversations'
-                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 shadow-2xs'
+                  ? 'bg-[#E8F8EF] text-[#009F50]'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               )}
             >
@@ -943,14 +1101,14 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               type="button"
               onClick={() => setInboxTab('visitors')}
               className={cn(
-                'flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
+                'py-1 px-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1',
                 inboxTab === 'visitors'
-                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 shadow-2xs'
+                  ? 'bg-[#E8F8EF] text-[#009F50]'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               )}
             >
               Live Visitors
-              <span className="size-4 bg-emerald-500 text-white rounded-full text-[10px] flex items-center justify-center font-bold">
+              <span className="size-4 bg-[#009F50] text-white rounded-full text-[9px] flex items-center justify-center font-bold">
                 {LIVE_VISITORS_DATA.length}
               </span>
             </button>
@@ -958,21 +1116,29 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               type="button"
               onClick={() => setInboxTab('tickets')}
               className={cn(
-                'flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1',
+                'py-1 px-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1',
                 inboxTab === 'tickets'
-                  ? 'bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-300 shadow-2xs'
+                  ? 'bg-[#E8F8EF] text-[#009F50]'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50'
               )}
             >
               Tickets
-              <span className="size-4 bg-teal-100 text-teal-700 rounded-full text-[10px] flex items-center justify-center font-bold">
+              <span className="size-4 bg-[#E8F8EF] text-[#009F50] rounded-full text-[9px] flex items-center justify-center font-bold">
                 5
               </span>
             </button>
           </div>
+        </div>
+      </header>
 
+      {/* ═══════════════════════════════════════════════════════════════════════
+          2. WORKSTATION MAIN: 3 ROUNDED CARDS (LIST | THREAD | CONTACT 360)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex-1 min-h-0 px-4 sm:px-6 pb-4 grid grid-cols-1 md:grid-cols-12 gap-3.5 overflow-hidden">
+        {/* ── LEFT COLUMN CARD: CONVERSATION LIST (3 Cols) ── */}
+        <div className="md:col-span-4 lg:col-span-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col min-h-0 overflow-hidden">
           {/* Search Bar */}
-          <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+          <div className="p-3 pb-2 flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" />
               <input
@@ -980,7 +1146,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search conversations..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-[#009F50]"
               />
             </div>
             <button
@@ -991,40 +1157,47 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 setSearchQuery('');
               }}
               title="Reset filters"
-              className="size-8 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 flex items-center justify-center text-slate-500"
+              className="size-8 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:bg-slate-50 flex items-center justify-center text-slate-500"
             >
               <Filter className="size-3.5" />
             </button>
           </div>
 
-          {/* Filter Pills: All | Unread | Assigned | AI | Starred */}
-          <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          {/* Filter Tabs: All | Unread | Leads | Customers */}
+          <div className="px-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3 overflow-x-auto scrollbar-none">
             {[
-              { id: 'all', label: `All ${totalConversationsCount}` },
-              { id: 'unread', label: `Unread ${unreadConversationsCount}` },
-              { id: 'assigned', label: 'Assigned' },
-              { id: 'ai', label: 'AI' },
-              { id: 'starred', label: 'Starred' },
-            ].map((pill) => (
-              <button
-                key={pill.id}
-                type="button"
-                onClick={() => setFilterPill(pill.id as any)}
-                className={cn(
-                  'px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors',
-                  filterPill === pill.id
-                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-2xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200'
-                )}
-              >
-                {pill.label}
-              </button>
-            ))}
+              { id: 'all', label: `All ${totalConversationsCount}`, display: 'All' },
+              { id: 'unread', label: `Unread ${unreadConversationsCount}`, badge: unreadConversationsCount },
+              { id: 'leads', label: 'Leads', badge: leadsConversationsCount },
+              { id: 'customers', label: 'Customers' },
+            ].map((pill) => {
+              const isActive = filterPill === pill.id;
+              return (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => setFilterPill(pill.id as any)}
+                  className={cn(
+                    'py-2 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors flex items-center gap-1',
+                    isActive
+                      ? 'border-[#009F50] text-[#009F50] font-bold'
+                      : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                  )}
+                >
+                  <span>{pill.label}</span>
+                  {pill.id === 'leads' && pill.badge !== undefined && (
+                    <span className="text-[10px] px-1.5 py-0 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold">
+                      {pill.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Scrollable Conversation Thread Cards */}
+          {/* Scrollable Conversation Thread Rows */}
           <ScrollArea className="flex-1 min-h-0">
-            <div className="p-2 space-y-1">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
               {filteredConversations.map((conv) => {
                 const isSelected = selectedConversation.id === conv.id;
                 return (
@@ -1035,61 +1208,48 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       setInboxTab('conversations');
                     }}
                     className={cn(
-                      'p-2.5 rounded-2xl transition-all cursor-pointer relative group flex items-start gap-3',
+                      'px-3.5 py-3 transition-all cursor-pointer relative group flex items-start gap-3 border-l-[3px]',
                       isSelected
-                        ? 'bg-teal-50/60 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800 shadow-2xs'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
+                        ? 'bg-[#E8F8EF]/65 dark:bg-emerald-950/30 border-l-[#009F50]'
+                        : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40 border-l-transparent'
                     )}
                   >
-                    {/* Avatar with Channel Badge Overlay */}
+                    {/* Customer Avatar */}
                     <div className="relative size-10 shrink-0">
-                      <Avatar className="size-10">
-                        <AvatarFallback className="text-xs font-bold bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                      <Avatar className="size-10 border border-slate-200/70 dark:border-slate-700">
+                        <AvatarFallback
+                          className={cn(
+                            'text-xs font-bold',
+                            isSelected
+                              ? 'bg-[#009F50] text-white'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                          )}
+                        >
                           {getInitials(conv.customerName)}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="absolute -bottom-0.5 -right-0.5 size-4 rounded-full bg-white dark:ring-slate-900 flex items-center justify-center shadow-2xs">
-                        <ChannelIcon channel={conv.channel} className="size-3" />
-                      </span>
                     </div>
 
-                    {/* Metadata & Snippet */}
+                    {/* Customer Name + Inline Channel Icon + Timestamp + Snippet + Unread Count */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1.5 truncate">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                             {conv.customerName}
                           </span>
-                          {conv.vipStatus && (
-                            <Star className="size-3 text-amber-500 fill-amber-500 shrink-0" />
-                          )}
+                          <ChannelIcon channel={conv.channel} className="size-3.5 shrink-0" />
                         </div>
-                        <span className="text-[10px] text-slate-400 shrink-0">
-                          {formatTime(conv.lastMessageTime)}
+                        <span className="text-[10px] text-slate-400 shrink-0 font-medium">
+                          {conv.displayTime || formatTime(conv.lastMessageTime)}
                         </span>
                       </div>
 
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5">
-                        {conv.lastMessage}
-                      </p>
-
-                      {/* Tag Badges Row */}
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {conv.tags?.slice(0, 2).map((t) => (
-                          <span
-                            key={t}
-                            className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                        {conv.status === 'closed' && (
-                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
-                            Closed
-                          </span>
-                        )}
+                      <div className="flex items-center justify-between gap-2 mt-1">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
+                          {conv.lastMessage}
+                        </p>
                         {conv.unreadCount > 0 && (
-                          <span className="size-4 rounded-full bg-rose-500 text-white font-bold text-[9px] flex items-center justify-center ml-auto">
+                          <span className="size-4.5 min-w-[18px] px-1 rounded-full bg-[#009F50] text-white font-bold text-[10px] flex items-center justify-center shrink-0">
                             {conv.unreadCount}
                           </span>
                         )}
@@ -1102,157 +1262,195 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           </ScrollArea>
         </div>
 
-        {/* ── CENTER COLUMN: ACTIVE CONVERSATION / LIVE RADAR (5.5 Cols) ── */}
-        <div className="md:col-span-8 lg:col-span-6 flex flex-col min-h-0 bg-background dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800">
+        {/* ── CENTER COLUMN CARD: ACTIVE CONVERSATION / LIVE RADAR (6 Cols) ── */}
+        <div className="md:col-span-8 lg:col-span-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col min-h-0 overflow-hidden">
           {inboxTab === 'conversations' ? (
             <>
-              {/* Center Customer Header */}
-              <div className="p-3.5 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
+              {/* Center Thread Header (Screenshot Parity) */}
+              <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
-                  <Avatar className="size-10">
-                    <AvatarFallback className="text-xs font-bold bg-teal-100 text-teal-700 dark:bg-teal-950">
+                  <Avatar className="size-10 border border-slate-200/80 dark:border-slate-700">
+                    <AvatarFallback className="text-xs font-bold bg-[#E8F8EF] text-[#009F50]">
                       {getInitials(selectedConversation.customerName)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
                         {selectedConversation.customerName}
                       </h3>
-                      {selectedConversation.vipStatus && (
-                        <Badge className="text-[10px] bg-teal-100 text-teal-700 border-none font-bold py-0 h-4">
-                          VIP
-                        </Badge>
-                      )}
+                      <Badge className="text-[10px] bg-[#E8F8EF] text-[#009F50] hover:bg-[#E8F8EF] border-none font-semibold py-0 h-4.5 px-2 rounded-md">
+                        {selectedConversation.leadStatusBadge || 'New Lead'}
+                      </Badge>
                       {selectedConversation.status === 'closed' && (
                         <Badge className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 font-bold py-0 h-4">
                           Closed
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                      <span>{selectedConversation.customerPhone || '+91 98765 43210'}</span>
-                      <span>•</span>
-                      <span className="capitalize">{selectedConversation.channel}</span>
-                      <span>•</span>
-                      <span className="text-emerald-600 font-medium flex items-center gap-1">
-                        <span className="size-1 rounded-full bg-emerald-500" /> Active conversation
+                    <div className="flex items-center gap-3 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      <span className="flex items-center gap-1">
+                        <Phone className="size-3 text-slate-400" />
+                        {selectedConversation.customerPhone || '+91 98765 43210'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <MapPin className="size-3 text-slate-400" />
+                        {selectedConversation.address || 'Delhi, India'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
+                {/* Right Thread Actions: Call | Schedule | Mark Closed | Convert to Customer */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => handleToggleAssign(selectedConversation, e)}
-                    className="h-8 text-xs font-semibold rounded-xl gap-1 border-slate-200"
+                    onClick={() =>
+                      toast.success(
+                        `Calling ${selectedConversation.customerName} (${
+                          selectedConversation.customerPhone || '+91 98765 43210'
+                        })`
+                      )
+                    }
+                    title="Call customer"
+                    className="size-8 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:bg-slate-50 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-colors"
                   >
-                    <UserCheck className="size-3.5" />
-                    {selectedConversation.assigneeId ? 'Assigned' : 'Assign'}
-                  </Button>
-                  <Button
+                    <Phone className="size-3.5" />
+                  </button>
+                  <button
                     type="button"
-                    variant="outline"
-                    size="sm"
                     onClick={() => handleToggleCloseConversation(selectedConversation)}
-                    className="h-8 text-xs font-semibold rounded-xl gap-1 border-slate-200"
+                    title={selectedConversation.status === 'closed' ? 'Reopen' : 'Mark closed'}
+                    className="h-8 px-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700 hover:bg-slate-50 flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-colors"
                   >
                     {selectedConversation.status === 'closed' ? (
                       <>
-                        <RotateCcw className="size-3.5" /> Reopen
+                        <RotateCcw className="size-3" /> Reopen
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 className="size-3.5" /> Mark closed
+                        <CheckCircle2 className="size-3" /> Mark closed
                       </>
                     )}
-                  </Button>
+                  </button>
                   <Button
                     type="button"
                     size="sm"
-                    onClick={handleGenerateAiReply}
-                    className="h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white shadow-xs gap-1"
+                    onClick={() => handleConvertToCustomer(selectedConversation)}
+                    className="h-8 px-3 text-xs font-bold rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white shadow-xs"
                   >
-                    <Sparkles className="size-3.5" /> AI Reply
+                    {selectedConversation.leadStatusBadge === 'Customer'
+                      ? 'Customer ✓'
+                      : 'Convert to Customer'}
                   </Button>
                 </div>
               </div>
 
-              {/* Sub-Navigation Tabs (Chat | Details | Notes | Orders | Appointments | Tickets) */}
-              <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 flex items-center gap-4 text-xs font-semibold text-slate-600 dark:text-slate-400 shrink-0 overflow-x-auto scrollbar-none">
-                {[
-                  { id: 'chat', label: 'Chat' },
-                  { id: 'details', label: 'Customer Details' },
-                  { id: 'notes', label: `Notes (${(conversationNotes[selectedConversation.id]?.length || 0) + 2})` },
-                  { id: 'orders', label: 'Orders (1)' },
-                  { id: 'appointments', label: 'Appointments (1)' },
-                  { id: 'tickets', label: 'Tickets (1)' },
-                ].map((tab) => {
-                  const active = centerSubTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setCenterSubTab(tab.id as any)}
-                      className={cn(
-                        'py-2.5 border-b-2 transition-all whitespace-nowrap',
-                        active
-                          ? 'border-teal-600 text-teal-600 font-bold'
-                          : 'border-transparent hover:text-slate-900'
-                      )}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
+              {/* Sub-Navigation Tabs (Chat | Customer Details | Notes | Orders | Appointments | Tickets) */}
+              <div className="bg-slate-50/60 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 px-4 flex items-center justify-between gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 shrink-0 overflow-x-auto scrollbar-none">
+                <div className="flex items-center gap-4">
+                  {[
+                    { id: 'chat', label: 'Chat' },
+                    { id: 'details', label: 'Customer Details' },
+                    { id: 'notes', label: `Notes (${(conversationNotes[selectedConversation.id]?.length || 0) + 2})` },
+                    { id: 'orders', label: 'Orders (1)' },
+                    { id: 'appointments', label: 'Appointments (1)' },
+                    { id: 'tickets', label: 'Tickets (1)' },
+                  ].map((tab) => {
+                    const active = centerSubTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setCenterSubTab(tab.id as any)}
+                        className={cn(
+                          'py-2 border-b-2 transition-all whitespace-nowrap text-[11px]',
+                          active
+                            ? 'border-[#009F50] text-[#009F50] font-bold'
+                            : 'border-transparent hover:text-slate-900'
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGenerateAiReply}
+                  className="text-[11px] font-bold text-[#009F50] hover:underline flex items-center gap-1 py-1 shrink-0"
+                >
+                  <Sparkles className="size-3" /> AI Reply
+                </button>
               </div>
 
               {/* Center Sub-Tab Content */}
               {centerSubTab === 'chat' ? (
-                <ScrollArea className="flex-1 min-h-0 p-4">
-                  <div className="w-full space-y-4">
+                <ScrollArea className="flex-1 min-h-0 px-4 py-3 bg-white dark:bg-slate-900">
+                  <div className="w-full space-y-3.5">
+                    {/* Centered Today Pill Divider */}
+                    <div className="flex items-center justify-center my-1">
+                      <span className="px-3 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-500">
+                        Today
+                      </span>
+                    </div>
+
                     {selectedConversation.messages.map((msg) => {
                       const isCustomer = msg.sender === 'customer';
                       const isAi = msg.sender === 'ai';
                       return (
-                        <div key={msg.id} className={cn('flex flex-col', isCustomer ? 'items-start' : 'items-end')}>
-                          {/* Sender Label */}
-                          {isAi && (
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-teal-600 mb-1 pl-1">
-                              <Sparkles className="size-3" /> AI Assistant
-                            </div>
-                          )}
-
+                        <div
+                          key={msg.id}
+                          className={cn('flex flex-col', isCustomer ? 'items-start' : 'items-end')}
+                        >
                           <div
                             className={cn(
-                              'p-3.5 rounded-2xl text-xs max-w-[85%] leading-relaxed shadow-2xs whitespace-pre-line',
+                              'p-3 rounded-2xl text-xs max-w-[82%] leading-relaxed shadow-2xs whitespace-pre-line',
                               isCustomer
-                                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 border border-slate-200/80 rounded-tl-xs'
-                                : isAi
-                                ? 'bg-teal-50/70 dark:bg-teal-950/40 text-slate-900 dark:text-slate-100 border border-teal-200 dark:border-teal-800 rounded-tr-xs'
-                                : 'bg-teal-600 text-white rounded-tr-xs'
+                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-tl-xs'
+                                : 'bg-[#DCFCE7] dark:bg-emerald-950/60 text-slate-900 dark:text-slate-100 border border-[#009F50]/15 rounded-tr-xs'
                             )}
                           >
+                            {/* Rich Photo Attachment Card (Screenshot Parity: Split AC Unit Photo) */}
+                            {msg.imageAttachment && (
+                              <div className="mb-2 rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                <div className="h-28 w-56 sm:w-64 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex flex-col items-center justify-center p-3 relative">
+                                  {/* Stylized Split AC Unit Illustration */}
+                                  <div className="w-44 h-14 rounded-lg bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 shadow-xs flex flex-col justify-between p-2">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[8px] font-bold text-slate-400 tracking-wider uppercase">
+                                        INVERTER SPLIT AC
+                                      </span>
+                                      <span className="px-1 py-0.2 rounded bg-emerald-50 text-[#009F50] font-mono text-[9px] font-bold">
+                                        24°C
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-600" />
+                                  </div>
+                                  <span className="text-[10px] text-slate-500 mt-1.5 font-medium">
+                                    {msg.imageAttachment.label || 'Attached Photo'}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
                             <p>{msg.content}</p>
 
-                            {/* ── IN-CHAT INTERACTIVE PACKAGE CARDS (Screenshot 3 Parity) ── */}
+                            {/* ── IN-CHAT INTERACTIVE PACKAGE CARDS ── */}
                             {msg.packageCards && (
-                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 pt-2 border-t border-teal-200/60 dark:border-teal-800">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 pt-2 border-t border-[#009F50]/20">
                                 {msg.packageCards.map((pkg) => (
                                   <div
                                     key={pkg.id}
                                     className={cn(
                                       'p-2.5 rounded-xl border text-center transition-all bg-white dark:bg-slate-900 relative shadow-2xs flex flex-col justify-between',
                                       pkg.isPopular
-                                        ? 'border-teal-600 ring-1 ring-teal-600'
+                                        ? 'border-[#009F50] ring-1 ring-[#009F50]'
                                         : 'border-slate-200 dark:border-slate-800'
                                     )}
                                   >
                                     {pkg.isPopular && (
-                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-teal-600 text-white absolute -top-2 left-1/2 -translate-x-1/2">
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#009F50] text-white absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap">
                                         Most Popular
                                       </span>
                                     )}
@@ -1260,7 +1458,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                       <div className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-1">
                                         {pkg.name}
                                       </div>
-                                      <div className="text-sm font-extrabold text-teal-600 mt-0.5">
+                                      <div className="text-sm font-extrabold text-[#009F50] mt-0.5">
                                         {pkg.price}
                                       </div>
                                       <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -1271,7 +1469,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                     <button
                                       type="button"
                                       onClick={() => handleSelectPackage(pkg)}
-                                      className="mt-2 w-full py-1 text-[11px] font-bold rounded-lg border border-teal-600 text-teal-600 hover:bg-teal-600 hover:text-white transition-colors"
+                                      className="mt-2 w-full py-1 text-[11px] font-bold rounded-lg border border-[#009F50] text-[#009F50] hover:bg-[#009F50] hover:text-white transition-colors"
                                     >
                                       Select
                                     </button>
@@ -1280,15 +1478,15 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                               </div>
                             )}
 
-                            {/* ── IN-CHAT SCHEDULE CONFIRMATION CHIPS (Screenshot 3 Parity) ── */}
+                            {/* ── IN-CHAT SCHEDULE CONFIRMATION CHIPS ── */}
                             {msg.confirmationCard && (
-                              <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-teal-200/60">
+                              <div className="flex flex-wrap gap-1.5 mt-2.5 pt-2 border-t border-[#009F50]/20">
                                 {msg.confirmationCard.actions.map((chip) => (
                                   <button
                                     key={chip}
                                     type="button"
                                     onClick={() => handleConfirmChip(chip)}
-                                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white dark:bg-slate-900 border border-teal-600/40 text-teal-600 hover:bg-teal-600 hover:text-white transition-all shadow-2xs"
+                                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-white dark:bg-slate-900 border border-[#009F50]/40 text-[#009F50] hover:bg-[#009F50] hover:text-white transition-all shadow-2xs"
                                   >
                                     {chip}
                                   </button>
@@ -1297,7 +1495,12 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                             )}
                           </div>
 
-                          <span className="text-[10px] text-slate-400 mt-0.5 px-1">{msg.timestamp}</span>
+                          <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-1 px-1">
+                            <span>{msg.timestamp}</span>
+                            {!isCustomer && (
+                              <CheckCheck className="size-3 text-[#009F50] inline" />
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1366,7 +1569,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                             setCenterNoteInput('');
                             toast.success('Internal note added');
                           }}
-                          className="h-9 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold"
+                          className="h-9 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-bold"
                         >
                           Save Note
                         </Button>
@@ -1375,7 +1578,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                         {[
                           ...(conversationNotes[selectedConversation.id] || []),
                           { id: 'n1', text: 'Customer prefers morning appointment slots (9 AM – 11 AM).', author: 'Team', date: 'Apr 15, 2025' },
-                          { id: 'n2', text: 'Requested eco-friendly / plant-based supplies.', author: 'Team', date: 'Apr 12, 2025' },
+                          { id: 'n2', text: 'Looking for annual maintenance after service.', author: 'Team', date: 'Apr 12, 2025' },
                         ].map((n) => (
                           <div key={n.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-800 text-xs">
                             <p className="font-medium text-slate-800 dark:text-slate-200">{n.text}</p>
@@ -1397,14 +1600,14 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                           setCenterSubTab('chat');
                           setMessageInput(`Hi ${selectedConversation.customerName.split(' ')[0]}, here is your service estimate for the requested package. Let me know to confirm!`);
                         }}
-                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                        className="h-8 text-xs font-bold rounded-xl bg-[#009F50] text-white"
                       >
                         Send Estimate in Chat
                       </Button>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
                       <div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100">Order #ORD-1042 — Deep Cleaning Package</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100">Order #ORD-1042 — AC Servicing &amp; Deep Clean</div>
                         <div className="text-slate-500 mt-0.5">Total: ₹{(selectedConversation.totalSpent || 3999).toLocaleString()}</div>
                       </div>
                       <Badge className="bg-emerald-50 text-emerald-700 border-none text-[10px]">Completed</Badge>
@@ -1419,17 +1622,17 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <Button
                         size="sm"
                         onClick={() => setCurrentView('scheduling')}
-                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                        className="h-8 text-xs font-bold rounded-xl bg-[#009F50] text-white"
                       >
                         Schedule in Appointments
                       </Button>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
                       <div>
-                        <div className="font-bold text-slate-900 dark:text-slate-100">Saturday, Apr 26 at 10:00 AM</div>
+                        <div className="font-bold text-slate-900 dark:text-slate-100">Tomorrow at 10:00 AM</div>
                         <div className="text-slate-500 mt-0.5">Service Visit • {selectedConversation.customerName}</div>
                       </div>
-                      <Badge className="bg-teal-50 text-teal-700 border-none text-[10px]">Scheduled</Badge>
+                      <Badge className="bg-[#E8F8EF] text-[#009F50] border-none text-[10px]">Scheduled</Badge>
                     </div>
                   </div>
                 </ScrollArea>
@@ -1441,7 +1644,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <Button
                         size="sm"
                         onClick={() => setCurrentView('helpCenter')}
-                        className="h-8 text-xs font-bold rounded-xl bg-teal-600 text-white"
+                        className="h-8 text-xs font-bold rounded-xl bg-[#009F50] text-white"
                       >
                         Open Tickets &amp; Support
                       </Button>
@@ -1451,23 +1654,26 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                         <div className="font-bold text-slate-900 dark:text-slate-100">Support Inquiry — {selectedConversation.customerName}</div>
                         <div className="text-slate-500 mt-0.5">Channel: {selectedConversation.channel}</div>
                       </div>
-                      <Badge className="bg-teal-50 text-teal-700 border-none text-[10px]">Active</Badge>
+                      <Badge className="bg-[#E8F8EF] text-[#009F50] border-none text-[10px]">Active</Badge>
                     </div>
                   </div>
                 </ScrollArea>
               )}
 
-              {/* Composer Toolbar & Input */}
-              <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 shrink-0">
+              {/* Bottom Composer Toolbar & Input (Screenshot Parity: Reply | Internal Note + Send) */}
+              <div className="px-4 pt-2 pb-3 bg-white dark:bg-slate-900 border-t border-slate-200/80 dark:border-slate-800 shrink-0">
                 <div className="w-full space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  {/* Top Composer Mode Tabs: Reply | Internal Note */}
+                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-4">
                       <button
                         type="button"
                         onClick={() => setComposerMode('reply')}
                         className={cn(
-                          'text-xs font-bold px-2.5 py-1 rounded-lg transition-colors',
-                          composerMode === 'reply' ? 'bg-teal-600 text-white' : 'text-slate-500 hover:bg-slate-100'
+                          'pb-2 text-xs font-semibold border-b-2 transition-colors',
+                          composerMode === 'reply'
+                            ? 'border-[#009F50] text-[#009F50] font-bold'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
                         )}
                       >
                         Reply
@@ -1476,8 +1682,10 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                         type="button"
                         onClick={() => setComposerMode('internal')}
                         className={cn(
-                          'text-xs font-bold px-2.5 py-1 rounded-lg transition-colors',
-                          composerMode === 'internal' ? 'bg-amber-500 text-white' : 'text-slate-500 hover:bg-slate-100'
+                          'pb-2 text-xs font-semibold border-b-2 transition-colors',
+                          composerMode === 'internal'
+                            ? 'border-amber-500 text-amber-600 font-bold'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
                         )}
                       >
                         Internal Note
@@ -1487,7 +1695,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     <button
                       type="button"
                       onClick={() => setShowTemplates((prev) => !prev)}
-                      className="text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
+                      className="pb-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
                     >
                       <FileText className="size-3.5" /> Templates
                     </button>
@@ -1496,8 +1704,8 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                   {showTemplates && (
                     <div className="flex items-center gap-1.5 flex-wrap pb-1">
                       {[
-                        { label: 'Booking Confirmed', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Your appointment with ${businessName} is confirmed. We look forward to seeing you!` },
-                        { label: 'Share Quote', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is your customized service estimate from ${businessName}. Let us know if you'd like to book a slot.` },
+                        { label: 'Booking Confirmed', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Your appointment with ${businessName} is confirmed for tomorrow at 10:00 AM.` },
+                        { label: 'Share Quote', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is your customized AC service estimate from ${businessName}.` },
                         { label: 'Reschedule Options', text: `No problem! We have open slots tomorrow at 10:00 AM or 2:00 PM. Which time works best for you?` },
                         { label: 'Review Request', text: `Thank you for choosing ${businessName}! If you loved your service today, we'd really appreciate a quick Google review.` },
                       ].map((tpl) => (
@@ -1508,7 +1716,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                             setMessageInput(tpl.text);
                             setShowTemplates(false);
                           }}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200/70 transition-colors"
+                          className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[#E8F8EF] text-[#009F50] hover:bg-[#009F50] hover:text-white transition-colors"
                         >
                           + {tpl.label}
                         </button>
@@ -1516,7 +1724,8 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     </div>
                   )}
 
-                  <div className="flex items-end gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-2 focus-within:ring-1 focus-within:ring-teal-500">
+                  {/* Message Input + Bottom Action Row */}
+                  <div className="space-y-2">
                     <textarea
                       rows={2}
                       value={messageInput}
@@ -1527,23 +1736,57 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                           handleSendMessage();
                         }
                       }}
-                      placeholder={composerMode === 'internal' ? 'Add internal note for team...' : 'Type a message...'}
-                      className="flex-1 text-xs bg-transparent focus:outline-none resize-none p-1 text-slate-900 dark:text-slate-100"
+                      placeholder={
+                        composerMode === 'internal'
+                          ? 'Add internal note for team...'
+                          : 'Type a message...'
+                      }
+                      className="w-full text-xs bg-transparent focus:outline-none resize-none py-1 text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
                     />
 
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <button type="button" className="p-1 hover:text-slate-600">
-                        <Smile className="size-4" />
-                      </button>
-                      <button type="button" className="p-1 hover:text-slate-600">
-                        <Paperclip className="size-4" />
-                      </button>
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-2 text-slate-400">
+                        <button
+                          type="button"
+                          onClick={() => setMessageInput((prev) => `${prev} 😊`)}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Insert emoji"
+                        >
+                          <Smile className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toast.info('Attachment picker opened')}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Attach file"
+                        >
+                          <Paperclip className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toast.info('Image gallery opened')}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Attach image"
+                        >
+                          <ImageIcon className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowTemplates((prev) => !prev)}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          title="Quick replies"
+                        >
+                          <Zap className="size-4" />
+                        </button>
+                      </div>
+
                       <button
                         type="button"
                         onClick={handleSendMessage}
-                        className="size-8 rounded-xl bg-teal-600 text-white flex items-center justify-center hover:bg-teal-700 transition-transform hover:scale-105"
+                        className="h-8 px-4 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all"
                       >
                         <Send className="size-3.5" />
+                        <span>Send</span>
                       </button>
                     </div>
                   </div>
@@ -1933,21 +2176,21 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           )}
         </div>
 
-        {/* ── RIGHT COLUMN: CUSTOMER 360 DOSSIER & AUTOMATION (3 Cols) ── */}
-        <div className="hidden lg:block lg:col-span-3 min-h-0 overflow-hidden">
+        {/* ── RIGHT COLUMN CARD: CONTACT 360 & QUICK ACTIONS (3 Cols) ── */}
+        <div className="hidden lg:flex lg:col-span-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex-col min-h-0 overflow-hidden">
           {inboxTab === 'visitors' ? (
             /* ── VISITOR DOSSIER & PROACTIVE CO-PILOT TAKEOVER PANEL ── */
-            <div className="h-full flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 overflow-y-auto p-4 space-y-4">
+            <div className="h-full flex flex-col bg-white dark:bg-slate-900 overflow-y-auto p-4 space-y-4">
               {/* Profile Header */}
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="size-10 rounded-xl bg-teal-100 dark:bg-teal-950/60 text-teal-700 flex items-center justify-center font-black text-sm">
+                  <div className="size-10 rounded-xl bg-[#E8F8EF] text-[#009F50] flex items-center justify-center font-black text-sm">
                     #{selectedVisitor.shortId}
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
                       <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">{selectedVisitor.name}</h3>
-                      <Badge className="text-[9px] bg-teal-50 text-teal-700 dark:bg-teal-950/60 font-semibold border-none">
+                      <Badge className="text-[9px] bg-[#E8F8EF] text-[#009F50] font-semibold border-none">
                         Returning Lead
                       </Badge>
                     </div>
@@ -1964,11 +2207,11 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 </div>
                 <div className="flex flex-col border-x border-slate-200 dark:border-slate-800">
                   <span className="text-[10px] text-slate-400 font-medium">Lead Score</span>
-                  <span className="text-xs font-bold text-emerald-600">{selectedVisitor.intentScore} / 100</span>
+                  <span className="text-xs font-bold text-[#009F50]">{selectedVisitor.intentScore} / 100</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] text-slate-400 font-medium">Est. Value</span>
-                  <span className="text-xs font-bold text-teal-600">${selectedVisitor.quoteEstimate}.00</span>
+                  <span className="text-xs font-bold text-[#009F50]">${selectedVisitor.quoteEstimate}.00</span>
                 </div>
               </div>
 
@@ -1976,7 +2219,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Live Journey Timeline</span>
-                  <span className="text-[10px] font-semibold text-teal-600">Active Stream</span>
+                  <span className="text-[10px] font-semibold text-[#009F50]">Active Stream</span>
                 </div>
                 <div className="relative pl-4 space-y-3 before:absolute before:left-1.5 before:top-1 before:bottom-1 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
                   {selectedVisitor.timeline.map((step, idx) => (
@@ -1984,13 +2227,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       <span
                         className={cn(
                           'absolute -left-4 top-1 size-2 rounded-full border-2 border-white dark:border-slate-900',
-                          step.isCurrent ? 'bg-rose-500 animate-ping' : 'bg-teal-500'
+                          step.isCurrent ? 'bg-rose-500 animate-ping' : 'bg-[#009F50]'
                         )}
                       />
                       <span
                         className={cn(
                           'absolute -left-4 top-1 size-2 rounded-full border-2 border-white dark:border-slate-900',
-                          step.isCurrent ? 'bg-rose-500' : 'bg-teal-500'
+                          step.isCurrent ? 'bg-rose-500' : 'bg-[#009F50]'
                         )}
                       />
                       <div className="flex items-center justify-between">
@@ -2006,16 +2249,16 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               </div>
 
               {/* AI Proactive Nudge Box */}
-              <div className="p-3 rounded-2xl bg-teal-50/70 dark:bg-teal-950/40 border border-teal-200/70 dark:border-teal-800/50 space-y-2">
+              <div className="p-3 rounded-2xl bg-[#E8F8EF]/70 dark:bg-emerald-950/40 border border-[#009F50]/20 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-teal-900 dark:text-teal-200 flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-teal-600" /> AI Nudge Recommended
+                  <span className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <Sparkles className="size-3.5 text-[#009F50]" /> AI Nudge Recommended
                   </span>
-                  <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-teal-700">
+                  <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 text-[#009F50]">
                     {selectedVisitor.aiNudge.rule}
                   </span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 text-xs italic text-slate-700 dark:text-slate-300 shadow-2xs border border-teal-100 dark:border-teal-900">
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900 text-xs italic text-slate-700 dark:text-slate-300 shadow-2xs border border-[#009F50]/15">
                   "{selectedVisitor.aiNudge.message}"
                 </div>
                 <div className="flex items-center gap-2 pt-0.5">
@@ -2025,7 +2268,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       setNudgeSent((prev) => ({ ...prev, [selectedVisitor.id]: true }));
                       toast.success(`AI Nudge dispatched to ${selectedVisitor.name}!`);
                     }}
-                    className="flex-1 h-8 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-700 text-white"
+                    className="flex-1 h-8 text-xs font-bold rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white"
                   >
                     {nudgeSent[selectedVisitor.id] ? 'Nudge Dispatched ✓' : 'Dispatch AI Nudge'}
                   </Button>
@@ -2047,7 +2290,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                   setInboxTab('conversations');
                   toast.success(`Instant human takeover initiated with ${selectedVisitor.name}`);
                 }}
-                className="w-full h-10 rounded-xl font-bold bg-teal-600 hover:bg-teal-700 text-white flex items-center justify-center gap-2 shadow-sm"
+                className="w-full h-10 rounded-xl font-bold bg-[#009F50] hover:bg-[#008A45] text-white flex items-center justify-center gap-2 shadow-sm"
               >
                 <Radio className="size-4 animate-pulse" /> Instant Human Takeover (Join As Agent)
               </Button>
@@ -2069,6 +2312,10 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 setComposerMode('reply');
                 setMessageInput(`Hi ${selectedConversation.customerName.split(' ')[0]}, here is your personalized service estimate from ${businessName}. Please reply to confirm your preferred slot!`);
                 toast.success(`Estimate drafted for ${selectedConversation.customerName}`);
+              }}
+              onCreateForm={() => {
+                toast.success(`Opening Form Builder for ${selectedConversation.customerName}`);
+                setCurrentView('formBuilder');
               }}
               onCreateTicket={() => {
                 toast.success(`Opening Tickets & Support for ${selectedConversation.customerName}`);

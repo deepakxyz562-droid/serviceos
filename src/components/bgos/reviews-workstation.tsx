@@ -127,77 +127,93 @@ const INITIAL_REVIEWS: ReviewItem[] = [
   },
   {
     id: 'rev-3',
-    name: 'Rahul Patel',
-    initials: 'RP',
-    avatarBg: 'bg-blue-100 text-blue-700',
+    name: 'Priya Sharma',
+    initials: 'PS',
+    avatarBg: 'bg-emerald-600 text-white',
+    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
     rating: 5,
-    timeAgo: '3 days ago',
-    text: 'Excellent service! The team was professional, on time and did a great job. Highly recommended!',
-    keywords: ['professional', 'on time', 'great service'],
+    timeAgo: 'Oct 6, 2026',
+    text: 'Excellent service! The team was on time and very professional. My home looks so clean. Highly recommended!',
+    keywords: ['professional', 'on time', 'clean'],
     replied: false,
     location: 'Green Park, Delhi',
     reviewCount: 4,
   },
   {
     id: 'rev-4',
-    name: 'Neha Sharma',
-    initials: 'NS',
-    avatarBg: 'bg-emerald-600',
-    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=120&auto=format&fit=crop&q=80',
+    name: 'Rahul Verma',
+    initials: 'RV',
+    avatarBg: 'bg-blue-600 text-white',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
     rating: 5,
-    timeAgo: '5 days ago',
-    text: 'Very good cleaning service. My house looks spotless. Will definitely book again.',
-    keywords: ['clean', 'deep cleaning', 'recommend'],
+    timeAgo: 'Oct 4, 2026',
+    text: 'Great experience. Booking was easy and the staff did a fantastic job. Will use again.',
+    keywords: ['great service', 'friendly', 'recommend'],
     replied: false,
     location: 'South Extension, Delhi',
     reviewCount: 6,
   },
   {
     id: 'rev-5',
-    name: 'Amit Mehta',
-    initials: 'AM',
-    avatarBg: 'bg-blue-100 text-blue-700',
+    name: 'Sneha Kapoor',
+    initials: 'SK',
+    avatarBg: 'bg-amber-600 text-white',
+    avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=120&auto=format&fit=crop&q=80',
     rating: 4,
-    timeAgo: '1 week ago',
-    text: 'Good service and friendly staff. Slightly delayed but overall satisfied.',
-    keywords: ['friendly', 'good service', 'satisfied'],
-    replied: true,
-    replyText: 'Thank you Amit! We appreciate your feedback and are glad you were pleased with our staff.',
-    replyEdited: 'Edited 5 days ago',
+    timeAgo: 'Oct 1, 2026',
+    text: 'Good service overall. The team was friendly and did a thorough cleaning.',
+    keywords: ['friendly', 'cleaning', 'good service'],
+    replied: false,
     location: 'Hauz Khas, Delhi',
     reviewCount: 3,
   },
   {
     id: 'rev-6',
-    name: 'Deepak Singh',
-    initials: 'DS',
-    avatarBg: 'bg-amber-600',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
+    name: 'Amit Singh',
+    initials: 'AS',
+    avatarBg: 'bg-teal-600 text-white',
+    avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
     rating: 5,
-    timeAgo: '1 week ago',
-    text: 'Amazing experience! Easy booking and excellent quality.',
-    keywords: ['quality', 'great service'],
-    replied: true,
-    replyText: 'Thanks so much Deepak! Thrilled to hear booking and service quality hit the mark.',
-    replyEdited: 'Edited 1 week ago',
+    timeAgo: 'Sep 28, 2026',
+    text: 'Very reliable and affordable. The booking process was smooth and the results were amazing.',
+    keywords: ['quality', 'price', 'great service'],
+    replied: false,
     location: 'Vasant Kunj, Delhi',
     reviewCount: 5,
   },
   {
     id: 'rev-7',
-    name: 'Pooja Kapoor',
-    initials: 'PK',
-    avatarBg: 'bg-blue-100 text-blue-700',
-    rating: 5,
-    timeAgo: '2 weeks ago',
-    text: 'Professional and reliable. Great attention to detail.',
-    keywords: ['professional', 'quality'],
-    replied: true,
-    replyText: 'Thank you Pooja! Attention to detail is our top priority.',
-    replyEdited: 'Edited 2 weeks ago',
+    name: 'Neha Gupta',
+    initials: 'NG',
+    avatarBg: 'bg-rose-600 text-white',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
+    rating: 4,
+    timeAgo: 'Sep 25, 2026',
+    text: 'Happy with the service. The team was polite and did a good job.',
+    keywords: ['friendly', 'quality'],
+    replied: false,
     location: 'Greater Kailash, Delhi',
     reviewCount: 7,
   },
+];
+
+const RATING_TREND_POINTS = [
+  { month: 'Jan', rating: 4.0, x: 20, y: 52 },
+  { month: 'Feb', rating: 4.1, x: 64, y: 47 },
+  { month: 'Mar', rating: 4.3, x: 108, y: 39 },
+  { month: 'Apr', rating: 4.2, x: 152, y: 44 },
+  { month: 'May', rating: 4.4, x: 196, y: 35 },
+  { month: 'Jun', rating: 4.5, x: 240, y: 31 },
+  { month: 'Jul', rating: 4.6, x: 284, y: 27 },
+  { month: 'Aug', rating: 4.7, x: 328, y: 23 },
+  { month: 'Sep', rating: 4.8, x: 372, y: 19 },
+  { month: 'Oct', rating: 4.9, x: 416, y: 14 },
+];
+
+const REVIEW_SOURCES = [
+  { label: 'Google Maps', count: 102, pct: '82%', color: 'bg-[#009F50]', stroke: '#009F50' },
+  { label: 'Google Search', count: 15, pct: '12%', color: 'bg-[#34D399]', stroke: '#34D399' },
+  { label: 'Other', count: 7, pct: '6%', color: 'bg-[#A7F3D0]', stroke: '#A7F3D0' },
 ];
 
 const REVIEW_GROWTH_BARS = [
@@ -521,30 +537,12 @@ export function ReviewsView() {
 
   return (
     <div className="p-4 sm:p-5 lg:p-6 space-y-5 w-full bg-[#F7FAF9] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
-      {/* ─── 1. Page Header (Matches Attached Screenshot) ─────────────── */}
+      {/* ─── 1. Page Header (Matches New Google Business & Reviews Screenshot) ─── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          {/* Google Maps / Business Pin Multi-color Icon Badge */}
-          <div className="size-12 rounded-2xl bg-white dark:bg-slate-900 shadow-xs border border-slate-200/80 dark:border-slate-800 flex items-center justify-center shrink-0">
-            <svg className="size-7" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2C7.58 2 4 5.58 4 10c0 5.25 8 12 8 12s8-6.75 8-12c0-4.42-3.58-8-8-8z"
-                fill="#34A853"
-              />
-              <path
-                d="M12 2C7.58 2 4 5.58 4 10c0 2.1.82 4.35 2.12 6.45L12 10V2z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 2v8l5.88 6.45C19.18 14.35 20 12.1 20 10c0-4.42-3.58-8-8-8z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M6.12 16.45C8.35 19.86 12 22 12 22s3.65-2.14 5.88-5.55L12 10l-5.88 6.45z"
-                fill="#EA4335"
-              />
-              <circle cx="12" cy="10" r="3.2" fill="#FFFFFF" />
-            </svg>
+          {/* Solid Green Rounded Square Badge with White MapPin Icon */}
+          <div className="size-11 rounded-2xl bg-[#009F50] text-white shadow-xs flex items-center justify-center shrink-0">
+            <MapPin className="size-6 text-white" />
           </div>
 
           <div>
@@ -557,44 +555,13 @@ export function ReviewsView() {
               </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Manage your Google Business Profile, post updates, and get more 5-star reviews.
+              Manage your Google Business profile, read and respond to reviews, and grow your reputation.
             </p>
           </div>
         </div>
 
-        {/* Right Global Toolbar */}
+        {/* Right Global Toolbar: View on Google + Request Reviews (+ Sync GBP) */}
         <div className="flex items-center flex-wrap gap-2.5">
-          {/* Timeframe selector */}
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTimeRangeOpen(!timeRangeOpen)}
-              className="h-9 gap-2 bg-white dark:bg-slate-900 shadow-2xs border-slate-200 dark:border-slate-800 text-xs font-medium rounded-xl px-3.5"
-            >
-              <Calendar className="size-4 text-[#009F50]" />
-              <span>{timeRange}</span>
-              <ChevronDown className="size-3.5 text-slate-400" />
-            </Button>
-            {timeRangeOpen && (
-              <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 py-1 text-xs">
-                {['Last 7 days', 'Last 30 days', 'Last 90 days', 'This Quarter'].map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => {
-                      setTimeRange(range);
-                      setTimeRangeOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between"
-                  >
-                    <span>{range}</span>
-                    {timeRange === range && <Check className="size-3.5 text-[#009F50]" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           <Button
             variant="outline"
             size="sm"
@@ -606,33 +573,45 @@ export function ReviewsView() {
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
-            onClick={() => setCreatePostModalOpen(true)}
+            onClick={() => window.open('https://google.com/maps', '_blank')}
+            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl px-3.5 shadow-2xs"
+          >
+            <span>View on Google</span>
+            <ExternalLink className="size-3.5 text-slate-500" />
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => setRequestReviewsOpen(true)}
             className="h-9 gap-1.5 bg-[#009F50] hover:bg-[#008A45] text-white font-semibold text-xs shadow-xs rounded-xl px-4"
           >
-            <Plus className="size-4" />
-            <span>Create Post</span>
+            <Send className="size-3.5" />
+            <span>Request Reviews</span>
           </Button>
         </div>
       </div>
 
-      {/* ─── 2. Sub-Navigation Tabs (With Icons & Green Active Underline) ─── */}
+      {/* ─── 2. Sub-Navigation Tabs (Matching Screenshot + Backward Compatible Tabs) ─── */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200/90 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50 px-2 pt-1 rounded-t-xl">
         {[
           { id: 'overview', label: 'Overview', Icon: BarChart3 },
-          { id: 'reviews', label: 'Reviews', Icon: MessageSquare },
-          { id: 'posts', label: 'Posts', Icon: Send },
-          { id: 'qna', label: 'Q&A', Icon: HelpCircle },
-          { id: 'photos', label: 'Photos', Icon: ImageIcon },
+          { id: 'reviews', label: 'Reviews', Icon: Star },
+          { id: 'generate-replies', label: 'Generate Replies', Icon: Sparkles },
+          { id: 'review-requests', label: 'Review Requests', Icon: Send },
+          { id: 'posts', label: 'Posts', Icon: FileText },
           { id: 'insights', label: 'Insights', Icon: Eye },
           { id: 'settings', label: 'Settings', Icon: Settings },
+          { id: 'qna', label: 'Q&A', Icon: HelpCircle },
+          { id: 'photos', label: 'Photos', Icon: ImageIcon },
         ].map(({ id, label, Icon }) => {
           const isActive = activeSubTab === id;
           return (
             <button
               key={id}
               onClick={() => setActiveSubTab(id)}
-              className={`relative px-4 py-2.5 text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
+              className={`relative px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
                 isActive
                   ? 'text-[#009F50] dark:text-emerald-400'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
@@ -649,231 +628,293 @@ export function ReviewsView() {
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          SCREENSHOT OVERVIEW BENTO (Top Profile + 4 KPIs + Review Growth +
-          Rating Breakdown + Recent Reviews + Create a Post + Profile Performance +
-          Customer Photos + Common Review Tags + Automate Review Requests)
+          SCREENSHOT OVERVIEW DASHBOARD:
+          - Row 1: 4 Top KPI Summary Cards (Average Rating, Total Reviews, Profile Views, Website Clicks)
+          - Row 2: Rating Trend (Line/Area Chart) | Reviews by Rating (Bars) | Review Sources (Donut Chart)
+          - Row 3: Recent Reviews (Left, Reply with AI) | Your Google Business Profile + Quick Actions (Right)
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'overview' && (
         <div className="space-y-5">
-          {/* ─── Top Grid: Storefront Profile Card + 4 KPIs + Review Growth + Breakdown ─── */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Left Storefront Card (4 cols) */}
-            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <img
-                  src="https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=320&auto=format&fit=crop&q=80"
-                  alt={profileTitle}
-                  className="w-24 h-20 sm:w-28 sm:h-24 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white truncate">
-                      {profileTitle}
-                    </h2>
-                    <CheckCircle2 className="size-4 fill-blue-500 text-white shrink-0" />
-                  </div>
-
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <div className="flex text-amber-400">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star key={s} className="size-3.5 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                    <span className="text-xs font-bold text-slate-900 dark:text-white">4.8</span>
-                    <span className="text-xs text-slate-500">(246 reviews)</span>
-                  </div>
-
-                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1.5">
-                    {profileCategory} · <span className="text-[#009F50] font-semibold">Open Now</span>
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                    {profileAddress}
-                  </p>
+          {/* ─── Row 1: 4 Top Summary KPI Cards (Matches Screenshot) ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* KPI 1: Average Rating */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex flex-col justify-between gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Average Rating</span>
+                <div className="size-8 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center shrink-0">
+                  <svg className="size-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.3 0 6.08-1.09 8.1-2.96l-3.88-3.05c-1.08.72-2.45 1.16-4.22 1.16-3.24 0-5.99-2.19-6.98-5.14H1.01v3.14C3.02 21.14 7.21 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.02 14.01c-.25-.72-.39-1.5-.39-2.31s.14-1.59.39-2.31V6.25H1.01C.37 7.53 0 8.98 0 11.7s.37 4.17 1.01 5.45l4.01-3.14z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.8 0 3.41.62 4.68 1.84l3.51-3.51C18.07 1.19 15.3 0 12 0 7.21 0 3.02 2.86 1.01 6.85l4.01 3.14c.99-2.95 3.74-5.24 6.98-5.24z"
+                    />
+                  </svg>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('https://google.com/maps', '_blank')}
-                  className="flex-1 h-9 text-xs font-semibold gap-2 rounded-xl border-slate-200 dark:border-slate-800"
-                >
-                  <span className="font-bold text-blue-600">G</span>
-                  <span>View on Google</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditProfileOpen(true)}
-                  className="flex-1 h-9 text-xs font-semibold gap-1.5 rounded-xl border-slate-200 dark:border-slate-800"
-                >
-                  <Edit3 className="size-3.5 text-slate-500" />
-                  <span>Edit Profile</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setActiveSubTab('settings')}
-                  className="size-9 rounded-xl border-slate-200 dark:border-slate-800 shrink-0"
-                  aria-label="More profile options"
-                >
-                  <MoreVertical className="size-4 text-slate-500" />
-                </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">4.8</span>
+                <div className="flex text-amber-400">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="size-3.5 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                <span className="text-xs text-slate-500 font-medium">(+0.3 this month)</span>
               </div>
             </div>
 
-            {/* Right 8 Cols: 4 KPI Cards on Top + Review Growth & Rating Breakdown Below */}
-            <div className="lg:col-span-8 flex flex-col gap-5">
-              {/* 4 Screenshot KPI Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-                {/* KPI 1: Total Reviews */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-500 shrink-0">
-                    <Star className="size-5 fill-amber-400 text-amber-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500 font-medium truncate">Total Reviews</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-2xl font-extrabold tracking-tight">246</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                        ↑ 28%
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">vs last 30 days</p>
-                  </div>
-                </div>
-
-                {/* KPI 2: Average Rating */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-amber-50 dark:bg-amber-950/50 flex items-center justify-center text-amber-500 shrink-0">
-                    <Star className="size-5 fill-amber-400 text-amber-400" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500 font-medium truncate">Average Rating</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-2xl font-extrabold tracking-tight">4.8</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                        ↑ 0.3
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">vs last 30 days</p>
-                  </div>
-                </div>
-
-                {/* KPI 3: Profile Views */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 shrink-0">
-                    <Eye className="size-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500 font-medium truncate">Profile Views</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-2xl font-extrabold tracking-tight">12,480</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                        ↑ 42%
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">vs last 30 days</p>
-                  </div>
-                </div>
-
-                {/* KPI 4: Customer Actions */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
-                  <div className="size-10 rounded-full bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 shrink-0">
-                    <MousePointerClick className="size-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-slate-500 font-medium truncate">Customer Actions</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-2xl font-extrabold tracking-tight">842</span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                        ↑ 36%
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">vs last 30 days</p>
-                  </div>
+            {/* KPI 2: Total Reviews */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex flex-col justify-between gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Reviews</span>
+                <div className="size-8 rounded-xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                  <MessageSquare className="size-4" />
                 </div>
               </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">124</span>
+                <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                  ↑ +18%
+                </span>
+                <span className="text-xs text-slate-500">vs last month</span>
+              </div>
+            </div>
 
-              {/* Review Growth Bar Chart + Rating Breakdown */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 flex-1">
-                {/* Review Growth Vertical Bar Chart (7 cols) */}
-                <div className="md:col-span-7 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Review Growth</h3>
-                    <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1">
-                      {timeRange} <ChevronDown className="size-3" />
+            {/* KPI 3: Profile Views */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex flex-col justify-between gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Profile Views</span>
+                <div className="size-8 rounded-xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                  <Eye className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">12.4K</span>
+                <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                  ↑ 32%
+                </span>
+                <span className="text-xs text-slate-500">vs last month</span>
+              </div>
+            </div>
+
+            {/* KPI 4: Website Clicks */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex flex-col justify-between gap-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Website Clicks</span>
+                <div className="size-8 rounded-xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                  <MousePointerClick className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">1.2K</span>
+                <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                  ↑ 21%
+                </span>
+                <span className="text-xs text-slate-500">vs last month</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Row 2: 3 Analytics Cards (Rating Trend | Reviews by Rating | Review Sources) ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Left Card (5 cols): Rating Trend */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Rating Trend</h3>
+                <button
+                  type="button"
+                  onClick={() => setTimeRangeOpen(!timeRangeOpen)}
+                  className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1"
+                >
+                  <span>Last 6 months</span>
+                  <ChevronDown className="size-3 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="relative h-44 pt-2 pl-7 pb-6">
+                {/* Y-Axis Labels (5.0 down to 1.0) */}
+                <div className="absolute left-0 top-1 bottom-6 flex flex-col justify-between text-[10px] text-slate-400 font-medium">
+                  <span>5.0</span>
+                  <span>4.0</span>
+                  <span>3.0</span>
+                  <span>2.0</span>
+                  <span>1.0</span>
+                </div>
+
+                {/* SVG Smooth Line + Shaded Area + Circular Data Point Markers */}
+                <svg className="w-full h-full overflow-visible" viewBox="0 0 436 130" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="ratingTrendArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#009F50" stopOpacity="0.22" />
+                      <stop offset="100%" stopColor="#009F50" stopOpacity="0.01" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Horizontal Dashed Gridlines */}
+                  {[14, 42, 70, 98, 124].map((yLine) => (
+                    <line
+                      key={yLine}
+                      x1="10"
+                      y1={yLine}
+                      x2="426"
+                      y2={yLine}
+                      stroke="#E2E8F0"
+                      strokeDasharray="3 3"
+                      strokeWidth="1"
+                    />
+                  ))}
+
+                  {/* Area under curve */}
+                  <path
+                    d="M 20,52 L 64,47 L 108,39 L 152,44 L 196,35 L 240,31 L 284,27 L 328,23 L 372,19 L 416,14 L 416,124 L 20,124 Z"
+                    fill="url(#ratingTrendArea)"
+                  />
+
+                  {/* Smooth Rating Line */}
+                  <path
+                    d="M 20,52 L 64,47 L 108,39 L 152,44 L 196,35 L 240,31 L 284,27 L 328,23 L 372,19 L 416,14"
+                    fill="none"
+                    stroke="#009F50"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Data Point Dots */}
+                  {RATING_TREND_POINTS.map((pt) => (
+                    <circle
+                      key={pt.month}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r="4"
+                      fill="#009F50"
+                      stroke="#FFFFFF"
+                      strokeWidth="1.5"
+                    />
+                  ))}
+                </svg>
+
+                {/* X-Axis Labels (Jan – Oct) */}
+                <div className="absolute left-7 right-0 bottom-0 flex justify-between text-[10px] text-slate-400 font-medium px-1">
+                  {RATING_TREND_POINTS.map((pt) => (
+                    <span key={pt.month}>{pt.month}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Middle Card (3 cols): Reviews by Rating */}
+            <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Reviews by Rating</h3>
+              <div className="space-y-3 my-auto">
+                {[
+                  { star: '5', width: '79%', count: 98 },
+                  { star: '4', width: '16%', count: 16 },
+                  { star: '3', width: '7%', count: 6 },
+                  { star: '2', width: '4%', count: 3 },
+                  { star: '1', width: '2%', count: 1 },
+                ].map((row) => (
+                  <div key={row.star} className="flex items-center gap-2.5 text-xs">
+                    <span className="w-7 flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-200">
+                      {row.star} <Star className="size-3 fill-amber-400 text-amber-400" />
+                    </span>
+                    <div className="flex-1 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-[#009F50] rounded-full" style={{ width: row.width }} />
+                    </div>
+                    <span className="w-6 text-right font-semibold text-slate-600 dark:text-slate-300">
+                      {row.count}
                     </span>
                   </div>
+                ))}
+              </div>
+            </div>
 
-                  <div className="relative h-40 flex items-end gap-1.5 pt-4 pl-7 pb-5 border-b border-slate-100 dark:border-slate-800">
-                    {/* Y-Axis Labels */}
-                    <div className="absolute left-0 top-2 bottom-5 flex flex-col justify-between text-[10px] text-slate-400 font-medium">
-                      <span>40</span>
-                      <span>30</span>
-                      <span>20</span>
-                      <span>10</span>
-                      <span>0</span>
-                    </div>
+            {/* Right Card (4 cols): Review Sources Donut Chart */}
+            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Review Sources</h3>
 
-                    {/* Vertical Emerald Green Bars */}
-                    {REVIEW_GROWTH_BARS.map((bar, idx) => (
-                      <div key={idx} className="flex-1 h-full flex items-end justify-center group relative">
-                        <div
-                          className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-[#009F50] to-[#00C86F] transition-all duration-300 group-hover:opacity-85"
-                          style={{ height: `${Math.max(15, (bar.val / 35) * 100)}%` }}
-                          title={`${bar.label}: ${bar.val} reviews`}
-                        />
-                      </div>
-                    ))}
-
-                    {/* X-Axis Labels */}
-                    <div className="absolute left-7 right-0 bottom-0 flex justify-between text-[10px] text-slate-400">
-                      <span>Oct 1</span>
-                      <span>Oct 5</span>
-                      <span>Oct 10</span>
-                      <span>Oct 15</span>
-                      <span>Oct 20</span>
-                      <span>Oct 25</span>
-                      <span>Oct 30</span>
-                    </div>
+              <div className="flex items-center justify-between gap-4 my-auto">
+                {/* SVG Donut Chart with 124 Total in Center */}
+                <div className="relative size-32 shrink-0 flex items-center justify-center">
+                  <svg className="size-full -rotate-90" viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="46" fill="none" stroke="#E2E8F0" strokeWidth="14" />
+                    {/* Google Maps 82% (237 of 289 circumference) */}
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="46"
+                      fill="none"
+                      stroke="#009F50"
+                      strokeWidth="14"
+                      strokeDasharray="237 289"
+                      strokeDashoffset="0"
+                    />
+                    {/* Google Search 12% (35 of 289 circumference) */}
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="46"
+                      fill="none"
+                      stroke="#34D399"
+                      strokeWidth="14"
+                      strokeDasharray="35 289"
+                      strokeDashoffset="-237"
+                    />
+                    {/* Other 6% (17 of 289 circumference) */}
+                    <circle
+                      cx="60"
+                      cy="60"
+                      r="46"
+                      fill="none"
+                      stroke="#A7F3D0"
+                      strokeWidth="14"
+                      strokeDasharray="17 289"
+                      strokeDashoffset="-272"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span className="text-xl font-extrabold text-slate-900 dark:text-white leading-none">
+                      124
+                    </span>
+                    <span className="text-[11px] text-slate-500 mt-0.5">Total</span>
                   </div>
                 </div>
 
-                {/* Rating Breakdown Card (5 cols) */}
-                <div className="md:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">Rating Breakdown</h3>
-                  <div className="space-y-3 my-auto">
-                    {[
-                      { num: '5', pct: '72%', color: 'bg-[#009F50]' },
-                      { num: '4', pct: '18%', color: 'bg-[#00C86F]' },
-                      { num: '3', pct: '6%', color: 'bg-amber-400' },
-                      { num: '2', pct: '3%', color: 'bg-orange-400' },
-                      { num: '1', pct: '1%', color: 'bg-rose-500' },
-                    ].map((row) => (
-                      <div key={row.num} className="flex items-center gap-2.5 text-xs">
-                        <span className="w-7 flex items-center gap-1 font-bold text-slate-700 dark:text-slate-200">
-                          {row.num} <Star className="size-3 fill-amber-400 text-amber-400" />
-                        </span>
-                        <div className="flex-1 h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div className={`h-full ${row.color} rounded-full`} style={{ width: row.pct }} />
-                        </div>
-                        <span className="w-9 text-right font-semibold text-slate-600 dark:text-slate-300">
-                          {row.pct}
+                {/* Right Legend Breakdown */}
+                <div className="flex-1 space-y-2.5 text-xs">
+                  {REVIEW_SOURCES.map((src) => (
+                    <div key={src.label} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`size-2.5 rounded-full ${src.color} shrink-0`} />
+                        <span className="text-slate-600 dark:text-slate-300 font-medium truncate">
+                          {src.label}
                         </span>
                       </div>
-                    ))}
-                  </div>
+                      <span className="font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                        {src.count}{' '}
+                        <span className="text-slate-400 font-normal">({src.pct})</span>
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ─── Middle 3-Column Row: Recent Reviews | Create a Post | Profile Performance ─── */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-            {/* Left (5 cols): Recent Reviews */}
-            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+          {/* ─── Row 3: Bottom 2-Column Split (Recent Reviews Left | Your Google Business Profile + Quick Actions Right) ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Left Column (7 cols): Recent Reviews with ✨ Reply with AI */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Recent Reviews</h3>
                 <button
@@ -881,16 +922,15 @@ export function ReviewsView() {
                   onClick={() => setActiveSubTab('reviews')}
                   className="text-xs font-semibold text-[#009F50] hover:underline flex items-center gap-1"
                 >
-                  <span>View All</span>
-                  <ChevronRight className="size-3.5" />
+                  <span>View all →</span>
                 </button>
               </div>
 
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {recentOverviewReviews.map((rev) => (
-                  <div key={rev.id} className="py-3 first:pt-1 last:pb-0">
+                  <div key={rev.id} className="py-3.5 first:pt-1 last:pb-0">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
                         {rev.avatarUrl ? (
                           <img
                             src={rev.avatarUrl}
@@ -904,8 +944,8 @@ export function ReviewsView() {
                             {rev.initials}
                           </div>
                         )}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-bold text-slate-900 dark:text-white">
                               {rev.name}
                             </span>
@@ -921,36 +961,41 @@ export function ReviewsView() {
                               />
                             ))}
                           </div>
-                          <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                            {rev.text}
-                          </p>
+                          <div className="flex items-end justify-between gap-3 mt-1">
+                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed flex-1">
+                              {rev.text}
+                            </p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const firstName = rev.name.split(' ')[0];
+                                  setSelectedReviewId(rev.id);
+                                  setQuickReplyId(quickReplyId === rev.id ? null : rev.id);
+                                  setQuickReplyText(
+                                    rev.replyText ||
+                                      `Thank you so much for your kind review, ${firstName}! Our Sparkle Clean Services team loved serving you and we look forward to your next visit.`
+                                  );
+                                }}
+                                className="h-7 px-2.5 rounded-lg border border-[#ccebd9] bg-[#F4FBF7] hover:bg-[#E8F8EF] text-[#009F50] text-[11px] font-semibold inline-flex items-center gap-1 transition-colors"
+                              >
+                                <Sparkles className="size-3" />
+                                <span>Reply with AI</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedReviewId(rev.id);
+                                  setActiveSubTab('reviews');
+                                }}
+                                className="p-1 text-slate-400 hover:text-slate-700 rounded-md"
+                                aria-label={`Inspect review by ${rev.name}`}
+                              >
+                                <MoreHorizontal className="size-4" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedReviewId(rev.id);
-                            setQuickReplyId(quickReplyId === rev.id ? null : rev.id);
-                            setQuickReplyText(rev.replyText || '');
-                          }}
-                          className="h-7 px-3 text-xs font-semibold rounded-lg border-slate-200 dark:border-slate-700"
-                        >
-                          Reply
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedReviewId(rev.id);
-                            setActiveSubTab('reviews');
-                          }}
-                          className="p-1 text-slate-400 hover:text-slate-700 rounded-md"
-                          aria-label={`Inspect review by ${rev.name}`}
-                        >
-                          <MoreVertical className="size-3.5" />
-                        </button>
                       </div>
                     </div>
 
@@ -960,7 +1005,7 @@ export function ReviewsView() {
                           value={quickReplyText}
                           onChange={(e) => setQuickReplyText(e.target.value)}
                           rows={2}
-                          placeholder={`Write a reply to ${rev.name}...`}
+                          placeholder={`Write an AI-assisted reply to ${rev.name}...`}
                           className="text-xs bg-slate-50 dark:bg-slate-800"
                         />
                         <div className="flex justify-end gap-2">
@@ -984,6 +1029,210 @@ export function ReviewsView() {
                     )}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Right Column (5 cols): Your Google Business Profile + Quick Actions */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              {/* Card 1: Your Google Business Profile */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Your Google Business Profile
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditProfileOpen(true)}
+                    className="text-xs font-semibold text-[#009F50] hover:underline flex items-center gap-1"
+                  >
+                    <Edit3 className="size-3.5" />
+                    <span>Edit</span>
+                  </button>
+                </div>
+
+                <div className="flex items-start gap-4">
+                  <img
+                    src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=320&auto=format&fit=crop&q=80"
+                    alt="Sparkle Clean Services"
+                    className="w-28 h-24 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Sparkle Clean Services
+                      </h4>
+                      <span className="text-[10px] font-medium text-slate-400">{profileTitle}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">4.8</span>
+                      <div className="flex text-amber-400">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star key={s} className="size-3 fill-amber-400 text-amber-400" />
+                        ))}
+                      </div>
+                      <span className="text-xs text-slate-500">(124 reviews)</span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400">House Cleaning Service</p>
+
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="px-2 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                        Open
+                      </span>
+                      <span className="text-xs text-slate-500 flex items-center gap-1">
+                        Closes 8:00 PM <ChevronDown className="size-3" />
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-0.5 truncate">
+                      <MapPin className="size-3.5 text-[#009F50] shrink-0" />
+                      <span className="truncate">{profileAddress}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('https://google.com/maps', '_blank')}
+                    className="h-9 text-xs font-semibold gap-1.5 rounded-xl border-slate-200 dark:border-slate-800"
+                  >
+                    <span>View on Google</span>
+                    <ExternalLink className="size-3.5 text-slate-400" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditProfileOpen(true)}
+                    className="h-9 text-xs font-semibold gap-1.5 rounded-xl border-[#009F50]/40 bg-[#F4FBF7] hover:bg-[#E8F8EF] text-[#009F50]"
+                  >
+                    <Edit3 className="size-3.5" />
+                    <span>Edit Profile</span>
+                  </Button>
+                </div>
+              </div>
+
+              {/* Card 2: Quick Actions (2x2 Grid matching Screenshot) */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs space-y-3">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Quick Actions</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRequestReviewsOpen(true)}
+                    className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-[#009F50]/40 hover:bg-[#F4FBF7] dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="size-9 rounded-full bg-[#E8F8EF] text-[#009F50] flex items-center justify-center">
+                      <Send className="size-4" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Request Reviews
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCreatePostModalOpen(true)}
+                    className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-[#009F50]/40 hover:bg-[#F4FBF7] dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="size-9 rounded-full bg-[#E8F8EF] text-[#009F50] flex items-center justify-center">
+                      <Plus className="size-4" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Create Post
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveSubTab('insights')}
+                    className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-[#009F50]/40 hover:bg-[#F4FBF7] dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="size-9 rounded-full bg-[#E8F8EF] text-[#009F50] flex items-center justify-center">
+                      <BarChart3 className="size-4" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      View Insights
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleCopyReviewLink}
+                    className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-[#009F50]/40 hover:bg-[#F4FBF7] dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="size-9 rounded-full bg-[#E8F8EF] text-[#009F50] flex items-center justify-center">
+                      <Share2 className="size-4" />
+                    </div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Share Profile
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Secondary GBP Studio Row: Review Growth + Rating Breakdown + Create a Post + Profile Performance ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Left (5 cols): Review Growth & Rating Breakdown */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              {/* Review Growth Card */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">Review Growth</h3>
+                    <p className="text-[11px] text-slate-400">
+                      <span>12,480</span> monthly impressions
+                    </p>
+                  </div>
+                  <span className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-lg font-medium flex items-center gap-1">
+                    {timeRange} <ChevronDown className="size-3" />
+                  </span>
+                </div>
+
+                <div className="relative h-32 flex items-end gap-1.5 pt-4 pl-7 pb-5 border-b border-slate-100 dark:border-slate-800">
+                  <div className="absolute left-0 top-2 bottom-5 flex flex-col justify-between text-[10px] text-slate-400 font-medium">
+                    <span>40</span>
+                    <span>20</span>
+                    <span>0</span>
+                  </div>
+                  {REVIEW_GROWTH_BARS.map((bar, idx) => (
+                    <div key={idx} className="flex-1 h-full flex items-end justify-center group relative">
+                      <div
+                        className="w-full max-w-[12px] rounded-t-md bg-gradient-to-t from-[#009F50] to-[#00C86F]"
+                        style={{ height: `${Math.max(15, (bar.val / 35) * 100)}%` }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Rating Breakdown Card */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">Rating Breakdown</h3>
+                <div className="space-y-2.5 my-auto">
+                  {[
+                    { num: '5', pct: '72%', color: 'bg-[#009F50]' },
+                    { num: '4', pct: '18%', color: 'bg-[#00C86F]' },
+                    { num: '3', pct: '6%', color: 'bg-amber-400' },
+                    { num: '2', pct: '3%', color: 'bg-orange-400' },
+                    { num: '1', pct: '1%', color: 'bg-rose-500' },
+                  ].map((row) => (
+                    <div key={row.num} className="flex items-center gap-2.5 text-xs">
+                      <span className="w-7 flex items-center gap-1 font-bold text-slate-700 dark:text-slate-200">
+                        {row.num} <Star className="size-3 fill-amber-400 text-amber-400" />
+                      </span>
+                      <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full ${row.color} rounded-full`} style={{ width: row.pct }} />
+                      </div>
+                      <span className="w-9 text-right font-semibold text-slate-600 dark:text-slate-300">
+                        {row.pct}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1287,8 +1536,48 @@ export function ReviewsView() {
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          SUB-TAB VIEWS FOR POSTS, Q&A, PHOTOS, INSIGHTS, SETTINGS
+          SUB-TAB VIEWS FOR GENERATE REPLIES, REVIEW REQUESTS, POSTS, Q&A, PHOTOS, INSIGHTS, SETTINGS
          ═══════════════════════════════════════════════════════════════════════ */}
+      {activeSubTab === 'generate-replies' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold">AI Review Reply Studio</h2>
+              <p className="text-xs text-slate-500">
+                Automatically craft personalized, brand-aligned responses for pending customer reviews.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleGenerateAiReply}
+              className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl gap-1.5"
+            >
+              <Sparkles className="size-3.5" /> Generate AI Drafts
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'review-requests' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold">Review Request Campaigns</h2>
+              <p className="text-xs text-slate-500">
+                Invite customers via SMS, WhatsApp, or Email to leave a 5-star review on Google.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setRequestReviewsOpen(true)}
+              className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl gap-1.5"
+            >
+              <Send className="size-3.5" /> New Campaign
+            </Button>
+          </div>
+        </div>
+      )}
+
       {activeSubTab === 'posts' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">

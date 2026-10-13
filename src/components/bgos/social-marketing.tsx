@@ -55,6 +55,10 @@ import {
   Radio,
   Clock,
   Sparkle,
+  ThumbsUp,
+  Eye,
+  Mail,
+  Bot,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -86,6 +90,8 @@ const SocialAnalyticsView = lazy(() =>
 
 type SocialTab =
   | 'overview'
+  | 'content'
+  | 'calendar'
   | 'ai-generator'
   | 'accounts'
   | 'create'
@@ -104,6 +110,100 @@ function TabLoader() {
     </div>
   );
 }
+
+const RECENT_CONTENT_ROWS = [
+  {
+    id: 'rc-1',
+    title: 'Diwali Cleaning Offer',
+    subtitle: 'Get 20% off on all cleaning services.',
+    thumb: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200&auto=format&fit=crop&q=80',
+    channel: 'Google Business',
+    status: 'Published',
+    date: 'Oct 8, 2026',
+    time: '10:00 AM',
+    views: '2.4K',
+    likes: '186',
+  },
+  {
+    id: 'rc-2',
+    title: 'Weekly Cleaning Tips',
+    subtitle: '5 easy ways to keep your home clean.',
+    thumb: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=200&auto=format&fit=crop&q=80',
+    channel: 'Instagram',
+    status: 'Scheduled',
+    date: 'Oct 10, 2026',
+    time: '9:00 AM',
+    views: '1.2K',
+    likes: '98',
+  },
+  {
+    id: 'rc-3',
+    title: 'Customer Review Post',
+    subtitle: 'Thank you for your kind words!',
+    thumb: 'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=200&auto=format&fit=crop&q=80',
+    channel: 'Facebook',
+    status: 'Published',
+    date: 'Oct 6, 2026',
+    time: '11:30 AM',
+    views: '3.1K',
+    likes: '240',
+  },
+  {
+    id: 'rc-4',
+    title: 'Holiday Service Announcement',
+    subtitle: "We're open during the festive season!",
+    thumb: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=200&auto=format&fit=crop&q=80',
+    channel: 'WhatsApp',
+    status: 'Draft',
+    date: 'Oct 12, 2026',
+    time: '—',
+    views: '',
+    likes: '',
+  },
+];
+
+const UPCOMING_SCHEDULE_ROWS = [
+  {
+    id: 'us-1',
+    month: 'OCT',
+    day: '10',
+    dow: 'Thu',
+    title: 'Weekly Cleaning Tips',
+    channel: 'Instagram',
+    time: '9:00 AM',
+    thumb: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=200&auto=format&fit=crop&q=80',
+  },
+  {
+    id: 'us-2',
+    month: 'OCT',
+    day: '12',
+    dow: 'Sat',
+    title: 'Festive Offer Reminder',
+    channel: 'WhatsApp',
+    time: '11:00 AM',
+    thumb: 'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=200&auto=format&fit=crop&q=80',
+  },
+  {
+    id: 'us-3',
+    month: 'OCT',
+    day: '15',
+    dow: 'Tue',
+    title: 'Customer Testimonial',
+    channel: 'Facebook',
+    time: '10:30 AM',
+    thumb: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=200&auto=format&fit=crop&q=80',
+  },
+  {
+    id: 'us-4',
+    month: 'OCT',
+    day: '18',
+    dow: 'Fri',
+    title: 'End of Month Offer',
+    channel: 'Google Business',
+    time: '9:00 AM',
+    thumb: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200&auto=format&fit=crop&q=80',
+  },
+];
 
 // Preset Quick Prompts
 const QUICK_PROMPTS = [
@@ -161,6 +261,24 @@ export function SocialMediaView() {
   const [activeTab, setActiveTab] = useState<SocialTab>('overview');
   const [timeRange, setTimeRange] = useState('Last 30 days');
   const [timeRangeOpen, setTimeRangeOpen] = useState(false);
+
+  // Screenshot Create with AI & Preview state
+  const [studioPrompt, setStudioPrompt] = useState('');
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([
+    'Google Business',
+    'Facebook',
+    'Instagram',
+    'WhatsApp',
+  ]);
+  const [studioPreviewTab, setStudioPreviewTab] = useState<
+    'Google Business' | 'Facebook' | 'Instagram' | 'WhatsApp'
+  >('Google Business');
+
+  const toggleChannel = (channelName: string) => {
+    setSelectedChannels((prev) =>
+      prev.includes(channelName) ? prev.filter((c) => c !== channelName) : [...prev, channelName]
+    );
+  };
 
   // AI Generator state
   const [aiPrompt, setAiPrompt] = useState(
@@ -444,84 +562,39 @@ export function SocialMediaView() {
   };
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-6 w-full text-slate-900 dark:text-slate-100">
-      {/* ─── 1. Header Section with Actions ─────────────────────────────── */}
+    <div className="p-4 sm:p-5 lg:p-6 space-y-5 w-full bg-[#F7FAF9] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      {/* ─── 1. Page Header (Matches New Marketing Studio Screenshot) ─── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex items-start gap-3.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              if (activeTab !== 'overview') {
-                setActiveTab('overview');
-              } else {
-                setCurrentView('dashboard');
-              }
-            }}
-            className="h-8 px-2 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 -ml-1 gap-1 self-center"
-            title={activeTab !== 'overview' ? 'Back to Studio Overview' : 'Back to Dashboard'}
-          >
-            <ChevronLeft className="size-4" />
-            <span className="hidden sm:inline text-xs font-semibold">
-              {activeTab !== 'overview' ? 'Back to Overview' : 'Back'}
-            </span>
-          </Button>
-          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#00A884] to-[#007F73] flex items-center justify-center text-white shadow-md shrink-0">
-            <Megaphone className="h-6 w-6" />
+        <div className="flex items-center gap-3.5">
+          {/* Solid #009F50 Green Rounded Square Badge with White Megaphone Icon */}
+          <div className="size-11 rounded-2xl bg-[#009F50] text-white shadow-xs flex items-center justify-center shrink-0">
+            <Megaphone className="size-6 text-white" />
           </div>
+
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">Marketing Studio</h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 text-xs font-semibold flex items-center gap-1 border border-teal-200/50 dark:border-teal-800/50">
-                <Sparkles className="size-3.5 text-teal-600 dark:text-teal-400" /> AI Enabled
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Marketing Studio
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full bg-[#E8F8EF] dark:bg-emerald-950/60 text-[#009F50] dark:text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-[#ccebd9] dark:border-emerald-800/50">
+                <Sparkles className="size-3.5 text-[#009F50]" /> AI Enabled
               </span>
             </div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Create, schedule and manage all your multi-channel marketing — powered by AI.
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Create, publish and manage your marketing content across email, SMS, WhatsApp and social media.
             </p>
           </div>
         </div>
 
-        {/* Action Cluster */}
+        {/* Right Action Cluster */}
         <div className="flex items-center flex-wrap gap-2">
-          {/* Time Range Selector */}
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setTimeRangeOpen(!timeRangeOpen)}
-              className="h-9 gap-2 bg-white dark:bg-slate-900 shadow-xs border-slate-200 dark:border-slate-800 text-xs font-medium"
-            >
-              <Calendar className="size-4 text-slate-400" />
-              <span>{timeRange}</span>
-              <ChevronRight className="size-3 rotate-90 text-slate-400" />
-            </Button>
-            {timeRangeOpen && (
-              <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-50 py-1 text-xs">
-                {['Last 7 days', 'Last 30 days', 'This Quarter', 'Year to Date'].map((range) => (
-                  <button
-                    key={range}
-                    onClick={() => {
-                      setTimeRange(range);
-                      setTimeRangeOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between"
-                  >
-                    <span>{range}</span>
-                    {timeRange === range && <Check className="size-3 text-teal-600" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
           <Button
             variant="outline"
             size="sm"
             onClick={() => setActiveTab('analytics')}
-            className="h-9 gap-1.5 bg-white dark:bg-slate-900 shadow-xs border-slate-200 dark:border-slate-800 text-xs font-medium"
+            className="h-9 gap-1.5 bg-white dark:bg-slate-900 shadow-2xs border-slate-200 dark:border-slate-800 text-xs font-medium rounded-xl"
           >
-            <BarChart3 className="size-4 text-slate-500" />
+            <BarChart3 className="size-3.5 text-slate-500" />
             <span>View Analytics</span>
           </Button>
 
@@ -529,23 +602,37 @@ export function SocialMediaView() {
             size="sm"
             onClick={() => setCreateCampaignOpen(true)}
             variant="outline"
-            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-teal-200 dark:border-teal-900/50 text-teal-700 dark:text-teal-400 font-semibold text-xs shadow-xs hover:bg-teal-50/50"
+            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs shadow-2xs rounded-xl"
           >
-            <Plus className="size-4" />
+            <Plus className="size-3.5" />
             <span>+ Create Campaign</span>
           </Button>
 
           <Button
+            variant="outline"
             size="sm"
             onClick={() => {
               setActiveTab('overview');
               const textarea = document.getElementById('ai-concept-box');
               textarea?.focus();
             }}
-            className="h-9 gap-2 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm rounded-lg"
+            className="h-9 gap-1.5 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs shadow-2xs rounded-xl"
+          >
+            <PenSquare className="size-3.5 text-[#009F50]" />
+            <span>Create Post</span>
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={() => {
+              setActiveTab('overview');
+              const textarea = document.getElementById('studio-ai-prompt');
+              textarea?.focus();
+            }}
+            className="h-9 gap-1.5 bg-[#009F50] hover:bg-[#008A45] text-white font-semibold text-xs shadow-xs rounded-xl px-4"
           >
             <Plus className="size-4" />
-            <span>Create Post</span>
+            <span>+ Create Content</span>
           </Button>
         </div>
       </div>
@@ -557,217 +644,38 @@ export function SocialMediaView() {
         </div>
       )}
 
-      {/* ─── 2. Top KPI Metric Row (5 Cards with Sparklines) ──────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
-        {/* Card 1: Posts Published */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Posts Published</span>
-            <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
-              <PenSquare className="size-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold tracking-tight">{generatedCount}</span>
-            <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-              <ArrowUp className="size-3 mr-0.5" /> 40%
-            </span>
-          </div>
-          <div className="w-full h-6 mt-2 text-teal-600">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
-              <path
-                d="M0,18 Q20,16 40,10 T80,12 T100,2"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2.5"
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* Card 2: Total Reach */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Total Reach</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-              <Users className="size-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold tracking-tight">1.2M</span>
-            <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-              <ArrowUp className="size-3 mr-0.5" /> 62%
-            </span>
-          </div>
-          <div className="w-full h-6 mt-2 text-emerald-600">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
-              <path
-                d="M0,20 Q25,18 50,8 T80,14 T100,3"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2.5"
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* Card 3: Engagements */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Engagements</span>
-            <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
-              <Heart className="size-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold tracking-tight">4,856</span>
-            <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-              <ArrowUp className="size-3 mr-0.5" /> 28%
-            </span>
-          </div>
-          <div className="w-full h-6 mt-2 text-teal-600">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
-              <path
-                d="M0,16 Q20,20 40,12 T70,16 T100,4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2.5"
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* Card 4: New Leads */}
-        <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">New Leads</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <UserPlus className="size-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold tracking-tight">342</span>
-            <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-              <ArrowUp className="size-3 mr-0.5" /> 35%
-            </span>
-          </div>
-          <div className="w-full h-6 mt-2 text-blue-600">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
-              <path
-                d="M0,22 Q30,10 60,14 T85,8 T100,2"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2.5"
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* Card 5: Estimated Pipeline */}
-        <div className="col-span-2 md:col-span-1 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Estimated Pipeline</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-700 dark:text-emerald-300">
-              <DollarSign className="size-4" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between mt-1">
-            <span className="text-2xl font-bold tracking-tight">$18,420</span>
-            <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-              <ArrowUp className="size-3 mr-0.5" /> 48%
-            </span>
-          </div>
-          <div className="w-full h-6 mt-2 text-emerald-600">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 24">
-              <path
-                d="M0,20 Q20,18 40,8 T70,10 T100,1"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2.5"
-              />
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── 3. Sub-Navigation Tabs Bar ─────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === 'overview'
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <BarChart3 className="size-4" />
-          <span>Overview</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('ai-generator')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === 'ai-generator'
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <Sparkles className="size-4 text-teal-600 dark:text-teal-400" />
-          <span>AI Post Generator</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('accounts')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === 'accounts'
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <Share2 className="size-4" />
-          <span>Social Media Accounts</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('posts')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === 'posts'
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <FileText className="size-4" />
-          <span>Posts Feed</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('create')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === 'create'
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <PenSquare className="size-4" />
-          <span>Post Composer</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
-            activeTab === 'analytics'
-              ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs border border-teal-200/60 dark:border-teal-800'
-              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100/60 dark:hover:bg-slate-800/60'
-          }`}
-        >
-          <TrendingUp className="size-4" />
-          <span>Analytics</span>
-        </button>
+      {/* ─── 2. Sub-Navigation Tabs Bar (Matches Screenshot + Studio Tabs) ─── */}
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200/90 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50 px-2 pt-1 rounded-t-xl">
+        {[
+          { id: 'overview' as SocialTab, label: 'Overview', Icon: Layers },
+          { id: 'content' as SocialTab, label: 'Content', Icon: Send },
+          { id: 'calendar' as SocialTab, label: 'Calendar', Icon: Calendar },
+          { id: 'templates' as SocialTab, label: 'Templates', Icon: Sparkles },
+          { id: 'analytics' as SocialTab, label: 'Analytics', Icon: BarChart3 },
+          { id: 'ai-generator' as SocialTab, label: 'AI Post Generator', Icon: Sparkles },
+          { id: 'accounts' as SocialTab, label: 'Social Media Accounts', Icon: Share2 },
+          { id: 'posts' as SocialTab, label: 'Posts Feed', Icon: FileText },
+          { id: 'create' as SocialTab, label: 'Post Composer', Icon: PenSquare },
+        ].map(({ id, label, Icon }) => {
+          const isActive = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`relative px-3.5 py-2.5 text-xs font-semibold transition-colors flex items-center gap-2 whitespace-nowrap ${
+                isActive
+                  ? 'text-[#009F50] dark:text-emerald-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+              }`}
+            >
+              <Icon className={`size-4 ${isActive ? 'text-[#009F50] dark:text-emerald-400' : 'text-slate-400'}`} />
+              <span>{label}</span>
+              {isActive && (
+                <span className="absolute bottom-0 left-2 right-2 h-[2.5px] rounded-t-full bg-[#009F50]" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ─── Tab Content: Drilldown vs Overview ───────────────────────── */}
@@ -783,7 +691,7 @@ export function SocialMediaView() {
         </Suspense>
       )}
 
-      {activeTab === 'posts' && (
+      {(activeTab === 'posts' || activeTab === 'content') && (
         <Suspense fallback={<TabLoader />}>
           <PostsListView />
         </Suspense>
@@ -796,8 +704,537 @@ export function SocialMediaView() {
       )}
 
       {/* ─── Overview & AI Generator Command Center ───────────────────── */}
-      {(activeTab === 'overview' || activeTab === 'ai-generator') && (
-        <div className="space-y-6">
+      {(activeTab === 'overview' ||
+        activeTab === 'ai-generator' ||
+        activeTab === 'calendar' ||
+        activeTab === 'templates') && (
+        <div className="space-y-5">
+          {/* ─── Row 1: 4 Screenshot KPI Summary Cards ─── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* KPI 1: Published Posts */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
+              <div className="size-11 rounded-2xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                <Send className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Published Posts</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    24
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                    ↑ 33%
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
+              </div>
+            </div>
+
+            {/* KPI 2: Scheduled Posts */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
+              <div className="size-11 rounded-2xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                <Calendar className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Scheduled Posts</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    8
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                    ↑ 14%
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
+              </div>
+            </div>
+
+            {/* KPI 3: Total Reach */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
+              <div className="size-11 rounded-2xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                <Users className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Reach</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    12,4K
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                    ↑ 28%
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
+              </div>
+            </div>
+
+            {/* KPI 4: Engagement Rate */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex items-center gap-3.5">
+              <div className="size-11 rounded-2xl bg-[#E8F8EF] dark:bg-emerald-950/60 flex items-center justify-center text-[#009F50] shrink-0">
+                <ThumbsUp className="size-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Engagement Rate</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    8.6%
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                    ↑ 21%
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Row 2: 3-Column Studio Grid (Create with AI | Preview | Connected Channels) ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Left Card (5 cols): Create with AI */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between gap-4">
+              <div className="space-y-3.5">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <Send className="size-4 text-[#009F50]" />
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">Create with AI</h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-semibold inline-flex items-center gap-1 border border-[#ccebd9]">
+                    <Bot className="size-3" />
+                    <span>AI Powered</span>
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Describe what you want to promote. BGOS will create ready-to-post content for all channels.
+                </p>
+
+                {/* Prompt Box with 0/500 counter */}
+                <div className="relative rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 p-3 pb-6">
+                  <Textarea
+                    id="studio-ai-prompt"
+                    value={studioPrompt}
+                    onChange={(e) => setStudioPrompt(e.target.value)}
+                    rows={3}
+                    maxLength={500}
+                    placeholder="Example: Create a Diwali offer for my cleaning business with 20% discount. Include festive theme and call to action."
+                    className="w-full bg-transparent border-none p-0 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:ring-0 focus-visible:ring-offset-0 resize-none"
+                  />
+                  <span className="absolute right-3 bottom-2 text-[11px] text-slate-400 font-medium">
+                    {studioPrompt.length}/500
+                  </span>
+                </div>
+
+                {/* Choose channels (optional) */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    Choose channels (optional)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: 'Google Business', badge: 'G', badgeColor: 'text-blue-600 font-extrabold' },
+                      { id: 'Facebook', badge: 'f', badgeColor: 'text-blue-600 font-extrabold' },
+                      { id: 'Instagram', badge: 'IG', badgeColor: 'text-pink-600 font-bold' },
+                      { id: 'WhatsApp', badge: 'WA', badgeColor: 'text-[#009F50] font-bold' },
+                      { id: 'Email', badge: '✉', badgeColor: 'text-slate-500' },
+                      { id: 'SMS', badge: '💬', badgeColor: 'text-slate-500' },
+                    ].map((ch) => {
+                      const checked = selectedChannels.includes(ch.id);
+                      return (
+                        <button
+                          key={ch.id}
+                          type="button"
+                          onClick={() => toggleChannel(ch.id)}
+                          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                            checked
+                              ? 'border-[#009F50]/40 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 shadow-2xs'
+                              : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 text-slate-500'
+                          }`}
+                        >
+                          <span
+                            className={`size-4 rounded flex items-center justify-center text-[10px] ${
+                              checked
+                                ? 'bg-[#009F50] text-white'
+                                : 'border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900'
+                            }`}
+                          >
+                            {checked && <Check className="size-3 stroke-[3]" />}
+                          </span>
+                          <span className={`text-[11px] ${ch.badgeColor}`}>{ch.badge}</span>
+                          <span>{ch.id}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="h-9 px-4 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold gap-1.5 shadow-xs"
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>Generate Content</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Middle Card (4 cols): Preview */}
+            <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white mb-2.5">Preview</h2>
+
+                {/* Channel Tabs: Google Business | Facebook | Instagram | WhatsApp */}
+                <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-2 text-xs overflow-x-auto">
+                  {(['Google Business', 'Facebook', 'Instagram', 'WhatsApp'] as const).map((tab) => {
+                    const active = studioPreviewTab === tab;
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setStudioPreviewTab(tab)}
+                        className={`relative pb-1.5 font-semibold whitespace-nowrap transition-colors ${
+                          active
+                            ? 'text-[#009F50]'
+                            : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        {tab}
+                        {active && (
+                          <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[#009F50]" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Social Post Preview Card */}
+              <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 space-y-3 bg-white dark:bg-slate-900">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-8 rounded-full bg-[#E8F8EF] text-[#009F50] font-extrabold text-sm flex items-center justify-center">
+                      b
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                        Your Business
+                      </p>
+                      <p className="text-[11px] text-slate-400 leading-tight">Just now · 🌐</p>
+                    </div>
+                  </div>
+                  <MoreHorizontal className="size-4 text-slate-400" />
+                </div>
+
+                <div className="text-xs text-slate-700 dark:text-slate-200 space-y-0.5 leading-relaxed">
+                  <p className="font-bold">✨ Diwali Special! ✨</p>
+                  <p>Get 20% off on all home cleaning services.</p>
+                  <p>A cleaner, brighter home for a happier Diwali! 🪔</p>
+                </div>
+
+                {/* Festive Banner Mockup */}
+                <div
+                  className="relative rounded-xl overflow-hidden h-40 p-4 flex flex-col justify-between text-white bg-cover bg-center"
+                  style={{
+                    backgroundImage:
+                      'linear-gradient(90deg, rgba(4,78,50,0.95) 0%, rgba(6,95,60,0.85) 55%, rgba(15,23,42,0.25) 100%), url("https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&auto=format&fit=crop&q=80")',
+                  }}
+                >
+                  <div>
+                    <p className="text-sm font-bold text-emerald-100">Diwali Special</p>
+                    <p className="text-2xl font-extrabold text-amber-300 tracking-tight leading-none mt-0.5">
+                      20% OFF
+                    </p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-100 mt-1">
+                      HOME CLEANING SERVICES
+                    </p>
+                  </div>
+
+                  <span className="self-start px-3.5 py-1 rounded-full bg-amber-400 text-slate-950 font-bold text-xs shadow-xs">
+                    Book Now
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Card (3 cols): Connected Channels */}
+            <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Connected Channels</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('accounts')}
+                  className="text-xs font-semibold text-[#009F50] hover:underline"
+                >
+                  Manage
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 my-auto">
+                {[
+                  { name: 'Google Business', badge: 'G', bg: 'bg-blue-50 text-blue-600' },
+                  { name: 'Facebook', badge: 'f', bg: 'bg-blue-600 text-white' },
+                  { name: 'Instagram', badge: 'IG', bg: 'bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white' },
+                  { name: 'WhatsApp', badge: 'WA', bg: 'bg-[#009F50] text-white' },
+                  { name: 'Email (SES)', badge: '✉', bg: 'bg-sky-50 text-sky-600' },
+                  { name: 'SMS (Twilio)', badge: '••', bg: 'bg-rose-500 text-white' },
+                ].map((ch) => (
+                  <button
+                    key={ch.name}
+                    type="button"
+                    onClick={() => setActiveTab('accounts')}
+                    className="w-full py-2.5 first:pt-1 last:pb-0 flex items-center justify-between gap-2.5 text-left hover:opacity-85 transition-opacity"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div
+                        className={`size-8 rounded-full ${ch.bg} font-bold text-xs flex items-center justify-center shrink-0`}
+                      >
+                        {ch.badge}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {ch.name}
+                        </p>
+                        <p className="text-[11px] font-semibold text-[#009F50]">Connected</p>
+                      </div>
+                    </div>
+                    <ChevronRight className="size-4 text-slate-400 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Row 3: Bottom 2-Column Split (Recent Content Table | Upcoming Schedule List) ─── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+            {/* Left Card (7 cols): Recent Content */}
+            <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Recent Content</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('posts')}
+                  className="text-xs font-semibold text-[#009F50] hover:underline flex items-center gap-1"
+                >
+                  <span>View all →</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 dark:border-slate-800 text-[11px] font-semibold text-slate-400">
+                      <th className="pb-2.5 pr-3">Content</th>
+                      <th className="pb-2.5 px-2">Channel</th>
+                      <th className="pb-2.5 px-2">Status</th>
+                      <th className="pb-2.5 px-2">Date</th>
+                      <th className="pb-2.5 pl-2 text-right">Performance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                    {RECENT_CONTENT_ROWS.map((row) => (
+                      <tr key={row.id} className="group">
+                        <td className="py-3 pr-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <img
+                              src={row.thumb}
+                              alt={row.title}
+                              className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 dark:text-white truncate">
+                                {row.title}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate">{row.subtitle}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-200">
+                            <span>{row.channel}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 whitespace-nowrap">
+                          <span
+                            className={`inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                              row.status === 'Published'
+                                ? 'bg-[#E8F8EF] text-[#009F50]'
+                                : row.status === 'Scheduled'
+                                ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2 whitespace-nowrap">
+                          <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
+                            {row.date}
+                          </p>
+                          <p className="text-[11px] text-slate-400">{row.time}</p>
+                        </td>
+                        <td className="py-3 pl-2 whitespace-nowrap text-right">
+                          <div className="inline-flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                            {row.views ? (
+                              <>
+                                <span className="inline-flex items-center gap-1 text-xs font-medium">
+                                  <Eye className="size-3.5 text-slate-400" /> {row.views}
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-xs font-medium">
+                                  <ThumbsUp className="size-3.5 text-slate-400" /> {row.likes}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                            <MoreHorizontal className="size-4 text-slate-400 cursor-pointer" />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Right Card (5 cols): Upcoming Schedule */}
+            <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">Upcoming Schedule</h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('calendar')}
+                  className="text-xs font-semibold text-[#009F50] hover:underline flex items-center gap-1"
+                >
+                  <span>View calendar →</span>
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 my-auto">
+                {UPCOMING_SCHEDULE_ROWS.map((item) => (
+                  <div key={item.id} className="py-3 first:pt-1 last:pb-0 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {/* Date Pill */}
+                      <div className="w-10 py-1 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200/70 dark:border-slate-700 text-center shrink-0">
+                        <p className="text-[9px] font-bold uppercase text-slate-400 leading-none">
+                          {item.month}
+                        </p>
+                        <p className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
+                          {item.day}
+                        </p>
+                        <p className="text-[9px] text-slate-400 leading-none">{item.dow}</p>
+                      </div>
+
+                      <img
+                        src={item.thumb}
+                        alt={item.title}
+                        className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                      />
+
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {item.title}
+                        </p>
+                        <p className="text-[11px] text-slate-500 truncate mt-0.5">{item.channel}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                        <Clock className="size-3 text-slate-400" />
+                        {item.time}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-[11px] font-semibold">
+                        Scheduled
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ─── Secondary Executive Telemetry Strip (5 KPI Cards with Sparklines) ─── */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5 pt-2">
+            {/* Card 1: Posts Published */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Posts Published</span>
+                <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                  <PenSquare className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-2xl font-bold tracking-tight">{generatedCount}</span>
+                <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                  <ArrowUp className="size-3 mr-0.5" /> 40%
+                </span>
+              </div>
+            </div>
+
+            {/* Card 2: Total Reach (1.2M) */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Cumulative Reach</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <Users className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-2xl font-bold tracking-tight">1.2M</span>
+                <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                  <ArrowUp className="size-3 mr-0.5" /> 62%
+                </span>
+              </div>
+            </div>
+
+            {/* Card 3: Engagements */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Engagements</span>
+                <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/50 flex items-center justify-center text-teal-600 dark:text-teal-400">
+                  <Heart className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-2xl font-bold tracking-tight">4,856</span>
+                <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                  <ArrowUp className="size-3 mr-0.5" /> 28%
+                </span>
+              </div>
+            </div>
+
+            {/* Card 4: New Leads */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">New Leads</span>
+                <div className="w-7 h-7 rounded-lg bg-blue-50 dark:bg-blue-950/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                  <UserPlus className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-2xl font-bold tracking-tight">342</span>
+                <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                  <ArrowUp className="size-3 mr-0.5" /> 35%
+                </span>
+              </div>
+            </div>
+
+            {/* Card 5: Estimated Pipeline */}
+            <div className="col-span-2 md:col-span-1 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 shadow-xs flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Estimated Pipeline</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-emerald-700 dark:text-emerald-300">
+                  <DollarSign className="size-4" />
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between mt-1">
+                <span className="text-2xl font-bold tracking-tight">$18,420</span>
+                <span className="flex items-center text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                  <ArrowUp className="size-3 mr-0.5" /> 48%
+                </span>
+              </div>
+            </div>
+          </div>
           {/* Tri-Column Interactive Workstation Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
             {/* ── Left Column (4 cols): AI Post Generator ─────────────────── */}

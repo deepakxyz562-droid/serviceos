@@ -46,6 +46,12 @@ export interface ConversationMessage {
   senderName?: string;
   timestamp: string;
   channel: ChannelType;
+  readReceipt?: boolean;
+  imageAttachment?: {
+    url?: string;
+    caption?: string;
+    label?: string;
+  };
   packageCards?: InteractivePackageCard[];
   confirmationCard?: {
     scheduledDate: string;
@@ -70,10 +76,12 @@ export interface Conversation {
   channel: ChannelType;
   lastMessage: string;
   lastMessageTime: string;
+  displayTime?: string;
   unreadCount: number;
   status: 'active' | 'closed' | 'pending';
   leadId?: string;
   lead?: LeadInfo;
+  leadStatusBadge?: 'New Lead' | 'Customer' | 'VIP Customer';
   messages: ConversationMessage[];
   autoLeadCreated?: boolean;
   /** Active assignee — surfaced by the conversations API via the
@@ -90,6 +98,13 @@ export interface Conversation {
   aiSummary?: string;
   notes?: Array<{ id: string; text: string; date: string; author: string }>;
   address?: string;
+  customFields?: {
+    source?: string;
+    interestedIn?: string;
+    preferredDate?: string;
+    address?: string;
+    notes?: string;
+  };
 }
 
 export interface OmnichannelStats {

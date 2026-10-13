@@ -107,8 +107,9 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
 
   render(<OmnichannelView />);
 
-  // 1. Top Channel Triage Header
+  // 1. Top Channel Triage Header & Labeled Channel Pills
   expect(screen.getByRole('heading', { level: 1, name: 'Inbox' })).toBeDefined();
+  expect(screen.getByText('All your customer conversations in one place.')).toBeDefined();
   expect(screen.getByTitle('WhatsApp')).toBeDefined();
   expect(screen.getByTitle('Live Chat')).toBeDefined();
   expect(screen.getByTitle('Instagram')).toBeDefined();
@@ -118,11 +119,13 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
   expect(screen.getByRole('button', { name: /Live Visitors/i })).toBeDefined();
   expect(screen.getAllByRole('button', { name: /Tickets/i }).length).toBeGreaterThanOrEqual(1);
 
-  // 3. Dynamic Filter Pills
+  // 3. Dynamic Filter Pills & Screenshot Thread (Priya Sharma)
   expect(screen.getByText('All 9')).toBeDefined();
   expect(screen.getByText('Unread 4')).toBeDefined();
+  expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByRole('button', { name: /Convert to Customer/i })).toBeDefined();
 
-  // 4. In-Chat Interactive Package Cards (Screenshot 3 Parity)
+  // 4. In-Chat Interactive Package Cards
   expect(screen.getByText('Deep Clean')).toBeDefined();
   expect(screen.getByText('₹ 3,999')).toBeDefined();
   expect(screen.getByText('Most Popular')).toBeDefined();
@@ -132,7 +135,15 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
   expect(screen.getByRole('button', { name: 'Yes, confirm' })).toBeDefined();
   expect(screen.getByRole('button', { name: 'Change time' })).toBeDefined();
 
-  // 6. Right Column: Customer 360 Dossier
+  // 6. Right Column: Contact 360 Dossier (Contact | Activity | Notes | Appointments)
+  expect(screen.getByRole('button', { name: 'Contact' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Activity' })).toBeDefined();
+  expect(screen.getByText('Custom Fields')).toBeDefined();
+  expect(screen.getByText('123 Green Park, Delhi')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Book Appointment/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Quote/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Form/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Add to CRM/i })).toBeDefined();
   expect(screen.getByText('Conversation Summary')).toBeDefined();
   expect(screen.getByText('AI Generated')).toBeDefined();
   expect(screen.getByText('Customer Profile')).toBeDefined();
@@ -253,12 +264,39 @@ it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview c
 
   render(<SocialMediaView />);
 
-  // 1. Header & Primary Actions
+  // 1. Header & Primary Actions (Matches Screenshot)
   expect(screen.getByRole('heading', { level: 1, name: /Marketing Studio/i })).toBeDefined();
+  expect(
+    screen.getByText('Create, publish and manage your marketing content across email, SMS, WhatsApp and social media.')
+  ).toBeDefined();
   expect(screen.getByText(/AI Enabled/i)).toBeDefined();
+  expect(screen.getByRole('button', { name: /\+ Create Content/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /\+ Create Campaign/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /View Analytics/i })).toBeDefined();
+
+  // 1b. Screenshot Overview Dashboard (4 Top KPIs, Create with AI, Preview, Connected Channels, Recent Content, Upcoming Schedule)
+  expect(screen.getByText('Published Posts')).toBeDefined();
+  expect(screen.getByText('Scheduled Posts')).toBeDefined();
+  expect(screen.getByText('12,4K')).toBeDefined();
+  expect(screen.getByText('Engagement Rate')).toBeDefined();
+  expect(screen.getByText('8.6%')).toBeDefined();
+  expect(screen.getByText('Create with AI')).toBeDefined();
+  expect(screen.getByText('AI Powered')).toBeDefined();
+  expect(screen.getByText('Choose channels (optional)')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Generate Content/i })).toBeDefined();
+  expect(screen.getByText('Preview')).toBeDefined();
+  expect(screen.getByText('Your Business')).toBeDefined();
+  expect(screen.getByText('✨ Diwali Special! ✨')).toBeDefined();
+  expect(screen.getByText('Connected Channels')).toBeDefined();
+  expect(screen.getByText('Email (SES)')).toBeDefined();
+  expect(screen.getByText('SMS (Twilio)')).toBeDefined();
+  expect(screen.getByText('Recent Content')).toBeDefined();
+  expect(screen.getByText('Diwali Cleaning Offer')).toBeDefined();
+  expect(screen.getByText('Holiday Service Announcement')).toBeDefined();
+  expect(screen.getByText('Upcoming Schedule')).toBeDefined();
+  expect(screen.getByText('Festive Offer Reminder')).toBeDefined();
+  expect(screen.getByText('End of Month Offer')).toBeDefined();
 
   // 2. 5 KPI Telemetry Cards
   expect(screen.getByText('Posts Published')).toBeDefined();
@@ -273,6 +311,10 @@ it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview c
 
   // 3. Sub-Navigation Tabs
   expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Content$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Calendar$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Templates$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /AI Post Generator/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Social Media Accounts/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Posts Feed/i })).toBeDefined();
@@ -298,7 +340,7 @@ it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview c
   expect(screen.getAllByText('Instagram').length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByText('Facebook').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Google Biz')).toBeDefined();
-  expect(screen.getByText('WhatsApp')).toBeDefined();
+  expect(screen.getAllByText('WhatsApp').length).toBeGreaterThanOrEqual(1);
 
   // 7. Lower Section: Recent Posts Velocity & Active Campaigns
   expect(screen.getByText('Recent Posts & Content Velocity')).toBeDefined();
@@ -331,19 +373,45 @@ it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, an
 
   render(<ReviewsView />);
 
-  // 1. Header & Navigation Tabs
+  // 1. Header & Navigation Tabs (Matches Screenshot)
   expect(screen.getByRole('heading', { level: 1, name: /Google Business & Reviews/i })).toBeDefined();
+  expect(
+    screen.getByText('Manage your Google Business profile, read and respond to reviews, and grow your reputation.')
+  ).toBeDefined();
   expect(screen.getByText('Connected')).toBeDefined();
   expect(screen.getByRole('button', { name: /Sync GBP/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Reviews$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Generate Replies$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Review Requests$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Posts$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Q&A$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Insights$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Photos$/i })).toBeDefined();
 
-  // 1b. Screenshot Overview Bento (Storefront Profile, 4 GBP KPIs, Review Growth, Rating Breakdown, Recent Reviews, Create a Post, Profile Performance, Customer Photos, Common Review Tags, Automate Review Requests)
+  // 1b. Screenshot Overview Dashboard (4 Top KPIs, Rating Trend, Reviews by Rating, Review Sources, Recent Reviews with Reply with AI, Your Google Business Profile, Quick Actions)
+  expect(screen.getByText('Average Rating')).toBeDefined();
+  expect(screen.getByText('(+0.3 this month)')).toBeDefined();
+  expect(screen.getByText('12.4K')).toBeDefined();
+  expect(screen.getByText('1.2K')).toBeDefined();
+  expect(screen.getByText('Rating Trend')).toBeDefined();
+  expect(screen.getByText('Reviews by Rating')).toBeDefined();
+  expect(screen.getByText('Review Sources')).toBeDefined();
+  expect(screen.getByText('Google Maps')).toBeDefined();
+  expect(screen.getByText('Google Search')).toBeDefined();
+  expect(screen.getByText('Your Google Business Profile')).toBeDefined();
+  expect(screen.getByText('Sparkle Clean Services')).toBeDefined();
+  expect(screen.getByText('House Cleaning Service')).toBeDefined();
+  expect(screen.getByText('Quick Actions')).toBeDefined();
+  expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Rahul Verma').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Sneha Kapoor').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Amit Singh').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Neha Gupta').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Reply with AI').length).toBeGreaterThanOrEqual(5);
+
+  // Secondary GBP Studio & Growth Suite
   expect(screen.getByText('BGOS Home Cleaning')).toBeDefined();
   expect(screen.getByText('123 Green Park, Delhi, India')).toBeDefined();
   expect(screen.getByText('12,480')).toBeDefined();
@@ -399,12 +467,12 @@ it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, an
 
   // 6. Column 3: AI Review Reply (Beta), Insights & Quick Actions
   expect(screen.getByText('AI Review Reply')).toBeDefined();
-  expect(screen.getByRole('button', { name: /Generate Reply/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Generate Reply$/i })).toBeDefined();
   expect(screen.getByText('Review Insights')).toBeDefined();
   expect(screen.getAllByText(/cleaning/i).length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByText(/professional/i).length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Actions')).toBeDefined();
-  expect(screen.getByText('Request Reviews')).toBeDefined();
+  expect(screen.getAllByText('Request Reviews').length).toBeGreaterThanOrEqual(1);
   expect(screen.getByText('Set Auto-Reply Rules')).toBeDefined();
 
   // 7. Interactivity: Selecting another review updates the inspector
@@ -414,7 +482,7 @@ it('renders Google Business & Reviews with 5 KPIs, Review Trend, triage feed, an
   expect(screen.getByText('Oro Valley, AZ')).toBeDefined();
 
   // 8. Interactivity: Generate Reply button updates reply draft
-  const generateBtn = screen.getByRole('button', { name: /Generate Reply/i });
+  const generateBtn = screen.getByRole('button', { name: /^Generate Reply$/i });
   fireEvent.click(generateBtn);
 });
 
