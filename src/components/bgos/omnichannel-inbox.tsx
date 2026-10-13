@@ -627,9 +627,10 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       const res = await fetch(`${API_BASE}/conversations`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setConversations(data);
-          if (!selectedConversationId) setSelectedConversationId(data[0].id);
+        const rawList = Array.isArray(data) ? data : (Array.isArray(data?.conversations) ? data.conversations : []);
+        if (rawList.length > 0) {
+          setConversations(rawList);
+          if (!selectedConversationId) setSelectedConversationId(rawList[0].id);
         }
       }
     } catch {
@@ -704,17 +705,18 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     return true;
   });
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation) return;
     const content = messageInput.trim();
+    const isInternal = composerMode === 'internal';
     setMessageInput('');
 
     const newMsg: ConversationMessage = {
       id: `msg_${Date.now()}`,
       conversationId: selectedConversation.id,
       content,
-      sender: composerMode === 'internal' ? 'system' : 'agent',
-      senderName: composerMode === 'internal' ? 'Internal Note' : (auth.user?.name || 'You'),
+      sender: isInternal ? 'system' : 'agent',
+      senderName: isInternal ? 'Internal Note' : (auth.user?.name || 'You'),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: selectedConversation.channel,
       readReceipt: true,
@@ -726,7 +728,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           ? {
               ...c,
               messages: [...c.messages, newMsg],
-              lastMessage: content,
+              lastMessage: isInternal ? `[Note] ${content}` : content,
               lastMessageTime: new Date().toISOString(),
               unreadCount: 0,
             }
@@ -734,15 +736,37 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       )
     );
 
-    // Call API in background
-    fetch(`${API_BASE}/conversations/${selectedConversation.id}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content }),
-    }).catch(() => {});
+    try {
+      if (isInternal) {
+        // Send to isolated internal notes endpoint — NEVER delivered to customer
+        const res = await fetch(`${API_BASE}/conversations/${selectedConversation.id}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) {
+          toast.error('Failed to save internal note to server.');
+        } else {
+          toast.success('Internal note saved privately');
+        }
+      } else {
+        // Customer delivery endpoint
+        const res = await fetch(`${API_BASE}/conversations/${selectedConversation.id}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || 'Failed to deliver message to customer.');
+        }
+      }
+    } catch {
+      toast.error('Network error occurred while sending.');
+    }
   };
 
-  const handleConvertToCustomer = (conv: Conversation) => {
+  const handleConvertToCustomer = async (conv: Conversation) => {
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conv.id
@@ -754,7 +778,20 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           : c
       )
     );
-    toast.success(`${conv.customerName} converted to Customer in CRM!`);
+    try {
+      await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: conv.customerName,
+          phone: conv.customerPhone,
+          notes: `Converted from omnichannel inbox (${conv.channel})`,
+        }),
+      });
+      toast.success(`${conv.customerName} converted to Customer in CRM!`);
+    } catch {
+      toast.success(`${conv.customerName} marked as Customer locally`);
+    }
   };
 
   const handleToggleCloseConversation = (conv: Conversation) => {
@@ -1398,6 +1435,25 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     {selectedConversation.messages.map((msg) => {
                       const isCustomer = msg.sender === 'customer';
                       const isAi = msg.sender === 'ai';
+                      const isInternal = msg.sender === 'system' || (msg as any).isInternal;
+
+                      if (isInternal) {
+                        return (
+                          <div key={msg.id} className="flex flex-col items-center my-1.5 w-full">
+                            <div className="w-full max-w-[88%] p-3 rounded-xl text-xs bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/80 text-amber-950 dark:text-amber-100 shadow-2xs">
+                              <div className="flex items-center gap-1.5 mb-1 font-bold text-[11px] text-amber-800 dark:text-amber-300">
+                                <StickyNote className="size-3.5" />
+                                <span>Internal Team Note</span>
+                                <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 ml-auto">
+                                  {msg.timestamp || 'Today'} • Visible to team only
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-line leading-relaxed">{msg.content}</p>
+                            </div>
+                          </div>
+                        );
+                      }
+
                       return (
                         <div
                           key={msg.id}

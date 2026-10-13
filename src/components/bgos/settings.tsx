@@ -28,7 +28,9 @@ import {
   X,
   BadgeCheck,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { TeamSettings } from '@/components/settings/sections/team-settings';
 import { GoogleBusinessProfileSettings } from '@/components/settings/sections/google-business-profile-settings';
 import { SecuritySettings } from '@/components/settings/sections/security-settings';
@@ -123,6 +125,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
 
   const [activeSubSection, setActiveSubSection] = useState<BusinessSubSection>('profile');
   const [savedToast, setSavedToast] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Business Profile state
   const [businessName, setBusinessName] = useState('BGOS');
@@ -166,6 +169,38 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [timezone, setTimezone] = useState('Asia/Kolkata (IST, UTC+05:30)');
   const [currency, setCurrency] = useState('INR (₹) / USD ($)');
 
+  // Real API hydration from brand-profile
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchSettings() {
+      try {
+        const res = await fetch('/api/brand-profile');
+        if (res.ok && isMounted) {
+          const data = await res.json();
+          const profile = data?.profile;
+          if (profile) {
+            if (profile.businessName) setBusinessName(profile.businessName);
+            if (profile.industry) setBusinessType(profile.industry);
+            if (profile.usps) setTagline(profile.usps);
+            if (profile.voiceDescription) setDescription(profile.voiceDescription);
+            if (profile.website) setWebsite(profile.website);
+            if (profile.location) setBusinessAddress(profile.location);
+            if (profile.serviceArea) {
+              const areaList = profile.serviceArea.split(',').map((s: string) => s.trim()).filter(Boolean);
+              if (areaList.length > 0) setCities(areaList);
+            }
+          }
+        }
+      } catch {
+        // preserve standard defaults
+      }
+    }
+    fetchSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (pendingSettingsSection) {
       setTab(normalizeTab(pendingSettingsSection));
@@ -179,9 +214,35 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
     }
   }, [initialTab]);
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
     setSavedToast(true);
-    setTimeout(() => setSavedToast(false), 2500);
+    try {
+      const res = await fetch('/api/brand-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessName,
+          industry: businessType || 'Home Cleaning Service',
+          website,
+          location: businessAddress,
+          serviceArea: serviceAreaMode === 'all' ? 'All areas' : cities.join(', '),
+          voiceDescription: description,
+          usps: tagline,
+          skipAiSummary: true,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Business settings saved to database!');
+      } else {
+        toast.success('Settings updated locally');
+      }
+    } catch {
+      toast.success('Settings updated locally');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSavedToast(false), 2500);
+    }
   };
 
   const toggleDayOpen = (dayName: string) => {
@@ -257,11 +318,16 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
             )}
             <button
               type="button"
+              disabled={isSaving}
               onClick={handleSaveChanges}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#009F50] px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-[#008A45]"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#009F50] px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-[#008A45] disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              <Check className="size-4 stroke-[2.5]" />
-              <span>Save Changes</span>
+              {isSaving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4 stroke-[2.5]" />
+              )}
+              <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
             </button>
           </div>
         </div>

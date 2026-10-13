@@ -425,7 +425,7 @@ export function ReviewsView() {
         type: postType,
         content: text,
         date: scheduled ? 'Scheduled for Tomorrow, 10:00 AM' : 'Just now',
-        status: scheduled ? 'Scheduled' : 'Published on Google',
+        status: scheduled ? 'Scheduled' : 'Queued (Sync Pending)',
       },
       ...prev,
     ]);
@@ -433,8 +433,8 @@ export function ReviewsView() {
     setCreatePostModalOpen(false);
     toast.success(
       scheduled
-        ? `Scheduled ${postType} post to Google Business Profile!`
-        : `Published ${postType} post to Google Business Profile!`
+        ? `Scheduled ${postType} post (queued in ServiceOS)`
+        : `Saved ${postType} update to ServiceOS`
     );
   };
 
@@ -484,16 +484,18 @@ export function ReviewsView() {
       toast.error('Reply text cannot be empty');
       return;
     }
+    let persisted = false;
     try {
-      await authFetch(`/api/reviews/${targetId}`, {
+      const res = await authFetch(`/api/reviews/${targetId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           responseJson: JSON.stringify({ text: textToSave.trim(), repliedAt: new Date().toISOString() }),
         }),
       });
+      persisted = res.ok;
     } catch {
-      // optimistic update persists locally
+      persisted = false;
     }
     setReviewsList((prev) =>
       prev.map((r) =>
@@ -510,7 +512,11 @@ export function ReviewsView() {
     setIsEditingReply(false);
     setQuickReplyId(null);
     setQuickReplyText('');
-    toast.success('Reply published to Google Business profile!');
+    if (persisted) {
+      toast.success('Reply saved to database (Google Sync queued)');
+    } else {
+      toast.success('Reply saved locally');
+    }
   };
 
   // Filtered reviews

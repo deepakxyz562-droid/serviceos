@@ -355,12 +355,71 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
   const [newTime, setNewTime] = useState('11:00 AM');
   const [newTeamMember, setNewTeamMember] = useState('Rakesh Kumar');
 
-  // Optional background sync with scheduling APIs
+  // Real-time synchronization with scheduling APIs
   const fetchBookings = useCallback(async () => {
     try {
-      const res = await authFetch('/api/bookings?limit=20');
+      const res = await authFetch('/api/bookings?limit=50');
       if (res.ok) {
-        await res.json();
+        const data = await res.json();
+        const bookingsList = Array.isArray(data?.bookings)
+          ? data.bookings
+          : Array.isArray(data)
+          ? data
+          : [];
+
+        if (bookingsList.length > 0) {
+          const mappedRows: DailyAppointmentRow[] = bookingsList.map((b: any, index: number) => {
+            const customer = b.customerName || b.title || 'Client';
+            const initials = customer
+              .split(' ')
+              .map((p: string) => p[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase() || 'NA';
+            const timeStr = b.scheduledAt
+              ? new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '10:00 AM';
+
+            return {
+              id: b.id || `row_${index}`,
+              time: timeStr,
+              initials,
+              initialsBg: 'bg-emerald-50 text-emerald-700',
+              customerName: customer,
+              customerPhone: b.customerPhone || '+91 98765 43210',
+              serviceName: b.service?.name || b.title || 'Home Cleaning',
+              location: b.address || 'Delhi, India',
+              teamMember: b.employee?.name || 'Rakesh Kumar',
+              teamAvatar: b.employee?.avatar || AVATAR_1,
+              status: b.status === 'confirmed' || b.status === 'Confirmed' ? 'Confirmed' : 'Pending',
+            };
+          });
+
+          const mappedBlocks: CalendarBlock[] = bookingsList.map((b: any, index: number) => {
+            const customer = b.customerName || b.title || 'Client';
+            const timeStr = b.scheduledAt
+              ? new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : '10:00 AM';
+            const dateObj = b.scheduledAt ? new Date(b.scheduledAt) : new Date();
+            const dayIdx = (dateObj.getDay() + 6) % 7;
+            const tones: CalendarBlock['tone'][] = ['green', 'amber', 'blue', 'rose', 'purple'];
+
+            return {
+              id: `cb_${b.id || index}`,
+              dayIndex: Math.min(Math.max(dayIdx, 0), 5),
+              startHour: 9 + (index % 6) * 1.5,
+              durationHours: 1.4,
+              timeLabel: timeStr,
+              customerName: customer,
+              serviceName: b.service?.name || b.title || 'Home Cleaning',
+              teamMember: b.employee?.name || 'Rakesh Kumar',
+              tone: tones[index % tones.length],
+            };
+          });
+
+          setDailyRows(mappedRows);
+          setCalendarBlocks(mappedBlocks);
+        }
       }
     } catch {
       // keep canonical seed state
@@ -379,7 +438,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
     teamFilter === 'All Team Members' ? true : r.teamMember === teamFilter
   );
 
-  const handleCreateAppointment = () => {
+  const handleCreateAppointment = async () => {
     if (!newCustomerName.trim()) {
       toast.error('Please enter a customer name');
       return;
@@ -392,6 +451,13 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
       .join('')
       .slice(0, 2)
       .toUpperCase();
+
+    const now = new Date();
+    const [timePart, meridiem] = newTime.split(' ');
+    let [hours, minutes] = (timePart || '11:00').split(':').map(Number);
+    if (meridiem === 'PM' && hours < 12) hours += 12;
+    if (meridiem === 'AM' && hours === 12) hours = 0;
+    const scheduledDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours || 11, minutes || 0);
 
     const createdRow: DailyAppointmentRow = {
       id: `row_${Date.now()}`,
@@ -424,7 +490,33 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
     setNewAppointmentOpen(false);
     setNewCustomerName('');
     setNewCustomerPhone('');
-    toast.success(`Appointment scheduled for ${customer} at ${newTime}`);
+
+    try {
+      const res = await authFetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${newService} for ${customer}`,
+          customerName: customer,
+          customerPhone: newCustomerPhone.trim() || '+91 98765 43210',
+          address: newLocation.trim() || 'Delhi, India',
+          scheduledAt: scheduledDate.toISOString(),
+          duration: 90,
+          source: 'manual',
+          notes: `Assigned technician: ${newTeamMember}`,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.warn('Booking API responded with non-200:', err);
+        toast.success(`Appointment scheduled locally for ${customer} at ${newTime}`);
+      } else {
+        toast.success(`Appointment scheduled and saved for ${customer} at ${newTime}`);
+      }
+    } catch {
+      toast.success(`Appointment scheduled locally for ${customer} at ${newTime}`);
+    }
   };
 
   const getBlockToneClasses = (tone: CalendarBlock['tone']) => {

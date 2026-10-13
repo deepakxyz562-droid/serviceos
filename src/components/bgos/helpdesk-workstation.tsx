@@ -464,14 +464,54 @@ export function HelpCenterView() {
   const [newPriority, setNewPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [newDescription, setNewDescription] = useState('');
 
-  // Optional background API hydration while keeping the 8 canonical tickets
+  // API hydration while preserving canonical seed tickets if no tickets exist
   useEffect(() => {
     let isMounted = true;
     async function fetchSupportTickets() {
       try {
-        const res = await fetch('/api/support/tickets?limit=20');
+        const res = await fetch('/api/support/tickets?limit=50');
         if (res.ok && isMounted) {
-          await res.json();
+          const data = await res.json();
+          const serverTickets = Array.isArray(data?.tickets) ? data.tickets : (Array.isArray(data) ? data : []);
+          if (serverTickets.length > 0 && isMounted) {
+            const mappedTickets: HelpdeskTicket[] = serverTickets.map((st: any) => {
+              const priorityUpper = (st.priority ? st.priority.charAt(0).toUpperCase() + st.priority.slice(1).toLowerCase() : 'Medium') as 'High' | 'Medium' | 'Low';
+              const statusUpper = (st.status === 'in_progress' ? 'In Progress' : (st.status ? st.status.charAt(0).toUpperCase() + st.status.slice(1).toLowerCase() : 'Open')) as HelpdeskTicket['status'];
+              return {
+                id: st.id,
+                ticketNumber: st.ticketNumber || `#${st.id.slice(-4)}`,
+                subject: st.subject || 'Support Ticket',
+                description: st.description || '',
+                category: st.category?.name || 'Customer Support',
+                priority: ['High', 'Medium', 'Low'].includes(priorityUpper) ? priorityUpper : 'Medium',
+                status: ['Open', 'In Progress', 'Waiting', 'Resolved', 'Closed'].includes(statusUpper) ? statusUpper : 'Open',
+                customerName: st.reporterName || 'Customer',
+                customerPhone: st.reporterPhone || '+91 98765 43210',
+                customerEmail: st.reporterEmail || 'customer@gmail.com',
+                customerAddress: 'Delhi, India',
+                customerAvatar: PRIYA_AVATAR,
+                createdAtLabel: st.createdAt ? new Date(st.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently',
+                updatedAgoLabel: 'Recently',
+                timeAgo: 'Recently',
+                assigneeName: st.assignedTo?.name || 'Rahul Kumar',
+                assigneeAvatar: TECH_AVATAR,
+                dueDate: 'Tomorrow',
+                tags: [st.category?.name || 'Support'],
+                aiSuggestedReply: 'Hello, our team is looking into this ticket and will update you shortly.',
+                appointments: [],
+                messages: Array.isArray(st.messages) ? st.messages.map((m: any) => ({
+                  id: m.id,
+                  sender: m.isInternal ? ('note' as const) : (m.senderType === 'user' ? ('customer' as const) : ('agent' as const)),
+                  senderName: m.isInternal ? 'Internal Note' : (m.senderName || 'Agent'),
+                  content: m.content || '',
+                  timestamp: m.createdAt ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now',
+                  channel: 'Email' as const,
+                })) : [],
+              };
+            });
+            setTickets(mappedTickets);
+            if (mappedTickets[0]) setSelectedTicketId(mappedTickets[0].id);
+          }
         }
       } catch {
         // fallback to canonical seed tickets
@@ -521,12 +561,24 @@ export function HelpCenterView() {
     );
   };
 
-  const handleMarkInProgress = () => {
+  const handleMarkInProgress = async () => {
     if (!selectedTicket) return;
     const nextStatus: HelpdeskTicket['status'] =
       selectedTicket.status === 'In Progress' ? 'Resolved' : 'In Progress';
     handleUpdateSelectedTicket({ status: nextStatus });
     toast.success(`Ticket ${selectedTicket.ticketNumber} marked as ${nextStatus}`);
+
+    try {
+      await fetch(`/api/support/tickets/${selectedTicket.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: nextStatus.toLowerCase().replace(/\s+/g, '_'),
+        }),
+      });
+    } catch {
+      // state updated optimistically
+    }
   };
 
   const handleUseAiToReply = () => {
@@ -536,15 +588,16 @@ export function HelpCenterView() {
     toast.success('AI reply draft inserted into composer');
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedTicket) return;
     const text = messageInput.trim();
+    const isNote = composerTab === 'note';
     setMessageInput('');
 
     const newMsg: HelpdeskMessage = {
       id: `msg_${Date.now()}`,
-      sender: composerTab === 'note' ? 'note' : 'agent',
-      senderName: composerTab === 'note' ? 'Internal Note' : selectedTicket.assigneeName,
+      sender: isNote ? 'note' : 'agent',
+      senderName: isNote ? 'Internal Note' : selectedTicket.assigneeName,
       senderAvatar: TECH_AVATAR,
       content: text,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -557,8 +610,21 @@ export function HelpCenterView() {
     });
 
     toast.success(
-      composerTab === 'note' ? 'Internal note added to ticket' : `Reply sent via ${selectedChannel}`
+      isNote ? 'Internal note added to ticket' : `Reply sent via ${selectedChannel}`
     );
+
+    try {
+      await fetch(`/api/support/tickets/${selectedTicket.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: text,
+          isInternal: isNote,
+        }),
+      });
+    } catch {
+      // optimistic update retained
+    }
   };
 
   const handleAddTag = () => {
@@ -571,7 +637,7 @@ export function HelpCenterView() {
     setAddingTag(false);
   };
 
-  const handleCreateNewTicket = () => {
+  const handleCreateNewTicket = async () => {
     if (!newSubject.trim() || !newCustomer.trim()) {
       toast.error('Please enter a ticket subject and customer name');
       return;
@@ -621,6 +687,30 @@ export function HelpCenterView() {
     setNewPhone('');
     setNewDescription('');
     toast.success(`Ticket ${nextNum} created`);
+
+    try {
+      const res = await fetch('/api/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: newSubject.trim(),
+          description: newDescription.trim() || newSubject.trim(),
+          priority: newPriority.toLowerCase(),
+          reporterName: newCustomer.trim(),
+          reporterPhone: newPhone.trim() || '+91 98765 43210',
+          reporterEmail: `${newCustomer.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.id) {
+          created.id = data.id;
+          if (data.ticketNumber) created.ticketNumber = data.ticketNumber;
+        }
+      }
+    } catch {
+      // optimistic creation preserved
+    }
   };
 
   const renderPriorityBadge = (priority: HelpdeskTicket['priority']) => {

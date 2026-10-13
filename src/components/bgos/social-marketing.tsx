@@ -496,8 +496,8 @@ export function SocialMediaView() {
       const accRes = await fetch('/api/social/accounts');
       if (accRes.ok) {
         const accData = await accRes.json();
-        const accounts = accData.data || [];
-        const matching = accounts.find((a: any) => a.platform.toLowerCase() === previewPlatform.toLowerCase()) || accounts[0];
+        const accounts = accData.data || (Array.isArray(accData) ? accData : []);
+        const matching = accounts.find((a: any) => a.platform?.toLowerCase() === previewPlatform.toLowerCase()) || accounts[0];
         if (matching) {
           await fetch('/api/social/posts', {
             method: 'POST',
@@ -511,8 +511,8 @@ export function SocialMediaView() {
           });
         }
       }
-    } catch {
-      // Gracefully silent; state preview is already updated
+    } catch (err) {
+      console.warn('[Marketing Studio] Social post queued; remote API sync skipped', err);
     }
   };
 
