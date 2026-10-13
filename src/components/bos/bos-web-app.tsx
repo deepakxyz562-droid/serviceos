@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   BarChart3,
   Bell,
   BookOpen,
@@ -766,6 +767,21 @@ export function BosWebApp({
   const [searchFocused, setSearchFocused] = useState(false);
   const globalSearchInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [products, setProducts] = useState<BosProductItem[]>(DEFAULT_PRODUCTS);
   const [orders, setOrders] = useState<BosOrder[]>(DEFAULT_ORDERS);
   const [customers, setCustomers] = useState<BosCustomer[]>(DEFAULT_CUSTOMERS);
@@ -1302,104 +1318,15 @@ export function BosWebApp({
     notes?: string;
     printReceipt?: boolean;
   }) => {
-    const newOrderId = `#ORD-${1049 + orders.length}`;
-    const newOrder: BosOrder = {
-      id: newOrderId,
-      customerName: payload.customerName,
-      customerPhone: payload.customerPhone,
-      channel: 'pos',
-      status: 'completed',
-      paymentMode: payload.paymentMode,
-      paymentStatus: payload.paymentMode === 'khata' ? 'pending' : 'paid',
-      totalAmount: payload.totalAmount,
-      subtotalAmount: payload.subtotalAmount,
-      discountAmount: payload.discountAmount,
-      taxAmount: payload.taxAmount,
-      items: payload.items,
-      notes: payload.notes,
-      createdAt: 'Just now',
-    };
-
-    setOrders((prev) => [newOrder, ...prev]);
-
-    // Decrement stock locally
-    setProducts((prev) =>
-      prev.map((prod) => {
-        const sold = payload.items.find((i) => i.id === prod.id);
-        if (!sold) return prod;
-        return {
-          ...prod,
-          stockQuantity: Math.max(0, prod.stockQuantity - sold.qty),
-        };
-      }),
-    );
-
-    // Add to Day Book if paid
-    if (payload.paymentMode !== 'khata') {
-      const dbMode: BosDaybookEntry['paymentMode'] =
-        payload.paymentMode === 'card'
-          ? 'card'
-          : payload.paymentMode === 'cash'
-            ? 'cash'
-            : 'upi';
-      setDaybookEntries((prev) => [
-        {
-          id: `db-${Date.now()}`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          partyName: `POS Sale — ${payload.customerName}`,
-          subtitle: `${payload.items.length} items • Counter #1`,
-          category: 'POS Sale',
-          refNumber: newOrderId,
-          paymentMode: dbMode,
-          moneyIn: payload.totalAmount,
-          moneyOut: 0,
-          createdAt: 'Today',
-        },
-        ...prev,
-      ]);
-    } else {
-      // Update Khata balance
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.name.toLowerCase() === payload.customerName.toLowerCase()
-            ? { ...c, khataBalance: c.khataBalance + payload.totalAmount }
-            : c,
-        ),
-      );
+    if (payload.paymentMode === 'khata' && (!payload.customerName || payload.customerName === 'Walk-in Customer')) {
+      throw new Error('Please select or create an account for this customer before granting Khata credit.');
     }
 
-    if (payload.printReceipt) {
-      void printCustomerBill(
-        {
-          orderNumber: newOrderId,
-          orderType: 'TAKEOUT',
-          customerName: payload.customerName,
-          customerPhone: payload.customerPhone,
-          createdAt: new Date().toISOString(),
-          items: payload.items.map((it) => ({
-            name: it.name,
-            qty: it.qty,
-            price: it.price,
-          })),
-          subtotal: payload.subtotalAmount,
-          discount: payload.discountAmount,
-          taxAmount: payload.taxAmount,
-          total: payload.totalAmount,
-          paymentMethod: payload.paymentMode.toUpperCase(),
-        },
-        {
-          name: storeSettings.businessName,
-          phone: storeSettings.phone,
-          address: storeSettings.address,
-          gstin: storeSettings.gstin,
-        },
-        printerConfig,
-      );
-    }
-
-    // Persist atomically to /api/commerce/orders with Idempotency-Key
     const requestKey = newRequestKey();
-    fetch('/api/commerce/orders', {
+    const cleanCustomerPhone = payload.customerName === 'Walk-in Customer' ? '' : payload.customerPhone.trim();
+
+    // 1. Await atomic order creation on the server
+    const res = await fetch('/api/commerce/orders', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1408,8 +1335,7 @@ export function BosWebApp({
       body: JSON.stringify({
         requestKey,
         customerName: payload.customerName,
-        customerPhone:
-          payload.customerName === 'Walk-in Customer' ? '' : payload.customerPhone,
+        customerPhone: cleanCustomerPhone,
         deliveryType: 'takeout',
         paymentMethod:
           payload.paymentMode === 'khata'
@@ -1425,7 +1351,140 @@ export function BosWebApp({
           amount: it.qty * it.price,
         })),
       }),
-    }).catch(() => {});
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error((data && (data.error || data.message)) || `Server rejected order (HTTP ${res.status})`);
+    }
+
+    // 2. Reconcile verified server order details
+    const verifiedOrderId =
+      (data && data.order && (data.order.orderNumber || data.order.id)) ||
+      (data && data.id) ||
+      `#ORD-${1049 + orders.length}`;
+
+    const verifiedTotalAmount =
+      data && data.order && typeof data.order.total === 'number'
+        ? data.order.total
+        : payload.totalAmount;
+
+    const newOrder: BosOrder = {
+      id: verifiedOrderId,
+      customerName: payload.customerName,
+      customerPhone: cleanCustomerPhone,
+      channel: 'pos',
+      status: 'completed',
+      paymentMode: payload.paymentMode,
+      paymentStatus: payload.paymentMode === 'khata' ? 'pending' : 'paid',
+      totalAmount: verifiedTotalAmount,
+      subtotalAmount: payload.subtotalAmount,
+      discountAmount: payload.discountAmount,
+      taxAmount: payload.taxAmount,
+      items: payload.items,
+      notes: payload.notes,
+      createdAt: 'Just now',
+    };
+
+    // 3. If Khata, record credit debit on customer's ledger
+    if (payload.paymentMode === 'khata') {
+      const khataReqKey = newRequestKey();
+      const khataRes = await fetch('/api/commerce/khata', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': khataReqKey,
+        },
+        body: JSON.stringify({
+          type: 'GAVE_UDHAAR',
+          amount: verifiedTotalAmount,
+          customerPhone: cleanCustomerPhone,
+          customerName: payload.customerName,
+          note: `POS Bill ${verifiedOrderId}`,
+          paymentMethod: 'CASH',
+          requestKey: khataReqKey,
+        }),
+      }).catch(() => null);
+
+      if (khataRes && !khataRes.ok) {
+        const kErr = await khataRes.json().catch(() => null);
+        throw new Error(kErr?.error || `Failed to record Khata credit (HTTP ${khataRes.status})`);
+      }
+
+      setCustomers((prev) =>
+        prev.map((c) =>
+          c.name.toLowerCase() === payload.customerName.toLowerCase()
+            ? { ...c, khataBalance: c.khataBalance + verifiedTotalAmount }
+            : c,
+        ),
+      );
+    } else {
+      // Add to Day Book register
+      const dbMode: BosDaybookEntry['paymentMode'] =
+        payload.paymentMode === 'card'
+          ? 'card'
+          : payload.paymentMode === 'cash'
+            ? 'cash'
+            : 'upi';
+      setDaybookEntries((prev) => [
+        {
+          id: `db-${Date.now()}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          partyName: `POS Sale — ${payload.customerName}`,
+          subtitle: `${payload.items.length} items • Counter #1`,
+          category: 'POS Sale',
+          refNumber: verifiedOrderId,
+          paymentMode: dbMode,
+          moneyIn: verifiedTotalAmount,
+          moneyOut: 0,
+          createdAt: 'Today',
+        },
+        ...prev,
+      ]);
+    }
+
+    // 4. Update confirmed orders state and deduct inventory stock
+    setOrders((prev) => [newOrder, ...prev]);
+    setProducts((prev) =>
+      prev.map((prod) => {
+        const sold = payload.items.find((i) => i.id === prod.id);
+        if (!sold) return prod;
+        return {
+          ...prod,
+          stockQuantity: Math.max(0, prod.stockQuantity - sold.qty),
+        };
+      }),
+    );
+
+    // 5. Trigger receipt printing ONLY after server confirmation
+    if (payload.printReceipt) {
+      void printCustomerBill(
+        {
+          orderNumber: verifiedOrderId,
+          orderType: 'TAKEOUT',
+          customerName: payload.customerName,
+          customerPhone: cleanCustomerPhone,
+          createdAt: new Date().toISOString(),
+          items: payload.items.map((it) => ({
+            name: it.name,
+            qty: it.qty,
+            price: it.price,
+          })),
+          subtotal: payload.subtotalAmount,
+          discount: payload.discountAmount,
+          taxAmount: payload.taxAmount,
+          total: verifiedTotalAmount,
+          paymentMethod: payload.paymentMode.toUpperCase(),
+        },
+        {
+          name: storeSettings.businessName,
+          phone: storeSettings.phone,
+          address: storeSettings.address,
+          gstin: storeSettings.gstin,
+        },
+        printerConfig,
+      );
+    }
   };
 
   const handleSaveProduct = async (product: BosProductItem, isNew: boolean) => {
@@ -1447,7 +1506,19 @@ export function BosWebApp({
           stock: product.stockQuantity,
           inStock: product.stockQuantity > 0,
         }),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            const realId = data?.product?.id || data?.id;
+            if (realId) {
+              setProducts((prev) =>
+                prev.map((p) => (p.id === product.id ? { ...p, id: realId } : p)),
+              );
+            }
+          }
+        })
+        .catch(() => {});
     }
 
     fetch('/api/commerce/config', {
@@ -1491,6 +1562,8 @@ export function BosWebApp({
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: BosOrder['status']) => {
+    const prevOrder = orders.find((o) => o.id === orderId);
+
     setOrders((prev) =>
       prev.map((o) =>
         o.id === orderId
@@ -1516,14 +1589,26 @@ export function BosWebApp({
       completed: 'COMPLETED',
       cancelled: 'CANCELLED',
     };
-    fetch(`/api/commerce/orders/${encodeURIComponent(orderId)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: apiStatusMap[status] || 'CONFIRMED',
-        ...(status === 'completed' ? { paymentStatus: 'PAID' } : {}),
-      }),
-    }).catch(() => {});
+
+    try {
+      const res = await fetch(`/api/commerce/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: apiStatusMap[status] || 'CONFIRMED',
+          ...(status === 'completed' ? { paymentStatus: 'PAID' } : {}),
+        }),
+      });
+      if (!res.ok && res.status !== 404) {
+        if (prevOrder) {
+          setOrders((prev) => prev.map((o) => (o.id === orderId ? prevOrder : o)));
+        }
+      }
+    } catch {
+      if (prevOrder) {
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? prevOrder : o)));
+      }
+    }
   };
 
   const handlePrintOrderBill = (order: BosOrder) => {
@@ -1564,7 +1649,19 @@ export function BosWebApp({
         email: created.email,
         address: created.address,
       }),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          const realId = data?.customer?.id || data?.id;
+          if (realId) {
+            setCustomers((prev) =>
+              prev.map((c) => (c.id === created.id ? { ...c, id: realId } : c)),
+            );
+          }
+        }
+      })
+      .catch(() => {});
   };
 
   const handleRecordKhataEntry = async (entry: {
@@ -1575,6 +1672,32 @@ export function BosWebApp({
     mode: 'cash' | 'upi' | 'credit';
     note: string;
   }) => {
+    const matchedCustomer = customers.find((c) => c.id === entry.customerId);
+    const cleanPhone = (matchedCustomer?.phone || '').replace(/\D/g, '');
+
+    const requestKey = newRequestKey();
+    const res = await fetch('/api/commerce/khata', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': requestKey,
+      },
+      body: JSON.stringify({
+        type: entry.type === 'got' ? 'GOT_PAYMENT' : 'GAVE_UDHAAR',
+        amount: entry.amount,
+        customerPhone: cleanPhone,
+        customerName: entry.customerName,
+        note: entry.note || (entry.type === 'got' ? 'Payment received' : 'Udhaar entry'),
+        paymentMethod: entry.mode === 'cash' ? 'CASH' : 'UPI',
+        requestKey,
+      }),
+    }).catch(() => null);
+
+    if (res && !res.ok) {
+      const errData = await res.json().catch(() => null);
+      throw new Error(errData?.error || `Khata ledger error (HTTP ${res.status})`);
+    }
+
     const tx: BosKhataTransaction = {
       id: `ktx-${Date.now()}`,
       partyId: entry.customerId,
@@ -1588,7 +1711,6 @@ export function BosWebApp({
     };
     setKhataTransactions((prev) => [tx, ...prev]);
 
-    const matchedCustomer = customers.find((c) => c.id === entry.customerId);
     setCustomers((prev) =>
       prev.map((c) => {
         if (c.id !== entry.customerId) return c;
@@ -1618,24 +1740,6 @@ export function BosWebApp({
         ...prev,
       ]);
     }
-
-    const requestKey = newRequestKey();
-    fetch('/api/commerce/khata', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Idempotency-Key': requestKey,
-      },
-      body: JSON.stringify({
-        type: entry.type === 'got' ? 'GOT_PAYMENT' : 'GAVE_UDHAAR',
-        amount: entry.amount,
-        customerPhone: matchedCustomer?.phone || '+91 98765 43210',
-        customerName: entry.customerName,
-        note: entry.note,
-        paymentMethod: entry.mode === 'cash' ? 'CASH' : 'UPI',
-        requestKey,
-      }),
-    }).catch(() => {});
   };
 
   const handleCreateAppointment = async (
@@ -1652,13 +1756,28 @@ export function BosWebApp({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        title: created.serviceName || 'Service Appointment',
         customerName: created.customerName,
         customerPhone: created.customerPhone,
-        serviceType: created.serviceName,
-        timeSlot: created.scheduledAt,
-        amount: created.amount,
+        scheduledAt: created.scheduledAt
+          ? new Date(created.scheduledAt).toISOString()
+          : new Date().toISOString(),
+        duration: 60,
+        notes: created.staffName ? `Staff: ${created.staffName}` : undefined,
       }),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          const realId = data?.booking?.id || data?.id;
+          if (realId) {
+            setAppointments((prev) =>
+              prev.map((a) => (a.id === created.id ? { ...a, id: realId } : a)),
+            );
+          }
+        }
+      })
+      .catch(() => {});
   };
 
   const handleUpdateAppointmentStatus = async (
@@ -1668,25 +1787,23 @@ export function BosWebApp({
     setAppointments((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status } : a)),
     );
+
+    fetch(`/api/bookings/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }).catch(() => {});
   };
 
   const handleAddDaybookEntry = async (
     entry: Omit<BosDaybookEntry, 'id' | 'time' | 'createdAt'>,
   ) => {
-    const created: BosDaybookEntry = {
-      ...entry,
-      id: `db-${Date.now()}`,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      createdAt: 'Today',
-    };
-    setDaybookEntries((prev) => [created, ...prev]);
-
     const requestKey = newRequestKey();
     const isOutflow = entry.moneyOut > 0;
     const amount = isOutflow ? entry.moneyOut : entry.moneyIn;
 
     if (entry.category === 'Expense') {
-      fetch('/api/commerce/expenses', {
+      const res = await fetch('/api/commerce/expenses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1699,9 +1816,14 @@ export function BosWebApp({
           paymentMode: entry.paymentMode === 'cash' ? 'CASH' : 'BANK',
           requestKey,
         }),
-      }).catch(() => {});
+      }).catch(() => null);
+
+      if (res && !res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || `Failed to record expense (HTTP ${res.status})`);
+      }
     } else {
-      fetch('/api/commerce/money', {
+      const res = await fetch('/api/commerce/money', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1714,8 +1836,21 @@ export function BosWebApp({
           reference: `${entry.partyName}: ${entry.subtitle}`,
           requestKey,
         }),
-      }).catch(() => {});
+      }).catch(() => null);
+
+      if (res && !res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || `Failed to record day book entry (HTTP ${res.status})`);
+      }
     }
+
+    const created: BosDaybookEntry = {
+      ...entry,
+      id: `db-${Date.now()}`,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      createdAt: 'Today',
+    };
+    setDaybookEntries((prev) => [created, ...prev]);
   };
 
   const handleUpdateStoreSettings = async (patch: Partial<BosStoreSettings>) => {
@@ -1764,20 +1899,28 @@ export function BosWebApp({
     }
 
     // Persist Storefront & Billing Config updates
-    if (
-      patch.upiId !== undefined ||
-      patch.storeLive !== undefined ||
-      patch.announcementBanner !== undefined ||
-      patch.gstin !== undefined
-    ) {
+    const configPatch: Record<string, unknown> = {};
+    if (patch.upiId !== undefined) configPatch.upiId = patch.upiId;
+    if (patch.storeLive !== undefined) configPatch.isActive = patch.storeLive;
+    if (patch.gstin !== undefined) configPatch.billing = { gstin: patch.gstin };
+    if (patch.phone !== undefined) configPatch.phone = patch.phone;
+    if (patch.whatsappNumber !== undefined) configPatch.whatsappNumber = patch.whatsappNumber;
+    if (patch.email !== undefined) configPatch.email = patch.email;
+    if (patch.address !== undefined) configPatch.address = patch.address;
+    if (patch.city !== undefined) configPatch.city = patch.city;
+    if (patch.state !== undefined) configPatch.state = patch.state;
+    if (patch.pincode !== undefined) configPatch.pincode = patch.pincode;
+    if (patch.minOrderAmount !== undefined) configPatch.minOrderAmount = patch.minOrderAmount;
+    if (patch.deliveryCharge !== undefined) configPatch.deliveryCharge = patch.deliveryCharge;
+    if (patch.freeDeliveryAbove !== undefined) configPatch.freeDeliveryAbove = patch.freeDeliveryAbove;
+    if (patch.enableLocalDelivery !== undefined) configPatch.enableLocalDelivery = patch.enableLocalDelivery;
+    if (patch.enableStorePickup !== undefined) configPatch.enableStorePickup = patch.enableStorePickup;
+
+    if (Object.keys(configPatch).length > 0) {
       fetch('/api/commerce/config', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...(patch.upiId !== undefined ? { upiId: patch.upiId } : {}),
-          ...(patch.storeLive !== undefined ? { isActive: patch.storeLive } : {}),
-          ...(patch.gstin !== undefined ? { billing: { gstin: patch.gstin } } : {}),
-        }),
+        body: JSON.stringify(configPatch),
       }).catch(() => {});
     }
 
@@ -1918,6 +2061,19 @@ export function BosWebApp({
 
       {/* Right Main Column: Top White Header + Scrollable Mint-Gray Canvas */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+        {/* Offline Banner when network drops */}
+        {!isOnline && (
+          <div className="flex items-center justify-between gap-3 bg-amber-600 px-4 py-2 text-[12.5px] font-bold text-white shadow-xs shrink-0">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Offline Mode: Cash counter is operating locally. Data will automatically synchronize with server when internet is restored.
+            </span>
+            <span className="rounded-md bg-amber-700/80 px-2 py-0.5 text-[11px] font-semibold uppercase shrink-0">
+              Offline
+            </span>
+          </div>
+        )}
+
         {/* Top White Header (64px) */}
         <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#E4EFEA] bg-white px-4 lg:px-6">
           {/* Left: Mobile Menu Trigger + Store & Blueprint Switcher Pill */}

@@ -341,16 +341,19 @@ export function BosMarketingAiIntegrationsSettings({
     setAiLoading(true);
 
     try {
+      const messagesPayload = [
+        ...aiMessages.map((m) => ({
+          role: m.role,
+          content: m.text,
+        })),
+        { role: 'user', content: trimmed },
+      ];
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: trimmed,
-          context: {
-            businessName: storeSettings.businessName,
-            productsCount: products.length,
-            ordersCount: orders.length,
-          },
+          messages: messagesPayload,
         }),
       });
       const json = await res.json().catch(() => null);
@@ -1128,7 +1131,25 @@ export function BosMarketingAiIntegrationsSettings({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    const targetAudienceCount =
+                      campaignAudience === 'All Customers'
+                        ? Math.max(1, customers.length)
+                        : Math.max(1, Math.min(customers.length, 25));
+
+                    fetch('/api/campaigns', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        name: campaignTitle || 'Special Store Promotion',
+                        type: 'promotional',
+                        status: 'active',
+                        channel: 'email',
+                        messageContent: campaignText,
+                        totalRecipients: targetAudienceCount,
+                      }),
+                    }).catch(() => {});
+
                     const nextId = recentCampaigns.length + 1;
                     setRecentCampaigns((prev) => [
                       {
@@ -1137,10 +1158,10 @@ export function BosMarketingAiIntegrationsSettings({
                         bannerTheme: 'fresh',
                         type: campaignType,
                         audience: campaignAudience,
-                        sent: '684',
-                        orders: 42,
-                        revenue: 6400,
-                        status: 'Completed',
+                        sent: String(targetAudienceCount),
+                        orders: 0,
+                        revenue: 0,
+                        status: 'Active',
                         discountHeadline: campaignDiscountText,
                         messageBody: campaignText,
                         validTill: campaignValidTill,
@@ -1149,10 +1170,12 @@ export function BosMarketingAiIntegrationsSettings({
                     ]);
                     setSelectedCampaignId(nextId);
                     setCreateCampaignModalOpen(false);
-                    setToast(`Launched "${campaignTitle}" to ${campaignAudience}!`);
+                    setToast(
+                      `Launched "${campaignTitle}" to ${targetAudienceCount} recipients (${campaignAudience})!`,
+                    );
                     setTimeout(() => setToast(null), 3000);
                   }}
-                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white"
+                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white cursor-pointer"
                 >
                   Launch Campaign
                 </button>
@@ -2174,18 +2197,25 @@ export function BosMarketingAiIntegrationsSettings({
                       <span className="font-medium text-[#475569] truncate">{item.meta}</span>
                       <button
                         type="button"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
                           if (item.id === 'printer' && onOpenPrinterModal) {
                             onOpenPrinterModal();
                             return;
                           }
+                          const nextState = !connectedIds[item.id];
                           setConnectedIds((prev) => ({
                             ...prev,
-                            [item.id]: !prev[item.id],
+                            [item.id]: nextState,
                           }));
+                          await onUpdateStoreSettings({
+                            capabilities: {
+                              ...storeSettings.capabilities,
+                              [item.id]: nextState,
+                            },
+                          });
                         }}
-                        className={`rounded-lg px-3 py-1 font-bold ${
+                        className={`rounded-lg px-3 py-1 font-bold cursor-pointer ${
                           isConnected
                             ? 'border border-[#DCE9E3] bg-white text-[#334155]'
                             : 'bg-[#0A6847] text-white'
@@ -2225,11 +2255,17 @@ export function BosMarketingAiIntegrationsSettings({
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                await onUpdateStoreSettings({
+                  capabilities: {
+                    ...storeSettings.capabilities,
+                    [selectedIntegration.id]: !!connectedIds[selectedIntegration.id],
+                  },
+                });
                 setToast(`Saved ${selectedIntegration.name} configuration!`);
                 setTimeout(() => setToast(null), 2500);
               }}
-              className="w-full bos-btn-primary rounded-xl py-2.5 text-[13px]"
+              className="w-full bos-btn-primary rounded-xl py-2.5 text-[13px] cursor-pointer"
             >
               Save Integration Settings
             </button>

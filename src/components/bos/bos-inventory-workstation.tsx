@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Barcode,
@@ -718,8 +718,119 @@ export function BosInventoryWorkstation({
     showToast('Exported inventory CSV');
   };
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleCsvFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      if (lines.length < 2) {
+        showToast('CSV file is empty or missing data rows.');
+        return;
+      }
+
+      const header = lines[0]
+        .split(',')
+        .map((h) => h.trim().toLowerCase().replace(/^["']|["']$/g, ''));
+      const skuIdx = header.findIndex((h) => h.includes('sku'));
+      const barcodeIdx = header.findIndex((h) => h.includes('barcode'));
+      const nameIdx = header.findIndex((h) =>
+        h.includes('name') || h.includes('title') || h.includes('item'),
+      );
+      const brandIdx = header.findIndex((h) => h.includes('brand'));
+      const catIdx = header.findIndex((h) => h.includes('category'));
+      const stockIdx = header.findIndex((h) =>
+        h.includes('stock') || h.includes('qty'),
+      );
+      const priceIdx = header.findIndex((h) =>
+        h.includes('price') || h.includes('rate') || h.includes('mrp'),
+      );
+
+      let importedCount = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const match = line.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g);
+        const parts = match
+          ? match.map((v) => v.replace(/^"|"$/g, '').trim())
+          : line.split(',').map((s) => s.trim());
+
+        const rawName =
+          nameIdx >= 0 && parts[nameIdx]
+            ? parts[nameIdx]
+            : parts[0] || `Imported Item ${i}`;
+        const rawPrice =
+          priceIdx >= 0 && parts[priceIdx] ? parseFloat(parts[priceIdx]) : 50;
+        const rawStock =
+          stockIdx >= 0 && parts[stockIdx] ? parseInt(parts[stockIdx], 10) : 20;
+        const rawCategory =
+          catIdx >= 0 && parts[catIdx] ? parts[catIdx] : 'Grocery';
+        const rawBrand =
+          brandIdx >= 0 && parts[brandIdx] ? parts[brandIdx] : 'Store Brand';
+        const rawSku =
+          skuIdx >= 0 && parts[skuIdx] ? parts[skuIdx] : `SKU-${Date.now()}-${i}`;
+        const rawBarcode =
+          barcodeIdx >= 0 && parts[barcodeIdx]
+            ? parts[barcodeIdx]
+            : `890${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+
+        const newItem: BosProductItem = {
+          id: `prod-${Date.now()}-${i}`,
+          name: rawName,
+          category: rawCategory,
+          brand: rawBrand,
+          price: isNaN(rawPrice) ? 50 : rawPrice,
+          mrp: isNaN(rawPrice) ? 50 : Math.round(rawPrice * 1.1),
+          costPrice: isNaN(rawPrice) ? 40 : Math.round(rawPrice * 0.8),
+          stockQuantity: isNaN(rawStock) ? 20 : Math.max(0, rawStock),
+          lowStockThreshold: 10,
+          sku: rawSku,
+          barcode: rawBarcode,
+          unit: '1 Unit',
+          gstRate: 5,
+          location: 'Main Store',
+          onlineVisible: true,
+        };
+
+        await onSaveProduct(newItem, true);
+        setStockOverrides((prev) => ({
+          ...prev,
+          [newItem.id]: newItem.stockQuantity,
+        }));
+        importedCount++;
+      }
+
+      showToast(
+        `Successfully imported ${importedCount} product${
+          importedCount > 1 ? 's' : ''
+        } into inventory!`,
+      );
+    } catch (err: any) {
+      showToast(`Import error: ${err?.message || 'Failed to parse CSV'}`);
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
+
   return (
     <div className="space-y-3.5 pb-6">
+      {/* Hidden File Input for CSV Import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv"
+        className="hidden"
+        onChange={handleCsvFileChange}
+      />
+
       {/* Page Title & Top Right Action Buttons */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -734,11 +845,7 @@ export function BosInventoryWorkstation({
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() =>
-              showToast(
-                'CSV & Barcode Import ready — products automatically pull images from centralized/public barcode CDN',
-              )
-            }
+            onClick={handleImportClick}
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Upload className="h-4 w-4 text-[#475569]" />

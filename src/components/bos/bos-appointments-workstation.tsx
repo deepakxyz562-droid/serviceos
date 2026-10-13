@@ -539,11 +539,15 @@ export function BosAppointmentsWorkstation({
   };
 
   const handleSendWhatsAppReminder = (blk: ScheduleBlockItem) => {
-    const cleanPhone = blk.customerPhone.replace(/\D/g, '') || '919876543210';
+    const cleanPhone = blk.customerPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 7) {
+      showToast('Please provide a valid customer phone number to send WhatsApp reminder.');
+      return;
+    }
     const text = `Hi *${blk.customerName}*,\nYour appointment at *${businessName || 'Ravi Store'}* for *${blk.serviceName}* with *${blk.staffName}* is scheduled for *${blk.dateLabel}* at *${blk.detailTimeLabel}*.`;
     if (typeof window !== 'undefined') {
       window.open(
-        `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`,
+        `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${encodeURIComponent(text)}`,
         '_blank',
         'noopener,noreferrer',
       );

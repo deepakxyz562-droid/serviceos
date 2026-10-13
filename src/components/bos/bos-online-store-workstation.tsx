@@ -169,8 +169,11 @@ export function BosOnlineStoreWorkstation({
   });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  const storeUrl = 'https://bos.fieseros.com/ravi-store';
-  const publicStorePath = `/store/${storeSettings.businessSlug || 'ravi-store'}`;
+  const liveOrigin =
+    typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
+  const effectiveSlug = storeSettings.businessSlug || 'my-store';
+  const storeUrl = `${liveOrigin}/store/${effectiveSlug}`;
+  const publicStorePath = `/store/${effectiveSlug}`;
 
   useEffect(() => {
     let active = true;
@@ -193,7 +196,11 @@ export function BosOnlineStoreWorkstation({
       return `${storeUrl}?table=${encodeURIComponent(qrTableNumber || '1')}`;
     }
     if (qrMode === 'payment') {
-      return `upi://pay?pa=${encodeURIComponent(storeSettings.upiId || 'ravistore@okaxis')}&pn=${encodeURIComponent(storeSettings.businessName || storeName)}`;
+      const upi = (storeSettings.upiId || '').trim();
+      if (!upi) {
+        return `${storeUrl}?action=pay`;
+      }
+      return `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(storeSettings.businessName || storeName)}`;
     }
     if (qrMode === 'booking') {
       return `${storeUrl}?mode=booking`;

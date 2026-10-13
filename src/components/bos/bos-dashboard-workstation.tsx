@@ -70,14 +70,14 @@ export function BosDashboardWorkstation({
   const kpiStats = useMemo(() => {
     const validOrders = orders.filter((o) => o.status !== 'cancelled');
     const computedSales = validOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
-    const totalSales = computedSales > 0 ? computedSales : 24580;
-    const totalOrdersCount = orders.length > 0 ? orders.length : 48;
-    const completedOrdersCount = orders.filter((o) => o.status === 'completed').length || 38;
-    const pendingOrdersCount = orders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled').length || 10;
-    const totalCustomersCount = customers.length > 0 ? customers.length : 1240;
-    const newCustomersCount = Math.min(totalCustomersCount, Math.max(15, Math.round(totalCustomersCount * 0.12)));
-    const appointmentsCount = appointments.length > 0 ? appointments.length : 12;
-    const upcomingCount = appointments.filter((a) => a.status === 'confirmed' || a.status === 'pending').length || 3;
+    const totalSales = computedSales;
+    const totalOrdersCount = orders.length;
+    const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
+    const pendingOrdersCount = orders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled').length;
+    const totalCustomersCount = customers.length;
+    const newCustomersCount = Math.min(totalCustomersCount, Math.round(totalCustomersCount * 0.12));
+    const appointmentsCount = appointments.length;
+    const upcomingCount = appointments.filter((a) => a.status === 'confirmed' || a.status === 'pending').length;
 
     return {
       totalSales,

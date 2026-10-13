@@ -369,6 +369,11 @@ export function BosInvoicesWorkstation({
       setTimeout(() => win.print(), 300);
     }
 
+    const matchedCust = customers.find(
+      (c) => c.name.toLowerCase() === selectedCustomerName.toLowerCase(),
+    );
+    const targetCustomerId = matchedCust?.id || customers[0]?.id || 'cust-1';
+
     const saved: SavedBosInvoice = {
       id: `inv-${Date.now()}`,
       invoiceNumber,
@@ -383,23 +388,48 @@ export function BosInvoicesWorkstation({
     };
     onInvoiceSaved?.(saved);
 
-    fetch('/api/v1/invoices', {
+    fetch('/api/invoices', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        customerId: targetCustomerId,
         customerName: selectedCustomerName,
-        amount: calculations.totalAmount,
         dueDate,
-        status: 'paid',
+        notes: remarks,
+        items: items.map((it) => ({
+          description: it.name,
+          quantity: it.qty,
+          rate: it.rate,
+          amount: it.qty * it.rate,
+        })),
+        discount: calculations.discountAmount,
+        currency: storeSettings.currencySymbol === '₹' ? 'INR' : 'USD',
       }),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data && data.invoice && data.invoice.id) {
+            onInvoiceSaved?.({
+              ...saved,
+              id: data.invoice.id,
+              invoiceNumber: data.invoice.number || saved.invoiceNumber,
+            });
+          }
+        }
+      })
+      .catch(() => {});
 
     showToast(`Invoice ${invoiceNumber} generated & sent to printer`);
   };
 
   const handleShareInvoice = () => {
-    const cleanPhone = selectedCustomerPhone.replace(/\D/g, '') || '919876543210';
-    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *Ravi Store*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks}`;
+    const cleanPhone = selectedCustomerPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 7) {
+      showToast('Please enter customer phone number to share invoice on WhatsApp.');
+      return;
+    }
+    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *${storeSettings.businessName || 'Ravi Store'}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks}`;
     if (typeof window !== 'undefined') {
       window.open(
         `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${encodeURIComponent(text)}`,

@@ -419,15 +419,22 @@ export function BosPosWorkstation({
 
   const handleCompleteOrder = async (printReceipt = true) => {
     if (cart.length === 0 || submitting) return;
+
+    const cname =
+      customCustomerName.trim() ||
+      selectedCustomer?.name ||
+      customerSearch.trim() ||
+      'Walk-in Customer';
+    const cphone =
+      customCustomerPhone.trim() || selectedCustomer?.phone || '';
+
+    if (paymentMode === 'khata' && cname === 'Walk-in Customer') {
+      showToast('Please select or add a customer before recording Khata credit.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const cname =
-        customCustomerName.trim() ||
-        selectedCustomer?.name ||
-        customerSearch.trim() ||
-        'Walk-in Customer';
-      const cphone =
-        customCustomerPhone.trim() || selectedCustomer?.phone || '+91 98765 43210';
       await onCompleteSale({
         customerName: cname,
         customerPhone: cphone,
@@ -460,6 +467,8 @@ export function BosPosWorkstation({
       showToast(
         `Sale completed (${formatPosPrice(billCalculations.grandTotal, currencySymbol)})!`,
       );
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to record sale. Cart and stock preserved.');
     } finally {
       setSubmitting(false);
     }

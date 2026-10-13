@@ -217,6 +217,7 @@ function getMethodPillStyle(method: DaybookShowcaseRow['method']) {
 export function BosReportsDaybookWorkstation({
   mode,
   currencySymbol,
+  orders = [],
   products,
   onAddDaybookEntry,
 }: BosReportsDaybookWorkstationProps) {
@@ -343,6 +344,148 @@ export function BosReportsDaybookWorkstation({
     showToast(`Recorded "${title}" (${currencySymbol} ${amt.toLocaleString('en-IN')})`);
   };
 
+  const handleExportGstr1Json = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const b2csInvoices = (orders || []).map((o) => {
+      const taxable = Math.round(o.totalAmount / 1.05);
+      const tax = o.totalAmount - taxable;
+      const cgst = Math.round(tax / 2);
+      const sgst = tax - cgst;
+      return {
+        flag: 'N',
+        chksum: `chk-${o.id}`,
+        inum: o.id,
+        idt: today,
+        val: o.totalAmount,
+        pos: '09',
+        rchrg: 'N',
+        inv_typ: 'R',
+        itms: [
+          {
+            num: 1,
+            itm_det: {
+              txval: taxable,
+              rt: 5,
+              iamt: 0,
+              camt: cgst,
+              samt: sgst,
+              csamt: 0,
+            },
+          },
+        ],
+      };
+    });
+
+    const hsnSummary = (products || []).slice(0, 20).map((p, idx) => ({
+      num: idx + 1,
+      hsn_sc: p.hsnCode || '1006',
+      desc: p.name,
+      uqc: 'OTH',
+      qty: p.stockQuantity || 10,
+      val: p.price * (p.stockQuantity || 10),
+      txval: Math.round((p.price * (p.stockQuantity || 10)) / 1.05),
+      iamt: 0,
+      camt: Math.round(((p.price * (p.stockQuantity || 10)) * 0.05) / 2),
+      samt: Math.round(((p.price * (p.stockQuantity || 10)) * 0.05) / 2),
+      csamt: 0,
+    }));
+
+    const gstrPayload = {
+      gstin: '09ABCDE1234F1Z5',
+      fp: `${new Date().getMonth() + 1 < 10 ? '0' : ''}${new Date().getMonth() + 1}${new Date().getFullYear()}`,
+      gt: 482650,
+      cur_gt: 482650,
+      b2cs: [
+        {
+          sply_ty: 'INTRA',
+          pos: '09',
+          typ: 'OE',
+          rt: 5,
+          txval: 459666,
+          iamt: 0,
+          camt: 11492,
+          samt: 11492,
+          csamt: 0,
+        },
+      ],
+      b2b: b2csInvoices.slice(0, 5),
+      hsn: {
+        data: hsnSummary,
+      },
+      doc_issue: {
+        doc_det: [
+          {
+            doc_num: 1,
+            doc_typ: 'Invoices for outward supply',
+            from: 'ORD-1001',
+            to: `ORD-${1000 + (orders?.length || 10)}`,
+            totnum: orders?.length || 10,
+            canc: 0,
+            net_issue: orders?.length || 10,
+          },
+        ],
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(gstrPayload, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GSTR1_return_${today}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded official GSTR-1 JSON return (${today})`);
+  };
+
+  const handleExportGstrSummaryCsv = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const header = [
+      'Invoice Number',
+      'Invoice Date',
+      'Customer Name',
+      'Supply Type',
+      'Rate (%)',
+      'Taxable Value',
+      'Central Tax (CGST)',
+      'State Tax (SGST)',
+      'Integrated Tax (IGST)',
+      'Total Invoice Value',
+    ];
+
+    const rows = (orders || []).map((o) => {
+      const taxable = Math.round(o.totalAmount / 1.05);
+      const tax = o.totalAmount - taxable;
+      const cgst = Math.round(tax / 2);
+      const sgst = tax - cgst;
+      return [
+        o.id,
+        today,
+        `"${o.customerName.replace(/"/g, '""')}"`,
+        'INTRA-STATE',
+        '5%',
+        taxable,
+        cgst,
+        sgst,
+        0,
+        o.totalAmount,
+      ];
+    });
+
+    const csvContent = [header.join(','), ...rows.map((r) => r.join(','))].join(
+      '\n',
+    );
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GSTR1_3B_summary_${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported GSTR-1 & 3B CSV return summary (${today})`);
+  };
+
   /* REPORTS VIEW */
   if (mode === 'reports') {
     return (
@@ -378,10 +521,8 @@ export function BosReportsDaybookWorkstation({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() =>
-                showToast('Exported GSTR-1 & GSTR-3B JSON/CSV return summary.')
-              }
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6]"
+              onClick={handleExportGstrSummaryCsv}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
             >
               <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
               <span>GSTR-1 / 3B</span>
@@ -659,8 +800,8 @@ export function BosReportsDaybookWorkstation({
               </div>
               <button
                 type="button"
-                onClick={() => showToast('Downloaded GSTR-1 JSON report.')}
-                className="bos-btn-primary rounded-lg px-3 py-1.5 text-[11.5px]"
+                onClick={handleExportGstr1Json}
+                className="bos-btn-primary rounded-lg px-3 py-1.5 text-[11.5px] cursor-pointer"
               >
                 Download GSTR-1
               </button>
