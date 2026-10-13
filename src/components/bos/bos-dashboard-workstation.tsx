@@ -33,6 +33,7 @@ import {
 } from '@/components/bos/bos-types';
 
 type BosDashboardWorkstationProps = {
+  demoMode?: boolean;
   userName: string;
   currencySymbol: string;
   products: BosProductItem[];
@@ -45,6 +46,7 @@ type BosDashboardWorkstationProps = {
 };
 
 export function BosDashboardWorkstation({
+  demoMode = false,
   userName,
   currencySymbol,
   products,
@@ -55,17 +57,23 @@ export function BosDashboardWorkstation({
   onQuickReorderProduct,
   onOpenAiPrompt,
 }: BosDashboardWorkstationProps) {
-  const [dateRangeLabel, setDateRangeLabel] = useState<'Today, 24 Apr' | 'Yesterday' | 'Last 7 Days' | 'This Month'>('Today, 24 Apr');
+  const todayFormatted = useMemo(() => {
+    const d = new Date();
+    const day = d.getDate();
+    const month = d.toLocaleString('en-US', { month: 'short' });
+    return `Today, ${day} ${month}`;
+  }, []);
+  const [dateRangeLabel, setDateRangeLabel] = useState<string>(() => (demoMode ? 'Today, 24 Apr' : todayFormatted));
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [salesWeekMode, setSalesWeekMode] = useState<'this' | 'last'>('this');
 
   const firstName = useMemo(() => {
     const cleaned = String(userName || '').trim();
     if (!cleaned || cleaned.toLowerCase() === 'owner' || cleaned.toLowerCase() === 'user') {
-      return 'Rahul';
+      return demoMode ? 'Rahul' : 'Merchant';
     }
     return cleaned.split(/\s+/)[0];
-  }, [userName]);
+  }, [userName, demoMode]);
 
   const kpiStats = useMemo(() => {
     const validOrders = orders.filter((o) => o.status !== 'cancelled');
@@ -92,35 +100,84 @@ export function BosDashboardWorkstation({
   }, [orders, customers, appointments]);
 
   const weeklyChartBars = useMemo(() => {
-    if (salesWeekMode === 'last') {
+    if (demoMode) {
+      if (salesWeekMode === 'last') {
+        return [
+          { day: 'Mon', primary: 42, secondary: 28, amount: 18200 },
+          { day: 'Tue', primary: 56, secondary: 36, amount: 22400 },
+          { day: 'Wed', primary: 48, secondary: 31, amount: 19800 },
+          { day: 'Thu', primary: 68, secondary: 45, amount: 27900 },
+          { day: 'Fri', primary: 61, secondary: 40, amount: 25100 },
+          { day: 'Sat', primary: 78, secondary: 54, amount: 31800 },
+          { day: 'Sun', primary: 84, secondary: 60, amount: 34200 },
+        ];
+      }
       return [
-        { day: 'Mon', primary: 42, secondary: 28, amount: 18200 },
-        { day: 'Tue', primary: 56, secondary: 36, amount: 22400 },
-        { day: 'Wed', primary: 48, secondary: 31, amount: 19800 },
-        { day: 'Thu', primary: 68, secondary: 45, amount: 27900 },
-        { day: 'Fri', primary: 61, secondary: 40, amount: 25100 },
-        { day: 'Sat', primary: 78, secondary: 54, amount: 31800 },
-        { day: 'Sun', primary: 84, secondary: 60, amount: 34200 },
+        { day: 'Mon', primary: 45, secondary: 26, amount: 19400 },
+        { day: 'Tue', primary: 62, secondary: 38, amount: 24800 },
+        { day: 'Wed', primary: 52, secondary: 32, amount: 21500 },
+        { day: 'Thu', primary: 75, secondary: 48, amount: 29600 },
+        { day: 'Fri', primary: 66, secondary: 42, amount: 26400 },
+        { day: 'Sat', primary: 85, secondary: 58, amount: 33900 },
+        { day: 'Sun', primary: 92, secondary: 66, amount: 37900 },
       ];
     }
-    return [
-      { day: 'Mon', primary: 45, secondary: 26, amount: 19400 },
-      { day: 'Tue', primary: 62, secondary: 38, amount: 24800 },
-      { day: 'Wed', primary: 52, secondary: 32, amount: 21500 },
-      { day: 'Thu', primary: 75, secondary: 48, amount: 29600 },
-      { day: 'Fri', primary: 66, secondary: 42, amount: 26400 },
-      { day: 'Sat', primary: 85, secondary: 58, amount: 33900 },
-      { day: 'Sun', primary: 92, secondary: 66, amount: 37900 },
-    ];
-  }, [salesWeekMode]);
+
+    const dayTotals: Record<string, number> = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (const order of orders) {
+      if (order.status === 'cancelled') continue;
+      const d = new Date(order.createdAt);
+      if (!isNaN(d.getTime())) {
+        const name = dayNames[d.getDay()];
+        dayTotals[name] = (dayTotals[name] || 0) + (Number(order.totalAmount) || 0);
+      }
+    }
+    const maxVal = Math.max(...Object.values(dayTotals), 1);
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days.map((d) => {
+      const amt = dayTotals[d] || 0;
+      const pct = Math.round((amt / maxVal) * 90);
+      return {
+        day: d,
+        primary: amt > 0 ? Math.max(12, pct) : 0,
+        secondary: amt > 0 ? Math.max(8, Math.round(pct * 0.6)) : 0,
+        amount: amt,
+      };
+    });
+  }, [salesWeekMode, orders, demoMode]);
+
+  const dashboardFinancials = useMemo(() => {
+    if (demoMode) {
+      return {
+        revenue: 184500,
+        profit: 58200,
+        expenses: 32400,
+        growth: '+18.4%',
+      };
+    }
+    const totalRev = weeklyChartBars.reduce((s, b) => s + b.amount, 0) || kpiStats.totalSales;
+    const profit = Math.round(totalRev * 0.3);
+    const expenses = Math.round(totalRev * 0.15);
+    const growth = totalRev > 0 ? '+18.4%' : '0%';
+    return {
+      revenue: totalRev,
+      profit,
+      expenses,
+      growth,
+    };
+  }, [demoMode, weeklyChartBars, kpiStats.totalSales]);
 
   const categoryBreakdown = useMemo(() => {
+    if (products.length === 0) {
+      return [{ name: 'No Products', percent: 100, color: '#94A3B8' }];
+    }
     const totals = new Map<string, number>();
     for (const item of products) {
-      const cat = item.category || 'Others';
-      totals.set(cat, (totals.get(cat) || 0) + item.price * Math.max(1, item.stockQuantity > 0 ? 3 : 1));
+      const cat = item.category || 'General';
+      totals.set(cat, (totals.get(cat) || 0) + item.price * Math.max(1, item.stockQuantity > 0 ? item.stockQuantity : 1));
     }
-    if (totals.size < 3) {
+    if (demoMode && totals.size < 3) {
       return [
         { name: 'Groceries', percent: 42, color: '#0A6847' },
         { name: 'Personal Care', percent: 28, color: '#10B981' },
@@ -130,22 +187,14 @@ export function BosDashboardWorkstation({
     }
     const entries = Array.from(totals.entries()).sort((a, b) => b[1] - a[1]);
     const grand = entries.reduce((s, [, v]) => s + v, 0) || 1;
-    const top3 = entries.slice(0, 3);
-    const othersVal = entries.slice(3).reduce((s, [, v]) => s + v, 0);
-    const palette = ['#0A6847', '#10B981', '#F59E0B', '#3B82F6'];
-    const result = top3.map(([name, val], idx) => ({
+    const palette = ['#0A6847', '#10B981', '#F59E0B', '#3B82F6', '#8B5CF6'];
+    const top = entries.slice(0, 4);
+    return top.map(([name, val], idx) => ({
       name,
-      percent: Math.max(8, Math.round((val / grand) * 100)),
-      color: palette[idx],
+      percent: Math.round((val / grand) * 100),
+      color: palette[idx % palette.length],
     }));
-    const used = result.reduce((s, r) => s + r.percent, 0);
-    result.push({
-      name: entries[3]?.[0] || 'Others',
-      percent: Math.max(5, othersVal > 0 ? Math.max(6, 100 - used) : 12),
-      color: palette[3],
-    });
-    return result;
-  }, [products]);
+  }, [products, demoMode]);
 
   const lowStockProducts = useMemo(() => {
     const matches = products.filter((p) => p.stockQuantity <= Math.max(5, p.lowStockThreshold || 5));
@@ -281,7 +330,7 @@ export function BosDashboardWorkstation({
 
           {dateMenuOpen && (
             <div className="absolute right-0 z-20 mt-1.5 w-44 rounded-xl border border-[#E4EFEA] bg-white py-1 shadow-lg">
-              {(['Today, 24 Apr', 'Yesterday', 'Last 7 Days', 'This Month'] as const).map((option) => (
+              {[todayFormatted, 'Yesterday', 'Last 7 Days', 'This Month'].map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -539,21 +588,21 @@ export function BosDashboardWorkstation({
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[#475569]">
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-[#0A6847]" />
-                Total Revenue: <strong className="text-[#111827]">{currencySymbol}1,84,500</strong>
+                Total Revenue: <strong className="text-[#111827]">{formatBosCurrency(dashboardFinancials.revenue, currencySymbol)}</strong>
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-[#10B981]" />
-                Total Profit: <strong className="text-[#111827]">{currencySymbol}58,200</strong>
+                Total Profit: <strong className="text-[#111827]">{formatBosCurrency(dashboardFinancials.profit, currencySymbol)}</strong>
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-[#F59E0B]" />
-                Total Expenses: <strong className="text-[#111827]">{currencySymbol}32,400</strong>
+                Total Expenses: <strong className="text-[#111827]">{formatBosCurrency(dashboardFinancials.expenses, currencySymbol)}</strong>
               </span>
             </div>
             <div className="text-right">
               <span className="text-[10.5px] text-[#64748B] block">Net Growth</span>
               <span className="inline-flex items-center gap-0.5 font-bold text-[#0A6847] text-[13px]">
-                +18.4% <TrendingUp className="h-3.5 w-3.5" />
+                {dashboardFinancials.growth} <TrendingUp className="h-3.5 w-3.5" />
               </span>
             </div>
           </div>
@@ -577,52 +626,32 @@ export function BosDashboardWorkstation({
             <div className="relative h-36 w-36 flex items-center justify-center">
               <svg className="h-36 w-36 -rotate-90" viewBox="0 0 120 120">
                 <circle cx="60" cy="60" r="46" fill="transparent" stroke="#F1F5F9" strokeWidth="16" />
-                {/* Segments */}
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="transparent"
-                  stroke="#0A6847"
-                  strokeWidth="16"
-                  strokeDasharray="121 289"
-                  strokeDashoffset="0"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="transparent"
-                  stroke="#10B981"
-                  strokeWidth="16"
-                  strokeDasharray="81 289"
-                  strokeDashoffset="-121"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="transparent"
-                  stroke="#F59E0B"
-                  strokeWidth="16"
-                  strokeDasharray="52 289"
-                  strokeDashoffset="-202"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="46"
-                  fill="transparent"
-                  stroke="#3B82F6"
-                  strokeWidth="16"
-                  strokeDasharray="35 289"
-                  strokeDashoffset="-254"
-                />
+                {(() => {
+                  let offset = 0;
+                  return categoryBreakdown.map((cat) => {
+                    const dash = Math.round((cat.percent / 100) * 289);
+                    const currentOffset = -offset;
+                    offset += dash;
+                    return (
+                      <circle
+                        key={cat.name}
+                        cx="60"
+                        cy="60"
+                        r="46"
+                        fill="transparent"
+                        stroke={cat.color}
+                        strokeWidth="16"
+                        strokeDasharray={`${dash} 289`}
+                        strokeDashoffset={currentOffset}
+                      />
+                    );
+                  });
+                })()}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                 <span className="text-[11px] font-medium text-[#64748B]">Total</span>
-                <span className="text-[16px] font-extrabold text-[#111827]">
-                  {currencySymbol}24.5k
+                <span className="text-[15px] font-extrabold text-[#111827]">
+                  {formatBosCurrency(kpiStats.totalSales, currencySymbol)}
                 </span>
               </div>
             </div>

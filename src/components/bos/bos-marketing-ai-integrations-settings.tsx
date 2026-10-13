@@ -82,6 +82,7 @@ import type {
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
+  demoMode?: boolean;
   storeSettings: BosStoreSettings;
   products: BosProductItem[];
   orders: BosOrder[];
@@ -97,6 +98,7 @@ type BosMarketingAiIntegrationsSettingsProps = {
 
 export function BosMarketingAiIntegrationsSettings({
   mode,
+  demoMode = false,
   storeSettings,
   products,
   orders,
@@ -153,7 +155,7 @@ export function BosMarketingAiIntegrationsSettings({
       messageBody: string;
       validTill: string;
     }>
-  >([
+  >(() => (demoMode ? [
     {
       id: 1,
       name: 'Weekend Fresh Deals',
@@ -224,8 +226,8 @@ export function BosMarketingAiIntegrationsSettings({
       messageBody: 'Mega month-end clearance on snacks, personal care & home essentials!',
       validTill: '28 Oct 2024',
     },
-  ]);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<number>(1);
+  ] : []));
+  const [selectedCampaignId, setSelectedCampaignId] = useState<number>(demoMode ? 1 : 0);
 
   /* AI Assistant state (Matches BOS AI Assistant screenshot 1:1) */
   const [aiInput, setAiInput] = useState('');
@@ -241,49 +243,99 @@ export function BosMarketingAiIntegrationsSettings({
   /* Integrations state */
   const [integrationCategory, setIntegrationCategory] = useState('All Integrations');
   const [selectedIntegrationId, setSelectedIntegrationId] = useState('razorpay');
-  const [connectedIds, setConnectedIds] = useState<Record<string, boolean>>({
-    razorpay: true,
-    whatsapp: true,
-    tally: true,
-    printer: true,
-    phonepe: false,
-    porter: false,
-    ondc: false,
-    zoho: false,
+  const [connectedIds, setConnectedIds] = useState<Record<string, boolean>>(() => {
+    if (demoMode) {
+      return {
+        razorpay: true,
+        whatsapp: true,
+        tally: true,
+        printer: true,
+        phonepe: false,
+        porter: false,
+        ondc: false,
+        zoho: false,
+      };
+    }
+    return {
+      razorpay: Boolean(storeSettings.upiId),
+      whatsapp: Boolean(storeSettings.whatsappNumber),
+      tally: false,
+      printer: false,
+      phonepe: false,
+      porter: false,
+      ondc: false,
+      zoho: false,
+    };
   });
   const [integrationCreds, setIntegrationCreds] = useState<
     Record<string, { keyId?: string; secret?: string; metaField?: string }>
-  >({
-    razorpay: {
-      keyId: 'rzp_live_8F92ka019',
-      secret: '••••••••••••••••',
-      metaField: storeSettings.upiId || 'sharmastore@okhdfcbank',
-    },
-    whatsapp: {
-      keyId: '1048291049281',
-      secret: 'EAABwzL1••••••••',
-      metaField: storeSettings.whatsappNumber || '+91 98765 43210',
-    },
-    tally: {
-      keyId: 'localhost',
-      secret: '9000',
-      metaField: 'SHARMA GENERAL STORE (2026)',
-    },
-    printer: {
-      keyId: 'USB001',
-      secret: '',
-      metaField: 'Epson TM-T82 (80mm)',
-    },
-    phonepe: {
-      keyId: '',
-      secret: '',
-      metaField: '',
-    },
-    porter: {
-      keyId: '',
-      secret: '',
-      metaField: storeSettings.address || '',
-    },
+  >(() => {
+    if (demoMode) {
+      return {
+        razorpay: {
+          keyId: 'rzp_live_8F92ka019',
+          secret: '••••••••••••••••',
+          metaField: storeSettings.upiId || 'sharmastore@okhdfcbank',
+        },
+        whatsapp: {
+          keyId: '1048291049281',
+          secret: 'EAABwzL1••••••••',
+          metaField: storeSettings.whatsappNumber || '+91 98765 43210',
+        },
+        tally: {
+          keyId: 'localhost',
+          secret: '9000',
+          metaField: `${storeSettings.businessName || 'SHARMA GENERAL STORE'} (2026)`,
+        },
+        printer: {
+          keyId: 'USB001',
+          secret: '',
+          metaField: 'Epson TM-T82 (80mm)',
+        },
+        phonepe: {
+          keyId: '',
+          secret: '',
+          metaField: '',
+        },
+        porter: {
+          keyId: '',
+          secret: '',
+          metaField: storeSettings.address || '',
+        },
+      };
+    }
+    return {
+      razorpay: {
+        keyId: '',
+        secret: '',
+        metaField: storeSettings.upiId || '',
+      },
+      whatsapp: {
+        keyId: '',
+        secret: '',
+        metaField: storeSettings.whatsappNumber || '',
+      },
+      tally: {
+        keyId: '',
+        secret: '',
+        metaField: storeSettings.businessName ? `${storeSettings.businessName} (2026)` : '',
+      },
+      printer: {
+        keyId: '',
+        secret: '',
+        metaField: '',
+      },
+      phonepe: {
+        keyId: '',
+        secret: '',
+        metaField: '',
+      },
+      porter: {
+        keyId: '',
+        secret: '',
+        metaField: storeSettings.address || '',
+      },
+    };
   });
 
   /* Settings state (Matches Settings & Business Configuration screenshot) */
@@ -307,22 +359,43 @@ export function BosMarketingAiIntegrationsSettings({
     | 'businessType'
     | 'documents'
   >('businessInfo');
-  const [settingsBusinessName, setSettingsBusinessName] = useState('Ravi Store');
-  const [settingsBusinessType, setSettingsBusinessType] = useState('Grocery Store');
-  const [settingsOwnerName, setSettingsOwnerName] = useState('Ravi Kumar');
-  const [settingsPhoneNumber, setSettingsPhoneNumber] = useState('98765 43210');
-  const [settingsEmailAddress, setSettingsEmailAddress] = useState('ravi.store@gmail.com');
-  const [settingsWebsite, setSettingsWebsite] = useState('https://bos.fieseros.com/ravi-store');
-  const [settingsAddress, setSettingsAddress] = useState(
-    '123 Main Road, Sector 15, Noida, Uttar Pradesh, 201301',
+  const [settingsBusinessName, setSettingsBusinessName] = useState(() =>
+    demoMode ? (storeSettings.businessName || 'Ravi Store') : (storeSettings.businessName || '')
   );
-  const [settingsCity, setSettingsCity] = useState('Noida');
-  const [settingsState, setSettingsState] = useState('Uttar Pradesh');
-  const [settingsPinCode, setSettingsPinCode] = useState('201301');
-  const [settingsDescription, setSettingsDescription] = useState(
-    'Daily essentials, fresh groceries, snacks, beverages and home care products at best prices.',
+  const [settingsBusinessType, setSettingsBusinessType] = useState(() =>
+    demoMode ? (storeSettings.businessType || 'Grocery Store') : (storeSettings.businessType || 'Retail Store')
   );
-  const [settingsGstin, setSettingsGstin] = useState('09ABCDE1234F1Z5');
+  const [settingsOwnerName, setSettingsOwnerName] = useState(() =>
+    demoMode ? 'Ravi Kumar' : ''
+  );
+  const [settingsPhoneNumber, setSettingsPhoneNumber] = useState(() =>
+    demoMode ? (storeSettings.phone?.replace(/^\+91\s*/, '') || '98765 43210') : (storeSettings.phone?.replace(/^\+91\s*/, '') || '')
+  );
+  const [settingsEmailAddress, setSettingsEmailAddress] = useState(() =>
+    demoMode ? (storeSettings.email || 'ravi.store@gmail.com') : (storeSettings.email || '')
+  );
+  const [settingsWebsite, setSettingsWebsite] = useState(() => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
+    return storeSettings.businessSlug ? `${origin}/store/${storeSettings.businessSlug}` : (demoMode ? `${origin}/store/ravi-store` : '');
+  });
+  const [settingsAddress, setSettingsAddress] = useState(() =>
+    demoMode ? (storeSettings.address || '123 Main Road, Sector 15, Noida, Uttar Pradesh, 201301') : (storeSettings.address || '')
+  );
+  const [settingsCity, setSettingsCity] = useState(() =>
+    demoMode ? (storeSettings.city || 'Noida') : (storeSettings.city || '')
+  );
+  const [settingsState, setSettingsState] = useState(() =>
+    demoMode ? (storeSettings.state || 'Uttar Pradesh') : (storeSettings.state || '')
+  );
+  const [settingsPinCode, setSettingsPinCode] = useState(() =>
+    demoMode ? (storeSettings.pincode || '201301') : (storeSettings.pincode || '')
+  );
+  const [settingsDescription, setSettingsDescription] = useState(() =>
+    demoMode ? (storeSettings.tagline || 'Daily essentials, fresh groceries, snacks, beverages and home care products at best prices.') : (storeSettings.tagline || '')
+  );
+  const [settingsGstin, setSettingsGstin] = useState(() =>
+    demoMode ? (storeSettings.gstin || '09ABCDE1234F1Z5') : (storeSettings.gstin || '')
+  );
   const [settingsRegType, setSettingsRegType] = useState('Regular');
   const [settingsEInvoiceEnabled, setSettingsEInvoiceEnabled] = useState(true);
   const [editingHours, setEditingHours] = useState(false);
@@ -331,7 +404,21 @@ export function BosMarketingAiIntegrationsSettings({
   const [inviteStaffModalOpen, setInviteStaffModalOpen] = useState(false);
   const [inviteStaffName, setInviteStaffName] = useState('');
   const [inviteStaffRole, setInviteStaffRole] = useState('Staff');
-  const [activeUsersCount, setActiveUsersCount] = useState(5);
+  const [activeUsersCount, setActiveUsersCount] = useState(demoMode ? 5 : 1);
+
+  useEffect(() => {
+    if (!demoMode) {
+      if (storeSettings.businessName) setSettingsBusinessName(storeSettings.businessName);
+      if (storeSettings.businessType) setSettingsBusinessType(storeSettings.businessType);
+      if (storeSettings.phone) setSettingsPhoneNumber(storeSettings.phone.replace(/^\+91\s*/, ''));
+      if (storeSettings.email) setSettingsEmailAddress(storeSettings.email);
+      if (storeSettings.address) setSettingsAddress(storeSettings.address);
+      if (storeSettings.city) setSettingsCity(storeSettings.city);
+      if (storeSettings.state) setSettingsState(storeSettings.state);
+      if (storeSettings.pincode) setSettingsPinCode(storeSettings.pincode);
+      if (storeSettings.gstin) setSettingsGstin(storeSettings.gstin);
+    }
+  }, [storeSettings, demoMode]);
 
   const generateSmartAiReply = (prompt: string): string => {
     const lower = prompt.toLowerCase();
@@ -442,8 +529,22 @@ export function BosMarketingAiIntegrationsSettings({
 
   /* 1. MARKETING MODE — 1:1 Match with Marketing & Promotions Screenshot */
   if (mode === 'marketing') {
+    const defaultEmptyCampaign = {
+      id: 0,
+      name: campaignTitle || 'Special Offer',
+      bannerTheme: 'fresh' as const,
+      type: campaignType,
+      audience: campaignAudience,
+      sent: '0',
+      orders: 0,
+      revenue: 0,
+      status: 'Draft',
+      discountHeadline: campaignDiscountText || 'Exclusive Deal',
+      messageBody: campaignText || 'Check out our latest products and deals!',
+      validTill: campaignValidTill || 'End of Month',
+    };
     const activePreviewCampaign =
-      recentCampaigns.find((c) => c.id === selectedCampaignId) || recentCampaigns[0];
+      recentCampaigns.find((c) => c.id === selectedCampaignId) || recentCampaigns[0] || defaultEmptyCampaign;
 
     const renderCampaignBannerBadge = (
       theme: 'fresh' | 'diwali' | 'arrivals' | 'loyalty' | 'clearance',
@@ -616,29 +717,37 @@ export function BosMarketingAiIntegrationsSettings({
           {[
             {
               label: 'Campaigns Sent',
-              value: String(13 + recentCampaigns.length),
-              trend: '↑ 28%',
+              value: demoMode ? String(13 + recentCampaigns.length) : String(recentCampaigns.length),
+              trend: recentCampaigns.length > 0 ? '↑ 28%' : '0%',
               icon: Megaphone,
               points: '0,28 18,22 36,24 54,14 72,16 90,4',
             },
             {
               label: 'Customers Reached',
-              value: '2,450',
-              trend: '↑ 32%',
+              value: demoMode
+                ? '2,450'
+                : recentCampaigns
+                    .reduce((acc, c) => acc + (parseInt(c.sent.replace(/,/g, '')) || 0), 0)
+                    .toLocaleString('en-IN'),
+              trend: recentCampaigns.length > 0 ? '↑ 32%' : '0%',
               icon: Users,
               points: '0,28 18,24 36,18 54,20 72,11 90,3',
             },
             {
               label: 'Orders from Campaigns',
-              value: '486',
-              trend: '↑ 45%',
+              value: demoMode
+                ? '486'
+                : recentCampaigns.reduce((acc, c) => acc + (c.orders || 0), 0).toLocaleString('en-IN'),
+              trend: recentCampaigns.length > 0 ? '↑ 45%' : '0%',
               icon: ShoppingCart,
               points: '0,29 18,23 36,21 54,13 72,14 90,4',
             },
             {
               label: 'Campaign Revenue',
-              value: `${currencySymbol} 34,280`,
-              trend: '↑ 38%',
+              value: demoMode
+                ? `${currencySymbol} 34,280`
+                : `${currencySymbol} ${recentCampaigns.reduce((acc, c) => acc + (c.revenue || 0), 0).toLocaleString('en-IN')}`,
+              trend: recentCampaigns.length > 0 ? '↑ 38%' : '0%',
               icon: IndianRupee,
               points: '0,28 18,24 36,19 54,15 72,12 90,3',
             },
@@ -788,7 +897,14 @@ export function BosMarketingAiIntegrationsSettings({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EDF4F0]">
-                    {recentCampaigns.map((camp, idx) => {
+                    {recentCampaigns.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-xs text-[#94A3B8]">
+                          No campaigns sent yet. Click &quot;Create Campaign&quot; to launch your first WhatsApp or SMS campaign.
+                        </td>
+                      </tr>
+                    ) : (
+                      recentCampaigns.map((camp, idx) => {
                       const isSelected = camp.id === selectedCampaignId;
                       return (
                         <tr
@@ -836,7 +952,7 @@ export function BosMarketingAiIntegrationsSettings({
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>
@@ -990,7 +1106,7 @@ export function BosMarketingAiIntegrationsSettings({
                     <Store className="h-4 w-4" />
                   </div>
                   <div className="leading-tight">
-                    <p className="text-[12.5px] font-extrabold">Ravi Store</p>
+                    <p className="text-[12.5px] font-extrabold">{storeSettings.businessName || 'My Store'}</p>
                     <p className="text-[10px] text-white/80">Online</p>
                   </div>
                 </div>
@@ -1043,7 +1159,7 @@ export function BosMarketingAiIntegrationsSettings({
                     <div>
                       <p className="font-medium">Order now from our store 👇</p>
                       <p className="text-[#2563EB] underline break-all">
-                        https://bos.fieseros.com/ravi-store
+                        {`${typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com'}/store/${storeSettings.businessSlug || 'store'}`}
                       </p>
                     </div>
                     <div className="flex items-center justify-end gap-1 text-[10px] text-[#64748B]">

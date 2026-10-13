@@ -23,7 +23,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
-import { type BosProductItem, formatBosCurrency } from '@/components/bos/bos-types';
+import { type BosProductItem, type BosOrder, formatBosCurrency } from '@/components/bos/bos-types';
 import {
   BosProductThumbnail,
   lookupPublicProductByBarcodeOrName,
@@ -42,6 +42,8 @@ type InspectorTab = 'overview' | 'stockHistory' | 'sales' | 'edit';
 type BosInventoryWorkstationProps = {
   currencySymbol: string;
   products: BosProductItem[];
+  orders?: BosOrder[];
+  demoMode?: boolean;
   initialOpenAddModal?: boolean;
   onSaveProduct: (product: BosProductItem, isNew: boolean) => Promise<void>;
   onDeleteProduct: (productId: string) => Promise<void>;
@@ -311,6 +313,8 @@ function formatInvPrice(amount: number, symbol = '₹'): string {
 export function BosInventoryWorkstation({
   currencySymbol = '₹',
   products,
+  orders = [],
+  demoMode = false,
   initialOpenAddModal = false,
   onSaveProduct,
   onDeleteProduct,
@@ -323,8 +327,10 @@ export function BosInventoryWorkstation({
   const [statusFilter, setStatusFilter] = useState<'all' | 'In Stock' | 'Low Stock' | 'Out of Stock'>('all');
   const [brandFilter, setBrandFilter] = useState('All Brands');
 
-  // Default selected product is Maggi Noodles (prod-2) matching the screenshot
-  const [selectedProductId, setSelectedProductId] = useState<string>('prod-2');
+  // Default selected product
+  const [selectedProductId, setSelectedProductId] = useState<string>(() =>
+    demoMode ? 'prod-2' : (products[0]?.id || ''),
+  );
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -357,32 +363,36 @@ export function BosInventoryWorkstation({
   });
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
-  const [purchaseOrders, setPurchaseOrders] = useState([
-    {
-      id: 'PO-2026-089',
-      supplier: 'Metro Cash & Carry Wholesale',
-      itemsCount: 8,
-      totalAmount: 28450,
-      status: 'Received',
-      date: '22 Apr 2026',
-    },
-    {
-      id: 'PO-2026-090',
-      supplier: 'Hindustan FMCG Distributors',
-      itemsCount: 12,
-      totalAmount: 42800,
-      status: 'In Transit',
-      date: '24 Apr 2026',
-    },
-    {
-      id: 'PO-2026-091',
-      supplier: 'Amul & Mother Dairy Depot',
-      itemsCount: 5,
-      totalAmount: 14200,
-      status: 'Ordered',
-      date: '24 Apr 2026',
-    },
-  ]);
+  const [purchaseOrders, setPurchaseOrders] = useState(() =>
+    demoMode
+      ? [
+          {
+            id: 'PO-2026-089',
+            supplier: 'Metro Cash & Carry Wholesale',
+            itemsCount: 8,
+            totalAmount: 28450,
+            status: 'Received',
+            date: '22 Apr 2026',
+          },
+          {
+            id: 'PO-2026-090',
+            supplier: 'Hindustan FMCG Distributors',
+            itemsCount: 12,
+            totalAmount: 42800,
+            status: 'In Transit',
+            date: '24 Apr 2026',
+          },
+          {
+            id: 'PO-2026-091',
+            supplier: 'Amul & Mother Dairy Depot',
+            itemsCount: 5,
+            totalAmount: 14200,
+            status: 'Ordered',
+            date: '24 Apr 2026',
+          },
+        ]
+      : [],
+  );
 
   const showToast = (msg: string) => {
     setBannerMessage(msg);
@@ -391,10 +401,13 @@ export function BosInventoryWorkstation({
     }, 3200);
   };
 
-  // Ordered product rows: custom added products first, then the 10 showcase items, then remaining
+  // Ordered product rows: in production mode, display products directly; in demoMode, showcase order
   const orderedProducts = useMemo(() => {
+    if (!demoMode) {
+      return products;
+    }
     const customAdded = products.filter(
-      (p) => ! p.id.startsWith('prod-') || Number(p.id.replace('prod-', '')) > 15,
+      (p) => !p.id.startsWith('prod-') || Number(p.id.replace('prod-', '')) > 15,
     );
     const showcase = INVENTORY_SHOWCASE_ORDER.map((id) =>
       products.find((p) => p.id === id),
@@ -405,7 +418,51 @@ export function BosInventoryWorkstation({
         !showcase.some((s) => s.id === p.id),
     );
     return [...customAdded, ...showcase, ...others];
-  }, [products]);
+  }, [demoMode, products]);
+
+  const inventoryStats = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalProducts: '248',
+        totalProductsTrend: '↑ 12%',
+        inStock: '186',
+        inStockTrend: '↑ 8%',
+        lowStock: '32',
+        lowStockTrend: '↓ 14%',
+        outOfStock: '8',
+        outOfStockTrend: '↓ 20%',
+        totalValuation: '1,24,580',
+        totalValuationTrend: '↑ 10%',
+      };
+    }
+    const total = products.length;
+    const inStock = products.filter(
+      (p) => (stockOverrides[p.id] ?? p.stockQuantity) > (p.lowStockThreshold || 5),
+    ).length;
+    const lowStock = products.filter((p) => {
+      const s = stockOverrides[p.id] ?? p.stockQuantity;
+      return s > 0 && s <= (p.lowStockThreshold || 5);
+    }).length;
+    const outOfStock = products.filter(
+      (p) => (stockOverrides[p.id] ?? p.stockQuantity) <= 0,
+    ).length;
+    const totalVal = products.reduce((acc, p) => {
+      const s = stockOverrides[p.id] ?? p.stockQuantity;
+      return acc + Math.max(0, s) * (p.costPrice || p.price || 0);
+    }, 0);
+    return {
+      totalProducts: String(total),
+      totalProductsTrend: total > 0 ? `${total} active` : '0 active',
+      inStock: String(inStock),
+      inStockTrend: total > 0 ? `${Math.round((inStock / Math.max(1, total)) * 100)}%` : '0%',
+      lowStock: String(lowStock),
+      lowStockTrend: lowStock > 0 ? 'Needs reorder' : 'Healthy',
+      outOfStock: String(outOfStock),
+      outOfStockTrend: outOfStock > 0 ? 'Out of stock' : 'None',
+      totalValuation: totalVal.toLocaleString('en-IN'),
+      totalValuationTrend: 'Live catalog',
+    };
+  }, [demoMode, products, stockOverrides]);
 
   const enrichedRows = useMemo(() => {
     return orderedProducts.map((product) => {
@@ -521,6 +578,49 @@ export function BosInventoryWorkstation({
       null
     );
   }, [enrichedRows, filteredRows, selectedProductId]);
+
+  const productSalesAnalytics = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalSold: 186,
+        trend: '↑ 12%',
+        recentList: [
+          { time: 'Today, 10:32 AM', qty: '2 pcs' },
+          { time: '11 Oct, 05:12 PM', qty: '1 pc' },
+          { time: '11 Oct, 02:14 PM', qty: '3 pcs' },
+          { time: '10 Oct, 11:20 AM', qty: '1 pc' },
+          { time: '10 Oct, 09:05 AM', qty: '2 pcs' },
+        ],
+      };
+    }
+    const targetId = selectedEntry?.product?.id;
+    const targetName = selectedEntry?.product?.name?.toLowerCase();
+    const matchedOrders = orders.filter((o) =>
+      o.items.some(
+        (it) => it.id === targetId || (targetName && it.name.toLowerCase() === targetName),
+      ),
+    );
+    const totalSold = matchedOrders.reduce((acc, o) => {
+      const it = o.items.find(
+        (i) => i.id === targetId || (targetName && i.name.toLowerCase() === targetName),
+      );
+      return acc + (it?.qty || 0);
+    }, 0);
+    const recentList = matchedOrders.slice(0, 5).map((o) => {
+      const it = o.items.find(
+        (i) => i.id === targetId || (targetName && i.name.toLowerCase() === targetName),
+      );
+      return {
+        time: o.createdAt || 'Recent',
+        qty: `${it?.qty || 1} ${selectedEntry?.product?.unit || 'pcs'}`,
+      };
+    });
+    return {
+      totalSold,
+      trend: totalSold > 0 ? `${matchedOrders.length} orders` : 'No sales yet',
+      recentList,
+    };
+  }, [demoMode, orders, selectedEntry]);
 
   const toggleSelectAll = () => {
     if (selectedRowIds.length === visibleRows.length) {
@@ -932,9 +1032,9 @@ export function BosInventoryWorkstation({
           <div>
             <p className="text-[12px] font-medium text-[#64748B]">Total Products</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              248
+              {inventoryStats.totalProducts}
             </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 12%</p>
+            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.totalProductsTrend}</p>
           </div>
         </div>
 
@@ -946,9 +1046,9 @@ export function BosInventoryWorkstation({
           <div>
             <p className="text-[12px] font-medium text-[#64748B]">In Stock</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              186
+              {inventoryStats.inStock}
             </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 8%</p>
+            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.inStockTrend}</p>
           </div>
         </div>
 
@@ -960,9 +1060,9 @@ export function BosInventoryWorkstation({
           <div>
             <p className="text-[12px] font-medium text-[#64748B]">Low Stock</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              32
+              {inventoryStats.lowStock}
             </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">↓ 14%</p>
+            <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{inventoryStats.lowStockTrend}</p>
           </div>
         </div>
 
@@ -974,9 +1074,9 @@ export function BosInventoryWorkstation({
           <div>
             <p className="text-[12px] font-medium text-[#64748B]">Out of Stock</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              8
+              {inventoryStats.outOfStock}
             </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">↓ 20%</p>
+            <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{inventoryStats.outOfStockTrend}</p>
           </div>
         </div>
 
@@ -992,9 +1092,9 @@ export function BosInventoryWorkstation({
               Total Inventory Value
             </p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              {currencySymbol} 1,24,580
+              {currencySymbol} {inventoryStats.totalValuation}
             </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 10%</p>
+            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.totalValuationTrend}</p>
           </div>
         </div>
       </div>
@@ -1559,10 +1659,10 @@ export function BosInventoryWorkstation({
                         Sales (Last 30 days)
                       </p>
                       <p className="mt-0.5 text-[20px] font-extrabold text-[#111827] leading-tight">
-                        186
+                        {productSalesAnalytics.totalSold}
                       </p>
                       <span className="mt-0.5 inline-flex rounded bg-[#E6F6F0] px-1.5 py-0.2 text-[10.5px] font-bold text-[#0A7B56]">
-                        ↑ 12%
+                        {productSalesAnalytics.trend}
                       </span>
                       <svg
                         viewBox="0 0 120 42"
@@ -1595,23 +1695,23 @@ export function BosInventoryWorkstation({
                         Recent Sales
                       </p>
                       <div className="space-y-1.5 text-[10.5px]">
-                        {[
-                          { time: 'Today, 10:32 AM', qty: '2 pcs' },
-                          { time: '11 Oct, 05:12 PM', qty: '1 pc' },
-                          { time: '11 Oct, 02:14 PM', qty: '3 pcs' },
-                          { time: '10 Oct, 11:20 AM', qty: '1 pc' },
-                          { time: '10 Oct, 09:05 AM', qty: '2 pcs' },
-                        ].map((s, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between text-[#64748B]"
-                          >
-                            <span className="truncate">{s.time}</span>
-                            <span className="font-bold text-[#111827] shrink-0">
-                              {s.qty}
-                            </span>
-                          </div>
-                        ))}
+                        {productSalesAnalytics.recentList.length > 0 ? (
+                          productSalesAnalytics.recentList.map((s, idx) => (
+                            <div
+                              key={idx}
+                              className="flex items-center justify-between text-[#64748B]"
+                            >
+                              <span className="truncate">{s.time}</span>
+                              <span className="font-bold text-[#111827] shrink-0">
+                                {s.qty}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-[11px] text-[#94A3B8] italic py-1">
+                            No sales recorded yet
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Ban,
   Bell,
@@ -35,6 +35,7 @@ type BosAppointmentsWorkstationProps = {
   currencySymbol: string;
   appointments: BosAppointment[];
   initialOpenNewModal?: boolean;
+  demoMode?: boolean;
   onCreateAppointment: (
     appt: Omit<BosAppointment, 'id' | 'bookingCode'>,
   ) => Promise<void>;
@@ -475,20 +476,101 @@ function getBlockThemeClasses(theme: ScheduleBlockItem['colorTheme']) {
   }
 }
 
+function mapAppointmentsToBlocks(appts: BosAppointment[]): ScheduleBlockItem[] {
+  return appts.map((a, idx) => {
+    const timeMatch = a.scheduledAt.match(/(\d+):?(\d*)\s*(am|pm)?/i);
+    let startHour = 10;
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      const m = parseInt(timeMatch[2] || '0', 10);
+      const meridiem = (timeMatch[3] || '').toLowerCase();
+      if (meridiem === 'pm' && h < 12) h += 12;
+      if (meridiem === 'am' && h === 12) h = 0;
+      startHour = h + m / 60;
+    }
+    const staff =
+      STAFF_COLUMNS.find(
+        (s) => s.name.toLowerCase() === (a.staffName || '').toLowerCase()
+      ) || STAFF_COLUMNS[idx % STAFF_COLUMNS.length];
+    const statusMap: Record<string, ScheduleBlockItem['status']> = {
+      completed: 'Completed',
+      cancelled: 'Cancelled',
+      confirmed: 'Confirmed',
+      checked_in: 'Confirmed',
+      pending: 'Upcoming',
+    };
+    const paymentMap: Record<string, ScheduleBlockItem['paymentStatus']> = {
+      paid: 'Paid',
+      pending: 'Pending',
+    };
+    return {
+      id: a.id,
+      staffId: staff.id,
+      staffName: a.staffName || staff.name,
+      staffRole: staff.role,
+      customerName: a.customerName,
+      customerPhone: a.customerPhone,
+      serviceName: a.serviceName,
+      timeLabel: a.scheduledAt,
+      detailTimeLabel: a.scheduledAt,
+      dateLabel: 'Today',
+      durationLabel: `${a.durationMinutes || 60} min`,
+      startHour,
+      durationHours: (a.durationMinutes || 60) / 60,
+      amount: a.amount,
+      status: statusMap[a.status] || 'Confirmed',
+      paymentStatus: paymentMap[a.paymentStatus] || 'Pending',
+      notes: a.notes || 'Booked appointment',
+      colorTheme: (['green', 'blue', 'amber', 'pink', 'purple'] as const)[idx % 5],
+      topRightIcon: 'check',
+    };
+  });
+}
+
 export function BosAppointmentsWorkstation({
   businessName,
   businessSlug,
   currencySymbol,
+  appointments = [],
   initialOpenNewModal = false,
+  demoMode = false,
   onCreateAppointment,
   onUpdateAppointmentStatus,
   onConvertToPosBill,
 }: BosAppointmentsWorkstationProps) {
-  const [blocks, setBlocks] = useState<ScheduleBlockItem[]>(INITIAL_SCHEDULE_BLOCKS);
-  const [selectedBlockId, setSelectedBlockId] = useState<string>('blk-1');
+  const [blocks, setBlocks] = useState<ScheduleBlockItem[]>(() =>
+    demoMode ? INITIAL_SCHEDULE_BLOCKS : mapAppointmentsToBlocks(appointments)
+  );
+  const [selectedBlockId, setSelectedBlockId] = useState<string>(() =>
+    demoMode ? 'blk-1' : (appointments[0]?.id || '')
+  );
   const [viewMode, setViewMode] = useState<CalendarViewMode>('day');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('details');
-  const [selectedDay, setSelectedDay] = useState<number>(12);
+  const [selectedDay, setSelectedDay] = useState<number>(() => new Date().getDate());
+
+  useEffect(() => {
+    if (!demoMode) {
+      setBlocks(mapAppointmentsToBlocks(appointments));
+    }
+  }, [appointments, demoMode]);
+
+  const todayDateStr = useMemo(() => {
+    if (demoMode) return 'Sat, 12 Oct 2024';
+    return new Intl.DateTimeFormat('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(new Date());
+  }, [demoMode]);
+
+  const currentMonthStr = useMemo(() => {
+    if (demoMode) return 'October 2024';
+    return new Intl.DateTimeFormat('en-IN', {
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date());
+  }, [demoMode]);
 
   // Left Sidebar Staff & Services Filter States
   const [allStaffChecked, setAllStaffChecked] = useState(true);
@@ -503,7 +585,7 @@ export function BosAppointmentsWorkstation({
 
   const [newForm, setNewForm] = useState({
     customerName: '',
-    customerPhone: '+91 98765 43210',
+    customerPhone: '',
     serviceName: 'Hair Cut',
     staffId: 'staff-priya',
     startHour: 11,
@@ -519,8 +601,48 @@ export function BosAppointmentsWorkstation({
   };
 
   const selectedBlock = useMemo(() => {
-    return blocks.find((b) => b.id === selectedBlockId) || blocks[0];
+    return blocks.find((b) => b.id === selectedBlockId) || blocks[0] || null;
   }, [blocks, selectedBlockId]);
+
+  const kpiStats = useMemo(() => {
+    if (demoMode) {
+      return {
+        total: 8,
+        customers: 6,
+        completed: 5,
+        upcoming: 3,
+        cancelled: 0,
+        totalTrend: '↑ 2 more',
+        custTrend: '↑ 20%',
+        completedTrend: '62%',
+        upcomingTrend: 'Next in 1 hr',
+        cancelledTrend: '0%',
+      };
+    }
+    const total = blocks.length;
+    const customers = new Set(
+      blocks.map((b) => b.customerName.toLowerCase().trim()).filter(Boolean)
+    ).size;
+    const completed = blocks.filter((b) => b.status === 'Completed').length;
+    const upcoming = blocks.filter(
+      (b) => b.status === 'Upcoming' || b.status === 'Confirmed'
+    ).length;
+    const cancelled = blocks.filter((b) => b.status === 'Cancelled').length;
+    const completedPct = total > 0 ? `${Math.round((completed / total) * 100)}%` : '0%';
+    const cancelledPct = total > 0 ? `${Math.round((cancelled / total) * 100)}%` : '0%';
+    return {
+      total,
+      customers,
+      completed,
+      upcoming,
+      cancelled,
+      totalTrend: total > 0 ? 'Active' : '—',
+      custTrend: customers > 0 ? `${customers} total` : '—',
+      completedTrend: completedPct,
+      upcomingTrend: upcoming > 0 ? `${upcoming} scheduled` : 'None',
+      cancelledTrend: cancelledPct,
+    };
+  }, [blocks, demoMode]);
 
   const toggleStaffCheckbox = (staffId: string) => {
     setCheckedStaffIds((prev) =>
@@ -567,11 +689,11 @@ export function BosAppointmentsWorkstation({
       staffName: staff.name,
       staffRole: staff.role,
       customerName: newForm.customerName.trim(),
-      customerPhone: newForm.customerPhone.trim() || '+91 98765 43210',
+      customerPhone: newForm.customerPhone.trim(),
       serviceName: newForm.serviceName,
       timeLabel: `${hourInt > 12 ? hourInt - 12 : hourInt}:00 - ${hourInt + 1 > 12 ? hourInt + 1 - 12 : hourInt + 1}:00`,
       detailTimeLabel: `${hourInt > 12 ? hourInt - 12 : hourInt}:00 ${hourInt >= 12 ? 'PM' : 'AM'} - ${hourInt + 1 > 12 ? hourInt + 1 - 12 : hourInt + 1}:00 ${hourInt + 1 >= 12 ? 'PM' : 'AM'}`,
-      dateLabel: 'Sat, 12 Oct 2024',
+      dateLabel: todayDateStr,
       durationLabel: '1 hr',
       startHour: hourInt,
       durationHours: 1,
@@ -632,7 +754,7 @@ export function BosAppointmentsWorkstation({
     if (!selectedBlock) return;
     onConvertToPosBill({
       id: selectedBlock.id,
-      bookingCode: '#APT-1012',
+      bookingCode: selectedBlock.id ? `#APT-${selectedBlock.id.slice(-4).toUpperCase()}` : '#APT-0001',
       customerName: selectedBlock.customerName,
       customerPhone: selectedBlock.customerPhone,
       serviceName: selectedBlock.serviceName,
@@ -720,9 +842,9 @@ export function BosAppointmentsWorkstation({
               Today&apos;s Appointments
             </p>
             <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-              8
+              {kpiStats.total}
             </p>
-            <p className="text-[11px] font-bold text-[#0A7B56]">↑ 2 more</p>
+            <p className="text-[11px] font-bold text-[#0A7B56]">{kpiStats.totalTrend}</p>
           </div>
         </div>
 
@@ -736,9 +858,9 @@ export function BosAppointmentsWorkstation({
               Customers
             </p>
             <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-              6
+              {kpiStats.customers}
             </p>
-            <p className="text-[11px] font-bold text-[#0A7B56]">↑ 20%</p>
+            <p className="text-[11px] font-bold text-[#0A7B56]">{kpiStats.custTrend}</p>
           </div>
         </div>
 
@@ -752,9 +874,9 @@ export function BosAppointmentsWorkstation({
               Completed
             </p>
             <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-              5
+              {kpiStats.completed}
             </p>
-            <p className="text-[11px] font-bold text-[#0A7B56]">62%</p>
+            <p className="text-[11px] font-bold text-[#0A7B56]">{kpiStats.completedTrend}</p>
           </div>
         </div>
 
@@ -768,9 +890,9 @@ export function BosAppointmentsWorkstation({
               Upcoming
             </p>
             <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-              3
+              {kpiStats.upcoming}
             </p>
-            <p className="text-[11px] font-bold text-[#2563EB]">Next in 1 hr</p>
+            <p className="text-[11px] font-bold text-[#2563EB]">{kpiStats.upcomingTrend}</p>
           </div>
         </div>
 
@@ -784,9 +906,9 @@ export function BosAppointmentsWorkstation({
               Cancelled / No Show
             </p>
             <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-              0
+              {kpiStats.cancelled}
             </p>
-            <p className="text-[11px] font-bold text-[#9F1239]">0%</p>
+            <p className="text-[11px] font-bold text-[#9F1239]">{kpiStats.cancelledTrend}</p>
           </div>
         </div>
       </div>
@@ -795,11 +917,11 @@ export function BosAppointmentsWorkstation({
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-12 items-start">
         {/* LEFT SIDEBAR: MINI CALENDAR + STAFF + SERVICES (2 cols) */}
         <div className="lg:col-span-2 rounded-2xl border border-[#DCE9E3] bg-white p-3.5 shadow-2xs space-y-4">
-          {/* Mini Month Calendar (October 2024) */}
+          {/* Mini Month Calendar */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-extrabold text-[#111827]">
-                October 2024
+                {currentMonthStr}
               </span>
               <div className="flex items-center gap-1">
                 <button
@@ -974,7 +1096,7 @@ export function BosAppointmentsWorkstation({
                 type="button"
                 className="inline-flex items-center gap-1.5 text-[13.5px] font-extrabold text-[#111827]"
               >
-                <span>Sat, 12 Oct 2024</span>
+                <span>{todayDateStr}</span>
                 <ChevronDown className="h-3.5 w-3.5 text-[#64748B]" />
               </button>
             </div>
@@ -1120,7 +1242,15 @@ export function BosAppointmentsWorkstation({
         </div>
 
         {/* RIGHT PANEL: APPOINTMENT DETAILS INSPECTOR (3 cols) */}
-        {selectedBlock && (
+        {!selectedBlock ? (
+          <div className="lg:col-span-3 rounded-2xl border border-[#DCE9E3] bg-white p-6 shadow-2xs text-center text-[#64748B]">
+            <Calendar className="mx-auto h-8 w-8 text-[#94A3B8] mb-2 stroke-1" />
+            <h3 className="text-[14px] font-bold text-[#1E293B]">No Appointment Selected</h3>
+            <p className="text-[12px] mt-1 text-[#64748B]">
+              Select a booking on the calendar or click &quot;New Appointment&quot; to schedule one.
+            </p>
+          </div>
+        ) : (
           <div className="lg:col-span-3 rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
             {/* Top Underline Tabs: Appointment Details | Customer History */}
             <div className="flex items-center gap-4 border-b border-[#EBF2EE]">

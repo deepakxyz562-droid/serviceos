@@ -55,6 +55,7 @@ type BosPosWorkstationProps = {
   customers: BosCustomer[];
   orders: BosOrder[];
   coupons: BosCoupon[];
+  demoMode?: boolean;
   onCompleteSale: (payload: {
     customerName: string;
     customerPhone: string;
@@ -141,6 +142,7 @@ export function BosPosWorkstation({
   customers,
   orders,
   coupons,
+  demoMode = false,
   onCompleteSale,
   onOpenPrinterModal,
 }: BosPosWorkstationProps) {
@@ -148,7 +150,9 @@ export function BosPosWorkstation({
   const [selectedCategory, setSelectedCategory] = useState<string>('All Products');
   const [gridMode, setGridMode] = useState<'grid' | 'compact'>('grid');
 
-  const [cart, setCart] = useState<CartItem[]>(() => buildDefaultCart(products));
+  const [cart, setCart] = useState<CartItem[]>(() =>
+    demoMode ? buildDefaultCart(products) : [],
+  );
   const [customerTab, setCustomerTab] = useState<'walk-in' | 'existing'>('walk-in');
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('walk-in');
@@ -156,7 +160,7 @@ export function BosPosWorkstation({
   const [customCustomerName, setCustomCustomerName] = useState('');
   const [customCustomerPhone, setCustomCustomerPhone] = useState('');
 
-  const [discountFlat, setDiscountFlat] = useState<number>(10);
+  const [discountFlat, setDiscountFlat] = useState<number>(demoMode ? 10 : 0);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [couponCode, setCouponCode] = useState('');
   const [showDiscountEditor, setShowDiscountEditor] = useState(false);
@@ -407,17 +411,32 @@ export function BosPosWorkstation({
   }, [cart, coupons, couponCode, discountFlat, discountPercent]);
 
   const kpiStats = useMemo(() => {
-    const todaySales = 24580 + completedSessionSales.revenue;
-    const billsCount = 48 + completedSessionSales.bills;
-    const avgBillValue = Math.round(todaySales / Math.max(1, billsCount));
-    const customersCount = 36 + completedSessionSales.customers;
+    if (demoMode) {
+      const todaySales = 24580 + completedSessionSales.revenue;
+      const billsCount = 48 + completedSessionSales.bills;
+      const avgBillValue = Math.round(todaySales / Math.max(1, billsCount));
+      const customersCount = 36 + completedSessionSales.customers;
+      return {
+        todaySales,
+        billsCount,
+        avgBillValue,
+        customersCount,
+      };
+    }
+    const posOrders = orders.filter((o) => o.channel === 'pos' && o.status === 'completed');
+    const baseSales = posOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const todaySales = baseSales + completedSessionSales.revenue;
+    const billsCount = posOrders.length + completedSessionSales.bills;
+    const avgBillValue = billsCount > 0 ? Math.round(todaySales / billsCount) : 0;
+    const uniqueCustomers = new Set(posOrders.map((o) => o.customerPhone || o.customerName));
+    const customersCount = uniqueCustomers.size + completedSessionSales.customers;
     return {
       todaySales,
       billsCount,
       avgBillValue,
       customersCount,
     };
-  }, [completedSessionSales]);
+  }, [demoMode, orders, completedSessionSales]);
 
   const handleCompleteOrder = async (printReceipt = true) => {
     if (cart.length === 0 || submitting) return;

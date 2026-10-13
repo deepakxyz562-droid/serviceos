@@ -46,6 +46,7 @@ type BosOrdersWorkstationProps = {
   businessName: string;
   currencySymbol: string;
   orders: BosOrder[];
+  demoMode?: boolean;
   initialSelectedOrderId?: string;
   onUpdateOrderStatus: (orderId: string, status: BosOrder['status']) => Promise<void>;
   onPrintOrderBill: (order: BosOrder) => void;
@@ -539,6 +540,7 @@ export function BosOrdersWorkstation({
   businessName,
   currencySymbol = '₹',
   orders,
+  demoMode = false,
   initialSelectedOrderId,
   onUpdateOrderStatus,
   onPrintOrderBill,
@@ -550,12 +552,14 @@ export function BosOrdersWorkstation({
   const [channelFilter, setChannelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<string>('all');
-  const [dateRangeLabel, setDateRangeLabel] = useState('01 Oct 2024 - 12 Oct 2024');
+  const [dateRangeLabel, setDateRangeLabel] = useState(
+    demoMode ? '01 Oct 2024 - 12 Oct 2024' : 'Today',
+  );
   const [showDateDropdown, setShowDateDropdown] = useState(false);
   const [showNewOrderDropdown, setShowNewOrderDropdown] = useState(false);
 
   const [selectedOrderId, setSelectedOrderId] = useState<string>(
-    initialSelectedOrderId || '#ORD-1005',
+    initialSelectedOrderId || (demoMode ? '#ORD-1005' : (orders[0]?.id || '')),
   );
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -575,8 +579,61 @@ export function BosOrdersWorkstation({
     }, 3200);
   };
 
-  // Merge any newly created runtime POS orders at the top of the 10 showcase rows
+  // In production mode, display orders directly from state; in demo mode, merge with showcase rows
   const allRows = useMemo<ShowcaseOrderRow[]>(() => {
+    if (!demoMode) {
+      return orders.map((o) => ({
+        id: o.id,
+        customerName: o.customerName,
+        customerPhone: o.customerPhone.replace(/\+91\s*/, ''),
+        customerAddress: o.customerAddress || 'Main Counter Pickup',
+        avatarType: 'photo-m1',
+        thumbs: o.items.slice(0, 2).map((it) => ({
+          name: it.name,
+          category: 'Grocery',
+          imageUrl: '',
+        })),
+        itemsCountLabel: `${o.items.reduce((s, i) => s + i.qty, 0)} items`,
+        amount: o.totalAmount,
+        paymentLabel:
+          o.paymentMode === 'cash'
+            ? 'Cash'
+            : o.paymentMode === 'card'
+              ? 'Card'
+              : 'UPI',
+        statusLabel:
+          statusOverrides[o.id] ||
+          (o.status === 'completed'
+            ? 'Completed'
+            : o.status === 'cancelled'
+              ? 'Cancelled'
+              : o.status === 'new'
+                ? 'Pending'
+                : 'Processing'),
+        channelLabel:
+          o.channel === 'online'
+            ? 'Online Store'
+            : o.channel === 'whatsapp'
+              ? 'WhatsApp'
+              : 'POS',
+        dateTime: o.createdAt,
+        inspectorDateTime: o.createdAt,
+        inspectorItems: o.items.map((it) => ({
+          name: it.name,
+          category: 'Grocery',
+          price: it.price,
+          qty: it.qty,
+          imageUrl: '',
+        })),
+        subtotal: o.subtotalAmount || o.totalAmount,
+        discount: o.discountAmount || 0,
+        deliveryCharge: 0,
+        inspectorTotal: o.totalAmount,
+        paymentMethodDetail: o.paymentMode.toUpperCase(),
+        transactionId: `TXN-${o.id.replace(/\D/g, '') || Date.now()}`,
+      }));
+    }
+
     const newRuntimeOrders: ShowcaseOrderRow[] = orders
       .filter((o) => {
         const num = Number(o.id.replace(/\D/g, ''));
@@ -636,7 +693,42 @@ export function BosOrdersWorkstation({
       ...row,
       statusLabel: statusOverrides[row.id] || row.statusLabel,
     }));
-  }, [orders, statusOverrides]);
+  }, [demoMode, orders, statusOverrides]);
+
+  const ordersKpi = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalOrders: 125,
+        totalRevenue: 48320,
+        avgOrderValue: 386,
+        pendingOrders: 12,
+        processingOrders: 8,
+        completedOrders: 96,
+        revenueTrend: '↑ 24%',
+        ordersTrend: '↑ 18%',
+        aovTrend: '↑ 12%',
+      };
+    }
+    const totalOrders = orders.length;
+    const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+    const pendingOrders = orders.filter((o) => o.status === 'new' || o.paymentStatus === 'pending').length;
+    const processingOrders = orders.filter(
+      (o) => o.status === 'preparing' || o.status === 'ready' || o.status === 'accepted',
+    ).length;
+    const completedOrders = orders.filter((o) => o.status === 'completed').length;
+    return {
+      totalOrders,
+      totalRevenue,
+      avgOrderValue,
+      pendingOrders,
+      processingOrders,
+      completedOrders,
+      revenueTrend: totalOrders > 0 ? `${totalOrders} orders` : 'No revenue',
+      ordersTrend: totalOrders > 0 ? `${completedOrders} fulfilled` : '0 today',
+      aovTrend: avgOrderValue > 0 ? 'Live average' : '₹0 avg',
+    };
+  }, [demoMode, orders]);
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -967,9 +1059,9 @@ export function BosOrdersWorkstation({
             <div>
               <p className="text-[11.5px] font-medium text-[#64748B]">Total Orders</p>
               <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
-                125
+                {ordersKpi.totalOrders}
               </p>
-              <p className="text-[11px] font-bold text-[#0A7B56]">↑ 18%</p>
+              <p className="text-[11px] font-bold text-[#0A7B56]">{ordersKpi.ordersTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 64 28" className="h-7 w-14 shrink-0 overflow-visible" fill="none">
@@ -994,9 +1086,9 @@ export function BosOrdersWorkstation({
             <div>
               <p className="text-[11.5px] font-medium text-[#64748B]">Total Revenue</p>
               <p className="text-[20px] font-extrabold text-[#111827] leading-tight">
-                {currencySymbol} 48,320
+                {currencySymbol} {ordersKpi.totalRevenue.toLocaleString('en-IN')}
               </p>
-              <p className="text-[11px] font-bold text-[#0A7B56]">↑ 24%</p>
+              <p className="text-[11px] font-bold text-[#0A7B56]">{ordersKpi.revenueTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 64 28" className="h-7 w-14 shrink-0 overflow-visible" fill="none">
@@ -1021,9 +1113,9 @@ export function BosOrdersWorkstation({
                 Avg. Order Value
               </p>
               <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
-                {currencySymbol} 386
+                {currencySymbol} {ordersKpi.avgOrderValue.toLocaleString('en-IN')}
               </p>
-              <p className="text-[11px] font-bold text-[#0A7B56]">↑ 12%</p>
+              <p className="text-[11px] font-bold text-[#0A7B56]">{ordersKpi.aovTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 64 28" className="h-7 w-14 shrink-0 overflow-visible" fill="none">
@@ -1048,7 +1140,7 @@ export function BosOrdersWorkstation({
                 Pending Orders
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                12
+                {ordersKpi.pendingOrders}
               </p>
             </div>
           </div>
@@ -1072,7 +1164,7 @@ export function BosOrdersWorkstation({
             <div>
               <p className="text-[11.5px] font-medium text-[#64748B]">Processing</p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                8
+                {ordersKpi.processingOrders}
               </p>
             </div>
           </div>
@@ -1096,7 +1188,7 @@ export function BosOrdersWorkstation({
             <div>
               <p className="text-[11.5px] font-medium text-[#64748B]">Completed</p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                96
+                {ordersKpi.completedOrders}
               </p>
             </div>
           </div>

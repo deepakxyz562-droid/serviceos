@@ -62,8 +62,8 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     expect(screen.getByText("Today's Appointments")).toBeTruthy();
   });
 
-  it('navigates across all BOS menu modules cleanly', () => {
-    render(<BosWebApp />);
+  it('navigates across all BOS menu modules cleanly in demo mode', () => {
+    render(<BosWebApp demoMode={true} />);
 
     const nav = screen.getByRole('navigation', { name: /BOS Primary Navigation/i });
     const clickNavItem = (label: string) => {
@@ -237,5 +237,34 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     expect(screen.getByText('GST Information')).toBeTruthy();
     expect(screen.getByText('Subscription Plan')).toBeTruthy();
     expect(screen.getByText('+ Invite Team Member')).toBeTruthy();
+  });
+
+  it('renders clean production zero-state when demoMode={false}', () => {
+    render(<BosWebApp demoMode={false} />);
+
+    // In production zero-state, dashboard displays empty state / zero sales
+    expect(screen.getByText(/Total Sales/i)).toBeTruthy();
+
+    const nav = screen.getByRole('navigation', { name: /BOS Primary Navigation/i });
+    const clickNavItem = (label: string) => {
+      const btn = Array.from(nav.querySelectorAll('button')).find((b) =>
+        b.textContent?.includes(label),
+      );
+      expect(btn).toBeTruthy();
+      fireEvent.click(btn!);
+    };
+
+    // Verify POS in production starts with empty cart
+    clickNavItem('Sales / POS');
+    expect(screen.getByText('Items (0)')).toBeTruthy();
+    expect(screen.getByText('Current bill is empty')).toBeTruthy();
+
+    // Verify Inventory starts with empty catalog in pure zero-state
+    clickNavItem('Products & Inventory');
+    expect(screen.getAllByText('Products & Inventory').length).toBeGreaterThanOrEqual(1);
+
+    // Verify Day Book
+    clickNavItem('Day Book');
+    expect(screen.getAllByText('Day Book').length).toBeGreaterThanOrEqual(1);
   });
 });

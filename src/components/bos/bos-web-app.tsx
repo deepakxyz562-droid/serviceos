@@ -751,8 +751,10 @@ const DEFAULT_COUPONS: BosCoupon[] = [
 
 export function BosWebApp({
   initialView = 'dashboard',
+  demoMode = false,
 }: {
   initialView?: BosNavId | string;
+  demoMode?: boolean;
 }) {
   const [activeView, setActiveView] = useState<BosNavId>(() => normalizeBosView(initialView));
   const [navContext, setNavContext] = useState<{
@@ -762,51 +764,96 @@ export function BosWebApp({
   } | null>(null);
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [userName, setUserName] = useState('Rahul Sharma');
+  const [userName, setUserName] = useState(demoMode ? 'Rahul Sharma' : 'Merchant');
   const [userRole, setUserRole] = useState('Owner');
-  const [userEmail, setUserEmail] = useState('rahul@sharmastore.in');
+  const [userEmail, setUserEmail] = useState(demoMode ? 'rahul@sharmastore.in' : '');
 
-  const [storeSettings, setStoreSettings] = useState<BosStoreSettings>(() => ({
-    businessName: 'Sharma General Store',
-    businessSlug: 'sharma-general-store',
-    businessType: 'Retail Supermarket & Kirana',
-    blueprintType: 'grocery',
-    salesChannels: ['in_store', 'whatsapp', 'online', 'delivery'],
-    countryCode: 'IN',
-    language: 'en',
-    capabilities: resolveBlueprintCapabilities('grocery', [
-      'in_store',
-      'whatsapp',
-      'online',
-      'delivery',
-    ]),
-    cancellationPolicy: 'before_preparation',
-    refundPolicy: 'full',
-    tagline: 'Fresh Groceries & Daily Essentials Delivered in 30 Mins',
-    phone: '+91 98765 43210',
-    whatsappNumber: '+91 98765 43210',
-    email: 'contact@sharmageneralstore.in',
-    address: 'Shop No. 14, Ground Floor, Green Valley Market, MG Road, Pune - 411001',
-    city: 'Pune',
-    state: '27 - Maharashtra',
-    pincode: '411001',
-    gstin: '27AABCS1429B1Z5',
-    pan: 'AABCS1429B',
-    upiId: 'sharmastore@okhdfcbank',
-    bankName: 'HDFC Bank',
-    accountNumber: '50200048291042',
-    ifscCode: 'HDFC0001204',
-    currencySymbol: '₹',
-    storeLive: true,
-    minOrderAmount: 199,
-    deliveryCharge: 30,
-    freeDeliveryAbove: 499,
-    deliveryRadiusKm: 5,
-    enableLocalDelivery: true,
-    enableStorePickup: true,
-    themeColor: '#0A6847',
-    announcementBanner: 'Free Home Delivery on Orders Above ₹499! Use code WELCOME50',
-  }));
+  const [storeSettings, setStoreSettings] = useState<BosStoreSettings>(() => {
+    if (demoMode) {
+      return {
+        businessName: 'Sharma General Store',
+        businessSlug: 'sharma-general-store',
+        businessType: 'Retail Supermarket & Kirana',
+        blueprintType: 'grocery',
+        salesChannels: ['in_store', 'whatsapp', 'online', 'delivery'],
+        countryCode: 'IN',
+        language: 'en',
+        capabilities: resolveBlueprintCapabilities('grocery', [
+          'in_store',
+          'whatsapp',
+          'online',
+          'delivery',
+        ]),
+        cancellationPolicy: 'before_preparation',
+        refundPolicy: 'full',
+        tagline: 'Fresh Groceries & Daily Essentials Delivered in 30 Mins',
+        phone: '+91 98765 43210',
+        whatsappNumber: '+91 98765 43210',
+        email: 'contact@sharmageneralstore.in',
+        address: 'Shop No. 14, Ground Floor, Green Valley Market, MG Road, Pune - 411001',
+        city: 'Pune',
+        state: '27 - Maharashtra',
+        pincode: '411001',
+        gstin: '27AABCS1429B1Z5',
+        pan: 'AABCS1429B',
+        upiId: 'sharmastore@okhdfcbank',
+        bankName: 'HDFC Bank',
+        accountNumber: '50200048291042',
+        ifscCode: 'HDFC0001204',
+        currencySymbol: '₹',
+        storeLive: true,
+        minOrderAmount: 199,
+        deliveryCharge: 30,
+        freeDeliveryAbove: 499,
+        deliveryRadiusKm: 5,
+        enableLocalDelivery: true,
+        enableStorePickup: true,
+        themeColor: '#0A6847',
+        announcementBanner: 'Free Home Delivery on Orders Above ₹499! Use code WELCOME50',
+      };
+    }
+    return {
+      businessName: 'My Store',
+      businessSlug: 'my-store',
+      businessType: 'Retail Store',
+      blueprintType: 'grocery',
+      salesChannels: ['in_store', 'whatsapp', 'online', 'delivery'],
+      countryCode: 'IN',
+      language: 'en',
+      capabilities: resolveBlueprintCapabilities('grocery', [
+        'in_store',
+        'whatsapp',
+        'online',
+        'delivery',
+      ]),
+      cancellationPolicy: 'before_preparation',
+      refundPolicy: 'full',
+      tagline: '',
+      phone: '',
+      whatsappNumber: '',
+      email: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      gstin: '',
+      pan: '',
+      upiId: '',
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      currencySymbol: '₹',
+      storeLive: false,
+      minOrderAmount: 0,
+      deliveryCharge: 0,
+      freeDeliveryAbove: 0,
+      deliveryRadiusKm: 5,
+      enableLocalDelivery: false,
+      enableStorePickup: false,
+      themeColor: '#0A6847',
+      announcementBanner: '',
+    };
+  });
 
   const [branches] = useState([
     { id: 'br-1', name: 'Sharma General Store', location: 'MG Road Main Branch' },
@@ -842,14 +889,14 @@ export function BosWebApp({
     };
   }, []);
 
-  const [products, setProducts] = useState<BosProductItem[]>(DEFAULT_PRODUCTS);
-  const [orders, setOrders] = useState<BosOrder[]>(DEFAULT_ORDERS);
-  const [customers, setCustomers] = useState<BosCustomer[]>(DEFAULT_CUSTOMERS);
+  const [products, setProducts] = useState<BosProductItem[]>(() => (demoMode ? DEFAULT_PRODUCTS : []));
+  const [orders, setOrders] = useState<BosOrder[]>(() => (demoMode ? DEFAULT_ORDERS : []));
+  const [customers, setCustomers] = useState<BosCustomer[]>(() => (demoMode ? DEFAULT_CUSTOMERS : []));
   const [khataTransactions, setKhataTransactions] =
-    useState<BosKhataTransaction[]>(DEFAULT_KHATA_TX);
-  const [appointments, setAppointments] = useState<BosAppointment[]>(DEFAULT_APPOINTMENTS);
-  const [daybookEntries, setDaybookEntries] = useState<BosDaybookEntry[]>(DEFAULT_DAYBOOK);
-  const [coupons, setCoupons] = useState<BosCoupon[]>(DEFAULT_COUPONS);
+    useState<BosKhataTransaction[]>(() => (demoMode ? DEFAULT_KHATA_TX : []));
+  const [appointments, setAppointments] = useState<BosAppointment[]>(() => (demoMode ? DEFAULT_APPOINTMENTS : []));
+  const [daybookEntries, setDaybookEntries] = useState<BosDaybookEntry[]>(() => (demoMode ? DEFAULT_DAYBOOK : []));
+  const [coupons, setCoupons] = useState<BosCoupon[]>(() => (demoMode ? DEFAULT_COUPONS : []));
 
   const activeCapabilities = useMemo<BusinessCapabilities>(() => {
     const bpType = storeSettings.blueprintType || 'grocery';
@@ -1085,22 +1132,26 @@ export function BosWebApp({
                 };
               },
             );
-            const existingNames = new Set(mappedProducts.map((p) => p.name.toLowerCase()));
-            const merged = [
-              ...DEFAULT_PRODUCTS.map((dp) => {
-                const apiOverride = mappedProducts.find(
-                  (mp) => mp.id === dp.id || mp.name.toLowerCase() === dp.name.toLowerCase(),
-                );
-                return apiOverride ? { ...dp, ...apiOverride, imageUrl: dp.imageUrl } : dp;
-              }),
-              ...mappedProducts.filter(
-                (mp) =>
-                  !DEFAULT_PRODUCTS.some(
-                    (dp) => dp.id === mp.id || dp.name.toLowerCase() === mp.name.toLowerCase(),
-                  ) && existingNames.has(mp.name.toLowerCase()),
-              ),
-            ];
-            setProducts(merged);
+            if (demoMode) {
+              const existingNames = new Set(mappedProducts.map((p) => p.name.toLowerCase()));
+              const merged = [
+                ...DEFAULT_PRODUCTS.map((dp) => {
+                  const apiOverride = mappedProducts.find(
+                    (mp) => mp.id === dp.id || mp.name.toLowerCase() === dp.name.toLowerCase(),
+                  );
+                  return apiOverride ? { ...dp, ...apiOverride, imageUrl: dp.imageUrl } : dp;
+                }),
+                ...mappedProducts.filter(
+                  (mp) =>
+                    !DEFAULT_PRODUCTS.some(
+                      (dp) => dp.id === mp.id || dp.name.toLowerCase() === mp.name.toLowerCase(),
+                    ) && existingNames.has(mp.name.toLowerCase()),
+                ),
+              ];
+              setProducts(merged);
+            } else {
+              setProducts(mappedProducts);
+            }
           }
         }
 
@@ -1258,7 +1309,11 @@ export function BosWebApp({
                 createdAt: 'Today',
               };
             });
-            setDaybookEntries((prev) => [...mappedDaybook, ...prev.slice(0, 5)]);
+            if (demoMode) {
+              setDaybookEntries((prev) => [...mappedDaybook, ...prev.slice(0, 5)]);
+            } else {
+              setDaybookEntries(mappedDaybook);
+            }
           }
         }
 
@@ -2643,6 +2698,7 @@ export function BosWebApp({
           <div className="w-full max-w-none">
             {activeView === 'dashboard' && (
               <BosDashboardWorkstation
+                demoMode={demoMode}
                 userName={userName}
                 currencySymbol={storeSettings.currencySymbol}
                 products={products}
@@ -2661,6 +2717,7 @@ export function BosWebApp({
 
             {activeView === 'pos' && (
               <BosPosWorkstation
+                demoMode={demoMode}
                 businessName={storeSettings.businessName}
                 currencySymbol={storeSettings.currencySymbol}
                 products={products}
@@ -2674,6 +2731,8 @@ export function BosWebApp({
 
             {activeView === 'inventory' && (
               <BosInventoryWorkstation
+                demoMode={demoMode}
+                orders={orders}
                 currencySymbol={storeSettings.currencySymbol}
                 products={products}
                 initialOpenAddModal={navContext?.action === 'add-product'}
@@ -2685,6 +2744,7 @@ export function BosWebApp({
 
             {activeView === 'orders' && (
               <BosOrdersWorkstation
+                demoMode={demoMode}
                 businessName={storeSettings.businessName}
                 currencySymbol={storeSettings.currencySymbol}
                 orders={orders}
@@ -2697,6 +2757,7 @@ export function BosWebApp({
 
             {(activeView === 'customers' || activeView === 'khata') && (
               <BosCustomersKhataWorkstation
+                demoMode={demoMode}
                 mode={activeView}
                 businessName={storeSettings.businessName}
                 currencySymbol={storeSettings.currencySymbol}
@@ -2710,6 +2771,7 @@ export function BosWebApp({
 
             {activeView === 'invoices' && (
               <BosInvoicesWorkstation
+                demoMode={demoMode}
                 storeSettings={storeSettings}
                 customers={customers}
                 products={products}
@@ -2718,6 +2780,7 @@ export function BosWebApp({
 
             {activeView === 'appointments' && (
               <BosAppointmentsWorkstation
+                demoMode={demoMode}
                 businessName={storeSettings.businessName}
                 businessSlug={storeSettings.businessSlug}
                 currencySymbol={storeSettings.currencySymbol}
@@ -2731,6 +2794,7 @@ export function BosWebApp({
 
             {activeView === 'onlineStore' && (
               <BosOnlineStoreWorkstation
+                demoMode={demoMode}
                 storeSettings={storeSettings}
                 products={products}
                 orders={orders}
@@ -2747,6 +2811,8 @@ export function BosWebApp({
 
             {(activeView === 'reports' || activeView === 'daybook') && (
               <BosReportsDaybookWorkstation
+                demoMode={demoMode}
+                storeSettings={storeSettings}
                 mode={activeView}
                 currencySymbol={storeSettings.currencySymbol}
                 orders={orders}
@@ -2762,6 +2828,7 @@ export function BosWebApp({
               activeView === 'integrations' ||
               activeView === 'settings') && (
               <BosMarketingAiIntegrationsSettings
+                demoMode={demoMode}
                 mode={activeView}
                 storeSettings={storeSettings}
                 products={products}

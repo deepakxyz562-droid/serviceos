@@ -63,6 +63,7 @@ type BosInvoicesWorkstationProps = {
   storeSettings: BosStoreSettings;
   customers: BosCustomer[];
   products: BosProductItem[];
+  demoMode?: boolean;
   onInvoiceSaved?: (invoice: SavedBosInvoice) => void;
 };
 
@@ -138,29 +139,64 @@ function formatTwoDecimals(num: number): string {
 
 export function BosInvoicesWorkstation({
   storeSettings,
-  customers,
-  products,
+  customers = [],
+  products = [],
+  demoMode = false,
   onInvoiceSaved,
 }: BosInvoicesWorkstationProps) {
   const currencySymbol = storeSettings.currencySymbol || '₹';
 
-  // Top & Builder States matching screenshot 1:1
+  // Top & Builder States matching screenshot 1:1 in demoMode, dynamic in production
   const [docType, setDocType] = useState<InvoiceDocType>('gst');
-  const [invoiceNumber, setInvoiceNumber] = useState('INV-2024-1068');
-  const [invoiceDate, setInvoiceDate] = useState('12 Oct 2024');
-  const [dueDate, setDueDate] = useState('12 Oct 2024');
+  const [invoiceNumber, setInvoiceNumber] = useState(() =>
+    demoMode
+      ? 'INV-2024-1068'
+      : `INV-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`
+  );
+  const [invoiceDate, setInvoiceDate] = useState(() =>
+    demoMode
+      ? '12 Oct 2024'
+      : new Intl.DateTimeFormat('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }).format(new Date())
+  );
+  const [dueDate, setDueDate] = useState(() =>
+    demoMode
+      ? '12 Oct 2024'
+      : new Intl.DateTimeFormat('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        }).format(new Date())
+  );
   const [salesType, setSalesType] = useState('B2B - Business');
 
   // Customer Details States
-  const [selectedCustomerName, setSelectedCustomerName] = useState('Amit Kumar Traders');
-  const [selectedCustomerGstin, setSelectedCustomerGstin] = useState('07AAKCA1234F1Z5');
-  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState('9876543210');
-  const [billingAddressLines, setBillingAddressLines] = useState([
-    'Amit Kumar Traders',
-    '123 Green Park, Metro Station Road',
-    'New Delhi - 110016',
-    'Delhi, India',
-  ]);
+  const [selectedCustomerName, setSelectedCustomerName] = useState(() =>
+    demoMode ? 'Amit Kumar Traders' : (customers[0]?.name || '')
+  );
+  const [selectedCustomerGstin, setSelectedCustomerGstin] = useState(() =>
+    demoMode ? '07AAKCA1234F1Z5' : (customers[0]?.gstin || '')
+  );
+  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState(() =>
+    demoMode ? '9876543210' : (customers[0]?.phone || '')
+  );
+  const [billingAddressLines, setBillingAddressLines] = useState<string[]>(() => {
+    if (demoMode) {
+      return [
+        'Amit Kumar Traders',
+        '123 Green Park, Metro Station Road',
+        'New Delhi - 110016',
+        'Delhi, India',
+      ];
+    }
+    if (customers[0]?.address) {
+      return [customers[0].name, customers[0].address];
+    }
+    return [];
+  });
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
   const [editingBillingAddress, setEditingBillingAddress] = useState(false);
@@ -174,20 +210,30 @@ export function BosInvoicesWorkstation({
 
   // GST & e-Way Bill States
   const [gstEnabled, setGstEnabled] = useState(true);
-  const [placeOfSupply, setPlaceOfSupply] = useState('Delhi (07)');
+  const [placeOfSupply, setPlaceOfSupply] = useState(() =>
+    demoMode
+      ? 'Delhi (07)'
+      : storeSettings.state
+        ? `${storeSettings.state} (${storeSettings.gstin?.slice(0, 2) || '07'})`
+        : 'Delhi (07)'
+  );
   const [invoiceType, setInvoiceType] = useState('Regular');
   const [reverseCharge, setReverseCharge] = useState(false);
   const [eInvoiceEnabled, setEInvoiceEnabled] = useState(true);
   const [eWayBillEnabled, setEWayBillEnabled] = useState(true);
 
   // Items States
-  const [items, setItems] = useState<InvoiceLineItem[]>(INITIAL_INVOICE_ITEMS);
+  const [items, setItems] = useState<InvoiceLineItem[]>(() =>
+    demoMode ? INITIAL_INVOICE_ITEMS : []
+  );
   const [itemSearchQuery, setItemSearchQuery] = useState('');
-  const [discountPercent] = useState(5);
+  const [discountPercent] = useState(() => (demoMode ? 5 : 0));
 
   // Additional Details States
   const [paymentTerms, setPaymentTerms] = useState('Immediate');
-  const [salesPerson, setSalesPerson] = useState('Ravi Kumar');
+  const [salesPerson, setSalesPerson] = useState(() =>
+    demoMode ? 'Ravi Kumar' : (storeSettings.businessName || 'Store Manager')
+  );
   const [projectReference, setProjectReference] = useState('');
   const [remarks, setRemarks] = useState('Thank you for your business!');
 
@@ -528,7 +574,7 @@ export function BosInvoicesWorkstation({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => showToast(`Saved ${invoiceNumber} as draft`)}
+            onClick={handlePrintOrDownload}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <FileText className="h-3.5 w-3.5 text-[#0A6847]" />
@@ -1528,7 +1574,7 @@ export function BosInvoicesWorkstation({
                   </p>
                   <p>1. Goods once sold will not be taken back.</p>
                   <p>2. Payment to be made within due date.</p>
-                  <p>3. Subject to Delhi jurisdiction.</p>
+                  <p>3. Subject to {storeSettings.city || storeSettings.state || 'Delhi'} jurisdiction.</p>
                   <p className="pt-0.5 font-extrabold text-[#111827]">
                     {remarks || 'Thank you for your business!'}
                   </p>

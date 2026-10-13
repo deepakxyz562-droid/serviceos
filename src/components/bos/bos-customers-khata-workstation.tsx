@@ -42,6 +42,7 @@ type BosCustomersKhataWorkstationProps = {
   customers: BosCustomer[];
   khataTransactions: BosKhataTransaction[];
   initialOpenAddCustomer?: boolean;
+  demoMode?: boolean;
   onAddCustomer: (customer: Omit<BosCustomer, 'id'>) => Promise<void>;
   onRecordKhataEntry: (entry: {
     customerId: string;
@@ -431,7 +432,9 @@ export function BosCustomersKhataWorkstation({
   businessName,
   currencySymbol = '₹',
   customers,
+  khataTransactions = [],
   initialOpenAddCustomer = false,
+  demoMode = false,
   onAddCustomer,
   onRecordKhataEntry,
 }: BosCustomersKhataWorkstationProps) {
@@ -442,7 +445,9 @@ export function BosCustomersKhataWorkstation({
   const [statusFilter, setStatusFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('cust-1');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() =>
+    demoMode ? 'cust-1' : (customers[0]?.id || '')
+  );
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -481,50 +486,94 @@ export function BosCustomersKhataWorkstation({
     }, 3200);
   };
 
-  // Merge any runtime added customers at the top of the 10 showcase customers
+  // Build rows from showcase in demoMode or real database records in production
   const allRows = useMemo<ShowcaseCustomerRow[]>(() => {
-    const runtimeAdded = customers
-      .filter((c) => {
-        const num = Number(c.id.replace(/\D/g, ''));
-        return num > 10 && !SHOWCASE_CUSTOMERS.some((s) => s.name === c.name);
-      })
-      .map((c, idx) => ({
-        id: c.id,
-        code: `CUST-0${11 + idx}`,
-        name: c.name,
-        phone: c.phone.replace(/\+91\s*/, ''),
-        email: c.email || `${c.name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
-        address: c.address || '123 Green Park, Delhi - 110016',
-        groupTag: 'Retail Customer',
-        segmentBadge: c.segment,
-        avatarStyle: 'photo-m1' as const,
-        totalPurchases: c.totalSpent || c.khataBalance,
-        totalPaid: Math.max(0, (c.totalSpent || 0) - c.khataBalance),
-        balance: Math.max(0, c.khataBalance),
-        status: (c.khataBalance > 0 ? 'Due' : 'Paid') as 'Due' | 'Paid',
-        transactions: [],
-      }));
+    if (demoMode) {
+      const runtimeAdded = customers
+        .filter((c) => {
+          const num = Number(c.id.replace(/\D/g, ''));
+          return num > 10 && !SHOWCASE_CUSTOMERS.some((s) => s.name === c.name);
+        })
+        .map((c, idx) => ({
+          id: c.id,
+          code: `CUST-0${11 + idx}`,
+          name: c.name,
+          phone: c.phone.replace(/\+91\s*/, ''),
+          email: c.email || `${c.name.toLowerCase().replace(/\s+/g, '.')}@gmail.com`,
+          address: c.address || '123 Green Park, Delhi - 110016',
+          groupTag: 'Retail Customer',
+          segmentBadge: c.segment,
+          avatarStyle: 'photo-m1' as const,
+          totalPurchases: c.totalSpent || c.khataBalance,
+          totalPaid: Math.max(0, (c.totalSpent || 0) - c.khataBalance),
+          balance: Math.max(0, c.khataBalance),
+          status: (c.khataBalance > 0 ? 'Due' : 'Paid') as 'Due' | 'Paid',
+          transactions: [],
+        }));
 
-    return [...runtimeAdded, ...SHOWCASE_CUSTOMERS].map((row) => {
-      const totalPaid =
-        paidOverrides[row.id] !== undefined ? paidOverrides[row.id] : row.totalPaid;
+      return [...runtimeAdded, ...SHOWCASE_CUSTOMERS].map((row) => {
+        const totalPaid =
+          paidOverrides[row.id] !== undefined ? paidOverrides[row.id] : row.totalPaid;
+        const balance =
+          balanceOverrides[row.id] !== undefined
+            ? balanceOverrides[row.id]
+            : row.balance;
+        const status: ShowcaseCustomerRow['status'] =
+          balance <= 0 ? 'Paid' : row.status === 'Overdue' ? 'Overdue' : 'Due';
+        const extraTx = extraTxByCustomer[row.id] || [];
+
+        return {
+          ...row,
+          totalPaid,
+          balance,
+          status,
+          transactions: [...extraTx, ...row.transactions],
+        };
+      });
+    }
+
+    // Production mode: purely map real customers and transactions
+    return customers.map((c, idx) => {
+      const basePaid = Math.max(0, (c.totalSpent || 0) - (c.khataBalance || 0));
+      const totalPaid = paidOverrides[c.id] !== undefined ? paidOverrides[c.id] : basePaid;
       const balance =
-        balanceOverrides[row.id] !== undefined
-          ? balanceOverrides[row.id]
-          : row.balance;
-      const status: ShowcaseCustomerRow['status'] =
-        balance <= 0 ? 'Paid' : row.status === 'Overdue' ? 'Overdue' : 'Due';
-      const extraTx = extraTxByCustomer[row.id] || [];
+        balanceOverrides[c.id] !== undefined
+          ? balanceOverrides[c.id]
+          : Math.max(0, c.khataBalance || 0);
+      const status: ShowcaseCustomerRow['status'] = balance <= 0 ? 'Paid' : 'Due';
+      const extraTx = extraTxByCustomer[c.id] || [];
+      const realTx = khataTransactions
+        .filter(
+          (tx) =>
+            tx.partyId === c.id ||
+            tx.partyName.toLowerCase() === c.name.toLowerCase()
+        )
+        .map((tx) => ({
+          id: tx.id,
+          title: tx.note || (tx.type === 'got' ? 'Payment Received' : 'Udhar / Credit Given'),
+          subtitle: `${(tx.mode || 'cash').toUpperCase()} • ${tx.createdAt}`,
+          amount: tx.amount,
+          direction: (tx.type === 'got' ? 'in' : 'out') as 'in' | 'out',
+        }));
 
       return {
-        ...row,
+        id: c.id,
+        code: `CUST-${String(idx + 1).padStart(3, '0')}`,
+        name: c.name,
+        phone: c.phone.replace(/\+91\s*/, ''),
+        email: c.email || '',
+        address: c.address || '',
+        groupTag: 'Retail Customer',
+        segmentBadge: c.segment || 'Regular',
+        avatarStyle: 'photo-m1' as const,
+        totalPurchases: c.totalSpent || balance,
         totalPaid,
         balance,
         status,
-        transactions: [...extraTx, ...row.transactions],
+        transactions: [...extraTx, ...realTx],
       };
     });
-  }, [customers, paidOverrides, balanceOverrides, extraTxByCustomer]);
+  }, [customers, demoMode, khataTransactions, paidOverrides, balanceOverrides, extraTxByCustomer]);
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -563,6 +612,49 @@ export function BosCustomersKhataWorkstation({
       allRows[0]
     );
   }, [allRows, filteredRows, selectedCustomerId]);
+
+  const kpiStats = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalCustomers: '248',
+        totalReceivable: `${currencySymbol} 48,320`,
+        totalReceived: `${currencySymbol} 1,24,580`,
+        overdueAmount: `${currencySymbol} 12,450`,
+        custTrend: '↑ 12%',
+        recTrend: '↑ 8%',
+        receivedTrend: '↑ 24%',
+        overdueTrend: '↑ 18%',
+      };
+    }
+    const totalCustomers = allRows.length;
+    const totalReceivable = allRows.reduce((sum, r) => sum + Math.max(0, r.balance), 0);
+    const totalReceived = allRows.reduce((sum, r) => sum + Math.max(0, r.totalPaid), 0);
+    const overdueAmount = allRows
+      .filter((r) => r.status === 'Overdue')
+      .reduce((sum, r) => sum + Math.max(0, r.balance), 0);
+    return {
+      totalCustomers: String(totalCustomers),
+      totalReceivable: formatCustAmount(totalReceivable, currencySymbol),
+      totalReceived: formatCustAmount(totalReceived, currencySymbol),
+      overdueAmount: formatCustAmount(overdueAmount, currencySymbol),
+      custTrend: totalCustomers > 0 ? 'Active' : '—',
+      recTrend: totalReceivable > 0 ? 'Pending' : 'Settled',
+      receivedTrend: totalReceived > 0 ? 'Received' : '—',
+      overdueTrend: overdueAmount > 0 ? 'Overdue' : 'Clear',
+    };
+  }, [allRows, currencySymbol, demoMode]);
+
+  const tabCounts = useMemo(() => {
+    if (demoMode) {
+      return { all: 248, credit: 62, regular: 156, new: 30 };
+    }
+    return {
+      all: allRows.length,
+      credit: allRows.filter((r) => r.balance > 0).length,
+      regular: allRows.filter((r) => r.segmentBadge === 'Regular').length,
+      new: allRows.filter((r) => r.segmentBadge === 'New').length,
+    };
+  }, [allRows, demoMode]);
 
   const toggleSelectAll = () => {
     if (selectedRowIds.length === visibleRows.length) {
@@ -667,17 +759,18 @@ export function BosCustomersKhataWorkstation({
   const handleCreateCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustomerForm.name.trim()) return;
+    const customerName = newCustomerForm.name.trim();
     await onAddCustomer({
-      name: newCustomerForm.name.trim(),
-      phone: newCustomerForm.phone.trim() || '9876500000',
+      name: customerName,
+      phone: newCustomerForm.phone.trim(),
       email: newCustomerForm.email.trim() || undefined,
-      address: newCustomerForm.address.trim() || '123 Green Park, Delhi - 110016',
+      address: newCustomerForm.address.trim() || undefined,
       segment: 'Regular',
-      ordersCount: 1,
+      ordersCount: 0,
       totalSpent: Number(newCustomerForm.openingKhata) || 0,
       khataBalance: Number(newCustomerForm.openingKhata) || 0,
-      loyaltyPoints: 50,
-      lastVisit: 'Today',
+      loyaltyPoints: 0,
+      lastVisit: 'New',
     });
     setShowAddCustomerModal(false);
     setNewCustomerForm({
@@ -687,7 +780,7 @@ export function BosCustomersKhataWorkstation({
       address: '',
       openingKhata: 0,
     });
-    showToastMsg(`Added customer "${newCustomerForm.name.trim()}"`);
+    showToastMsg(`Added customer "${customerName}"`);
   };
 
   const handleExportCsv = () => {
@@ -795,9 +888,9 @@ export function BosCustomersKhataWorkstation({
                 Total Customers
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                248
+                {kpiStats.totalCustomers}
               </p>
-              <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 12%</p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{kpiStats.custTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
@@ -832,9 +925,9 @@ export function BosCustomersKhataWorkstation({
                 Total Receivable
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                {currencySymbol} 48,320
+                {kpiStats.totalReceivable}
               </p>
-              <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">↑ 8%</p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{kpiStats.recTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
@@ -869,9 +962,9 @@ export function BosCustomersKhataWorkstation({
                 Total Received
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                {currencySymbol} 1,24,580
+                {kpiStats.totalReceived}
               </p>
-              <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">↑ 24%</p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{kpiStats.receivedTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
@@ -906,9 +999,9 @@ export function BosCustomersKhataWorkstation({
                 Overdue Amount
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-                {currencySymbol} 12,450
+                {kpiStats.overdueAmount}
               </p>
-              <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">↑ 18%</p>
+              <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{kpiStats.overdueTrend}</p>
             </div>
           </div>
           <svg viewBox="0 0 84 36" className="h-9 w-20 shrink-0 overflow-visible" fill="none">
@@ -942,10 +1035,10 @@ export function BosCustomersKhataWorkstation({
             <div className="flex items-center gap-5 overflow-x-auto no-scrollbar">
               {(
                 [
-                  { id: 'all', label: 'All Customers', count: 248 },
-                  { id: 'credit', label: 'Credit Customers', count: 62 },
-                  { id: 'regular', label: 'Regular Customers', count: 156 },
-                  { id: 'new', label: 'New Customers', count: 30 },
+                  { id: 'all', label: 'All Customers', count: tabCounts.all },
+                  { id: 'credit', label: 'Credit Customers', count: tabCounts.credit },
+                  { id: 'regular', label: 'Regular Customers', count: tabCounts.regular },
+                  { id: 'new', label: 'New Customers', count: tabCounts.new },
                 ] as const
               ).map((tab) => {
                 const active = subTab === tab.id;
@@ -1079,106 +1172,114 @@ export function BosCustomersKhataWorkstation({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                {visibleRows.map((row) => {
-                  const isSelected = selectedCustomer?.id === row.id;
-                  const isChecked = selectedRowIds.includes(row.id);
+                {visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-[13px] text-[#64748B]">
+                      No customers found. Click &quot;Add Customer&quot; to register your first customer.
+                    </td>
+                  </tr>
+                ) : (
+                  visibleRows.map((row) => {
+                    const isSelected = selectedCustomer?.id === row.id;
+                    const isChecked = selectedRowIds.includes(row.id);
 
-                  const statusPillCls =
-                    row.status === 'Paid'
-                      ? 'bg-[#E6F6F0] text-[#0A7B56]'
-                      : 'bg-[#FEE2E2] text-[#DC2626]';
+                    const statusPillCls =
+                      row.status === 'Paid'
+                        ? 'bg-[#E6F6F0] text-[#0A7B56]'
+                        : 'bg-[#FEE2E2] text-[#DC2626]';
 
-                  return (
-                    <tr
-                      key={row.id}
-                      onClick={() => setSelectedCustomerId(row.id)}
-                      className={`cursor-pointer transition ${
-                        isSelected ? 'bg-[#F1FAF5]' : 'hover:bg-[#F9FCFA]'
-                      }`}
-                    >
-                      <td
-                        className="py-2.5 pl-4 pr-2"
-                        onClick={(e) => toggleSelectRow(row.id, e)}
+                    return (
+                      <tr
+                        key={row.id}
+                        onClick={() => setSelectedCustomerId(row.id)}
+                        className={`cursor-pointer transition ${
+                          isSelected ? 'bg-[#F1FAF5]' : 'hover:bg-[#F9FCFA]'
+                        }`}
                       >
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${row.name}`}
-                          checked={isChecked}
-                          onChange={() => {}}
-                          className="h-4 w-4 rounded border-[#CBD5E1] accent-[#0A6847] cursor-pointer"
-                        />
-                      </td>
-
-                      {/* Customer Avatar + Name + Code */}
-                      <td className="py-2.5 px-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <CustomerRowAvatar
-                            styleType={row.avatarStyle}
-                            name={row.name}
+                        <td
+                          className="py-2.5 pl-4 pr-2"
+                          onClick={(e) => toggleSelectRow(row.id, e)}
+                        >
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${row.name}`}
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="h-4 w-4 rounded border-[#CBD5E1] accent-[#0A6847] cursor-pointer"
                           />
-                          <div className="min-w-0">
-                            <p className="font-bold text-[#111827] truncate">
-                              {row.name}
-                            </p>
-                            <p className="text-[11px] font-medium text-[#64748B]">
-                              {row.code}
-                            </p>
+                        </td>
+
+                        {/* Customer Avatar + Name + Code */}
+                        <td className="py-2.5 px-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <CustomerRowAvatar
+                              styleType={row.avatarStyle}
+                              name={row.name}
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-[#111827] truncate">
+                                {row.name}
+                              </p>
+                              <p className="text-[11px] font-medium text-[#64748B]">
+                                {row.code}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Phone */}
-                      <td className="py-2.5 px-2.5 font-medium text-[#334155]">
-                        {row.phone}
-                      </td>
+                        {/* Phone */}
+                        <td className="py-2.5 px-2.5 font-medium text-[#334155]">
+                          {row.phone}
+                        </td>
 
-                      {/* Total Purchases */}
-                      <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
-                        {formatCustAmount(row.totalPurchases, currencySymbol)}
-                      </td>
+                        {/* Total Purchases */}
+                        <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
+                          {formatCustAmount(row.totalPurchases, currencySymbol)}
+                        </td>
 
-                      {/* Total Paid */}
-                      <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
-                        {formatCustAmount(row.totalPaid, currencySymbol)}
-                      </td>
+                        {/* Total Paid */}
+                        <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
+                          {formatCustAmount(row.totalPaid, currencySymbol)}
+                        </td>
 
-                      {/* Balance */}
-                      <td className="py-2.5 px-2.5">
-                        <span
-                          className={`font-extrabold ${
-                            row.balance === 0 ? 'text-[#0A7B56]' : 'text-[#111827]'
-                          }`}
-                        >
-                          {formatCustAmount(row.balance, currencySymbol)}
-                        </span>
-                      </td>
+                        {/* Balance */}
+                        <td className="py-2.5 px-2.5">
+                          <span
+                            className={`font-extrabold ${
+                              row.balance === 0 ? 'text-[#0A7B56]' : 'text-[#111827]'
+                            }`}
+                          >
+                            {formatCustAmount(row.balance, currencySymbol)}
+                          </span>
+                        </td>
 
-                      {/* Status */}
-                      <td className="py-2.5 px-2.5">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusPillCls}`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
+                        {/* Status */}
+                        <td className="py-2.5 px-2.5">
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${statusPillCls}`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
 
-                      {/* Actions Kebab */}
-                      <td className="py-2.5 pl-2 pr-4 text-center">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCustomerId(row.id);
-                          }}
-                          aria-label={`Actions for ${row.name}`}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#EBF2EE] hover:text-[#111827]"
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {/* Actions Kebab */}
+                        <td className="py-2.5 pl-2 pr-4 text-center">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCustomerId(row.id);
+                            }}
+                            aria-label={`Actions for ${row.name}`}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#EBF2EE] hover:text-[#111827]"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -1186,7 +1287,7 @@ export function BosCustomersKhataWorkstation({
           {/* Pagination Footer */}
           <div className="flex flex-col gap-2.5 border-t border-[#EBF2EE] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[12.5px] font-medium text-[#64748B]">
-              Showing 1–{Math.min(pageSize, visibleRows.length)} of 248 customers
+              Showing {filteredRows.length === 0 ? 0 : 1}–{Math.min(pageSize, filteredRows.length)} of {allRows.length} customers
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1194,36 +1295,23 @@ export function BosCustomersKhataWorkstation({
                 <button
                   type="button"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                  disabled={currentPage <= 1}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6] disabled:opacity-40"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
-                {[1, 2, 3, 4, 5].map((pg) => (
-                  <button
-                    key={pg}
-                    type="button"
-                    onClick={() => setCurrentPage(pg)}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg text-[12px] font-bold transition ${
-                      currentPage === pg
-                        ? 'bg-[#0A6847] text-white'
-                        : 'border border-[#DCE9E3] bg-white text-[#334155] hover:bg-[#F4F8F6]'
-                    }`}
-                  >
-                    {pg}
-                  </button>
-                ))}
-                <span className="px-1 text-[12px] text-[#64748B]">...</span>
+                <span className="px-2 text-[12px] font-semibold text-[#334155]">
+                  Page {currentPage} of {Math.max(1, Math.ceil(filteredRows.length / pageSize))}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setCurrentPage(25)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[12px] font-bold text-[#334155] hover:bg-[#F4F8F6]"
-                >
-                  25
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(25, p + 1))}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                  onClick={() =>
+                    setCurrentPage((p) =>
+                      Math.min(Math.max(1, Math.ceil(filteredRows.length / pageSize)), p + 1)
+                    )
+                  }
+                  disabled={currentPage >= Math.max(1, Math.ceil(filteredRows.length / pageSize))}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6] disabled:opacity-40"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
                 </button>
@@ -1244,7 +1332,15 @@ export function BosCustomersKhataWorkstation({
         </div>
 
         {/* Right Panel: Customer Profile & Khata Inspector */}
-        {selectedCustomer && (
+        {!selectedCustomer ? (
+          <div className="lg:col-span-4 rounded-2xl border border-[#DCE9E3] bg-white p-8 shadow-2xs text-center text-[#64748B]">
+            <Users className="mx-auto h-10 w-10 text-[#94A3B8] mb-3 stroke-1" />
+            <h3 className="text-[15px] font-bold text-[#1E293B]">No Customer Selected</h3>
+            <p className="text-[12.5px] mt-1 text-[#64748B]">
+              Add your first customer using the &quot;Add Customer&quot; button to inspect their profile, Khata balance and history.
+            </p>
+          </div>
+        ) : (
           <div className="lg:col-span-4 rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
             {/* Profile Header */}
             <div className="flex items-start justify-between gap-2">

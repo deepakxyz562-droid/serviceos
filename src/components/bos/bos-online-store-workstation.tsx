@@ -48,6 +48,7 @@ type BosOnlineStoreWorkstationProps = {
   storeSettings: BosStoreSettings;
   products: BosProductItem[];
   orders: BosOrder[];
+  demoMode?: boolean;
   onUpdateStoreSettings: (patch: Partial<BosStoreSettings>) => Promise<void>;
   onToggleProductOnline: (productId: string, visible: boolean) => void;
 };
@@ -63,6 +64,20 @@ type OnlineShowcaseRow = {
   barcode: string;
   imageUrl: string;
 };
+
+function mapProductsToOnlineRows(items: BosProductItem[]): OnlineShowcaseRow[] {
+  return items.map((p) => ({
+    id: p.id,
+    name: p.name,
+    category: p.category,
+    price: p.price,
+    stock: p.stockQuantity,
+    status: (p.onlineVisible !== false ? 'Active' : 'Draft') as 'Active' | 'Draft',
+    featured: p.onlineVisible !== false,
+    barcode: p.barcode || p.sku || '',
+    imageUrl: p.imageUrl || '',
+  }));
+}
 
 const INITIAL_ONLINE_PRODUCTS: OnlineShowcaseRow[] = [
   {
@@ -124,6 +139,9 @@ const INITIAL_ONLINE_PRODUCTS: OnlineShowcaseRow[] = [
 
 export function BosOnlineStoreWorkstation({
   storeSettings,
+  products = [],
+  orders = [],
+  demoMode = false,
   onUpdateStoreSettings,
   onToggleProductOnline,
 }: BosOnlineStoreWorkstationProps) {
@@ -133,21 +151,45 @@ export function BosOnlineStoreWorkstation({
   const [previewMode, setPreviewMode] = useState<PreviewDeviceMode>('mobile');
 
   // Store Settings Card States
-  const [storeName, setStoreName] = useState('Ravi Store');
-  const [businessType, setBusinessType] = useState('Grocery Store');
-  const [storeDescription, setStoreDescription] = useState(
-    'Daily groceries, home essentials, fresh products and more. Fast delivery in your area.',
+  const [storeName, setStoreName] = useState(() =>
+    demoMode ? 'Ravi Store' : (storeSettings.businessName || 'My Store')
+  );
+  const [businessType, setBusinessType] = useState(() =>
+    demoMode ? 'Grocery Store' : (storeSettings.businessType || 'Retail Store')
+  );
+  const [storeDescription, setStoreDescription] = useState(() =>
+    demoMode
+      ? 'Daily groceries, home essentials, fresh products and more. Fast delivery in your area.'
+      : (storeSettings.tagline || '')
   );
 
   // Delivery & Ordering States
-  const [homeDelivery, setHomeDelivery] = useState(true);
-  const [selfPickup, setSelfPickup] = useState(true);
+  const [homeDelivery, setHomeDelivery] = useState(
+    () => storeSettings.enableLocalDelivery ?? true
+  );
+  const [selfPickup, setSelfPickup] = useState(
+    () => storeSettings.enableStorePickup ?? true
+  );
   const [dineInTakeaway, setDineInTakeaway] = useState(false);
 
   // Products Table States
-  const [catalogRows, setCatalogRows] = useState<OnlineShowcaseRow[]>(
-    INITIAL_ONLINE_PRODUCTS,
+  const [catalogRows, setCatalogRows] = useState<OnlineShowcaseRow[]>(() =>
+    demoMode ? INITIAL_ONLINE_PRODUCTS : mapProductsToOnlineRows(products)
   );
+
+  useEffect(() => {
+    if (storeSettings.businessName) setStoreName(storeSettings.businessName);
+    if (storeSettings.tagline !== undefined) setStoreDescription(storeSettings.tagline);
+    if (storeSettings.businessType) setBusinessType(storeSettings.businessType);
+    if (storeSettings.enableLocalDelivery !== undefined) setHomeDelivery(storeSettings.enableLocalDelivery);
+    if (storeSettings.enableStorePickup !== undefined) setSelfPickup(storeSettings.enableStorePickup);
+  }, [storeSettings]);
+
+  useEffect(() => {
+    if (!demoMode) {
+      setCatalogRows(mapProductsToOnlineRows(products));
+    }
+  }, [products, demoMode]);
   const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
@@ -344,7 +386,13 @@ export function BosOnlineStoreWorkstation({
           <button
             type="button"
             onClick={() => {
-              void onUpdateStoreSettings({ businessName: storeName });
+              void onUpdateStoreSettings({
+                businessName: storeName,
+                businessType: businessType,
+                tagline: storeDescription,
+                enableLocalDelivery: homeDelivery,
+                enableStorePickup: selfPickup,
+              });
               showToast('Store customization saved');
             }}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 text-[12.5px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
@@ -597,23 +645,23 @@ export function BosOnlineStoreWorkstation({
                 <button
                   type="button"
                   onClick={() => {
-                    void onUpdateStoreSettings({ businessName: storeName });
+                    void onUpdateStoreSettings({
+                      businessName: storeName,
+                      businessType: businessType,
+                      tagline: storeDescription,
+                    });
                     showToast('Updated Store Settings');
                   }}
                   className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#DCE9E3] bg-white px-2.5 text-[11.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
                 >
                   <Edit3 className="h-3 w-3 text-[#0A6847]" />
-                  <span>Edit</span>
+                  <span>Save</span>
                 </button>
               </div>
 
               {/* Store Thumbnail */}
-              <div className="h-14 w-14 overflow-hidden rounded-xl border border-[#DCE9E3] bg-linear-to-br from-[#78350F] via-[#B45309] to-[#451A03] flex items-center justify-center shadow-2xs">
-                <img
-                  src="/bos/products/coca-cola.png"
-                  alt="Ravi Store"
-                  className="h-11 w-11 object-contain"
-                />
+              <div className="h-14 w-14 overflow-hidden rounded-xl border border-[#DCE9E3] bg-[#E6F6F0] text-[#0A7B56] flex items-center justify-center font-bold text-base shadow-2xs">
+                {storeName.slice(0, 2).toUpperCase()}
               </div>
 
               {/* Store Name */}
@@ -675,11 +723,17 @@ export function BosOnlineStoreWorkstation({
                 </h2>
                 <button
                   type="button"
-                  onClick={() => showToast('Updated Delivery & Ordering rules')}
+                  onClick={() => {
+                    void onUpdateStoreSettings({
+                      enableLocalDelivery: homeDelivery,
+                      enableStorePickup: selfPickup,
+                    });
+                    showToast('Updated Delivery & Ordering rules');
+                  }}
                   className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#DCE9E3] bg-white px-2.5 text-[11.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
                 >
                   <Edit3 className="h-3 w-3 text-[#0A6847]" />
-                  <span>Edit</span>
+                  <span>Save</span>
                 </button>
               </div>
 
@@ -863,7 +917,14 @@ export function BosOnlineStoreWorkstation({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                  {filteredRows.map((row) => {
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-[13px] text-[#64748B]">
+                        No online products found. Click &quot;Add Product&quot; to publish your first product to the storefront.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((row) => {
                     const isChecked = selectedRowIds.includes(row.id);
                     return (
                       <tr key={row.id} className="hover:bg-[#F9FCFA]">
@@ -958,8 +1019,9 @@ export function BosOnlineStoreWorkstation({
                         </td>
                       </tr>
                     );
-                  })}
-                </tbody>
+                  })
+                )}
+              </tbody>
               </table>
             </div>
           </div>

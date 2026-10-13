@@ -36,6 +36,7 @@ import {
   type BosDaybookEntry,
   type BosOrder,
   type BosProductItem,
+  type BosStoreSettings,
   formatBosCurrency,
 } from '@/components/bos/bos-types';
 
@@ -55,6 +56,8 @@ type BosReportsDaybookWorkstationProps = {
   products: BosProductItem[];
   daybookEntries: BosDaybookEntry[];
   initialOpeningBalance?: number;
+  demoMode?: boolean;
+  storeSettings?: BosStoreSettings;
   onAddDaybookEntry: (
     entry: Omit<BosDaybookEntry, 'id' | 'time' | 'createdAt'>,
   ) => Promise<void>;
@@ -262,6 +265,8 @@ export function BosReportsDaybookWorkstation({
   daybookEntries = [],
   onAddDaybookEntry,
   initialOpeningBalance = 0,
+  demoMode = false,
+  storeSettings,
 }: BosReportsDaybookWorkstationProps) {
   const [reportTab, setReportTab] = useState<
     'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata'
@@ -287,8 +292,93 @@ export function BosReportsDaybookWorkstation({
       });
       return computed.reverse();
     }
+    if (demoMode) {
+      return INITIAL_DAYBOOK_ROWS;
+    }
     return [];
-  }, [daybookEntries, openingBal]);
+  }, [daybookEntries, openingBal, demoMode]);
+
+  const reportsData = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalRevenue: 482650,
+        grossProfit: 142800,
+        totalOrders: 1284,
+        totalExpenses: 64200,
+        gstCollected: 38420,
+        itcClaimable: 14200,
+        cogs: 275650,
+        avgOrderVal: 376,
+        marginLabel: '29.6% Net Margin',
+        paymentSplit: [
+          { mode: 'UPI / QR', amount: 260631, pct: 54, color: 'bg-[#0A6847]' },
+          { mode: 'Cash', amount: 135142, pct: 28, color: 'bg-[#10B981]' },
+          { mode: 'Card / POS', amount: 57918, pct: 12, color: 'bg-blue-500' },
+          { mode: 'Khata / Credit', amount: 28959, pct: 6, color: 'bg-amber-500' },
+        ],
+        weeklyBars: [
+          { label: 'Week 1 (1–7 Apr)', rev: 72, prof: 44, exp: 26, val: '₹1,05,200' },
+          { label: 'Week 2 (8–14 Apr)', rev: 85, prof: 54, exp: 28, val: '₹1,24,800' },
+          { label: 'Week 3 (15–21 Apr)', rev: 78, prof: 48, exp: 25, val: '₹1,14,150' },
+          { label: 'Week 4 (22–24 Apr)', rev: 96, prof: 64, exp: 24, val: '₹1,38,500' },
+        ],
+      };
+    }
+
+    const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalOrders = orders.length;
+    const avgOrderVal = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+    const totalExpenses = daybookEntries
+      .filter((e) => e.category === 'Expense' || e.moneyOut > 0)
+      .reduce((sum, e) => sum + (e.moneyOut || 0), 0);
+    const cogs = Math.round(totalRevenue * 0.6);
+    const grossProfit = Math.max(0, totalRevenue - totalExpenses - cogs);
+    const marginLabel = totalRevenue > 0 ? `${((grossProfit / totalRevenue) * 100).toFixed(1)}% Margin` : '0% Margin';
+    const gstCollected = orders.reduce((sum, o) => sum + (o.taxAmount || Math.round((o.totalAmount || 0) * 0.05 / 1.05)), 0);
+    const itcClaimable = Math.round(gstCollected * 0.35);
+
+    let upi = 0;
+    let cash = 0;
+    let card = 0;
+    let khata = 0;
+    for (const o of orders) {
+      const mode = (o.paymentMode || '').toLowerCase();
+      const amt = o.totalAmount || 0;
+      if (mode === 'upi') upi += amt;
+      else if (mode === 'cash') cash += amt;
+      else if (mode === 'card') card += amt;
+      else if (mode === 'khata') khata += amt;
+      else upi += amt;
+    }
+    const totPay = upi + cash + card + khata || 1;
+    const paymentSplit = [
+      { mode: 'UPI / QR', amount: upi, pct: Math.round((upi / totPay) * 100), color: 'bg-[#0A6847]' },
+      { mode: 'Cash', amount: cash, pct: Math.round((cash / totPay) * 100), color: 'bg-[#10B981]' },
+      { mode: 'Card / POS', amount: card, pct: Math.round((card / totPay) * 100), color: 'bg-blue-500' },
+      { mode: 'Khata / Credit', amount: khata, pct: Math.round((khata / totPay) * 100), color: 'bg-amber-500' },
+    ];
+
+    const weeklyBars = [
+      { label: 'Week 1', rev: totalRevenue > 0 ? 25 : 0, prof: grossProfit > 0 ? 20 : 0, exp: totalExpenses > 0 ? 15 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.25), currencySymbol) },
+      { label: 'Week 2', rev: totalRevenue > 0 ? 30 : 0, prof: grossProfit > 0 ? 25 : 0, exp: totalExpenses > 0 ? 20 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.3), currencySymbol) },
+      { label: 'Week 3', rev: totalRevenue > 0 ? 20 : 0, prof: grossProfit > 0 ? 18 : 0, exp: totalExpenses > 0 ? 15 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.2), currencySymbol) },
+      { label: 'Week 4', rev: totalRevenue > 0 ? 25 : 0, prof: grossProfit > 0 ? 22 : 0, exp: totalExpenses > 0 ? 18 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.25), currencySymbol) },
+    ];
+
+    return {
+      totalRevenue,
+      grossProfit,
+      totalOrders,
+      totalExpenses,
+      gstCollected,
+      itcClaimable,
+      cogs,
+      avgOrderVal,
+      marginLabel,
+      paymentSplit,
+      weeklyBars,
+    };
+  }, [orders, daybookEntries, demoMode, currencySymbol]);
 
   const openingBalance = openingBal;
   const totalMoneyIn = useMemo(
@@ -496,18 +586,18 @@ export function BosReportsDaybookWorkstation({
     }));
 
     const totalGross =
-      (orders || []).reduce((acc, o) => acc + (o.totalAmount || 0), 0) || 482650;
+      (orders || []).reduce((acc, o) => acc + (o.totalAmount || 0), 0) || (demoMode ? 482650 : 0);
     const totalTxval =
       (orders || []).reduce(
         (acc, o) => acc + Math.round((o.totalAmount || 0) / 1.05),
         0,
-      ) || Math.round(totalGross / 1.05);
+      ) || (demoMode ? Math.round(totalGross / 1.05) : 0);
     const totalTax = totalGross - totalTxval;
     const totalCgst = Math.round(totalTax / 2);
     const totalSgst = totalTax - totalCgst;
 
     const gstrPayload = {
-      gstin: '09ABCDE1234F1Z5',
+      gstin: storeSettings?.gstin || (demoMode ? '09ABCDE1234F1Z5' : ''),
       fp: `${new Date().getMonth() + 1 < 10 ? '0' : ''}${new Date().getMonth() + 1}${new Date().getFullYear()}`,
       gt: totalGross,
       cur_gt: totalGross,
@@ -533,11 +623,11 @@ export function BosReportsDaybookWorkstation({
           {
             doc_num: 1,
             doc_typ: 'Invoices for outward supply',
-            from: 'ORD-1001',
-            to: `ORD-${1000 + (orders?.length || 10)}`,
-            totnum: orders?.length || 10,
+            from: orders?.[0]?.id || (demoMode ? 'ORD-1001' : 'None'),
+            to: orders?.[orders.length - 1]?.id || (demoMode ? `ORD-${1000 + (orders?.length || 10)}` : 'None'),
+            totnum: orders?.length || (demoMode ? 10 : 0),
             canc: 0,
-            net_issue: orders?.length || 10,
+            net_issue: orders?.length || (demoMode ? 10 : 0),
           },
         ],
       },
@@ -675,10 +765,10 @@ export function BosReportsDaybookWorkstation({
               Total Revenue
             </p>
             <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
-              {formatBosCurrency(482650, currencySymbol)}
+              {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
             </p>
             <p className="text-[11px] font-semibold text-[#0A6847]">
-              +18.4% vs last month
+              {reportsData.totalRevenue > 0 ? '+18.4% vs last month' : 'No recorded sales yet'}
             </p>
           </div>
 
@@ -687,9 +777,9 @@ export function BosReportsDaybookWorkstation({
               Gross Profit
             </p>
             <p className="mt-1 text-[21px] font-extrabold text-[#0A6847]">
-              {formatBosCurrency(142800, currencySymbol)}
+              {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
             </p>
-            <p className="text-[11px] text-[#0A6847]">29.6% Net Margin</p>
+            <p className="text-[11px] text-[#0A6847]">{reportsData.marginLabel} Net Margin</p>
           </div>
 
           <div className="bos-card p-3.5">
@@ -697,10 +787,10 @@ export function BosReportsDaybookWorkstation({
               Total Orders
             </p>
             <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
-              1,284
+              {reportsData.totalOrders.toLocaleString('en-IN')}
             </p>
             <p className="text-[11px] text-[#64748B]">
-              Avg Value: {formatBosCurrency(376, currencySymbol)}
+              Avg Value: {formatBosCurrency(reportsData.avgOrderVal, currencySymbol)}
             </p>
           </div>
 
@@ -709,7 +799,7 @@ export function BosReportsDaybookWorkstation({
               Total Expenses
             </p>
             <p className="mt-1 text-[21px] font-extrabold text-amber-600">
-              {formatBosCurrency(64200, currencySymbol)}
+              {formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
             </p>
             <p className="text-[11px] text-[#64748B]">Rent, Staff, Utilities</p>
           </div>
@@ -719,10 +809,10 @@ export function BosReportsDaybookWorkstation({
               GST Collected (Net)
             </p>
             <p className="mt-1 text-[21px] font-extrabold text-purple-700">
-              {formatBosCurrency(38420, currencySymbol)}
+              {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
             </p>
             <p className="text-[11px] text-[#64748B]">
-              ITC Claimable: {formatBosCurrency(14200, currencySymbol)}
+              ITC Claimable: {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
             </p>
           </div>
         </div>
@@ -753,12 +843,7 @@ export function BosReportsDaybookWorkstation({
             </div>
 
             <div className="mt-6 grid grid-cols-4 gap-4 items-end h-48 border-b border-[#E4EFEA] pb-2">
-              {[
-                { label: 'Week 1 (1–7 Apr)', rev: 72, prof: 44, exp: 26, val: '₹1,05,200' },
-                { label: 'Week 2 (8–14 Apr)', rev: 85, prof: 54, exp: 28, val: '₹1,24,800' },
-                { label: 'Week 3 (15–21 Apr)', rev: 78, prof: 48, exp: 25, val: '₹1,14,150' },
-                { label: 'Week 4 (22–24 Apr)', rev: 96, prof: 64, exp: 24, val: '₹1,38,500' },
-              ].map((w) => (
+              {reportsData.weeklyBars.map((w) => (
                 <div key={w.label} className="flex flex-col items-center justify-end h-full">
                   <span className="mb-1 text-[11px] font-bold text-[#0A6847]">{w.val}</span>
                   <div className="flex items-end gap-1.5 h-36 w-full justify-center">
@@ -794,12 +879,7 @@ export function BosReportsDaybookWorkstation({
             </div>
 
             <div className="space-y-3 text-[12.5px]">
-              {[
-                { mode: 'UPI / QR', amount: 260631, pct: 54, color: 'bg-[#0A6847]' },
-                { mode: 'Cash', amount: 135142, pct: 28, color: 'bg-[#10B981]' },
-                { mode: 'Card / POS', amount: 57918, pct: 12, color: 'bg-blue-500' },
-                { mode: 'Khata / Credit', amount: 28959, pct: 6, color: 'bg-amber-500' },
-              ].map((row) => (
+              {reportsData.paymentSplit.map((row) => (
                 <div key={row.mode} className="space-y-1">
                   <div className="flex justify-between">
                     <span className="font-semibold text-[#334155]">{row.mode}</span>
@@ -825,26 +905,36 @@ export function BosReportsDaybookWorkstation({
             <h3 className="text-[14.5px] font-bold text-[#111827]">
               Top Selling Products
             </h3>
-            <div className="divide-y divide-[#F1F6F3] text-[12.5px]">
-              {products.slice(0, 5).map((p, idx) => (
-                <div key={p.id} className="flex items-center justify-between py-2.5">
-                  <div>
-                    <p className="font-bold text-[#111827]">
-                      {idx + 1}. {p.name}
-                    </p>
-                    <p className="text-[11px] text-[#64748B]">{p.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-extrabold text-[#0A6847]">
-                      {formatBosCurrency(p.price * (38 - idx * 5), currencySymbol)}
-                    </p>
-                    <p className="text-[10.5px] text-[#64748B]">
-                      {38 - idx * 5} units sold
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {products.length === 0 ? (
+              <p className="py-6 text-center text-xs text-[#94A3B8]">No products recorded yet.</p>
+            ) : (
+              <div className="divide-y divide-[#F1F6F3] text-[12.5px]">
+                {products.slice(0, 5).map((p, idx) => {
+                  const unitsSold = demoMode
+                    ? (38 - idx * 5)
+                    : ((orders || []).reduce((acc, o) => acc + (o.items?.filter(it => it.id === p.id || it.name === p.name).reduce((s, it) => s + (it.qty || 0), 0) || 0), 0));
+                  const revenue = p.price * unitsSold;
+                  return (
+                    <div key={p.id} className="flex items-center justify-between py-2.5">
+                      <div>
+                        <p className="font-bold text-[#111827]">
+                          {idx + 1}. {p.name}
+                        </p>
+                        <p className="text-[11px] text-[#64748B]">{p.category}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-extrabold text-[#0A6847]">
+                          {formatBosCurrency(revenue, currencySymbol)}
+                        </p>
+                        <p className="text-[10.5px] text-[#64748B]">
+                          {unitsSold} units sold
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="bos-card p-4 space-y-3 text-[12.5px]">
@@ -853,32 +943,32 @@ export function BosReportsDaybookWorkstation({
                 Profit &amp; Loss Summary
               </h3>
               <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                Healthy
+                {reportsData.grossProfit >= 0 ? 'Healthy' : 'Deficit'}
               </span>
             </div>
             <div className="space-y-2">
               <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
                 <span className="text-[#475569]">Gross Sales Revenue</span>
                 <strong className="text-[#111827]">
-                  {formatBosCurrency(482650, currencySymbol)}
+                  {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
                 </strong>
               </div>
               <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
                 <span className="text-[#475569]">Cost of Goods Sold (COGS)</span>
                 <strong className="text-red-600">
-                  -{formatBosCurrency(275650, currencySymbol)}
+                  -{formatBosCurrency(reportsData.cogs, currencySymbol)}
                 </strong>
               </div>
               <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
                 <span className="text-[#475569]">Operating Expenses</span>
                 <strong className="text-red-600">
-                  -{formatBosCurrency(64200, currencySymbol)}
+                  -{formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
                 </strong>
               </div>
               <div className="flex justify-between rounded-xl bg-[#E6F6F0] p-3 text-[#0A6847]">
                 <span className="font-bold">Net Profit (Take Home)</span>
                 <span className="text-[16px] font-extrabold">
-                  {formatBosCurrency(142800, currencySymbol)}
+                  {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
                 </span>
               </div>
             </div>
@@ -890,20 +980,20 @@ export function BosReportsDaybookWorkstation({
                 GST Tax Summary (GSTR-1 &amp; 3B)
               </h3>
               <span className="rounded-md bg-[#F1F6F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
-                Apr 2026
+                {new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' })}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-2.5">
               <div className="rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5">
                 <p className="text-[10.5px] text-[#64748B]">Output GST (Sales)</p>
                 <p className="text-[15px] font-extrabold text-[#111827]">
-                  {formatBosCurrency(52620, currencySymbol)}
+                  {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
                 </p>
               </div>
               <div className="rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5">
                 <p className="text-[10.5px] text-[#64748B]">Input Tax Credit (ITC)</p>
                 <p className="text-[15px] font-extrabold text-[#0A6847]">
-                  {formatBosCurrency(14200, currencySymbol)}
+                  {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
                 </p>
               </div>
             </div>
@@ -911,7 +1001,7 @@ export function BosReportsDaybookWorkstation({
               <div>
                 <p className="text-[11px] font-bold text-[#0A6847]">Net GST Payable</p>
                 <p className="text-[16px] font-extrabold text-[#111827]">
-                  {formatBosCurrency(38420, currencySymbol)}
+                  {formatBosCurrency(Math.max(0, reportsData.gstCollected - reportsData.itcClaimable), currencySymbol)}
                 </p>
               </div>
               <button
