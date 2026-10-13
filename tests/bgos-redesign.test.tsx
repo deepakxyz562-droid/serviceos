@@ -194,69 +194,73 @@ it('supports selecting in-chat package cards and toggling AI automation in detai
   expect(screen.getAllByText(/Excellent choice! The/i).length).toBeGreaterThanOrEqual(1);
 });
 
-it('renders Tickets & Support Helpdesk workstation with 5 KPI cards, AI Triage, and Customer Dossier', async () => {
+it('renders Tickets & Support Helpdesk workstation with status pills, 8-ticket queue, conversation thread, and Customer/Ticket Details/Related/Quick Actions rail', async () => {
   const { BgosHelpdeskWorkstation: HelpCenterView } = await import('@/components/bgos/helpdesk-workstation');
 
   render(<HelpCenterView />);
 
-  // 1. Header & Badge
-  expect(screen.getByRole('heading', { level: 1, name: /Tickets & Support Helpdesk/i })).toBeDefined();
-  expect(screen.getByText(/AI Copilot Triaging Active/i)).toBeDefined();
-  expect(screen.getByRole('button', { name: /Ticket Settings/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Export CSV/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Create Ticket/i })).toBeDefined();
+  // 1. Header & New Ticket Button
+  expect(screen.getByRole('heading', { level: 1, name: /^Tickets & Support$/i })).toBeDefined();
+  expect(screen.getByText('Manage customer support tickets and issues.')).toBeDefined();
+  expect(screen.getByRole('button', { name: /New Ticket/i })).toBeDefined();
 
-  // 2. 5 KPI Telemetry Cards
-  expect(screen.getByText('Open Backlog')).toBeDefined();
-  expect(screen.getByText('Unassigned')).toBeDefined();
-  expect(screen.getByText('Avg First Response')).toBeDefined();
-  expect(screen.getByText('Resolution Rate')).toBeDefined();
-  expect(screen.getByText('CSAT Satisfaction')).toBeDefined();
-  expect(screen.getByText('94.2%')).toBeDefined();
-  expect(screen.getByText('4.85')).toBeDefined();
+  // 2. Status Filter Pills
+  expect(screen.getByRole('button', { name: /All\s*12/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Open\s*5/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /In Progress\s*3/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Waiting\s*2/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Resolved\s*2/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Closed\s*0/i })).toBeDefined();
 
-  // 3. Sub-Navigation Filter Tabs
-  expect(screen.getByRole('button', { name: /All Tickets/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /My Assigned/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Urgent & Escalated/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Reschedule Requests/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Quality & Complaints/i })).toBeDefined();
+  // 3. Column 1: 8-Ticket Queue & Pagination
+  expect(screen.getByPlaceholderText('Search tickets...')).toBeDefined();
+  expect(screen.getAllByText('#1245').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('#1244')).toBeDefined();
+  expect(screen.getByText('#1243')).toBeDefined();
+  expect(screen.getByText('#1242')).toBeDefined();
+  expect(screen.getByText('#1241')).toBeDefined();
+  expect(screen.getByText('#1240')).toBeDefined();
+  expect(screen.getByText('#1239')).toBeDefined();
+  expect(screen.getByText('#1238')).toBeDefined();
 
-  // 4. Column 1: Queue Feed Cards
-  expect(screen.getByText('Queue Feed')).toBeDefined();
-  expect(screen.getAllByText('#TK-1082').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('#TK-1081')).toBeDefined();
-  expect(screen.getByText('#TK-1080')).toBeDefined();
-  expect(screen.getByText('#TK-1079')).toBeDefined();
-  expect(screen.getByText('#TK-1078')).toBeDefined();
+  // 4. Column 2: Active Ticket #1245 Conversation & Composer
+  expect(screen.getAllByText('AC not cooling properly').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('High Priority')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Mark as In Progress/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Conversation$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Internal Notes$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Customer Details$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Activity$/i })).toBeDefined();
+  expect(
+    screen.getByText(/Hi, my AC is not cooling properly\. There is some strange noise/i)
+  ).toBeDefined();
+  expect(
+    screen.getByText(/Sure, my address is 123 Green Park, Delhi\. Preferred time is 10:00 AM\./i)
+  ).toBeDefined();
 
-  // 5. Column 2: Active Ticket & AI Triage
-  expect(screen.getAllByText(/Reschedule move-out clean to Monday, May 5/i).length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText(/AI Copilot Smart Triage Summary/i)).toBeDefined();
-  expect(screen.getByText(/Triage Confidence 99.4%/i)).toBeDefined();
-  expect(screen.getByText(/Recommended 1-Click Resolution/i)).toBeDefined();
-  expect(screen.getByRole('button', { name: /Update Schedule & Send WhatsApp/i })).toBeDefined();
+  // 5. Column 3: Customer, Ticket Details, Related & Quick Actions
+  expect(screen.getByRole('button', { name: /View in CRM/i })).toBeDefined();
+  expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('+91 98765 43210')).toBeDefined();
+  expect(screen.getByText('priya.sharma@gmail.com')).toBeDefined();
+  expect(screen.getByText('123 Green Park, Delhi, India')).toBeDefined();
+  expect(screen.getByText('Ticket Details')).toBeDefined();
+  expect(screen.getByText('Oct 8, 2026, 10:00 AM')).toBeDefined();
+  expect(screen.getByText('Appointments (1)')).toBeDefined();
+  expect(screen.getByText('Other Tickets (0)')).toBeDefined();
+  expect(screen.getByText('10:00 AM – 11:00 AM')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Book Appointment/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Quote/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Create Form/i })).toBeDefined();
 
-  // 6. Column 3: Customer Dossier & Context
-  expect(screen.getByText('Customer Dossier')).toBeDefined();
-  expect(screen.getAllByText('Emily Davis').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('$780')).toBeDefined();
-  expect(screen.getByText('LTV Spent')).toBeDefined();
-  expect(screen.getByText('#ORD-4491')).toBeDefined();
-  expect(screen.getByText('Move-out Deep Clean')).toBeDefined();
-  expect(screen.getByText(/Property Notes:/i)).toBeDefined();
-  expect(screen.getByText(/SLA Target Milestones/i)).toBeDefined();
-
-  // 7. Interactivity: Clicking "Update Schedule & Send WhatsApp" applies resolution
-  const actionBtn = screen.getByRole('button', { name: /Update Schedule & Send WhatsApp/i });
-  fireEvent.click(actionBtn);
-
-  // Resolution message should be appended to the conversation thread
-  expect(screen.getAllByText(/Technician Kevin Harris is assigned/i).length).toBeGreaterThanOrEqual(1);
-
-  // 8. Interactivity: Clicking "Resolve" marks ticket as solved
-  const resolveBtn = screen.getByRole('button', { name: /^Resolve$/i });
-  fireEvent.click(resolveBtn);
+  // 6. Interactivity: Use AI to reply & Send message
+  const aiReplyBtn = screen.getByRole('button', { name: /Use AI to reply/i });
+  fireEvent.click(aiReplyBtn);
+  const sendBtn = screen.getByRole('button', { name: /^Send$/i });
+  fireEvent.click(sendBtn);
+  expect(
+    screen.getByText(/Technician Amit Singh is confirmed for tomorrow, Oct 8 at 10:00 AM/i)
+  ).toBeDefined();
 });
 
 it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview canvas, and campaign velocity', async () => {
@@ -981,6 +985,56 @@ test('BgosSettings renders redesigned Business Settings layout with 8 top tabs, 
   expect(screen.getByDisplayValue('07ABCDE1234F1Z5')).toBeDefined();
   expect(screen.getByDisplayValue('INV')).toBeDefined();
 });
+
+test('SchedulingView renders redesigned Appointments workstation with 7 tabs, 3 KPI cards, weekly calendar grid, daily appointments table, October 2026 mini calendar, and Quick Actions', async () => {
+  const { SchedulingView } = await import('@/components/views/scheduling-view');
+
+  render(<SchedulingView />);
+
+  // 1. Header & Actions
+  expect(screen.getByRole('heading', { level: 1, name: 'Appointments' })).toBeDefined();
+  expect(screen.getByText('Manage bookings, schedules and availability for your team.')).toBeDefined();
+  expect(screen.getAllByRole('button', { name: /New Appointment/i }).length).toBeGreaterThanOrEqual(2);
+
+  // 2. 7 Horizontal Tabs
+  expect(screen.getByRole('tab', { name: /^Calendar$/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /^List$/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /^Availability$/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /^Services$/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /^Team$/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /^Reminders$/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /^Online Booking$/i })).toBeDefined();
+
+  // 3. 3 KPI Summary Cards
+  expect(screen.getByText('Total Appointments')).toBeDefined();
+  expect(screen.getAllByText('28').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Confirmed').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('22').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getAllByText('Pending').length).toBeGreaterThanOrEqual(1);
+
+  // 4. Weekly Schedule Calendar Grid & Blocks
+  expect(screen.getByText('Oct 6 – Oct 12, 2026')).toBeDefined();
+  expect(screen.getAllByText('Priya Sharma').length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText('Sneha Kapoor')).toBeDefined();
+  expect(screen.getByText('Rahul Verma')).toBeDefined();
+  expect(screen.getByText('Vikram Rao')).toBeDefined();
+
+  // 5. Daily Appointments Table (Wed, Oct 8, 2026)
+  expect(screen.getByText(/Appointments for Wed, Oct 8, 2026/i)).toBeDefined();
+  expect(screen.getByText('Green Park, Delhi')).toBeDefined();
+  expect(screen.getByText('Connaught Place, Delhi')).toBeDefined();
+  expect(screen.getByText('Lajpat Nagar, Delhi')).toBeDefined();
+  expect(screen.getByText('Saket, Delhi')).toBeDefined();
+
+  // 6. Right Rail: Mini Calendar & Quick Actions
+  expect(screen.getByText('October 2026')).toBeDefined();
+  expect(screen.getByText('Quick Actions')).toBeDefined();
+  expect(screen.getByRole('button', { name: /Manage Availability/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Booking Page/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Add Recurring Appointment/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Import from Calendar/i })).toBeDefined();
+});
+
 
 
 

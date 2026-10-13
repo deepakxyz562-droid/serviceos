@@ -4,6 +4,7 @@ import { generateRequestId } from '@/lib/logger';
 import { BRAND } from '@/lib/brand';
 import { productForHostname } from '../shared/product-context';
 import { marketplaceRedirect } from '../shared/products';
+import { bosIconRedirect } from '@/lib/bos-icons';
 
 /**
  * Trial-expiry paywall middleware (server-side layer) + global API rate limit
@@ -159,6 +160,12 @@ export async function proxy(request: NextRequest) {
   }
 
   const appProduct = productForHostname(lowerHost);
+  const bosIcon = bosIconRedirect(appProduct, pathname);
+  if (bosIcon && ['GET', 'HEAD'].includes(request.method)) {
+    const response = NextResponse.redirect(new URL(bosIcon, request.url), 307);
+    response.headers.set('Cache-Control', 'no-store');
+    return response;
+  }
   if (appProduct === 'quoteflow' && pathname === '/') {
     const rewriteUrl = request.nextUrl.clone();
     rewriteUrl.pathname = '/quote-flow';
@@ -334,5 +341,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image).*)'],
 };

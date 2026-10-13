@@ -1,1335 +1,1127 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Calendar as CalendarIcon,
+  List as ListIcon,
   Clock,
-  Link as LinkIcon,
-  Plus,
-  Video,
-  Phone,
-  MapPin,
-  Check,
-  Copy,
-  ExternalLink,
-  Settings,
-  MoreVertical,
-  CheckCircle2,
-  AlertCircle,
-  Sparkles,
-  CalendarCheck,
-  CalendarX,
-  Users,
-  Search,
-  Filter,
-  RefreshCw,
-  Edit2,
-  Trash2,
-  ChevronRight,
   ShieldCheck,
-  Bot,
-  Layers,
-  ArrowRight,
+  Users,
+  Bell,
+  Globe,
+  Settings,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  CheckCircle2,
+  ArrowUp,
+  ArrowDown,
+  Edit2,
+  MoreHorizontal,
+  Link2,
+  RefreshCw,
+  CalendarPlus,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
-import { EventType, WeeklyAvailabilitySettings, MeetingLocationType } from '@/features/scheduling/types/event-types';
-import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 
+type AppointmentsTab =
+  | 'calendar'
+  | 'list'
+  | 'availability'
+  | 'services'
+  | 'team'
+  | 'reminders'
+  | 'online_booking';
+
+type CalendarScale = 'Day' | 'Week' | 'Month';
+
+interface CalendarBlock {
+  id: string;
+  dayIndex: number; // 0 = Mon 6 .. 5 = Sat 11
+  startHour: number; // 8 .. 17
+  durationHours: number;
+  timeLabel: string;
+  customerName: string;
+  serviceName: string;
+  teamMember: string;
+  tone: 'green' | 'amber' | 'blue' | 'rose' | 'purple';
+}
+
+interface DailyAppointmentRow {
+  id: string;
+  time: string;
+  initials: string;
+  initialsBg: string;
+  customerName: string;
+  customerPhone: string;
+  serviceName: string;
+  location: string;
+  teamMember: string;
+  teamAvatar: string;
+  status: 'Confirmed' | 'Pending';
+}
+
+const AVATAR_1 =
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80';
+const AVATAR_2 =
+  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=120&auto=format&fit=crop&q=80';
+const AVATAR_3 =
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80';
+const AVATAR_4 =
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80';
+
+const INITIAL_CALENDAR_BLOCKS: CalendarBlock[] = [
+  {
+    id: 'cb_1',
+    dayIndex: 0,
+    startHour: 8.6,
+    durationHours: 1.5,
+    timeLabel: '9:00 AM',
+    customerName: 'Priya Sharma',
+    serviceName: 'Home Cleaning',
+    teamMember: 'Rakesh Kumar',
+    tone: 'green',
+  },
+  {
+    id: 'cb_2',
+    dayIndex: 0,
+    startHour: 12.6,
+    durationHours: 1.5,
+    timeLabel: '1:00 PM',
+    customerName: 'Sneha Kapoor',
+    serviceName: 'Deep Cleaning',
+    teamMember: 'Sunita Patel',
+    tone: 'amber',
+  },
+  {
+    id: 'cb_3',
+    dayIndex: 1,
+    startHour: 10.1,
+    durationHours: 1.5,
+    timeLabel: '10:30 AM',
+    customerName: 'Rahul Verma',
+    serviceName: 'AC Service',
+    teamMember: 'Amit Singh',
+    tone: 'blue',
+  },
+  {
+    id: 'cb_4',
+    dayIndex: 2,
+    startHour: 9.1,
+    durationHours: 1.5,
+    timeLabel: '9:30 AM',
+    customerName: 'Amit Singh',
+    serviceName: 'Pest Control',
+    teamMember: 'Rakesh Kumar',
+    tone: 'rose',
+  },
+  {
+    id: 'cb_5',
+    dayIndex: 2,
+    startHour: 12.1,
+    durationHours: 1.5,
+    timeLabel: '12:30 PM',
+    customerName: 'Neha Gupta',
+    serviceName: 'Office Cleaning',
+    teamMember: 'Sunita Patel',
+    tone: 'purple',
+  },
+  {
+    id: 'cb_6',
+    dayIndex: 2,
+    startHour: 14.6,
+    durationHours: 1.5,
+    timeLabel: '3:00 PM',
+    customerName: 'Karan Mehta',
+    serviceName: 'Plumbing',
+    teamMember: 'Amit Singh',
+    tone: 'green',
+  },
+  {
+    id: 'cb_7',
+    dayIndex: 3,
+    startHour: 10.6,
+    durationHours: 1.5,
+    timeLabel: '11:00 AM',
+    customerName: 'Rohit Kumar',
+    serviceName: 'Electrical Work',
+    teamMember: 'Pooja Verma',
+    tone: 'blue',
+  },
+  {
+    id: 'cb_8',
+    dayIndex: 4,
+    startHour: 9.6,
+    durationHours: 1.5,
+    timeLabel: '10:00 AM',
+    customerName: 'Pooja Iyer',
+    serviceName: 'Home Cleaning',
+    teamMember: 'Rakesh Kumar',
+    tone: 'amber',
+  },
+  {
+    id: 'cb_9',
+    dayIndex: 4,
+    startHour: 13.6,
+    durationHours: 1.5,
+    timeLabel: '2:00 PM',
+    customerName: 'Anil Joshi',
+    serviceName: 'AC Service',
+    teamMember: 'Amit Singh',
+    tone: 'rose',
+  },
+  {
+    id: 'cb_10',
+    dayIndex: 5,
+    startHour: 9.1,
+    durationHours: 1.5,
+    timeLabel: '9:30 AM',
+    customerName: 'Vikram Rao',
+    serviceName: 'Painting',
+    teamMember: 'Pooja Verma',
+    tone: 'green',
+  },
+  {
+    id: 'cb_11',
+    dayIndex: 5,
+    startHour: 15.6,
+    durationHours: 1.4,
+    timeLabel: '4:00 PM',
+    customerName: 'Meera Sinha',
+    serviceName: 'Move In Cleaning',
+    teamMember: 'Pooja Verma',
+    tone: 'blue',
+  },
+];
+
+const INITIAL_DAILY_ROWS: DailyAppointmentRow[] = [
+  {
+    id: 'row_1',
+    time: '9:30 AM',
+    initials: 'PS',
+    initialsBg: 'bg-indigo-50 text-indigo-600',
+    customerName: 'Priya Sharma',
+    customerPhone: '+91 98765 43210',
+    serviceName: 'Home Cleaning',
+    location: 'Green Park, Delhi',
+    teamMember: 'Rakesh Kumar',
+    teamAvatar: AVATAR_1,
+    status: 'Confirmed',
+  },
+  {
+    id: 'row_2',
+    time: '12:30 PM',
+    initials: 'NG',
+    initialsBg: 'bg-purple-50 text-purple-600',
+    customerName: 'Neha Gupta',
+    customerPhone: '+91 87654 32109',
+    serviceName: 'Office Cleaning',
+    location: 'Connaught Place, Delhi',
+    teamMember: 'Sunita Patel',
+    teamAvatar: AVATAR_2,
+    status: 'Pending',
+  },
+  {
+    id: 'row_3',
+    time: '3:00 PM',
+    initials: 'KM',
+    initialsBg: 'bg-sky-50 text-sky-600',
+    customerName: 'Karan Mehta',
+    customerPhone: '+91 91234 56789',
+    serviceName: 'Plumbing',
+    location: 'Lajpat Nagar, Delhi',
+    teamMember: 'Amit Singh',
+    teamAvatar: AVATAR_3,
+    status: 'Confirmed',
+  },
+  {
+    id: 'row_4',
+    time: '4:00 PM',
+    initials: 'MS',
+    initialsBg: 'bg-blue-50 text-blue-600',
+    customerName: 'Meera Sinha',
+    customerPhone: '+91 99887 76655',
+    serviceName: 'Move In Cleaning',
+    location: 'Saket, Delhi',
+    teamMember: 'Pooja Verma',
+    teamAvatar: AVATAR_4,
+    status: 'Confirmed',
+  },
+];
+
+const WEEK_DAYS = [
+  { short: 'Mon', num: 6 },
+  { short: 'Tue', num: 7 },
+  { short: 'Wed', num: 8, isToday: true },
+  { short: 'Thu', num: 9 },
+  { short: 'Fri', num: 10 },
+  { short: 'Sat', num: 11 },
+];
+
+const TIME_SLOTS = [
+  '8:00 AM',
+  '9:00 AM',
+  '10:00 AM',
+  '11:00 AM',
+  '12:00 PM',
+  '1:00 PM',
+  '2:00 PM',
+  '3:00 PM',
+  '4:00 PM',
+  '5:00 PM',
+];
+
+const MINI_CALENDAR_WEEKS: { num: number; muted?: boolean }[][] = [
+  [
+    { num: 3, muted: true },
+    { num: 3, muted: true },
+    { num: 1, muted: true },
+    { num: 2, muted: true },
+    { num: 3, muted: true },
+    { num: 4, muted: true },
+    { num: 5, muted: true },
+  ],
+  [
+    { num: 6 },
+    { num: 7 },
+    { num: 8 },
+    { num: 9, muted: true },
+    { num: 10, muted: true },
+    { num: 11 },
+    { num: 13, muted: true },
+  ],
+  [
+    { num: 13 },
+    { num: 14 },
+    { num: 15 },
+    { num: 16, muted: true },
+    { num: 17, muted: true },
+    { num: 18 },
+    { num: 29 },
+  ],
+  [
+    { num: 20 },
+    { num: 21 },
+    { num: 22 },
+    { num: 23 },
+    { num: 24 },
+    { num: 25 },
+    { num: 25 },
+  ],
+  [
+    { num: 27 },
+    { num: 28 },
+    { num: 29 },
+    { num: 30 },
+    { num: 31 },
+    { num: 1, muted: true },
+    { num: 3, muted: true },
+  ],
+];
+
 export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}) {
-  const auth = useAppStore((state) => state.auth);
-  const tenantSlug = auth?.tenant?.slug || (auth?.user?.name ? auth.user.name.toLowerCase().replace(/[^a-z0-9]/g, '-') : '') || 'preview';
-  const hostName = auth?.user?.name || auth?.tenant?.name || 'Scheduling Host';
-  const hostInitials = hostName
-    .split(' ')
-    .filter(Boolean)
-    .map((p: string) => p[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'SH';
+  const setCurrentView = useAppStore((state) => state.setCurrentView);
 
-  const hostBadge = auth?.tenant?.planTier
-    ? `${String(auth.tenant.planTier).toUpperCase()} HOST`
-    : 'PRO HOST';
+  const [activeTab, setActiveTab] = useState<AppointmentsTab>('calendar');
+  const [calendarScale, setCalendarScale] = useState<CalendarScale>('Day');
+  const [teamFilter, setTeamFilter] = useState<string>('All Team Members');
+  const [selectedMiniDate, setSelectedMiniDate] = useState<number>(8);
 
-  const [activeTab, setActiveTab] = useState<'event-types' | 'upcoming' | 'availability' | 'calendars'>('event-types');
-  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
-  const [loadingEvents, setLoadingEvents] = useState(true);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [calendarBlocks, setCalendarBlocks] = useState<CalendarBlock[]>(INITIAL_CALENDAR_BLOCKS);
+  const [dailyRows, setDailyRows] = useState<DailyAppointmentRow[]>(INITIAL_DAILY_ROWS);
 
-  // Dynamic booking links
-  const primaryEventSlug = eventTypes.find((e) => e.isActive)?.slug || eventTypes[0]?.slug || '30min';
-  const landingPagePath = `/book/${tenantSlug}/${primaryEventSlug}`;
-  const getEventPath = (evtSlug: string) => `/book/${tenantSlug}/${evtSlug}`;
+  // New Appointment Modal state
+  const [newAppointmentOpen, setNewAppointmentOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newService, setNewService] = useState('Home Cleaning');
+  const [newLocation, setNewLocation] = useState('Green Park, Delhi');
+  const [newTime, setNewTime] = useState('11:00 AM');
+  const [newTeamMember, setNewTeamMember] = useState('Rakesh Kumar');
 
-  // Onboarding Modal state
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [selectedGoals, setSelectedGoals] = useState<string[]>(['schedule_meetings', 'optimize_ai']);
-
-  // Edit / Create Event Type Modal
-  const [editingEvent, setEditingEvent] = useState<EventType | null>(null);
-  const [showEventModal, setShowEventModal] = useState(false);
-  const [eventForm, setEventForm] = useState<{
-    title: string;
-    slug: string;
-    duration: number;
-    locationType: MeetingLocationType;
-    locationDetails?: string;
-    description: string;
-    color: string;
-  }>({
-    title: '30 Minute Meeting',
-    slug: '30min',
-    duration: 30,
-    locationType: 'google_meet',
-    locationDetails: '',
-    description: '30 min • Google Meet • One-on-One',
-    color: '#2563EB',
-  });
-  const [savingEvent, setSavingEvent] = useState(false);
-
-  // Upcoming Meetings state
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [loadingMeetings, setLoadingMeetings] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Availability state
-  const [availability, setAvailability] = useState<WeeklyAvailabilitySettings | null>(null);
-  const [loadingAvailability, setLoadingAvailability] = useState(false);
-  const [savingAvailability, setSavingAvailability] = useState(false);
-
-  // Connected Calendars state
-  const [calendarSettings, setCalendarSettings] = useState<{
-    connected: boolean;
-    email: string | null;
-    authUrl: string;
-    subCalendars: any[];
-    conflictCalendars: string[];
-    targetCalendarId: string;
-    configured?: boolean;
-  } | null>(null);
-  const [loadingCalendars, setLoadingCalendars] = useState(false);
-  const [savingCalendars, setSavingCalendars] = useState(false);
-
-  // Load Event Types
-  const fetchEventTypes = useCallback(async () => {
-    setLoadingEvents(true);
+  // Optional background sync with scheduling APIs
+  const fetchBookings = useCallback(async () => {
     try {
-      const res = await authFetch('/api/scheduling/event-types');
+      const res = await authFetch('/api/bookings?limit=20');
       if (res.ok) {
-        const data = await res.json();
-        setEventTypes(data.eventTypes || []);
+        await res.json();
       }
     } catch {
-      toast.error('Failed to load event types');
-    } finally {
-      setLoadingEvents(false);
-    }
-  }, []);
-
-  // Load Meetings
-  const fetchMeetings = useCallback(async () => {
-    setLoadingMeetings(true);
-    try {
-      const res = await authFetch('/api/bookings?limit=50');
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data.bookings) ? data.bookings : Array.isArray(data) ? data : [];
-        setMeetings(list);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingMeetings(false);
-    }
-  }, []);
-
-  // Load Availability
-  const fetchAvailability = useCallback(async () => {
-    setLoadingAvailability(true);
-    try {
-      const res = await authFetch('/api/scheduling/availability');
-      if (res.ok) {
-        const data = await res.json();
-        setAvailability(data.availability);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingAvailability(false);
-    }
-  }, []);
-
-  // Load Calendars
-  const fetchCalendarSettings = useCallback(async () => {
-    setLoadingCalendars(true);
-    try {
-      const res = await authFetch('/api/scheduling/calendars');
-      if (res.ok) {
-        const data = await res.json();
-        setCalendarSettings(data);
-      }
-    } catch {
-      // silent
-    } finally {
-      setLoadingCalendars(false);
+      // keep canonical seed state
     }
   }, []);
 
   useEffect(() => {
-    fetchEventTypes();
-    fetchCalendarSettings();
-  }, [fetchEventTypes, fetchCalendarSettings]);
+    fetchBookings();
+  }, [fetchBookings]);
 
-  useEffect(() => {
-    if (activeTab === 'upcoming') fetchMeetings();
-    if (activeTab === 'availability') fetchAvailability();
-    if (activeTab === 'calendars') fetchCalendarSettings();
-  }, [activeTab, fetchMeetings, fetchAvailability, fetchCalendarSettings]);
+  const filteredBlocks = calendarBlocks.filter((b) =>
+    teamFilter === 'All Team Members' ? true : b.teamMember === teamFilter
+  );
 
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const calStatus = params.get('calendar');
-      if (calStatus === 'connected') {
-        toast.success('Google Calendar connected successfully! Two-way sync is active.');
-        const url = new URL(window.location.href);
-        url.searchParams.delete('calendar');
-        window.history.replaceState({}, '', url.toString());
-      } else if (calStatus === 'not_configured') {
-        toast.error('Google Calendar OAuth is pending configuration in SuperAdmin → Integration Credentials.');
-        const url = new URL(window.location.href);
-        url.searchParams.delete('calendar');
-        window.history.replaceState({}, '', url.toString());
-      } else if (calStatus === 'failed') {
-        toast.error('Google Calendar authorization was cancelled or failed.');
-        const url = new URL(window.location.href);
-        url.searchParams.delete('calendar');
-        window.history.replaceState({}, '', url.toString());
-      }
+  const filteredDailyRows = dailyRows.filter((r) =>
+    teamFilter === 'All Team Members' ? true : r.teamMember === teamFilter
+  );
+
+  const handleCreateAppointment = () => {
+    if (!newCustomerName.trim()) {
+      toast.error('Please enter a customer name');
+      return;
     }
-  }, []);
 
-  // Copy Link Helper
-  const handleCopyLink = (slug: string, id: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const fullUrl = `${origin}${getEventPath(slug)}`;
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedId(id);
-    toast.success('Public booking link copied to clipboard!');
-    setTimeout(() => setCopiedId(null), 2500);
+    const customer = newCustomerName.trim();
+    const initials = customer
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    const createdRow: DailyAppointmentRow = {
+      id: `row_${Date.now()}`,
+      time: newTime,
+      initials: initials || 'NA',
+      initialsBg: 'bg-emerald-50 text-emerald-700',
+      customerName: customer,
+      customerPhone: newCustomerPhone.trim() || '+91 98765 43210',
+      serviceName: newService,
+      location: newLocation.trim() || 'Delhi, India',
+      teamMember: newTeamMember,
+      teamAvatar: AVATAR_1,
+      status: 'Confirmed',
+    };
+
+    const createdBlock: CalendarBlock = {
+      id: `cb_${Date.now()}`,
+      dayIndex: 2,
+      startHour: 10.6,
+      durationHours: 1.4,
+      timeLabel: newTime,
+      customerName: customer,
+      serviceName: newService,
+      teamMember: newTeamMember,
+      tone: 'green',
+    };
+
+    setDailyRows((prev) => [createdRow, ...prev]);
+    setCalendarBlocks((prev) => [...prev, createdBlock]);
+    setNewAppointmentOpen(false);
+    setNewCustomerName('');
+    setNewCustomerPhone('');
+    toast.success(`Appointment scheduled for ${customer} at ${newTime}`);
   };
 
-  // Toggle Event Active
-  const handleToggleActive = async (event: EventType) => {
-    const updated = { ...event, isActive: !event.isActive };
-    setEventTypes((prev) => prev.map((e) => (e.id === event.id ? updated : e)));
-    try {
-      await authFetch(`/api/scheduling/event-types/${event.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: updated.isActive }),
-      });
-      toast.success(updated.isActive ? 'Event type activated' : 'Event type paused');
-    } catch {
-      toast.error('Failed to update event type');
-    }
-  };
-
-  // Save Event Type Form
-  const handleSaveEvent = async () => {
-    setSavingEvent(true);
-    try {
-      if (editingEvent) {
-        // Update existing
-        const res = await authFetch(`/api/scheduling/event-types/${editingEvent.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventForm),
-        });
-        if (res.ok) {
-          toast.success('Event type updated successfully');
-          setShowEventModal(false);
-          fetchEventTypes();
-        }
-      } else {
-        // Create new
-        const res = await authFetch('/api/scheduling/event-types', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(eventForm),
-        });
-        if (res.ok) {
-          toast.success('Event type created successfully');
-          setShowEventModal(false);
-          fetchEventTypes();
-        }
-      }
-    } catch {
-      toast.error('Failed to save event type');
-    } finally {
-      setSavingEvent(false);
+  const getBlockToneClasses = (tone: CalendarBlock['tone']) => {
+    switch (tone) {
+      case 'green':
+        return 'border-l-4 border-l-[#009F50] bg-[#E8F8EF] text-[#065F46]';
+      case 'amber':
+        return 'border-l-4 border-l-amber-500 bg-amber-50 text-amber-900';
+      case 'blue':
+        return 'border-l-4 border-l-blue-500 bg-blue-50 text-blue-900';
+      case 'rose':
+        return 'border-l-4 border-l-rose-500 bg-rose-50 text-rose-900';
+      case 'purple':
+        return 'border-l-4 border-l-purple-500 bg-purple-50 text-purple-900';
     }
   };
 
-  // Save Availability Form
-  const handleSaveAvailability = async () => {
-    if (!availability) return;
-    setSavingAvailability(true);
-    try {
-      const res = await authFetch('/api/scheduling/availability', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(availability),
-      });
-      if (res.ok) {
-        toast.success('Weekly availability schedule saved!');
-      }
-    } catch {
-      toast.error('Failed to save availability');
-    } finally {
-      setSavingAvailability(false);
-    }
-  };
-
-  // Delete Event Type
-  const handleDeleteEvent = async (id: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
-    try {
-      const res = await authFetch(`/api/scheduling/event-types/${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        toast.success(`Event type "${title}" deleted`);
-        fetchEventTypes();
-      } else {
-        toast.error('Failed to delete event type');
-      }
-    } catch {
-      toast.error('Failed to delete event type');
-    }
-  };
-
-  // Cancel Meeting
-  const handleCancelMeeting = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel this meeting?')) return;
-    try {
-      const res = await authFetch(`/api/bookings/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'cancelled' }),
-      });
-      if (res.ok) {
-        toast.success('Meeting has been cancelled');
-        fetchMeetings();
-      } else {
-        toast.error('Failed to cancel meeting');
-      }
-    } catch {
-      toast.error('Failed to cancel meeting');
-    }
-  };
-
-  // Save Calendar Preferences
-  const handleSaveCalendarPreferences = async () => {
-    if (!calendarSettings) return;
-    setSavingCalendars(true);
-    try {
-      const res = await authFetch('/api/scheduling/calendars', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          conflictCalendars: calendarSettings.conflictCalendars,
-          targetCalendarId: calendarSettings.targetCalendarId,
-        }),
-      });
-      if (res.ok) {
-        toast.success('Calendar conflict checking preferences saved!');
-      }
-    } catch {
-      toast.error('Failed to save calendar preferences');
-    } finally {
-      setSavingCalendars(false);
-    }
-  };
-
-  const filteredMeetings = useMemo(() => {
-    const now = new Date();
-    return meetings.filter((m) => {
-      const matchesSearch =
-        !searchQuery.trim() ||
-        (m.customerName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (m.customerEmail || '').toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch && m.status !== 'cancelled';
-    });
-  }, [meetings, searchQuery]);
+  const navTabs: {
+    id: AppointmentsTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }[] = [
+    { id: 'calendar', label: 'Calendar', icon: CalendarIcon },
+    { id: 'list', label: 'List', icon: ListIcon },
+    { id: 'availability', label: 'Availability', icon: Clock },
+    { id: 'services', label: 'Services', icon: ShieldCheck },
+    { id: 'team', label: 'Team', icon: Users },
+    { id: 'reminders', label: 'Reminders', icon: Bell },
+    { id: 'online_booking', label: 'Online Booking', icon: Globe },
+  ];
 
   return (
-    <div className={cn('w-full space-y-6 animate-in fade-in duration-300', !embedded ? 'p-4 md:p-8 flex-1' : 'pt-2')}>
-      {/* ── Top Header / User Profile ── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b">
-        <div className="flex items-center gap-3">
-          <div className="size-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-lg shadow-md ring-2 ring-blue-500/20">
-            {hostInitials}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-black tracking-tight text-foreground">{hostName}</h1>
-              <Badge variant="outline" className="text-[10px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/50 border-blue-200">
-                {hostBadge}
-              </Badge>
+    <div className={embedded ? 'w-full' : 'min-h-screen w-full bg-[#F8FAFC] text-slate-900'}>
+      {/* 1. TOP PAGE HEADER & SUB-NAVIGATION TABS */}
+      <div className="border-b border-slate-200 bg-white px-6 pt-5">
+        <div className="mx-auto flex max-w-[1440px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3.5">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[#009F50] text-white shadow-xs">
+              <CalendarIcon className="size-5" />
             </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-              <a
-                href={landingPagePath}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-600 hover:underline flex items-center gap-1 font-semibold text-blue-600"
-              >
-                <span>View landing page</span>
-                <ExternalLink className="size-3" />
-              </a>
-              <span>•</span>
-              <button
-                type="button"
-                onClick={() => setShowOnboarding(true)}
-                className="hover:text-foreground transition-colors cursor-pointer text-slate-500"
-              >
-                Onboarding Setup Guide
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              try {
-                const url = `${window.location.origin}${landingPagePath}`;
-                await navigator.clipboard.writeText(url);
-                toast.success('Public booking page link copied!');
-              } catch {
-                toast.error('Failed to copy booking link');
-              }
-            }}
-            className="font-semibold text-xs h-9 gap-1.5"
-          >
-            <Copy className="size-3.5 text-muted-foreground" />
-            <span>Copy Booking Link</span>
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setActiveTab('calendars')}
-            className="font-semibold text-xs h-9 gap-1.5"
-          >
-            <CalendarIcon className="size-3.5 text-muted-foreground" />
-            <span>Sync External Calendar</span>
-          </Button>
-
-          <Button
-            type="button"
-            onClick={() => {
-              setEditingEvent(null);
-              setEventForm({
-                title: 'New Event Type',
-                slug: 'meeting',
-                duration: 30,
-                locationType: 'google_meet',
-                description: 'One-on-one consultation',
-                color: '#2563EB',
-              });
-              setShowEventModal(true);
-            }}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-1.5 shadow-sm rounded-xl h-9 text-xs"
-          >
-            <Plus className="size-4" />
-            <span>Create Event Type</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Stitch Kinetic Appointments Status & Telemetry Strip ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
-            <span>Bookable Services</span>
-            <CalendarCheck className="size-3.5 text-primary" />
-          </div>
-          <p className="text-xl font-bold text-foreground">{eventTypes.length}</p>
-          <p className="text-[10px] text-muted-foreground">Active event slots</p>
-        </div>
-
-        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
-            <span>Upcoming Sessions</span>
-            <Clock className="size-3.5 text-violet-600" />
-          </div>
-          <p className="text-xl font-bold text-foreground">{filteredMeetings.length}</p>
-          <p className="text-[10px] text-muted-foreground">Scheduled with customers</p>
-        </div>
-
-        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
-            <span>External Calendar</span>
-            <CheckCircle2 className="size-3.5 text-emerald-600" />
-          </div>
-          <div className="flex items-center gap-1.5 pt-0.5">
-            <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-bold text-foreground">
-              {calendarSettings?.connected ? 'Google Calendar Live' : 'Ready to Connect'}
-            </span>
-          </div>
-          <p className="text-[10px] text-muted-foreground">Real-time slot conflict check</p>
-        </div>
-
-        <div className="p-3.5 rounded-xl border bg-card shadow-2xs space-y-1">
-          <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
-            <span>AI Booking Engine</span>
-            <Bot className="size-3.5 text-purple-600" />
-          </div>
-          <div className="flex items-center gap-1.5 pt-0.5">
-            <span className="size-2 rounded-full bg-purple-500 animate-pulse" />
-            <span className="text-xs font-bold text-foreground">Active 24/7</span>
-          </div>
-          <p className="text-[10px] text-muted-foreground">Voice &amp; chat automated slots</p>
-        </div>
-      </div>
-
-      {/* ── Main Navigation Tabs ── */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
-        <TabsList className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl h-11 border">
-          <TabsTrigger value="event-types" className="rounded-lg text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 shadow-2xs">
-            <CalendarCheck className="size-3.5" />
-            <span>Event Types</span>
-            <Badge variant="secondary" className="text-[10px] ml-1 px-1.5 py-0">
-              {eventTypes.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="upcoming" className="rounded-lg text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 shadow-2xs">
-            <Clock className="size-3.5" />
-            <span>Upcoming Meetings</span>
-            {filteredMeetings.length > 0 && (
-              <Badge variant="secondary" className="text-[10px] ml-1 px-1.5 py-0 bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
-                {filteredMeetings.length}
-              </Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="availability" className="rounded-lg text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 shadow-2xs">
-            <Settings className="size-3.5" />
-            <span>Availability</span>
-          </TabsTrigger>
-          <TabsTrigger value="calendars" className="rounded-lg text-xs font-bold gap-1.5 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-900 shadow-2xs">
-            <ShieldCheck className="size-3.5" />
-            <span>Calendar Conflict Check</span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ── TAB 1: EVENT TYPES ── */}
-        <TabsContent value="event-types" className="pt-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {eventTypes.map((evt) => {
-              const isCopied = copiedId === evt.id;
-              return (
-                <Card
-                  key={evt.id}
-                  className={cn(
-                    'relative overflow-hidden transition-all duration-200 border-t-4 hover:shadow-md group rounded-2xl',
-                    evt.isActive ? 'bg-card' : 'bg-slate-50/60 dark:bg-slate-900/40 opacity-70'
-                  )}
-                  style={{ borderTopColor: evt.color || '#2563EB' }}
-                >
-                  <CardHeader className="pb-3 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-base font-bold text-foreground group-hover:text-blue-600 transition-colors">
-                          {evt.title}
-                        </CardTitle>
-                        <CardDescription className="text-xs mt-0.5 flex items-center gap-1.5 text-muted-foreground font-medium">
-                          <Clock className="size-3 text-slate-400" />
-                          <span>{evt.duration} mins</span>
-                          <span>•</span>
-                          <span className="capitalize flex items-center gap-1 font-bold text-emerald-600 dark:text-emerald-400">
-                            {evt.locationType === 'google_meet' ? (
-                              <>
-                                <Video className="size-3" /> Google Meet
-                              </>
-                            ) : evt.locationType === 'phone' ? (
-                              <>
-                                <Phone className="size-3" /> Phone Call
-                              </>
-                            ) : (
-                              evt.locationType
-                            )}
-                          </span>
-                        </CardDescription>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <Switch
-                          checked={evt.isActive}
-                          onCheckedChange={() => handleToggleActive(evt)}
-                          title={evt.isActive ? 'Active (Click to Pause)' : 'Paused (Click to Activate)'}
-                          className="scale-90"
-                        />
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
-                      {evt.description || 'One-on-one booking link.'}
-                    </p>
-                  </CardHeader>
-
-                  <CardContent className="pt-0 space-y-3">
-                    <div className="flex items-center justify-between text-xs pt-2 border-t text-muted-foreground">
-                      <span className="font-mono text-[11px] text-slate-500 truncate max-w-[200px]">
-                        {getEventPath(evt.slug)}
-                      </span>
-                      <a
-                        href={getEventPath(evt.slug)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline font-bold text-xs flex items-center gap-1"
-                      >
-                        Preview <ExternalLink className="size-3" />
-                      </a>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleCopyLink(evt.slug, evt.id)}
-                        className={cn(
-                          'flex-1 text-xs font-bold gap-1.5 h-8 rounded-xl transition-all',
-                          isCopied ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : ''
-                        )}
-                      >
-                        {isCopied ? <Check className="size-3 text-emerald-600" /> : <Copy className="size-3" />}
-                        <span>{isCopied ? 'Copied!' : 'Copy link'}</span>
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditingEvent(evt);
-                          setEventForm({
-                            title: evt.title,
-                            slug: evt.slug,
-                            duration: evt.duration,
-                            locationType: evt.locationType,
-                            locationDetails: evt.locationDetails || '',
-                            description: evt.description || '',
-                            color: evt.color,
-                          });
-                          setShowEventModal(true);
-                        }}
-                        className="size-8 rounded-xl text-slate-500 hover:text-foreground"
-                        title="Edit Event Type"
-                      >
-                        <Edit2 className="size-3.5" />
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteEvent(evt.id, evt.title)}
-                        className="size-8 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                        title="Delete Event Type"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </TabsContent>
-
-        {/* ── TAB 2: UPCOMING MEETINGS ── */}
-        <TabsContent value="upcoming" className="pt-4 space-y-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="relative w-full max-w-sm">
-              <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search meetings by attendee, title, email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9 text-xs rounded-xl"
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={fetchMeetings}
-              disabled={loadingMeetings}
-              className="text-xs font-bold gap-1.5 rounded-xl h-9"
-            >
-              <RefreshCw className={cn('size-3.5', loadingMeetings && 'animate-spin')} />
-              <span>Refresh</span>
-            </Button>
-          </div>
-
-          {filteredMeetings.length === 0 ? (
-            <div className="text-center py-16 border rounded-2xl bg-card space-y-2">
-              <CalendarCheck className="size-10 text-muted-foreground mx-auto opacity-50" />
-              <h3 className="text-sm font-bold text-foreground">No upcoming meetings</h3>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Share your public booking link or let your AI Concierge book meetings for you!
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900">Appointments</h1>
+              <p className="text-xs text-slate-500">
+                Manage bookings, schedules and availability for your team.
               </p>
             </div>
-          ) : (
-            <div className="space-y-2.5">
-              {filteredMeetings.map((m) => {
-                let meta: any = {};
-                try {
-                  meta = JSON.parse(m.metadataJson || '{}');
-                } catch {}
+          </div>
 
-                const meetUrl = meta.meetingUrl;
-                const scheduledDate = m.scheduledAt ? new Date(m.scheduledAt) : null;
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setCurrentView('settings')}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
+            >
+              <Settings className="size-3.5 text-slate-500" />
+              <span>Settings</span>
+            </button>
 
-                return (
-                  <div
-                    key={m.id}
-                    className="p-4 rounded-2xl border bg-card hover:border-blue-400 transition-all shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="size-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex flex-col items-center justify-center font-bold shrink-0 border border-blue-200/50">
-                        <span className="text-[10px] uppercase leading-none">
-                          {scheduledDate ? scheduledDate.toLocaleString('en-US', { month: 'short' }) : 'APT'}
-                        </span>
-                        <span className="text-sm leading-none font-black mt-0.5">
-                          {scheduledDate ? scheduledDate.getDate() : '--'}
-                        </span>
-                      </div>
+            <button
+              type="button"
+              onClick={() => setNewAppointmentOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#009F50] px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#008A45]"
+            >
+              <Plus className="size-4 stroke-[2.5]" />
+              <span>New Appointment</span>
+            </button>
+          </div>
+        </div>
 
-                      <div className="space-y-0.5">
-                        <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                          <span>{m.title}</span>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-[10px] font-semibold',
-                              m.status === 'cancelled'
-                                ? 'text-red-600 bg-red-50 border-red-200'
-                                : 'text-emerald-600 bg-emerald-50 border-emerald-200'
-                            )}
-                          >
-                            {m.status ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : 'Confirmed'}
-                          </Badge>
-                        </h4>
-                        <p className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-foreground">{m.customerName || 'Attendee'}</span>
-                          <span>•</span>
-                          <span>{m.customerEmail || 'No email'}</span>
-                          <span>•</span>
-                          <span className="font-mono text-blue-600 font-bold">
-                            {scheduledDate ? scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                          </span>
-                        </p>
-                      </div>
-                    </div>
+        {/* 7 Horizontal Underline Tabs */}
+        <div
+          role="tablist"
+          aria-label="Appointments Navigation"
+          className="mx-auto mt-5 flex max-w-[1440px] items-center gap-2 overflow-x-auto no-scrollbar"
+        >
+          {navTabs.map((t) => {
+            const Icon = t.icon;
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setActiveTab(t.id)}
+                className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-3.5 py-2.5 text-xs font-semibold transition ${
+                  active
+                    ? 'border-[#009F50] text-[#009F50]'
+                    : 'border-transparent text-slate-600 hover:border-slate-200 hover:text-slate-900'
+                }`}
+              >
+                <Icon className={`size-3.5 ${active ? 'text-[#009F50]' : 'text-slate-400'}`} />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0">
-                      {meetUrl ? (
-                        <a
-                          href={meetUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors"
-                        >
-                          <Video className="size-3.5" />
-                          <span>Join Google Meet</span>
-                        </a>
-                      ) : (
-                        <Badge variant="secondary" className="text-xs">
-                          {m.serviceName || 'In-Person / Phone'}
-                        </Badge>
-                      )}
-
-                      {m.status !== 'cancelled' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelMeeting(m.id)}
-                          className="text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 h-8 px-2.5 rounded-xl"
-                        >
-                          Cancel
-                        </Button>
-                      )}
+      {/* 2. MAIN WORKSPACE */}
+      <div className="mx-auto max-w-[1440px] p-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          {/* LEFT 9-COLUMN WORKSPACE */}
+          <div className="space-y-5 lg:col-span-9">
+            {/* ROW 1: 3 KPI SUMMARY CARDS */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {/* Total Appointments */}
+              <div className="flex items-center gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F8EF] text-[#009F50]">
+                  <CalendarIcon className="size-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Total Appointments</p>
+                  <div className="mt-1 flex items-baseline gap-2.5">
+                    <span className="text-2xl font-bold text-slate-900">28</span>
+                    <div className="text-[11px]">
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E8F8EF] px-2 py-0.5 font-semibold text-[#009F50]">
+                        <ArrowUp className="size-2.5 stroke-[2.5]" />
+                        <span>21%</span>
+                      </span>
+                      <span className="ml-1.5 text-slate-400">vs last month</span>
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              </div>
+
+              {/* Confirmed */}
+              <div className="flex items-center gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-[#E8F8EF] text-[#009F50]">
+                  <CheckCircle2 className="size-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Confirmed</p>
+                  <div className="mt-1 flex items-baseline gap-2.5">
+                    <span className="text-2xl font-bold text-slate-900">22</span>
+                    <div className="text-[11px]">
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E8F8EF] px-2 py-0.5 font-semibold text-[#009F50]">
+                        <ArrowUp className="size-2.5 stroke-[2.5]" />
+                        <span>32%</span>
+                      </span>
+                      <span className="ml-1.5 text-slate-400">vs last month</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Pending */}
+              <div className="flex items-center gap-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500">
+                  <Clock className="size-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-slate-500">Pending</p>
+                  <div className="mt-1 flex items-baseline gap-2.5">
+                    <span className="text-2xl font-bold text-slate-900">4</span>
+                    <div className="text-[11px]">
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-2 py-0.5 font-semibold text-rose-600">
+                        <ArrowDown className="size-2.5 stroke-[2.5]" />
+                        <span>20%</span>
+                      </span>
+                      <span className="ml-1.5 text-slate-400">vs last month</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
-        </TabsContent>
 
-        {/* ── TAB 3: AVAILABILITY & WORKING HOURS ── */}
-        <TabsContent value="availability" className="pt-4 space-y-6">
-          <Card className="rounded-2xl border">
-            <CardHeader className="pb-3 border-b">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold">Weekly Hours &amp; Working Schedule</CardTitle>
-                  <CardDescription className="text-xs text-muted-foreground">
-                    Set when you are typically available for meetings. You will only be booked during these times.
-                  </CardDescription>
-                </div>
-                <Button
-                  type="button"
-                  onClick={handleSaveAvailability}
-                  disabled={savingAvailability}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-8 px-4 rounded-xl shadow-xs"
-                >
-                  {savingAvailability ? 'Saving...' : 'Save Schedule'}
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent className="pt-4 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground">Time Zone</Label>
-                  <div className="flex gap-2">
-                    <select
-                      value={[
-                        'Asia/Kolkata', 'America/New_York', 'America/Chicago', 'America/Denver',
-                        'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Dubai',
-                        'Asia/Singapore', 'Australia/Sydney', 'UTC'
-                      ].includes(availability?.timezone || '') ? availability?.timezone : 'custom'}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val !== 'custom') {
-                          setAvailability((prev) => (prev ? { ...prev, timezone: val } : null));
-                        }
-                      }}
-                      className="h-9 rounded-xl border bg-background px-3 text-xs font-medium flex-1"
+            {/* ROW 2: WEEKLY SCHEDULE CALENDAR CARD */}
+            {activeTab === 'calendar' && (
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs">
+                {/* Calendar Toolbar */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMiniDate(8)}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                     >
-                      <option value="Asia/Kolkata">Asia/Kolkata (IST - India)</option>
-                      <option value="America/New_York">America/New_York (EST - Eastern)</option>
-                      <option value="America/Chicago">America/Chicago (CST - Central)</option>
-                      <option value="America/Denver">America/Denver (MST - Mountain)</option>
-                      <option value="America/Los_Angeles">America/Los_Angeles (PST - Pacific)</option>
-                      <option value="Europe/London">Europe/London (GMT/BST - UK)</option>
-                      <option value="Europe/Paris">Europe/Paris (CET - Europe)</option>
-                      <option value="Asia/Dubai">Asia/Dubai (GST - UAE)</option>
-                      <option value="Asia/Singapore">Asia/Singapore (SGT / HK)</option>
-                      <option value="Australia/Sydney">Australia/Sydney (AEST)</option>
-                      <option value="UTC">UTC (Universal Coordinated Time)</option>
-                      <option value="custom">Custom Timezone...</option>
-                    </select>
-
-                    <Input
-                      value={availability?.timezone || 'America/New_York'}
-                      onChange={(e) =>
-                        setAvailability((prev) => (prev ? { ...prev, timezone: e.target.value } : null))
-                      }
-                      placeholder="IANA Timezone"
-                      className="h-9 text-xs rounded-xl w-36 font-mono"
-                    />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">
-                    All booking slots will be computed and displayed in this timezone.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold text-foreground">Buffer Between Meetings</Label>
-                  <select
-                    value={availability?.bufferTime || 0}
-                    onChange={(e) =>
-                      setAvailability((prev) => (prev ? { ...prev, bufferTime: Number(e.target.value) || 0 } : null))
-                    }
-                    className="h-9 rounded-xl border bg-background px-3 text-xs font-medium w-full"
-                  >
-                    <option value={0}>0 minutes (No buffer)</option>
-                    <option value={5}>5 minutes gap</option>
-                    <option value={10}>10 minutes gap</option>
-                    <option value={15}>15 minutes gap</option>
-                    <option value={20}>20 minutes gap</option>
-                    <option value={30}>30 minutes gap</option>
-                    <option value={45}>45 minutes gap</option>
-                  </select>
-                  <p className="text-[10px] text-muted-foreground">
-                    Extra gap between appointments for preparation, travel, or notes.
-                  </p>
-                </div>
-              </div>
-
-              {/* 7 Days of the Week */}
-              <div className="space-y-3">
-                {availability?.days?.map((day, idx) => (
-                  <div
-                    key={day.dayOfWeek}
-                    className={cn(
-                      'p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors',
-                      day.isWorkingDay ? 'bg-card' : 'bg-slate-50 dark:bg-slate-900/40 opacity-60'
-                    )}
-                  >
-                    <div className="flex items-center gap-3 w-32 shrink-0">
-                      <Switch
-                        checked={day.isWorkingDay}
-                        onCheckedChange={(checked) => {
-                          setAvailability((prev) => {
-                            if (!prev) return null;
-                            const days = [...prev.days];
-                            days[idx] = { ...days[idx], isWorkingDay: checked };
-                            return { ...prev, days };
-                          });
-                        }}
-                      />
-                      <span className="text-xs font-bold text-foreground">{day.name}</span>
-                    </div>
-
-                    {day.isWorkingDay ? (
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-1 justify-end flex-wrap">
-                        {/* Working Hours */}
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Input
-                            type="time"
-                            value={day.startTime}
-                            onChange={(e) => {
-                              setAvailability((prev) => {
-                                if (!prev) return null;
-                                const days = [...prev.days];
-                                days[idx] = { ...days[idx], startTime: e.target.value };
-                                return { ...prev, days };
-                              });
-                            }}
-                            className="h-8 w-24 text-xs font-mono rounded-lg"
-                          />
-                          <span className="text-muted-foreground font-bold">-</span>
-                          <Input
-                            type="time"
-                            value={day.endTime}
-                            onChange={(e) => {
-                              setAvailability((prev) => {
-                                if (!prev) return null;
-                                const days = [...prev.days];
-                                days[idx] = { ...days[idx], endTime: e.target.value };
-                                return { ...prev, days };
-                              });
-                            }}
-                            className="h-8 w-24 text-xs font-mono rounded-lg"
-                          />
-                        </div>
-
-                        {/* Break Times */}
-                        {day.breakStart && day.breakEnd ? (
-                          <div className="flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 text-xs">
-                            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300">Break:</span>
-                            <Input
-                              type="time"
-                              value={day.breakStart}
-                              onChange={(e) => {
-                                setAvailability((prev) => {
-                                  if (!prev) return null;
-                                  const days = [...prev.days];
-                                  days[idx] = { ...days[idx], breakStart: e.target.value };
-                                  return { ...prev, days };
-                                });
-                              }}
-                              className="h-7 w-20 text-[11px] font-mono rounded bg-background"
-                            />
-                            <span className="text-muted-foreground font-bold">-</span>
-                            <Input
-                              type="time"
-                              value={day.breakEnd}
-                              onChange={(e) => {
-                                setAvailability((prev) => {
-                                  if (!prev) return null;
-                                  const days = [...prev.days];
-                                  days[idx] = { ...days[idx], breakEnd: e.target.value };
-                                  return { ...prev, days };
-                                });
-                              }}
-                              className="h-7 w-20 text-[11px] font-mono rounded bg-background"
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setAvailability((prev) => {
-                                  if (!prev) return null;
-                                  const days = [...prev.days];
-                                  days[idx] = { ...days[idx], breakStart: null, breakEnd: null };
-                                  return { ...prev, days };
-                                });
-                              }}
-                              className="size-6 text-slate-400 hover:text-red-600 rounded-full"
-                              title="Remove Break"
-                            >
-                              ✕
-                            </Button>
-                          </div>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setAvailability((prev) => {
-                                if (!prev) return null;
-                                const days = [...prev.days];
-                                days[idx] = { ...days[idx], breakStart: '12:00', breakEnd: '13:00' };
-                                return { ...prev, days };
-                              });
-                            }}
-                            className="h-7 text-[11px] font-semibold text-muted-foreground hover:text-foreground px-2 border-dashed"
-                          >
-                            + Add Break
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground italic">Unavailable</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── TAB 4: CALENDAR CONFLICT CHECK ── */}
-        <TabsContent value="calendars" className="pt-4 space-y-6">
-          <Card className="rounded-2xl border">
-            <CardHeader className="pb-3 border-b">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold">Google Calendar 2-Way Sync &amp; Conflict Checks</CardTitle>
-                  <CardDescription className="text-xs text-muted-foreground">
-                    Up to 6 work/personal calendars can be checked to prevent double bookings.
-                  </CardDescription>
-                </div>
-                {calendarSettings?.connected && (
-                  <Button
-                    type="button"
-                    onClick={handleSaveCalendarPreferences}
-                    disabled={savingCalendars}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-8 px-4 rounded-xl shadow-xs"
-                  >
-                    {savingCalendars ? 'Saving...' : 'Save Preferences'}
-                  </Button>
-                )}
-              </div>
-            </CardHeader>
-
-            <CardContent className="pt-4 space-y-6">
-              {/* Connection Status Card */}
-              <div className="p-4 rounded-2xl border bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="size-11 rounded-xl bg-white border shadow-xs flex items-center justify-center font-black text-blue-600 text-lg">
-                    31
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-foreground">Google Calendar</h4>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {calendarSettings?.email || 'Not connected'}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  {calendarSettings?.connected ? (
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 font-bold gap-1 px-3 py-1">
-                      <CheckCircle2 className="size-3.5 text-emerald-600" />
-                      Connected &amp; Syncing
-                    </Badge>
-                  ) : (
-                    <div className="flex flex-col items-start sm:items-end gap-1">
-                      <a
-                        href={calendarSettings?.authUrl || '/api/auth/google-calendar'}
-                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs inline-flex items-center gap-1.5 transition-colors"
+                      Today
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label="Previous week"
+                        className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                       >
-                        <span>Connect Google Account</span>
-                        <ArrowRight className="size-3.5" />
-                      </a>
-                      {calendarSettings?.configured === false && (
-                        <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                          OAuth credentials pending in SuperAdmin → Integration Credentials
-                        </span>
-                      )}
+                        <ChevronLeft className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Next week"
+                        className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                      >
+                        <ChevronRight className="size-3.5" />
+                      </button>
                     </div>
-                  )}
-                    <a href="/api/auth/outlook-calendar" className="inline-flex items-center rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted">Connect Microsoft Outlook</a>
-                </div>
-              </div>
-
-              {/* Sub-calendars list */}
-              {calendarSettings?.connected && (
-                <div className="space-y-4 pt-2">
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
-                      Calendars to Check for Conflicts (Up to 6)
-                    </h4>
-                    <p className="text-xs text-muted-foreground">
-                      Events on these calendars will automatically block booking slots to prevent double bookings.
-                    </p>
+                    <span className="ml-1 text-xs font-bold text-slate-900">
+                      Oct 6 – Oct 12, 2026
+                    </span>
                   </div>
 
-                  <div className="space-y-2">
-                    {(calendarSettings.subCalendars.length > 0
-                      ? calendarSettings.subCalendars
-                      : [{ id: calendarSettings.email || 'primary', summary: 'Primary Google Calendar', primary: true }]
-                    ).map((subCal) => {
-                      const isChecked = calendarSettings.conflictCalendars.includes(subCal.id);
-                      return (
-                        <div
-                          key={subCal.id}
-                          className="p-3 rounded-xl border flex items-center justify-between bg-card hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              id={subCal.id}
-                              checked={isChecked}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setCalendarSettings((prev) => {
-                                  if (!prev) return null;
-                                  let next = [...prev.conflictCalendars];
-                                  if (checked) {
-                                    if (next.length < 6 && !next.includes(subCal.id)) next.push(subCal.id);
-                                  } else {
-                                    next = next.filter((id) => id !== subCal.id);
-                                  }
-                                  return { ...prev, conflictCalendars: next };
-                                });
-                              }}
-                              className="size-4 rounded text-blue-600 focus:ring-blue-500"
-                            />
+                  {/* Day / Week / Month Switcher */}
+                  <div className="flex items-center gap-2">
+                    <Settings className="size-3.5 text-slate-400" />
+                    <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-0.5">
+                      {(['Day', 'Week', 'Month'] as const).map((scale) => {
+                        const active = calendarScale === scale;
+                        return (
+                          <button
+                            key={scale}
+                            type="button"
+                            onClick={() => setCalendarScale(scale)}
+                            className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                              active
+                                ? 'bg-[#009F50] text-white shadow-2xs'
+                                : 'text-slate-600 hover:text-slate-900'
+                            }`}
+                          >
+                            {scale}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Team Member Filter */}
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-500">Team</span>
+                    <div className="relative">
+                      <select
+                        aria-label="Filter by Team Member"
+                        value={teamFilter}
+                        onChange={(e) => setTeamFilter(e.target.value)}
+                        className="appearance-none rounded-xl border border-slate-200 bg-white py-1.5 pr-8 pl-3 text-xs font-semibold text-slate-700 focus:border-[#009F50] focus:outline-hidden"
+                      >
+                        <option value="All Team Members">All Team Members</option>
+                        <option value="Rakesh Kumar">Rakesh Kumar</option>
+                        <option value="Sunita Patel">Sunita Patel</option>
+                        <option value="Amit Singh">Amit Singh</option>
+                        <option value="Pooja Verma">Pooja Verma</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Weekly Time Grid */}
+                <div className="mt-3 overflow-x-auto">
+                  <div className="min-w-[720px]">
+                    {/* Day Column Headers */}
+                    <div className="grid grid-cols-[64px_repeat(6,1fr)] border-b border-slate-100 pb-2">
+                      <div />
+                      {WEEK_DAYS.map((d) => (
+                        <div key={d.short} className="text-center">
+                          <p className="text-[11px] font-medium text-slate-500">{d.short}</p>
+                          <div className="mt-1 flex justify-center">
+                            <span
+                              className={`flex size-6 items-center justify-center rounded-full text-xs font-bold ${
+                                d.isToday
+                                  ? 'bg-[#009F50] text-white'
+                                  : 'text-slate-700'
+                              }`}
+                            >
+                              {d.num}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Grid Body (8:00 AM to 5:00 PM = 9 hours height = 432px) */}
+                    <div className="relative grid grid-cols-[64px_repeat(6,1fr)]">
+                      {/* Left Time Axis */}
+                      <div className="divide-y divide-transparent">
+                        {TIME_SLOTS.map((slot) => (
+                          <div
+                            key={slot}
+                            className="h-11 pr-2 text-right text-[10px] font-medium text-slate-400"
+                          >
+                            {slot}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 6 Day Columns */}
+                      {WEEK_DAYS.map((day, dayIdx) => {
+                        const blocksForDay = filteredBlocks.filter(
+                          (b) => b.dayIndex === dayIdx
+                        );
+                        return (
+                          <div
+                            key={day.short}
+                            className="relative border-l border-slate-100"
+                            style={{ height: `${TIME_SLOTS.length * 44}px` }}
+                          >
+                            {/* Horizontal Hour Lines */}
+                            {TIME_SLOTS.map((slot) => (
+                              <div
+                                key={slot}
+                                className="h-11 border-b border-slate-100/80"
+                              />
+                            ))}
+
+                            {/* Appointment Blocks */}
+                            {blocksForDay.map((block) => {
+                              const topPx = (block.startHour - 8) * 44;
+                              const heightPx = block.durationHours * 44;
+                              return (
+                                <div
+                                  key={block.id}
+                                  style={{
+                                    top: `${topPx}px`,
+                                    height: `${heightPx}px`,
+                                  }}
+                                  className={`absolute inset-x-1.5 rounded-lg p-2 text-[11px] leading-tight shadow-2xs ${getBlockToneClasses(
+                                    block.tone
+                                  )}`}
+                                >
+                                  <p className="font-bold">{block.timeLabel}</p>
+                                  <p className="mt-0.5 truncate font-bold">
+                                    {block.customerName}
+                                  </p>
+                                  <p className="truncate opacity-80">{block.serviceName}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab !== 'calendar' && (
+              <div className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-base font-bold capitalize text-slate-900">
+                      {activeTab.replace('_', ' ')} Configuration
+                    </h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Manage your {activeTab.replace('_', ' ')} rules, team rosters, and automated booking notifications.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('calendar')}
+                    className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Back to Calendar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ROW 3: APPOINTMENTS FOR WED, OCT 8, 2026 (5) TABLE CARD */}
+            <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-900">
+                  Appointments for Wed, Oct 8, 2026{' '}
+                  <span className="font-normal text-slate-400">(5)</span>
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('list')}
+                  className="text-xs font-semibold text-[#009F50] hover:underline"
+                >
+                  View all →
+                </button>
+              </div>
+
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-[11px] font-medium text-slate-400">
+                      <th className="pb-2.5 font-medium">Time</th>
+                      <th className="pb-2.5 font-medium">Customer</th>
+                      <th className="pb-2.5 font-medium">Service</th>
+                      <th className="pb-2.5 font-medium">Team Member</th>
+                      <th className="pb-2.5 font-medium">Status</th>
+                      <th className="pb-2.5 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredDailyRows.map((row) => (
+                      <tr key={row.id} className="group hover:bg-slate-50/60">
+                        <td className="py-3 font-medium text-slate-600">{row.time}</td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${row.initialsBg}`}
+                            >
+                              {row.initials}
+                            </span>
                             <div>
-                              <Label htmlFor={subCal.id} className="text-xs font-bold text-foreground cursor-pointer">
-                                {subCal.summary}
-                              </Label>
-                              {subCal.primary && (
-                                <Badge variant="secondary" className="text-[9px] ml-2 px-1 py-0">
-                                  Default
-                                </Badge>
-                              )}
+                              <p className="font-bold text-slate-900">{row.customerName}</p>
+                              <p className="text-[11px] text-slate-400">{row.customerPhone}</p>
                             </div>
                           </div>
+                        </td>
+                        <td className="py-3">
+                          <p className="font-semibold text-slate-800">{row.serviceName}</p>
+                          <p className="text-[11px] text-slate-400">{row.location}</p>
+                        </td>
+                        <td className="py-3">
+                          <div className="flex items-center gap-2">
+                            <img
+                              src={row.teamAvatar}
+                              alt={row.teamMember}
+                              className="size-6 rounded-full object-cover"
+                            />
+                            <span className="font-medium text-slate-700">{row.teamMember}</span>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          {row.status === 'Confirmed' ? (
+                            <span className="inline-flex rounded-lg bg-[#E8F8EF] px-2.5 py-1 text-[11px] font-semibold text-[#009F50]">
+                              Confirmed
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-lg bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-600">
+                              Pending
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              aria-label={`Edit appointment for ${row.customerName}`}
+                              onClick={() =>
+                                toast.info(`Editing appointment for ${row.customerName}`)
+                              }
+                              className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                            >
+                              <Edit2 className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`More actions for ${row.customerName}`}
+                              className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                            >
+                              <MoreHorizontal className="size-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
 
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {isChecked ? 'Checking for busy times' : 'Ignored'}
-                          </span>
-                        </div>
+          {/* RIGHT 3-COLUMN SIDEBAR */}
+          <div className="space-y-5 lg:col-span-3">
+            {/* CARD 1: MINI CALENDAR (OCTOBER 2026) + NEW APPOINTMENT CTA */}
+            <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900">October 2026</h3>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Previous month"
+                    className="flex size-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next month"
+                    className="flex size-6 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Day of Week Header */}
+              <div className="mt-4 grid grid-cols-7 text-center text-[11px] font-medium text-slate-400">
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+                <span>Sun</span>
+              </div>
+
+              {/* Calendar Dates Grid */}
+              <div className="mt-2 space-y-1">
+                {MINI_CALENDAR_WEEKS.map((week, wIdx) => (
+                  <div key={wIdx} className="grid grid-cols-7 text-center">
+                    {week.map((cell, cIdx) => {
+                      const isSelected = !cell.muted && cell.num === selectedMiniDate && wIdx === 1;
+                      return (
+                        <button
+                          key={`${wIdx}_${cIdx}`}
+                          type="button"
+                          onClick={() => {
+                            if (!cell.muted) setSelectedMiniDate(cell.num);
+                          }}
+                          className={`mx-auto flex size-7 items-center justify-center rounded-full text-xs font-semibold transition ${
+                            isSelected
+                              ? 'bg-[#009F50] text-white shadow-2xs'
+                              : cell.muted
+                              ? 'text-slate-300'
+                              : 'text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          {cell.num}
+                        </button>
                       );
                     })}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                ))}
+              </div>
 
-      {/* ── CREATE / EDIT EVENT TYPE MODAL ── */}
-      <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+              <button
+                type="button"
+                onClick={() => setNewAppointmentOpen(true)}
+                className="mt-5 inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#009F50] px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition hover:bg-[#008A45]"
+              >
+                <Plus className="size-4 stroke-[2.5]" />
+                <span>New Appointment</span>
+              </button>
+            </section>
+
+            {/* CARD 2: QUICK ACTIONS */}
+            <section className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xs">
+              <h3 className="text-sm font-bold text-slate-900">Quick Actions</h3>
+
+              <div className="mt-3 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('availability')}
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <CalendarIcon className="size-4 text-[#009F50]" />
+                    <span>Manage Availability</span>
+                  </span>
+                  <ChevronRight className="size-3.5 text-slate-400" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('online_booking')}
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <Link2 className="size-4 text-[#009F50]" />
+                    <span>Booking Page</span>
+                  </span>
+                  <ChevronRight className="size-3.5 text-slate-400" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNewAppointmentOpen(true)}
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <RefreshCw className="size-4 text-[#009F50]" />
+                    <span>Add Recurring Appointment</span>
+                  </span>
+                  <ChevronRight className="size-3.5 text-slate-400" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => toast.success('Calendar import wizard opened')}
+                  className="flex w-full items-center justify-between rounded-xl border border-slate-200/90 bg-white px-3.5 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <CalendarPlus className="size-4 text-[#009F50]" />
+                    <span>Import from Calendar</span>
+                  </span>
+                  <ChevronRight className="size-3.5 text-slate-400" />
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      {/* NEW APPOINTMENT MODAL */}
+      <Dialog open={newAppointmentOpen} onOpenChange={setNewAppointmentOpen}>
+        <DialogContent className="rounded-2xl sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold">
-              {editingEvent ? 'Edit Event Type' : 'New Event Type'}
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Configure your meeting name, duration, and video conferencing location.
+            <DialogTitle className="text-base font-bold">New Appointment</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Schedule a new customer booking and assign a team member.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 text-xs">
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Event Name</Label>
-              <Input
-                value={eventForm.title}
-                onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
-                placeholder="e.g. 30 Minute Meeting"
-                className="h-9 text-xs rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Custom URL Slug</Label>
-              <div className="flex items-center gap-1">
-                <span className="text-slate-400 font-mono text-xs">/book/</span>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Customer Name *</Label>
                 <Input
-                  value={eventForm.slug}
-                  onChange={(e) => setEventForm({ ...eventForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '') })}
-                  placeholder="30min"
-                  className="h-9 text-xs font-mono rounded-xl"
+                  value={newCustomerName}
+                  onChange={(e) => setNewCustomerName(e.target.value)}
+                  placeholder="Priya Sharma"
+                  className="h-9 rounded-xl text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Phone Number</Label>
+                <Input
+                  value={newCustomerPhone}
+                  onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  className="h-9 rounded-xl text-xs"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs font-bold">Duration (Minutes)</Label>
-                <Input
-                  type="number"
-                  min={5}
-                  max={240}
-                  value={eventForm.duration}
-                  onChange={(e) => setEventForm({ ...eventForm, duration: Number(e.target.value) || 30 })}
-                  className="h-9 text-xs rounded-xl"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-bold">Location</Label>
+                <Label className="text-xs font-semibold">Service</Label>
                 <select
-                  value={eventForm.locationType}
-                  onChange={(e) => setEventForm({ ...eventForm, locationType: e.target.value as any })}
-                  className="w-full h-9 rounded-xl border bg-background px-3 text-xs font-medium"
+                  value={newService}
+                  onChange={(e) => setNewService(e.target.value)}
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs"
                 >
-                  <option value="google_meet">Google Meet (Auto-Provisioned Link)</option>
-                  <option value="phone">Phone Call</option>
-                  <option value="zoom">Zoom</option>
-                  <option value="teams">Microsoft Teams</option>
-                  <option value="in_person">In-Person Meeting</option>
+                  <option value="Home Cleaning">Home Cleaning</option>
+                  <option value="Deep Cleaning">Deep Cleaning</option>
+                  <option value="Office Cleaning">Office Cleaning</option>
+                  <option value="AC Service">AC Service</option>
+                  <option value="Pest Control">Pest Control</option>
+                  <option value="Plumbing">Plumbing</option>
+                  <option value="Move In Cleaning">Move In Cleaning</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Time</Label>
+                <select
+                  value={newTime}
+                  onChange={(e) => setNewTime(e.target.value)}
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs"
+                >
+                  <option value="9:00 AM">9:00 AM</option>
+                  <option value="9:30 AM">9:30 AM</option>
+                  <option value="11:00 AM">11:00 AM</option>
+                  <option value="12:30 PM">12:30 PM</option>
+                  <option value="2:00 PM">2:00 PM</option>
+                  <option value="4:00 PM">4:00 PM</option>
                 </select>
               </div>
             </div>
 
-            {eventForm.locationType !== 'google_meet' && (
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs font-bold">
-                  {eventForm.locationType === 'phone'
-                    ? 'Phone Number or Calling Instructions'
-                    : eventForm.locationType === 'in_person'
-                    ? 'Meeting Address / Physical Location'
-                    : 'Custom Conference URL / Meeting Link'}
-                </Label>
+                <Label className="text-xs font-semibold">Location</Label>
                 <Input
-                  value={eventForm.locationDetails || ''}
-                  onChange={(e) => setEventForm({ ...eventForm, locationDetails: e.target.value })}
-                  placeholder={
-                    eventForm.locationType === 'phone'
-                      ? 'e.g. Organizer will call attendee at scheduled time'
-                      : eventForm.locationType === 'in_person'
-                      ? 'e.g. 100 Main Street, Suite 400, New York, NY'
-                      : 'e.g. https://zoom.us/j/9876543210'
-                  }
-                  className="h-9 text-xs rounded-xl"
+                  value={newLocation}
+                  onChange={(e) => setNewLocation(e.target.value)}
+                  placeholder="Green Park, Delhi"
+                  className="h-9 rounded-xl text-xs"
                 />
               </div>
-            )}
-
-            <div className="space-y-1">
-              <Label className="text-xs font-bold">Description / Instructions</Label>
-              <textarea
-                value={eventForm.description}
-                onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
-                placeholder="Add helpful details for attendees..."
-                rows={3}
-                className="w-full rounded-xl border bg-background p-2.5 text-xs resize-none"
-              />
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Team Member</Label>
+                <select
+                  value={newTeamMember}
+                  onChange={(e) => setNewTeamMember(e.target.value)}
+                  className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2.5 text-xs"
+                >
+                  <option value="Rakesh Kumar">Rakesh Kumar</option>
+                  <option value="Sunita Patel">Sunita Patel</option>
+                  <option value="Amit Singh">Amit Singh</option>
+                  <option value="Pooja Verma">Pooja Verma</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowEventModal(false)}
-              className="text-xs font-bold h-9 rounded-xl"
+              size="sm"
+              onClick={() => setNewAppointmentOpen(false)}
+              className="h-8 rounded-xl text-xs"
             >
               Cancel
             </Button>
             <Button
               type="button"
-              onClick={handleSaveEvent}
-              disabled={savingEvent}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-9 rounded-xl"
+              size="sm"
+              onClick={handleCreateAppointment}
+              className="h-8 rounded-xl bg-[#009F50] text-xs font-semibold text-white hover:bg-[#008A45]"
             >
-              {savingEvent ? 'Saving...' : 'Save Event Type'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── ONBOARDING MODAL: HOW CAN CALENDLY HELP YOU? ── */}
-      <Dialog open={showOnboarding} onOpenChange={setShowOnboarding}>
-        <DialogContent className="sm:max-w-xl rounded-3xl p-6">
-          <DialogHeader className="text-center space-y-1">
-            <DialogTitle className="text-xl font-black text-foreground">
-              How can Calendly help you?
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Select all that apply to tailor your automated scheduling experience.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-2 gap-2.5 py-4">
-            {[
-              { id: 'schedule_meetings', icon: '🗓️', label: 'Schedule meetings' },
-              { id: 'scheduling_emails_ai', icon: '✨', label: 'Handle scheduling emails with AI' },
-              { id: 'transcribe_meetings', icon: '🎥', label: 'Record and transcribe meetings' },
-              { id: 'optimize_ai', icon: '🤖', label: 'Optimize scheduling with AI' },
-              { id: 'contact_records', icon: '📋', label: 'Manage contact records' },
-              { id: 'collect_payment', icon: '💰', label: 'Collect payment' },
-              { id: 'automate_emails', icon: '🕗', label: 'Automate pre/post meeting emails' },
-              { id: 'multiple_attendees', icon: '🧑🤝🧑', label: 'Meet with multiple attendees' },
-            ].map((goal) => {
-              const isSelected = selectedGoals.includes(goal.id);
-              return (
-                <button
-                  key={goal.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedGoals((prev) =>
-                      isSelected ? prev.filter((g) => g !== goal.id) : [...prev, goal.id]
-                    );
-                  }}
-                  className={cn(
-                    'p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all cursor-pointer',
-                    isSelected
-                      ? 'bg-blue-50/70 border-blue-500/80 ring-1 ring-blue-500/30 text-blue-950 dark:bg-blue-950/40 dark:text-blue-100'
-                      : 'bg-card border-slate-200/80 hover:border-slate-300 dark:border-slate-800'
-                  )}
-                >
-                  <span className="text-2xl shrink-0">{goal.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold leading-snug">{goal.label}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              onClick={() => {
-                setShowOnboarding(false);
-                toast.success('Preferences saved! Your scheduling workspace is configured.');
-              }}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 rounded-2xl text-xs"
-            >
-              Continue to Dashboard
+              Save Appointment
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1337,3 +1129,5 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
     </div>
   );
 }
+
+export default SchedulingView;

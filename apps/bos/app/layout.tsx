@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { BOS_FAVICON_SRC, BOS_TOUCH_ICON_SRC } from '@/lib/bos-icons';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -6,9 +7,9 @@ export const metadata: Metadata = {
   description:
     'One system to run the entire business: POS, Inventory, Stock, Khata, GST Invoices, Appointments, Online Store, and Day Book.',
   icons: {
-    icon: '/bos/logo-mark.png',
-    shortcut: '/bos/logo-mark.png',
-    apple: '/bos/logo-mark.png',
+    icon: BOS_FAVICON_SRC,
+    shortcut: BOS_FAVICON_SRC,
+    apple: BOS_TOUCH_ICON_SRC,
   },
   manifest: '/bos/manifest.webmanifest',
 };
