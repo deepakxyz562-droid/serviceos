@@ -65,6 +65,20 @@ import {
   type BosStoreSettings,
   formatBosCurrency,
 } from '@/components/bos/bos-types';
+import {
+  BUSINESS_TYPE_LABELS,
+  DEFAULT_CHANNELS_FOR_BUSINESS_TYPE,
+  resolveBlueprintCapabilities,
+} from '../../../shared/blueprint/presets';
+import {
+  COUNTRY_PACKS,
+  getCountryPack,
+} from '../../../shared/blueprint/country-packs';
+import type {
+  BusinessType,
+  CountryCode,
+  SalesChannel,
+} from '../../../shared/blueprint/types';
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
@@ -2399,9 +2413,31 @@ export function BosMarketingAiIntegrationsSettings({
             <button
               type="button"
               onClick={async () => {
+                const labelToBlueprint: Record<string, BusinessType> = {
+                  'Grocery Store': 'grocery',
+                  'Supermarket & Kirana': 'grocery',
+                  'Pharmacy & Medical': 'retail',
+                  'Electronics & Mobile': 'retail',
+                  'Salon & Spa': 'salon',
+                  'Restaurant & Cafe': 'restaurant',
+                  'Service Business': 'services',
+                  'Wholesale & Distribution': 'wholesale',
+                };
+                const bpType =
+                  labelToBlueprint[settingsBusinessType] ||
+                  storeSettings.blueprintType ||
+                  'grocery';
+                const channels =
+                  storeSettings.salesChannels ||
+                  DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bpType];
+                const resolvedCaps = resolveBlueprintCapabilities(bpType, channels);
+
                 await onUpdateStoreSettings({
                   businessName: settingsBusinessName,
                   businessType: settingsBusinessType,
+                  blueprintType: bpType,
+                  salesChannels: channels,
+                  capabilities: resolvedCaps as unknown as Record<string, boolean>,
                   phone: `+91 ${settingsPhoneNumber}`,
                   whatsappNumber: `+91 ${settingsPhoneNumber}`,
                   email: settingsEmailAddress,
@@ -2441,7 +2477,29 @@ export function BosMarketingAiIntegrationsSettings({
                   <Store className="pointer-events-none absolute left-3 h-4 w-4 text-[#0A6847]" />
                   <select
                     value={settingsBusinessType}
-                    onChange={(e) => setSettingsBusinessType(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSettingsBusinessType(val);
+                      const labelToBlueprint: Record<string, BusinessType> = {
+                        'Grocery Store': 'grocery',
+                        'Supermarket & Kirana': 'grocery',
+                        'Pharmacy & Medical': 'retail',
+                        'Electronics & Mobile': 'retail',
+                        'Salon & Spa': 'salon',
+                        'Restaurant & Cafe': 'restaurant',
+                        'Service Business': 'services',
+                        'Wholesale & Distribution': 'wholesale',
+                      };
+                      const bpType = labelToBlueprint[val] || 'grocery';
+                      const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bpType];
+                      const resolvedCaps = resolveBlueprintCapabilities(bpType, channels);
+                      void onUpdateStoreSettings({
+                        businessType: val,
+                        blueprintType: bpType,
+                        salesChannels: channels,
+                        capabilities: resolvedCaps as unknown as Record<string, boolean>,
+                      });
+                    }}
                     className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-9 pr-8 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
                   >
                     <option value="Grocery Store">Grocery Store</option>
@@ -2450,6 +2508,8 @@ export function BosMarketingAiIntegrationsSettings({
                     <option value="Electronics & Mobile">Electronics &amp; Mobile</option>
                     <option value="Salon & Spa">Salon &amp; Spa</option>
                     <option value="Restaurant & Cafe">Restaurant &amp; Cafe</option>
+                    <option value="Service Business">Service Business</option>
+                    <option value="Wholesale & Distribution">Wholesale &amp; Distribution</option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
                 </div>
@@ -2643,6 +2703,177 @@ export function BosMarketingAiIntegrationsSettings({
                 </div>
               </div>
             </div>
+
+            {settingsSection === 'businessType' && (
+              <div className="mt-4 space-y-4 rounded-2xl border border-[#DCE9E3] bg-[#F8FCFA] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-[14px] font-extrabold text-[#111827]">
+                      Business Blueprint, Channels &amp; Country Pack
+                    </h3>
+                    <p className="text-[11.5px] text-[#64748B]">
+                      Adapt POS, Dining, Appointments, Tax Rules &amp; Refund Policies to your industry and market.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.flag}{' '}
+                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.name} •{' '}
+                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.tax.label}
+                  </span>
+                </div>
+
+                {/* Blueprint Industry Presets */}
+                <div>
+                  <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                    Industry Blueprint Preset
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {(
+                      ['grocery', 'retail', 'restaurant', 'salon', 'services', 'wholesale'] as BusinessType[]
+                    ).map((bp) => {
+                      const meta = BUSINESS_TYPE_LABELS[bp];
+                      const active = (storeSettings.blueprintType || 'grocery') === bp;
+                      return (
+                        <button
+                          key={bp}
+                          type="button"
+                          onClick={() => {
+                            const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bp];
+                            const resolved = resolveBlueprintCapabilities(bp, channels);
+                            setSettingsBusinessType(meta.label);
+                            void onUpdateStoreSettings({
+                              businessType: meta.label,
+                              blueprintType: bp,
+                              salesChannels: channels,
+                              capabilities: resolved as unknown as Record<string, boolean>,
+                            });
+                            setToast(`Applied ${meta.label} Blueprint & Capabilities`);
+                            setTimeout(() => setToast(null), 2500);
+                          }}
+                          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[12px] transition ${
+                            active
+                              ? 'border-[#0A6847] bg-[#E6F6F0] font-bold text-[#064E3B]'
+                              : 'border-[#DCE9E3] bg-white font-semibold text-[#334155] hover:border-[#0A6847]'
+                          }`}
+                        >
+                          <span className="text-[15px]">{meta.icon}</span>
+                          <span className="truncate">{meta.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Country & Tax Pack Selector */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Country &amp; Tax Pack
+                    </label>
+                    <select
+                      value={storeSettings.countryCode || 'IN'}
+                      onChange={(e) => {
+                        const code = e.target.value as CountryCode;
+                        const pack = getCountryPack(code);
+                        void onUpdateStoreSettings({
+                          countryCode: code,
+                          currencySymbol: pack.currency.symbol,
+                        });
+                        setToast(
+                          `Switched to ${pack.flag} ${pack.name} (${pack.currency.code} • ${pack.tax.label} ${pack.tax.defaultRate}%)`,
+                        );
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                    >
+                      {(['IN', 'US', 'CA', 'AU', 'GB', 'GLOBAL'] as CountryCode[]).map((c) => {
+                        const pk = COUNTRY_PACKS[c];
+                        return (
+                          <option key={c} value={c}>
+                            {pk.flag} {pk.name} ({pk.currency.symbol} {pk.currency.code} • {pk.tax.label})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Cancellation &amp; Refund Policy
+                    </label>
+                    <select
+                      value={storeSettings.cancellationPolicy || 'before_preparation'}
+                      onChange={(e) => {
+                        const policy = e.target.value as NonNullable<
+                          BosStoreSettings['cancellationPolicy']
+                        >;
+                        void onUpdateStoreSettings({ cancellationPolicy: policy });
+                        setToast(`Updated order cancellation policy`);
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                    >
+                      <option value="before_confirmation">Allow cancel before order accepted</option>
+                      <option value="before_preparation">Allow cancel before preparing / packed</option>
+                      <option value="30m_before_appointment">Allow cancel 30m before appointment</option>
+                      <option value="24h_before_appointment">Allow cancel 24h before appointment</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Active Sales Channels Toggles */}
+                <div>
+                  <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                    Active Sales Channels
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      [
+                        { id: 'counter_pos', label: 'Counter POS' },
+                        { id: 'online_store', label: 'Online Store' },
+                        { id: 'whatsapp', label: 'WhatsApp Orders' },
+                        { id: 'delivery', label: 'Local Delivery' },
+                        { id: 'pickup', label: 'Click & Collect' },
+                        { id: 'dine_in', label: 'Dine-In / Tables' },
+                        { id: 'appointments', label: 'Appointments' },
+                      ] as Array<{ id: SalesChannel; label: string }>
+                    ).map((ch) => {
+                      const currentChannels =
+                        storeSettings.salesChannels ||
+                        DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[
+                          storeSettings.blueprintType || 'grocery'
+                        ];
+                      const isEnabled = currentChannels.includes(ch.id);
+                      return (
+                        <button
+                          key={ch.id}
+                          type="button"
+                          onClick={() => {
+                            const nextChannels = isEnabled
+                              ? currentChannels.filter((x) => x !== ch.id)
+                              : [...currentChannels, ch.id];
+                            const bp = storeSettings.blueprintType || 'grocery';
+                            const resolved = resolveBlueprintCapabilities(bp, nextChannels);
+                            void onUpdateStoreSettings({
+                              salesChannels: nextChannels,
+                              capabilities: resolved as unknown as Record<string, boolean>,
+                            });
+                          }}
+                          className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition ${
+                            isEnabled
+                              ? 'border-[#0A6847] bg-[#0A6847] text-white'
+                              : 'border-[#DCE9E3] bg-white text-[#475569]'
+                          }`}
+                        >
+                          {isEnabled ? '✓ ' : '+ '}
+                          {ch.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

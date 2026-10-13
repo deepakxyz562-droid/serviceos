@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgePercent,
   Calendar,
@@ -155,6 +155,12 @@ export function BosOnlineStoreWorkstation({
 
   // Modals & Toast
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrMode, setQrMode] = useState<'storefront' | 'table' | 'payment' | 'booking'>(
+    'storefront',
+  );
+  const [qrTableNumber, setQrTableNumber] = useState('12');
+  const [whatsappShareUrl, setWhatsappShareUrl] = useState('');
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     category: 'Grocery',
@@ -165,6 +171,35 @@ export function BosOnlineStoreWorkstation({
 
   const storeUrl = 'https://bos.fieseros.com/ravi-store';
   const publicStorePath = `/store/${storeSettings.businessSlug || 'ravi-store'}`;
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/commerce/store-share')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data) return;
+        if (data.whatsappShareUrl) {
+          setWhatsappShareUrl(String(data.whatsappShareUrl));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const activeQrTargetUrl = useMemo(() => {
+    if (qrMode === 'table') {
+      return `${storeUrl}?table=${encodeURIComponent(qrTableNumber || '1')}`;
+    }
+    if (qrMode === 'payment') {
+      return `upi://pay?pa=${encodeURIComponent(storeSettings.upiId || 'ravistore@okaxis')}&pn=${encodeURIComponent(storeSettings.businessName || storeName)}`;
+    }
+    if (qrMode === 'booking') {
+      return `${storeUrl}?mode=booking`;
+    }
+    return storeUrl;
+  }, [qrMode, qrTableNumber, storeSettings.businessName, storeSettings.upiId, storeName, storeUrl]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -283,7 +318,7 @@ export function BosOnlineStoreWorkstation({
 
           <button
             type="button"
-            onClick={() => showToast('Downloaded high-resolution Store QR Code')}
+            onClick={() => setShowQrModal(true)}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <QrCode className="h-3.5 w-3.5 text-[#475569]" />
@@ -1283,6 +1318,121 @@ export function BosOnlineStoreWorkstation({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Multi-Mode QR Code & WhatsApp Share Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <div>
+                <h3 className="text-[15.5px] font-extrabold text-[#111827]">
+                  Multi-Mode Store QR &amp; Share
+                </h3>
+                <p className="text-[11.5px] text-[#64748B]">
+                  Generate QR codes for Storefront, Dine-In Table Ordering, UPI Payment, or Bookings.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQrModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* 4 QR Mode Tabs */}
+            <div className="grid grid-cols-4 gap-1.5 rounded-xl bg-[#F4F8F6] p-1 text-[11.5px] font-bold">
+              {(
+                [
+                  { id: 'storefront', label: 'Storefront' },
+                  { id: 'table', label: 'Table QR' },
+                  { id: 'payment', label: 'Pay QR' },
+                  { id: 'booking', label: 'Booking' },
+                ] as const
+              ).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setQrMode(m.id)}
+                  className={`rounded-lg py-1.5 transition ${
+                    qrMode === m.id
+                      ? 'bg-[#0A6847] text-white shadow-2xs'
+                      : 'text-[#475569] hover:text-[#111827]'
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+
+            {qrMode === 'table' && (
+              <div className="flex items-center justify-between rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 text-[12px]">
+                <span className="font-semibold text-[#334155]">Table / Counter Number</span>
+                <input
+                  type="text"
+                  value={qrTableNumber}
+                  onChange={(e) => setQrTableNumber(e.target.value)}
+                  className="w-20 rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-center font-bold text-[#111827]"
+                />
+              </div>
+            )}
+
+            {/* Printable QR Poster Card */}
+            <div className="flex flex-col items-center rounded-2xl border border-[#DCE9E3] bg-[#FAFDFB] p-4 text-center space-y-2.5">
+              <span className="rounded-full bg-[#E6F6F0] px-3 py-0.5 text-[11px] font-extrabold text-[#0A6847]">
+                {storeName}
+              </span>
+              <div className="flex h-36 w-36 items-center justify-center rounded-2xl border-2 border-[#0A6847] bg-white p-3 shadow-xs">
+                <svg
+                  viewBox="0 0 36 36"
+                  className="h-full w-full text-[#111827]"
+                  fill="currentColor"
+                >
+                  <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h4v2h-4v-2zm6 0h2v4h-2v-4zm4 4h6v2h-6v-2zm-10 4h2v6h-2v-6zm4 2h4v2h-4v-2zm6 2h4v6h-4v-6zm-6 4h4v2h-4v-2z" />
+                </svg>
+              </div>
+              <p className="text-[11px] font-mono text-[#475569] break-all px-2">
+                {activeQrTargetUrl}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                    navigator.clipboard.writeText(activeQrTargetUrl).catch(() => {});
+                  }
+                  showToast(`Copied QR link: ${activeQrTargetUrl}`);
+                  setShowQrModal(false);
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6]"
+              >
+                <Copy className="h-3.5 w-3.5 text-[#0A6847]" />
+                <span>Copy QR Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetShare =
+                    whatsappShareUrl ||
+                    `https://wa.me/?text=${encodeURIComponent(`Order online from ${storeName}: ${activeQrTargetUrl}`)}`;
+                  if (typeof window !== 'undefined') {
+                    window.open(targetShare, '_blank', 'noopener,noreferrer');
+                  }
+                  showToast('Opened WhatsApp Store Share');
+                  setShowQrModal(false);
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#0A6847] py-2.5 text-[12px] font-bold text-white hover:bg-[#085238]"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Share on WhatsApp</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

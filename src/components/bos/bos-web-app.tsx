@@ -39,6 +39,19 @@ import {
   type BosNavId,
   normalizeBosView,
 } from '../../../shared/bos-navigation';
+import {
+  BUSINESS_TYPE_LABELS,
+  DEFAULT_CHANNELS_FOR_BUSINESS_TYPE,
+  resolveBlueprintCapabilities,
+} from '../../../shared/blueprint/presets';
+import { COUNTRY_PACKS, getCountryPack } from '../../../shared/blueprint/country-packs';
+import type {
+  BusinessCapabilities,
+  BusinessType,
+  CountryCode,
+  SalesChannel,
+} from '../../../shared/blueprint/types';
+import { newRequestKey } from '../../../shared/money';
 import { BosBrand } from '@/components/bos/brand';
 import { useBosDocumentBrand } from '@/components/bos/document-brand';
 import '@/components/bos/workspace.css';
@@ -692,10 +705,22 @@ export function BosWebApp({
   const [userRole, setUserRole] = useState('Owner');
   const [userEmail, setUserEmail] = useState('rahul@sharmastore.in');
 
-  const [storeSettings, setStoreSettings] = useState<BosStoreSettings>({
+  const [storeSettings, setStoreSettings] = useState<BosStoreSettings>(() => ({
     businessName: 'Sharma General Store',
     businessSlug: 'sharma-general-store',
     businessType: 'Retail Supermarket & Kirana',
+    blueprintType: 'grocery',
+    salesChannels: ['in_store', 'whatsapp', 'online', 'delivery'],
+    countryCode: 'IN',
+    language: 'en',
+    capabilities: resolveBlueprintCapabilities('grocery', [
+      'in_store',
+      'whatsapp',
+      'online',
+      'delivery',
+    ]),
+    cancellationPolicy: 'before_preparation',
+    refundPolicy: 'full',
     tagline: 'Fresh Groceries & Daily Essentials Delivered in 30 Mins',
     phone: '+91 98765 43210',
     whatsappNumber: '+91 98765 43210',
@@ -720,12 +745,13 @@ export function BosWebApp({
     enableStorePickup: true,
     themeColor: '#0A6847',
     announcementBanner: 'Free Home Delivery on Orders Above ₹499! Use code WELCOME50',
-  });
+  }));
 
   const [branches] = useState([
     { id: 'br-1', name: 'Sharma General Store', location: 'MG Road Main Branch' },
     { id: 'br-2', name: 'Sharma Express Mart', location: 'Kothrud Branch' },
   ]);
+  const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -748,6 +774,72 @@ export function BosWebApp({
   const [appointments, setAppointments] = useState<BosAppointment[]>(DEFAULT_APPOINTMENTS);
   const [daybookEntries, setDaybookEntries] = useState<BosDaybookEntry[]>(DEFAULT_DAYBOOK);
   const [coupons, setCoupons] = useState<BosCoupon[]>(DEFAULT_COUPONS);
+
+  const activeCapabilities = useMemo<BusinessCapabilities>(() => {
+    const bpType = storeSettings.blueprintType || 'grocery';
+    return resolveBlueprintCapabilities(
+      bpType,
+      storeSettings.salesChannels,
+      storeSettings.capabilities,
+    );
+  }, [storeSettings.blueprintType, storeSettings.salesChannels, storeSettings.capabilities]);
+
+  const activeCountryPack = useMemo(
+    () => getCountryPack(storeSettings.countryCode || 'IN'),
+    [storeSettings.countryCode],
+  );
+
+  const isNavItemEnabledByBlueprint = useCallback(
+    (navId: BosNavId): boolean => {
+      switch (navId) {
+        case 'dashboard':
+        case 'reports':
+        case 'integrations':
+        case 'settings':
+          return true;
+        case 'pos':
+          return activeCapabilities.posRegister || activeCapabilities.dining;
+        case 'inventory':
+          return activeCapabilities.catalog || activeCapabilities.inventory;
+        case 'orders':
+          return activeCapabilities.orders || activeCapabilities.posRegister;
+        case 'customers':
+          return activeCapabilities.customers;
+        case 'khata':
+          return activeCapabilities.customerCredit;
+        case 'invoices':
+          return activeCapabilities.invoicing || activeCapabilities.quotes;
+        case 'appointments':
+          return (
+            activeCapabilities.calendarBooking ||
+            activeCapabilities.reservations ||
+            activeCapabilities.jobs
+          );
+        case 'onlineStore':
+          return activeCapabilities.onlineStore;
+        case 'daybook':
+          return activeCapabilities.expenses;
+        case 'marketing':
+          return (
+            activeCapabilities.marketingBlasts ||
+            activeCapabilities.loyalty ||
+            activeCapabilities.whatsapp
+          );
+        case 'aiAssistant':
+          return true;
+        default:
+          return true;
+      }
+    },
+    [activeCapabilities],
+  );
+
+  const visibleNavItems = useMemo(() => {
+    if (!blueprintFilterEnabled) return BOS_PRIMARY_NAV_ITEMS;
+    return BOS_PRIMARY_NAV_ITEMS.filter(
+      (item) => isNavItemEnabledByBlueprint(item.id) || item.id === activeView,
+    );
+  }, [blueprintFilterEnabled, isNavItemEnabledByBlueprint, activeView]);
 
   const activeNavMeta = useMemo(
     () => BOS_PRIMARY_NAV_ITEMS.find((i) => i.id === activeView) || BOS_PRIMARY_NAV_ITEMS[0],
@@ -772,16 +864,32 @@ export function BosWebApp({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Load initial database state from shared API endpoints
+  // Load initial database state from shared production API endpoints
   useEffect(() => {
     let cancelled = false;
 
     async function hydrateFromDatabase() {
       try {
-        const [meRes, commRes, khataRes, custRes, bookRes] = await Promise.allSettled([
+        const [
+          meRes,
+          blueprintRes,
+          configRes,
+          invRes,
+          ordersRes,
+          khataRes,
+          daybookRes,
+          promoRes,
+          custRes,
+          bookRes,
+        ] = await Promise.allSettled([
           fetch('/api/auth/me', { credentials: 'include' }),
-          fetch('/api/commerce', { credentials: 'include' }),
+          fetch('/api/tenant/blueprint', { credentials: 'include' }),
+          fetch('/api/commerce/config', { credentials: 'include' }),
+          fetch('/api/commerce/inventory', { credentials: 'include' }),
+          fetch('/api/commerce/orders', { credentials: 'include' }),
           fetch('/api/commerce/khata', { credentials: 'include' }),
+          fetch('/api/commerce/daybook', { credentials: 'include' }),
+          fetch('/api/commerce/promotions', { credentials: 'include' }),
           fetch('/api/customers', { credentials: 'include' }),
           fetch('/api/bookings', { credentials: 'include' }),
         ]);
@@ -809,20 +917,70 @@ export function BosWebApp({
           }
         }
 
-        if (commRes.status === 'fulfilled' && commRes.value.ok) {
-          const commData = await commRes.value.json().catch(() => null);
-          const apiCatalog = commData?.catalog || commData?.data?.catalog;
-          if (Array.isArray(apiCatalog) && apiCatalog.length > 0) {
-            const mappedProducts: BosProductItem[] = apiCatalog.map(
+        // 1. Hydrate Tenant Blueprint & Country Pack
+        if (blueprintRes.status === 'fulfilled' && blueprintRes.value.ok) {
+          const bpData = await blueprintRes.value.json().catch(() => null);
+          const bp = bpData?.blueprint;
+          const pack = bpData?.countryPack;
+          if (bp && typeof bp === 'object') {
+            const bType = (bp.businessType as BusinessType) || 'grocery';
+            const typeMeta = BUSINESS_TYPE_LABELS[bType];
+            setStoreSettings((prev) => ({
+              ...prev,
+              blueprintType: bType,
+              businessType: typeMeta?.label || prev.businessType,
+              salesChannels: Array.isArray(bp.salesChannels)
+                ? bp.salesChannels
+                : prev.salesChannels,
+              countryCode: (bp.country as CountryCode) || prev.countryCode,
+              language: bp.language === 'hi' ? 'hi' : 'en',
+              capabilities: bp.capabilities || prev.capabilities,
+              currencySymbol: pack?.currency?.symbol || prev.currencySymbol,
+              ...(bp.businessName && !/default|workspace|demo/i.test(String(bp.businessName))
+                ? { businessName: String(bp.businessName) }
+                : {}),
+            }));
+          }
+        }
+
+        // 2. Hydrate Commerce Config & Inventory Catalog
+        let configCatalog: Array<Record<string, unknown>> = [];
+        if (configRes.status === 'fulfilled' && configRes.value.ok) {
+          const cfgData = await configRes.value.json().catch(() => null);
+          const cfg = cfgData?.config;
+          if (cfg) {
+            try {
+              const parsed =
+                typeof cfg.catalogJson === 'string'
+                  ? JSON.parse(cfg.catalogJson)
+                  : cfg.catalog;
+              if (Array.isArray(parsed)) configCatalog = parsed;
+            } catch {
+              // ignore
+            }
+            setStoreSettings((prev) => ({
+              ...prev,
+              ...(cfg.upiId ? { upiId: String(cfg.upiId) } : {}),
+              ...(typeof cfg.isActive === 'boolean' ? { storeLive: cfg.isActive } : {}),
+              ...(cfg.currencySymbol ? { currencySymbol: String(cfg.currencySymbol) } : {}),
+            }));
+          }
+        }
+
+        if (invRes.status === 'fulfilled' && invRes.value.ok) {
+          const invData = await invRes.value.json().catch(() => null);
+          const invItems = Array.isArray(invData?.items) ? invData.items : configCatalog;
+          if (Array.isArray(invItems) && invItems.length > 0) {
+            const mappedProducts: BosProductItem[] = invItems.map(
               (item: Record<string, unknown>, idx: number) => {
                 const itemName = String(item.name || 'Product Item');
                 const defaultMatch = DEFAULT_PRODUCTS.find(
                   (dp) =>
-                    dp.id === String(item.id || '') ||
+                    dp.id === String(item.id || item.productId || '') ||
                     dp.name.toLowerCase() === itemName.toLowerCase(),
                 );
                 return {
-                  id: String(item.id || defaultMatch?.id || `prod-api-${idx}`),
+                  id: String(item.id || item.productId || defaultMatch?.id || `prod-api-${idx}`),
                   name: itemName,
                   category: String(item.category || defaultMatch?.category || 'Groceries'),
                   price: Number(item.price) || defaultMatch?.price || 100,
@@ -832,18 +990,22 @@ export function BosWebApp({
                     defaultMatch?.costPrice ||
                     Math.round((Number(item.price) || 100) * 0.8),
                   stockQuantity:
-                    typeof item.stockQuantity === 'number'
-                      ? item.stockQuantity
-                      : (defaultMatch?.stockQuantity ?? 25),
+                    typeof item.stock === 'number'
+                      ? item.stock
+                      : typeof item.stockQuantity === 'number'
+                        ? item.stockQuantity
+                        : (defaultMatch?.stockQuantity ?? 25),
                   lowStockThreshold:
-                    Number(item.lowStockThreshold) || defaultMatch?.lowStockThreshold || 5,
+                    Number(item.minStock ?? item.lowStockThreshold) ||
+                    defaultMatch?.lowStockThreshold ||
+                    5,
                   sku: String(item.sku || defaultMatch?.sku || `SKU-${100 + idx}`),
                   barcode: String(item.barcode || defaultMatch?.barcode || `89010308452${idx}`),
                   unit: String(item.unit || defaultMatch?.unit || '1 Unit'),
                   gstRate: Number(item.gstRate ?? defaultMatch?.gstRate ?? 5),
                   hsnCode: String(item.hsnCode || defaultMatch?.hsnCode || '1006'),
                   imageUrl: item.imageUrl ? String(item.imageUrl) : defaultMatch?.imageUrl,
-                  onlineVisible: item.onlineVisible !== false,
+                  onlineVisible: item.isActive !== false && item.onlineVisible !== false,
                 };
               },
             );
@@ -864,50 +1026,88 @@ export function BosWebApp({
             ];
             setProducts(merged);
           }
+        }
 
-          const apiOrders = commData?.orders || commData?.data?.orders;
+        // 3. Hydrate Commerce Orders
+        if (ordersRes.status === 'fulfilled' && ordersRes.value.ok) {
+          const ordData = await ordersRes.value.json().catch(() => null);
+          const apiOrders = ordData?.orders || ordData?.data?.orders;
           if (Array.isArray(apiOrders) && apiOrders.length > 0) {
             const mappedOrders: BosOrder[] = apiOrders.map(
-              (o: Record<string, unknown>, idx: number) => ({
-                id: String(o.id || `#ORD-${1050 + idx}`),
-                customerName: String(o.customerName || 'Walk-in Customer'),
-                customerPhone: String(o.customerPhone || '+91 98765 43210'),
-                channel:
-                  o.channel === 'online' || o.channel === 'whatsapp' ? o.channel : 'pos',
-                status:
-                  o.status === 'completed' ||
-                  o.status === 'cancelled' ||
-                  o.status === 'preparing' ||
-                  o.status === 'accepted'
-                    ? o.status
-                    : 'new',
-                paymentMode:
-                  o.paymentMode === 'cash' ||
-                  o.paymentMode === 'card' ||
-                  o.paymentMode === 'khata'
-                    ? o.paymentMode
-                    : 'upi',
-                paymentStatus: o.paymentStatus === 'pending' ? 'pending' : 'paid',
-                totalAmount: Number(o.totalAmount) || 0,
-                items: Array.isArray(o.items)
-                  ? (o.items as Array<Record<string, unknown>>).map((it) => ({
-                      name: String(it.name || 'Item'),
-                      qty: Number(it.qty) || 1,
-                      price: Number(it.price) || 0,
-                    }))
-                  : [{ name: 'Store Item', qty: 1, price: Number(o.totalAmount) || 0 }],
-                createdAt: o.createdAt
-                  ? new Date(String(o.createdAt)).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
-                  : 'Today',
-              }),
+              (o: Record<string, unknown>, idx: number) => {
+                const rawStatus = String(o.status || 'PENDING').toUpperCase();
+                const status: BosOrder['status'] =
+                  rawStatus === 'COMPLETED'
+                    ? 'completed'
+                    : rawStatus === 'CANCELLED'
+                      ? 'cancelled'
+                      : rawStatus === 'PREPARING'
+                        ? 'preparing'
+                        : rawStatus === 'READY'
+                          ? 'ready'
+                          : rawStatus === 'CONFIRMED'
+                            ? 'accepted'
+                            : 'new';
+                const rawMethod = String(
+                  o.paymentMethod || o.paymentMode || 'UPI',
+                ).toUpperCase();
+                const paymentMode: BosOrder['paymentMode'] =
+                  rawMethod === 'CASH'
+                    ? 'cash'
+                    : rawMethod === 'CARD'
+                      ? 'card'
+                      : rawMethod === 'KHATA'
+                        ? 'khata'
+                        : 'upi';
+                const rawPayStatus = String(o.paymentStatus || 'PAID').toUpperCase();
+                const paymentStatus: BosOrder['paymentStatus'] =
+                  rawPayStatus === 'REFUNDED'
+                    ? 'refunded'
+                    : rawPayStatus === 'REFUND_PENDING'
+                      ? 'refund_pending'
+                      : rawPayStatus === 'PARTIAL'
+                        ? 'partial'
+                        : rawPayStatus === 'UNPAID' || rawPayStatus === 'PENDING'
+                          ? 'pending'
+                          : 'paid';
+
+                const totalVal = Number(o.total ?? o.totalAmount) || 0;
+                return {
+                  id: String(o.id || `#ORD-${1050 + idx}`),
+                  customerName: String(o.customerName || 'Walk-in Customer'),
+                  customerPhone: String(o.customerPhone || '+91 98765 43210'),
+                  customerAddress: o.deliveryAddress ? String(o.deliveryAddress) : undefined,
+                  channel:
+                    o.channel === 'online' || o.channel === 'whatsapp'
+                      ? o.channel
+                      : o.deliveryType === 'delivery'
+                        ? 'online'
+                        : 'pos',
+                  status,
+                  paymentMode,
+                  paymentStatus,
+                  totalAmount: totalVal,
+                  items: Array.isArray(o.items)
+                    ? (o.items as Array<Record<string, unknown>>).map((it) => ({
+                        name: String(it.name || 'Item'),
+                        qty: Number(it.qty) || 1,
+                        price: Number(it.price) || 0,
+                      }))
+                    : [{ name: 'Store Item', qty: 1, price: totalVal }],
+                  createdAt: o.createdAt
+                    ? new Date(String(o.createdAt)).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Today',
+                };
+              },
             );
             setOrders(mappedOrders);
           }
         }
 
+        // 4. Hydrate Khata / Customer Credit Ledger
         if (khataRes.status === 'fulfilled' && khataRes.value.ok) {
           const khataData = await khataRes.value.json().catch(() => null);
           const khataCustomers = khataData?.customers || khataData?.data?.customers;
@@ -920,21 +1120,22 @@ export function BosWebApp({
                 const existingIdx = merged.findIndex(
                   (c) => c.name.toLowerCase() === name.toLowerCase(),
                 );
+                const bal = Number(kc.balance ?? kc.creditBalance ?? 0);
                 if (existingIdx >= 0) {
                   merged[existingIdx] = {
                     ...merged[existingIdx],
-                    khataBalance: Number(kc.creditBalance ?? merged[existingIdx].khataBalance),
+                    khataBalance: bal,
                   };
                 } else {
                   merged.push({
-                    id: String(kc.id || `cust-${Date.now()}`),
+                    id: String(kc.id || kc.phone || `cust-${Date.now()}`),
                     name,
                     phone: String(kc.phone || '+91 98765 00000'),
                     address: 'Local Customer',
                     segment: 'Regular',
                     ordersCount: 5,
                     totalSpent: Number(kc.totalCredit) || 4500,
-                    khataBalance: Number(kc.creditBalance) || 0,
+                    khataBalance: bal,
                     loyaltyPoints: 120,
                     lastVisit: 'Recently',
                   });
@@ -945,6 +1146,74 @@ export function BosWebApp({
           }
         }
 
+        // 5. Hydrate Day Book Transactions
+        if (daybookRes.status === 'fulfilled' && daybookRes.value.ok) {
+          const dbData = await daybookRes.value.json().catch(() => null);
+          const txList = dbData?.transactions;
+          if (Array.isArray(txList) && txList.length > 0) {
+            const mappedDaybook: BosDaybookEntry[] = (
+              txList.slice(0, 20) as Array<Record<string, unknown>>
+            ).map((t, idx) => {
+              const isOut = String(t.type || '').toUpperCase() === 'OUTFLOW';
+              const amt = Number(t.amount) || 0;
+              const rawM = String(t.paymentMethod || 'CASH').toUpperCase();
+              const paymentMode: BosDaybookEntry['paymentMode'] = rawM.includes('UPI')
+                ? 'upi'
+                : rawM.includes('BANK')
+                  ? 'bank'
+                  : rawM.includes('CARD')
+                    ? 'card'
+                    : 'cash';
+              return {
+                id: String(t.id || `db-api-${idx}`),
+                time: t.time
+                  ? new Date(String(t.time)).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : 'Today',
+                partyName: String(t.title || 'Store Entry'),
+                subtitle: String(t.subtitle || 'Daily transaction'),
+                category: isOut ? 'Expense' : 'POS Sale',
+                refNumber: String(t.id || `REF-${100 + idx}`).slice(-8).toUpperCase(),
+                paymentMode,
+                moneyIn: isOut ? 0 : amt,
+                moneyOut: isOut ? amt : 0,
+                createdAt: 'Today',
+              };
+            });
+            setDaybookEntries((prev) => [...mappedDaybook, ...prev.slice(0, 5)]);
+          }
+        }
+
+        // 6. Hydrate Promotions & Storefront Banner
+        if (promoRes.status === 'fulfilled' && promoRes.value.ok) {
+          const promoData = await promoRes.value.json().catch(() => null);
+          const promoList = promoData?.promotions;
+          if (Array.isArray(promoList) && promoList.length > 0) {
+            const mappedCoupons: BosCoupon[] = (
+              promoList as Array<Record<string, unknown>>
+            ).map((p, idx) => ({
+              id: String(p.id || `cp-api-${idx}`),
+              code: String(p.code || 'OFFER10'),
+              type: p.discountType === 'PERCENT' ? 'percentage' : 'flat',
+              value: Number(p.discountValue) || 10,
+              minOrder: Number(p.minOrderValue) || 299,
+              active: p.isActive !== false,
+              usageCount: 24,
+              description: p.description ? String(p.description) : undefined,
+            }));
+            setCoupons(mappedCoupons);
+          }
+          if (promoData?.bannerText && String(promoData.bannerText).trim()) {
+            setStoreSettings((prev) => ({
+              ...prev,
+              announcementBanner: String(promoData.bannerText).trim(),
+            }));
+          }
+        }
+
+        // 7. Hydrate Customers & Bookings
         if (custRes.status === 'fulfilled' && custRes.value.ok) {
           const custData = await custRes.value.json().catch(() => null);
           const list = custData?.customers || custData?.data;
@@ -1020,7 +1289,7 @@ export function BosWebApp({
     [],
   );
 
-  // Handlers connected to APIs + local state
+  // Handlers connected to atomic production /api/commerce/* & /api/tenant/blueprint endpoints
   const handleCompleteSale = async (payload: {
     customerName: string;
     customerPhone: string;
@@ -1053,7 +1322,7 @@ export function BosWebApp({
 
     setOrders((prev) => [newOrder, ...prev]);
 
-    // Decrement stock
+    // Decrement stock locally
     setProducts((prev) =>
       prev.map((prod) => {
         const sold = payload.items.find((i) => i.id === prod.id);
@@ -1128,16 +1397,33 @@ export function BosWebApp({
       );
     }
 
-    // Persist to /api/commerce
-    fetch('/api/commerce', {
+    // Persist atomically to /api/commerce/orders with Idempotency-Key
+    const requestKey = newRequestKey();
+    fetch('/api/commerce/orders', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': requestKey,
+      },
       body: JSON.stringify({
+        requestKey,
         customerName: payload.customerName,
-        customerPhone: payload.customerPhone,
-        channel: 'pos',
-        items: payload.items,
-        totalAmount: payload.totalAmount,
+        customerPhone:
+          payload.customerName === 'Walk-in Customer' ? '' : payload.customerPhone,
+        deliveryType: 'takeout',
+        paymentMethod:
+          payload.paymentMode === 'khata'
+            ? 'CASH'
+            : payload.paymentMode.toUpperCase(),
+        paymentStatus: payload.paymentMode === 'khata' ? 'UNPAID' : 'PAID',
+        notes: payload.notes,
+        items: payload.items.map((it) => ({
+          productId: it.id,
+          name: it.name,
+          qty: it.qty,
+          price: it.price,
+          amount: it.qty * it.price,
+        })),
       }),
     }).catch(() => {});
   };
@@ -1148,20 +1434,36 @@ export function BosWebApp({
       : products.map((p) => (p.id === product.id ? product : p));
     setProducts(nextProducts);
 
-    fetch('/api/commerce', {
-      method: 'PUT',
+    if (isNew) {
+      fetch('/api/commerce/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: product.name,
+          price: product.price,
+          category: product.category,
+          sku: product.sku,
+          imageUrl: product.imageUrl,
+          stock: product.stockQuantity,
+          inStock: product.stockQuantity > 0,
+        }),
+      }).catch(() => {});
+    }
+
+    fetch('/api/commerce/config', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ catalog: nextProducts }),
+      body: JSON.stringify({ catalogJson: nextProducts }),
     }).catch(() => {});
   };
 
   const handleDeleteProduct = async (productId: string) => {
     const nextProducts = products.filter((p) => p.id !== productId);
     setProducts(nextProducts);
-    fetch('/api/commerce', {
-      method: 'PUT',
+    fetch('/api/commerce/config', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ catalog: nextProducts }),
+      body: JSON.stringify({ catalogJson: nextProducts }),
     }).catch(() => {});
   };
 
@@ -1172,10 +1474,19 @@ export function BosWebApp({
         : p,
     );
     setProducts(nextProducts);
-    fetch('/api/commerce', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ catalog: nextProducts }),
+
+    const requestKey = newRequestKey();
+    fetch('/api/commerce/inventory', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': requestKey,
+      },
+      body: JSON.stringify({
+        productId,
+        deltaStock: delta,
+        requestKey,
+      }),
     }).catch(() => {});
   };
 
@@ -1186,15 +1497,32 @@ export function BosWebApp({
           ? {
               ...o,
               status,
-              paymentStatus: status === 'completed' ? 'paid' : o.paymentStatus,
+              paymentStatus:
+                status === 'completed'
+                  ? 'paid'
+                  : status === 'cancelled' && o.paymentStatus === 'paid'
+                    ? 'refund_pending'
+                    : o.paymentStatus,
             }
           : o,
       ),
     );
-    fetch('/api/commerce', {
+
+    const apiStatusMap: Record<BosOrder['status'], string> = {
+      new: 'PENDING',
+      accepted: 'CONFIRMED',
+      preparing: 'PREPARING',
+      ready: 'READY',
+      completed: 'COMPLETED',
+      cancelled: 'CANCELLED',
+    };
+    fetch(`/api/commerce/orders/${encodeURIComponent(orderId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: orderId, status }),
+      body: JSON.stringify({
+        status: apiStatusMap[status] || 'CONFIRMED',
+        ...(status === 'completed' ? { paymentStatus: 'PAID' } : {}),
+      }),
     }).catch(() => {});
   };
 
@@ -1260,6 +1588,7 @@ export function BosWebApp({
     };
     setKhataTransactions((prev) => [tx, ...prev]);
 
+    const matchedCustomer = customers.find((c) => c.id === entry.customerId);
     setCustomers((prev) =>
       prev.map((c) => {
         if (c.id !== entry.customerId) return c;
@@ -1290,16 +1619,21 @@ export function BosWebApp({
       ]);
     }
 
+    const requestKey = newRequestKey();
     fetch('/api/commerce/khata', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': requestKey,
+      },
       body: JSON.stringify({
-        entityType: 'customer',
-        id: entry.customerId,
-        action: entry.type === 'got' ? 'payment' : 'credit',
+        type: entry.type === 'got' ? 'GOT_PAYMENT' : 'GAVE_UDHAAR',
         amount: entry.amount,
-        mode: entry.mode,
-        notes: entry.note,
+        customerPhone: matchedCustomer?.phone || '+91 98765 43210',
+        customerName: entry.customerName,
+        note: entry.note,
+        paymentMethod: entry.mode === 'cash' ? 'CASH' : 'UPI',
+        requestKey,
       }),
     }).catch(() => {});
   };
@@ -1347,19 +1681,116 @@ export function BosWebApp({
     };
     setDaybookEntries((prev) => [created, ...prev]);
 
-    fetch('/api/commerce/daybook', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        date: new Date().toISOString().slice(0, 10),
-        openingBalance: 12500,
-        notes: `${entry.partyName}: ${entry.subtitle}`,
-      }),
-    }).catch(() => {});
+    const requestKey = newRequestKey();
+    const isOutflow = entry.moneyOut > 0;
+    const amount = isOutflow ? entry.moneyOut : entry.moneyIn;
+
+    if (entry.category === 'Expense') {
+      fetch('/api/commerce/expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': requestKey,
+        },
+        body: JSON.stringify({
+          amount,
+          category: entry.category,
+          description: `${entry.partyName} — ${entry.subtitle}`,
+          paymentMode: entry.paymentMode === 'cash' ? 'CASH' : 'BANK',
+          requestKey,
+        }),
+      }).catch(() => {});
+    } else {
+      fetch('/api/commerce/money', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': requestKey,
+        },
+        body: JSON.stringify({
+          kind: isOutflow ? 'EXPENSE' : 'MONEY_IN',
+          amount,
+          account: entry.paymentMode === 'cash' ? 'CASH' : 'BANK',
+          reference: `${entry.partyName}: ${entry.subtitle}`,
+          requestKey,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const handleUpdateStoreSettings = async (patch: Partial<BosStoreSettings>) => {
-    setStoreSettings((prev) => ({ ...prev, ...patch }));
+    setStoreSettings((prev) => {
+      const next = { ...prev, ...patch };
+      if (patch.countryCode && patch.countryCode !== prev.countryCode && !patch.currencySymbol) {
+        const pack = getCountryPack(patch.countryCode);
+        next.currencySymbol = pack.currency.symbol;
+      }
+      if (patch.blueprintType && patch.blueprintType !== prev.blueprintType) {
+        const channels =
+          patch.salesChannels ||
+          DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[patch.blueprintType] ||
+          prev.salesChannels;
+        next.salesChannels = channels;
+        next.capabilities = resolveBlueprintCapabilities(
+          patch.blueprintType,
+          channels,
+          patch.capabilities,
+        );
+      }
+      return next;
+    });
+
+    // Persist Blueprint updates if any blueprint-level field changed
+    if (
+      patch.blueprintType !== undefined ||
+      patch.salesChannels !== undefined ||
+      patch.countryCode !== undefined ||
+      patch.language !== undefined ||
+      patch.capabilities !== undefined ||
+      patch.businessName !== undefined
+    ) {
+      fetch('/api/tenant/blueprint', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(patch.blueprintType ? { businessType: patch.blueprintType } : {}),
+          ...(patch.salesChannels ? { salesChannels: patch.salesChannels } : {}),
+          ...(patch.countryCode ? { country: patch.countryCode } : {}),
+          ...(patch.language ? { language: patch.language } : {}),
+          ...(patch.capabilities ? { capabilities: patch.capabilities } : {}),
+          ...(patch.businessName ? { businessName: patch.businessName } : {}),
+        }),
+      }).catch(() => {});
+    }
+
+    // Persist Storefront & Billing Config updates
+    if (
+      patch.upiId !== undefined ||
+      patch.storeLive !== undefined ||
+      patch.announcementBanner !== undefined ||
+      patch.gstin !== undefined
+    ) {
+      fetch('/api/commerce/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...(patch.upiId !== undefined ? { upiId: patch.upiId } : {}),
+          ...(patch.storeLive !== undefined ? { isActive: patch.storeLive } : {}),
+          ...(patch.gstin !== undefined ? { billing: { gstin: patch.gstin } } : {}),
+        }),
+      }).catch(() => {});
+    }
+
+    if (patch.announcementBanner !== undefined) {
+      fetch('/api/commerce/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'SET_BANNER',
+          bannerText: patch.announcementBanner,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const searchResults = useMemo(() => {
@@ -1430,9 +1861,15 @@ export function BosWebApp({
           aria-label="BOS Primary Navigation"
           className="bos-sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-3"
         >
-          {BOS_PRIMARY_NAV_ITEMS.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = NAV_ICON_MAP[item.id] || LayoutDashboard;
             const isActive = activeView === item.id;
+            const displayLabel =
+              item.id === 'marketing'
+                ? 'Marketing & Promotions'
+                : item.id === 'khata' && storeSettings.countryCode && storeSettings.countryCode !== 'IN'
+                  ? `Khata / Credit (${activeCountryPack.vocabulary.customerCredit})`
+                  : item.label;
             return (
               <button
                 key={item.id}
@@ -1445,9 +1882,7 @@ export function BosWebApp({
                     isActive ? 'text-[#2DD4BF]' : 'text-[#8CC4B0]'
                   }`}
                 />
-                <span className="truncate">
-                  {item.id === 'marketing' ? 'Marketing & Promotions' : item.label}
-                </span>
+                <span className="truncate">{displayLabel}</span>
                 {item.id === 'aiAssistant' && (
                   <span className="ml-auto rounded-full bg-[#00B894]/25 px-1.5 py-0.5 text-[9.5px] font-bold text-[#6EE7B7]">
                     AI
@@ -1485,7 +1920,7 @@ export function BosWebApp({
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         {/* Top White Header (64px) */}
         <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[#E4EFEA] bg-white px-4 lg:px-6">
-          {/* Left: Mobile Menu Trigger + Store Switcher Pill */}
+          {/* Left: Mobile Menu Trigger + Store & Blueprint Switcher Pill */}
           <div className="flex items-center gap-2.5">
             <button
               type="button"
@@ -1508,34 +1943,111 @@ export function BosWebApp({
                 <span className="text-[13.5px] font-bold text-[#111827] max-w-[180px] truncate">
                   {storeSettings.businessName}
                 </span>
+                <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[10.5px] font-bold text-[#0A6847]">
+                  <span>{activeCountryPack.flag}</span>
+                  <span>{storeSettings.currencySymbol}</span>
+                </span>
                 <ChevronDown className="h-4 w-4 text-[#64748B]" />
               </button>
 
               {storeMenuOpen && (
-                <div className="absolute left-0 z-40 mt-1.5 w-64 rounded-2xl border border-[#E4EFEA] bg-white p-2 shadow-xl">
-                  <p className="px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                    Switch Store / Branch
-                  </p>
-                  {branches.map((br) => (
-                    <button
-                      key={br.id}
-                      type="button"
-                      onClick={() => {
-                        setStoreSettings((s) => ({ ...s, businessName: br.name }));
-                        setStoreMenuOpen(false);
+                <div className="absolute left-0 z-40 mt-1.5 w-80 rounded-2xl border border-[#E4EFEA] bg-white p-2.5 shadow-xl space-y-2">
+                  <div>
+                    <p className="px-2 py-1 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Switch Store / Branch
+                    </p>
+                    {branches.map((br) => (
+                      <button
+                        key={br.id}
+                        type="button"
+                        onClick={() => {
+                          void handleUpdateStoreSettings({ businessName: br.name });
+                          setStoreMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[12.5px] hover:bg-[#F4F8F6]"
+                      >
+                        <div>
+                          <p className="font-bold text-[#111827]">{br.name}</p>
+                          <p className="text-[11px] text-[#64748B]">{br.location}</p>
+                        </div>
+                        {storeSettings.businessName === br.name && (
+                          <span className="h-2 w-2 rounded-full bg-[#0A6847]" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Business Blueprint Profile Switcher */}
+                  <div className="border-t border-[#EDF4F0] pt-2 px-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                        Business Blueprint
+                      </p>
+                      <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#0A6847] cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={blueprintFilterEnabled}
+                          onChange={(e) => setBlueprintFilterEnabled(e.target.checked)}
+                          className="h-3.5 w-3.5 accent-[#0A6847]"
+                        />
+                        <span>Filter Sidebar</span>
+                      </label>
+                    </div>
+                    <select
+                      value={storeSettings.blueprintType || 'grocery'}
+                      onChange={(e) => {
+                        const nextType = e.target.value as BusinessType;
+                        const label = BUSINESS_TYPE_LABELS[nextType]?.label || storeSettings.businessType;
+                        void handleUpdateStoreSettings({
+                          blueprintType: nextType,
+                          businessType: label,
+                        });
                       }}
-                      className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-[12.5px] hover:bg-[#F4F8F6]"
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-1.5 text-[12px] font-bold text-[#111827]"
                     >
-                      <div>
-                        <p className="font-bold text-[#111827]">{br.name}</p>
-                        <p className="text-[11px] text-[#64748B]">{br.location}</p>
-                      </div>
-                      {storeSettings.businessName === br.name && (
-                        <span className="h-2 w-2 rounded-full bg-[#0A6847]" />
-                      )}
-                    </button>
-                  ))}
-                  <div className="mt-1 border-t border-[#EDF4F0] pt-1">
+                      {(Object.keys(BUSINESS_TYPE_LABELS) as BusinessType[]).map((bKey) => (
+                        <option key={bKey} value={bKey}>
+                          {BUSINESS_TYPE_LABELS[bKey].icon} {BUSINESS_TYPE_LABELS[bKey].label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Country & Tax Pack Switcher */}
+                  <div className="border-t border-[#EDF4F0] pt-2 px-2">
+                    <p className="mb-1 text-[10.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Country &amp; Tax Pack
+                    </p>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['IN', 'US', 'CA', 'AU', 'GB', 'GLOBAL'] as CountryCode[]).map((cCode) => {
+                        const pack = COUNTRY_PACKS[cCode];
+                        const isSelected = (storeSettings.countryCode || 'IN') === cCode;
+                        return (
+                          <button
+                            key={cCode}
+                            type="button"
+                            onClick={() => {
+                              void handleUpdateStoreSettings({
+                                countryCode: cCode,
+                                currencySymbol: pack.currency.symbol,
+                              });
+                            }}
+                            className={`flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-bold transition ${
+                              isSelected
+                                ? 'border-[#0A6847] bg-[#E6F6F0] text-[#0A6847]'
+                                : 'border-[#DCE9E3] bg-white text-[#475569] hover:bg-[#F8FCFA]'
+                            }`}
+                          >
+                            <span>{pack.flag}</span>
+                            <span>{cCode}</span>
+                            <span>({pack.currency.symbol})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#EDF4F0] pt-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -1545,7 +2057,7 @@ export function BosWebApp({
                       className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-[12px] font-semibold text-[#0A6847] hover:bg-[#E6F6F0]/50"
                     >
                       <Settings className="h-3.5 w-3.5" />
-                      <span>Store & GST Settings</span>
+                      <span>Store &amp; GST Settings</span>
                     </button>
                   </div>
                 </div>
@@ -1997,12 +2509,53 @@ export function BosWebApp({
                 initialAiPrompt={navContext?.prompt}
                 onUpdateStoreSettings={handleUpdateStoreSettings}
                 onAddCoupon={async (cp) => {
-                  setCoupons((prev) => [{ ...cp, id: `cp-${Date.now()}` }, ...prev]);
+                  const newCoupon: BosCoupon = { ...cp, id: `cp-${Date.now()}` };
+                  const nextCoupons = [newCoupon, ...coupons];
+                  setCoupons(nextCoupons);
+                  try {
+                    await fetch('/api/commerce/promotions', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': newRequestKey(),
+                      },
+                      body: JSON.stringify({
+                        discountRules: nextCoupons.map((c) => ({
+                          id: c.id,
+                          code: c.code,
+                          type: c.type,
+                          value: c.value,
+                          minOrderAmount: c.minOrder,
+                          active: c.active,
+                        })),
+                      }),
+                    });
+                  } catch {
+                    // Optimistic update kept
+                  }
                 }}
                 onToggleCoupon={(id) => {
-                  setCoupons((prev) =>
-                    prev.map((c) => (c.id === id ? { ...c, active: !c.active } : c)),
+                  const nextCoupons = coupons.map((c) =>
+                    c.id === id ? { ...c, active: !c.active } : c,
                   );
+                  setCoupons(nextCoupons);
+                  void fetch('/api/commerce/promotions', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Idempotency-Key': newRequestKey(),
+                    },
+                    body: JSON.stringify({
+                      discountRules: nextCoupons.map((c) => ({
+                        id: c.id,
+                        code: c.code,
+                        type: c.type,
+                        value: c.value,
+                        minOrderAmount: c.minOrder,
+                        active: c.active,
+                      })),
+                    }),
+                  }).catch(() => {});
                 }}
                 onOpenPrinterModal={() => setPrinterModalOpen(true)}
                 onOpenUpgradeModal={() => setUpgradeModalOpen(true)}

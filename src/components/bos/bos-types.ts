@@ -36,13 +36,15 @@ export type BosOrder = {
   channel: 'pos' | 'online' | 'whatsapp';
   status: 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   paymentMode: 'cash' | 'upi' | 'card' | 'khata';
-  paymentStatus: 'paid' | 'pending' | 'partial';
+  paymentStatus: 'paid' | 'pending' | 'partial' | 'refund_pending' | 'refunded';
   totalAmount: number;
   subtotalAmount?: number;
   discountAmount?: number;
   taxAmount?: number;
   items: BosOrderLineItem[];
   notes?: string;
+  cancellationReason?: string;
+  supportStatus?: 'none' | 'open' | 'resolved' | 'escalated';
   createdAt: string;
 };
 
@@ -118,6 +120,17 @@ export type BosStoreSettings = {
   businessName: string;
   businessSlug: string;
   businessType: string;
+  blueprintType?: import('../../../shared/blueprint/types').BusinessType;
+  salesChannels?: import('../../../shared/blueprint/types').SalesChannel[];
+  countryCode?: import('../../../shared/blueprint/types').CountryCode;
+  language?: 'en' | 'hi';
+  capabilities?: Partial<import('../../../shared/blueprint/types').BusinessCapabilities>;
+  cancellationPolicy?:
+    | 'before_confirmation'
+    | 'before_preparation'
+    | '30m_before_appointment'
+    | '24h_before_appointment';
+  refundPolicy?: 'full' | 'partial' | 'merchant_review';
   tagline: string;
   phone: string;
   whatsappNumber: string;

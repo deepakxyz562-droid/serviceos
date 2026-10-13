@@ -563,6 +563,9 @@ export function BosOrdersWorkstation({
   const [statusOverrides, setStatusOverrides] = useState<
     Record<string, ShowcaseOrderRow['statusLabel']>
   >({});
+  const [refundOverrides, setRefundOverrides] = useState<
+    Record<string, 'paid' | 'refund_pending' | 'refunded'>
+  >({});
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -769,8 +772,12 @@ export function BosOrdersWorkstation({
 
   const handleCreateReturn = async (row: ShowcaseOrderRow) => {
     setStatusOverrides((prev) => ({ ...prev, [row.id]: 'Cancelled' }));
+    setRefundOverrides((prev) => ({
+      ...prev,
+      [row.id]: prev[row.id] === 'refund_pending' ? 'refunded' : 'refund_pending',
+    }));
     await onUpdateOrderStatus(row.id, 'cancelled');
-    showToast(`Return initiated for Order ${row.id}`);
+    showToast(`Return & Refund initiated for Order ${row.id}`);
   };
 
   return (
@@ -1631,8 +1638,20 @@ export function BosOrdersWorkstation({
                     {selectedOrder.paymentMethodDetail}
                   </span>
                 </div>
-                <span className="rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-bold text-[#0A7B56]">
-                  Paid
+                <span
+                  className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                    refundOverrides[selectedOrder.id] === 'refunded'
+                      ? 'bg-[#FEE2E2] text-[#DC2626]'
+                      : refundOverrides[selectedOrder.id] === 'refund_pending'
+                        ? 'bg-[#FEF3C7] text-[#D97706]'
+                        : 'bg-[#E6F6F0] text-[#0A7B56]'
+                  }`}
+                >
+                  {refundOverrides[selectedOrder.id] === 'refunded'
+                    ? 'Refunded'
+                    : refundOverrides[selectedOrder.id] === 'refund_pending'
+                      ? 'Refund Pending'
+                      : 'Paid'}
                 </span>
               </div>
 
@@ -1648,6 +1667,61 @@ export function BosOrdersWorkstation({
                   {selectedOrder.inspectorDateTime}
                 </span>
               </div>
+
+              {inspectorTab === 'history' && (
+                <div className="mt-2 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase text-[#64748B]">
+                      Update Order Status
+                    </span>
+                    {refundOverrides[selectedOrder.id] === 'refund_pending' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRefundOverrides((prev) => ({
+                            ...prev,
+                            [selectedOrder.id]: 'refunded',
+                          }));
+                          showToast(`Marked refund completed for ${selectedOrder.id}`);
+                        }}
+                        className="rounded-md bg-[#0A6847] px-2 py-0.5 text-[10.5px] font-bold text-white"
+                      >
+                        Mark Refunded
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-4 gap-1 text-[11px] font-semibold">
+                    {(
+                      [
+                        { label: 'Pending', api: 'new' as const },
+                        { label: 'Processing', api: 'preparing' as const },
+                        { label: 'Completed', api: 'completed' as const },
+                        { label: 'Cancelled', api: 'cancelled' as const },
+                      ] as const
+                    ).map((st) => (
+                      <button
+                        key={st.label}
+                        type="button"
+                        onClick={() => {
+                          setStatusOverrides((prev) => ({
+                            ...prev,
+                            [selectedOrder.id]: st.label,
+                          }));
+                          void onUpdateOrderStatus(selectedOrder.id, st.api);
+                          showToast(`Order ${selectedOrder.id} marked ${st.label}`);
+                        }}
+                        className={`rounded-lg py-1 transition ${
+                          selectedOrder.statusLabel === st.label
+                            ? 'bg-[#0A6847] text-white'
+                            : 'bg-white border border-[#DCE9E3] text-[#475569]'
+                        }`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bottom 3 Action Buttons: Print Bill | Share | Create Return */}
