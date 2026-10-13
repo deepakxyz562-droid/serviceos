@@ -921,4 +921,66 @@ it('verifies BGOS navigation cleanup, Billing inside Settings, and FormAgentStud
   expect(formsRoot?.className).toContain('min-h-0');
 });
 
+test('BgosSettings renders redesigned Business Settings layout with 8 top tabs, 10 sidebar sections, live Profile Preview, Business Hours, Service Areas, and Tax & Compliance', async () => {
+  const { BgosSettings } = await import('@/components/bgos/settings');
+  const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
+
+  useAppStore.setState({ currentView: 'settings', pendingSettingsSection: null });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  render(
+    <QueryClientProvider client={queryClient}>
+      <BgosSettings />
+    </QueryClientProvider>
+  );
+
+  // Header & Save Changes button
+  expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeDefined();
+  expect(screen.getByText('Configure your business, team, integrations and preferences.')).toBeDefined();
+  const saveBtn = screen.getByRole('button', { name: /Save Changes/i });
+  expect(saveBtn).toBeDefined();
+  fireEvent.click(saveBtn);
+  expect(screen.getByText('Changes Saved!')).toBeDefined();
+
+  // 8 Top Sub-Navigation Tabs
+  expect(screen.getByRole('tab', { name: /Business Settings/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Team & Users/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Plans & Billing/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Notifications/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Integrations/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Automation/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Security/i })).toBeDefined();
+  expect(screen.getByRole('tab', { name: /Preferences/i })).toBeDefined();
+
+  // 10 Left Sidebar Subsections
+  const sidebarNav = screen.getByRole('navigation', { name: /Business Settings Subsections/i });
+  expect(sidebarNav).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Business Details$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Branding & Logo$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Custom Fields$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Language & Region$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Data Management$/i })).toBeDefined();
+
+  // Business Profile & Live Profile Preview
+  expect(screen.getByRole('heading', { name: 'Profile Preview' })).toBeDefined();
+  expect(screen.getByText('(246 reviews)')).toBeDefined();
+  expect(screen.getByText('Open Now')).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Book Now' })).toBeDefined();
+  expect(screen.getByRole('button', { name: 'Get Quote' })).toBeDefined();
+
+  // Contact Information & Business Hours
+  expect(screen.getByDisplayValue('hello@bgos.com')).toBeDefined();
+  expect(screen.getByDisplayValue('https://bgos.com')).toBeDefined();
+  expect(screen.getByText('Closed')).toBeDefined();
+
+  // Service Areas removable city chips & Tax & Compliance
+  expect(screen.getByText('Delhi')).toBeDefined();
+  expect(screen.getByText('Noida')).toBeDefined();
+  expect(screen.getByText('Gurgaon')).toBeDefined();
+  expect(screen.getByText('Faridabad')).toBeDefined();
+  expect(screen.getByDisplayValue('07ABCDE1234F1Z5')).toBeDefined();
+  expect(screen.getByDisplayValue('INV')).toBeDefined();
+});
+
+
 
