@@ -251,6 +251,40 @@ export function BosMarketingAiIntegrationsSettings({
     ondc: false,
     zoho: false,
   });
+  const [integrationCreds, setIntegrationCreds] = useState<
+    Record<string, { keyId?: string; secret?: string; metaField?: string }>
+  >({
+    razorpay: {
+      keyId: 'rzp_live_8F92ka019',
+      secret: '••••••••••••••••',
+      metaField: storeSettings.upiId || 'sharmastore@okhdfcbank',
+    },
+    whatsapp: {
+      keyId: '1048291049281',
+      secret: 'EAABwzL1••••••••',
+      metaField: storeSettings.whatsappNumber || '+91 98765 43210',
+    },
+    tally: {
+      keyId: 'localhost',
+      secret: '9000',
+      metaField: 'SHARMA GENERAL STORE (2026)',
+    },
+    printer: {
+      keyId: 'USB001',
+      secret: '',
+      metaField: 'Epson TM-T82 (80mm)',
+    },
+    phonepe: {
+      keyId: '',
+      secret: '',
+      metaField: '',
+    },
+    porter: {
+      keyId: '',
+      secret: '',
+      metaField: storeSettings.address || '',
+    },
+  });
 
   /* Settings state (Matches Settings & Business Configuration screenshot) */
   const [settingsTopTab, setSettingsTopTab] = useState<
@@ -357,26 +391,40 @@ export function BosMarketingAiIntegrationsSettings({
         }),
       });
       const json = await res.json().catch(() => null);
-      const reply =
-        (json && (json.reply || json.message || json.content)) ||
-        generateSmartAiReply(trimmed);
 
+      if (res.ok && json && (json.reply || json.message || json.content)) {
+        const reply = json.reply || json.message || json.content;
+        setAiMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: String(reply),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      } else {
+        const errMsg =
+          (json && json.error) ||
+          (res ? `AI service responded with HTTP ${res.status}` : 'AI service unavailable');
+        setAiMessages((prev) => [
+          ...prev,
+          {
+            id: `ai-${Date.now()}`,
+            role: 'assistant',
+            text: `⚠️ **AI Service Notice:** ${errMsg}. Please ensure the backend AI service is online and configured.`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Network error';
       setAiMessages((prev) => [
         ...prev,
         {
           id: `ai-${Date.now()}`,
           role: 'assistant',
-          text: String(reply),
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } catch {
-      setAiMessages((prev) => [
-        ...prev,
-        {
-          id: `ai-${Date.now()}`,
-          role: 'assistant',
-          text: generateSmartAiReply(trimmed),
+          text: `⚠️ **AI Service Error:** ${errMsg}. Unable to connect to the backend AI assistant service.`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -1137,18 +1185,43 @@ export function BosMarketingAiIntegrationsSettings({
                         ? Math.max(1, customers.length)
                         : Math.max(1, Math.min(customers.length, 25));
 
-                    fetch('/api/campaigns', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        name: campaignTitle || 'Special Store Promotion',
-                        type: 'promotional',
-                        status: 'active',
-                        channel: 'email',
-                        messageContent: campaignText,
-                        totalRecipients: targetAudienceCount,
-                      }),
-                    }).catch(() => {});
+                    const channelMap: Record<string, string> = {
+                      WhatsApp: 'whatsapp',
+                      Discount: 'sms',
+                      Loyalty: 'sms',
+                      Coupon: 'email',
+                    };
+                    const channel = channelMap[campaignType] || 'whatsapp';
+
+                    let launchSuccess = false;
+                    let failureReason = '';
+                    try {
+                      const res = await fetch('/api/campaigns', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          name: campaignTitle || 'Special Store Promotion',
+                          type: 'promotional',
+                          status: 'active',
+                          channel,
+                          messageContent: campaignText,
+                          totalRecipients: targetAudienceCount,
+                        }),
+                      });
+                      if (res.ok) {
+                        launchSuccess = true;
+                        setToast(
+                          `Launched "${campaignTitle}" to ${targetAudienceCount} recipients (${campaignAudience}) via ${campaignType}!`,
+                        );
+                      } else {
+                        const err = await res.json().catch(() => null);
+                        failureReason = err?.error || `HTTP ${res.status}`;
+                        setToast(`⚠️ Server error: Campaign saved as Draft (${failureReason})`);
+                      }
+                    } catch (netErr: any) {
+                      failureReason = netErr?.message || 'Network unreachable';
+                      setToast(`⚠️ Network error: Campaign saved as Draft. Could not dispatch to recipients.`);
+                    }
 
                     const nextId = recentCampaigns.length + 1;
                     setRecentCampaigns((prev) => [
@@ -1158,10 +1231,10 @@ export function BosMarketingAiIntegrationsSettings({
                         bannerTheme: 'fresh',
                         type: campaignType,
                         audience: campaignAudience,
-                        sent: String(targetAudienceCount),
+                        sent: launchSuccess ? String(targetAudienceCount) : '0',
                         orders: 0,
                         revenue: 0,
-                        status: 'Active',
+                        status: launchSuccess ? 'Active' : 'Draft',
                         discountHeadline: campaignDiscountText,
                         messageBody: campaignText,
                         validTill: campaignValidTill,
@@ -1170,9 +1243,6 @@ export function BosMarketingAiIntegrationsSettings({
                     ]);
                     setSelectedCampaignId(nextId);
                     setCreateCampaignModalOpen(false);
-                    setToast(
-                      `Launched "${campaignTitle}" to ${targetAudienceCount} recipients (${campaignAudience})!`,
-                    );
                     setTimeout(() => setToast(null), 3000);
                   }}
                   className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white cursor-pointer"
@@ -2199,21 +2269,48 @@ export function BosMarketingAiIntegrationsSettings({
                         type="button"
                         onClick={async (e) => {
                           e.stopPropagation();
+                          setSelectedIntegrationId(item.id);
                           if (item.id === 'printer' && onOpenPrinterModal) {
                             onOpenPrinterModal();
                             return;
                           }
-                          const nextState = !connectedIds[item.id];
-                          setConnectedIds((prev) => ({
-                            ...prev,
-                            [item.id]: nextState,
-                          }));
-                          await onUpdateStoreSettings({
-                            capabilities: {
-                              ...storeSettings.capabilities,
-                              [item.id]: nextState,
-                            },
-                          });
+                          if (isConnected) {
+                            setConnectedIds((prev) => ({
+                              ...prev,
+                              [item.id]: false,
+                            }));
+                            await onUpdateStoreSettings({
+                              capabilities: {
+                                ...storeSettings.capabilities,
+                                [item.id]: false,
+                              },
+                            });
+                            setToast(`Disconnected ${item.name}.`);
+                            setTimeout(() => setToast(null), 2500);
+                          } else {
+                            const creds = integrationCreds[item.id];
+                            const hasCreds = Boolean(
+                              (creds && (creds.keyId || creds.secret || creds.metaField)) ||
+                              (item.id === 'razorpay' && storeSettings.upiId),
+                            );
+                            if (hasCreds) {
+                              setConnectedIds((prev) => ({
+                                ...prev,
+                                [item.id]: true,
+                              }));
+                              await onUpdateStoreSettings({
+                                capabilities: {
+                                  ...storeSettings.capabilities,
+                                  [item.id]: true,
+                                },
+                              });
+                              setToast(`Connected and verified ${item.name}!`);
+                              setTimeout(() => setToast(null), 2500);
+                            } else {
+                              setToast(`Please enter credentials in the configuration panel to connect ${item.name}.`);
+                              setTimeout(() => setToast(null), 3000);
+                            }
+                          }
                         }}
                         className={`rounded-lg px-3 py-1 font-bold cursor-pointer ${
                           isConnected
@@ -2221,7 +2318,7 @@ export function BosMarketingAiIntegrationsSettings({
                             : 'bg-[#0A6847] text-white'
                         }`}
                       >
-                        {isConnected ? 'Configure' : '+ Connect'}
+                        {isConnected ? 'Disconnect' : '+ Connect'}
                       </button>
                     </div>
                   </div>
@@ -2240,7 +2337,104 @@ export function BosMarketingAiIntegrationsSettings({
               <p className="text-[12px] text-[#64748B]">{selectedIntegration.desc}</p>
             </div>
 
-            <div className="space-y-2.5 text-[12.5px]">
+            <div className="space-y-3 text-[12.5px]">
+              <div>
+                <label className="mb-1 block font-semibold text-[#334155]">
+                  {selectedIntegration.id === 'whatsapp'
+                    ? 'Meta Phone Number ID'
+                    : selectedIntegration.id === 'tally'
+                      ? 'Tally Server Host / IP'
+                      : selectedIntegration.id === 'printer'
+                        ? 'Connection Mode'
+                        : 'Merchant / Key ID'}
+                </label>
+                <input
+                  type="text"
+                  value={
+                    integrationCreds[selectedIntegration.id]?.keyId || ''
+                  }
+                  onChange={(e) =>
+                    setIntegrationCreds((prev) => ({
+                      ...prev,
+                      [selectedIntegration.id]: {
+                        ...prev[selectedIntegration.id],
+                        keyId: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder={
+                    selectedIntegration.id === 'whatsapp'
+                      ? 'e.g. 1048291049281'
+                      : selectedIntegration.id === 'tally'
+                        ? 'e.g. localhost or 192.168.1.100'
+                        : selectedIntegration.id === 'printer'
+                          ? 'e.g. USB001 or Bluetooth'
+                          : 'e.g. rzp_live_xxxxxxxx'
+                  }
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-mono text-[12px] text-[#111827] focus:bg-white focus:outline-hidden"
+                />
+              </div>
+
+              {selectedIntegration.id !== 'printer' && (
+                <div>
+                  <label className="mb-1 block font-semibold text-[#334155]">
+                    {selectedIntegration.id === 'whatsapp'
+                      ? 'System User Access Token'
+                      : selectedIntegration.id === 'tally'
+                        ? 'Tally Port'
+                        : 'API Secret / Auth Token'}
+                  </label>
+                  <input
+                    type="password"
+                    value={
+                      integrationCreds[selectedIntegration.id]?.secret || ''
+                    }
+                    onChange={(e) =>
+                      setIntegrationCreds((prev) => ({
+                        ...prev,
+                        [selectedIntegration.id]: {
+                          ...prev[selectedIntegration.id],
+                          secret: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="••••••••••••••••"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-mono text-[12px] text-[#111827] focus:bg-white focus:outline-hidden"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block font-semibold text-[#334155]">
+                  {selectedIntegration.id === 'razorpay' ||
+                  selectedIntegration.id === 'phonepe'
+                    ? 'Merchant UPI VPA (QR Target)'
+                    : selectedIntegration.id === 'whatsapp'
+                      ? 'WhatsApp Sender Phone'
+                      : selectedIntegration.id === 'tally'
+                        ? 'Company Name in Tally'
+                        : selectedIntegration.id === 'printer'
+                          ? 'Printer Model'
+                          : 'Pickup Hub Address'}
+                </label>
+                <input
+                  type="text"
+                  value={
+                    integrationCreds[selectedIntegration.id]?.metaField || ''
+                  }
+                  onChange={(e) =>
+                    setIntegrationCreds((prev) => ({
+                      ...prev,
+                      [selectedIntegration.id]: {
+                        ...prev[selectedIntegration.id],
+                        metaField: e.target.value,
+                      },
+                    }))
+                  }
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 text-[12px] text-[#111827] focus:bg-white focus:outline-hidden"
+                />
+              </div>
+
               <label className="flex items-center justify-between rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-3">
                 <span className="font-semibold text-[#111827]">Auto-sync with POS Counter</span>
                 <input type="checkbox" defaultChecked className="h-4 w-4 accent-[#0A6847]" />
@@ -2256,13 +2450,34 @@ export function BosMarketingAiIntegrationsSettings({
             <button
               type="button"
               onClick={async () => {
+                const creds = integrationCreds[selectedIntegration.id];
+                const hasCreds = Boolean(
+                  selectedIntegration.id === 'printer' ||
+                  (creds && (creds.keyId || creds.secret || creds.metaField)) ||
+                  (selectedIntegration.id === 'razorpay' && storeSettings.upiId),
+                );
+
+                if (!hasCreds) {
+                  setToast(`Please enter API credentials or keys before saving ${selectedIntegration.name}.`);
+                  setTimeout(() => setToast(null), 3000);
+                  return;
+                }
+
+                setConnectedIds((prev) => ({
+                  ...prev,
+                  [selectedIntegration.id]: true,
+                }));
                 await onUpdateStoreSettings({
                   capabilities: {
                     ...storeSettings.capabilities,
-                    [selectedIntegration.id]: !!connectedIds[selectedIntegration.id],
+                    [selectedIntegration.id]: true,
                   },
+                  upiId:
+                    selectedIntegration.id === 'razorpay'
+                      ? integrationCreds.razorpay?.metaField || storeSettings.upiId
+                      : storeSettings.upiId,
                 });
-                setToast(`Saved ${selectedIntegration.name} configuration!`);
+                setToast(`Saved and verified ${selectedIntegration.name} configuration!`);
                 setTimeout(() => setToast(null), 2500);
               }}
               className="w-full bos-btn-primary rounded-xl py-2.5 text-[13px] cursor-pointer"

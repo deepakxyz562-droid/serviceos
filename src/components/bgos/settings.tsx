@@ -190,6 +190,9 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
               if (areaList.length > 0) setCities(areaList);
             }
           }
+          if (data?.hours && Array.isArray(data.hours) && data.hours.length > 0) {
+            setHours(data.hours);
+          }
         }
       } catch {
         // preserve standard defaults
@@ -229,16 +232,18 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           serviceArea: serviceAreaMode === 'all' ? 'All areas' : cities.join(', '),
           voiceDescription: description,
           usps: tagline,
+          hours,
           skipAiSummary: true,
         }),
       });
       if (res.ok) {
         toast.success('Business settings saved to database!');
       } else {
-        toast.success('Settings updated locally');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to save settings to server. Please try again.');
       }
     } catch {
-      toast.success('Settings updated locally');
+      toast.error('Network error saving settings. Please try again.');
     } finally {
       setIsSaving(false);
       setTimeout(() => setSavedToast(false), 2500);

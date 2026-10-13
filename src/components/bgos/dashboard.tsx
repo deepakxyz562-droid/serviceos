@@ -90,8 +90,8 @@ export function BgosDashboard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!mounted || !data) return;
-        const total = data.pagination?.total ?? data.leads?.length;
-        if (typeof total === 'number' && total > 0) {
+        const total = data.pagination?.total ?? (Array.isArray(data.leads) ? data.leads.length : undefined);
+        if (typeof total === 'number') {
           setLeadCount(total);
         }
       })
@@ -100,12 +100,18 @@ export function BgosDashboard() {
     fetch('/api/reviews?limit=50')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!mounted || !data?.reviews?.length) return;
-        const total = data.pagination?.total || data.reviews.length;
-        const avg =
-          data.reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) /
-          data.reviews.length;
-        setReviewStats({ rating: avg.toFixed(1), count: total });
+        if (!mounted || !data) return;
+        const total = data.pagination?.total ?? (Array.isArray(data.reviews) ? data.reviews.length : undefined);
+        if (typeof total === 'number') {
+          if (total === 0) {
+            setReviewStats({ rating: '0.0', count: 0 });
+          } else if (data.reviews?.length) {
+            const avg =
+              data.reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) /
+              data.reviews.length;
+            setReviewStats({ rating: avg.toFixed(1), count: total });
+          }
+        }
       })
       .catch(() => {});
 

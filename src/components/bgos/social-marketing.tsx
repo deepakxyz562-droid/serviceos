@@ -73,6 +73,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
 
 // Lazy-load existing sub-views for deep-dive tabs
 const SocialAccountsView = lazy(() =>
@@ -488,7 +489,7 @@ export function SocialMediaView() {
       status: 'Scheduled',
       color: 'bg-teal-600',
     };
-    setCalendarItems([newItem, ...calendarItems]);
+    setCalendarItems((prev) => [newItem, ...prev]);
     setScheduleNotice(`Successfully scheduled to ${previewPlatform}! Added to Content Calendar.`);
     setTimeout(() => setScheduleNotice(null), 4000);
 
@@ -496,10 +497,10 @@ export function SocialMediaView() {
       const accRes = await fetch('/api/social/accounts');
       if (accRes.ok) {
         const accData = await accRes.json();
-        const accounts = accData.data || (Array.isArray(accData) ? accData : []);
-        const matching = accounts.find((a: any) => a.platform?.toLowerCase() === previewPlatform.toLowerCase()) || accounts[0];
+        const accounts = accData?.data || (Array.isArray(accData) ? accData : []);
+        const matching = accounts.find((a: any) => a.platform?.toLowerCase() === previewPlatform.toLowerCase());
         if (matching) {
-          await fetch('/api/social/posts', {
+          const res = await fetch('/api/social/posts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -509,10 +510,15 @@ export function SocialMediaView() {
               targets: [{ platform: matching.platform, socialAccountId: matching.id }],
             }),
           });
+          if (!res.ok) {
+            setCalendarItems((prev) => prev.filter((i) => i.id !== newItem.id));
+            setScheduleNotice(null);
+            toast.error('Failed to schedule social post on server.');
+          }
         }
       }
     } catch (err) {
-      console.warn('[Marketing Studio] Social post queued; remote API sync skipped', err);
+      console.warn('[Marketing Studio] Social post scheduling failed', err);
     }
   };
 

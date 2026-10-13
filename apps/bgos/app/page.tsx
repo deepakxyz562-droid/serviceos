@@ -10,5 +10,5 @@ export default async function BgosPage({ searchParams }: {
   }
   query.set('product', 'bgos');
   if (!query.has('auth')) query.set('auth', 'login');
-  redirect(`/app${query.size ? `?${query}` : ''}`);
+  redirect(`/${query.size ? `?${query}` : ''}`);
 }

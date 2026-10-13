@@ -598,62 +598,122 @@ const DEFAULT_APPOINTMENTS: BosAppointment[] = [
 
 const DEFAULT_DAYBOOK: BosDaybookEntry[] = [
   {
-    id: 'db-1',
-    time: '02:42 PM',
-    partyName: 'POS Retail Sale — Rajesh Verma',
-    subtitle: '12 items • Counter #1',
+    id: 'db-10',
+    time: '05:20 PM',
+    partyName: 'POS Sale #POS-1071',
+    subtitle: 'Walk-in Customer',
     category: 'POS Sale',
-    refNumber: '#ORD-1048',
+    refNumber: 'POS-1071',
     paymentMode: 'upi',
-    moneyIn: 1480,
+    moneyIn: 6780,
+    moneyOut: 0,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-9',
+    time: '03:40 PM',
+    partyName: 'Payment from Vikram Singh',
+    subtitle: 'Khata Due Settlement',
+    category: 'Khata In',
+    refNumber: 'KHT-1042',
+    paymentMode: 'cash',
+    moneyIn: 2000,
+    moneyOut: 0,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-8',
+    time: '02:15 PM',
+    partyName: 'Shop Maintenance',
+    subtitle: 'Electrical and pest control',
+    category: 'Expense',
+    refNumber: 'EXP-403',
+    paymentMode: 'cash',
+    moneyIn: 0,
+    moneyOut: 850,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-7',
+    time: '01:30 PM',
+    partyName: 'POS Sale #POS-1070',
+    subtitle: 'Walk-in Customer',
+    category: 'POS Sale',
+    refNumber: 'POS-1070',
+    paymentMode: 'cash',
+    moneyIn: 1890,
+    moneyOut: 0,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-6',
+    time: '12:05 PM',
+    partyName: 'Payment to ABC Distributors',
+    subtitle: 'Invoice #SUP-778',
+    category: 'Supplier',
+    refNumber: 'SUP-778',
+    paymentMode: 'bank',
+    moneyIn: 0,
+    moneyOut: 5000,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-5',
+    time: '11:20 AM',
+    partyName: 'Online Order #ORD-2043',
+    subtitle: 'Rahul Mehta',
+    category: 'Online Sale',
+    refNumber: 'ORD-2043',
+    paymentMode: 'card',
+    moneyIn: 3450,
+    moneyOut: 0,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-4',
+    time: '10:45 AM',
+    partyName: 'Electricity Bill',
+    subtitle: 'MSEB Store connection',
+    category: 'Expense',
+    refNumber: 'EXP-402',
+    paymentMode: 'cash',
+    moneyIn: 0,
+    moneyOut: 1500,
+    createdAt: 'Today',
+  },
+  {
+    id: 'db-3',
+    time: '10:10 AM',
+    partyName: 'Payment from Priya Sharma',
+    subtitle: 'Monthly grocery dues',
+    category: 'Khata In',
+    refNumber: 'KHT-892',
+    paymentMode: 'upi',
+    moneyIn: 1200,
     moneyOut: 0,
     createdAt: 'Today',
   },
   {
     id: 'db-2',
-    time: '01:55 PM',
-    partyName: 'Khata Payment Received — Anita Desai',
-    subtitle: 'Cleared previous month due',
-    category: 'Khata In',
-    refNumber: 'KHT-892',
-    paymentMode: 'cash',
-    moneyIn: 2500,
+    time: '09:32 AM',
+    partyName: 'POS Sale #POS-1069',
+    subtitle: 'Amit Kumar',
+    category: 'POS Sale',
+    refNumber: 'POS-1069',
+    paymentMode: 'upi',
+    moneyIn: 2340,
     moneyOut: 0,
     createdAt: 'Today',
   },
   {
-    id: 'db-3',
-    time: '01:15 PM',
-    partyName: 'Metro Cash & Carry Wholesale',
-    subtitle: 'Beverages & Snacks Restock PO',
-    category: 'Supplier',
-    refNumber: 'PO-2026-089',
-    paymentMode: 'bank',
-    moneyIn: 0,
-    moneyOut: 4500,
-    createdAt: 'Today',
-  },
-  {
-    id: 'db-4',
-    time: '12:30 PM',
-    partyName: 'Store Electricity & Diesel Generator',
-    subtitle: 'Paid to MSEB / Local Vendor',
-    category: 'Expense',
-    refNumber: 'EXP-402',
+    id: 'db-1',
+    time: '09:15 AM',
+    partyName: 'POS Sale #POS-1068',
+    subtitle: 'Walk-in Customer',
+    category: 'POS Sale',
+    refNumber: 'POS-1068',
     paymentMode: 'cash',
-    moneyIn: 0,
-    moneyOut: 1200,
-    createdAt: 'Today',
-  },
-  {
-    id: 'db-5',
-    time: '11:48 AM',
-    partyName: 'B2B GST Invoice — Mehta General Traders',
-    subtitle: 'Part payment against INV-2026-0842',
-    category: 'Invoice',
-    refNumber: 'INV-0842',
-    paymentMode: 'upi',
-    moneyIn: 5000,
+    moneyIn: 4580,
     moneyOut: 0,
     createdAt: 'Today',
   },
@@ -1317,12 +1377,15 @@ export function BosWebApp({
     totalAmount: number;
     notes?: string;
     printReceipt?: boolean;
+    operationKey?: string;
   }) => {
     if (payload.paymentMode === 'khata' && (!payload.customerName || payload.customerName === 'Walk-in Customer')) {
       throw new Error('Please select or create an account for this customer before granting Khata credit.');
     }
 
-    const requestKey = newRequestKey();
+    const baseOpKey = payload.operationKey || newRequestKey();
+    const orderRequestKey = `ord_${baseOpKey}`;
+    const khataRequestKey = `kht_${baseOpKey}`;
     const cleanCustomerPhone = payload.customerName === 'Walk-in Customer' ? '' : payload.customerPhone.trim();
 
     // 1. Await atomic order creation on the server
@@ -1330,10 +1393,10 @@ export function BosWebApp({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Idempotency-Key': requestKey,
+        'Idempotency-Key': orderRequestKey,
       },
       body: JSON.stringify({
-        requestKey,
+        requestKey: orderRequestKey,
         customerName: payload.customerName,
         customerPhone: cleanCustomerPhone,
         deliveryType: 'takeout',
@@ -1388,27 +1451,33 @@ export function BosWebApp({
 
     // 3. If Khata, record credit debit on customer's ledger
     if (payload.paymentMode === 'khata') {
-      const khataReqKey = newRequestKey();
-      const khataRes = await fetch('/api/commerce/khata', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': khataReqKey,
-        },
-        body: JSON.stringify({
-          type: 'GAVE_UDHAAR',
-          amount: verifiedTotalAmount,
-          customerPhone: cleanCustomerPhone,
-          customerName: payload.customerName,
-          note: `POS Bill ${verifiedOrderId}`,
-          paymentMethod: 'CASH',
-          requestKey: khataReqKey,
-        }),
-      }).catch(() => null);
+      let khataRes: Response;
+      try {
+        khataRes = await fetch('/api/commerce/khata', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': khataRequestKey,
+          },
+          body: JSON.stringify({
+            type: 'GAVE_UDHAAR',
+            amount: verifiedTotalAmount,
+            customerPhone: cleanCustomerPhone,
+            customerName: payload.customerName,
+            note: `POS Bill ${verifiedOrderId}`,
+            paymentMethod: 'CASH',
+            requestKey: khataRequestKey,
+          }),
+        });
+      } catch (networkErr: any) {
+        throw new Error(
+          `Order ${verifiedOrderId} created, but recording Khata credit failed due to network error (${networkErr?.message || 'offline'}). Please retry.`,
+        );
+      }
 
-      if (khataRes && !khataRes.ok) {
+      if (!khataRes.ok) {
         const kErr = await khataRes.json().catch(() => null);
-        throw new Error(kErr?.error || `Failed to record Khata credit (HTTP ${khataRes.status})`);
+        throw new Error(kErr?.error || `Order created (${verifiedOrderId}), but failed to record Khata credit. Please retry.`);
       }
 
       setCustomers((prev) =>
@@ -1488,13 +1557,9 @@ export function BosWebApp({
   };
 
   const handleSaveProduct = async (product: BosProductItem, isNew: boolean) => {
-    const nextProducts = isNew
-      ? [product, ...products]
-      : products.map((p) => (p.id === product.id ? product : p));
-    setProducts(nextProducts);
-
+    let finalProduct = { ...product };
     if (isNew) {
-      fetch('/api/commerce/products', {
+      const res = await fetch('/api/commerce/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1506,48 +1571,59 @@ export function BosWebApp({
           stock: product.stockQuantity,
           inStock: product.stockQuantity > 0,
         }),
-      })
-        .then(async (res) => {
-          if (res.ok) {
-            const data = await res.json().catch(() => null);
-            const realId = data?.product?.id || data?.id;
-            if (realId) {
-              setProducts((prev) =>
-                prev.map((p) => (p.id === product.id ? { ...p, id: realId } : p)),
-              );
-            }
-          }
-        })
-        .catch(() => {});
+      });
+
+      if (!res.ok && res.status !== 404) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || `Failed to create product on server (HTTP ${res.status})`);
+      }
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        const realId = data?.product?.id || data?.id;
+        if (realId) {
+          finalProduct.id = realId;
+        }
+      }
     }
 
-    fetch('/api/commerce/config', {
+    const nextProducts = isNew
+      ? [finalProduct, ...products]
+      : products.map((p) => (p.id === finalProduct.id ? finalProduct : p));
+
+    const configRes = await fetch('/api/commerce/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ catalogJson: nextProducts }),
-    }).catch(() => {});
+    });
+
+    if (!configRes.ok && configRes.status !== 404) {
+      const cfgErr = await configRes.json().catch(() => null);
+      throw new Error(cfgErr?.error || `Failed to save catalog to server (HTTP ${configRes.status})`);
+    }
+
+    setProducts(nextProducts);
   };
 
   const handleDeleteProduct = async (productId: string) => {
     const nextProducts = products.filter((p) => p.id !== productId);
-    setProducts(nextProducts);
-    fetch('/api/commerce/config', {
+    const configRes = await fetch('/api/commerce/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ catalogJson: nextProducts }),
-    }).catch(() => {});
+    });
+
+    if (!configRes.ok && configRes.status !== 404) {
+      const cfgErr = await configRes.json().catch(() => null);
+      throw new Error(cfgErr?.error || `Failed to delete product from server (HTTP ${configRes.status})`);
+    }
+
+    setProducts(nextProducts);
   };
 
   const handleAdjustStock = async (productId: string, delta: number) => {
-    const nextProducts = products.map((p) =>
-      p.id === productId
-        ? { ...p, stockQuantity: Math.max(0, p.stockQuantity + delta) }
-        : p,
-    );
-    setProducts(nextProducts);
-
     const requestKey = newRequestKey();
-    fetch('/api/commerce/inventory', {
+    const res = await fetch('/api/commerce/inventory', {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1558,7 +1634,20 @@ export function BosWebApp({
         deltaStock: delta,
         requestKey,
       }),
-    }).catch(() => {});
+    });
+
+    if (!res.ok && res.status !== 404) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `Failed to update stock on server (HTTP ${res.status})`);
+    }
+
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === productId
+          ? { ...p, stockQuantity: Math.max(0, p.stockQuantity + delta) }
+          : p,
+      ),
+    );
   };
 
   const handleUpdateOrderStatus = async (orderId: string, status: BosOrder['status']) => {
@@ -1634,34 +1723,30 @@ export function BosWebApp({
   };
 
   const handleAddCustomer = async (customer: Omit<BosCustomer, 'id'>) => {
-    const created: BosCustomer = {
-      ...customer,
-      id: `cust-${Date.now()}`,
-    };
-    setCustomers((prev) => [created, ...prev]);
-
-    fetch('/api/customers', {
+    const res = await fetch('/api/customers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: created.name,
-        phone: created.phone,
-        email: created.email,
-        address: created.address,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        address: customer.address,
       }),
-    })
-      .then(async (res) => {
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          const realId = data?.customer?.id || data?.id;
-          if (realId) {
-            setCustomers((prev) =>
-              prev.map((c) => (c.id === created.id ? { ...c, id: realId } : c)),
-            );
-          }
-        }
-      })
-      .catch(() => {});
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `Failed to create customer (HTTP ${res.status})`);
+    }
+
+    const data = await res.json().catch(() => null);
+    const realId = data?.customer?.id || data?.id || `cust-${Date.now()}`;
+
+    const created: BosCustomer = {
+      ...customer,
+      id: realId,
+    };
+    setCustomers((prev) => [created, ...prev]);
   };
 
   const handleRecordKhataEntry = async (entry: {
@@ -1691,9 +1776,9 @@ export function BosWebApp({
         paymentMethod: entry.mode === 'cash' ? 'CASH' : 'UPI',
         requestKey,
       }),
-    }).catch(() => null);
+    });
 
-    if (res && !res.ok) {
+    if (!res.ok) {
       const errData = await res.json().catch(() => null);
       throw new Error(errData?.error || `Khata ledger error (HTTP ${res.status})`);
     }
@@ -1745,54 +1830,59 @@ export function BosWebApp({
   const handleCreateAppointment = async (
     appt: Omit<BosAppointment, 'id' | 'bookingCode'>,
   ) => {
-    const created: BosAppointment = {
-      ...appt,
-      id: `appt-${Date.now()}`,
-      bookingCode: `#APT-${2084 + appointments.length}`,
-    };
-    setAppointments((prev) => [created, ...prev]);
+    const scheduledAt = appt.scheduledAt
+      ? new Date(appt.scheduledAt).toISOString()
+      : new Date().toISOString();
 
-    fetch('/api/bookings', {
+    const res = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title: created.serviceName || 'Service Appointment',
-        customerName: created.customerName,
-        customerPhone: created.customerPhone,
-        scheduledAt: created.scheduledAt
-          ? new Date(created.scheduledAt).toISOString()
-          : new Date().toISOString(),
+        title: appt.serviceName || 'Service Appointment',
+        customerName: appt.customerName,
+        customerPhone: appt.customerPhone,
+        scheduledAt,
         duration: 60,
-        notes: created.staffName ? `Staff: ${created.staffName}` : undefined,
+        notes: appt.staffName ? `Staff: ${appt.staffName}` : undefined,
       }),
-    })
-      .then(async (res) => {
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          const realId = data?.booking?.id || data?.id;
-          if (realId) {
-            setAppointments((prev) =>
-              prev.map((a) => (a.id === created.id ? { ...a, id: realId } : a)),
-            );
-          }
-        }
-      })
-      .catch(() => {});
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `Failed to create appointment (HTTP ${res.status})`);
+    }
+
+    const data = await res.json().catch(() => null);
+    const realId = data?.booking?.id || data?.id || `appt-${Date.now()}`;
+
+    const created: BosAppointment = {
+      ...appt,
+      id: realId,
+      bookingCode: `#APT-${2084 + appointments.length}`,
+    };
+    setAppointments((prev) => [created, ...prev]);
   };
 
   const handleUpdateAppointmentStatus = async (
     id: string,
     status: BosAppointment['status'],
   ) => {
-    setAppointments((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status } : a)),
-    );
+    const prevAppt = appointments.find((a) => a.id === id);
 
-    fetch(`/api/bookings/${encodeURIComponent(id)}`, {
+    const res = await fetch(`/api/bookings/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
-    }).catch(() => {});
+    });
+
+    if (!res.ok && res.status !== 404) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `Failed to update appointment status (HTTP ${res.status})`);
+    }
+
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, status } : a)),
+    );
   };
 
   const handleAddDaybookEntry = async (
@@ -1816,9 +1906,9 @@ export function BosWebApp({
           paymentMode: entry.paymentMode === 'cash' ? 'CASH' : 'BANK',
           requestKey,
         }),
-      }).catch(() => null);
+      });
 
-      if (res && !res.ok) {
+      if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.error || `Failed to record expense (HTTP ${res.status})`);
       }
@@ -1836,9 +1926,9 @@ export function BosWebApp({
           reference: `${entry.partyName}: ${entry.subtitle}`,
           requestKey,
         }),
-      }).catch(() => null);
+      });
 
-      if (res && !res.ok) {
+      if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.error || `Failed to record day book entry (HTTP ${res.status})`);
       }
@@ -1875,6 +1965,8 @@ export function BosWebApp({
       return next;
     });
 
+    const promises: Promise<Response>[] = [];
+
     // Persist Blueprint updates if any blueprint-level field changed
     if (
       patch.blueprintType !== undefined ||
@@ -1884,18 +1976,20 @@ export function BosWebApp({
       patch.capabilities !== undefined ||
       patch.businessName !== undefined
     ) {
-      fetch('/api/tenant/blueprint', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...(patch.blueprintType ? { businessType: patch.blueprintType } : {}),
-          ...(patch.salesChannels ? { salesChannels: patch.salesChannels } : {}),
-          ...(patch.countryCode ? { country: patch.countryCode } : {}),
-          ...(patch.language ? { language: patch.language } : {}),
-          ...(patch.capabilities ? { capabilities: patch.capabilities } : {}),
-          ...(patch.businessName ? { businessName: patch.businessName } : {}),
+      promises.push(
+        fetch('/api/tenant/blueprint', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(patch.blueprintType ? { businessType: patch.blueprintType } : {}),
+            ...(patch.salesChannels ? { salesChannels: patch.salesChannels } : {}),
+            ...(patch.countryCode ? { country: patch.countryCode } : {}),
+            ...(patch.language ? { language: patch.language } : {}),
+            ...(patch.capabilities ? { capabilities: patch.capabilities } : {}),
+            ...(patch.businessName ? { businessName: patch.businessName } : {}),
+          }),
         }),
-      }).catch(() => {});
+      );
     }
 
     // Persist Storefront & Billing Config updates
@@ -1917,22 +2011,33 @@ export function BosWebApp({
     if (patch.enableStorePickup !== undefined) configPatch.enableStorePickup = patch.enableStorePickup;
 
     if (Object.keys(configPatch).length > 0) {
-      fetch('/api/commerce/config', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(configPatch),
-      }).catch(() => {});
+      promises.push(
+        fetch('/api/commerce/config', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(configPatch),
+        }),
+      );
     }
 
     if (patch.announcementBanner !== undefined) {
-      fetch('/api/commerce/promotions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'SET_BANNER',
-          bannerText: patch.announcementBanner,
+      promises.push(
+        fetch('/api/commerce/promotions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'SET_BANNER',
+            bannerText: patch.announcementBanner,
+          }),
         }),
-      }).catch(() => {});
+      );
+    }
+
+    const settled = await Promise.allSettled(promises);
+    for (const res of settled) {
+      if (res.status === 'fulfilled' && !res.value.ok && res.value.status !== 404) {
+        throw new Error(`Server returned error saving configuration (HTTP ${res.value.status})`);
+      }
     }
   };
 
@@ -2647,6 +2752,7 @@ export function BosWebApp({
                 orders={orders}
                 products={products}
                 daybookEntries={daybookEntries}
+                initialOpeningBalance={storeSettings.openingBalance || 0}
                 onAddDaybookEntry={handleAddDaybookEntry}
               />
             )}

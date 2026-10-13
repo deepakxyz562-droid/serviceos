@@ -146,6 +146,7 @@ export type BosStoreSettings = {
   accountNumber: string;
   ifscCode: string;
   currencySymbol: string;
+  openingBalance?: number;
   storeLive: boolean;
   minOrderAmount: number;
   deliveryCharge: number;

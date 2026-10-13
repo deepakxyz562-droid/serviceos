@@ -66,6 +66,7 @@ type BosPosWorkstationProps = {
     totalAmount: number;
     notes?: string;
     printReceipt?: boolean;
+    operationKey?: string;
   }) => Promise<void>;
   onOpenPrinterModal?: () => void;
 };
@@ -177,6 +178,7 @@ export function BosPosWorkstation({
 
   const [submitting, setSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const checkoutOpIdRef = useRef<string>(`pos_op_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`);
 
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const customerInputRef = useRef<HTMLInputElement | null>(null);
@@ -453,7 +455,9 @@ export function BosPosWorkstation({
         totalAmount: billCalculations.grandTotal,
         notes: orderNote.trim() || undefined,
         printReceipt,
+        operationKey: checkoutOpIdRef.current,
       });
+      checkoutOpIdRef.current = `pos_op_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       setCompletedSessionSales((prev) => ({
         revenue: prev.revenue + billCalculations.grandTotal,
         bills: prev.bills + 1,

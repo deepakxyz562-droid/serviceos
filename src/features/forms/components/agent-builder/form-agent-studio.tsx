@@ -587,8 +587,13 @@ export function FormAgentStudio({
                   </div>
                   <textarea
                     rows={4}
-                    value={agent.systemPrompt || ''}
-                    onChange={(e) => setAgent((prev) => ({ ...prev, systemPrompt: e.target.value }))}
+                    value={agent.knowledge?.systemPrompt || ''}
+                    onChange={(e) =>
+                      setAgent((prev) => ({
+                        ...prev,
+                        knowledge: { ...prev.knowledge, systemPrompt: e.target.value },
+                      }))
+                    }
                     placeholder="You are a helpful AI assistant for our business. Answer customer questions accurately, provide service quotes, and help visitors book appointments..."
                     className="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 leading-relaxed"
                   />
@@ -598,7 +603,7 @@ export function FormAgentStudio({
                   <div className="space-y-1">
                     <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">Conversation Tone</span>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {(['friendly', 'professional', 'empathetic', 'casual'] as const).map((tone) => (
+                      {(['friendly', 'professional', 'medical', 'sales', 'empathetic'] as const).map((tone) => (
                         <button
                           key={tone}
                           type="button"

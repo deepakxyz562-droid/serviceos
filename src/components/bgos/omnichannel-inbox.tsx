@@ -630,13 +630,19 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
         const rawList = Array.isArray(data) ? data : (Array.isArray(data?.conversations) ? data.conversations : []);
         if (rawList.length > 0) {
           setConversations(rawList);
-          if (!selectedConversationId) setSelectedConversationId(rawList[0].id);
+          if (!selectedConversationId || !rawList.some((c: any) => c.id === selectedConversationId)) {
+            setSelectedConversationId(rawList[0].id);
+          }
+        } else if (auth.isAuthenticated && (Array.isArray(data) || Array.isArray(data?.conversations))) {
+          // Explicit empty conversation set from authenticated backend
+          setConversations([]);
+          setSelectedConversationId('');
         }
       }
     } catch {
       // Keep rich fallback dataset
     }
-  }, [selectedConversationId]);
+  }, [selectedConversationId, auth.isAuthenticated]);
 
   useEffect(() => {
     loadData();
@@ -651,7 +657,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
   // Selected conversation
   const selectedConversation =
-    conversations.find((c) => c.id === selectedConversationId) || conversations[0];
+    conversations.find((c) => c.id === selectedConversationId) || conversations[0] || null;
 
   // Selected live visitor
   const selectedVisitor =
@@ -811,44 +817,109 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     toast.success(nextStatus === 'closed' ? 'Conversation marked as closed' : 'Conversation reopened');
   };
 
-  const handleGenerateAiReply = () => {
-    const lastText = (selectedConversation.lastMessage || '').toLowerCase();
-    let draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! Thank you for reaching out to ${businessName}. How can I help you confirm your appointment today?`;
-    if (lastText.includes('tomorrow') || lastText.includes('ac')) {
-      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! I have reserved tomorrow at 10:00 AM for your 2 Split AC servicing in Delhi. Our technician will call you 30 minutes before arrival.`;
-    } else if (lastText.includes('3bhk') || lastText.includes('deep cleaning') || lastText.includes('saturday')) {
-      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! I noticed you are interested in our 3BHK Deep Cleaning package. I can lock in Saturday at 10:00 AM right away for you—shall I send the booking confirmation?`;
-    } else if (lastText.includes('quote') || lastText.includes('pricing') || lastText.includes('cost')) {
-      draft = `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is a tailored estimate from ${businessName} based on your request. Let me know if you'd like to schedule a walkthrough or reserve a time slot!`;
+  const handleGenerateAiReply = async () => {
+    if (!selectedConversation) return;
+    const lastMsg = selectedConversation.lastMessage || '';
+    const firstName = selectedConversation.customerName ? selectedConversation.customerName.split(' ')[0] : 'there';
+    let draft = `Hi ${firstName}! Thank you for reaching out to ${businessName}. How can we assist you with your request today?`;
+
+    try {
+      const res = await fetch('/api/ai/suggested-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: lastMsg || `Inquiry from ${selectedConversation.customerName}`,
+          conversationId: selectedConversation.id,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.replies) && data.replies.length > 0 && data.replies[0]?.text) {
+          draft = data.replies[0].text;
+        }
+      }
+    } catch {
+      // Dynamic fallback based on customer inquiry context
+      const lastText = lastMsg.toLowerCase();
+      if (lastText.includes('tomorrow') || lastText.includes('time') || lastText.includes('slot')) {
+        draft = `Hi ${firstName}! I have reserved tomorrow at 10:00 AM for you. Our specialist will confirm with you 30 minutes before arrival.`;
+      } else if (lastText.includes('quote') || lastText.includes('pricing') || lastText.includes('cost')) {
+        draft = `Hi ${firstName}! Here is a tailored estimate from ${businessName} based on your requirements. Let me know if you would like to proceed!`;
+      }
     }
+
     setCenterSubTab('chat');
     setComposerMode('reply');
     setMessageInput(draft);
     toast.success('AI draft generated in composer');
   };
 
-  const handleToggleAssign = (conv: Conversation, e: React.MouseEvent) => {
+  const handleToggleAssign = async (conv: Conversation, e: React.MouseEvent) => {
     e.stopPropagation();
     const isAssigned = !!conv.assigneeId;
     const assigneeName = auth.user?.name || 'You';
+    const nextAssigneeId = isAssigned ? undefined : (auth.user?.id || 'me');
+    const nextAssigneeName = isAssigned ? undefined : assigneeName;
+
     setConversations((prev) =>
       prev.map((c) =>
         c.id === conv.id
           ? {
               ...c,
-              assigneeId: isAssigned ? undefined : (auth.user?.id || 'me'),
-              assigneeName: isAssigned ? undefined : assigneeName,
+              assigneeId: nextAssigneeId,
+              assigneeName: nextAssigneeName,
             }
           : c
       )
     );
-    toast.success(isAssigned ? 'Unassigned' : `Assigned to ${assigneeName}`);
+
+    try {
+      const res = await fetch(`${API_BASE}/conversations/${conv.id}/assign`, {
+        method: isAssigned ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: isAssigned ? undefined : JSON.stringify({ agentId: auth.user?.id }),
+      });
+      if (!res.ok) {
+        // Rollback
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conv.id ? { ...c, assigneeId: conv.assigneeId, assigneeName: conv.assigneeName } : c))
+        );
+        toast.error('Failed to update assignment on server');
+        return;
+      }
+      toast.success(isAssigned ? 'Unassigned' : `Assigned to ${assigneeName}`);
+    } catch {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, assigneeId: conv.assigneeId, assigneeName: conv.assigneeName } : c))
+      );
+      toast.error('Network error updating assignment');
+    }
   };
 
-  const handleToggleAiHandled = (convId: string, aiPaused: boolean) => {
+  const handleToggleAiHandled = async (convId: string, aiPaused: boolean) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === convId ? { ...c, aiPaused } : c))
     );
+    try {
+      const res = await fetch(`${API_BASE}/conversations/${convId}/takeover`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aiPaused }),
+      });
+      if (!res.ok) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === convId ? { ...c, aiPaused: !aiPaused } : c))
+        );
+        toast.error('Failed to update AI handoff on server');
+      } else {
+        toast.success(aiPaused ? 'AI paused — Human takeover active' : 'AI automated responses resumed');
+      }
+    } catch {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === convId ? { ...c, aiPaused: !aiPaused } : c))
+      );
+      toast.error('Network error updating AI takeover');
+    }
   };
 
   const handleSelectPackage = (pkg: InteractivePackageCard) => {
@@ -1235,8 +1306,13 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           {/* Scrollable Conversation Thread Rows */}
           <ScrollArea className="flex-1 min-h-0">
             <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-              {filteredConversations.map((conv) => {
-                const isSelected = selectedConversation.id === conv.id;
+              {filteredConversations.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">
+                  No conversations match this view
+                </div>
+              ) : (
+                filteredConversations.map((conv) => {
+                  const isSelected = selectedConversation?.id === conv.id;
                 return (
                   <div
                     key={conv.id}
@@ -1294,7 +1370,8 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                     </div>
                   </div>
                 );
-              })}
+              })
+            )}
             </div>
           </ScrollArea>
         </div>
@@ -1302,6 +1379,17 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
         {/* ── CENTER COLUMN CARD: ACTIVE CONVERSATION / LIVE RADAR (6 Cols) ── */}
         <div className="md:col-span-8 lg:col-span-6 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex flex-col min-h-0 overflow-hidden">
           {inboxTab === 'conversations' ? (
+            !selectedConversation ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white dark:bg-slate-900">
+                <div className="size-16 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3">
+                  <MessageSquare className="size-8" />
+                </div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No conversations yet</h3>
+                <p className="text-xs text-slate-500 max-w-sm mt-1">
+                  When customers reach out via WhatsApp, Website Live Chat, SMS, or Email, their messages and inquiries will appear here in real time.
+                </p>
+              </div>
+            ) : (
             <>
               {/* Center Thread Header (Screenshot Parity) */}
               <div className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
@@ -1849,6 +1937,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 </div>
               </div>
             </>
+            )
           ) : inboxTab === 'visitors' ? (
             /* ── LIVE ENGAGE VISITOR RADAR (Integrated in Inbox) ── */
             <div className="flex-1 p-5 space-y-5 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/50">
@@ -2350,6 +2439,10 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
               >
                 <Radio className="size-4 animate-pulse" /> Instant Human Takeover (Join As Agent)
               </Button>
+            </div>
+          ) : !selectedConversation ? (
+            <div className="h-full flex flex-col items-center justify-center p-6 text-center text-xs text-slate-400">
+              Select a conversation to inspect customer dossier and history
             </div>
           ) : (
             <ConversationDetailPanel

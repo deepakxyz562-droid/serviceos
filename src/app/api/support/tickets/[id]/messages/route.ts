@@ -21,8 +21,14 @@ export async function GET(
       return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     }
 
-    const where: Record<string, unknown> = { ticketId: id };
     const canManageTicket = isSuperAdmin || (user.tenantId && ticket.tenantId === user.tenantId);
+
+    // Access control: only tenant staff, super-admins, or the ticket reporter can view messages
+    if (!canManageTicket && ticket.reporterId !== user.id) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    const where: Record<string, unknown> = { ticketId: id };
     if (!canManageTicket) where.isInternal = false;
 
     const messages = await db.ticketMessage.findMany({

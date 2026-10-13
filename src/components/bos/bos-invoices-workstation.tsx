@@ -56,7 +56,7 @@ type SavedBosInvoice = {
   dueDate: string;
   totalAmount: number;
   paidAmount: number;
-  status: 'Paid' | 'Partial' | 'Unpaid';
+  status: 'Paid' | 'Partial' | 'Unpaid' | 'Draft';
 };
 
 type BosInvoicesWorkstationProps = {
@@ -324,103 +324,142 @@ export function BosInvoicesWorkstation({
     setItemSearchQuery('');
   };
 
-  const handlePrintOrDownload = () => {
-    const html = generateGstInvoiceHtml(
-      {
-        number: invoiceNumber,
-        date: invoiceDate,
-        dueDate,
-        customerName: selectedCustomerName,
-        customerPhone: selectedCustomerPhone,
-        customerGstin: selectedCustomerGstin,
-        customerAddress: billingAddressLines.slice(1).join(', '),
-        placeOfSupply,
-        subtotal: Math.round(calculations.taxableAmount),
-        tax: Math.round(calculations.cgst + calculations.sgst),
-        discount: Math.round(calculations.discountAmount),
-        total: Math.round(calculations.totalAmount),
-        balance: 0,
-        status: 'PAID',
-        items: calculations.computedRows.map((r) => ({
-          name: r.name,
-          hsn: r.hsnSac,
-          qty: r.qty,
-          unitPrice: r.rate,
-        })),
-      },
-      {
-        businessName: 'Ravi Store',
-        logoUrl: '/bos/logo-mark.png',
-        gstin: '07ABCDE1234F1Z5',
-        address: '123 Main Market, Lajpat Nagar, New Delhi - 110024, Delhi, India',
-        phone: '9876543210',
-        email: storeSettings.email,
-        upiId: storeSettings.upiId || 'ravistore@okaxis',
-      },
-      currencySymbol,
-    );
-
-    const win = window.open('', '_blank', 'width=900,height=800');
-    if (win) {
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => win.print(), 300);
-    }
-
+  const handlePrintOrDownload = async () => {
     const matchedCust = customers.find(
       (c) => c.name.toLowerCase() === selectedCustomerName.toLowerCase(),
     );
-    const targetCustomerId = matchedCust?.id || customers[0]?.id || 'cust-1';
+    let targetCustomerId = matchedCust?.id;
 
-    const saved: SavedBosInvoice = {
-      id: `inv-${Date.now()}`,
-      invoiceNumber,
-      docType,
-      customerName: selectedCustomerName,
-      customerGstin: selectedCustomerGstin,
-      date: invoiceDate,
-      dueDate,
-      totalAmount: calculations.totalAmount,
-      paidAmount: calculations.totalAmount,
-      status: 'Paid',
-    };
-    onInvoiceSaved?.(saved);
-
-    fetch('/api/invoices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customerId: targetCustomerId,
-        customerName: selectedCustomerName,
-        dueDate,
-        notes: remarks,
-        items: items.map((it) => ({
-          description: it.name,
-          quantity: it.qty,
-          rate: it.rate,
-          amount: it.qty * it.rate,
-        })),
-        discount: calculations.discountAmount,
-        currency: storeSettings.currencySymbol === '₹' ? 'INR' : 'USD',
-      }),
-    })
-      .then(async (res) => {
-        if (res.ok) {
-          const data = await res.json().catch(() => null);
-          if (data && data.invoice && data.invoice.id) {
-            onInvoiceSaved?.({
-              ...saved,
-              id: data.invoice.id,
-              invoiceNumber: data.invoice.number || saved.invoiceNumber,
-            });
-          }
+    if (!targetCustomerId) {
+      if (!selectedCustomerName.trim()) {
+        showToast('Please enter a customer name for the invoice.');
+        return;
+      }
+      try {
+        const createCustRes = await fetch('/api/customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: selectedCustomerName.trim(),
+            phone: selectedCustomerPhone.trim(),
+            address: billingAddressLines.slice(1).join(', ') || undefined,
+          }),
+        });
+        if (createCustRes.ok) {
+          const custData = await createCustRes.json().catch(() => null);
+          targetCustomerId = custData?.customer?.id || custData?.id;
         }
-      })
-      .catch(() => {});
+      } catch {}
+    }
 
-    showToast(`Invoice ${invoiceNumber} generated & sent to printer`);
+    if (!targetCustomerId) {
+      showToast('Could not link customer to invoice. Please select or add a customer.');
+      return;
+    }
+
+    const calculatedTaxPercent =
+      calculations.taxableAmount > 0
+        ? Number(
+            (
+              ((calculations.cgst + calculations.sgst) /
+                calculations.taxableAmount) *
+              100
+            ).toFixed(1),
+          )
+        : 0;
+
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: targetCustomerId,
+          customerName: selectedCustomerName,
+          dueDate,
+          notes: remarks,
+          items: items.map((it) => ({
+            description: it.name,
+            quantity: it.qty,
+            rate: it.rate,
+            amount: it.qty * it.rate,
+          })),
+          discount: calculations.discountAmount,
+          taxPercent: calculatedTaxPercent,
+          currency: storeSettings.currencySymbol === '₹' ? 'INR' : 'USD',
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        showToast((data && data.error) || 'Failed to save invoice on server.');
+        return;
+      }
+
+      const verifiedInvoiceId = data?.invoice?.id || `inv-${Date.now()}`;
+      const verifiedInvoiceNumber = data?.invoice?.number || invoiceNumber;
+
+      const html = generateGstInvoiceHtml(
+        {
+          number: verifiedInvoiceNumber,
+          date: invoiceDate,
+          dueDate,
+          customerName: selectedCustomerName,
+          customerPhone: selectedCustomerPhone,
+          customerGstin: selectedCustomerGstin,
+          customerAddress: billingAddressLines.slice(1).join(', '),
+          placeOfSupply,
+          subtotal: Math.round(calculations.taxableAmount),
+          tax: Math.round(calculations.cgst + calculations.sgst),
+          discount: Math.round(calculations.discountAmount),
+          total: Math.round(calculations.totalAmount),
+          balance: Math.round(calculations.totalAmount),
+          status: 'DRAFT',
+          items: calculations.computedRows.map((r) => ({
+            name: r.name,
+            hsn: r.hsnSac,
+            qty: r.qty,
+            unitPrice: r.rate,
+          })),
+        },
+        {
+          businessName: storeSettings.businessName || 'Business Store',
+          logoUrl: '/bos/logo-mark.png',
+          gstin: storeSettings.gstin || '',
+          address: storeSettings.address || '',
+          phone: storeSettings.phone || '',
+          email: storeSettings.email || '',
+          upiId: storeSettings.upiId || '',
+        },
+        currencySymbol,
+      );
+
+      const saved: SavedBosInvoice = {
+        id: verifiedInvoiceId,
+        invoiceNumber: verifiedInvoiceNumber,
+        docType,
+        customerName: selectedCustomerName,
+        customerGstin: selectedCustomerGstin,
+        date: invoiceDate,
+        dueDate,
+        totalAmount: calculations.totalAmount,
+        paidAmount: 0,
+        status: 'Draft',
+      };
+      onInvoiceSaved?.(saved);
+
+      const win = window.open('', '_blank', 'width=900,height=800');
+      if (win) {
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        setTimeout(() => win.print(), 300);
+      }
+
+      showToast(`Invoice ${verifiedInvoiceNumber} created & sent to printer`);
+    } catch (err: any) {
+      showToast(err?.message || 'Network error saving invoice.');
+    }
   };
 
   const handleShareInvoice = () => {

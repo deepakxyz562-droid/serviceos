@@ -393,29 +393,29 @@ export function BgosOutreach() {
         const mapped: BusinessProspect[] = res.prospects.map((p: any, idx: number) => ({
           id: p.id || `prosp-${idx}`,
           name: p.company || p.name || 'Enterprise Prospect',
-          industry: industryFilter !== 'All Industries' ? industryFilter : 'Professional Services',
-          location: location || 'Tucson, Arizona',
-          employees: companySize,
-          revenue: '$1M - $5M',
-          ownerName: p.name || 'Decision Maker',
-          phone: '(555) 019-2834',
+          industry: industryFilter !== 'All Industries' ? industryFilter : (p.industry || 'Professional Services'),
+          location: p.location || location || 'Tucson, Arizona',
+          employees: p.employees || companySize,
+          revenue: p.revenue || '$1M - $5M',
+          ownerName: p.ownerName || p.name || 'Decision Maker',
+          phone: p.phone || p.phoneNumber || '—',
           email: p.email || `contact@${(p.company || 'biz').toLowerCase().replace(/\s+/g, '')}.com`,
           verified: true,
-          relevance: '95% Match',
-          opportunityScore: 92,
-          techGaps: ['No 24/7 AI Receptionist', 'Manual Form Follow-ups'],
-          recentSignals: ['Active Hiring', 'Growing Team'],
-          recommendedPitch: `Hi ${p.name || 'there'}, noticed your growing presence in ${location}. Businesses in your sector are automating 78% of incoming client inquiries with BGOS AI Receptionist and instant form booking.`,
+          relevance: p.relevance || '95% Match',
+          opportunityScore: p.opportunityScore || 92,
+          techGaps: p.techGaps || ['No 24/7 AI Receptionist', 'Manual Form Follow-ups'],
+          recentSignals: p.recentSignals || ['Active Hiring', 'Growing Team'],
+          recommendedPitch: p.recommendedPitch || `Hi ${p.name || 'there'}, noticed your growing presence in ${location}. Businesses in your sector are automating incoming client inquiries with BGOS AI Receptionist and instant form booking.`,
           status: 'discovered',
         }));
         setProspects(mapped);
         setSelectedProspectId(mapped[0]?.id || 'prosp-1');
         toast.success(`Found ${mapped.length} prospects from directory!`);
       } else {
-        toast.success(`Found 1,248 verified prospects for "${keyword}" in ${location}!`);
+        toast.info(`No directory prospects found for "${keyword}" in ${location}. Try adjusting your search criteria.`);
       }
     } catch {
-      toast.success(`Found 1,248 verified prospects for "${keyword}" in ${location}!`);
+      toast.error('Directory search failed. Please check your network and try again.');
     } finally {
       setIsSearching(false);
     }

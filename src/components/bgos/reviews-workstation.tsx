@@ -487,7 +487,7 @@ export function ReviewsView() {
     let persisted = false;
     try {
       const res = await authFetch(`/api/reviews/${targetId}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           responseJson: JSON.stringify({ text: textToSave.trim(), repliedAt: new Date().toISOString() }),
@@ -497,25 +497,26 @@ export function ReviewsView() {
     } catch {
       persisted = false;
     }
-    setReviewsList((prev) =>
-      prev.map((r) =>
-        r.id === targetId
-          ? {
-              ...r,
-              replied: true,
-              replyText: textToSave.trim(),
-              replyEdited: 'Just now',
-            }
-          : r
-      )
-    );
-    setIsEditingReply(false);
-    setQuickReplyId(null);
-    setQuickReplyText('');
+
     if (persisted) {
+      setReviewsList((prev) =>
+        prev.map((r) =>
+          r.id === targetId
+            ? {
+                ...r,
+                replied: true,
+                replyText: textToSave.trim(),
+                replyEdited: 'Just now',
+              }
+            : r
+        )
+      );
+      setIsEditingReply(false);
+      setQuickReplyId(null);
+      setQuickReplyText('');
       toast.success('Reply saved to database (Google Sync queued)');
     } else {
-      toast.success('Reply saved locally');
+      toast.error('Failed to save review reply to server. Please try again.');
     }
   };
 

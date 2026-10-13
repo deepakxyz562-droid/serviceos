@@ -583,41 +583,49 @@ export function BosAppointmentsWorkstation({
       topRightIcon: 'check',
     };
 
-    setBlocks((prev) => [...prev, nextBlock]);
-    setSelectedBlockId(nextBlock.id);
-    setShowNewModal(false);
+    try {
+      await onCreateAppointment({
+        customerName: nextBlock.customerName,
+        customerPhone: nextBlock.customerPhone,
+        serviceName: nextBlock.serviceName,
+        staffName: nextBlock.staffName,
+        scheduledAt: nextBlock.detailTimeLabel.split(' - ')[0],
+        durationMinutes: 60,
+        amount: nextBlock.amount,
+        paymentStatus: 'paid',
+        status: 'confirmed',
+        notes: nextBlock.notes,
+      });
 
-    await onCreateAppointment({
-      customerName: nextBlock.customerName,
-      customerPhone: nextBlock.customerPhone,
-      serviceName: nextBlock.serviceName,
-      staffName: nextBlock.staffName,
-      scheduledAt: nextBlock.detailTimeLabel.split(' - ')[0],
-      durationMinutes: 60,
-      amount: nextBlock.amount,
-      paymentStatus: 'paid',
-      status: 'confirmed',
-      notes: nextBlock.notes,
-    });
-
-    showToast(`Booked appointment for ${nextBlock.customerName}`);
+      setBlocks((prev) => [...prev, nextBlock]);
+      setSelectedBlockId(nextBlock.id);
+      setShowNewModal(false);
+      showToast(`Booked appointment for ${nextBlock.customerName}`);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to schedule appointment on server.');
+    }
   };
 
   const handleStatusChange = async (nextStatus: ScheduleBlockItem['status']) => {
     if (!selectedBlock) return;
-    setBlocks((prev) =>
-      prev.map((b) =>
-        b.id === selectedBlock.id ? { ...b, status: nextStatus } : b,
-      ),
-    );
     const mapped =
       nextStatus === 'Completed'
         ? 'completed'
         : nextStatus === 'Cancelled'
           ? 'cancelled'
           : 'confirmed';
-    await onUpdateAppointmentStatus(selectedBlock.id, mapped);
-    showToast(`Updated status for ${selectedBlock.customerName} to ${nextStatus}`);
+
+    try {
+      await onUpdateAppointmentStatus(selectedBlock.id, mapped);
+      setBlocks((prev) =>
+        prev.map((b) =>
+          b.id === selectedBlock.id ? { ...b, status: nextStatus } : b,
+        ),
+      );
+      showToast(`Updated status for ${selectedBlock.customerName} to ${nextStatus}`);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update appointment status on server.');
+    }
   };
 
   const handleCreateInvoiceFromAppt = () => {

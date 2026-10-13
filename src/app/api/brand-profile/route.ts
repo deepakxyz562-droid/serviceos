@@ -43,6 +43,7 @@ interface BrandProfileInput {
   usps?: string | null;
   currentOffers?: string | null;
   competitors?: StringList | null;
+  hours?: unknown;
   // Allow caller to skip the (slow) AI summary regeneration.
   skipAiSummary?: boolean;
 }
@@ -141,7 +142,17 @@ export async function GET() {
     }
 
     const profile = await getBrandContextRaw(tenantId);
-    return NextResponse.json({ profile });
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { businessHoursJson: true },
+    });
+    let hours: unknown = null;
+    if (tenant?.businessHoursJson) {
+      try {
+        hours = JSON.parse(tenant.businessHoursJson);
+      } catch {}
+    }
+    return NextResponse.json({ profile, hours });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[/api/brand-profile GET] error:', error);
@@ -230,6 +241,14 @@ export async function PUT(request: NextRequest) {
         ...(aiGeneratedSummary ? { aiGeneratedSummary } : {}),
       },
     });
+
+    if (body.hours !== undefined) {
+      const hoursJson = typeof body.hours === 'string' ? body.hours : JSON.stringify(body.hours);
+      await db.tenant.update({
+        where: { id: tenantId },
+        data: { businessHoursJson: hoursJson },
+      });
+    }
 
     return NextResponse.json({ profile });
   } catch (error: unknown) {

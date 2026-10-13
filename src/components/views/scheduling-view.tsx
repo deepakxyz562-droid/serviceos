@@ -510,12 +510,16 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         console.warn('Booking API responded with non-200:', err);
-        toast.success(`Appointment scheduled locally for ${customer} at ${newTime}`);
+        setDailyRows((prev) => prev.filter((r) => r.id !== createdRow.id));
+        setCalendarBlocks((prev) => prev.filter((b) => b.id !== createdBlock.id));
+        toast.error(err.error || 'Failed to save appointment to server. Please try again.');
       } else {
         toast.success(`Appointment scheduled and saved for ${customer} at ${newTime}`);
       }
     } catch {
-      toast.success(`Appointment scheduled locally for ${customer} at ${newTime}`);
+      setDailyRows((prev) => prev.filter((r) => r.id !== createdRow.id));
+      setCalendarBlocks((prev) => prev.filter((b) => b.id !== createdBlock.id));
+      toast.error('Network error: appointment could not be saved to server.');
     }
   };
 

@@ -143,7 +143,7 @@ export function SafeImage({
   return (
     <img
       {...rest}
-      src={finalSrc}
+      src={typeof finalSrc === 'string' ? finalSrc : undefined}
       alt={alt}
       loading={loading}
       // fetchPriority is a newer HTML attribute. React 19 supports the

@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BookOpen,
   Building2,
   Calendar,
   CheckCircle2,
@@ -53,6 +54,7 @@ type BosReportsDaybookWorkstationProps = {
   orders: BosOrder[];
   products: BosProductItem[];
   daybookEntries: BosDaybookEntry[];
+  initialOpeningBalance?: number;
   onAddDaybookEntry: (
     entry: Omit<BosDaybookEntry, 'id' | 'time' | 'createdAt'>,
   ) => Promise<void>;
@@ -214,12 +216,52 @@ function getMethodPillStyle(method: DaybookShowcaseRow['method']) {
   }
 }
 
+function mapDaybookEntryToShowcaseRow(
+  entry: BosDaybookEntry,
+  index: number,
+  runningBalance: number,
+): DaybookShowcaseRow {
+  let typeLabel: DaybookShowcaseRow['typeLabel'] = 'Sales';
+  if (entry.category === 'Expense') {
+    typeLabel = 'Expense';
+  } else if (entry.category === 'Khata In') {
+    typeLabel = 'Customer Payment';
+  } else if (entry.category === 'Supplier') {
+    typeLabel = 'Supplier Payment';
+  }
+
+  let method: DaybookShowcaseRow['method'] = 'Cash';
+  if (entry.paymentMode === 'upi') {
+    method = 'UPI';
+  } else if (entry.paymentMode === 'card') {
+    method = 'Card';
+  } else if (entry.paymentMode === 'bank') {
+    method = 'Bank';
+  }
+
+  return {
+    id: entry.id,
+    rowNum: index + 1,
+    dateText: entry.createdAt === 'Today' ? '12 Oct 2024' : entry.createdAt,
+    timeText: entry.time || '10:00 AM',
+    typeLabel,
+    particularsTitle: entry.partyName,
+    particularsSub: entry.subtitle,
+    method,
+    moneyIn: entry.moneyIn || 0,
+    moneyOut: entry.moneyOut || 0,
+    balance: runningBalance,
+  };
+}
+
 export function BosReportsDaybookWorkstation({
   mode,
   currencySymbol,
   orders = [],
   products,
+  daybookEntries = [],
   onAddDaybookEntry,
+  initialOpeningBalance = 0,
 }: BosReportsDaybookWorkstationProps) {
   const [reportTab, setReportTab] = useState<
     'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata'
@@ -227,12 +269,38 @@ export function BosReportsDaybookWorkstation({
 
   // Day Book States
   const [daybookTab, setDaybookTab] = useState<DaybookTabId>('all');
-  const [rows, setRows] = useState<DaybookShowcaseRow[]>(INITIAL_DAYBOOK_ROWS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('Main Store');
   const [dayClosed, setDayClosed] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const openingBal = initialOpeningBalance ?? 0;
+  const rows: DaybookShowcaseRow[] = useMemo(() => {
+    if (daybookEntries && daybookEntries.length > 0) {
+      // Calculate running balance in chronological order (daybookEntries are newest-first)
+      const chronological = [...daybookEntries].reverse();
+      let currentBal = openingBal;
+      const computed = chronological.map((entry, idx) => {
+        currentBal = currentBal + (entry.moneyIn || 0) - (entry.moneyOut || 0);
+        return mapDaybookEntryToShowcaseRow(entry, idx, currentBal);
+      });
+      return computed.reverse();
+    }
+    return [];
+  }, [daybookEntries, openingBal]);
+
+  const openingBalance = openingBal;
+  const totalMoneyIn = useMemo(
+    () => rows.reduce((acc, r) => acc + (r.moneyIn || 0), 0),
+    [rows],
+  );
+  const totalMoneyOut = useMemo(
+    () => rows.reduce((acc, r) => acc + (r.moneyOut || 0), 0),
+    [rows],
+  );
+  const closingBalance = openingBalance + totalMoneyIn - totalMoneyOut;
+  const expectedBalance = closingBalance;
 
   // Add Entry Modal State
   const [showEntryModal, setShowEntryModal] = useState(false);
@@ -281,6 +349,56 @@ export function BosReportsDaybookWorkstation({
     });
   }, [rows, daybookTab, searchQuery]);
 
+  const pagedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredRows.slice(start, start + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
+
+  const paymentMethodStats = useMemo(() => {
+    let cashTotal = 0;
+    let upiTotal = 0;
+    let cardTotal = 0;
+    let bankTotal = 0;
+    for (const r of rows) {
+      const amt = r.moneyIn || r.moneyOut || 0;
+      if (r.method === 'Cash') cashTotal += amt;
+      else if (r.method === 'UPI') upiTotal += amt;
+      else if (r.method === 'Card') cardTotal += amt;
+      else if (r.method === 'Bank') bankTotal += amt;
+    }
+    const grand = cashTotal + upiTotal + cardTotal + bankTotal || 1;
+    return [
+      {
+        label: 'Cash',
+        amount: cashTotal.toLocaleString('en-IN'),
+        pct: `${Math.round((cashTotal / grand) * 100)}%`,
+        iconBg: 'bg-[#E6F6F0] text-[#0A7B56]',
+        Icon: Wallet,
+      },
+      {
+        label: 'UPI',
+        amount: upiTotal.toLocaleString('en-IN'),
+        pct: `${Math.round((upiTotal / grand) * 100)}%`,
+        iconBg: 'bg-[#F3E8FF] text-[#7E22CE]',
+        Icon: QrCode,
+      },
+      {
+        label: 'Card',
+        amount: cardTotal.toLocaleString('en-IN'),
+        pct: `${Math.round((cardTotal / grand) * 100)}%`,
+        iconBg: 'bg-[#DBEAFE] text-[#2563EB]',
+        Icon: CreditCard,
+      },
+      {
+        label: 'Bank Transfer',
+        amount: bankTotal.toLocaleString('en-IN'),
+        pct: `${Math.round((bankTotal / grand) * 100)}%`,
+        iconBg: 'bg-[#E0F2FE] text-[#0369A1]',
+        Icon: Building2,
+      },
+    ];
+  }, [rows]);
+
   const openQuickEntryModal = (
     typeLabel: DaybookShowcaseRow['typeLabel'],
     direction: 'in' | 'out',
@@ -303,45 +421,32 @@ export function BosReportsDaybookWorkstation({
     const title =
       entryForm.particularsTitle.trim() ||
       (entryForm.direction === 'in' ? 'Manual Receipt' : 'Store Expense');
-    const prevBal = rows[rows.length - 1]?.balance || 27370;
-    const nextBal =
-      entryForm.direction === 'in' ? prevBal + amt : prevBal - amt;
 
-    const newRow: DaybookShowcaseRow = {
-      id: `db-row-${Date.now()}`,
-      rowNum: rows.length + 1,
-      dateText: '12 Oct 2024',
-      timeText: '05:45 PM',
-      typeLabel: entryForm.typeLabel,
-      particularsTitle: title,
-      particularsSub: entryForm.particularsSub.trim() || undefined,
-      method: entryForm.method,
-      moneyIn: entryForm.direction === 'in' ? amt : 0,
-      moneyOut: entryForm.direction === 'out' ? amt : 0,
-      balance: nextBal,
-    };
-
-    setRows((prev) => [...prev, newRow]);
     setShowEntryModal(false);
 
-    await onAddDaybookEntry({
-      partyName: title,
-      subtitle: entryForm.particularsSub.trim() || 'Day Book Entry',
-      category:
-        entryForm.typeLabel === 'Sales'
-          ? 'POS Sale'
-          : entryForm.typeLabel === 'Customer Payment'
-            ? 'Khata In'
-            : entryForm.typeLabel === 'Supplier Payment'
-              ? 'Supplier'
-              : 'Expense',
-      refNumber: `DB-${1071 + rows.length}`,
-      paymentMode: entryForm.method.toLowerCase() as BosDaybookEntry['paymentMode'],
-      moneyIn: newRow.moneyIn,
-      moneyOut: newRow.moneyOut,
-    });
+    try {
+      await onAddDaybookEntry({
+        partyName: title,
+        subtitle: entryForm.particularsSub.trim() || 'Day Book Entry',
+        category:
+          entryForm.typeLabel === 'Sales'
+            ? 'POS Sale'
+            : entryForm.typeLabel === 'Customer Payment'
+              ? 'Khata In'
+              : entryForm.typeLabel === 'Supplier Payment'
+                ? 'Supplier'
+                : 'Expense',
+        refNumber: `DB-${1071 + rows.length}`,
+        paymentMode: entryForm.method.toLowerCase() as BosDaybookEntry['paymentMode'],
+        moneyIn: entryForm.direction === 'in' ? amt : 0,
+        moneyOut: entryForm.direction === 'out' ? amt : 0,
+      });
 
-    showToast(`Recorded "${title}" (${currencySymbol} ${amt.toLocaleString('en-IN')})`);
+      showToast(`Recorded "${title}" (${currencySymbol} ${amt.toLocaleString('en-IN')})`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to record entry';
+      showToast(`Error: ${msg}`);
+    }
   };
 
   const handleExportGstr1Json = () => {
@@ -390,21 +495,32 @@ export function BosReportsDaybookWorkstation({
       csamt: 0,
     }));
 
+    const totalGross =
+      (orders || []).reduce((acc, o) => acc + (o.totalAmount || 0), 0) || 482650;
+    const totalTxval =
+      (orders || []).reduce(
+        (acc, o) => acc + Math.round((o.totalAmount || 0) / 1.05),
+        0,
+      ) || Math.round(totalGross / 1.05);
+    const totalTax = totalGross - totalTxval;
+    const totalCgst = Math.round(totalTax / 2);
+    const totalSgst = totalTax - totalCgst;
+
     const gstrPayload = {
       gstin: '09ABCDE1234F1Z5',
       fp: `${new Date().getMonth() + 1 < 10 ? '0' : ''}${new Date().getMonth() + 1}${new Date().getFullYear()}`,
-      gt: 482650,
-      cur_gt: 482650,
+      gt: totalGross,
+      cur_gt: totalGross,
       b2cs: [
         {
           sply_ty: 'INTRA',
           pos: '09',
           typ: 'OE',
           rt: 5,
-          txval: 459666,
+          txval: totalTxval,
           iamt: 0,
-          camt: 11492,
-          samt: 11492,
+          camt: totalCgst,
+          samt: totalSgst,
           csamt: 0,
         },
       ],
@@ -894,7 +1010,7 @@ export function BosReportsDaybookWorkstation({
               Opening Balance
             </p>
             <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
-              {currencySymbol} 12,480
+              {currencySymbol} {openingBalance.toLocaleString('en-IN')}
             </p>
           </div>
         </div>
@@ -909,7 +1025,7 @@ export function BosReportsDaybookWorkstation({
               Total Money In
             </p>
             <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
-              {currencySymbol} 48,320
+              {currencySymbol} {totalMoneyIn.toLocaleString('en-IN')}
             </p>
             <p className="text-[11px] font-bold text-[#0A7B56]">↑ 12%</p>
           </div>
@@ -925,7 +1041,7 @@ export function BosReportsDaybookWorkstation({
               Total Money Out
             </p>
             <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
-              {currencySymbol} 18,520
+              {currencySymbol} {totalMoneyOut.toLocaleString('en-IN')}
             </p>
             <p className="text-[11px] font-bold text-[#E11D48]">↓ 8%</p>
           </div>
@@ -941,7 +1057,7 @@ export function BosReportsDaybookWorkstation({
               Closing Balance
             </p>
             <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
-              {currencySymbol} 42,280
+              {currencySymbol} {closingBalance.toLocaleString('en-IN')}
             </p>
           </div>
         </div>
@@ -958,7 +1074,7 @@ export function BosReportsDaybookWorkstation({
               </p>
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-[20px] font-extrabold text-[#111827] leading-tight">
-                  {currencySymbol} 42,280
+                  {currencySymbol} {expectedBalance.toLocaleString('en-IN')}
                 </p>
                 <span className="inline-flex rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[10.5px] font-bold text-[#0A7B56]">
                   Matched
@@ -1041,8 +1157,21 @@ export function BosReportsDaybookWorkstation({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                {filteredRows.map((row) => (
-                  <tr key={row.id} className="hover:bg-[#F9FCFA]">
+                {pagedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center">
+                      <div className="flex flex-col items-center justify-center text-[#64748B]">
+                        <BookOpen className="h-8 w-8 text-[#94A3B8] mb-2" />
+                        <p className="text-[14px] font-semibold text-[#1E293B]">No Day Book transactions yet</p>
+                        <p className="text-[12px] text-[#64748B] mt-0.5 max-w-sm">
+                          Completed POS sales, invoices, customer payments, and logged expenses will appear here.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  pagedRows.map((row) => (
+                    <tr key={row.id} className="hover:bg-[#F9FCFA]">
                     <td className="py-2.5 pl-4 pr-2 font-medium text-[#475569]">
                       {row.rowNum}
                     </td>
@@ -1150,15 +1279,16 @@ export function BosReportsDaybookWorkstation({
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
+                ))
+              )}
+            </tbody>
             </table>
           </div>
 
           {/* Pagination Footer */}
           <div className="flex flex-col gap-2.5 border-t border-[#EBF2EE] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[12px] font-medium text-[#64748B]">
-              Showing 1–{Math.min(10, filteredRows.length)} of 28 transactions
+              Showing {filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredRows.length)} of {filteredRows.length} transactions
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1170,7 +1300,15 @@ export function BosReportsDaybookWorkstation({
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                 </button>
-                {[1, 2, 3].map((pg) => (
+                {Array.from(
+                  {
+                    length: Math.min(
+                      3,
+                      Math.max(1, Math.ceil(filteredRows.length / pageSize)),
+                    ),
+                  },
+                  (_, i) => i + 1,
+                ).map((pg) => (
                   <button
                     key={pg}
                     type="button"
@@ -1186,7 +1324,14 @@ export function BosReportsDaybookWorkstation({
                 ))}
                 <button
                   type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(3, p + 1))}
+                  onClick={() =>
+                    setCurrentPage((p) =>
+                      Math.min(
+                        Math.max(1, Math.ceil(filteredRows.length / pageSize)),
+                        p + 1,
+                      ),
+                    )
+                  }
                   className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
                 >
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -1248,19 +1393,19 @@ export function BosReportsDaybookWorkstation({
               <div className="flex justify-between text-[#475569]">
                 <span>Opening Balance</span>
                 <span className="font-bold text-[#111827]">
-                  {currencySymbol} 12,480
+                  {currencySymbol} {openingBalance.toLocaleString('en-IN')}
                 </span>
               </div>
               <div className="flex justify-between text-[#475569]">
                 <span>Total Money In</span>
                 <span className="font-bold text-[#111827]">
-                  {currencySymbol} 48,320
+                  {currencySymbol} {totalMoneyIn.toLocaleString('en-IN')}
                 </span>
               </div>
               <div className="flex justify-between text-[#475569]">
                 <span>Total Money Out</span>
                 <span className="font-bold text-[#111827]">
-                  {currencySymbol} 18,520
+                  {currencySymbol} {totalMoneyOut.toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -1270,7 +1415,7 @@ export function BosReportsDaybookWorkstation({
                 Calculated Closing Balance
               </span>
               <span className="text-[15px] font-extrabold text-[#0A6847]">
-                {currencySymbol} 42,280
+                {currencySymbol} {closingBalance.toLocaleString('en-IN')}
               </span>
             </div>
 
@@ -1281,7 +1426,7 @@ export function BosReportsDaybookWorkstation({
                 showToast(
                   dayClosed
                     ? 'Reopened Day Book for 12 Oct 2024'
-                    : 'Closed Day Book & verified closing balance ₹ 42,280',
+                    : `Closed Day Book & verified closing balance ${currencySymbol} ${closingBalance.toLocaleString('en-IN')}`,
                 );
               }}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#0A6847] text-[13px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
@@ -1298,50 +1443,7 @@ export function BosReportsDaybookWorkstation({
             </h2>
 
             <div className="space-y-2.5 text-[12.5px]">
-              {[
-                {
-                  label: 'Cash',
-                  amount: '18,120',
-                  pct: '38%',
-                  iconBg: 'bg-[#E6F6F0] text-[#0A7B56]',
-                  Icon: Wallet,
-                },
-                {
-                  label: 'UPI',
-                  amount: '12,460',
-                  pct: '26%',
-                  iconBg: 'bg-[#F3E8FF] text-[#7E22CE]',
-                  Icon: QrCode,
-                },
-                {
-                  label: 'Card',
-                  amount: '6,780',
-                  pct: '14%',
-                  iconBg: 'bg-[#DBEAFE] text-[#2563EB]',
-                  Icon: CreditCard,
-                },
-                {
-                  label: 'Bank Transfer',
-                  amount: '5,000',
-                  pct: '10%',
-                  iconBg: 'bg-[#E0F2FE] text-[#0369A1]',
-                  Icon: Building2,
-                },
-                {
-                  label: 'Credit (Khata)',
-                  amount: '4,500',
-                  pct: '9%',
-                  iconBg: 'bg-[#FEF3C7] text-[#D97706]',
-                  Icon: Wallet,
-                },
-                {
-                  label: 'Others',
-                  amount: '1,460',
-                  pct: '3%',
-                  iconBg: 'bg-[#F1F5F9] text-[#64748B]',
-                  Icon: CircleDot,
-                },
-              ].map((m) => (
+              {paymentMethodStats.map((m) => (
                 <div
                   key={m.label}
                   className="flex items-center justify-between gap-2"

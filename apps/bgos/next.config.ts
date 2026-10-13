@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   async redirects() {
-    return [{ source: "/design-preview", destination: "/app?auth=login", permanent: false }];
+    return [{ source: "/design-preview", destination: "/?product=bgos&auth=login", permanent: false }];
   },
   async rewrites() {
     const core = (process.env.CORE_API_URL || "http://127.0.0.1:3000").replace(/\/$/, "");
