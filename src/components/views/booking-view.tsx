@@ -42,6 +42,7 @@ import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useAppStore } from '@/store/app-store';
 import { useIsStandalone } from '@/hooks/use-tenant-plan';
 import { lineItemsSubtotal, type LineItem } from '@/features/line-items';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 import {
   EMPTY_FORM,
@@ -63,7 +64,7 @@ import {
 } from '@/features/booking/components/booking-columns';
 import { BookingCard } from '@/features/booking/components/booking-card';
 import { BookingStatusChips } from '@/features/booking/components/booking-status-chips';
-import { useDemoPageSize } from '@/hooks/use-demo-page-size';
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------

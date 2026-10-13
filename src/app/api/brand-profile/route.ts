@@ -302,17 +302,15 @@ export async function PUT(request: NextRequest) {
       body.defaultTaxRate !== undefined ||
       body.location !== undefined
     ) {
-      const hasTaxFields =
+      const hasTaxComplianceUpdate =
         body.gstNumber !== undefined ||
         body.invoicePrefix !== undefined ||
         body.defaultTaxRate !== undefined;
 
       let settingsJson: string | undefined = undefined;
-      if (hasTaxFields) {
+      if (hasTaxComplianceUpdate) {
         // Read the existing settingsJson so we can MERGE the tax/compliance
-        // sub-key rather than overwrite the whole blob. This is important
-        // because settingsJson is shared by other features (e.g. notifications,
-        // marketplace flags) — blowing it away would silently drop their config.
+        // sub-key rather than overwrite the whole blob.
         const existingTenant = await db.tenant.findUnique({
           where: { id: tenantId },
           select: { settingsJson: true },

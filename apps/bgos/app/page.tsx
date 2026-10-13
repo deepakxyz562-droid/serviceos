@@ -1,6 +1,13 @@
 import { redirect } from 'next/navigation';
 
-/** Preserve sign-in callbacks and deep links while using the real application. */
+/**
+ * BGOS entry route.
+ *
+ * Preserves sign-in callbacks and deep links while redirecting to the real
+ * application shell at `/app`. We redirect to `/app` (NOT `/`) because `/`
+ * is this very route — redirecting to `/` would create an infinite loop
+ * (`ERR_TOO_MANY_REDIRECTS`).
+ */
 export default async function BgosPage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
@@ -10,5 +17,5 @@ export default async function BgosPage({ searchParams }: {
   }
   query.set('product', 'bgos');
   if (!query.has('auth')) query.set('auth', 'login');
-  redirect(`/${query.size ? `?${query}` : ''}`);
+  redirect(`/app${query.size ? `?${query}` : ''}`);
 }
