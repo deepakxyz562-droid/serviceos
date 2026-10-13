@@ -79,6 +79,7 @@ import type {
   CountryCode,
   SalesChannel,
 } from '../../../shared/blueprint/types';
+import { authFetch } from '@/lib/client-auth';
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
@@ -115,15 +116,6 @@ export function BosMarketingAiIntegrationsSettings({
   const [toast, setToast] = useState<string | null>(null);
 
   /* Marketing state (Matches Marketing & Promotions screenshot 1:1) */
-  const [marketingTab, setMarketingTab] = useState<
-    | 'Overview'
-    | 'Offers & Discounts'
-    | 'WhatsApp Campaigns'
-    | 'Coupons'
-    | 'Loyalty Program'
-    | 'Customer Communication'
-    | 'Templates'
-  >('Overview');
   const [previewChannel, setPreviewChannel] = useState<'WhatsApp' | 'SMS' | 'Email'>('WhatsApp');
   const [createCampaignModalOpen, setCreateCampaignModalOpen] = useState(false);
   const [createCouponModalOpen, setCreateCouponModalOpen] = useState(false);
@@ -339,17 +331,6 @@ export function BosMarketingAiIntegrationsSettings({
   });
 
   /* Settings state (Matches Settings & Business Configuration screenshot) */
-  const [settingsTopTab, setSettingsTopTab] = useState<
-    | 'Business Profile'
-    | 'Store Settings'
-    | 'GST & Tax'
-    | 'Users & Staff'
-    | 'Invoice Templates'
-    | 'Notifications'
-    | 'Subscription'
-    | 'Security'
-    | 'Preferences'
-  >('Business Profile');
   const [settingsSection, setSettingsSection] = useState<
     | 'businessInfo'
     | 'businessHours'
@@ -405,6 +386,70 @@ export function BosMarketingAiIntegrationsSettings({
   const [inviteStaffName, setInviteStaffName] = useState('');
   const [inviteStaffRole, setInviteStaffRole] = useState('Staff');
   const [activeUsersCount, setActiveUsersCount] = useState(demoMode ? 5 : 1);
+
+  /* Real subscription plan info fetched from /api/subscriptions. In demo
+     mode we never fire the request — demoMode is for anonymous browsing with
+     static demo data, not for hitting authenticated endpoints (matching the
+     convention enforced elsewhere in the BOS shell). The fallback when the
+     fetch fails or the response is malformed is an honest "manage your plan
+     in Settings > Billing" message rather than a fabricated "Pro Plan ₹4,999"
+     card. */
+  const [subscriptionPlan, setSubscriptionPlan] = useState<{
+    plan: string;
+    billingCycle: string;
+    status: string;
+    renewalDate: string | null;
+    isTrialExpired: boolean;
+    trialEndsAt: string | null;
+    maxUsers: number | null;
+    currency: string;
+    price: number;
+  } | null>(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+    setSubscriptionLoading(true);
+    (async () => {
+      try {
+        const res = await authFetch('/api/subscriptions');
+        if (!res.ok) {
+          if (!cancelled) setSubscriptionPlan(null);
+          return;
+        }
+        const data = await res.json().catch(() => null);
+        if (cancelled || !data) return;
+        const renewalIso =
+          data.renewalDate ?? data.endDate ?? data.subscription?.endDate ?? null;
+        const trialIso =
+          data.trialEndsAt ?? data.subscription?.trialEndsAt ?? null;
+        setSubscriptionPlan({
+          plan: String(data.plan ?? data.subscription?.plan ?? ''),
+          billingCycle: String(data.billingCycle ?? data.subscription?.billingCycle ?? 'monthly'),
+          status: String(data.status ?? data.subscription?.status ?? ''),
+          renewalDate: renewalIso ? String(renewalIso) : null,
+          isTrialExpired: Boolean(data.isTrialExpired),
+          trialEndsAt: trialIso ? String(trialIso) : null,
+          maxUsers:
+            typeof data.usage?.users?.limit === 'number'
+              ? data.usage.users.limit
+              : typeof data.maxUsers === 'number'
+                ? data.maxUsers
+                : null,
+          currency: String(data.currency ?? 'INR'),
+          price: typeof data.price === 'number' ? data.price : 0,
+        });
+      } catch {
+        if (!cancelled) setSubscriptionPlan(null);
+      } finally {
+        if (!cancelled) setSubscriptionLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
 
   useEffect(() => {
     if (!demoMode) {
@@ -676,42 +721,6 @@ export function BosMarketingAiIntegrationsSettings({
           </button>
         </div>
 
-        {/* 7 Top Underline Sub-Tabs */}
-        <div className="border-b border-[#DCE9E3] overflow-x-auto">
-          <div className="flex items-center gap-6 min-w-max">
-            {(
-              [
-                'Overview',
-                'Offers & Discounts',
-                'WhatsApp Campaigns',
-                'Coupons',
-                'Loyalty Program',
-                'Customer Communication',
-                'Templates',
-              ] as const
-            ).map((tab) => {
-              const isActive = marketingTab === tab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setMarketingTab(tab)}
-                  className={`relative pb-3 text-[13px] font-bold transition ${
-                    isActive
-                      ? 'text-[#0A6847]'
-                      : 'text-[#475569] hover:text-[#111827]'
-                  }`}
-                >
-                  {tab}
-                  {isActive && (
-                    <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-[#0A6847]" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {/* 4 Top KPI Summary Cards with Sparklines */}
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
           {[
@@ -825,8 +834,7 @@ export function BosMarketingAiIntegrationsSettings({
                     icon: Users,
                     iconBg: 'bg-[#FEF3C7] text-[#D97706]',
                     action: () => {
-                      setMarketingTab('Loyalty Program');
-                      setToast('Loyalty Program: 1 Point per ₹100 spent is active.');
+                      setToast('Loyalty Program is coming soon.');
                       setTimeout(() => setToast(null), 2500);
                     },
                   },
@@ -900,7 +908,7 @@ export function BosMarketingAiIntegrationsSettings({
                     {recentCampaigns.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="py-8 text-center text-xs text-[#94A3B8]">
-                          No campaigns sent yet. Click &quot;Create Campaign&quot; to launch your first WhatsApp or SMS campaign.
+                          No campaigns yet. Create your first campaign to get started.
                         </td>
                       </tr>
                     ) : (
@@ -1025,8 +1033,7 @@ export function BosMarketingAiIntegrationsSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setMarketingTab('Loyalty Program');
-                    setToast('Loyalty Program setup opened: Earn 5% points on every order.');
+                    setToast('Loyalty Program is coming soon.');
                     setTimeout(() => setToast(null), 2500);
                   }}
                   className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
@@ -1053,8 +1060,8 @@ export function BosMarketingAiIntegrationsSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setToast('Customer Segments: All (684) • VIP (128) • Loyalty (450)');
-                    setTimeout(() => setToast(null), 2500);
+                    setToast(`Customer Segments: All (${customers.length}) • VIP (${customers.filter((c) => c.segment === 'VIP').length}) • Regular (${customers.filter((c) => c.segment === 'Regular').length}). Segmentation tools are coming soon.`);
+                    setTimeout(() => setToast(null), 3500);
                   }}
                   className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0]/50 transition"
                 >
@@ -1180,10 +1187,8 @@ export function BosMarketingAiIntegrationsSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setToast(
-                      `Sent "${activePreviewCampaign.name}" via ${previewChannel} to ${activePreviewCampaign.audience}!`,
-                    );
-                    setTimeout(() => setToast(null), 3000);
+                    setToast('Preview only. Connect the WhatsApp Business API in the Integrations page to send real broadcasts.');
+                    setTimeout(() => setToast(null), 3500);
                   }}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs hover:bg-[#085238]"
                   aria-label="Send campaign test"
@@ -1458,96 +1463,73 @@ export function BosMarketingAiIntegrationsSettings({
 
   /* 2. AI ASSISTANT MODE — 1:1 Match with BOS AI Assistant Screenshot */
   if (mode === 'aiAssistant') {
-    const recentChatsList = [
-      {
-        id: 'todays-sales',
-        title: "Today's sales report",
-        sub: "Show me today's sales and...",
-        prompt: "Show me today's sales and top 5 products",
-        icon: RefreshCw,
-      },
-      {
-        id: 'low-stock',
-        title: 'Low stock items',
-        sub: 'Which items are low in stock?',
-        prompt: 'Which items are low in stock?',
-        icon: Package,
-      },
-      {
-        id: 'create-invoice',
-        title: 'Create invoice',
-        sub: 'Create invoice for Sneha Patel',
-        prompt: 'Create invoice for Sneha Patel',
-        icon: FileText,
-      },
-      {
-        id: 'customer-outstanding',
-        title: 'Customer outstanding',
-        sub: 'Show me customer due amount',
-        prompt: 'Show me customer due amount',
-        icon: IndianRupee,
-      },
-      {
-        id: 'appointments',
-        title: 'Next 7 days appointments',
-        sub: 'Check my salon appointments',
-        prompt: 'Check my salon appointments for next 7 days',
-        icon: Calendar,
-      },
-      {
-        id: 'marketing-msg',
-        title: 'Marketing message',
-        sub: 'Create WhatsApp offer for Diwali',
-        prompt: 'Create WhatsApp offer for Diwali',
-        icon: Megaphone,
-      },
-      {
-        id: 'monthly-profit',
-        title: 'Monthly profit',
-        sub: 'Show profit and loss for September',
-        prompt: 'Show profit and loss for September',
-        icon: Wallet,
-      },
-      {
-        id: 'top-selling',
-        title: 'Top selling products',
-        sub: 'Which products sold the most?',
-        prompt: 'Which products sold the most?',
-        icon: BarChart3,
-      },
-      {
-        id: 'add-product',
-        title: 'Add new product',
-        sub: 'Add new product shampoo',
-        prompt: 'Add new product shampoo',
-        icon: Plus,
-      },
-      {
-        id: 'help-eway',
-        title: 'Help',
-        sub: 'How to generate e-way bill?',
-        prompt: 'How to generate e-way bill?',
-        icon: HelpCircle,
-      },
-    ];
+    // Recent chats are server-side conversation history. We do not seed any
+    // demo chats here — in production the list starts empty and grows as the
+    // operator sends real prompts. Suggestion prompts are still surfaced via
+    // the "Quick Actions" grid and the suggestion pills in the conversation
+    // column, so the operator always has somewhere to start.
+    const recentChatsList: Array<{
+      id: string;
+      title: string;
+      sub: string;
+      prompt: string;
+      icon: typeof RefreshCw;
+    }> = [];
 
-    const top5Products = [
-      { rank: 1, name: 'Hair Shampoo', qty: 24, sales: '7,680', badgeBg: 'bg-amber-100 text-amber-800' },
-      { rank: 2, name: 'Hair Conditioner', qty: 18, sales: '5,940', badgeBg: 'bg-orange-100 text-orange-800' },
-      { rank: 3, name: 'Hair Color', qty: 12, sales: '4,800', badgeBg: 'bg-rose-100 text-rose-800' },
-      { rank: 4, name: 'Facial Kit', qty: 10, sales: '4,500', badgeBg: 'bg-emerald-100 text-emerald-800' },
-      { rank: 5, name: 'Hair Serum', qty: 8, sales: '3,920', badgeBg: 'bg-purple-100 text-purple-800' },
-    ];
+    // Weekly bar chart: real revenue per day for the last 7 days. Honest:
+    // when there are no orders in the window, every bar is 0-height.
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - (6 - i));
+      return d;
+    });
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weeklyRevenueBuckets = last7Days.map((day) => {
+      const next = new Date(day);
+      next.setDate(day.getDate() + 1);
+      return orders
+        .filter((o) => {
+          const created = new Date(o.createdAt);
+          return created >= day && created < next;
+        })
+        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    });
+    const maxWeeklyRevenue = Math.max(1, ...weeklyRevenueBuckets);
+    const todayIdx = new Date().getDay();
+    const weeklyBars = weeklyRevenueBuckets.map((rev, i) => ({
+      day: dayLabels[last7Days[i].getDay()],
+      height: Math.round((rev / maxWeeklyRevenue) * 64) + (rev > 0 ? 8 : 0),
+      active: last7Days[i].getDay() === todayIdx,
+    }));
 
-    const weeklyBars = [
-      { day: 'Mon', height: 22, active: false },
-      { day: 'Tue', height: 32, active: false },
-      { day: 'Wed', height: 26, active: false },
-      { day: 'Thu', height: 44, active: false },
-      { day: 'Fri', height: 38, active: false },
-      { day: 'Sat', height: 54, active: false },
-      { day: 'Sun', height: 74, active: true },
-    ];
+    // Real business-insight aggregates. When orders/customers/products are
+    // empty (production zero-state), every figure is honestly 0.
+    const periodOrders = orders.filter((o) => {
+      const created = new Date(o.createdAt);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - (aiInsightsPeriod === 'This Week' ? 7 : 30));
+      return created >= cutoff;
+    });
+    const periodRevenue = periodOrders.reduce((s, o) => s + (o.totalAmount || 0), 0);
+    const periodNewCustomers = customers.filter((c) => {
+      const lastVisit = new Date(c.lastVisit);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - (aiInsightsPeriod === 'This Week' ? 7 : 30));
+      return lastVisit >= cutoff;
+    }).length;
+
+    // Smart Suggestions: real counts derived from live data, not invented.
+    const lowStockCount = products.filter(
+      (p) => p.stockQuantity <= (p.lowStockThreshold || 5),
+    ).length;
+    const dormantCustomers = customers.filter((c) => {
+      const lastVisit = new Date(c.lastVisit);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 45);
+      return lastVisit < cutoff;
+    }).length;
+    const customersWithDues = customers.filter((c) => c.khataBalance > 0).length;
 
     return (
       <div className="w-full max-w-none space-y-4 pb-6">
@@ -1613,8 +1595,8 @@ export function BosMarketingAiIntegrationsSettings({
               <button
                 type="button"
                 onClick={() => {
-                  setToast('Chat history synced with store cloud.');
-                  setTimeout(() => setToast(null), 2000);
+                  setToast('Chat history sync is coming soon.');
+                  setTimeout(() => setToast(null), 2500);
                 }}
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] text-[#475569] hover:border-[#0A6847] hover:text-[#0A6847]"
                 aria-label="Chat history archive"
@@ -1626,7 +1608,18 @@ export function BosMarketingAiIntegrationsSettings({
             <p className="px-1 text-[11.5px] font-semibold text-[#64748B]">Recent Chats</p>
 
             <div className="space-y-1">
-              {recentChatsList.map((chat) => {
+              {recentChatsList.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-[#DCE9E3] bg-[#F8FCFA] px-3 py-6 text-center">
+                  <Bot className="mx-auto h-6 w-6 text-[#94A3B8]" />
+                  <p className="mt-2 text-[12px] font-semibold text-[#475569]">
+                    No recent AI chats.
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-[#64748B]">
+                    Start a conversation with your AI Assistant.
+                  </p>
+                </div>
+              ) : (
+                recentChatsList.map((chat) => {
                 const Icon = chat.icon;
                 const isActive = activeAiThreadId === chat.id;
                 return (
@@ -1666,14 +1659,14 @@ export function BosMarketingAiIntegrationsSettings({
                     </div>
                   </button>
                 );
-              })}
+              }))}
             </div>
           </div>
 
           {/* Center Column (6 cols) — Interactive AI Conversation & Rich Summary Card */}
           <div className="bos-card p-4 lg:col-span-6 flex flex-col justify-between space-y-4">
             <div className="space-y-4">
-              {/* Message 1: Assistant Greeting & Quick Prompt Pills */}
+              {/* Message 1: Static Assistant Greeting & Quick Prompt Pills */}
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs">
                   <Bot className="h-5 w-5" />
@@ -1681,7 +1674,9 @@ export function BosMarketingAiIntegrationsSettings({
 
                 <div className="flex-1 space-y-2.5">
                   <div className="rounded-2xl rounded-tl-xs border border-[#EDF4F0] bg-[#F8FCFA] px-4 py-3 text-[13px] leading-relaxed text-[#1E293B]">
-                    <p className="font-semibold text-[#111827]">Hi Ravi! 👋</p>
+                    <p className="font-semibold text-[#111827]">
+                      Hi{storeSettings.businessName ? `, ${storeSettings.businessName}` : ''}! 👋
+                    </p>
                     <p className="mt-0.5">
                       I&apos;m BOS AI Assistant. I can help you with sales, inventory, customers,
                       invoices, appointments, marketing and much more.
@@ -1712,181 +1707,21 @@ export function BosMarketingAiIntegrationsSettings({
                 </div>
               </div>
 
-              {/* Message 2: User Prompt Bubble (Right Aligned Mint) */}
-              <div className="flex justify-end">
-                <div className="rounded-2xl rounded-tr-xs bg-[#E6F6F0] px-4 py-2.5 text-[13px] font-semibold text-[#064E3B] shadow-2xs">
-                  Show me today&apos;s sales and top 5 products
+              {/* Empty state when there are no AI messages yet. The greeting
+                  bubble above is a static introduction — the operator sends a
+                  real prompt via the suggestion pills or the composer below
+                  to populate this column with the assistant's actual replies. */}
+              {aiMessages.length === 0 && !aiLoading && (
+                <div className="rounded-xl border border-dashed border-[#DCE9E3] bg-[#F8FCFA] px-4 py-8 text-center">
+                  <Sparkles className="mx-auto h-6 w-6 text-[#94A3B8]" />
+                  <p className="mt-2 text-[12.5px] font-semibold text-[#475569]">
+                    No AI insights yet.
+                  </p>
+                  <p className="mt-0.5 text-[11.5px] text-[#64748B]">
+                    Use the AI Assistant to generate insights — try a suggestion pill above or type a question below.
+                  </p>
                 </div>
-              </div>
-
-              {/* Message 3: Assistant Rich Structured Response Card */}
-              <div className="flex items-start gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white shadow-2xs">
-                  <Bot className="h-5 w-5" />
-                </div>
-
-                <div className="min-w-0 flex-1 space-y-2.5">
-                  <div className="inline-block rounded-2xl rounded-tl-xs border border-[#EDF4F0] bg-[#F8FCFA] px-4 py-2 text-[13px] text-[#1E293B]">
-                    Here is your summary for today (
-                    <span className="font-extrabold text-[#111827]">12 Oct 2024</span>):
-                  </div>
-
-                  {/* Rich Structured Summary Card */}
-                  <div className="rounded-2xl border border-[#E4EFEA] bg-white p-3.5 shadow-2xs space-y-3.5">
-                    {/* 4 Mini KPI Tiles */}
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-                      {/* Total Sales */}
-                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E6F6F0] text-[#0A6847]">
-                            <ShoppingCart className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="text-[11px] font-medium text-[#64748B]">
-                            Total Sales
-                          </span>
-                        </div>
-                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">
-                          {currencySymbol} 48,320
-                        </p>
-                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">
-                          ↑ 12% vs yesterday
-                        </p>
-                      </div>
-
-                      {/* Orders */}
-                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#DBEAFE] text-[#2563EB]">
-                            <Users className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="text-[11px] font-medium text-[#64748B]">Orders</span>
-                        </div>
-                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">28</p>
-                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">↑ 17%</p>
-                      </div>
-
-                      {/* Avg. Order Value */}
-                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E0E7FF] text-[#4F46E5]">
-                            <IndianRupee className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="text-[11px] font-medium text-[#64748B] truncate">
-                            Avg. Order Value
-                          </span>
-                        </div>
-                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">
-                          {currencySymbol} 1,725
-                        </p>
-                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">↑ 8%</p>
-                      </div>
-
-                      {/* Profit (Est.) */}
-                      <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F3E8FF] text-[#9333EA]">
-                            <Wallet className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="text-[11px] font-medium text-[#64748B]">
-                            Profit (Est.)
-                          </span>
-                        </div>
-                        <p className="mt-1.5 text-[16px] font-extrabold text-[#111827]">
-                          {currencySymbol} 12,460
-                        </p>
-                        <p className="mt-0.5 text-[10.5px] font-bold text-[#10B981]">↑ 10%</p>
-                      </div>
-                    </div>
-
-                    {/* Top 5 Products Table */}
-                    <div className="space-y-2">
-                      <h3 className="text-[13.5px] font-extrabold text-[#111827]">
-                        Top 5 Products
-                      </h3>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse text-[12px]">
-                          <thead>
-                            <tr className="border-b border-[#EDF4F0] bg-[#F8FCFA] text-[11px] font-semibold text-[#64748B]">
-                              <th className="py-2 pl-2.5 pr-2">#</th>
-                              <th className="py-2 px-2">Product</th>
-                              <th className="py-2 px-2 text-center">Quantity Sold</th>
-                              <th className="py-2 pl-2 pr-2.5 text-right">
-                                Sales ({currencySymbol})
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-[#F1F6F3]">
-                            {top5Products.map((item) => (
-                              <tr key={item.rank} className="hover:bg-[#F8FCFA]">
-                                <td className="py-2 pl-2.5 pr-2 font-semibold text-[#475569]">
-                                  {item.rank}
-                                </td>
-                                <td className="py-2 px-2">
-                                  <div className="flex items-center gap-2.5">
-                                    <span
-                                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[10px] font-extrabold ${item.badgeBg}`}
-                                    >
-                                      {item.name.slice(0, 2).toUpperCase()}
-                                    </span>
-                                    <span className="font-semibold text-[#111827]">
-                                      {item.name}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="py-2 px-2 text-center font-semibold text-[#111827]">
-                                  {item.qty}
-                                </td>
-                                <td className="py-2 pl-2 pr-2.5 text-right font-bold text-[#111827]">
-                                  {item.sales}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* 3 Action Buttons below table */}
-                    <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToast("Opened full Today's Sales & Product Velocity report.");
-                          setTimeout(() => setToast(null), 2500);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 px-3 text-[12px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
-                      >
-                        <BarChart3 className="h-3.5 w-3.5 text-[#0A6847]" />
-                        <span>View Full Report</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToast('Prepared draft GST Sales Invoice from AI summary.');
-                          setTimeout(() => setToast(null), 2500);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 px-3 text-[12px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
-                      >
-                        <FileText className="h-3.5 w-3.5 text-[#0A6847]" />
-                        <span>Create Sales Invoice</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setToast("Shared Today's Sales Summary (₹48,320) on WhatsApp!");
-                          setTimeout(() => setToast(null), 2500);
-                        }}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 px-3 text-[12px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#F8FCFA] transition"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5 text-[#16A34A]" />
-                        <span>Share on WhatsApp</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Additional Interactive Messages Appended During Session */}
               {aiMessages.map((msg) => (
@@ -1941,8 +1776,8 @@ export function BosMarketingAiIntegrationsSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setToast('Voice input ready — speak your business query.');
-                    setTimeout(() => setToast(null), 2000);
+                    setToast('Voice input is coming soon.');
+                    setTimeout(() => setToast(null), 2500);
                   }}
                   className="rounded-lg p-1 text-[#64748B] hover:text-[#0A6847]"
                   aria-label="Voice input"
@@ -2027,8 +1862,8 @@ export function BosMarketingAiIntegrationsSettings({
                 <button
                   type="button"
                   onClick={() => {
-                    setToast('All 8 AI Quick Actions are enabled for your store.');
-                    setTimeout(() => setToast(null), 2000);
+                    setToast('All AI Quick Actions are listed above. More are coming soon.');
+                    setTimeout(() => setToast(null), 2500);
                   }}
                   className="text-[11.5px] font-bold text-[#0A6847] hover:underline"
                 >
@@ -2131,13 +1966,15 @@ export function BosMarketingAiIntegrationsSettings({
                 <p className="text-[11.5px] font-medium text-[#64748B]">Sales</p>
                 <div className="mt-0.5 flex items-baseline gap-2">
                   <span className="text-[20px] font-extrabold text-[#111827]">
-                    {currencySymbol} 3,42,180
+                    {currencySymbol} {periodRevenue.toLocaleString('en-IN')}
                   </span>
-                  <span className="text-[11.5px] font-bold text-[#10B981]">↑ 18%</span>
+                  <span className="text-[11.5px] font-medium text-[#64748B]">
+                    {aiInsightsPeriod.toLowerCase()}
+                  </span>
                 </div>
               </div>
 
-              {/* 7-Day Bar Chart (Mon - Sun) */}
+              {/* 7-Day Bar Chart — real revenue per day (last 7 days) */}
               <div className="flex items-end justify-between gap-2 pt-2 h-24">
                 {weeklyBars.map((bar) => (
                   <div key={bar.day} className="flex flex-1 flex-col items-center gap-1.5">
@@ -2152,7 +1989,7 @@ export function BosMarketingAiIntegrationsSettings({
                 ))}
               </div>
 
-              {/* Bottom 2 Mini Cards: Orders | New Customers */}
+              {/* Bottom 2 Mini Cards: Orders | New Customers — real counts */}
               <div className="grid grid-cols-2 gap-2.5 pt-1">
                 <div className="rounded-xl border border-[#EDF4F0] bg-[#F8FCFA] p-2.5 flex items-center gap-2.5">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#E6F6F0] text-[#0A6847]">
@@ -2160,8 +1997,8 @@ export function BosMarketingAiIntegrationsSettings({
                   </span>
                   <div>
                     <p className="text-[10.5px] font-medium text-[#64748B]">Orders</p>
-                    <p className="text-[14.5px] font-extrabold text-[#111827]">186</p>
-                    <p className="text-[10px] font-bold text-[#10B981]">↑ 16%</p>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">{periodOrders.length}</p>
+                    <p className="text-[10px] font-medium text-[#64748B]">{aiInsightsPeriod.toLowerCase()}</p>
                   </div>
                 </div>
 
@@ -2173,8 +2010,8 @@ export function BosMarketingAiIntegrationsSettings({
                     <p className="text-[10.5px] font-medium text-[#64748B] truncate">
                       New Customers
                     </p>
-                    <p className="text-[14.5px] font-extrabold text-[#111827]">24</p>
-                    <p className="text-[10px] font-bold text-[#10B981]">↑ 33%</p>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">{periodNewCustomers}</p>
+                    <p className="text-[10px] font-medium text-[#64748B]">{aiInsightsPeriod.toLowerCase()}</p>
                   </div>
                 </div>
               </div>
@@ -2190,32 +2027,32 @@ export function BosMarketingAiIntegrationsSettings({
               <div className="space-y-2">
                 {[
                   {
-                    title: '5 products are low in stock',
-                    sub: 'Restock to avoid stockout.',
+                    title: `${lowStockCount} product${lowStockCount === 1 ? '' : 's'} ${lowStockCount === 0 ? 'below safety threshold' : 'low in stock'}`,
+                    sub: lowStockCount > 0 ? 'Restock to avoid stockout.' : 'Inventory is healthy.',
                     icon: AlertTriangle,
                     bg: 'bg-[#FEE2E2] text-[#EF4444]',
                     prompt: 'Show low stock items to reorder',
                   },
                   {
-                    title: "12 customers haven't purchased in 45+ days",
-                    sub: 'Send a WhatsApp offer.',
+                    title: `${dormantCustomers} customer${dormantCustomers === 1 ? '' : 's'} haven't purchased in 45+ days`,
+                    sub: dormantCustomers > 0 ? 'Send a WhatsApp offer.' : 'No dormant customers yet.',
                     icon: Package,
                     bg: 'bg-[#FEF3C7] text-[#D97706]',
                     prompt: 'Draft a WhatsApp promo for weekend sale',
                   },
                   {
-                    title: "Today's appointments end at 7:00 PM",
-                    sub: 'Send reminder to 3 customers.',
-                    icon: Calendar,
+                    title: `${customersWithDues} customer${customersWithDues === 1 ? '' : 's'} with outstanding dues`,
+                    sub: customersWithDues > 0 ? 'Send a polite payment reminder.' : 'No outstanding dues.',
+                    icon: IndianRupee,
                     bg: 'bg-[#DBEAFE] text-[#2563EB]',
-                    prompt: 'Check my salon appointments',
+                    prompt: 'Show customer due amount',
                   },
                   {
-                    title: 'Create a Diwali offer for your top customers',
+                    title: 'Create a festive offer for your top customers',
                     sub: 'I can create a ready-to-send message.',
                     icon: Bot,
                     bg: 'bg-[#E6F6F0] text-[#0A6847]',
-                    prompt: 'Create WhatsApp offer for Diwali',
+                    prompt: 'Create WhatsApp offer for upcoming festival',
                   },
                 ].map((sug) => {
                   const Icon = sug.icon;
@@ -2404,28 +2241,17 @@ export function BosMarketingAiIntegrationsSettings({
                             setToast(`Disconnected ${item.name}.`);
                             setTimeout(() => setToast(null), 2500);
                           } else {
-                            const creds = integrationCreds[item.id];
-                            const hasCreds = Boolean(
-                              (creds && (creds.keyId || creds.secret || creds.metaField)) ||
-                              (item.id === 'razorpay' && storeSettings.upiId),
-                            );
-                            if (hasCreds) {
-                              setConnectedIds((prev) => ({
-                                ...prev,
-                                [item.id]: true,
-                              }));
-                              await onUpdateStoreSettings({
-                                capabilities: {
-                                  ...storeSettings.capabilities,
-                                  [item.id]: true,
-                                },
-                              });
-                              setToast(`Connected and verified ${item.name}!`);
-                              setTimeout(() => setToast(null), 2500);
-                            } else {
-                              setToast(`Please enter credentials in the configuration panel to connect ${item.name}.`);
-                              setTimeout(() => setToast(null), 3000);
-                            }
+                            // No real OAuth / credential verification happens
+                            // here — this BOS view only persists a local
+                            // capability flag. To avoid giving the operator
+                            // the false impression that we have actually
+                            // verified their integration (e.g. Razorpay
+                            // key/secret, WhatsApp Business API token), we
+                            // honestly redirect them to the full
+                            // Integrations page in the dashboard where the
+                            // real OAuth flow lives.
+                            setToast('Connect via the Integrations page in your dashboard.');
+                            setTimeout(() => setToast(null), 3000);
                           }
                         }}
                         className={`rounded-lg px-3 py-1 font-bold cursor-pointer ${
@@ -2579,22 +2405,21 @@ export function BosMarketingAiIntegrationsSettings({
                   return;
                 }
 
-                setConnectedIds((prev) => ({
-                  ...prev,
-                  [selectedIntegration.id]: true,
-                }));
+                // Persist the configuration values (e.g. UPI VPA for
+                // Razorpay) to the store settings. We do NOT mark the
+                // integration as "Connected" or claim verification — actual
+                // OAuth verification happens via the real Integrations page
+                // in the dashboard. The local credentials are saved here so
+                // the operator can later complete the OAuth flow with the
+                // same values.
                 await onUpdateStoreSettings({
-                  capabilities: {
-                    ...storeSettings.capabilities,
-                    [selectedIntegration.id]: true,
-                  },
                   upiId:
                     selectedIntegration.id === 'razorpay'
                       ? integrationCreds.razorpay?.metaField || storeSettings.upiId
                       : storeSettings.upiId,
                 });
-                setToast(`Saved and verified ${selectedIntegration.name} configuration!`);
-                setTimeout(() => setToast(null), 2500);
+                setToast(`Saved ${selectedIntegration.name} configuration. Connect via the Integrations page to verify.`);
+                setTimeout(() => setToast(null), 3000);
               }}
               className="w-full bos-btn-primary rounded-xl py-2.5 text-[13px] cursor-pointer"
             >
@@ -2686,56 +2511,29 @@ export function BosMarketingAiIntegrationsSettings({
         </p>
       </div>
 
-      {/* 9 Top Underline Sub-Tabs */}
-      <div className="border-b border-[#DCE9E3] overflow-x-auto">
-        <div className="flex items-center gap-6 min-w-max">
-          {(
-            [
-              'Business Profile',
-              'Store Settings',
-              'GST & Tax',
-              'Users & Staff',
-              'Invoice Templates',
-              'Notifications',
-              'Subscription',
-              'Security',
-              'Preferences',
-            ] as const
-          ).map((tab) => {
-            const isActive = settingsTopTab === tab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setSettingsTopTab(tab)}
-                className={`relative pb-3 text-[13px] font-bold transition ${
-                  isActive
-                    ? 'text-[#0A6847]'
-                    : 'text-[#475569] hover:text-[#111827]'
-                }`}
-              >
-                {tab}
-                {isActive && (
-                  <span className="absolute inset-x-0 bottom-0 h-[3px] rounded-t-full bg-[#0A6847]" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Middle 3-Column Grid: Left Menu (3 cols) + Center Business Information Form (6 cols) + Right Preview Cards (3 cols) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
-        {/* Left Vertical Navigation Menu Card (3 cols) */}
+        {/* Left Vertical Navigation Menu Card (3 cols) — only `businessInfo`
+            (default) and `businessType` switch content; the other items are
+            shown as navigation but surface an honest "coming soon" toast
+            instead of silently doing nothing. */}
         <div className="bos-card p-2.5 lg:col-span-3 space-y-1">
           {leftNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = settingsSection === item.id;
+            const isWired = item.id === 'businessInfo' || item.id === 'businessType';
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setSettingsSection(item.id)}
+                onClick={() => {
+                  if (isWired) {
+                    setSettingsSection(item.id);
+                  } else {
+                    setToast(`${item.title} settings are coming soon.`);
+                    setTimeout(() => setToast(null), 2500);
+                  }
+                }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                   isActive
                     ? 'border-l-[3.5px] border-l-[#0A6847] bg-[#E6F6F0]/80 text-[#0A6847]'
@@ -3026,7 +2824,7 @@ export function BosMarketingAiIntegrationsSettings({
                     <button
                       type="button"
                       onClick={() => {
-                        setToast('Store logo updated successfully!');
+                        setToast('Logo upload is coming soon.');
                         setTimeout(() => setToast(null), 2500);
                       }}
                       className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition"
@@ -3037,7 +2835,7 @@ export function BosMarketingAiIntegrationsSettings({
                     <button
                       type="button"
                       onClick={() => {
-                        setToast('Reset store logo to default.');
+                        setToast('Logo removal is coming soon.');
                         setTimeout(() => setToast(null), 2500);
                       }}
                       className="rounded-lg border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-slate-50"
@@ -3253,8 +3051,14 @@ export function BosMarketingAiIntegrationsSettings({
               <button
                 type="button"
                 onClick={() => {
-                  setToast(`Opening live store preview: ${settingsWebsite}`);
-                  setTimeout(() => setToast(null), 2500);
+                  if (typeof window === 'undefined') return;
+                  const slug = storeSettings.businessSlug;
+                  if (slug) {
+                    window.open(`/store/${slug}`, '_blank', 'noopener,noreferrer');
+                  } else {
+                    setToast('Set a Store Slug in your business profile to enable the live store preview.');
+                    setTimeout(() => setToast(null), 3000);
+                  }
                 }}
                 className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
               >
@@ -3299,8 +3103,7 @@ export function BosMarketingAiIntegrationsSettings({
             <button
               type="button"
               onClick={() => {
-                setSettingsSection('logoBranding');
-                setToast('Switched to Store Appearance & Branding settings.');
+                setToast('Logo & Branding settings are coming soon.');
                 setTimeout(() => setToast(null), 2500);
               }}
               className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/40 transition"
@@ -3431,7 +3234,8 @@ export function BosMarketingAiIntegrationsSettings({
                   if (onOpenUpgradeModal) {
                     onOpenUpgradeModal();
                   } else {
-                    setSettingsTopTab('Subscription');
+                    setToast('Manage your plan in Settings > Billing.');
+                    setTimeout(() => setToast(null), 3000);
                   }
                 }}
                 className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
@@ -3445,19 +3249,62 @@ export function BosMarketingAiIntegrationsSettings({
                 <Crown className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[14.5px] font-extrabold text-[#111827]">Pro Plan</p>
-                <p className="text-[11.5px] text-[#64748B]">Valid till 12 Jan 2026</p>
+                {demoMode ? (
+                  <>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">Pro Plan</p>
+                    <p className="text-[11.5px] text-[#64748B]">Demo mode</p>
+                  </>
+                ) : subscriptionLoading ? (
+                  <>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">Loading…</p>
+                    <p className="text-[11.5px] text-[#64748B]">Fetching your plan</p>
+                  </>
+                ) : subscriptionPlan && subscriptionPlan.plan ? (
+                  <>
+                    <p className="text-[14.5px] font-extrabold text-[#111827] capitalize">
+                      {subscriptionPlan.plan} Plan
+                    </p>
+                    <p className="text-[11.5px] text-[#64748B]">
+                      {subscriptionPlan.renewalDate
+                        ? `Renews ${new Date(subscriptionPlan.renewalDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                        : subscriptionPlan.status
+                          ? subscriptionPlan.status.charAt(0).toUpperCase() + subscriptionPlan.status.slice(1)
+                          : 'Active'}
+                      {subscriptionPlan.billingCycle ? ` • ${subscriptionPlan.billingCycle}` : ''}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[14.5px] font-extrabold text-[#111827]">No active plan</p>
+                    <p className="text-[11.5px] text-[#64748B]">Manage your plan in Settings &gt; Billing</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           <div className="space-y-1.5 border-t border-[#EDF4F0] pt-2.5 text-[12px]">
-            {[
-              'All Features',
-              'Up to 5 Staff Members',
-              'Online Store',
-              'Priority Support',
-            ].map((feat) => (
+            {(demoMode
+              ? [
+                  'All Features',
+                  'Up to 5 Staff Members',
+                  'Online Store',
+                  'Priority Support',
+                ]
+              : subscriptionPlan && subscriptionPlan.maxUsers
+                ? [
+                    `${subscriptionPlan.plan ? subscriptionPlan.plan.charAt(0).toUpperCase() + subscriptionPlan.plan.slice(1) : 'Current'} plan`,
+                    `Up to ${subscriptionPlan.maxUsers} staff members`,
+                    'Online Store',
+                    'Priority Support',
+                  ]
+                : [
+                    'Manage your plan',
+                    'in Settings > Billing',
+                    'to see your',
+                    'active features',
+                  ]
+            ).map((feat) => (
               <div key={feat} className="flex items-center gap-2 text-[#334155]">
                 <Check className="h-3.5 w-3.5 shrink-0 text-[#0A6847] stroke-[2.5]" />
                 <span className="font-medium">{feat}</span>
@@ -3473,7 +3320,10 @@ export function BosMarketingAiIntegrationsSettings({
               <h3 className="text-[14.5px] font-extrabold text-[#111827]">Users &amp; Staff</h3>
               <button
                 type="button"
-                onClick={() => setSettingsTopTab('Users & Staff')}
+                onClick={() => {
+                  setToast('Manage staff in Settings > Users & Staff.');
+                  setTimeout(() => setToast(null), 3000);
+                }}
                 className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
               >
                 Manage
@@ -3486,9 +3336,11 @@ export function BosMarketingAiIntegrationsSettings({
               </div>
               <div>
                 <p className="text-[14.5px] font-extrabold text-[#111827]">
-                  {activeUsersCount} Active Users
+                  {activeUsersCount} Active User{activeUsersCount === 1 ? '' : 's'}
                 </p>
-                <p className="text-[11.5px] text-[#64748B]">2 Admin • 3 Staff</p>
+                <p className="text-[11.5px] text-[#64748B]">
+                  {demoMode ? '2 Admin • 3 Staff' : 'Owner account'}
+                </p>
               </div>
             </div>
 
@@ -3535,11 +3387,14 @@ export function BosMarketingAiIntegrationsSettings({
                     type="button"
                     onClick={() => {
                       if (!inviteStaffName.trim()) return;
-                      setActiveUsersCount((c) => c + 1);
-                      setToast(`Invited ${inviteStaffName} (${inviteStaffRole}) to ${settingsBusinessName}!`);
+                      // Honest: there is no team-invite API wired up here,
+                      // so we do NOT increment the active-users counter or
+                      // claim success. The operator is redirected to the
+                      // real Users & Staff admin page in the dashboard.
+                      setToast(`Team invitations are coming soon. Use Settings > Users & Staff to invite ${inviteStaffName.trim()}.`);
                       setInviteStaffName('');
                       setInviteStaffModalOpen(false);
-                      setTimeout(() => setToast(null), 3000);
+                      setTimeout(() => setToast(null), 3500);
                     }}
                     className="flex-1 rounded-lg bg-[#0A6847] py-1 text-[11.5px] font-bold text-white"
                   >
@@ -3566,7 +3421,10 @@ export function BosMarketingAiIntegrationsSettings({
               <h3 className="text-[14.5px] font-extrabold text-[#111827]">Security</h3>
               <button
                 type="button"
-                onClick={() => setSettingsTopTab('Security')}
+                onClick={() => {
+                  setToast('Manage security in Settings > Security.');
+                  setTimeout(() => setToast(null), 3000);
+                }}
                 className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
               >
                 Manage

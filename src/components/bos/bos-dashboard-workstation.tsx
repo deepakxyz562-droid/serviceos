@@ -27,6 +27,7 @@ import type { BosNavId } from '../../../shared/bos-navigation';
 import {
   type BosAppointment,
   type BosCustomer,
+  type BosDaybookEntry,
   type BosOrder,
   type BosProductItem,
   formatBosCurrency,
@@ -40,6 +41,7 @@ type BosDashboardWorkstationProps = {
   orders: BosOrder[];
   customers: BosCustomer[];
   appointments: BosAppointment[];
+  daybookEntries?: BosDaybookEntry[];
   onNavigate: (view: BosNavId, context?: { action?: string; prompt?: string; itemId?: string }) => void;
   onQuickReorderProduct: (productId: string) => void;
   onOpenAiPrompt: (prompt: string) => void;
@@ -53,6 +55,7 @@ export function BosDashboardWorkstation({
   orders,
   customers,
   appointments,
+  daybookEntries = [],
   onNavigate,
   onQuickReorderProduct,
   onOpenAiPrompt,
@@ -86,6 +89,7 @@ export function BosDashboardWorkstation({
     const newCustomersCount = Math.min(totalCustomersCount, Math.round(totalCustomersCount * 0.12));
     const appointmentsCount = appointments.length;
     const upcomingCount = appointments.filter((a) => a.status === 'confirmed' || a.status === 'pending').length;
+    const totalExpenses = (daybookEntries || []).reduce((sum, e) => sum + (Number(e.moneyOut) || 0), 0);
 
     return {
       totalSales,
@@ -96,8 +100,9 @@ export function BosDashboardWorkstation({
       totalCustomersCount,
       appointmentsCount,
       upcomingCount,
+      totalExpenses,
     };
-  }, [orders, customers, appointments]);
+  }, [orders, customers, appointments, daybookEntries]);
 
   const weeklyChartBars = useMemo(() => {
     if (demoMode) {
@@ -157,16 +162,18 @@ export function BosDashboardWorkstation({
       };
     }
     const totalRev = weeklyChartBars.reduce((s, b) => s + b.amount, 0) || kpiStats.totalSales;
-    const profit = Math.round(totalRev * 0.3);
-    const expenses = Math.round(totalRev * 0.15);
-    const growth = totalRev > 0 ? '+18.4%' : '0%';
+    // Use real expense data from the daybook if available; otherwise 0 (honest).
+    // Previously this invented profit = 30% of revenue and expenses = 15% of revenue.
+    const expenses = kpiStats.totalExpenses || 0;
+    const profit = Math.max(0, totalRev - expenses);
+    const growth = totalRev > 0 ? '+' : '0%';
     return {
       revenue: totalRev,
       profit,
       expenses,
       growth,
     };
-  }, [demoMode, weeklyChartBars, kpiStats.totalSales]);
+  }, [demoMode, weeklyChartBars, kpiStats.totalSales, kpiStats.totalExpenses]);
 
   const categoryBreakdown = useMemo(() => {
     if (products.length === 0) {
@@ -371,7 +378,7 @@ export function BosDashboardWorkstation({
                 {formatBosCurrency(kpiStats.totalSales, currencySymbol)}
               </span>
               <span className="inline-flex items-center rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-semibold text-[#0A6847]">
-                +12.5%
+                —
               </span>
             </div>
             <p className="mt-1 text-[11.5px] text-[#64748B]">vs yesterday</p>
@@ -406,7 +413,7 @@ export function BosDashboardWorkstation({
                 {kpiStats.totalOrdersCount}
               </span>
               <span className="inline-flex items-center rounded-full bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-semibold text-[#0A6847]">
-                +8.2%
+                —
               </span>
             </div>
             <div className="mt-1 flex items-center gap-2.5 text-[11.5px] text-[#64748B]">

@@ -46,7 +46,7 @@ type InvoiceLineItem = {
   gstRate: number;
 };
 
-type SavedBosInvoice = {
+export type SavedBosInvoice = {
   id: string;
   invoiceNumber: string;
   docType: InvoiceDocType;
@@ -63,8 +63,14 @@ type BosInvoicesWorkstationProps = {
   storeSettings: BosStoreSettings;
   customers: BosCustomer[];
   products: BosProductItem[];
+  /** Invoices hydrated from /api/quote-flow/invoices (GET) — kept in sync by the parent. */
+  invoices?: SavedBosInvoice[];
   demoMode?: boolean;
   onInvoiceSaved?: (invoice: SavedBosInvoice) => void;
+  /** Mark an invoice as fully paid via PATCH /api/quote-flow/invoices/[id]. */
+  onMarkInvoicePaid?: (invoiceId: string) => Promise<void> | void;
+  /** Delete an invoice via DELETE /api/quote-flow/invoices/[id]. */
+  onDeleteInvoice?: (invoiceId: string) => Promise<void> | void;
 };
 
 const INITIAL_INVOICE_ITEMS: InvoiceLineItem[] = [
@@ -141,8 +147,11 @@ export function BosInvoicesWorkstation({
   storeSettings,
   customers = [],
   products = [],
+  invoices = [],
   demoMode = false,
   onInvoiceSaved,
+  onMarkInvoicePaid,
+  onDeleteInvoice,
 }: BosInvoicesWorkstationProps) {
   const currencySymbol = storeSettings.currencySymbol || '₹';
 
@@ -241,12 +250,21 @@ export function BosInvoicesWorkstation({
   const [rightTab, setRightTab] = useState<RightPreviewTab>('preview');
   const [paperMode, setPaperMode] = useState<PreviewPaperMode>('a4');
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [infoBanner, setInfoBanner] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setStatusBanner(msg);
     setTimeout(() => {
       setStatusBanner((prev) => (prev === msg ? null : prev));
     }, 3200);
+  };
+
+  /** Honest, non-success messaging for not-yet-implemented integrations. */
+  const showInfo = (msg: string) => {
+    setInfoBanner(msg);
+    setTimeout(() => {
+      setInfoBanner((prev) => (prev === msg ? null : prev));
+    }, 4200);
   };
 
   // Filtered catalog items when searching in the Items search bar
@@ -371,37 +389,24 @@ export function BosInvoicesWorkstation({
   };
 
   const handlePrintOrDownload = async () => {
-    const matchedCust = customers.find(
-      (c) => c.name.toLowerCase() === selectedCustomerName.toLowerCase(),
-    );
-    let targetCustomerId = matchedCust?.id;
-
-    if (!targetCustomerId) {
-      if (!selectedCustomerName.trim()) {
-        showToast('Please enter a customer name for the invoice.');
-        return;
-      }
-      try {
-        const createCustRes = await fetch('/api/customers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: selectedCustomerName.trim(),
-            phone: selectedCustomerPhone.trim(),
-            address: billingAddressLines.slice(1).join(', ') || undefined,
-          }),
-        });
-        if (createCustRes.ok) {
-          const custData = await createCustRes.json().catch(() => null);
-          targetCustomerId = custData?.customer?.id || custData?.id;
-        }
-      } catch {}
-    }
-
-    if (!targetCustomerId) {
-      showToast('Could not link customer to invoice. Please select or add a customer.');
+    if (!selectedCustomerName.trim()) {
+      showToast('Please enter a customer name for the invoice.');
       return;
     }
+    if (items.length === 0) {
+      showToast('Please add at least one item to the invoice.');
+      return;
+    }
+
+    // ── Real customer data only ──────────────────────────────────────
+    // Previously this handler invented fake GSTIN/phone/address values
+    // when fields were blank. That corrupted real invoices. We now pass
+    // through whatever the user actually entered — blanks become
+    // `undefined` so the server can apply its own defaults (e.g. the
+    // quote-flow route auto-creates an AiCustomer by phone/name).
+    const cleanCustomerName = selectedCustomerName.trim();
+    const cleanCustomerPhone = selectedCustomerPhone.trim();
+    const cleanCustomerAddress = billingAddressLines.slice(1).join(', ').trim();
 
     const calculatedTaxPercent =
       calculations.taxableAmount > 0
@@ -415,23 +420,29 @@ export function BosInvoicesWorkstation({
         : 0;
 
     try {
-      const res = await fetch('/api/invoices', {
+      // POST against the quote-flow invoice contract — same shape that
+      // /api/quote-flow/invoices/route.ts expects. The route auto-creates
+      // or attaches the customer by phone/name if `customerId` is omitted.
+      const res = await fetch('/api/quote-flow/invoices', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customerId: targetCustomerId,
-          customerName: selectedCustomerName,
+          customerName: cleanCustomerName,
+          customerPhone: cleanCustomerPhone || undefined,
           dueDate,
           notes: remarks,
+          status: 'DRAFT',
           items: items.map((it) => ({
             description: it.name,
-            quantity: it.qty,
-            rate: it.rate,
-            amount: it.qty * it.rate,
+            qty: it.qty,
+            unitPrice: it.rate,
+            hsnCode: it.hsnSac || undefined,
           })),
-          discount: calculations.discountAmount,
-          taxPercent: calculatedTaxPercent,
-          currency: storeSettings.currencySymbol === '₹' ? 'INR' : 'USD',
+          discountValue: calculations.discountAmount,
+          discountType: 'AMOUNT',
+          taxRate: calculatedTaxPercent,
+          pdfTemplate: 'classic-corporate-blue',
         }),
       });
 
@@ -449,10 +460,10 @@ export function BosInvoicesWorkstation({
           number: verifiedInvoiceNumber,
           date: invoiceDate,
           dueDate,
-          customerName: selectedCustomerName,
-          customerPhone: selectedCustomerPhone,
+          customerName: cleanCustomerName,
+          customerPhone: cleanCustomerPhone,
           customerGstin: selectedCustomerGstin,
-          customerAddress: billingAddressLines.slice(1).join(', '),
+          customerAddress: cleanCustomerAddress,
           placeOfSupply,
           subtotal: Math.round(calculations.taxableAmount),
           tax: Math.round(calculations.cgst + calculations.sgst),
@@ -483,7 +494,7 @@ export function BosInvoicesWorkstation({
         id: verifiedInvoiceId,
         invoiceNumber: verifiedInvoiceNumber,
         docType,
-        customerName: selectedCustomerName,
+        customerName: cleanCustomerName,
         customerGstin: selectedCustomerGstin,
         date: invoiceDate,
         dueDate,
@@ -528,17 +539,23 @@ export function BosInvoicesWorkstation({
   const handleAddNewCustomerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustomerForm.name.trim()) return;
-    setSelectedCustomerName(newCustomerForm.name.trim());
-    setSelectedCustomerGstin(newCustomerForm.gstin.trim() || '07AAKCA1234F1Z5');
-    setSelectedCustomerPhone(newCustomerForm.phone.trim() || '9876543210');
-    setBillingAddressLines([
-      newCustomerForm.name.trim(),
-      newCustomerForm.address.trim() || '123 Green Park, Metro Station Road',
-      'New Delhi - 110016',
-      'Delhi, India',
-    ]);
+    // ── Real customer data only ──────────────────────────────────────
+    // Previously this invented fake GSTIN/phone/address values when the
+    // user left fields blank. Those fake values then leaked into the
+    // invoice POST and the saved invoice record. We now use whatever the
+    // user actually typed — empty strings stay empty.
+    const trimmedName = newCustomerForm.name.trim();
+    const trimmedGstin = newCustomerForm.gstin.trim();
+    const trimmedPhone = newCustomerForm.phone.trim();
+    const trimmedAddress = newCustomerForm.address.trim();
+    setSelectedCustomerName(trimmedName);
+    setSelectedCustomerGstin(trimmedGstin);
+    setSelectedCustomerPhone(trimmedPhone);
+    setBillingAddressLines(
+      trimmedAddress ? [trimmedName, trimmedAddress] : [trimmedName],
+    );
     setShowAddCustomerModal(false);
-    showToast(`Selected customer "${newCustomerForm.name.trim()}"`);
+    showToast(`Selected customer "${trimmedName}"`);
   };
 
   return (
@@ -553,6 +570,23 @@ export function BosInvoicesWorkstation({
           <button
             type="button"
             onClick={() => setStatusBanner(null)}
+            className="text-xs font-semibold underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Info Banner (honest "not yet implemented" messaging — never styled as success) */}
+      {infoBanner && (
+        <div className="flex items-center justify-between rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-4 py-2.5 text-[13px] font-medium text-[#1E40AF]">
+          <span className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-[#2563EB]" />
+            {infoBanner}
+          </span>
+          <button
+            type="button"
+            onClick={() => setInfoBanner(null)}
             className="text-xs font-semibold underline"
           >
             Dismiss
@@ -782,41 +816,33 @@ export function BosInvoicesWorkstation({
 
                 {showCustomerDropdown && (
                   <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-[#DCE9E3] bg-white p-1.5 shadow-lg">
-                    {[
-                      {
-                        name: 'Amit Kumar Traders',
-                        gstin: '07AAKCA1234F1Z5',
-                        phone: '9876543210',
-                      },
-                      ...customers.slice(0, 4).map((c) => ({
-                        name: c.name,
-                        gstin: c.gstin || '07AABCU9603R1ZM',
-                        phone: c.phone,
-                      })),
-                    ].map((c, idx) => (
+                    {customers.slice(0, 5).map((c, idx) => {
+                      const cName = c.name;
+                      const cGstin = c.gstin || '';
+                      const cPhone = c.phone || '';
+                      const cAddress = c.address || '';
+                      return (
                       <button
                         key={idx}
                         type="button"
                         onClick={() => {
-                          setSelectedCustomerName(c.name);
-                          setSelectedCustomerGstin(c.gstin);
-                          setSelectedCustomerPhone(c.phone);
-                          setBillingAddressLines([
-                            c.name,
-                            '123 Green Park, Metro Station Road',
-                            'New Delhi - 110016',
-                            'Delhi, India',
-                          ]);
+                          setSelectedCustomerName(cName);
+                          setSelectedCustomerGstin(cGstin);
+                          setSelectedCustomerPhone(cPhone);
+                          setBillingAddressLines(
+                            cAddress ? [cName, cAddress] : [cName],
+                          );
                           setShowCustomerDropdown(false);
                         }}
                         className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-[#F1FAF5]"
                       >
-                        <span className="font-bold text-[#111827]">{c.name}</span>
+                        <span className="font-bold text-[#111827]">{cName}</span>
                         <span className="font-mono text-[11px] text-[#64748B]">
-                          {c.gstin}
+                          {cGstin || '—'}
                         </span>
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1596,7 +1622,9 @@ export function BosInvoicesWorkstation({
               <button
                 type="button"
                 onClick={() =>
-                  showToast(`e-Way Bill generated for ${invoiceNumber}`)
+                  showInfo(
+                    'e-Way Bill generation requires GSTN API integration. Coming soon.',
+                  )
                 }
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
               >
@@ -1607,7 +1635,9 @@ export function BosInvoicesWorkstation({
               <button
                 type="button"
                 onClick={() =>
-                  showToast(`IRN & e-Invoice generated for ${invoiceNumber}`)
+                  showInfo(
+                    'e-Invoice generation requires GSTN API integration. Coming soon.',
+                  )
                 }
                 className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
               >
@@ -1734,6 +1764,111 @@ export function BosInvoicesWorkstation({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Recent Invoices — hydrated from /api/quote-flow/invoices (GET) in the parent.
+          Saving an invoice above calls onInvoiceSaved, which prepends it to this list
+          and persists across reloads. Mark-Paid / Delete trigger PATCH and DELETE on
+          the same quote-flow contract. */}
+      {invoices.length > 0 && (
+        <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[15.5px] font-extrabold text-[#111827]">
+              Recent Invoices
+            </h2>
+            <span className="text-[11.5px] font-semibold text-[#64748B]">
+              {invoices.length} saved
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-[12px]">
+              <thead>
+                <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                  <th className="py-2 pl-2 pr-1.5">Invoice #</th>
+                  <th className="py-2 px-2">Customer</th>
+                  <th className="py-2 px-2">Date</th>
+                  <th className="py-2 px-2 text-right">Total</th>
+                  <th className="py-2 px-2 text-center">Status</th>
+                  <th className="py-2 pl-1 pr-2 w-32 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#EEF5F1]">
+                {invoices.map((inv) => {
+                  const isPaid = inv.status === 'Paid';
+                  const isUnpaid =
+                    inv.status === 'Unpaid' ||
+                    inv.status === 'Partial' ||
+                    inv.status === 'Draft';
+                  const statusBadgeClass =
+                    inv.status === 'Paid'
+                      ? 'bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0]'
+                      : inv.status === 'Partial'
+                        ? 'bg-[#FFFBEB] text-[#92400E] border-[#FDE68A]'
+                        : inv.status === 'Draft'
+                          ? 'bg-[#F1F5F9] text-[#475569] border-[#E2E8F0]'
+                          : 'bg-[#FEF2F2] text-[#991B1B] border-[#FECACA]';
+                  return (
+                    <tr key={inv.id} className="hover:bg-[#F9FCFA]">
+                      <td className="py-2 pl-2 pr-1.5 font-bold text-[#111827]">
+                        {inv.invoiceNumber}
+                      </td>
+                      <td className="py-2 px-2">
+                        <p className="font-semibold text-[#111827]">
+                          {inv.customerName || '—'}
+                        </p>
+                        {inv.customerGstin && (
+                          <p className="font-mono text-[10px] text-[#64748B]">
+                            {inv.customerGstin}
+                          </p>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-[#64748B]">{inv.date}</td>
+                      <td className="py-2 px-2 text-right font-bold text-[#111827]">
+                        {currencySymbol} {formatTwoDecimals(inv.totalAmount)}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        <span
+                          className={`inline-flex rounded-md border px-2 py-0.5 text-[10.5px] font-bold ${statusBadgeClass}`}
+                        >
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td className="py-2 pl-1 pr-2 text-right">
+                        <div className="inline-flex items-center gap-1">
+                          {isUnpaid && onMarkInvoicePaid && (
+                            <button
+                              type="button"
+                              onClick={() => onMarkInvoicePaid(inv.id)}
+                              className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[10.5px] font-bold text-[#0A6847] hover:bg-[#F4F8F6] cursor-pointer"
+                            >
+                              Mark Paid
+                            </button>
+                          )}
+                          {onDeleteInvoice && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteInvoice(inv.id)}
+                              disabled={isPaid}
+                              title={
+                                isPaid
+                                  ? 'Paid invoices cannot be deleted'
+                                  : 'Delete this invoice'
+                              }
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#EF4444] hover:bg-[#FEE2E2] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

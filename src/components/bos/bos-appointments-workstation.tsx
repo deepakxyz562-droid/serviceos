@@ -398,43 +398,35 @@ const TIME_SLOTS_LABELS = [
   { hour: 19, label: '7:00 PM' },
 ];
 
-const MINI_CALENDAR_DAYS: Array<{ day: number; muted?: boolean; active?: boolean }> = [
-  { day: 29, muted: true },
-  { day: 30, muted: true },
-  { day: 1 },
-  { day: 2 },
-  { day: 3 },
-  { day: 4 },
-  { day: 5 },
-  { day: 6 },
-  { day: 7 },
-  { day: 8 },
-  { day: 9 },
-  { day: 10 },
-  { day: 11 },
-  { day: 12, active: true },
-  { day: 13 },
-  { day: 14 },
-  { day: 15 },
-  { day: 16 },
-  { day: 17 },
-  { day: 18 },
-  { day: 19 },
-  { day: 20 },
-  { day: 21 },
-  { day: 22 },
-  { day: 23 },
-  { day: 24 },
-  { day: 25 },
-  { day: 26 },
-  { day: 27 },
-  { day: 28 },
-  { day: 29 },
-  { day: 30 },
-  { day: 31 },
-  { day: 1, muted: true },
-  { day: 2, muted: true },
-];
+// Dynamic mini calendar — generates the current month's days with today
+// marked as active. Previously this was a hardcoded October 2024 grid.
+function getMiniCalendarDays(): Array<{ day: number; muted?: boolean; active?: boolean }> {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const today = now.getDate();
+  const firstDay = new Date(year, month, 1);
+  const lastDayPrev = new Date(year, month, 0).getDate();
+  const startWeekday = firstDay.getDay(); // 0 = Sunday
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days: Array<{ day: number; muted?: boolean; active?: boolean }> = [];
+  // Leading days from previous month
+  for (let i = startWeekday - 1; i >= 0; i--) {
+    days.push({ day: lastDayPrev - i, muted: true });
+  }
+  // Current month days
+  for (let d = 1; d <= daysInMonth; d++) {
+    days.push({ day: d, active: d === today });
+  }
+  // Trailing days from next month to fill the last row
+  const remaining = (7 - (days.length % 7)) % 7;
+  for (let d = 1; d <= remaining; d++) {
+    days.push({ day: d, muted: true });
+  }
+  return days;
+}
+
+const MINI_CALENDAR_DAYS = getMiniCalendarDays();
 
 function getBlockThemeClasses(theme: ScheduleBlockItem['colorTheme']) {
   switch (theme) {
@@ -488,10 +480,23 @@ function mapAppointmentsToBlocks(appts: BosAppointment[]): ScheduleBlockItem[] {
       if (meridiem === 'am' && h === 12) h = 0;
       startHour = h + m / 60;
     }
+    // Use the real staff name from the API. Only fall back to STAFF_COLUMNS
+    // (demo staff) when the appointment has no staffName at all AND we're
+    // in demo mode. In production, real staff names are used as-is.
+    const realStaffName = (a.staffName || '').trim();
     const staff =
       STAFF_COLUMNS.find(
-        (s) => s.name.toLowerCase() === (a.staffName || '').toLowerCase()
-      ) || STAFF_COLUMNS[idx % STAFF_COLUMNS.length];
+        (s) => s.name.toLowerCase() === realStaffName.toLowerCase()
+      ) || (realStaffName
+        ? {
+            id: `staff-${realStaffName.toLowerCase().replace(/\s+/g, '-')}`,
+            name: realStaffName,
+            role: 'Staff',
+            avatarBg: 'bg-[#E0E7FF]',
+            avatarText: 'text-[#3730A3]',
+            initials: realStaffName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'ST',
+          }
+        : STAFF_COLUMNS[idx % STAFF_COLUMNS.length]);
     const statusMap: Record<string, ScheduleBlockItem['status']> = {
       completed: 'Completed',
       cancelled: 'Cancelled',

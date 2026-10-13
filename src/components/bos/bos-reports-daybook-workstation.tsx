@@ -257,6 +257,86 @@ function mapDaybookEntryToShowcaseRow(
   };
 }
 
+/**
+ * Compute the real GST amount for an order. Honest fallback chain (no 5% fabrication):
+ *   1. Use o.taxAmount when present.
+ *   2. Sum tax from line items that carry their own gstRate (price * qty * rate/100).
+ *   3. Fall back to an order-level gstRate / taxRate (tax-inclusive total).
+ *   4. Otherwise return 0 — no data, no tax.
+ */
+function computeOrderTaxAmount(o: BosOrder): number {
+  if (typeof o.taxAmount === 'number' && Number.isFinite(o.taxAmount)) {
+    return o.taxAmount;
+  }
+  const fromItems = (o.items || []).reduce((sum, it) => {
+    const r = it.gstRate ?? 0;
+    if (r <= 0) return sum;
+    const base = (it.qty || 0) * (it.price || 0);
+    return sum + (base * r) / 100;
+  }, 0);
+  if (fromItems > 0) return Math.round(fromItems);
+  const orderRate =
+    (o as { gstRate?: number; taxRate?: number }).gstRate ??
+    (o as { taxRate?: number }).taxRate ??
+    0;
+  if (orderRate > 0) {
+    return Math.round(((o.totalAmount || 0) * orderRate) / (100 + orderRate));
+  }
+  return 0;
+}
+
+/**
+ * Representative GST rate (%) for an order — first line item carrying a non-zero
+ * gstRate, else the order-level gstRate / taxRate, else 0. Used to populate the
+ * `rt` field in GSTR-1 exports.
+ */
+function computeOrderGstRate(o: BosOrder): number {
+  const fromItem = (o.items || []).find(
+    (it) => typeof it.gstRate === 'number' && (it.gstRate ?? 0) > 0,
+  )?.gstRate;
+  if (typeof fromItem === 'number') return fromItem;
+  return (
+    (o as { gstRate?: number }).gstRate ??
+    (o as { taxRate?: number }).taxRate ??
+    0
+  );
+}
+
+/**
+ * Full GST breakup for an order. CGST = round(tax/2), SGST = tax - CGST
+ * (intra-state assumption, matching the original GSTR-1 structure).
+ */
+function computeOrderGstBreakup(o: BosOrder): {
+  rate: number;
+  taxable: number;
+  tax: number;
+  cgst: number;
+  sgst: number;
+} {
+  const total = o.totalAmount || 0;
+  const tax = computeOrderTaxAmount(o);
+  const rate = computeOrderGstRate(o);
+  const taxable = Math.max(0, Math.round(total - tax));
+  const cgst = Math.round(tax / 2);
+  const sgst = tax - cgst;
+  return { rate, taxable, tax, cgst, sgst };
+}
+
+/**
+ * Real COGS for an order: sum of (qty × product.costPrice) across line items.
+ * Products are matched by id first, then by name. If no matching product has a
+ * costPrice, returns 0 (honest — no 60% fabrication).
+ */
+function computeOrderCogs(o: BosOrder, products: BosProductItem[]): number {
+  return (o.items || []).reduce((sum, it) => {
+    const product = products.find(
+      (p) => (it.id && p.id === it.id) || p.name === it.name,
+    );
+    const cost = product?.costPrice ?? 0;
+    return sum + (it.qty || 0) * cost;
+  }, 0);
+}
+
 export function BosReportsDaybookWorkstation({
   mode,
   currencySymbol,
@@ -331,11 +411,23 @@ export function BosReportsDaybookWorkstation({
     const totalExpenses = daybookEntries
       .filter((e) => e.category === 'Expense' || e.moneyOut > 0)
       .reduce((sum, e) => sum + (e.moneyOut || 0), 0);
-    const cogs = Math.round(totalRevenue * 0.6);
+    // Real COGS: sum of (qty × product.costPrice) across sold line items.
+    // If no products carry costPrice, COGS is honestly 0 (no 60% fabrication).
+    const cogs = orders.reduce(
+      (sum, o) => sum + computeOrderCogs(o, products),
+      0,
+    );
     const grossProfit = Math.max(0, totalRevenue - totalExpenses - cogs);
     const marginLabel = totalRevenue > 0 ? `${((grossProfit / totalRevenue) * 100).toFixed(1)}% Margin` : '0% Margin';
-    const gstCollected = orders.reduce((sum, o) => sum + (o.taxAmount || Math.round((o.totalAmount || 0) * 0.05 / 1.05)), 0);
-    const itcClaimable = Math.round(gstCollected * 0.35);
+    // Real GST collected: prefer o.taxAmount; else derive from line-item gstRate;
+    // else order-level gstRate / taxRate; else 0 (no 5% fabrication).
+    const gstCollected = orders.reduce(
+      (sum, o) => sum + computeOrderTaxAmount(o),
+      0,
+    );
+    // ITC: BosDaybookEntry has no GST-breakdown field, so we cannot honestly
+    // derive input tax credit. Show 0 rather than fabricate 35% of output GST.
+    const itcClaimable = 0;
 
     let upi = 0;
     let cash = 0;
@@ -358,12 +450,55 @@ export function BosReportsDaybookWorkstation({
       { mode: 'Khata / Credit', amount: khata, pct: Math.round((khata / totPay) * 100), color: 'bg-amber-500' },
     ];
 
-    const weeklyBars = [
-      { label: 'Week 1', rev: totalRevenue > 0 ? 25 : 0, prof: grossProfit > 0 ? 20 : 0, exp: totalExpenses > 0 ? 15 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.25), currencySymbol) },
-      { label: 'Week 2', rev: totalRevenue > 0 ? 30 : 0, prof: grossProfit > 0 ? 25 : 0, exp: totalExpenses > 0 ? 20 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.3), currencySymbol) },
-      { label: 'Week 3', rev: totalRevenue > 0 ? 20 : 0, prof: grossProfit > 0 ? 18 : 0, exp: totalExpenses > 0 ? 15 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.2), currencySymbol) },
-      { label: 'Week 4', rev: totalRevenue > 0 ? 25 : 0, prof: grossProfit > 0 ? 22 : 0, exp: totalExpenses > 0 ? 18 : 0, val: formatBosCurrency(Math.round(totalRevenue * 0.25), currencySymbol) },
-    ];
+    // Real weekly bars: bucket orders and expenses by day-of-month offset for
+    // the last 4 weeks. If a day has no orders, its bar is 0 (no fabricated
+    // 25 / 30 / 20 / 25% splits).
+    const today = new Date();
+    const weekLabels: string[] = [];
+    for (let i = 3; i >= 0; i--) {
+      const end = new Date(today);
+      end.setDate(today.getDate() - i * 7);
+      const start = new Date(end);
+      start.setDate(end.getDate() - 6);
+      const fmt = (d: Date) =>
+        `${d.getDate()} ${d.toLocaleString('en-US', { month: 'short' })}`;
+      weekLabels.push(`Week ${4 - i} (${fmt(start)}–${fmt(end)})`);
+    }
+    const dayBucket = (createdAt: string): number => {
+      const d = new Date(createdAt);
+      if (Number.isNaN(d.getTime())) return -1;
+      const daysAgo = Math.floor(
+        (today.getTime() - d.getTime()) / (24 * 60 * 60 * 1000),
+      );
+      if (daysAgo < 0 || daysAgo >= 28) return -1;
+      return Math.floor(daysAgo / 7); // 0 = most recent week, 3 = oldest
+    };
+    const weeklyRevenue = [0, 0, 0, 0];
+    const weeklyCogs = [0, 0, 0, 0];
+    const weeklyExpenses = [0, 0, 0, 0];
+    for (const o of orders) {
+      const idx = dayBucket(o.createdAt);
+      if (idx < 0) continue;
+      const displayIdx = 3 - idx; // Week 4 = most recent, Week 1 = oldest
+      weeklyRevenue[displayIdx] += o.totalAmount || 0;
+      weeklyCogs[displayIdx] += computeOrderCogs(o, products);
+    }
+    for (const e of daybookEntries) {
+      if (e.category !== 'Expense' && !(e.moneyOut > 0)) continue;
+      const idx = dayBucket(e.createdAt);
+      if (idx < 0) continue;
+      weeklyExpenses[3 - idx] += e.moneyOut || 0;
+    }
+    const maxRev = Math.max(1, ...weeklyRevenue);
+    const weeklyBars = weeklyRevenue.map((rev, i) => ({
+      label: weekLabels[i],
+      rev: Math.round((rev / maxRev) * 100),
+      prof: Math.round(
+        (Math.max(0, rev - weeklyCogs[i] - weeklyExpenses[i]) / maxRev) * 100,
+      ),
+      exp: Math.round((weeklyExpenses[i] / maxRev) * 100),
+      val: formatBosCurrency(rev, currencySymbol),
+    }));
 
     return {
       totalRevenue,
@@ -378,7 +513,7 @@ export function BosReportsDaybookWorkstation({
       paymentSplit,
       weeklyBars,
     };
-  }, [orders, daybookEntries, demoMode, currencySymbol]);
+  }, [orders, products, daybookEntries, demoMode, currencySymbol]);
 
   const openingBalance = openingBal;
   const totalMoneyIn = useMemo(
@@ -541,60 +676,86 @@ export function BosReportsDaybookWorkstation({
 
   const handleExportGstr1Json = () => {
     const today = new Date().toISOString().slice(0, 10);
-    const b2csInvoices = (orders || []).map((o) => {
-      const taxable = Math.round(o.totalAmount / 1.05);
-      const tax = o.totalAmount - taxable;
+    // Per-order GST breakup computed from real rates (o.taxAmount → line-item
+    // gstRate → order-level gstRate/taxRate → 0). No hardcoded 5%.
+    const orderBreakups = (orders || []).map((o) => ({
+      order: o,
+      breakup: computeOrderGstBreakup(o),
+    }));
+    const b2csInvoices = orderBreakups.map(({ order, breakup: b }) => ({
+      flag: 'N',
+      chksum: `chk-${order.id}`,
+      inum: order.id,
+      idt: today,
+      val: order.totalAmount,
+      pos: '09',
+      rchrg: 'N',
+      inv_typ: 'R',
+      itms: [
+        {
+          num: 1,
+          itm_det: {
+            txval: b.taxable,
+            rt: b.rate,
+            iamt: 0,
+            camt: b.cgst,
+            samt: b.sgst,
+            csamt: 0,
+          },
+        },
+      ],
+    }));
+
+    // HSN summary: each product's GST comes from p.gstRate (or p.taxRate), not
+    // a hardcoded 5%. If rate is 0%, both camt and samt are 0.
+    const hsnSummary = (products || []).slice(0, 20).map((p, idx) => {
+      const qty = p.stockQuantity || 10;
+      const gross = p.price * qty;
+      const rate = p.gstRate ?? (p as { taxRate?: number }).taxRate ?? 0;
+      const tax = Math.round((gross * rate) / (100 + rate));
+      const taxable = Math.max(0, Math.round(gross - tax));
       const cgst = Math.round(tax / 2);
       const sgst = tax - cgst;
       return {
-        flag: 'N',
-        chksum: `chk-${o.id}`,
-        inum: o.id,
-        idt: today,
-        val: o.totalAmount,
-        pos: '09',
-        rchrg: 'N',
-        inv_typ: 'R',
-        itms: [
-          {
-            num: 1,
-            itm_det: {
-              txval: taxable,
-              rt: 5,
-              iamt: 0,
-              camt: cgst,
-              samt: sgst,
-              csamt: 0,
-            },
-          },
-        ],
+        num: idx + 1,
+        hsn_sc: p.hsnCode || '1006',
+        desc: p.name,
+        uqc: 'OTH',
+        qty,
+        val: gross,
+        txval: taxable,
+        iamt: 0,
+        camt: cgst,
+        samt: sgst,
+        csamt: 0,
       };
     });
 
-    const hsnSummary = (products || []).slice(0, 20).map((p, idx) => ({
-      num: idx + 1,
-      hsn_sc: p.hsnCode || '1006',
-      desc: p.name,
-      uqc: 'OTH',
-      qty: p.stockQuantity || 10,
-      val: p.price * (p.stockQuantity || 10),
-      txval: Math.round((p.price * (p.stockQuantity || 10)) / 1.05),
-      iamt: 0,
-      camt: Math.round(((p.price * (p.stockQuantity || 10)) * 0.05) / 2),
-      samt: Math.round(((p.price * (p.stockQuantity || 10)) * 0.05) / 2),
-      csamt: 0,
-    }));
-
-    const totalGross =
-      (orders || []).reduce((acc, o) => acc + (o.totalAmount || 0), 0) || (demoMode ? 482650 : 0);
-    const totalTxval =
-      (orders || []).reduce(
-        (acc, o) => acc + Math.round((o.totalAmount || 0) / 1.05),
-        0,
-      ) || (demoMode ? Math.round(totalGross / 1.05) : 0);
-    const totalTax = totalGross - totalTxval;
+    let totalGross = (orders || []).reduce(
+      (acc, o) => acc + (o.totalAmount || 0),
+      0,
+    );
+    let totalTxval = orderBreakups.reduce(
+      (acc, { breakup: b }) => acc + b.taxable,
+      0,
+    );
+    let totalTax = orderBreakups.reduce(
+      (acc, { breakup: b }) => acc + b.tax,
+      0,
+    );
+    // Preserve the demo fallback so the export still produces a sample return
+    // when no real orders exist (matches prior demoMode behaviour).
+    if (totalGross === 0 && demoMode) {
+      totalGross = 482650;
+      totalTxval = Math.round(482650 / 1.05);
+      totalTax = totalGross - totalTxval;
+    }
     const totalCgst = Math.round(totalTax / 2);
     const totalSgst = totalTax - totalCgst;
+    // Representative rate for the aggregated B2CS summary line — first order
+    // carrying a non-zero rate, else 0.
+    const summaryRate =
+      orderBreakups.find(({ breakup: b }) => b.rate > 0)?.breakup.rate ?? 0;
 
     const gstrPayload = {
       gstin: storeSettings?.gstin || (demoMode ? '09ABCDE1234F1Z5' : ''),
@@ -606,7 +767,7 @@ export function BosReportsDaybookWorkstation({
           sply_ty: 'INTRA',
           pos: '09',
           typ: 'OE',
-          rt: 5,
+          rt: summaryRate,
           txval: totalTxval,
           iamt: 0,
           camt: totalCgst,
@@ -661,19 +822,16 @@ export function BosReportsDaybookWorkstation({
     ];
 
     const rows = (orders || []).map((o) => {
-      const taxable = Math.round(o.totalAmount / 1.05);
-      const tax = o.totalAmount - taxable;
-      const cgst = Math.round(tax / 2);
-      const sgst = tax - cgst;
+      const b = computeOrderGstBreakup(o);
       return [
         o.id,
         today,
         `"${o.customerName.replace(/"/g, '""')}"`,
         'INTRA-STATE',
-        '5%',
-        taxable,
-        cgst,
-        sgst,
+        `${b.rate}%`,
+        b.taxable,
+        b.cgst,
+        b.sgst,
         0,
         o.totalAmount,
       ];

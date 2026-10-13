@@ -863,13 +863,22 @@ export function BosOrdersWorkstation({
   };
 
   const handleCreateReturn = async (row: ShowcaseOrderRow) => {
+    const prevStatus = statusOverrides[row.id];
+    const prevRefund = refundOverrides[row.id];
     setStatusOverrides((prev) => ({ ...prev, [row.id]: 'Cancelled' }));
     setRefundOverrides((prev) => ({
       ...prev,
       [row.id]: prev[row.id] === 'refund_pending' ? 'refunded' : 'refund_pending',
     }));
-    await onUpdateOrderStatus(row.id, 'cancelled');
-    showToast(`Return & Refund initiated for Order ${row.id}`);
+    try {
+      await onUpdateOrderStatus(row.id, 'cancelled');
+      showToast(`Return & Refund initiated for Order ${row.id}`);
+    } catch {
+      // Rollback optimistic state on failure.
+      setStatusOverrides((prev) => { const n = { ...prev }; if (prevStatus === undefined) delete n[row.id]; else n[row.id] = prevStatus; return n; });
+      setRefundOverrides((prev) => { const n = { ...prev }; if (prevRefund === undefined) delete n[row.id]; else n[row.id] = prevRefund; return n; });
+      showToast('Failed to update order status. Please try again.');
+    }
   };
 
   return (
@@ -1794,13 +1803,20 @@ export function BosOrdersWorkstation({
                       <button
                         key={st.label}
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
+                          const prevStatus = statusOverrides[selectedOrder.id];
                           setStatusOverrides((prev) => ({
                             ...prev,
                             [selectedOrder.id]: st.label,
                           }));
-                          void onUpdateOrderStatus(selectedOrder.id, st.api);
-                          showToast(`Order ${selectedOrder.id} marked ${st.label}`);
+                          try {
+                            await onUpdateOrderStatus(selectedOrder.id, st.api);
+                            showToast(`Order ${selectedOrder.id} marked ${st.label}`);
+                          } catch {
+                            // Rollback optimistic state on failure.
+                            setStatusOverrides((prev) => { const n = { ...prev }; if (prevStatus === undefined) delete n[selectedOrder.id]; else n[selectedOrder.id] = prevStatus; return n; });
+                            showToast('Failed to update order status. Please try again.');
+                          }
                         }}
                         className={`rounded-lg py-1 transition ${
                           selectedOrder.statusLabel === st.label

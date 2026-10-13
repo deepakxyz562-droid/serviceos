@@ -270,14 +270,10 @@ const INVENTORY_META_BY_ID: Record<string, InventoryRowMeta> = {
 };
 
 function getResolvedRowMeta(product: BosProductItem): InventoryRowMeta {
-  const preset = INVENTORY_META_BY_ID[product.id];
+  // Always use real API data — the INVENTORY_META_BY_ID showcase overrides
+  // have been removed because they replaced real product data with hardcoded
+  // demo values (names, stock levels, categories) even in production mode.
   const cleanBaseName = product.name.replace(/\s*\([^)]+\)\s*$/, '');
-  if (preset) {
-    return {
-      ...preset,
-      price: product.price || preset.price,
-    };
-  }
   const stock = product.stockQuantity;
   const minStock = product.lowStockThreshold || 10;
   const statusOverride: InventoryRowMeta['statusOverride'] =
@@ -1112,18 +1108,7 @@ export function BosInventoryWorkstation({
             </div>
             <button
               type="button"
-              onClick={() => {
-                const newPo = {
-                  id: `PO-2026-0${92 + purchaseOrders.length}`,
-                  supplier: 'Metro Cash & Carry Wholesale',
-                  itemsCount: 6,
-                  totalAmount: 19500,
-                  status: 'Ordered',
-                  date: 'Today',
-                };
-                setPurchaseOrders((prev) => [newPo, ...prev]);
-                showToast(`Created Purchase Order ${newPo.id}`);
-              }}
+              onClick={() => showToast('Purchase Order creation requires a Supplier API. Coming soon.')}
               className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-2 text-[12.5px] font-semibold text-white"
             >
               <Plus className="h-4 w-4" />
@@ -1175,7 +1160,7 @@ export function BosInventoryWorkstation({
                                 x.id === po.id ? { ...x, status: 'Received' } : x,
                               ),
                             );
-                            showToast(`Marked ${po.id} as Received into inventory.`);
+                            showToast('Stock receipt requires a Purchase Order API. Coming soon.');
                           }}
                           className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-semibold text-[#0A6847]"
                         >
@@ -1424,7 +1409,7 @@ export function BosInventoryWorkstation({
             {/* Pagination Footer */}
             <div className="flex flex-col gap-2.5 border-t border-[#EBF2EE] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12.5px] font-medium text-[#64748B]">
-                Showing 1–{Math.min(pageSize, visibleRows.length)} of 248 products
+                Showing 1–{Math.min(pageSize, visibleRows.length)} of {visibleRows.length} product{visibleRows.length === 1 ? '' : 's'}
               </p>
 
               <div className="flex flex-wrap items-center gap-2">

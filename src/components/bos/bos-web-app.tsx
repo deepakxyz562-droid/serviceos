@@ -73,7 +73,7 @@ import { BosPosWorkstation } from '@/components/bos/bos-pos-workstation';
 import { BosInventoryWorkstation } from '@/components/bos/bos-inventory-workstation';
 import { BosOrdersWorkstation } from '@/components/bos/bos-orders-workstation';
 import { BosCustomersKhataWorkstation } from '@/components/bos/bos-customers-khata-workstation';
-import { BosInvoicesWorkstation } from '@/components/bos/bos-invoices-workstation';
+import { BosInvoicesWorkstation, type SavedBosInvoice } from '@/components/bos/bos-invoices-workstation';
 import { BosAppointmentsWorkstation } from '@/components/bos/bos-appointments-workstation';
 import { BosOnlineStoreWorkstation } from '@/components/bos/bos-online-store-workstation';
 import { BosReportsDaybookWorkstation } from '@/components/bos/bos-reports-daybook-workstation';
@@ -88,6 +88,8 @@ import {
   printCustomerBill,
   savePrinterConfig,
 } from '@/lib/hardware/print-service';
+import { authFetch } from '@/lib/client-auth';
+import { toast } from 'sonner';
 
 const NAV_ICON_MAP: Record<BosNavId, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
@@ -876,6 +878,18 @@ export function BosWebApp({
 
   const [isOnline, setIsOnline] = useState<boolean>(true);
 
+  // ── Bootstrap error / auth-gate state ─────────────────────────────────
+  // When the initial hydration Promise.allSettled throws (network down, JSON
+  // parse failure, etc.), surface a banner with a Retry button instead of
+  // silently falling back to demo defaults (ISSUE 2).
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  // Retry trigger — bumping this nonce re-runs the bootstrap useEffect.
+  const [bootstrapNonce, setBootstrapNonce] = useState(0);
+  // Set to true the moment we redirect to /login so we don't keep rendering
+  // the shell with fake "Merchant" / "My Store" defaults while the hard
+  // navigation is in flight (ISSUE 4).
+  const [authRedirecting, setAuthRedirecting] = useState(false);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setIsOnline(navigator.onLine);
@@ -897,6 +911,7 @@ export function BosWebApp({
   const [appointments, setAppointments] = useState<BosAppointment[]>(() => (demoMode ? DEFAULT_APPOINTMENTS : []));
   const [daybookEntries, setDaybookEntries] = useState<BosDaybookEntry[]>(() => (demoMode ? DEFAULT_DAYBOOK : []));
   const [coupons, setCoupons] = useState<BosCoupon[]>(() => (demoMode ? DEFAULT_COUPONS : []));
+  const [invoices, setInvoices] = useState<SavedBosInvoice[]>([]);
 
   const activeCapabilities = useMemo<BusinessCapabilities>(() => {
     const bpType = storeSettings.blueprintType || 'grocery';
@@ -989,6 +1004,10 @@ export function BosWebApp({
 
   // Load initial database state from shared production API endpoints
   useEffect(() => {
+    // In demoMode we render static demo data without ever touching the API —
+    // this also avoids `authFetch` 401→refresh→redirect bouncing demo users.
+    if (demoMode) return;
+
     let cancelled = false;
 
     async function hydrateFromDatabase() {
@@ -1004,20 +1023,40 @@ export function BosWebApp({
           promoRes,
           custRes,
           bookRes,
+          quoteInvoicesRes,
         ] = await Promise.allSettled([
-          fetch('/api/auth/me', { credentials: 'include' }),
-          fetch('/api/tenant/blueprint', { credentials: 'include' }),
-          fetch('/api/commerce/config', { credentials: 'include' }),
-          fetch('/api/commerce/inventory', { credentials: 'include' }),
-          fetch('/api/commerce/orders', { credentials: 'include' }),
-          fetch('/api/commerce/khata', { credentials: 'include' }),
-          fetch('/api/commerce/daybook', { credentials: 'include' }),
-          fetch('/api/commerce/promotions', { credentials: 'include' }),
-          fetch('/api/customers', { credentials: 'include' }),
-          fetch('/api/bookings', { credentials: 'include' }),
+          authFetch('/api/auth/me', { credentials: 'include' }),
+          authFetch('/api/tenant/blueprint', { credentials: 'include' }),
+          authFetch('/api/commerce/config', { credentials: 'include' }),
+          authFetch('/api/commerce/inventory', { credentials: 'include' }),
+          authFetch('/api/commerce/orders', { credentials: 'include' }),
+          authFetch('/api/commerce/khata', { credentials: 'include' }),
+          authFetch('/api/commerce/daybook', { credentials: 'include' }),
+          authFetch('/api/commerce/promotions', { credentials: 'include' }),
+          authFetch('/api/customers', { credentials: 'include' }),
+          authFetch('/api/bookings', { credentials: 'include' }),
+          // Quote-flow invoices — separate contract from /api/invoices (CRM tenant system).
+          // Used by the BOS Invoices workstation. GET returns { invoices: [...enriched], overview }
+          authFetch('/api/quote-flow/invoices', { credentials: 'include' }),
         ]);
 
         if (cancelled) return;
+
+        // ── ISSUE 4: Auth gate ───────────────────────────────────────────
+        // If `/api/auth/me` returns anything other than 200 OK (401 after a
+        // failed refresh, 403 Forbidden, 5xx, etc.) the user is not properly
+        // authenticated. Hard-redirect to /login so we never render the shell
+        // with fake `userName='Merchant'` / `businessName='My Store'` defaults.
+        // (`authFetch` already redirects on 401+refresh-fail; this branch
+        // additionally covers 403 and any other non-OK status it lets through.)
+        if (meRes.status === 'fulfilled' && !meRes.value.ok) {
+          setAuthRedirecting(true);
+          if (typeof window !== 'undefined') {
+            window.location.href =
+              '/login?redirect=' + encodeURIComponent(window.location.pathname);
+          }
+          return;
+        }
 
         if (meRes.status === 'fulfilled' && meRes.value.ok) {
           const meData = await meRes.value.json().catch(() => null);
@@ -1397,8 +1436,65 @@ export function BosWebApp({
             setAppointments(mappedAppts);
           }
         }
+
+        // 8. Hydrate Quote-Flow Invoices (BOS Invoices workstation)
+        // Maps the enriched /api/quote-flow/invoices response to SavedBosInvoice[]
+        // so the workstation's "Recent Invoices" panel renders real saved records
+        // instead of an empty list (P0 bug: saved invoices previously vanished on reload).
+        if (quoteInvoicesRes.status === 'fulfilled' && quoteInvoicesRes.value.ok) {
+          const invoData = await quoteInvoicesRes.value.json().catch(() => null);
+          const apiInvoices = invoData?.invoices;
+          if (Array.isArray(apiInvoices) && apiInvoices.length > 0) {
+            const statusMap: Record<string, SavedBosInvoice['status']> = {
+              DRAFT: 'Draft',
+              SENT: 'Unpaid',
+              PARTIALLY_PAID: 'Partial',
+              PAID: 'Paid',
+              OVERDUE: 'Unpaid',
+              UNPAID: 'Unpaid',
+            };
+            const mappedInvoices: SavedBosInvoice[] = (
+              apiInvoices as Array<Record<string, unknown>>
+            ).map((inv) => {
+              const rawStatus = String(inv.status || 'DRAFT').toUpperCase();
+              const customer =
+                (inv.customer as Record<string, unknown> | undefined) || undefined;
+              const createdIso = inv.createdAt ? String(inv.createdAt) : null;
+              const dueIso = inv.dueDate ? String(inv.dueDate) : null;
+              const fmt = (iso: string | null) =>
+                iso
+                  ? new Date(iso).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '';
+              return {
+                id: String(inv.id || `invo-${Date.now()}`),
+                invoiceNumber: String(inv.number || 'INV'),
+                docType: 'gst',
+                customerName: String(customer?.name || 'Customer'),
+                // AiCustomer schema has no gstin column — keep empty rather than inventing one.
+                customerGstin: '',
+                date: fmt(createdIso),
+                dueDate: fmt(dueIso),
+                totalAmount: Number(inv.total ?? inv.totalAmount ?? 0) || 0,
+                paidAmount: Number(inv.paidAmount ?? 0) || 0,
+                status: statusMap[rawStatus] || 'Unpaid',
+              };
+            });
+            setInvoices(mappedInvoices);
+          }
+        }
       } catch {
-        // Fallback to pre-populated BOS state seamlessly
+        // ISSUE 2: surface hydration failures instead of silently falling
+        // back to demo defaults. A Retry button on the banner re-runs the
+        // bootstrap by bumping `bootstrapNonce` (see useEffect dep below).
+        if (!cancelled) {
+          setBootstrapError(
+            'Failed to load your business data. Please check your connection and try again.',
+          );
+        }
       }
     }
 
@@ -1406,7 +1502,7 @@ export function BosWebApp({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [bootstrapNonce, demoMode]);
 
   const handleNavigate = useCallback(
     (
@@ -1444,7 +1540,7 @@ export function BosWebApp({
     const cleanCustomerPhone = payload.customerName === 'Walk-in Customer' ? '' : payload.customerPhone.trim();
 
     // 1. Await atomic order creation on the server
-    const res = await fetch('/api/commerce/orders', {
+    const res = await authFetch('/api/commerce/orders', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1508,7 +1604,7 @@ export function BosWebApp({
     if (payload.paymentMode === 'khata') {
       let khataRes: Response;
       try {
-        khataRes = await fetch('/api/commerce/khata', {
+        khataRes = await authFetch('/api/commerce/khata', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1614,7 +1710,7 @@ export function BosWebApp({
   const handleSaveProduct = async (product: BosProductItem, isNew: boolean) => {
     let finalProduct = { ...product };
     if (isNew) {
-      const res = await fetch('/api/commerce/products', {
+      const res = await authFetch('/api/commerce/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1628,8 +1724,9 @@ export function BosWebApp({
         }),
       });
 
-      if (!res.ok && res.status !== 404) {
+      if (!res.ok) {
         const err = await res.json().catch(() => null);
+        toast.error(err?.error || 'Failed to create product on server');
         throw new Error(err?.error || `Failed to create product on server (HTTP ${res.status})`);
       }
 
@@ -1646,14 +1743,15 @@ export function BosWebApp({
       ? [finalProduct, ...products]
       : products.map((p) => (p.id === finalProduct.id ? finalProduct : p));
 
-    const configRes = await fetch('/api/commerce/config', {
+    const configRes = await authFetch('/api/commerce/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ catalogJson: nextProducts }),
     });
 
-    if (!configRes.ok && configRes.status !== 404) {
+    if (!configRes.ok) {
       const cfgErr = await configRes.json().catch(() => null);
+      toast.error(cfgErr?.error || 'Failed to save catalog to server');
       throw new Error(cfgErr?.error || `Failed to save catalog to server (HTTP ${configRes.status})`);
     }
 
@@ -1662,14 +1760,15 @@ export function BosWebApp({
 
   const handleDeleteProduct = async (productId: string) => {
     const nextProducts = products.filter((p) => p.id !== productId);
-    const configRes = await fetch('/api/commerce/config', {
+    const configRes = await authFetch('/api/commerce/config', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ catalogJson: nextProducts }),
     });
 
-    if (!configRes.ok && configRes.status !== 404) {
+    if (!configRes.ok) {
       const cfgErr = await configRes.json().catch(() => null);
+      toast.error(cfgErr?.error || 'Failed to delete product from server');
       throw new Error(cfgErr?.error || `Failed to delete product from server (HTTP ${configRes.status})`);
     }
 
@@ -1678,7 +1777,7 @@ export function BosWebApp({
 
   const handleAdjustStock = async (productId: string, delta: number) => {
     const requestKey = newRequestKey();
-    const res = await fetch('/api/commerce/inventory', {
+    const res = await authFetch('/api/commerce/inventory', {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1691,8 +1790,9 @@ export function BosWebApp({
       }),
     });
 
-    if (!res.ok && res.status !== 404) {
+    if (!res.ok) {
       const err = await res.json().catch(() => null);
+      toast.error(err?.error || 'Failed to update stock on server');
       throw new Error(err?.error || `Failed to update stock on server (HTTP ${res.status})`);
     }
 
@@ -1735,7 +1835,7 @@ export function BosWebApp({
     };
 
     try {
-      const res = await fetch(`/api/commerce/orders/${encodeURIComponent(orderId)}`, {
+      const res = await authFetch(`/api/commerce/orders/${encodeURIComponent(orderId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1743,12 +1843,17 @@ export function BosWebApp({
           ...(status === 'completed' ? { paymentStatus: 'PAID' } : {}),
         }),
       });
-      if (!res.ok && res.status !== 404) {
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast.error(err?.error || 'Failed to update order status');
+        // Roll back optimistic state.
         if (prevOrder) {
           setOrders((prev) => prev.map((o) => (o.id === orderId ? prevOrder : o)));
         }
       }
-    } catch {
+    } catch (networkErr: any) {
+      // Network failure — also roll back + surface.
+      toast.error(networkErr?.message || 'Failed to update order status');
       if (prevOrder) {
         setOrders((prev) => prev.map((o) => (o.id === orderId ? prevOrder : o)));
       }
@@ -1778,7 +1883,7 @@ export function BosWebApp({
   };
 
   const handleAddCustomer = async (customer: Omit<BosCustomer, 'id'>) => {
-    const res = await fetch('/api/customers', {
+    const res = await authFetch('/api/customers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1816,7 +1921,7 @@ export function BosWebApp({
     const cleanPhone = (matchedCustomer?.phone || '').replace(/\D/g, '');
 
     const requestKey = newRequestKey();
-    const res = await fetch('/api/commerce/khata', {
+    const res = await authFetch('/api/commerce/khata', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1889,7 +1994,7 @@ export function BosWebApp({
       ? new Date(appt.scheduledAt).toISOString()
       : new Date().toISOString();
 
-    const res = await fetch('/api/bookings', {
+    const res = await authFetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1922,16 +2027,15 @@ export function BosWebApp({
     id: string,
     status: BosAppointment['status'],
   ) => {
-    const prevAppt = appointments.find((a) => a.id === id);
-
-    const res = await fetch(`/api/bookings/${encodeURIComponent(id)}`, {
+    const res = await authFetch(`/api/bookings/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
 
-    if (!res.ok && res.status !== 404) {
+    if (!res.ok) {
       const err = await res.json().catch(() => null);
+      toast.error(err?.error || 'Failed to update appointment status');
       throw new Error(err?.error || `Failed to update appointment status (HTTP ${res.status})`);
     }
 
@@ -1948,7 +2052,7 @@ export function BosWebApp({
     const amount = isOutflow ? entry.moneyOut : entry.moneyIn;
 
     if (entry.category === 'Expense') {
-      const res = await fetch('/api/commerce/expenses', {
+      const res = await authFetch('/api/commerce/expenses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1968,7 +2072,7 @@ export function BosWebApp({
         throw new Error(err?.error || `Failed to record expense (HTTP ${res.status})`);
       }
     } else {
-      const res = await fetch('/api/commerce/money', {
+      const res = await authFetch('/api/commerce/money', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1999,6 +2103,10 @@ export function BosWebApp({
   };
 
   const handleUpdateStoreSettings = async (patch: Partial<BosStoreSettings>) => {
+    // Snapshot the pre-update settings so we can roll back the optimistic
+    // mutation if any of the persistence promises below fail (ISSUE 3).
+    const prevSettings = storeSettings;
+
     setStoreSettings((prev) => {
       const next = { ...prev, ...patch };
       if (patch.countryCode && patch.countryCode !== prev.countryCode && !patch.currencySymbol) {
@@ -2032,7 +2140,7 @@ export function BosWebApp({
       patch.businessName !== undefined
     ) {
       promises.push(
-        fetch('/api/tenant/blueprint', {
+        authFetch('/api/tenant/blueprint', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2067,7 +2175,7 @@ export function BosWebApp({
 
     if (Object.keys(configPatch).length > 0) {
       promises.push(
-        fetch('/api/commerce/config', {
+        authFetch('/api/commerce/config', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(configPatch),
@@ -2077,7 +2185,7 @@ export function BosWebApp({
 
     if (patch.announcementBanner !== undefined) {
       promises.push(
-        fetch('/api/commerce/promotions', {
+        authFetch('/api/commerce/promotions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2089,12 +2197,144 @@ export function BosWebApp({
     }
 
     const settled = await Promise.allSettled(promises);
+    // ISSUE 3: only `res.ok` counts as success — no more 404 exemption.
+    // On any failure (rejected promise OR non-OK HTTP response), surface a
+    // toast, roll back the optimistic settings mutation, and re-throw so
+    // callers see the failure.
     for (const res of settled) {
-      if (res.status === 'fulfilled' && !res.value.ok && res.value.status !== 404) {
-        throw new Error(`Server returned error saving configuration (HTTP ${res.value.status})`);
+      if (res.status === 'rejected') {
+        toast.error('Failed to save configuration');
+        setStoreSettings(prevSettings);
+        throw new Error(res.reason?.message || 'Failed to save configuration');
+      }
+      if (!res.value.ok) {
+        const err = await res.value.json().catch(() => null);
+        toast.error(err?.error || 'Failed to save configuration');
+        setStoreSettings(prevSettings);
+        throw new Error(err?.error || `Server returned error saving configuration (HTTP ${res.value.status})`);
       }
     }
   };
+
+  // ── BOS Invoices Workstation wiring ───────────────────────────────────
+  // The workstation POSTs to /api/quote-flow/invoices on its own (so it can
+  // open the print window immediately), then calls `onInvoiceSaved` with the
+  // server-verified record. We prepend to local state so the new invoice
+  // shows up in the "Recent Invoices" panel without waiting for a refetch.
+  const handleInvoiceSaved = useCallback((invoice: SavedBosInvoice) => {
+    setInvoices((prev) => {
+      // De-dupe by id in case the workstation fires the callback twice.
+      if (prev.some((i) => i.id === invoice.id)) return prev;
+      return [invoice, ...prev];
+    });
+  }, []);
+
+  // PATCH /api/quote-flow/invoices/[id] with { status: 'PAID' }.
+  // The route enforces atomicity: it records an INVOICE_PAYMENT via the
+  // shared money route, then re-fetches and returns the updated invoice.
+  const handleMarkInvoicePaid = useCallback(async (invoiceId: string) => {
+    const prev = invoices;
+    // Optimistic update so the UI reflects "Paid" immediately.
+    setInvoices((cur) =>
+      cur.map((i) =>
+        i.id === invoiceId
+          ? {
+              ...i,
+              status: 'Paid',
+              paidAmount: i.totalAmount,
+            }
+          : i,
+      ),
+    );
+
+    try {
+      const res = await authFetch(
+        `/api/quote-flow/invoices/${encodeURIComponent(invoiceId)}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PAID' }),
+        },
+      );
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        // Roll back on failure.
+        setInvoices(prev);
+        throw new Error(
+          (data && (data.error || data.message)) ||
+            `Failed to mark invoice paid (HTTP ${res.status})`,
+        );
+      }
+      // Reconcile with the server-verified record (the PATCH handler returns
+      // the enriched invoice shape via its inner GET call).
+      const updated = data?.invoice;
+      if (updated) {
+        const statusMap: Record<string, SavedBosInvoice['status']> = {
+          DRAFT: 'Draft',
+          SENT: 'Unpaid',
+          PARTIALLY_PAID: 'Partial',
+          PAID: 'Paid',
+          OVERDUE: 'Unpaid',
+          UNPAID: 'Unpaid',
+        };
+        const rawStatus = String(updated.status || 'PAID').toUpperCase();
+        const fmt = (iso: unknown) =>
+          iso
+            ? new Date(String(iso)).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            : '';
+        setInvoices((cur) =>
+          cur.map((i) =>
+            i.id === invoiceId
+              ? {
+                  ...i,
+                  status: statusMap[rawStatus] || 'Paid',
+                  paidAmount: Number(updated.paidAmount ?? i.totalAmount) || 0,
+                  totalAmount: Number(updated.total ?? i.totalAmount) || 0,
+                  dueDate: updated.dueDate ? fmt(updated.dueDate) : i.dueDate,
+                }
+              : i,
+          ),
+        );
+      }
+    } catch (err: any) {
+      setInvoices(prev);
+      throw err;
+    }
+  }, [invoices]);
+
+  // DELETE /api/quote-flow/invoices/[id]. The server refuses to delete
+  // invoices that already have payments (409 Conflict) — we surface that
+  // to the user instead of silently removing from the local list.
+  const handleDeleteInvoice = useCallback(async (invoiceId: string) => {
+    const prev = invoices;
+    setInvoices((cur) => cur.filter((i) => i.id !== invoiceId));
+    try {
+      const res = await authFetch(
+        `/api/quote-flow/invoices/${encodeURIComponent(invoiceId)}`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        // Restore on failure so the user sees the row come back.
+        setInvoices(prev);
+        throw new Error(
+          (data && (data.error || data.message)) ||
+            `Failed to delete invoice (HTTP ${res.status})`,
+        );
+      }
+    } catch (err: any) {
+      setInvoices(prev);
+      throw err;
+    }
+  }, [invoices]);
 
   const searchResults = useMemo(() => {
     const q = globalSearch.trim().toLowerCase();
@@ -2123,6 +2363,21 @@ export function BosWebApp({
       matchedOrders,
     };
   }, [globalSearch, products, customers, orders]);
+
+  // ISSUE 4: if `/api/auth/me` returned non-OK and we've kicked off a hard
+  // redirect to /login, render a minimal "redirecting" placeholder instead
+  // of the full shell (which would otherwise flash the fake `Merchant` /
+  // `My Store` defaults during the navigation window).
+  if (authRedirecting) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#F4F8F6] text-[#475569]">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0A6847] border-t-transparent" />
+          <p className="text-[13px] font-semibold">Redirecting to sign in…</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bos-app-shell flex h-screen w-full overflow-hidden">
@@ -2221,6 +2476,26 @@ export function BosWebApp({
 
       {/* Right Main Column: Top White Header + Scrollable Mint-Gray Canvas */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+        {/* ISSUE 2: Bootstrap hydration failure banner with Retry. */}
+        {bootstrapError && (
+          <div className="flex items-center justify-between gap-3 bg-red-600 px-4 py-2.5 text-[12.5px] font-bold text-white shadow-xs shrink-0">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {bootstrapError}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setBootstrapError(null);
+                setBootstrapNonce((n) => n + 1);
+              }}
+              className="rounded-md bg-white/15 px-3 py-1 text-[11.5px] font-bold uppercase tracking-wide hover:bg-white/25 transition shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Offline Banner when network drops */}
         {!isOnline && (
           <div className="flex items-center justify-between gap-3 bg-amber-600 px-4 py-2 text-[12.5px] font-bold text-white shadow-xs shrink-0">
@@ -2678,7 +2953,7 @@ export function BosWebApp({
                     <button
                       type="button"
                       onClick={async () => {
-                        await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+                        await authFetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
                         window.location.href = '/login';
                       }}
                       className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-red-600 hover:bg-red-50"
@@ -2705,6 +2980,7 @@ export function BosWebApp({
                 orders={orders}
                 customers={customers}
                 appointments={appointments}
+                daybookEntries={daybookEntries}
                 onNavigate={handleNavigate}
                 onQuickReorderProduct={(productId) => {
                   void handleAdjustStock(productId, 25);
@@ -2775,6 +3051,10 @@ export function BosWebApp({
                 storeSettings={storeSettings}
                 customers={customers}
                 products={products}
+                invoices={invoices}
+                onInvoiceSaved={handleInvoiceSaved}
+                onMarkInvoicePaid={handleMarkInvoicePaid}
+                onDeleteInvoice={handleDeleteInvoice}
               />
             )}
 
@@ -2842,7 +3122,7 @@ export function BosWebApp({
                   const nextCoupons = [newCoupon, ...coupons];
                   setCoupons(nextCoupons);
                   try {
-                    await fetch('/api/commerce/promotions', {
+                    await authFetch('/api/commerce/promotions', {
                       method: 'POST',
                       headers: {
                         'Content-Type': 'application/json',
@@ -2868,7 +3148,7 @@ export function BosWebApp({
                     c.id === id ? { ...c, active: !c.active } : c,
                   );
                   setCoupons(nextCoupons);
-                  void fetch('/api/commerce/promotions', {
+                  void authFetch('/api/commerce/promotions', {
                     method: 'POST',
                     headers: {
                       'Content-Type': 'application/json',

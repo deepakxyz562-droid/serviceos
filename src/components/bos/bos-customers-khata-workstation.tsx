@@ -687,6 +687,9 @@ export function BosCustomersKhataWorkstation({
     const amt = Number(paymentAmountInput) || 0;
     if (amt <= 0) return;
 
+    const prevPaid = paidOverrides[selectedCustomer.id];
+    const prevBalance = balanceOverrides[selectedCustomer.id];
+    const prevExtraTx = extraTxByCustomer[selectedCustomer.id];
     const nextPaid = selectedCustomer.totalPaid + amt;
     const nextBalance = Math.max(0, selectedCustomer.balance - amt);
     setPaidOverrides((prev) => ({ ...prev, [selectedCustomer.id]: nextPaid }));
@@ -705,19 +708,26 @@ export function BosCustomersKhataWorkstation({
       ],
     }));
 
-    await onRecordKhataEntry({
-      customerId: selectedCustomer.id,
-      customerName: selectedCustomer.name,
-      type: 'got',
-      amount: amt,
-      mode: paymentModeChoice,
-      note: 'Payment Received',
-    });
-
-    setShowPaymentModal(false);
-    showToastMsg(
-      `Recorded ${formatCustAmount(amt, currencySymbol)} payment from ${selectedCustomer.name}`,
-    );
+    try {
+      await onRecordKhataEntry({
+        customerId: selectedCustomer.id,
+        customerName: selectedCustomer.name,
+        type: 'got',
+        amount: amt,
+        mode: paymentModeChoice,
+        note: 'Payment Received',
+      });
+      setShowPaymentModal(false);
+      showToastMsg(
+        `Recorded ${formatCustAmount(amt, currencySymbol)} payment from ${selectedCustomer.name}`,
+      );
+    } catch {
+      // Rollback optimistic state on failure.
+      setPaidOverrides((prev) => { const n = { ...prev }; if (prevPaid === undefined) delete n[selectedCustomer.id]; else n[selectedCustomer.id] = prevPaid; return n; });
+      setBalanceOverrides((prev) => { const n = { ...prev }; if (prevBalance === undefined) delete n[selectedCustomer.id]; else n[selectedCustomer.id] = prevBalance; return n; });
+      setExtraTxByCustomer((prev) => { const n = { ...prev }; if (!prevExtraTx) delete n[selectedCustomer.id]; else n[selectedCustomer.id] = prevExtraTx; return n; });
+      showToastMsg('Failed to record payment. Please try again.');
+    }
   };
 
   const handleAdjustBalanceSubmit = async () => {
@@ -725,6 +735,8 @@ export function BosCustomersKhataWorkstation({
     const amt = Number(adjustAmountInput) || 0;
     if (amt <= 0) return;
 
+    const prevBalance = balanceOverrides[selectedCustomer.id];
+    const prevExtraTx = extraTxByCustomer[selectedCustomer.id];
     const nextBalance = selectedCustomer.balance + amt;
     setBalanceOverrides((prev) => ({ ...prev, [selectedCustomer.id]: nextBalance }));
     setExtraTxByCustomer((prev) => ({
@@ -741,19 +753,26 @@ export function BosCustomersKhataWorkstation({
       ],
     }));
 
-    await onRecordKhataEntry({
-      customerId: selectedCustomer.id,
-      customerName: selectedCustomer.name,
-      type: 'gave',
-      amount: amt,
-      mode: 'credit',
-      note: 'Balance Adjustment',
-    });
+    try {
+      await onRecordKhataEntry({
+        customerId: selectedCustomer.id,
+        customerName: selectedCustomer.name,
+        type: 'gave',
+        amount: amt,
+        mode: 'credit',
+        note: 'Balance Adjustment',
+      });
 
-    setShowAdjustModal(false);
-    showToastMsg(
-      `Adjusted balance for ${selectedCustomer.name} by ${formatCustAmount(amt, currencySymbol)}`,
-    );
+      setShowAdjustModal(false);
+      showToastMsg(
+        `Adjusted balance for ${selectedCustomer.name} by ${formatCustAmount(amt, currencySymbol)}`,
+      );
+    } catch {
+      // Rollback optimistic state on failure
+      setBalanceOverrides((prev) => { const n = { ...prev }; if (prevBalance === undefined) delete n[selectedCustomer.id]; else n[selectedCustomer.id] = prevBalance; return n; });
+      setExtraTxByCustomer((prev) => { const n = { ...prev }; if (!prevExtraTx) delete n[selectedCustomer.id]; else n[selectedCustomer.id] = prevExtraTx; return n; });
+      showToastMsg('Failed to adjust balance. Please try again.');
+    }
   };
 
   const handleCreateCustomerSubmit = async (e: React.FormEvent) => {

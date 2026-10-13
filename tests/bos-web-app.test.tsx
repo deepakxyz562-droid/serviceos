@@ -215,8 +215,12 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     ).toBeTruthy();
     expect(screen.getByText('How to use AI Assistant')).toBeTruthy();
     expect(screen.getByText('Recent Chats')).toBeTruthy();
-    expect(screen.getByText("Today's sales report")).toBeTruthy();
-    expect(screen.getByText('Top 5 Products')).toBeTruthy();
+    // Production-readiness pass removed the hardcoded demo chats and the
+    // fabricated "Top 5 Products" / ₹48,320 sales summary card — the
+    // sidebar and the conversation column now show honest empty states
+    // until the operator sends a real prompt.
+    expect(screen.getByText('No recent AI chats.')).toBeTruthy();
+    expect(screen.getByText('No AI insights yet.')).toBeTruthy();
     expect(screen.getByText('Business Insights')).toBeTruthy();
     expect(screen.getByText('Smart Suggestions')).toBeTruthy();
 
