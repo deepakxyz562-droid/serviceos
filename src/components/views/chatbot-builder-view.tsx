@@ -39,16 +39,18 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
 
   const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [siteOrigin, setSiteOrigin] = useState('');
 
   const fetchPrimaryAgent = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/forms/agents');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.agents) && data.agents.length > 0) {
-          // Open the business's single AI agent directly
+          // Open the business's primary AI agent directly
           setActiveStudioAgent(data.agents[0]);
         } else {
           // Auto-initialize the single agent for this business
@@ -72,16 +74,23 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
               setActiveStudioAgent(saved.agent || defaultAgent);
             } else {
               setActiveStudioAgent(defaultAgent);
+              toast.info('AI Assistant initialized locally');
             }
           } catch {
             setActiveStudioAgent(defaultAgent);
+            toast.info('AI Assistant loaded locally');
           }
         }
       } else {
-        setActiveStudioAgent(DEFAULT_FORM_AGENT);
+        const errData = await res.json().catch(() => ({}));
+        const msg = errData.error || `Server responded with ${res.status}`;
+        setError(msg);
+        toast.error(`Failed to load AI Assistant: ${msg}`);
       }
-    } catch {
-      setActiveStudioAgent(DEFAULT_FORM_AGENT);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error loading AI Assistant';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -98,8 +107,48 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="size-8 animate-spin text-blue-600" />
+          <Loader2 className="size-8 animate-spin text-[#009F50]" />
           <p className="text-xs font-semibold text-muted-foreground">Opening AI Agent Builder...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !activeStudioAgent) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-6">
+        <div className="flex max-w-md flex-col items-center gap-3 text-center">
+          <div className="size-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+            <Loader2 className="size-6 text-red-500" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Unable to Load AI Assistant</h2>
+          <p className="text-xs text-muted-foreground">{error}</p>
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={fetchPrimaryAgent}
+              className="px-4 py-2 text-xs font-bold rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white transition-colors"
+            >
+              Retry Connection
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setActiveStudioAgent(DEFAULT_FORM_AGENT);
+              }}
+              className="px-4 py-2 text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+            >
+              Open Offline Draft
+            </button>
+            <button
+              type="button"
+              onClick={handleBackToDashboard}
+              className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+            >
+              Back
+            </button>
+          </div>
         </div>
       </div>
     );
