@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   BarChart3,
@@ -81,6 +82,7 @@ import type {
   SalesChannel,
 } from '../../../shared/blueprint/types';
 import { authFetch } from '@/lib/client-auth';
+import { isValidUpiId } from '@/lib/upi-qr';
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
@@ -3788,13 +3790,29 @@ export function BosMarketingAiIntegrationsSettings({
                       value={settingsUpiId}
                       onChange={(e) => setSettingsUpiId(e.target.value.toLowerCase().trim())}
                       placeholder="e.g. sharmastore@okhdfcbank or 9876543210@paytm"
-                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2.5 font-mono text-[13px] font-bold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                      className={`w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-[13px] font-bold text-[#111827] focus:outline-hidden ${
+                        settingsUpiId && !isValidUpiId(settingsUpiId)
+                          ? 'border-amber-300 focus:border-amber-500'
+                          : 'border-[#DCE9E3] focus:border-[#0A6847]'
+                      }`}
                     />
                     <div className="absolute right-3 top-2.5 flex items-center gap-1.5 text-[11px] font-semibold text-[#0A6847]">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>Instant Settlement</span>
                     </div>
                   </div>
+                  {settingsUpiId && !isValidUpiId(settingsUpiId) && (
+                    <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>Format must include @handle (e.g. yourshop@okhdfcbank, 9876543210@paytm, merchant@ybl)</span>
+                    </p>
+                  )}
+                  {settingsUpiId && isValidUpiId(settingsUpiId) && (
+                    <p className="mt-1.5 flex items-center gap-1 text-[11px] font-bold text-emerald-600">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>Valid NPCI UPI ID — Ready for PhonePe, GPay, Paytm, BHIM</span>
+                    </p>
+                  )}
                   <p className="mt-1 text-[11px] text-[#64748B]">
                     Funds from customers are transferred 100% directly to this bank account via NPCI UPI with zero gateway deductions.
                   </p>
@@ -3822,10 +3840,12 @@ export function BosMarketingAiIntegrationsSettings({
                           alt="Shop Payment QR"
                           className="h-full w-full object-contain"
                         />
-                      ) : settingsUpiId ? (
+                      ) : settingsUpiId && isValidUpiId(settingsUpiId) ? (
                         <img
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                            `upi://pay?pa=${settingsUpiId}&pn=${storeSettings.businessName || 'My Store'}&cu=INR`
+                            `upi://pay?pa=${encodeURIComponent(settingsUpiId.trim())}&pn=${encodeURIComponent(
+                              storeSettings.businessName || 'My Store'
+                            )}&cu=INR`
                           )}`}
                           alt="Auto-generated UPI QR"
                           className="h-full w-full object-contain"
@@ -3858,9 +3878,9 @@ export function BosMarketingAiIntegrationsSettings({
                       <p className="text-[11px] text-[#64748B]">
                         {settingsPaymentQrUrl
                           ? 'Your custom uploaded shop QR image is displayed to customers.'
-                          : settingsUpiId
+                          : settingsUpiId && isValidUpiId(settingsUpiId)
                           ? 'Showing auto-generated dynamic UPI QR for your UPI ID. You can also upload your own shop sticker image.'
-                          : 'Enter your UPI ID or upload an existing QR code photo.'}
+                          : 'Enter a valid UPI ID (e.g. yourshop@okhdfcbank) or upload an existing QR code photo.'}
                       </p>
                     </div>
                   </div>
@@ -3877,7 +3897,7 @@ export function BosMarketingAiIntegrationsSettings({
                       <div>
                         <p className="font-extrabold text-[12.5px] text-[#064E3B]">Pay with UPI / QR Code</p>
                         <p className="font-mono text-[11px] text-emerald-800 font-bold">
-                          {settingsUpiId || 'merchant@upi'}
+                          {settingsUpiId || 'No UPI ID configured'}
                         </p>
                         <p className="text-[10px] text-emerald-600">Scan QR or tap to open GPay / PhonePe / Paytm</p>
                       </div>

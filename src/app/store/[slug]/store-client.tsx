@@ -1,5 +1,6 @@
 'use client';
 import { RequestTracker } from '../../../../shared/money';
+import { isValidUpiId } from '@/lib/upi-qr';
 
 import React, { useState, useMemo, useRef } from 'react';
 import {
@@ -106,7 +107,8 @@ export function StoreClient({
 
   // Online Payment vs Counter COD state
   const effectiveUpiId = (upiId || '').trim();
-  const hasOnlinePayment = enableOnlinePayment && (Boolean(effectiveUpiId) || Boolean(paymentQrUrl));
+  const isUpiValid = isValidUpiId(effectiveUpiId);
+  const hasOnlinePayment = enableOnlinePayment && (Boolean(paymentQrUrl) || (Boolean(effectiveUpiId) && isUpiValid));
   const [paymentMode, setPaymentMode] = useState<'ONLINE_UPI' | 'COUNTER_COD'>(() =>
     hasOnlinePayment ? 'ONLINE_UPI' : 'COUNTER_COD'
   );
@@ -230,9 +232,9 @@ export function StoreClient({
   const grandTotal = taxableAmount + taxAmount + serviceChargeAmount;
 
   const upiUri = useMemo(() => {
-    if (!effectiveUpiId) return '';
+    if (!effectiveUpiId || !isUpiValid) return '';
     return `upi://pay?pa=${encodeURIComponent(effectiveUpiId)}&pn=${encodeURIComponent(businessName)}&am=${grandTotal.toFixed(2)}&tn=${encodeURIComponent(`Order at ${businessName}`)}&cu=INR`;
-  }, [effectiveUpiId, businessName, grandTotal]);
+  }, [effectiveUpiId, isUpiValid, businessName, grandTotal]);
 
   const dynamicQrCodeUrl = useMemo(() => {
     if (paymentQrUrl) return paymentQrUrl;

@@ -1810,15 +1810,23 @@ export function BosInvoicesWorkstation({
                 {/* QR Code + Terms & Conditions + Authorized Signatory */}
                 <div className="flex flex-col gap-3 border-t border-[#EBF2EE] pt-2.5 sm:flex-row sm:items-end sm:justify-between">
                   <div className="flex items-start gap-2.5">
-                    {/* Styled SVG QR Code */}
-                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1">
-                      <svg
-                        viewBox="0 0 36 36"
-                        className="h-full w-full text-[#111827]"
-                        fill="currentColor"
-                      >
-                        <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h4v2h-4v-2zm6 0h2v4h-2v-4zm4 4h6v2h-6v-2zm-10 4h2v6h-2v-6zm4 2h4v2h-4v-2zm6 2h4v6h-4v-6zm-6 4h4v2h-4v-2z" />
-                      </svg>
+                    {/* Real Scannable Invoice UPI QR Code */}
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1 shadow-2xs">
+                      {storeSettings.upiId ? (
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                            `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
+                              storeSettings.businessName || 'Store'
+                            )}&am=${calculations.totalAmount.toFixed(2)}&tn=${encodeURIComponent(
+                              `Invoice ${invoiceNumber}`
+                            )}&cu=INR`
+                          )}`}
+                          alt="Invoice UPI QR"
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <QrCode className="h-8 w-8 text-[#94A3B8]" />
+                      )}
                     </div>
 
                     <div className="text-[9.5px] leading-snug text-[#475569] space-y-0.5">
@@ -2118,24 +2126,34 @@ export function BosInvoicesWorkstation({
               {/* UPI QR Display */}
               <div className="flex flex-col items-center justify-center p-4 bg-[#FAFDFB] rounded-xl border border-[#DCE9E3] space-y-2.5 text-center">
                 <div className="p-2 bg-white rounded-xl shadow-xs border border-[#E2E8F0]">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                      `upi://pay?pa=${encodeURIComponent(storeSettings.upiId || 'merchant@upi')}&pn=${encodeURIComponent(
-                        storeSettings.businessName || 'Store',
-                      )}&am=${calculations.totalAmount.toFixed(2)}&tn=${encodeURIComponent(
-                        `Invoice ${invoiceNumber}`,
-                      )}&cu=INR`,
-                    )}`}
-                    alt="UPI Payment QR"
-                    className="h-36 w-36 object-contain"
-                  />
+                  {storeSettings.upiId ? (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                        `upi://pay?pa=${encodeURIComponent(storeSettings.upiId)}&pn=${encodeURIComponent(
+                          storeSettings.businessName || 'Store',
+                        )}&am=${calculations.totalAmount.toFixed(2)}&tn=${encodeURIComponent(
+                          `Invoice ${invoiceNumber}`,
+                        )}&cu=INR`,
+                      )}`}
+                      alt="UPI Payment QR"
+                      className="h-36 w-36 object-contain"
+                    />
+                  ) : (
+                    <div className="h-36 w-36 flex flex-col items-center justify-center p-3 text-center bg-[#FAFDFB]">
+                      <QrCode className="h-10 w-10 text-[#94A3B8] mb-1" />
+                      <p className="text-[11.5px] font-bold text-[#334155]">UPI Not Configured</p>
+                      <p className="text-[10px] text-[#64748B] mt-0.5">
+                        Set your merchant UPI ID in Settings to enable dynamic bill QR
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-[12px] font-bold text-[#111827]">
                     Scan with GPay, PhonePe, Paytm, or BHIM
                   </p>
                   <p className="text-[11px] text-[#64748B] font-mono">
-                    UPI ID: {storeSettings.upiId || 'merchant@upi'}
+                    UPI ID: {storeSettings.upiId || 'Not configured (set in Settings)'}
                   </p>
                 </div>
               </div>

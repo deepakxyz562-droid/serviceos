@@ -26,18 +26,31 @@ export interface UpiQrParams {
 }
 
 /**
- * Build the upi:// deep-link URL.
+ * Validates UPI ID / VPA format according to NPCI specs.
+ * A valid UPI ID must have a username part and a PSP handle separated by '@'
+ * Examples: 'sharmastore@okhdfcbank', '9876543210@paytm', 'merchant@ybl'
+ */
+export function isValidUpiId(text?: string | null): boolean {
+  if (!text) return false;
+  const clean = text.trim().toLowerCase();
+  // Standard NPCI UPI VPA format
+  return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/.test(clean);
+}
+
+/**
+ * Build the upi:// deep-link URL according to NPCI UPI specifications.
  */
 export function buildUpiDeepLink(params: UpiQrParams): string {
   const { upiId, payeeName, amount, currency = 'INR', note } = params;
   const parts = new URLSearchParams();
-  parts.set('pa', upiId);
-  if (payeeName) parts.set('pn', payeeName);
+  parts.set('pa', upiId.trim());
+  if (payeeName) parts.set('pn', payeeName.trim());
   if (amount && amount > 0) {
     parts.set('am', amount.toFixed(2));
-    parts.set('cu', currency);
   }
-  if (note) parts.set('tn', note);
+  // NPCI strictly requires cu=INR on all UPI payment URIs
+  parts.set('cu', currency || 'INR');
+  if (note) parts.set('tn', note.trim());
   return `upi://pay?${parts.toString()}`;
 }
 

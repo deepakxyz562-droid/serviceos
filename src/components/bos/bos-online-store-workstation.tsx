@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   BadgePercent,
   Calendar,
   CheckCircle2,
@@ -36,6 +37,7 @@ import {
   type BosStoreSettings,
 } from '@/components/bos/bos-types';
 import { authFetch } from '@/lib/client-auth';
+import { isValidUpiId } from '@/lib/upi-qr';
 
 type StoreSubTab =
   | 'overview'
@@ -250,23 +252,6 @@ export function BosOnlineStoreWorkstation({
     };
   }, []);
 
-  const activeQrTargetUrl = useMemo(() => {
-    if (qrMode === 'table') {
-      return `${storeUrl}?table=${encodeURIComponent(qrTableNumber || '1')}`;
-    }
-    if (qrMode === 'payment') {
-      const upi = (storeSettings.upiId || '').trim();
-      if (!upi) {
-        return `${storeUrl}?action=pay`;
-      }
-      return `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(storeSettings.businessName || storeName)}`;
-    }
-    if (qrMode === 'booking') {
-      return `${storeUrl}?mode=booking`;
-    }
-    return storeUrl;
-  }, [qrMode, qrTableNumber, storeSettings.businessName, storeSettings.upiId, storeName, storeUrl]);
-
   const [themeColor, setThemeColor] = useState('#0A6847');
   const [themeLayout, setThemeLayout] = useState<'grid' | 'list'>('grid');
   const [minOrderInput, setMinOrderInput] = useState(() => String(storeSettings.minOrderAmount || 200));
@@ -284,6 +269,41 @@ export function BosOnlineStoreWorkstation({
     if (storeSettings.paymentQrUrl !== undefined) setStorePaymentQr(storeSettings.paymentQrUrl);
     if (storeSettings.enableOnlinePayment !== undefined) setStoreOnlinePayEnabled(storeSettings.enableOnlinePayment);
   }, [storeSettings.upiId, storeSettings.paymentQrUrl, storeSettings.enableOnlinePayment]);
+
+  const activeQrTargetUrl = useMemo(() => {
+    if (qrMode === 'table') {
+      return `${storeUrl}?table=${encodeURIComponent(qrTableNumber || '1')}`;
+    }
+    if (qrMode === 'payment') {
+      const upi = (storeUpiId || storeSettings.upiId || '').trim();
+      // If merchant has no UPI ID or format is invalid, do not generate an invalid UPI URI
+      if (!upi || !isValidUpiId(upi)) {
+        return '';
+      }
+      // Strict NPCI compliance: pa, pn, and cu=INR are mandatory
+      return `upi://pay?pa=${encodeURIComponent(upi)}&pn=${encodeURIComponent(storeSettings.businessName || storeName)}&cu=INR`;
+    }
+    if (qrMode === 'booking') {
+      return `${storeUrl}?mode=booking`;
+    }
+    return storeUrl;
+  }, [qrMode, qrTableNumber, storeSettings.businessName, storeSettings.upiId, storeUpiId, storeName, storeUrl]);
+
+  const handleDownloadQr = (targetData: string, filename: string) => {
+    if (!targetData) {
+      showToast('No QR code data available to download');
+      return;
+    }
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(targetData)}`;
+    const a = document.createElement('a');
+    a.href = qrUrl;
+    a.download = filename;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast(`Downloaded printable ${filename}`);
+  };
 
   const onlineKpiStats = useMemo(() => {
     if (demoMode) {
@@ -994,25 +1014,23 @@ export function BosOnlineStoreWorkstation({
                   QR Code
                 </label>
                 <div className="flex items-center gap-3">
-                  {/* Detailed SVG QR Code */}
-                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-[#DCE9E3] bg-white p-1.5">
-                    <svg
-                      viewBox="0 0 36 36"
-                      className="h-full w-full text-[#111827]"
-                      fill="currentColor"
-                    >
-                      <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h4v2h-4v-2zm6 0h2v4h-2v-4zm4 4h6v2h-6v-2zm-10 4h2v6h-2v-6zm4 2h4v2h-4v-2zm6 2h4v6h-4v-6zm-6 4h4v2h-4v-2z" />
-                    </svg>
+                  {/* Real Scannable Storefront QR Code */}
+                  <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-xl border border-[#DCE9E3] bg-white p-1.5 shadow-2xs">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(storeUrl)}`}
+                      alt="Storefront QR Code"
+                      className="h-full w-full object-contain"
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <p className="text-[11px] leading-relaxed text-[#64748B]">
-                      Scan this QR code to open your store
+                      Scan this QR code to open your digital store
                     </p>
                     <button
                       type="button"
                       onClick={() =>
-                        showToast('Downloaded printable Store QR Code')
+                        handleDownloadQr(storeUrl, `${storeName.replace(/\s+/g, '-').toLowerCase()}-storefront-qr.png`)
                       }
                       className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[11.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
                     >
@@ -1311,8 +1329,24 @@ export function BosOnlineStoreWorkstation({
                   value={storeUpiId}
                   onChange={(e) => setStoreUpiId(e.target.value.toLowerCase().trim())}
                   placeholder="e.g. storename@okhdfcbank"
-                  className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-semibold text-[#111827]"
+                  className={`h-8 w-full rounded-xl border bg-white px-3 text-[12px] font-semibold text-[#111827] ${
+                    storeUpiId && !isValidUpiId(storeUpiId)
+                      ? 'border-amber-300 focus:border-amber-500'
+                      : 'border-[#DCE9E3] focus:border-[#0A6847]'
+                  }`}
                 />
+                {storeUpiId && !isValidUpiId(storeUpiId) && (
+                  <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>Format must include @handle (e.g. shop@okhdfcbank or 9876543210@paytm)</span>
+                  </p>
+                )}
+                {storeUpiId && isValidUpiId(storeUpiId) && (
+                  <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    <span>Valid UPI ID — Ready for GPay, PhonePe, Paytm, BHIM</span>
+                  </p>
+                )}
               </div>
 
               {/* QR Code thumbnail */}
@@ -1320,10 +1354,10 @@ export function BosOnlineStoreWorkstation({
                 <div className="h-14 w-14 overflow-hidden rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-1 flex items-center justify-center shrink-0">
                   {storePaymentQr ? (
                     <img src={storePaymentQr} alt="Payment QR" className="h-full w-full object-contain" />
-                  ) : storeUpiId ? (
+                  ) : storeUpiId && isValidUpiId(storeUpiId) ? (
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
-                        `upi://pay?pa=${storeUpiId}&pn=${storeName}&cu=INR`
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(
+                        `upi://pay?pa=${encodeURIComponent(storeUpiId.trim())}&pn=${encodeURIComponent(storeName.trim())}&cu=INR`
                       )}`}
                       alt="UPI QR"
                       className="h-full w-full object-contain"
@@ -1334,10 +1368,16 @@ export function BosOnlineStoreWorkstation({
                 </div>
                 <div className="flex-1 min-w-0 text-[11px]">
                   <p className="font-semibold text-[#111827]">
-                    {storePaymentQr ? 'Custom Shop QR Active' : storeUpiId ? 'Auto-generated UPI QR' : 'No Payment QR Set'}
+                    {storePaymentQr
+                      ? 'Custom Shop QR Active'
+                      : storeUpiId && isValidUpiId(storeUpiId)
+                      ? 'Auto-generated UPI QR'
+                      : 'No Valid UPI Set'}
                   </p>
                   <p className="text-[#64748B] text-[10.5px] truncate">
-                    Customers can scan or 1-tap open UPI apps
+                    {storeUpiId && !isValidUpiId(storeUpiId)
+                      ? 'Enter a valid UPI handle above'
+                      : 'Customers can scan or 1-tap open UPI apps'}
                   </p>
                 </div>
               </div>
@@ -2014,51 +2054,83 @@ export function BosOnlineStoreWorkstation({
               <span className="rounded-full bg-[#E6F6F0] px-3 py-0.5 text-[11px] font-extrabold text-[#0A6847]">
                 {storeName}
               </span>
-              <div className="flex h-36 w-36 items-center justify-center rounded-2xl border-2 border-[#0A6847] bg-white p-3 shadow-xs">
-                <svg
-                  viewBox="0 0 36 36"
-                  className="h-full w-full text-[#111827]"
-                  fill="currentColor"
-                >
-                  <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h4v2h-4v-2zm6 0h2v4h-2v-4zm4 4h6v2h-6v-2zm-10 4h2v6h-2v-6zm4 2h4v2h-4v-2zm6 2h4v6h-4v-6zm-6 4h4v2h-4v-2z" />
-                </svg>
+              <div className="flex h-40 w-40 items-center justify-center rounded-2xl border-2 border-[#0A6847] bg-white p-2.5 shadow-xs">
+                {qrMode === 'payment' && !activeQrTargetUrl ? (
+                  <div className="flex flex-col items-center justify-center p-3 text-center text-amber-700 bg-amber-50 rounded-xl border border-amber-200 h-full w-full">
+                    <AlertCircle className="h-6 w-6 text-amber-600 mb-1" />
+                    <p className="text-[11px] font-bold">UPI ID Required</p>
+                    <p className="text-[9.5px] text-[#64748B] mt-0.5 leading-tight">
+                      Please enter a valid UPI ID (e.g. <code>store@okhdfcbank</code>) in Settings to generate a Pay QR.
+                    </p>
+                  </div>
+                ) : (
+                  <img
+                    src={
+                      qrMode === 'payment' && storePaymentQr
+                        ? storePaymentQr
+                        : `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
+                            activeQrTargetUrl
+                          )}`
+                    }
+                    alt={`${qrMode} QR Code`}
+                    className="h-full w-full object-contain"
+                  />
+                )}
               </div>
               <p className="text-[11px] font-mono text-[#475569] break-all px-2">
-                {activeQrTargetUrl}
+                {activeQrTargetUrl || (qrMode === 'payment' ? 'No valid UPI ID configured' : storeUrl)}
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5 pt-1">
+            <div className="grid grid-cols-3 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
+                  const target = activeQrTargetUrl || storeUrl;
                   if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                    navigator.clipboard.writeText(activeQrTargetUrl).catch(() => {});
+                    navigator.clipboard.writeText(target).catch(() => {});
                   }
-                  showToast(`Copied QR link: ${activeQrTargetUrl}`);
+                  showToast(`Copied link: ${target}`);
                   setShowQrModal(false);
                 }}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6]"
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white py-2 text-[11.5px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
               >
                 <Copy className="h-3.5 w-3.5 text-[#0A6847]" />
-                <span>Copy QR Link</span>
+                <span>Copy Link</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!activeQrTargetUrl) {
+                    showToast('Please configure a valid UPI ID first');
+                    return;
+                  }
+                  handleDownloadQr(
+                    activeQrTargetUrl,
+                    `${storeName.replace(/\s+/g, '-').toLowerCase()}-${qrMode}-qr.png`
+                  );
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-[#0A6847] bg-[#F2FAF6] py-2 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
                   const targetShare =
                     whatsappShareUrl ||
-                    `https://wa.me/?text=${encodeURIComponent(`Order online from ${storeName}: ${activeQrTargetUrl}`)}`;
+                    `https://wa.me/?text=${encodeURIComponent(`Order online from ${storeName}: ${activeQrTargetUrl || storeUrl}`)}`;
                   if (typeof window !== 'undefined') {
                     window.open(targetShare, '_blank', 'noopener,noreferrer');
                   }
                   showToast('Opened WhatsApp Store Share');
                   setShowQrModal(false);
                 }}
-                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#0A6847] py-2.5 text-[12px] font-bold text-white hover:bg-[#085238]"
+                className="flex items-center justify-center gap-1.5 rounded-xl bg-[#0A6847] py-2 text-[11.5px] font-bold text-white hover:bg-[#085238] cursor-pointer"
               >
-                <Download className="h-3.5 w-3.5" />
-                <span>Share on WhatsApp</span>
+                <ShoppingBag className="h-3.5 w-3.5" />
+                <span>WhatsApp</span>
               </button>
             </div>
           </div>
