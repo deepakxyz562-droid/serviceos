@@ -226,6 +226,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       const storeBanner = isExplicitSharma ? '🎉 Welcome to Sharma Kirana Store! Order online for 30-45 min local delivery.' : '';
       const storeDiscounts = isExplicitSharma ? DEMO_STORE.discounts : [];
       const storeBilling = {
+        enableGst: isExplicitSharma ? true : false,
         taxRate: isExplicitSharma ? 5 : 0,
         taxType: 'inclusive' as const,
         taxName: 'GST',
@@ -300,6 +301,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   }
 
   let billingConfig: any = {
+    enableGst: false,
     taxRate: 0,
     taxType: 'inclusive' as const,
     taxName: 'GST',

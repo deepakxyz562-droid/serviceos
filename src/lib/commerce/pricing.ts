@@ -25,12 +25,13 @@ export function priceOrder(config: { catalogJson: string; fieldsJson: string }, 
     discountMinor = Math.max(0, Math.min(subtotalMinor, discountMinor));
   }
   const billing = fields.billing || {};
-  // Existing published stores default to a 5% exclusive tax; retain that rule.
-  const taxRate = Number(billing.taxRate ?? 5);
+  // GST / Tax is opt-in for merchants (default: OFF / 0%).
+  const enableGst = Boolean(billing.enableGst);
+  const taxRate = enableGst ? Number(billing.taxRate ?? 0) : 0;
   const serviceRate = Number(billing.serviceChargeRate ?? 0);
   if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100 || !Number.isFinite(serviceRate) || serviceRate < 0 || serviceRate > 100) throw new Error('INVALID_BILLING');
   const taxable = subtotalMinor - discountMinor;
-  const taxMinor = billing.taxType === 'inclusive' ? 0 : Math.round(taxable * taxRate / 100);
+  const taxMinor = (!enableGst || billing.taxType === 'inclusive') ? 0 : Math.round(taxable * taxRate / 100);
   const serviceMinor = Math.round(taxable * serviceRate / 100);
   const totalMinor = taxable + taxMinor + serviceMinor;
   if (!Number.isSafeInteger(totalMinor) || totalMinor > 9000000000000) throw new Error('INVALID_AMOUNT');

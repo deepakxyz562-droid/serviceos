@@ -181,6 +181,12 @@ export function BosOnlineStoreWorkstation({
   );
   const [dineInTakeaway, setDineInTakeaway] = useState(false);
 
+  // GST & Tax Configuration States
+  const [enableGst, setEnableGst] = useState(() => Boolean(storeSettings.enableGst));
+  const [storeTaxRate, setStoreTaxRate] = useState(() => Number(storeSettings.taxRate ?? 0));
+  const [storeTaxType, setStoreTaxType] = useState<'inclusive' | 'exclusive'>(() => storeSettings.taxType || 'inclusive');
+  const [storeGstin, setStoreGstin] = useState(() => storeSettings.gstin || '');
+
   // Products Table States
   const [catalogRows, setCatalogRows] = useState<OnlineShowcaseRow[]>(() =>
     demoMode ? INITIAL_ONLINE_PRODUCTS : mapProductsToOnlineRows(products)
@@ -192,6 +198,10 @@ export function BosOnlineStoreWorkstation({
     if (storeSettings.businessType) setBusinessType(storeSettings.businessType);
     if (storeSettings.enableLocalDelivery !== undefined) setHomeDelivery(storeSettings.enableLocalDelivery);
     if (storeSettings.enableStorePickup !== undefined) setSelfPickup(storeSettings.enableStorePickup);
+    if (storeSettings.enableGst !== undefined) setEnableGst(Boolean(storeSettings.enableGst));
+    if (storeSettings.taxRate !== undefined) setStoreTaxRate(Number(storeSettings.taxRate));
+    if (storeSettings.taxType) setStoreTaxType(storeSettings.taxType);
+    if (storeSettings.gstin !== undefined) setStoreGstin(storeSettings.gstin);
   }, [storeSettings]);
 
   useEffect(() => {
@@ -1088,8 +1098,12 @@ export function BosOnlineStoreWorkstation({
                       businessName: storeName,
                       businessType: businessType,
                       tagline: storeDescription,
+                      enableGst: enableGst,
+                      taxRate: enableGst ? storeTaxRate : 0,
+                      taxType: storeTaxType,
+                      gstin: storeGstin.trim(),
                     });
-                    showToast('Updated Store Settings');
+                    showToast('Updated Store & GST Settings');
                   }}
                   className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#DCE9E3] bg-white px-2.5 text-[11.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
                 >
@@ -1159,6 +1173,86 @@ export function BosOnlineStoreWorkstation({
                   onChange={(e) => setStoreDescription(e.target.value)}
                   className="w-full rounded-xl border border-[#DCE9E3] bg-white p-2.5 text-[11.5px] leading-relaxed text-[#334155]"
                 />
+              </div>
+
+              {/* GST & Tax Configuration (Opt-in for Roadside Carts & Small Shops) */}
+              <div className="border-t border-[#F1F5F3] pt-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[12px] font-bold text-[#111827]">GST &amp; Taxes</p>
+                    <p className="text-[10.5px] text-[#64748B]">Small shops &amp; roadside stalls can keep this OFF</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enableGst}
+                      onChange={(e) => setEnableGst(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4.5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-[#0A6847]"></div>
+                  </label>
+                </div>
+
+                {enableGst && (
+                  <div className="space-y-2.5 pt-1 pl-2.5 border-l-2 border-emerald-500">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">
+                        GST Rate (%)
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        {[0, 5, 12, 18].map((rate) => (
+                          <button
+                            key={rate}
+                            type="button"
+                            onClick={() => setStoreTaxRate(rate)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                              storeTaxRate === rate
+                                ? 'bg-[#0A6847] text-white'
+                                : 'bg-slate-100 text-[#475569] hover:bg-slate-200'
+                            }`}
+                          >
+                            {rate}%
+                          </button>
+                        ))}
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={storeTaxRate}
+                          onChange={(e) => setStoreTaxRate(Number(e.target.value) || 0)}
+                          className="h-7 w-16 rounded-lg border border-[#DCE9E3] bg-white px-2 text-[11.5px] font-bold text-[#111827]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">
+                        Tax Calculation Mode
+                      </label>
+                      <select
+                        value={storeTaxType}
+                        onChange={(e) => setStoreTaxType(e.target.value as 'inclusive' | 'exclusive')}
+                        className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[11.5px] font-semibold text-[#111827]"
+                      >
+                        <option value="inclusive">Prices already include GST (Inclusive)</option>
+                        <option value="exclusive">Add GST on top at checkout (Exclusive)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#64748B] mb-1">
+                        Store GSTIN (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 27AABCV1234F1Z2"
+                        value={storeGstin}
+                        onChange={(e) => setStoreGstin(e.target.value.toUpperCase())}
+                        className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[11.5px] font-mono font-semibold text-[#111827]"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

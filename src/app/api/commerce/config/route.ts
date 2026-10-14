@@ -210,8 +210,11 @@ export async function PATCH(req: NextRequest) {
       if (Array.isArray(body.fieldsJson)) container.fields = body.fieldsJson;
       else if (typeof body.fieldsJson === 'object') container = { ...container, ...body.fieldsJson };
     }
-    if (body.tables !== undefined) container.tables = body.tables;
     if (body.billing !== undefined) container.billing = { ...container.billing, ...body.billing };
+    if (body.enableGst !== undefined) container.billing = { ...container.billing, enableGst: Boolean(body.enableGst) };
+    if (body.taxRate !== undefined) container.billing = { ...container.billing, taxRate: Number(body.taxRate) };
+    if (body.taxType !== undefined) container.billing = { ...container.billing, taxType: String(body.taxType) };
+    if (body.gstin !== undefined) container.billing = { ...container.billing, gstin: String(body.gstin) };
     if (body.discounts !== undefined) container.discounts = body.discounts;
     if (body.logoUrl !== undefined) container.logoUrl = body.logoUrl;
     if (body.paymentQrUrl !== undefined) container.paymentQrUrl = body.paymentQrUrl;
@@ -352,12 +355,13 @@ const DEFAULT_TABLES = [
 ];
 
 const DEFAULT_BILLING = {
-  taxRate: 5,
+  enableGst: false,
+  taxRate: 0,
   taxName: 'GST',
-  taxType: 'exclusive',
+  taxType: 'inclusive',
   serviceChargeRate: 0,
   gstin: '',
-  billFooterText: 'Thank you for dining with us! Please visit again.',
+  billFooterText: 'Thank you for shopping with us! Please visit again.',
 };
 
 const DEFAULT_DISCOUNTS = [

@@ -46,7 +46,91 @@ export async function POST(req: Request) {
       void triggerImmediateOrderNotifications(result.order.id, 'CREATED');
     }
 
-    return NextResponse.json({ ...result, orderId: result.order.id, trackingToken:token, trackingUrl:`/store/${encodeURIComponent(tenant?.slug||business.id)}/order/${result.order.id}?token=${encodeURIComponent(token)}` }, { status: result.replayed ? 200 : 201 });
+    // Automatically create or update customer record by phone number for easy tracking
+    let customerProfile = {
+      name: String(result.order?.customerName || body.customerName || 'Customer').trim(),
+      phone: String(result.order?.customerPhone || body.customerPhone || '').trim(),
+      address: typeof body.deliveryAddress === 'string' && body.deliveryAddress.trim()
+        ? body.deliveryAddress.trim()
+        : (typeof result.order?.deliveryAddress === 'string' ? result.order.deliveryAddress : ''),
+    };
+
+    if (result.order?.customerPhone) {
+      try {
+        const rawPhone = String(result.order.customerPhone).trim();
+        const cleanDigits = rawPhone.replace(/\D/g, '');
+        const custName = customerProfile.name;
+        const custAddress = customerProfile.address || null;
+
+        if (cleanDigits.length >= 7) {
+          const existingCust = await db.aiCustomer.findFirst({
+            where: {
+              businessId: business.id,
+              phone: { contains: cleanDigits.slice(-10) },
+            },
+          });
+
+          if (existingCust) {
+            await db.aiCustomer.update({
+              where: { id: existingCust.id },
+              data: {
+                ...(custName && custName !== 'Guest' ? { name: custName } : {}),
+                ...(custAddress ? { address: custAddress } : {}),
+              },
+            });
+          } else {
+            await db.aiCustomer.create({
+              data: {
+                businessId: business.id,
+                name: custName && custName !== 'Guest' ? custName : 'Customer',
+                phone: rawPhone,
+                address: custAddress,
+                notes: 'Auto-created via Store Order',
+              },
+            });
+          }
+
+          if (business.tenantId) {
+            try {
+              const existingTenantCust = await db.customer.findFirst({
+                where: {
+                  tenantId: business.tenantId,
+                  phone: { contains: cleanDigits.slice(-10) },
+                },
+              });
+              if (existingTenantCust) {
+                await db.customer.update({
+                  where: { id: existingTenantCust.id },
+                  data: {
+                    ...(custName && custName !== 'Guest' ? { name: custName } : {}),
+                    ...(custAddress ? { address: custAddress } : {}),
+                  },
+                });
+              } else {
+                await db.customer.create({
+                  data: {
+                    tenantId: business.tenantId,
+                    name: custName && custName !== 'Guest' ? custName : 'Customer',
+                    phone: rawPhone,
+                    address: custAddress,
+                  },
+                });
+              }
+            } catch {}
+          }
+        }
+      } catch (custErr) {
+        console.warn('[store/order] Customer auto-account creation skipped:', custErr);
+      }
+    }
+
+    return NextResponse.json({
+      ...result,
+      orderId: result.order.id,
+      trackingToken: token,
+      trackingUrl: `/store/${encodeURIComponent(tenant?.slug||business.id)}/order/${result.order.id}?token=${encodeURIComponent(token)}`,
+      customerProfile,
+    }, { status: result.replayed ? 200 : 201 });
   } catch (error) {
     const failure = commerceError(error);
     return NextResponse.json({ error: failure.message }, { status: failure.status });

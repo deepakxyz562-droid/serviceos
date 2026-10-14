@@ -168,6 +168,9 @@ export type BosStoreSettings = {
   registrationType?: string;
   paymentQrUrl?: string;
   enableOnlinePayment?: boolean;
+  enableGst?: boolean;
+  taxRate?: number;
+  taxType?: 'inclusive' | 'exclusive';
 };
 
 export function formatBosCurrency(amount: number, symbol = '₹'): string {

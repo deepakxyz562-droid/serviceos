@@ -1203,7 +1203,12 @@ export function BosWebApp({
               if (cfg.autoCloseIfInactive !== undefined) next.autoCloseIfInactive = Boolean(cfg.autoCloseIfInactive);
               if (cfg.manualCloseReason) next.manualCloseReason = String(cfg.manualCloseReason);
               if (cfg.currencySymbol) next.currencySymbol = String(cfg.currencySymbol);
-              if (cfg.billing?.gstin) next.gstin = String(cfg.billing.gstin);
+              if (cfg.billing) {
+                if (cfg.billing.gstin) next.gstin = String(cfg.billing.gstin);
+                if (cfg.billing.enableGst !== undefined) next.enableGst = Boolean(cfg.billing.enableGst);
+                if (cfg.billing.taxRate !== undefined) next.taxRate = Number(cfg.billing.taxRate);
+                if (cfg.billing.taxType) next.taxType = cfg.billing.taxType;
+              }
               if (cfg.businessHours && typeof cfg.businessHours === 'object') {
                 next.businessHours = cfg.businessHours;
               }
@@ -2385,7 +2390,14 @@ export function BosWebApp({
     if (patch.paymentQrUrl !== undefined) configPatch.paymentQrUrl = patch.paymentQrUrl;
     if (patch.enableOnlinePayment !== undefined) configPatch.enableOnlinePayment = patch.enableOnlinePayment;
     if (patch.storeLive !== undefined) configPatch.isActive = patch.storeLive;
-    if (patch.gstin !== undefined) configPatch.billing = { gstin: patch.gstin };
+    if (patch.gstin !== undefined || patch.enableGst !== undefined || patch.taxRate !== undefined || patch.taxType !== undefined) {
+      configPatch.billing = {
+        ...(patch.gstin !== undefined ? { gstin: patch.gstin } : {}),
+        ...(patch.enableGst !== undefined ? { enableGst: patch.enableGst } : {}),
+        ...(patch.taxRate !== undefined ? { taxRate: patch.taxRate } : {}),
+        ...(patch.taxType !== undefined ? { taxType: patch.taxType } : {}),
+      };
+    }
     if (patch.phone !== undefined) configPatch.phone = patch.phone;
     if (patch.whatsappNumber !== undefined) configPatch.whatsappNumber = patch.whatsappNumber;
     if (patch.email !== undefined) configPatch.email = patch.email;

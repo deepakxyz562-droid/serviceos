@@ -38,6 +38,8 @@ import {
   Trash2,
   User,
   Phone,
+  RotateCcw,
+  LogOut,
 } from 'lucide-react';
 
 interface Product {
@@ -50,6 +52,7 @@ interface Product {
 }
 
 interface BillingConfig {
+  enableGst?: boolean;
   taxRate?: number;
   taxType?: 'exclusive' | 'inclusive';
   taxName?: string;
@@ -147,6 +150,95 @@ export function StoreClient({
   const [whatsappUpdatesOptIn, setWhatsappUpdatesOptIn] = useState(false);
   const [isReturningCustomer, setIsReturningCustomer] = useState(false);
 
+  // Customer Account & Order Tracking States
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authPhoneInput, setAuthPhoneInput] = useState('');
+  const [authNameInput, setAuthNameInput] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [customerOrders, setCustomerOrders] = useState<any[]>([]);
+  const [showOrdersSheet, setShowOrdersSheet] = useState(false);
+
+  // Fetch past orders & profile for a given phone
+  const fetchCustomerOrders = async (phone: string) => {
+    const clean = (phone || '').replace(/\D/g, '');
+    if (clean.length < 7) return;
+    try {
+      setAuthLoading(true);
+      setAuthError('');
+      const res = await fetch(
+        `/api/public/store/customer-orders?phone=${encodeURIComponent(clean)}&businessId=${encodeURIComponent(businessId)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.customer) {
+          if (data.customer.name && data.customer.name !== 'Customer') {
+            setCustomerName(data.customer.name);
+          }
+          if (data.customer.address) {
+            setDeliveryAddress(data.customer.address);
+          }
+          setCustomerPhone(clean);
+          setIsReturningCustomer(true);
+        }
+        if (Array.isArray(data.orders)) {
+          setCustomerOrders(data.orders);
+        }
+        try {
+          localStorage.setItem(
+            'gptform_store_customer',
+            JSON.stringify({
+              name: data.customer?.name || customerName,
+              phone: clean,
+              address: data.customer?.address || deliveryAddress,
+              lastSync: new Date().toISOString(),
+            })
+          );
+        } catch {}
+      } else {
+        const errData = await res.json().catch(() => null);
+        if (errData?.error) setAuthError(errData.error);
+      }
+    } catch {
+      // ignore network errors
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const clean = authPhoneInput.replace(/\D/g, '');
+    if (clean.length < 10) {
+      setAuthError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    await fetchCustomerOrders(clean);
+    if (authNameInput.trim()) {
+      setCustomerName(authNameInput.trim());
+    }
+    setAuthModalOpen(false);
+    setShowOrdersSheet(true);
+  };
+
+  const handleReorder = (order: any) => {
+    if (!order || !Array.isArray(order.items)) return;
+    const newCart: Record<string, number> = {};
+    for (const item of order.items) {
+      if (item.productId) {
+        newCart[item.productId] = item.qty || 1;
+      } else {
+        const match = catalog.find((p) => p.name.toLowerCase() === (item.name || '').toLowerCase());
+        if (match) newCart[match.id] = item.qty || 1;
+      }
+    }
+    if (Object.keys(newCart).length > 0) {
+      setCart((prev) => ({ ...prev, ...newCart }));
+      setShowOrdersSheet(false);
+      openCart();
+    }
+  };
+
   // Open / Close Cart with browser history & hardware back button support
   const openCart = () => {
     setCartOpen(true);
@@ -179,7 +271,7 @@ export function StoreClient({
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Restore customer from device localStorage on QR scan / page load
+  // Restore customer from device localStorage on QR scan / page load & sync order history
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem('gptform_store_customer');
@@ -187,9 +279,14 @@ export function StoreClient({
         const parsed = JSON.parse(saved);
         if (parsed.phone) {
           setCustomerPhone(parsed.phone);
-          if (parsed.name) setCustomerName(parsed.name);
+          setAuthPhoneInput(parsed.phone);
+          if (parsed.name) {
+            setCustomerName(parsed.name);
+            setAuthNameInput(parsed.name);
+          }
           if (parsed.address) setDeliveryAddress(parsed.address);
           setIsReturningCustomer(true);
+          void fetchCustomerOrders(parsed.phone);
         }
       }
     } catch {}
@@ -199,7 +296,9 @@ export function StoreClient({
     setCustomerName('');
     setCustomerPhone('');
     setDeliveryAddress('');
+    setCustomerOrders([]);
     setIsReturningCustomer(false);
+    setShowOrdersSheet(false);
     try {
       localStorage.removeItem('gptform_store_customer');
     } catch {}
@@ -272,12 +371,13 @@ export function StoreClient({
 
   const taxableAmount = Math.max(0, subtotal - discountAmount);
 
-  const taxRate = billing?.taxRate ?? 5;
+  const enableGst = Boolean(billing?.enableGst);
+  const taxRate = enableGst ? Number(billing?.taxRate ?? 0) : 0;
   const taxName = billing?.taxName || 'GST';
-  const taxType = billing?.taxType || 'exclusive';
+  const taxType = billing?.taxType || 'inclusive';
   const serviceChargeRate = billing?.serviceChargeRate ?? 0;
 
-  const taxAmount = taxType === 'inclusive' ? 0 : (taxableAmount * taxRate) / 100;
+  const taxAmount = (!enableGst || taxType === 'inclusive') ? 0 : (taxableAmount * taxRate) / 100;
   const serviceChargeAmount = (taxableAmount * serviceChargeRate) / 100;
 
   const grandTotal = taxableAmount + taxAmount + serviceChargeAmount;
@@ -752,19 +852,32 @@ export function StoreClient({
             </button>
 
             {/* Customer Status or Login */}
-            {isReturningCustomer && customerName ? (
-              <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-200">
-                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs">
-                  {customerName.charAt(0).toUpperCase()}
+            {isReturningCustomer && customerPhone ? (
+              <button
+                type="button"
+                onClick={() => setShowOrdersSheet(true)}
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 transition cursor-pointer text-xs font-bold border border-slate-200"
+                title="View your orders and account"
+              >
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-700 text-white flex items-center justify-center font-black text-[10px] sm:text-[11px]">
+                  {(customerName || customerPhone).charAt(0).toUpperCase()}
                 </div>
-              </div>
+                <span className="hidden sm:inline truncate max-w-[90px]">{customerName || 'My Account'}</span>
+                {customerOrders.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
+                    {customerOrders.length}
+                  </span>
+                )}
+              </button>
             ) : (
               <button
                 type="button"
-                onClick={openCart}
-                className="hidden sm:block px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs"
+                onClick={() => setAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs cursor-pointer"
               >
-                Login
+                <User className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline">Sign In / Orders</span>
+                <span className="sm:hidden">Sign In</span>
               </button>
             )}
           </div>
@@ -2033,6 +2146,278 @@ export function StoreClient({
                     Continue Shopping in Browser
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Customer Sign In / Phone Verification Modal ─────────────────── */}
+        {authModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+            <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-slide-up flex flex-col">
+              <div className="relative bg-gradient-to-br from-emerald-600 to-teal-800 p-6 text-white text-center">
+                <button
+                  type="button"
+                  onClick={() => setAuthModalOpen(false)}
+                  className="absolute right-4 top-4 p-1.5 rounded-full bg-black/20 hover:bg-black/30 text-white transition cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <div className="w-12 h-12 mx-auto rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mb-3 shadow-inner border border-white/20">
+                  <User className="h-6 w-6 text-white" />
+                </div>
+                <h3 className="text-base font-black tracking-tight">Customer Sign In &amp; Orders</h3>
+                <p className="text-xs text-emerald-100 mt-1 max-w-xs mx-auto">
+                  Enter your mobile number to view past orders, track deliveries, and speed up checkout.
+                </p>
+              </div>
+
+              <form onSubmit={handleSignIn} className="p-5 space-y-4">
+                {authError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+                    <ShieldAlert className="size-4 shrink-0 text-rose-500" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="flex items-center rounded-xl border border-stone-200 bg-stone-50 focus-within:bg-white focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 transition overflow-hidden">
+                    <span className="px-3 text-xs font-bold text-stone-500 border-r border-stone-200 bg-stone-100/60 py-2.5">
+                      🇮🇳 +91
+                    </span>
+                    <input
+                      type="tel"
+                      value={authPhoneInput}
+                      onChange={(e) => {
+                        setAuthPhoneInput(e.target.value);
+                        setAuthError('');
+                      }}
+                      placeholder="98765 43210"
+                      maxLength={10}
+                      autoFocus
+                      required
+                      className="w-full px-3 py-2.5 text-xs sm:text-sm font-bold text-stone-900 bg-transparent focus:outline-none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-stone-400 mt-1">We&apos;ll retrieve any orders placed with this number.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    Your Name <span className="text-stone-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={authNameInput}
+                    onChange={(e) => setAuthNameInput(e.target.value)}
+                    placeholder="e.g. Rahul Sharma"
+                    className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-xs sm:text-sm font-semibold text-stone-900 transition focus:outline-none"
+                  />
+                </div>
+
+                <div className="pt-1 space-y-2">
+                  <button
+                    type="submit"
+                    disabled={authLoading || !authPhoneInput.trim()}
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition active:scale-98 cursor-pointer"
+                  >
+                    {authLoading ? (
+                      <div className="size-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <span>Continue &amp; View Orders</span>
+                        <ArrowRight className="size-3.5" />
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuthModalOpen(false)}
+                    className="w-full py-2 text-stone-400 hover:text-stone-600 font-semibold text-xs transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Customer Orders & Account Sheet ─────────────────────────────── */}
+        {showOrdersSheet && (
+          <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/60 backdrop-blur-xs animate-fade-in">
+            <div className="w-full max-w-md h-full bg-stone-50 shadow-2xl flex flex-col border-l border-stone-200 animate-slide-left overflow-hidden">
+              {/* Sheet Header */}
+              <div className="bg-white px-5 py-4 border-b border-stone-200 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 font-black text-sm flex items-center justify-center">
+                    {(customerName || customerPhone || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-stone-900 truncate">
+                      {customerName || 'My Orders'}
+                    </h3>
+                    <p className="text-[11px] text-stone-500 font-medium">
+                      📱 +91 {customerPhone}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOrdersSheet(false)}
+                  className="p-1.5 rounded-full hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+
+              {/* Account Quick Actions Bar */}
+              <div className="bg-white/80 border-b border-stone-200/80 px-5 py-2.5 flex items-center justify-between text-xs">
+                <span className="text-stone-500 font-medium">
+                  {customerOrders.length} order{customerOrders.length === 1 ? '' : 's'} recorded
+                </span>
+                <button
+                  type="button"
+                  onClick={handleResetCustomer}
+                  className="flex items-center gap-1.5 text-rose-600 hover:text-rose-700 font-bold hover:bg-rose-50 px-2 py-1 rounded-lg transition cursor-pointer"
+                  title="Sign out of this phone number"
+                >
+                  <LogOut className="size-3.5" />
+                  <span>Switch Phone</span>
+                </button>
+              </div>
+
+              {/* Sheet Content: Order History */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {authLoading ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-stone-400 gap-3">
+                    <div className="size-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-semibold">Loading orders...</span>
+                  </div>
+                ) : customerOrders.length === 0 ? (
+                  <div className="text-center py-14 px-4 bg-white rounded-3xl border border-stone-200/80 my-4">
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-stone-100 flex items-center justify-center text-stone-400 mb-3">
+                      <ShoppingBag className="size-6 text-stone-400" />
+                    </div>
+                    <h4 className="text-sm font-bold text-stone-800">No Orders Yet</h4>
+                    <p className="text-xs text-stone-500 mt-1 max-w-xs mx-auto">
+                      Any orders placed under +91 {customerPhone} will appear here for easy tracking and 1-tap reordering.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowOrdersSheet(false)}
+                      className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition"
+                    >
+                      Browse Store Catalog
+                    </button>
+                  </div>
+                ) : (
+                  customerOrders.map((order: any) => {
+                    const status = (order.status || 'NEW').toUpperCase();
+                    const statusColor =
+                      status === 'DELIVERED'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : status === 'CONFIRMED' || status === 'ACCEPTED'
+                        ? 'bg-blue-100 text-blue-800 border-blue-200'
+                        : status === 'PREPARING' || status === 'READY'
+                        ? 'bg-amber-100 text-amber-800 border-amber-200'
+                        : status === 'OUT_FOR_DELIVERY'
+                        ? 'bg-purple-100 text-purple-800 border-purple-200'
+                        : status === 'CANCELLED'
+                        ? 'bg-rose-100 text-rose-800 border-rose-200'
+                        : 'bg-stone-100 text-stone-800 border-stone-200';
+
+                    const dateStr = order.createdAt
+                      ? new Date(order.createdAt).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Recent';
+
+                    const orderNum = order.orderNumber || (order.id ? order.id.slice(-6).toUpperCase() : 'ORDER');
+
+                    return (
+                      <div
+                        key={order.id}
+                        className="bg-white rounded-2xl p-4 border border-stone-200/90 shadow-2xs space-y-3 transition hover:shadow-xs"
+                      >
+                        {/* Order Header */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-xs text-stone-900 tracking-tight">
+                                #{orderNum}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${statusColor}`}
+                              >
+                                {status.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-stone-400 font-medium mt-0.5">
+                              {dateStr}
+                            </p>
+                          </div>
+                          <span className="font-black text-sm text-stone-900">
+                            {currencySymbol}
+                            {Number(order.totalAmount || 0).toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Order Items Summary */}
+                        {Array.isArray(order.items) && order.items.length > 0 && (
+                          <div className="bg-stone-50 rounded-xl p-2.5 text-[11px] text-stone-700 space-y-1">
+                            {order.items.slice(0, 3).map((it: any, idx: number) => (
+                              <div key={idx} className="flex justify-between items-center">
+                                <span className="truncate max-w-[200px]">
+                                  {it.qty || 1}× {it.name || 'Item'}
+                                </span>
+                                {it.amount && (
+                                  <span className="text-stone-500 font-semibold">
+                                    {currencySymbol}{Number(it.amount).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                            {order.items.length > 3 && (
+                              <p className="text-[10px] text-stone-400 font-medium pt-0.5">
+                                +{order.items.length - 3} more item{order.items.length - 3 > 1 ? 's' : ''}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Order Actions */}
+                        <div className="flex items-center gap-2 pt-1">
+                          {order.trackingUrl && (
+                            <a
+                              href={order.trackingUrl}
+                              className="flex-1 py-1.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold flex items-center justify-center gap-1.5 transition text-center"
+                            >
+                              <MapPin className="size-3 text-emerald-600" />
+                              <span>Track Live</span>
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleReorder(order)}
+                            className="flex-1 py-1.5 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                          >
+                            <RotateCcw className="size-3 text-emerald-700" />
+                            <span>1-Tap Reorder</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
