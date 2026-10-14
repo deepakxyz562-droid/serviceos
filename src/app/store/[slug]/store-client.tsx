@@ -22,6 +22,14 @@ import {
   Bell,
   Tag,
   Check,
+  Truck,
+  Lock,
+  BadgePercent,
+  Store,
+  Home,
+  Layers,
+  Smartphone,
+  Heart,
 } from 'lucide-react';
 
 interface Product {
@@ -378,14 +386,13 @@ export function StoreClient({
   };
 
   return (
-    <div className="min-h-screen bg-stone-100 flex justify-center text-stone-900 font-sans pb-28">
-      {/* Mobile-first frame container */}
-      <div className="w-full max-w-md bg-white min-h-screen shadow-md flex flex-col">
-        {/* Promotional Announcement Banner */}
-        {bannerText && (
-          <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-2xs">
-            <div className="flex items-center gap-1.5 truncate">
-              <span className="shrink-0 text-sm">📣</span>
+    <div className="min-h-screen bg-[#F8FAFC] text-stone-900 font-sans pb-32">
+      {/* ── Top Promotional Announcement Bar ────────────────────────────── */}
+      {bannerText && (
+        <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="max-w-7xl mx-auto w-full flex items-center justify-between">
+            <div className="flex items-center gap-2 truncate">
+              <span className="shrink-0 text-sm">🎉</span>
               <span className="truncate">{bannerText}</span>
             </div>
             {discounts && discounts.length > 0 && !appliedDiscount && (
@@ -395,169 +402,460 @@ export function StoreClient({
                   setPromoCodeInput(discounts[0].code);
                   setAppliedDiscount(discounts[0]);
                 }}
-                className="shrink-0 ml-2 px-2 py-0.5 rounded bg-white text-stone-900 text-[10px] font-black hover:bg-stone-100 transition shadow-2xs"
+                className="shrink-0 ml-3 px-2.5 py-0.5 rounded-full bg-white text-emerald-800 text-[11px] font-bold hover:bg-emerald-50 transition shadow-2xs"
               >
-                Apply
+                Apply Coupon
               </button>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Store Banner & Brand Header */}
-        <div className="bg-stone-900 text-white p-5 pt-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-44 h-44 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+      {/* ── Smart App Banner (BOS Customer Mobile App Link) ──────────────── */}
+      <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 text-xs text-emerald-900">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 truncate">
+            <Smartphone className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span className="truncate font-medium">
+              Get the <strong>BOS Customer App</strong> for instant QR ordering, favorites &amp; live delivery tracking.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.location.href = '/marketplace';
+              }
+            }}
+            className="shrink-0 font-bold text-emerald-700 hover:text-emerald-800 underline text-xs"
+          >
+            Explore App →
+          </button>
+        </div>
+      </div>
 
-          {/* Dine-In Table Pill & Server Call (Take.app Parity) */}
-          {tableNumber && (
-            <div className="flex items-center justify-between gap-2 mb-3 bg-amber-400/20 border border-amber-400/40 rounded-xl p-2.5">
-              <div className="flex items-center gap-1.5 text-amber-300 text-xs font-black uppercase tracking-wider">
-                <UtensilsCrossed className="h-4 w-4" />
-                Table #{tableNumber}
-              </div>
-              <div className="flex items-center gap-1.5">
+      {/* ── Main Web Storefront Header (Panel 2 from Mockup) ───────────── */}
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+          {/* Left: Store Logo & Brand */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white font-black text-xl flex items-center justify-center shadow-sm shrink-0">
+              <Store className="h-6 w-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate flex items-center gap-1.5">
+                {businessName}
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                  Open
+                </span>
+              </h1>
+              <p className="text-[11px] sm:text-xs text-slate-500 truncate font-medium">
+                Fresh Products • Best Prices • Home Delivery
+              </p>
+            </div>
+          </div>
+
+          {/* Middle: Desktop Search Bar */}
+          <div className="hidden md:flex flex-1 max-w-lg mx-4">
+            <div className="relative w-full">
+              <Search className="h-4 w-4 absolute left-3.5 top-3 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search for products, grocery, snacks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
+              />
+              {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => handleCallWaiter('SERVER')}
-                  className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-stone-950 text-[10px] font-black flex items-center gap-1 shadow-2xs active:scale-95 transition"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600"
                 >
-                  <Bell className="h-3 w-3" />
-                  Call Server
+                  <X className="h-4 w-4" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleCallWaiter('BILL')}
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-900 text-[10px] font-black flex items-center gap-1 shadow-2xs active:scale-95 transition"
-                >
-                  Request Bill
-                </button>
-              </div>
+              )}
             </div>
-          )}
+          </div>
 
-          <h1 className="text-2xl font-black tracking-tight">{businessName}</h1>
-          {businessAddress && (
-            <div className="flex items-center gap-1 text-stone-400 text-xs mt-1">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{businessAddress}</span>
-            </div>
-          )}
-          <p className="text-xs text-stone-300 mt-2 font-medium">{greeting}</p>
-
-          {isReturningCustomer && customerPhone && (
-            <div className="mt-3 bg-emerald-500/20 border border-emerald-400/40 rounded-xl px-3 py-2 text-xs flex items-center justify-between text-emerald-100">
-              <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-emerald-400 text-stone-950 font-black flex items-center justify-center text-[10px]">
-                  ✓
-                </span>
-                <span>
-                  Welcome back{customerName ? <strong className="text-white font-bold">, {customerName}</strong> : ''}!
-                </span>
-              </div>
+          {/* Right: Navigation & Cart Action */}
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('ALL')}
+              className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
+            >
+              <Home className="h-4 w-4" />
+              <span>Home</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('categories-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
+            >
+              <Layers className="h-4 w-4" />
+              <span>Categories</span>
+            </button>
+            {discounts.length > 0 && (
               <button
                 type="button"
-                onClick={handleResetCustomer}
-                className="text-[10px] text-emerald-300 hover:text-white underline cursor-pointer"
+                onClick={() => setCartOpen(true)}
+                className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-700 transition"
               >
-                Not you?
+                <Tag className="h-4 w-4" />
+                <span>Offers</span>
               </button>
-            </div>
-          )}
+            )}
+
+            {/* Cart Button */}
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition border border-emerald-200"
+            >
+              <ShoppingCart className="h-4 w-4 text-emerald-700" />
+              <span className="hidden sm:inline">Cart</span>
+              {totalItems > 0 && (
+                <span className="h-5 min-w-[20px] px-1.5 rounded-full bg-emerald-700 text-white text-[11px] font-black flex items-center justify-center">
+                  {totalItems}
+                </span>
+              )}
+            </button>
+
+            {/* Customer Status or Login */}
+            {isReturningCustomer && customerName ? (
+              <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-slate-200">
+                <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs">
+                  {customerName.charAt(0).toUpperCase()}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="hidden sm:block px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs"
+              >
+                Login
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Search & Category Filter Bar */}
-        <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-stone-200 px-4 py-3 space-y-2">
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="h-4 w-4 absolute left-3 top-2.5 text-stone-400" />
+        {/* Mobile Search Input (Visible on small screens) */}
+        <div className="md:hidden px-4 pb-3">
+          <div className="relative w-full">
+            <Search className="h-4 w-4 absolute left-3.5 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search food, products, drinks..."
+              placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-stone-100 border-none text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-100 border-none text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
+        </div>
+      </header>
 
-          {/* Category Chips Horizontal Scroll */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-            {categories.map((cat) => (
+      {/* ── Table / Dine-In Notification (if applicable) ────────────────── */}
+      {tableNumber && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+              <UtensilsCrossed className="h-4 w-4 text-amber-700" />
+              <span>Dine-In Table #{tableNumber}</span>
+            </div>
+            <div className="flex items-center gap-2">
               <button
-                key={cat}
                 type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition ${
-                  selectedCategory === cat
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                }`}
+                onClick={() => handleCallWaiter('SERVER')}
+                className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-500 text-stone-950 text-xs font-bold transition"
               >
-                {cat}
+                Call Server
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => handleCallWaiter('BILL')}
+                className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-stone-900 text-xs font-bold transition"
+              >
+                Request Bill
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Products List */}
-        <div className="p-4 space-y-3 flex-1">
-          {filteredProducts.length === 0 ? (
-            <div className="py-16 text-center text-stone-400 text-xs">
-              No items found. Try a different search or category.
+      {/* ── Main Content Grid (Panel 2 Mockup: Sidebar + Main Section) ──── */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex flex-col lg:flex-row gap-6 items-start">
+          {/* ── Left Sidebar: Category Menu (Sticky on Desktop) ─────────── */}
+          <aside
+            id="categories-section"
+            className="w-full lg:w-64 shrink-0 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs lg:sticky lg:top-24"
+          >
+            <div className="px-3 py-2 border-b border-slate-100 mb-2 flex items-center justify-between">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Categories</h2>
+              <span className="text-[11px] font-medium text-slate-400">{categories.length} Total</span>
             </div>
-          ) : (
-            filteredProducts.map((p) => {
-              const qty = cart[p.id] || 0;
-              return (
-                <div
-                  key={p.id}
-                  className="flex items-start justify-between gap-3 p-3.5 rounded-2xl border border-stone-200 bg-white hover:border-stone-300 transition shadow-2xs"
-                >
-                  <div className="flex-1 pr-2">
-                    <h3 className="text-sm font-bold text-stone-900 leading-snug">{p.name}</h3>
-                    {p.description && (
-                      <p className="text-[11px] text-stone-500 mt-0.5 line-clamp-2 leading-relaxed">
-                        {p.description}
-                      </p>
-                    )}
-                    <div className="mt-2 text-sm font-black text-stone-900">
-                      {currencySymbol}{p.price.toFixed(2)}
-                    </div>
-                  </div>
 
-                  {/* Quantity Controller / Add Button */}
-                  <div className="shrink-0 pt-1">
-                    {qty === 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => updateQty(p.id, 1)}
-                        className="px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold hover:bg-emerald-100 active:scale-95 transition"
-                      >
-                        Add +
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 bg-emerald-600 text-white rounded-xl px-2 py-1 shadow-xs">
-                        <button
-                          type="button"
-                          onClick={() => updateQty(p.id, -1)}
-                          className="w-5 h-5 flex items-center justify-center font-bold hover:opacity-80"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="text-xs font-black min-w-[14px] text-center">{qty}</span>
-                        <button
-                          type="button"
-                          onClick={() => updateQty(p.id, 1)}
-                          className="w-5 h-5 flex items-center justify-center font-bold hover:opacity-80"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
-                    )}
+            <nav className="flex lg:flex-col gap-1 overflow-x-auto no-scrollbar lg:overflow-visible pb-1 lg:pb-0">
+              {categories.map((cat) => {
+                const isActive = selectedCategory === cat;
+                const count = cat === 'ALL'
+                  ? catalog.length
+                  : catalog.filter((p) => p.category === cat).length;
+
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap lg:whitespace-normal w-full text-left ${
+                      isActive
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="truncate">{cat === 'ALL' ? 'All Products' : cat}</span>
+                    <span
+                      className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Store Information Card inside Sidebar */}
+            <div className="hidden lg:block mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-2 px-2">
+              <div className="flex items-start gap-2">
+                <MapPin className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span className="leading-relaxed font-medium">{businessAddress || 'Patna, Bihar'}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                <span className="font-medium">Delivery: 30 - 45 mins</span>
+              </div>
+              <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                <Truck className="h-4 w-4 shrink-0" />
+                <span>Free delivery above ₹299</span>
+              </div>
+            </div>
+          </aside>
+
+          {/* ── Right Column: Hero Banner + Value Props + Product Grid ───── */}
+          <div className="flex-1 min-w-0 w-full space-y-6">
+            {/* Hero Promotional Banner (Matching Panel 2) */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#D8EEDB] via-[#EAF7EE] to-[#FEF3D6] p-6 sm:p-8 border border-emerald-100 shadow-xs">
+              <div className="max-w-md relative z-10 space-y-3">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
+                  <Sparkles className="h-3 w-3" />
+                  100% Fresh Guarantee
+                </div>
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                  Fresh Groceries Delivered to Your Home
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 font-medium">
+                  Farm fresh produce, daily essentials, snacks, and dairy delivered in 30–45 minutes.
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const el = document.getElementById('featured-products');
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm transition shadow-sm active:scale-95"
+                  >
+                    <span>Shop Now</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Decorative fresh basket badge */}
+              <div className="absolute right-4 bottom-2 sm:right-8 sm:bottom-4 opacity-80 sm:opacity-100 pointer-events-none">
+                <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-emerald-500/10 flex items-center justify-center p-2 border-2 border-dashed border-emerald-400/40">
+                  <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-emerald-600 text-white flex flex-col items-center justify-center font-black text-center shadow-lg">
+                    <span className="text-[10px] tracking-widest text-emerald-200">CERTIFIED</span>
+                    <span className="text-xs sm:text-sm">100%</span>
+                    <span className="text-[10px]">FRESH</span>
                   </div>
                 </div>
-              );
-            })
-          )}
+              </div>
+            </div>
+
+            {/* 4 Value Proposition Badges */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Quality Products</h4>
+                  <p className="text-[10px] text-slate-500">Handpicked items</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                  <Truck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Fast Delivery</h4>
+                  <p className="text-[10px] text-slate-500">30–45 mins local</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
+                  <Lock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Secure Payment</h4>
+                  <p className="text-[10px] text-slate-500">UPI, Card &amp; Cash</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                  <BadgePercent className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900">Best Prices</h4>
+                  <p className="text-[10px] text-slate-500">Direct kirana rates</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Featured Products Section Header */}
+            <div id="featured-products" className="pt-2 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  {selectedCategory === 'ALL' ? 'Featured Products' : selectedCategory}
+                </h3>
+                <p className="text-xs text-slate-500">Showing {filteredProducts.length} items available</p>
+              </div>
+              {selectedCategory !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory('ALL')}
+                  className="text-xs font-bold text-emerald-700 hover:underline"
+                >
+                  View All Products
+                </button>
+              )}
+            </div>
+
+            {/* Products Grid (Panel 2 Mockup: 4 Columns on Desktop) */}
+            {filteredProducts.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
+                <p className="text-sm font-semibold">No products found matching your search.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('ALL');
+                    setSearchQuery('');
+                  }}
+                  className="mt-3 px-4 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold"
+                >
+                  Clear Filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filteredProducts.map((p) => {
+                  const qty = cart[p.id] || 0;
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white rounded-2xl border border-slate-200/90 hover:border-emerald-300 hover:shadow-md transition flex flex-col justify-between overflow-hidden group p-3.5"
+                    >
+                      {/* Product Image Area */}
+                      <div className="relative aspect-square w-full rounded-xl bg-slate-50 overflow-hidden mb-3 flex items-center justify-center">
+                        {p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 bg-slate-50">
+                            <Store className="h-10 w-10 mb-1" />
+                            <span className="text-[10px] font-bold text-slate-400">Grocery</span>
+                          </div>
+                        )}
+                        {p.category && (
+                          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-white/90 backdrop-blur-xs text-[10px] font-bold text-slate-700 shadow-2xs">
+                            {p.category}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Product Info */}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 leading-snug group-hover:text-emerald-800 transition">
+                          {p.name}
+                        </h4>
+                        {p.description && (
+                          <p className="text-[11px] text-slate-500 line-clamp-1 mt-0.5 font-medium">
+                            {p.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Price & Add to Cart Action */}
+                      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                        <div>
+                          <span className="text-xs text-slate-400 block font-medium">Price</span>
+                          <span className="text-sm sm:text-base font-black text-slate-900">
+                            {currencySymbol}{p.price}
+                          </span>
+                        </div>
+
+                        {qty === 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => updateQty(p.id, 1)}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center gap-1 active:scale-95"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Add</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-2 bg-emerald-700 text-white rounded-xl px-2 py-1 shadow-xs">
+                            <button
+                              type="button"
+                              onClick={() => updateQty(p.id, -1)}
+                              className="w-5 h-5 flex items-center justify-center font-bold hover:opacity-80"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="text-xs font-black min-w-[14px] text-center">{qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(p.id, 1)}
+                              className="w-5 h-5 flex items-center justify-center font-bold hover:opacity-80"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
+      </main>
 
         {/* Floating Bottom Cart Bar (Take.app style) */}
         {totalItems > 0 && !cartOpen && (
@@ -959,7 +1257,6 @@ export function StoreClient({
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

@@ -216,10 +216,13 @@ export function BosOnlineStoreWorkstation({
   });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  const [serverStoreUrl, setServerStoreUrl] = useState<string | null>(null);
+  const [serverStoreSlug, setServerStoreSlug] = useState<string | null>(null);
+
   const liveOrigin =
     typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
-  const effectiveSlug = storeSettings.businessSlug || 'my-store';
-  const storeUrl = `${liveOrigin}/store/${effectiveSlug}`;
+  const effectiveSlug = serverStoreSlug || storeSettings.businessSlug || 'my-store';
+  const storeUrl = serverStoreUrl || `${liveOrigin}/store/${effectiveSlug}`;
   const publicStorePath = `/store/${effectiveSlug}`;
 
   useEffect(() => {
@@ -228,6 +231,15 @@ export function BosOnlineStoreWorkstation({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!active || !data) return;
+        if (data.storeUrl) {
+          setServerStoreUrl(data.storeUrl);
+          try {
+            const parsed = new URL(data.storeUrl);
+            const pathParts = parsed.pathname.split('/').filter(Boolean);
+            const s = pathParts[pathParts.length - 1];
+            if (s) setServerStoreSlug(s);
+          } catch {}
+        }
         if (data.whatsappShareUrl) {
           setWhatsappShareUrl(String(data.whatsappShareUrl));
         }
