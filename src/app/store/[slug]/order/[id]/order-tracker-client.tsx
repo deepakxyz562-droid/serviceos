@@ -23,7 +23,7 @@ import {
   Check,
   Send,
 } from 'lucide-react';
-import { getBosText, type BosLanguage } from '@/components/bos/i18n/bos-translations';
+import { getBosText, detectRegionalDefaultLanguage, type BosLanguage } from '@/components/bos/i18n/bos-translations';
 
 interface OrderItem {
   name: string;
@@ -49,6 +49,7 @@ interface OrderData {
   items: OrderItem[];
   businessName: string;
   businessPhone?: string;
+  businessAddress?: string;
 }
 
 interface QueueData {
@@ -86,16 +87,9 @@ export function OrderTrackerClient({
   const [utrSuccess, setUtrSuccess] = useState(false);
   const previousStatusRef = useRef(initialOrder.status);
 
+  // Language state: defaults to regional detection (Hindi for Hindi belt/India, English for Telugu/Tamil/Marathi or outside India), persists to customer localStorage
   const [language, setLanguage] = useState<BosLanguage>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('store_language') as BosLanguage;
-        if (saved === 'en' || saved === 'hi' || saved === 'both') {
-          return saved;
-        }
-      } catch {}
-    }
-    return 'en';
+    return detectRegionalDefaultLanguage(initialOrder.businessAddress || initialOrder.businessName, 'en');
   });
 
   const handleSetLanguage = (lang: BosLanguage) => {

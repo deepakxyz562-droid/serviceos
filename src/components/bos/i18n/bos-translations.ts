@@ -467,3 +467,104 @@ export function getBosText(
   }
   return en;
 }
+
+/**
+ * Heuristic to detect the appropriate default language based on user's linguistic preferences,
+ * regional indicators (Telugu, Tamil, Marathi, etc. -> English; Hindi Belt -> Hindi),
+ * and Indian national timezone fallback.
+ */
+export function detectRegionalDefaultLanguage(
+  businessAddress?: string,
+  merchantDefault?: BosLanguage
+): BosLanguage {
+  if (typeof window === 'undefined') {
+    return merchantDefault || 'en';
+  }
+
+  try {
+    // 1. Priority 1: User's explicitly saved selection
+    const saved = localStorage.getItem('store_language') as BosLanguage;
+    if (saved === 'en' || saved === 'hi' || saved === 'both') {
+      return saved;
+    }
+  } catch {}
+
+  // 2. Priority 2: Browser & Keyboard linguistic preferences
+  const navLangs = (
+    typeof navigator !== 'undefined'
+      ? [navigator.language, ...(navigator.languages || [])].filter(Boolean)
+      : []
+  ).map((l) => l.toLowerCase());
+
+  // Non-Hindi Indic languages: Telugu (te), Tamil (ta), Marathi (mr), Kannada (kn),
+  // Malayalam (ml), Bengali (bn), Gujarati (gu), Punjabi (pa), Odia (or), Assamese (as), Urdu (ur)
+  const nonHindiIndicPrefixes = ['te', 'ta', 'mr', 'kn', 'ml', 'bn', 'gu', 'pa', 'or', 'as', 'ur'];
+  const hasNonHindiIndic = navLangs.some((lang) =>
+    nonHindiIndicPrefixes.some((prefix) => lang.startsWith(prefix))
+  );
+  if (hasNonHindiIndic) {
+    return 'en';
+  }
+
+  // If user explicitly has Hindi in browser preferences
+  const hasHindi = navLangs.some((lang) => lang.startsWith('hi'));
+  if (hasHindi) {
+    return 'hi';
+  }
+
+  // 3. Priority 3: Store location (businessAddress) for regional local stores
+  if (businessAddress && typeof businessAddress === 'string') {
+    const addr = businessAddress.toLowerCase();
+
+    // Southern, Western, and Eastern non-Hindi regions
+    const nonHindiRegions = [
+      'telangana', 'andhra', 'hyderabad', 'secunderabad', 'vizag', 'visakhapatnam', 'vijayawada', 'guntur', 'warangal', 'tirupati',
+      'tamil nadu', 'tamilnadu', 'chennai', 'madras', 'coimbatore', 'madurai', 'trichy', 'salem', 'vellore',
+      'karnataka', 'bangalore', 'bengaluru', 'mysore', 'mysuru', 'mangalore', 'mangaluru', 'hubli', 'belgaum',
+      'kerala', 'kochi', 'cochin', 'thiruvananthapuram', 'trivandrum', 'kozhikode', 'calicut', 'thrissur',
+      'maharashtra', 'mumbai', 'bombay', 'pune', 'nagpur', 'nashik', 'aurangabad', 'thane', 'solapur',
+      'west bengal', 'kolkata', 'calcutta', 'howrah', 'siliguri', 'durgapur',
+      'gujarat', 'ahmedabad', 'surat', 'vadodara', 'baroda', 'rajkot',
+      'odisha', 'orissa', 'bhubaneswar', 'cuttack',
+      'punjab', 'amritsar', 'ludhiana', 'jalandhar',
+      'assam', 'guwahati', 'manipur', 'meghalaya', 'nagaland', 'mizoram', 'tripura'
+    ];
+
+    if (nonHindiRegions.some((keyword) => addr.includes(keyword))) {
+      return 'en';
+    }
+
+    // Northern & Central Hindi belt regions
+    const hindiBeltRegions = [
+      'delhi', 'new delhi', 'noida', 'gurugram', 'gurgaon', 'ghaziabad', 'faridabad',
+      'uttar pradesh', 'lucknow', 'kanpur', 'varanasi', 'banaras', 'kashi', 'agra', 'prayagraj', 'allahabad', 'meerut', 'bareilly', 'gorakhpur', 'aligarh', 'mathura', 'ayodhya',
+      'bihar', 'patna', 'gaya', 'bhagalpur', 'muzaffarpur', 'kankarbagh', 'darbhanga',
+      'madhya pradesh', 'bhopal', 'indore', 'gwalior', 'jabalpur', 'ujjain',
+      'rajasthan', 'jaipur', 'jodhpur', 'udaipur', 'kota', 'bikaner', 'ajmer',
+      'haryana', 'panipat', 'ambala', 'karnal', 'rohtak', 'hisar',
+      'himachal', 'shimla', 'dharamshala', 'mandi', 'kullu', 'manali',
+      'uttarakhand', 'dehradun', 'haridwar', 'rishikesh', 'haldwani', 'roorkee',
+      'jharkhand', 'ranchi', 'jamshedpur', 'dhanbad', 'bokaro',
+      'chhattisgarh', 'raipur', 'bilaspur', 'durg', 'bhilai'
+    ];
+
+    if (hindiBeltRegions.some((keyword) => addr.includes(keyword))) {
+      return 'hi';
+    }
+  }
+
+  // 4. Priority 4: Indian National Fallback (Timezone Asia/Kolkata or locale *-IN)
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const isIndiaTimezone = timeZone === 'Asia/Kolkata' || timeZone === 'Asia/Calcutta' || timeZone.includes('IST');
+    const isIndiaLocale = navLangs.some((l) => l.endsWith('-in'));
+
+    if (isIndiaTimezone || isIndiaLocale) {
+      // Default for India is Hindi (unless matched by non-Hindi Indic language or non-Hindi address earlier)
+      return 'hi';
+    }
+  } catch {}
+
+  // 5. Priority 5: Merchant explicit store setting, or default 'en' for international
+  return merchantDefault || 'en';
+}

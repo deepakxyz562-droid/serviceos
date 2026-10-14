@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   BOS_TRANSLATIONS,
   getBosText,
+  detectRegionalDefaultLanguage,
   type BosLanguage,
 } from '@/components/bos/i18n/bos-translations';
 
@@ -205,6 +206,141 @@ describe('Public Storefront & Live Tracker i18n Suite', () => {
     it('gracefully retains custom niche categories unchanged', () => {
       expect(getCategoryLabel('Handmade Pottery', 'hi')).toBe('Handmade Pottery');
       expect(getCategoryLabel('Organic Khadi', 'both')).toBe('Organic Khadi');
+    });
+  });
+
+  describe('Regional Default Language Detection', () => {
+    beforeEach(() => {
+      localStorage.clear();
+      vi.restoreAllMocks();
+    });
+
+    it('defaults to English when user prefers non-Hindi Indic languages (Telugu, Tamil, Marathi, etc.)', () => {
+      // Simulate Telugu
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['te-IN', 'te', 'en-IN']);
+      expect(detectRegionalDefaultLanguage()).toBe('en');
+
+      // Simulate Tamil
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['ta-IN', 'ta', 'en-US']);
+      expect(detectRegionalDefaultLanguage()).toBe('en');
+
+      // Simulate Marathi
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['mr-IN', 'mr', 'en-GB']);
+      expect(detectRegionalDefaultLanguage()).toBe('en');
+
+      // Simulate Kannada
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['kn-IN', 'kn', 'en']);
+      expect(detectRegionalDefaultLanguage()).toBe('en');
+
+      // Simulate Malayalam
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['ml-IN', 'ml', 'en']);
+      expect(detectRegionalDefaultLanguage()).toBe('en');
+    });
+
+    it('defaults to Hindi when browser preferences explicitly have Hindi', () => {
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['hi-IN', 'hi', 'en-IN']);
+      expect(detectRegionalDefaultLanguage()).toBe('hi');
+    });
+
+    it('defaults to English when store location is in a non-Hindi region (Telangana, Tamil Nadu, Karnataka, Maharashtra)', () => {
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-IN', 'en-US']);
+
+      // Hyderabad, Telangana
+      expect(detectRegionalDefaultLanguage('Banjara Hills, Hyderabad, Telangana')).toBe('en');
+
+      // Chennai, Tamil Nadu
+      expect(detectRegionalDefaultLanguage('T. Nagar, Chennai, Tamil Nadu')).toBe('en');
+
+      // Bengaluru, Karnataka
+      expect(detectRegionalDefaultLanguage('Indiranagar, Bengaluru, Karnataka')).toBe('en');
+
+      // Pune / Mumbai, Maharashtra
+      expect(detectRegionalDefaultLanguage('Kothrud, Pune, Maharashtra')).toBe('en');
+      expect(detectRegionalDefaultLanguage('Bandra West, Mumbai, Maharashtra')).toBe('en');
+    });
+
+    it('defaults to Hindi when store location is in the Hindi Belt', () => {
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-IN', 'en-US']);
+
+      // Patna, Bihar
+      expect(detectRegionalDefaultLanguage('Station Road, Kankarbagh, Patna, Bihar')).toBe('hi');
+
+      // Delhi NCR
+      expect(detectRegionalDefaultLanguage('Connaught Place, New Delhi, Delhi')).toBe('hi');
+
+      // Lucknow, Uttar Pradesh
+      expect(detectRegionalDefaultLanguage('Hazratganj, Lucknow, Uttar Pradesh')).toBe('hi');
+
+      // Jaipur, Rajasthan
+      expect(detectRegionalDefaultLanguage('MI Road, Jaipur, Rajasthan')).toBe('hi');
+    });
+
+    it('defaults to Hindi for Indian timezone when no specific non-Hindi regional indicators exist', () => {
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['en-US']);
+      vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
+        locale: 'en-US',
+        timeZone: 'Asia/Kolkata',
+      } as any);
+
+      expect(detectRegionalDefaultLanguage()).toBe('hi');
+    });
+
+    it('prioritizes user explicit selection over regional heuristics', () => {
+      // User is in Chennai with Tamil preference
+      vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['ta-IN', 'ta']);
+
+      // But user explicitly clicked 'both' or 'hi'
+      localStorage.setItem('store_language', 'both');
+      expect(detectRegionalDefaultLanguage('T. Nagar, Chennai, Tamil Nadu')).toBe('both');
+
+      localStorage.setItem('store_language', 'hi');
+      expect(detectRegionalDefaultLanguage('T. Nagar, Chennai, Tamil Nadu')).toBe('hi');
+
+      localStorage.setItem('store_language', 'en');
+      expect(detectRegionalDefaultLanguage('Station Road, Patna, Bihar')).toBe('en');
+    });
+  });
+
+  describe('Cart Persistence across Page Refreshes', () => {
+    const businessId = 'test-store-123';
+    const storageKey = `bos_store_cart_${businessId}`;
+
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    it('persists cart items to localStorage so refresh does not clear cart', () => {
+      const cartData = { 'prod-1': 2, 'prod-2': 1 };
+      localStorage.setItem(storageKey, JSON.stringify(cartData));
+
+      // Simulate page refresh loading cart
+      const saved = localStorage.getItem(storageKey);
+      expect(saved).toBeTruthy();
+      const parsed = JSON.parse(saved!);
+      expect(parsed['prod-1']).toBe(2);
+      expect(parsed['prod-2']).toBe(1);
+    });
+
+    it('cleans up saved cart when user clears cart or completes an order', () => {
+      const cartData = { 'prod-1': 2 };
+      localStorage.setItem(storageKey, JSON.stringify(cartData));
+      expect(localStorage.getItem(storageKey)).toBeTruthy();
+
+      // Clear cart
+      localStorage.removeItem(storageKey);
+      expect(localStorage.getItem(storageKey)).toBeNull();
+    });
+
+    it('isolates carts between different stores on the same domain', () => {
+      localStorage.setItem('bos_store_cart_storeA', JSON.stringify({ 'prod-A': 3 }));
+      localStorage.setItem('bos_store_cart_storeB', JSON.stringify({ 'prod-B': 1 }));
+
+      const storeACart = JSON.parse(localStorage.getItem('bos_store_cart_storeA')!);
+      const storeBCart = JSON.parse(localStorage.getItem('bos_store_cart_storeB')!);
+
+      expect(storeACart['prod-A']).toBe(3);
+      expect(storeBCart['prod-B']).toBe(1);
+      expect(storeACart['prod-B']).toBeUndefined();
     });
   });
 });

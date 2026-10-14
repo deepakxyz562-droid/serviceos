@@ -1,7 +1,7 @@
 'use client';
 import { RequestTracker } from '../../../../shared/money';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
-import { getBosText, type BosLanguage } from '@/components/bos/i18n/bos-translations';
+import { getBosText, detectRegionalDefaultLanguage, type BosLanguage } from '@/components/bos/i18n/bos-translations';
 
 import React, { useState, useMemo, useRef } from 'react';
 import {
@@ -115,17 +115,9 @@ export function StoreClient({
 }: StoreClientProps) {
   const requestTracker = useRef(new RequestTracker());
 
-  // Language state: defaults to merchant setting, persists to customer localStorage
+  // Language state: defaults to regional detection (Hindi for Hindi belt/India, English for Telugu/Tamil/Marathi or outside India), persists to customer localStorage
   const [language, setLanguage] = useState<BosLanguage>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('store_language') as BosLanguage;
-        if (saved === 'en' || saved === 'hi' || saved === 'both') {
-          return saved;
-        }
-      } catch {}
-    }
-    return storeLanguage || 'en';
+    return detectRegionalDefaultLanguage(businessAddress, storeLanguage);
   });
 
   const handleSetLanguage = (lang: BosLanguage) => {
@@ -169,7 +161,44 @@ export function StoreClient({
 
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [cart, setCart] = useState<Record<string, number>>({});
+
+  // Cart state: hydrated from localStorage so page refresh never empties the cart
+  const cartStorageKey = `bos_store_cart_${businessId}`;
+  const [cart, setCart] = useState<Record<string, number>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(`bos_store_cart_${businessId}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            const clean: Record<string, number> = {};
+            for (const [k, v] of Object.entries(parsed)) {
+              if (typeof v === 'number' && v > 0) {
+                clean[k] = v;
+              }
+            }
+            return clean;
+          }
+        }
+      } catch {}
+    }
+    return {};
+  });
+
+  // Automatically sync cart to localStorage whenever it changes
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `bos_store_cart_${businessId}`;
+        if (Object.keys(cart).length === 0) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, JSON.stringify(cart));
+        }
+      } catch {}
+    }
+  }, [cart, businessId]);
+
   const [cartOpen, setCartOpen] = useState(false);
   const [upiTrustConfirmed, setUpiTrustConfirmed] = useState(false);
   const [storeClosedAlert, setStoreClosedAlert] = useState(false);
@@ -643,6 +672,13 @@ export function StoreClient({
         waMessage,
         paymentMethod: method === 'UPI' ? 'UPI' : 'COD',
       });
+
+      setCart({});
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(`bos_store_cart_${businessId}`);
+        } catch {}
+      }
 
       setCartOpen(false);
       if (typeof window !== 'undefined' && window.location.hash === '#cart') {
