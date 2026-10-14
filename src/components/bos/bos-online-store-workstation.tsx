@@ -37,7 +37,7 @@ import {
   type BosStoreSettings,
 } from '@/components/bos/bos-types';
 import { authFetch } from '@/lib/client-auth';
-import { isValidUpiId } from '@/lib/upi-qr';
+import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
 
 type StoreSubTab =
   | 'overview'
@@ -275,7 +275,8 @@ export function BosOnlineStoreWorkstation({
       return `${storeUrl}?table=${encodeURIComponent(qrTableNumber || '1')}`;
     }
     if (qrMode === 'payment') {
-      const upi = (storeUpiId || storeSettings.upiId || '').trim();
+      const rawUpi = (storeUpiId || storeSettings.upiId || '').trim();
+      const upi = sanitizeUpiId(rawUpi);
       // If merchant has no UPI ID or format is invalid, do not generate an invalid UPI URI
       if (!upi || !isValidUpiId(upi)) {
         return '';
@@ -1294,8 +1295,10 @@ export function BosOnlineStoreWorkstation({
                 <button
                   type="button"
                   onClick={() => {
+                    const cleanUpi = sanitizeUpiId(storeUpiId);
+                    setStoreUpiId(cleanUpi);
                     void onUpdateStoreSettings({
-                      upiId: storeUpiId.trim(),
+                      upiId: cleanUpi,
                       paymentQrUrl: storePaymentQr,
                       enableOnlinePayment: storeOnlinePayEnabled,
                     });
@@ -1327,15 +1330,16 @@ export function BosOnlineStoreWorkstation({
                 <input
                   type="text"
                   value={storeUpiId}
-                  onChange={(e) => setStoreUpiId(e.target.value.toLowerCase().trim())}
+                  onChange={(e) => setStoreUpiId(e.target.value)}
+                  onBlur={() => setStoreUpiId((prev) => sanitizeUpiId(prev))}
                   placeholder="e.g. storename@okhdfcbank"
                   className={`h-8 w-full rounded-xl border bg-white px-3 text-[12px] font-semibold text-[#111827] ${
-                    storeUpiId && !isValidUpiId(storeUpiId)
+                    storeUpiId && storeUpiId.trim().length > 3 && !isValidUpiId(storeUpiId)
                       ? 'border-amber-300 focus:border-amber-500'
                       : 'border-[#DCE9E3] focus:border-[#0A6847]'
                   }`}
                 />
-                {storeUpiId && !isValidUpiId(storeUpiId) && (
+                {storeUpiId && storeUpiId.trim().length > 3 && !isValidUpiId(storeUpiId) && (
                   <p className="mt-1 flex items-center gap-1 text-[10px] font-medium text-amber-600">
                     <AlertCircle className="h-3 w-3 shrink-0" />
                     <span>Format must include @handle (e.g. shop@okhdfcbank or 9876543210@paytm)</span>

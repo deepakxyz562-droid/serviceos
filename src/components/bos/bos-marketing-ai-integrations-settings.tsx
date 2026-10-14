@@ -82,7 +82,7 @@ import type {
   SalesChannel,
 } from '../../../shared/blueprint/types';
 import { authFetch } from '@/lib/client-auth';
-import { isValidUpiId } from '@/lib/upi-qr';
+import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
@@ -444,6 +444,18 @@ export function BosMarketingAiIntegrationsSettings({
   const [settingsPaymentQrUrl, setSettingsPaymentQrUrl] = useState(() => storeSettings.paymentQrUrl || '');
   const [settingsEnableOnlinePayment, setSettingsEnableOnlinePayment] = useState(() => storeSettings.enableOnlinePayment ?? true);
   const paymentQrFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (storeSettings.upiId !== undefined) {
+      setSettingsUpiId(storeSettings.upiId);
+    }
+    if (storeSettings.paymentQrUrl !== undefined) {
+      setSettingsPaymentQrUrl(storeSettings.paymentQrUrl);
+    }
+    if (storeSettings.enableOnlinePayment !== undefined) {
+      setSettingsEnableOnlinePayment(storeSettings.enableOnlinePayment);
+    }
+  }, [storeSettings.upiId, storeSettings.paymentQrUrl, storeSettings.enableOnlinePayment]);
 
   const handlePaymentQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3750,8 +3762,10 @@ export function BosMarketingAiIntegrationsSettings({
                 <button
                   type="button"
                   onClick={async () => {
+                    const cleanUpi = sanitizeUpiId(settingsUpiId);
+                    setSettingsUpiId(cleanUpi);
                     await onUpdateStoreSettings({
-                      upiId: settingsUpiId.trim(),
+                      upiId: cleanUpi,
                       paymentQrUrl: settingsPaymentQrUrl,
                       enableOnlinePayment: settingsEnableOnlinePayment,
                     });
@@ -3788,10 +3802,11 @@ export function BosMarketingAiIntegrationsSettings({
                     <input
                       type="text"
                       value={settingsUpiId}
-                      onChange={(e) => setSettingsUpiId(e.target.value.toLowerCase().trim())}
+                      onChange={(e) => setSettingsUpiId(e.target.value)}
+                      onBlur={() => setSettingsUpiId((prev) => sanitizeUpiId(prev))}
                       placeholder="e.g. sharmastore@okhdfcbank or 9876543210@paytm"
                       className={`w-full rounded-xl border bg-white px-3.5 py-2.5 font-mono text-[13px] font-bold text-[#111827] focus:outline-hidden ${
-                        settingsUpiId && !isValidUpiId(settingsUpiId)
+                        settingsUpiId && settingsUpiId.trim().length > 3 && !isValidUpiId(settingsUpiId)
                           ? 'border-amber-300 focus:border-amber-500'
                           : 'border-[#DCE9E3] focus:border-[#0A6847]'
                       }`}
@@ -3801,7 +3816,7 @@ export function BosMarketingAiIntegrationsSettings({
                       <span>Instant Settlement</span>
                     </div>
                   </div>
-                  {settingsUpiId && !isValidUpiId(settingsUpiId) && (
+                  {settingsUpiId && settingsUpiId.trim().length > 3 && !isValidUpiId(settingsUpiId) && (
                     <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-amber-600">
                       <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                       <span>Format must include @handle (e.g. yourshop@okhdfcbank, 9876543210@paytm, merchant@ybl)</span>

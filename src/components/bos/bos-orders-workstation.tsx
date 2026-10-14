@@ -29,6 +29,7 @@ import {
   formatBosCurrency,
 } from '@/components/bos/bos-types';
 import { BosProductThumbnail } from '@/components/bos/bos-product-image-resolver';
+import { authFetch } from '@/lib/client-auth';
 
 type OrdersFilterTab =
   | 'all'
@@ -816,6 +817,8 @@ export function BosOrdersWorkstation({
     showToast('Exported orders CSV');
   };
 
+  const [sendingWhatsAppId, setSendingWhatsAppId] = useState<string | null>(null);
+
   const handleShareWhatsApp = (row: ShowcaseOrderRow) => {
     const cleanPhone = row.customerPhone.replace(/\D/g, '');
     const itemsText = row.inspectorItems
@@ -830,6 +833,41 @@ export function BosOrdersWorkstation({
       '_blank',
       'noopener,noreferrer',
     );
+  };
+
+  const handleSendDirectWhatsApp = async (row: ShowcaseOrderRow) => {
+    const cleanPhone = row.customerPhone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      showToast('No valid customer phone number for WhatsApp');
+      return;
+    }
+    const itemsText = row.inspectorItems
+      .map(
+        (i) =>
+          `• ${i.name} (${formatOrdAmount(i.price, currencySymbol)} × ${i.qty}) = ${formatOrdAmount(i.price * i.qty, currencySymbol)}`,
+      )
+      .join('\n');
+    const message = `Hello ${row.customerName},\nThank you for your order at *${businessName}*!\n\n*Order:* ${row.id}\n${itemsText}\n\n*Total Amount:* ${formatOrdAmount(row.inspectorTotal, currencySymbol)}\n*Status:* ${row.statusLabel}`;
+
+    setSendingWhatsAppId(row.id);
+    try {
+      const res = await authFetch('/api/commerce/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, message }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        showToast(`WhatsApp message sent to ${row.customerName} via Meta Cloud API!`);
+      } else {
+        showToast('Meta Cloud: Opening WhatsApp Web chat...');
+        handleShareWhatsApp(row);
+      }
+    } catch {
+      handleShareWhatsApp(row);
+    } finally {
+      setSendingWhatsAppId(null);
+    }
   };
 
   const handlePrintSelected = (row: ShowcaseOrderRow) => {
@@ -1625,9 +1663,9 @@ export function BosOrdersWorkstation({
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleShareWhatsApp(selectedOrder)}
-                        className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#10B981] text-white"
-                        title="Chat on WhatsApp"
+                        onClick={() => handleSendDirectWhatsApp(selectedOrder)}
+                        className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#10B981] text-white hover:bg-[#059669] transition"
+                        title="Send WhatsApp via Meta Cloud API"
                       >
                         <MessageCircle className="h-2.5 w-2.5" />
                       </button>
@@ -1845,11 +1883,13 @@ export function BosOrdersWorkstation({
 
               <button
                 type="button"
-                onClick={() => handleShareWhatsApp(selectedOrder)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#BCE3D4] bg-[#F2FAF6] px-2.5 py-2.5 text-[12px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] transition cursor-pointer"
+                onClick={() => handleSendDirectWhatsApp(selectedOrder)}
+                disabled={sendingWhatsAppId === selectedOrder.id}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#BCE3D4] bg-[#F2FAF6] px-2.5 py-2.5 text-[12px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] transition cursor-pointer disabled:opacity-50"
+                title="Send WhatsApp via Meta Cloud API"
               >
                 <MessageCircle className="h-3.5 w-3.5 text-[#0A7B56]" />
-                <span>Share</span>
+                <span>{sendingWhatsAppId === selectedOrder.id ? 'Sending...' : 'WhatsApp'}</span>
               </button>
 
               <button

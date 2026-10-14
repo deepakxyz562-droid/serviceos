@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ownerBusiness } from '@/lib/commerce/access';
 import { atomicCommerce, commerceError } from '@/lib/commerce/atomic';
+import { triggerImmediateOrderNotifications } from '@/lib/commerce/order-notification-dispatch';
 
 export async function GET(
   req: NextRequest,
@@ -71,6 +72,9 @@ export async function PATCH(
       clean[field] = body[field] === null ? null : body[field].slice(0,limit);
     }
     const result = await atomicCommerce('updateOrder',[business.id,id,clean]);
+    if (clean.status) {
+      void triggerImmediateOrderNotifications(id, 'STATUS_CHANGE', clean.status);
+    }
     return NextResponse.json(result);
 
   } catch (e: any) {

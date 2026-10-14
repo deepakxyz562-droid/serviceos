@@ -38,15 +38,19 @@ export async function POST(req: NextRequest){
       // Scheduled updates cannot assume an open WhatsApp customer-service window.
       const provider=await resolveOrderMessagingConfig(business.tenantId);
       const templateName=job.audience==='vendor'?provider.vendorTemplate:provider.customerTemplate;
-      if(!templateName)throw new Error('Approved order notification template not configured');
-      const parameters=job.audience==='vendor'
-        ? [payload.businessName,payload.orderNumber,payload.customerName,String(payload.total),payload.currency||'INR',`${base}/?view=commerce`]
-        : [payload.customerName,payload.businessName,payload.orderNumber,payload.status,payload.trackingUrl!];
-      const result=await dispatchTransactionalWhatsApp(job.audience==='customer'?order.customerPhone:payload.businessPhone||'',formatted.messageText,{name:templateName,language:provider.language,parameters},provider);
+      const template=templateName ? {
+        name: templateName,
+        language: provider.language,
+        parameters: job.audience==='vendor'
+          ? [payload.businessName,payload.orderNumber,payload.customerName,String(payload.total),payload.currency||'INR',`${base}/?view=commerce`]
+          : [payload.customerName,payload.businessName,payload.orderNumber,payload.status,payload.trackingUrl!],
+      } : undefined;
+      const recipientPhone = job.audience==='customer'?order.customerPhone:payload.businessPhone||'';
+      const result=await dispatchTransactionalWhatsApp(recipientPhone,formatted.messageText,template,provider);
       if(!result.success)throw new Error(result.error||'Message not delivered');
       await atomicCommerce('acknowledge',[job.id,'true','',job.leaseToken]);delivered++;
     }catch(error){
-      const reason=error instanceof Error && error.message==='Approved order notification template not configured' ? error.message : 'Message delivery failed; check configured gateway and recipient.';
+      const reason=error instanceof Error ? error.message : 'Message delivery failed; check configured gateway and recipient.';
       await atomicCommerce('acknowledge',[job.id,'false',reason,job.leaseToken]);failed++;
     }
   }

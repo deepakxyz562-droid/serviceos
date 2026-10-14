@@ -26,15 +26,49 @@ export interface UpiQrParams {
 }
 
 /**
+ * Sanitizes and normalizes a UPI ID or VPA string.
+ * - Strips `upi://pay?pa=` deep link wrapper if pasted
+ * - Removes leading/trailing and internal whitespace/zero-width chars
+ * - Strips leading '+' (e.g. +919876543210@paytm -> 919876543210@paytm)
+ * - Converts to lowercase
+ */
+export function sanitizeUpiId(text?: string | null): string {
+  if (!text) return '';
+  let clean = text.trim();
+  // If user pasted a full upi URI: upi://pay?pa=...
+  if (clean.includes('pa=')) {
+    try {
+      const match = clean.match(/[?&]pa=([^&]+)/);
+      if (match && match[1]) {
+        clean = decodeURIComponent(match[1]);
+      }
+    } catch {}
+  }
+  // Remove spaces, tabs, zero-width characters
+  clean = clean.replace(/[\s\u200B-\u200D\uFEFF]/g, '');
+  // Remove leading '+' from phone numbers before handle
+  if (clean.startsWith('+')) {
+    clean = clean.slice(1);
+  }
+  return clean.toLowerCase();
+}
+
+/**
  * Validates UPI ID / VPA format according to NPCI specs.
- * A valid UPI ID must have a username part and a PSP handle separated by '@'
- * Examples: 'sharmastore@okhdfcbank', '9876543210@paytm', 'merchant@ybl'
+ * A valid UPI ID must have a username part and a PSP handle separated by '@'.
+ * Supports dots, hyphens, and alphanumeric in both username and bank handle.
+ * Examples: 'deepakchandra076-1@okhdfbank', '9876543210@paytm', 'merchant@sbi.co.in'
  */
 export function isValidUpiId(text?: string | null): boolean {
   if (!text) return false;
-  const clean = text.trim().toLowerCase();
+  const clean = sanitizeUpiId(text);
+  if (!clean) return false;
   // Standard NPCI UPI VPA format
-  return /^[a-zA-Z0-9._-]+@[a-zA-Z0-9]+$/.test(clean);
+  if (/^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+$/.test(clean)) {
+    const [user, handle] = clean.split('@');
+    return Boolean(user && handle && user.length >= 2 && handle.length >= 2 && !handle.startsWith('.') && !handle.endsWith('.'));
+  }
+  return false;
 }
 
 /**
@@ -42,8 +76,9 @@ export function isValidUpiId(text?: string | null): boolean {
  */
 export function buildUpiDeepLink(params: UpiQrParams): string {
   const { upiId, payeeName, amount, currency = 'INR', note } = params;
+  const cleanUpi = sanitizeUpiId(upiId);
   const parts = new URLSearchParams();
-  parts.set('pa', upiId.trim());
+  parts.set('pa', cleanUpi);
   if (payeeName) parts.set('pn', payeeName.trim());
   if (amount && amount > 0) {
     parts.set('am', amount.toFixed(2));

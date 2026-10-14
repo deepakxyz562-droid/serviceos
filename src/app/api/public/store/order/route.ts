@@ -4,6 +4,7 @@ import { createCommerceOrder } from '@/lib/commerce/order-service';
 import { commerceError } from '@/lib/commerce/atomic';
 import { apiLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { orderAccessToken, verifyOrderAccess } from '@/lib/commerce/order-access';
+import { triggerImmediateOrderNotifications } from '@/lib/commerce/order-notification-dispatch';
 
 export const runtime = 'nodejs';
 export async function POST(req: Request) {
@@ -23,6 +24,12 @@ export async function POST(req: Request) {
     const result = await createCommerceOrder(business, body, req.headers.get('Idempotency-Key') || body.requestKey || '', true);
     const token=orderAccessToken(result.order.id,business.id);
     const tenant=business.tenantId?await db.tenant.findUnique({where:{id:business.tenantId},select:{slug:true}}):null;
+
+    // Trigger instant Meta WhatsApp and In-App Push notifications in background
+    if (result.order?.id && !result.replayed) {
+      void triggerImmediateOrderNotifications(result.order.id, 'CREATED');
+    }
+
     return NextResponse.json({ ...result, orderId: result.order.id, trackingToken:token, trackingUrl:`/store/${encodeURIComponent(tenant?.slug||business.id)}/order/${result.order.id}?token=${encodeURIComponent(token)}` }, { status: result.replayed ? 200 : 201 });
   } catch (error) {
     const failure = commerceError(error);

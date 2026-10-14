@@ -1,6 +1,6 @@
 'use client';
 import { RequestTracker } from '../../../../shared/money';
-import { isValidUpiId } from '@/lib/upi-qr';
+import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
 
 import React, { useState, useMemo, useRef } from 'react';
 import {
@@ -106,7 +106,7 @@ export function StoreClient({
   );
 
   // Online Payment vs Counter COD state
-  const effectiveUpiId = (upiId || '').trim();
+  const effectiveUpiId = sanitizeUpiId(upiId);
   const isUpiValid = isValidUpiId(effectiveUpiId);
   const hasOnlinePayment = enableOnlinePayment && (Boolean(paymentQrUrl) || (Boolean(effectiveUpiId) && isUpiValid));
   const [paymentMode, setPaymentMode] = useState<'ONLINE_UPI' | 'COUNTER_COD'>(() =>

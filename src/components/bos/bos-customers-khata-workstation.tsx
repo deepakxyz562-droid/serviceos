@@ -31,6 +31,7 @@ import {
   type BosCustomer,
   type BosKhataTransaction,
 } from '@/components/bos/bos-types';
+import { authFetch } from '@/lib/client-auth';
 
 type CustomerSubTab = 'all' | 'credit' | 'regular' | 'new';
 type CustomerInspectorTab = 'overview' | 'transactions' | 'orders' | 'notes' | 'settings';
@@ -671,15 +672,44 @@ export function BosCustomersKhataWorkstation({
     );
   };
 
-  const handleSendWhatsAppReminder = (row: ShowcaseCustomerRow) => {
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+
+  const handleSendWhatsAppReminder = async (row: ShowcaseCustomerRow) => {
     const cleanPhone = row.phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 8) {
+      showToastMsg('No valid customer phone number for WhatsApp');
+      return;
+    }
     const dueText = formatCustAmount(Math.max(0, row.balance), currencySymbol);
     const msg = `Namaste ${row.name} 🙏,\nThis is a friendly reminder from *${businessName}* regarding your pending Khata balance of *${dueText}*.\nYou can pay conveniently via UPI or at the store. Thank you!`;
-    window.open(
-      `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`,
-      '_blank',
-      'noopener,noreferrer',
-    );
+
+    setSendingReminderId(row.id);
+    try {
+      const res = await authFetch('/api/commerce/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, message: msg }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        showToastMsg(`Khata reminder sent to ${row.name} via Meta Cloud API!`);
+      } else {
+        showToastMsg('Meta Cloud: Opening WhatsApp Web chat...');
+        window.open(
+          `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`,
+          '_blank',
+          'noopener,noreferrer',
+        );
+      }
+    } catch {
+      window.open(
+        `https://wa.me/91${cleanPhone}?text=${encodeURIComponent(msg)}`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+    } finally {
+      setSendingReminderId(null);
+    }
   };
 
   const handleRecordPaymentSubmit = async () => {

@@ -91,6 +91,7 @@ import {
 } from '@/lib/hardware/print-service';
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
+import { TenantPushManager } from '@/components/pwa/tenant-push-manager';
 
 const NAV_ICON_MAP: Record<BosNavId, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
@@ -882,6 +883,55 @@ export function BosWebApp({
   const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<
+    Array<{
+      id: string;
+      title: string;
+      message: string;
+      type?: string;
+      category?: string;
+      isRead?: boolean;
+      createdAt?: string;
+      actionUrl?: string;
+    }>
+  >([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0);
+  const prevOrderCountRef = useRef<number | null>(null);
+
+  const playOrderChime = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioContextClass =
+        window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(659.25, now);
+      gain1.gain.setValueAtTime(0.3, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(830.61, now + 0.12);
+      gain2.gain.setValueAtTime(0.35, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.55);
+    } catch {}
+  }, []);
   const [helpOpen, setHelpOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
@@ -1597,6 +1647,77 @@ export function BosWebApp({
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [initialView]);
+
+  // Periodic polling for incoming online orders and notification unread count
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+
+    const pollIncoming = async () => {
+      try {
+        const [ordRes, notifRes, unreadRes] = await Promise.allSettled([
+          authFetch('/api/commerce/orders', { credentials: 'include' }),
+          authFetch('/api/notifications?limit=8', { credentials: 'include' }),
+          authFetch('/api/notifications/unread-count', { credentials: 'include' }),
+        ]);
+        if (cancelled) return;
+
+        if (unreadRes.status === 'fulfilled' && unreadRes.value.ok) {
+          const unreadData = await unreadRes.value.json().catch(() => null);
+          if (typeof unreadData?.count === 'number') {
+            setUnreadNotificationCount(unreadData.count);
+          } else if (typeof unreadData?.unreadCount === 'number') {
+            setUnreadNotificationCount(unreadData.unreadCount);
+          }
+        }
+
+        if (notifRes.status === 'fulfilled' && notifRes.value.ok) {
+          const notifData = await notifRes.value.json().catch(() => null);
+          const list = notifData?.notifications || notifData?.data?.notifications;
+          if (Array.isArray(list)) {
+            setNotifications(list);
+          }
+        }
+
+        if (ordRes.status === 'fulfilled' && ordRes.value.ok) {
+          const ordData = await ordRes.value.json().catch(() => null);
+          const apiOrders = ordData?.orders || ordData?.data?.orders;
+          if (Array.isArray(apiOrders)) {
+            if (prevOrderCountRef.current !== null && apiOrders.length > prevOrderCountRef.current) {
+              const diff = apiOrders.length - prevOrderCountRef.current;
+              playOrderChime();
+              toast.success(`🛍️ ${diff} New Online Order${diff > 1 ? 's' : ''} Received!`, {
+                description: 'Open Orders Workstation to accept & process.',
+                action: {
+                  label: 'View Orders',
+                  onClick: () => handleNavigate('orders'),
+                },
+              });
+            }
+            prevOrderCountRef.current = apiOrders.length;
+          }
+        }
+      } catch {}
+    };
+
+    void pollIncoming();
+    const interval = setInterval(pollIncoming, 12000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [demoMode, handleNavigate, playOrderChime]);
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await authFetch('/api/notifications/read-all', { method: 'POST' });
+      setUnreadNotificationCount(0);
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      toast.success('All notifications marked as read');
+    } catch {
+      toast.error('Failed to mark notifications as read');
+    }
+  };
 
   // Handlers connected to atomic production /api/commerce/* & /api/tenant/blueprint endpoints
   const handleCompleteSale = async (payload: {
@@ -2575,6 +2696,7 @@ export function BosWebApp({
 
       {/* Right Main Column: Top White Header + Scrollable Mint-Gray Canvas */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+        <TenantPushManager />
         {/* ISSUE 2: Bootstrap hydration failure banner with Retry. */}
         {bootstrapError && (
           <div className="flex items-center justify-between gap-3 bg-red-600 px-4 py-2.5 text-[12.5px] font-bold text-white shadow-xs shrink-0">
@@ -2953,61 +3075,88 @@ export function BosWebApp({
                   setHelpOpen(false);
                   setProfileMenuOpen(false);
                 }}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-[#E4EFEA] bg-[#F8FCFA] text-[#475569] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition"
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-[#E4EFEA] bg-[#F8FCFA] text-[#475569] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition cursor-pointer"
                 aria-label="Notifications"
               >
                 <Bell className="h-4 w-4" />
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EF4444] px-1 text-[9.5px] font-bold text-white">
-                  3
-                </span>
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#EF4444] px-1 text-[9.5px] font-bold text-white shadow-2xs animate-pulse">
+                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                  </span>
+                )}
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-80 rounded-2xl border border-[#E4EFEA] bg-white p-3.5 shadow-xl space-y-2.5 text-[12px]">
+                <div className="absolute right-0 z-40 mt-2 w-84 rounded-2xl border border-[#E4EFEA] bg-white p-3.5 shadow-xl space-y-2.5 text-[12px]">
                   <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-2">
-                    <h4 className="font-bold text-[#111827]">Store Alerts (3)</h4>
-                    <span className="text-[11px] font-semibold text-[#0A6847]">Live</span>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-[#111827]">Store Alerts</h4>
+                      {unreadNotificationCount > 0 && (
+                        <span className="rounded-full bg-red-100 px-1.5 py-0.2 text-[9.5px] font-bold text-red-700">
+                          {unreadNotificationCount} new
+                        </span>
+                      )}
+                    </div>
+                    {unreadNotificationCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={handleMarkAllNotificationsRead}
+                        className="text-[11px] font-semibold text-[#0A6847] hover:underline cursor-pointer"
+                      >
+                        Mark all read
+                      </button>
+                    ) : (
+                      <span className="text-[11px] font-semibold text-[#0A6847]">Live</span>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationsOpen(false);
-                        handleNavigate('orders');
-                      }}
-                      className="w-full rounded-xl bg-[#F8FCFA] p-2.5 text-left hover:bg-[#E6F6F0]/50"
-                    >
-                      <p className="font-bold text-[#111827]">🛍️ New Online Order #ORD-1047</p>
-                      <p className="text-[11px] text-[#64748B]">
-                        Amit Kumar ordered 2 items (₹480)
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationsOpen(false);
-                        handleNavigate('inventory');
-                      }}
-                      className="w-full rounded-xl bg-red-50/50 p-2.5 text-left hover:bg-red-50"
-                    >
-                      <p className="font-bold text-red-700">⚠️ 3 Low Stock Items</p>
-                      <p className="text-[11px] text-[#64748B]">
-                        Tata Tea Gold, Amul Butter & Surf Excel need reorder
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationsOpen(false);
-                        handleNavigate('khata');
-                      }}
-                      className="w-full rounded-xl bg-[#F8FCFA] p-2.5 text-left hover:bg-[#E6F6F0]/50"
-                    >
-                      <p className="font-bold text-[#0A6847]">💰 Khata UPI Payment Received</p>
-                      <p className="text-[11px] text-[#64748B]">
-                        Anita Desai paid ₹2,500 via UPI QR
-                      </p>
-                    </button>
+
+                  <div className="max-h-72 overflow-y-auto space-y-1.5 pr-0.5">
+                    {notifications.length > 0 ? (
+                      notifications.map((n) => {
+                        const isOrder = n.type?.includes('order') || n.category === 'commerce';
+                        const isInventory = n.type?.includes('inventory') || n.category === 'inventory';
+                        const isKhata = n.type?.includes('payment') || n.category === 'khata';
+                        return (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => {
+                              setNotificationsOpen(false);
+                              if (isOrder) handleNavigate('orders');
+                              else if (isInventory) handleNavigate('inventory');
+                              else if (isKhata) handleNavigate('khata');
+                              else handleNavigate('orders');
+                            }}
+                            className={`w-full rounded-xl p-2.5 text-left transition ${
+                              !n.isRead
+                                ? 'bg-[#F2FAF6] border border-[#CDE9DE] hover:bg-[#E6F6F0]'
+                                : 'bg-[#F8FCFA] hover:bg-[#EDF4F0]'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="font-bold text-[#111827] line-clamp-1">
+                                {isOrder ? '🛍️ ' : isInventory ? '⚠️ ' : isKhata ? '💰 ' : '🔔 '}
+                                {n.title}
+                              </p>
+                              {n.createdAt && (
+                                <span className="text-[9.5px] text-[#94A3B8] shrink-0 font-medium">
+                                  {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-[#64748B] mt-0.5 line-clamp-2">
+                              {n.message}
+                            </p>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <div className="py-6 text-center text-[#64748B]">
+                        <CheckCircle2 className="h-6 w-6 text-[#0A6847] mx-auto mb-1.5 opacity-80" />
+                        <p className="font-semibold text-[11.5px] text-[#111827]">No new alerts</p>
+                        <p className="text-[10.5px]">You&apos;re all caught up on store activity</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

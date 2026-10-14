@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { type BosAppointment } from '@/components/bos/bos-types';
+import { authFetch } from '@/lib/client-auth';
 
 type CalendarViewMode = 'day' | 'week' | 'month' | 'agenda';
 type InspectorTab = 'details' | 'history';
@@ -665,21 +666,43 @@ export function BosAppointmentsWorkstation({
     showToast(`Copied online booking link: ${link}`);
   };
 
-  const handleSendWhatsAppReminder = (blk: ScheduleBlockItem) => {
+  const [sendingReminderBlockId, setSendingReminderBlockId] = useState<string | null>(null);
+
+  const handleSendWhatsAppReminder = async (blk: ScheduleBlockItem) => {
     const cleanPhone = blk.customerPhone.replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 7) {
       showToast('Please provide a valid customer phone number to send WhatsApp reminder.');
       return;
     }
     const text = `Hi *${blk.customerName}*,\nYour appointment at *${businessName || 'Ravi Store'}* for *${blk.serviceName}* with *${blk.staffName}* is scheduled for *${blk.dateLabel}* at *${blk.detailTimeLabel}*.`;
-    if (typeof window !== 'undefined') {
+
+    setSendingReminderBlockId(blk.id);
+    try {
+      const res = await authFetch('/api/commerce/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, message: text }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        showToast(`Appointment reminder sent to ${blk.customerName} via Meta Cloud API!`);
+      } else {
+        showToast('Meta Cloud: Opening WhatsApp Web chat...');
+        window.open(
+          `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${encodeURIComponent(text)}`,
+          '_blank',
+          'noopener,noreferrer',
+        );
+      }
+    } catch {
       window.open(
         `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${encodeURIComponent(text)}`,
         '_blank',
         'noopener,noreferrer',
       );
+    } finally {
+      setSendingReminderBlockId(null);
     }
-    showToast(`Reminder sent to ${blk.customerName}`);
   };
 
   const handleCreateNewAppointment = async (e: React.FormEvent) => {

@@ -4,12 +4,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
+import { sanitizeUpiId } from '@/lib/upi-qr';
 
 export async function GET(req: NextRequest) {
   try {
     const { business } = await requireQuoteFlowBusiness(req);
     let config = await db.gptformCommerceConfig.findFirst({
-      where: { businessId: business.id },
+      where: {
+        OR: [{ businessId: business.id }, ...(business.tenantId ? [{ businessId: business.tenantId }] : [])],
+      },
+      orderBy: { updatedAt: 'desc' },
     });
 
     if (!config) {
@@ -200,13 +204,15 @@ export async function PATCH(req: NextRequest) {
       deliveryAreasJsonVal = JSON.stringify(body.deliveryAreas);
     }
 
+    const cleanUpiId = body.upiId !== undefined ? (sanitizeUpiId(body.upiId) || null) : undefined;
+
     if (!config) {
       config = await db.gptformCommerceConfig.create({
         data: {
           businessId: business.id,
           catalogJson: JSON.stringify(body.catalogJson || []),
           fieldsJson: JSON.stringify(container),
-          upiId: body.upiId || null,
+          upiId: cleanUpiId || null,
           currency: businessUpdates.currency || business.currency || 'INR',
           currencySymbol: businessUpdates.currencySymbol || business.currencySymbol || '₹',
           businessHoursJson: businessHoursJsonVal || '{}',
@@ -221,7 +227,7 @@ export async function PATCH(req: NextRequest) {
         data: {
           ...(body.catalogJson !== undefined ? { catalogJson: JSON.stringify(body.catalogJson) } : {}),
           fieldsJson: JSON.stringify(container),
-          ...(body.upiId !== undefined ? { upiId: body.upiId } : {}),
+          ...(cleanUpiId !== undefined ? { upiId: cleanUpiId } : {}),
           ...(deliveryAreasJsonVal !== undefined ? { deliveryAreasJson: deliveryAreasJsonVal } : {}),
           ...(businessHoursJsonVal !== undefined ? { businessHoursJson: businessHoursJsonVal } : {}),
           ...(body.greetingMessage !== undefined ? { greetingMessage: body.greetingMessage } : {}),

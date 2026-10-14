@@ -645,6 +645,7 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   },
   CommunicationProvider: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    credential: { targetTable: 'Credential', fkColumn: 'credentialId' },
   },
   Contact: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },

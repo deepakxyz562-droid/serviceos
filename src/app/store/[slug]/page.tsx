@@ -168,11 +168,20 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   let tenant: any = null;
   try {
     tenant = await db.tenant.findFirst({
-      where: { OR: [{ slug }, { id: slug }] },
+      where: {
+        OR: [
+          { slug },
+          { publicSlug: slug },
+          { id: slug },
+          { slug: decodeURIComponent(slug) },
+          { publicSlug: decodeURIComponent(slug) },
+        ],
+      },
       select: {
         id: true,
         name: true,
         slug: true,
+        publicSlug: true,
         phone: true,
         email: true,
         logo: true,
