@@ -4,8 +4,8 @@ export const BGOS_NAVIGATION = [
     title: 'Core',
     items: [
       { view: 'dashboard', label: 'Home', iconName: 'Home' },
-      { view: 'omnichannel', label: 'Inbox', iconName: 'Mail', badge: '12' },
-      { view: 'helpCenter', label: 'Tickets & Support', iconName: 'CircleHelp', badge: '3' },
+      { view: 'omnichannel', label: 'Inbox', iconName: 'Mail' },
+      { view: 'helpCenter', label: 'Tickets & Support', iconName: 'CircleHelp' },
     ],
   },
   {

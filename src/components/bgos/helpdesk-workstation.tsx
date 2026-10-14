@@ -27,6 +27,8 @@ import {
   ClipboardList,
   MessageCircle,
   Clock,
+  Ticket,
+  Users,
   X,
 } from 'lucide-react';
 import {
@@ -825,99 +827,145 @@ export function HelpCenterView() {
               </div>
 
               {/* Ticket Queue Items */}
-              <div className="mt-3 divide-y divide-slate-100">
-                {filteredTickets.map((ticket) => {
-                  const isSelected = ticket.id === selectedTicket.id;
-                  const isChecked = checkedTicketIds.includes(ticket.id);
-                  return (
-                    <div
-                      key={ticket.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedTicketId(ticket.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedTicketId(ticket.id);
-                        }
-                      }}
-                      className={`flex cursor-pointer items-start gap-2.5 rounded-xl px-2.5 py-3 transition ${
-                        isSelected
-                          ? 'border-l-4 border-l-[#009F50] bg-[#E8F8EF]/65'
-                          : 'hover:bg-slate-50/80'
-                      }`}
+              {filteredTickets.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-emerald-50 text-[#009F50] mb-3">
+                    <Ticket className="size-6" />
+                  </div>
+                  <p className="text-xs font-bold text-slate-800">No tickets found</p>
+                  <p className="mt-1 text-[11px] text-slate-500 max-w-[200px] mx-auto">
+                    {tickets.length === 0
+                      ? 'No support tickets have been created yet.'
+                      : 'No tickets match the selected status filter.'}
+                  </p>
+                  {tickets.length === 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateTicketOpen(true)}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-[#009F50] px-3 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#008A45]"
                     >
-                      <button
-                        type="button"
-                        aria-label={`Select ticket ${ticket.ticketNumber}`}
-                        onClick={(e) => toggleTicketCheck(ticket.id, e)}
-                        className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border ${
-                          isChecked
-                            ? 'border-[#009F50] bg-[#009F50] text-white'
-                            : 'border-slate-300 bg-white'
+                      <Plus className="size-3.5" />
+                      <span>Create Ticket</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 divide-y divide-slate-100">
+                  {filteredTickets.map((ticket) => {
+                    const isSelected = ticket.id === selectedTicket?.id;
+                    const isChecked = checkedTicketIds.includes(ticket.id);
+                    return (
+                      <div
+                        key={ticket.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedTicketId(ticket.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedTicketId(ticket.id);
+                          }
+                        }}
+                        className={`flex cursor-pointer items-start gap-2.5 rounded-xl px-2.5 py-3 transition ${
+                          isSelected
+                            ? 'border-l-4 border-l-[#009F50] bg-[#E8F8EF]/65'
+                            : 'hover:bg-slate-50/80'
                         }`}
                       >
-                        {isChecked && <Check className="size-2.5 stroke-[3]" />}
-                      </button>
+                        <button
+                          type="button"
+                          aria-label={`Select ticket ${ticket.ticketNumber}`}
+                          onClick={(e) => toggleTicketCheck(ticket.id, e)}
+                          className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border ${
+                            isChecked
+                              ? 'border-[#009F50] bg-[#009F50] text-white'
+                              : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {isChecked && <Check className="size-2.5 stroke-[3]" />}
+                        </button>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-bold text-slate-900">
-                            {ticket.ticketNumber}
-                          </span>
-                          {renderPriorityBadge(ticket.priority)}
-                        </div>
-                        <p className="mt-0.5 truncate text-xs font-semibold text-slate-800">
-                          {ticket.subject}
-                        </p>
-                        <div className="mt-0.5 flex items-center justify-between text-[11px] text-slate-500">
-                          <span className="truncate">{ticket.customerName}</span>
-                          <span className="shrink-0 text-slate-400">{ticket.timeAgo}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-900">
+                              {ticket.ticketNumber}
+                            </span>
+                            {renderPriorityBadge(ticket.priority)}
+                          </div>
+                          <p className="mt-0.5 truncate text-xs font-semibold text-slate-800">
+                            {ticket.subject}
+                          </p>
+                          <div className="mt-0.5 flex items-center justify-between text-[11px] text-slate-500">
+                            <span className="truncate">{ticket.customerName}</span>
+                            <span className="shrink-0 text-slate-400">{ticket.timeAgo}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Pagination Footer */}
-            <div className="mt-4 flex items-center justify-center gap-1 border-t border-slate-100 pt-3">
-              <button
-                type="button"
-                aria-label="Previous page"
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 hover:bg-slate-50"
-              >
-                <ChevronLeft className="size-3.5" />
-              </button>
-              {[1, 2, 3].map((page) => (
+            {filteredTickets.length > 0 && (
+              <div className="mt-4 flex items-center justify-center gap-1 border-t border-slate-100 pt-3">
                 <button
-                  key={page}
                   type="button"
-                  onClick={() => setCurrentPage(page)}
-                  className={`flex size-7 items-center justify-center rounded-lg text-xs font-semibold transition ${
-                    currentPage === page
-                      ? 'bg-[#009F50] text-white'
-                      : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
+                  aria-label="Previous page"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 hover:bg-slate-50"
                 >
-                  {page}
+                  <ChevronLeft className="size-3.5" />
                 </button>
-              ))}
-              <button
-                type="button"
-                aria-label="Next page"
-                onClick={() => setCurrentPage((p) => Math.min(3, p + 1))}
-                className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 hover:bg-slate-50"
-              >
-                <ChevronRight className="size-3.5" />
-              </button>
-            </div>
+                {[1, 2, 3].map((page) => (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`flex size-7 items-center justify-center rounded-lg text-xs font-semibold transition ${
+                      currentPage === page
+                        ? 'bg-[#009F50] text-white'
+                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  aria-label="Next page"
+                  onClick={() => setCurrentPage((p) => Math.min(3, p + 1))}
+                  className="flex size-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs text-slate-500 hover:bg-slate-50"
+                >
+                  <ChevronRight className="size-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* COLUMN 2: CENTER TICKET CONVERSATION & COMPOSER */}
           <div className="flex flex-col justify-between rounded-2xl border border-slate-200/90 bg-white shadow-2xs lg:col-span-6">
+            {!selectedTicket ? (
+              <div className="flex flex-1 flex-col items-center justify-center p-12 text-center min-h-[480px]">
+                <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-emerald-50 text-[#009F50] mb-3">
+                  <Ticket className="size-7" />
+                </div>
+                <h3 className="text-sm font-bold text-slate-900">No Ticket Selected</h3>
+                <p className="mt-1 max-w-sm text-xs text-slate-500">
+                  Select a ticket from the left queue to view customer messages, reply via WhatsApp, SMS, or Email, and resolve issues.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCreateTicketOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#009F50] px-4 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-[#008A45]"
+                >
+                  <Plus className="size-4" />
+                  <span>Create New Ticket</span>
+                </button>
+              </div>
+            ) : (
+              <>
             {/* Ticket Header */}
             <div>
               <div className="p-5 pb-0">
@@ -1238,10 +1286,24 @@ export function HelpCenterView() {
                 </div>
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* COLUMN 3: RIGHT CUSTOMER, TICKET DETAILS, RELATED & QUICK ACTIONS */}
           <div className="space-y-4 lg:col-span-3">
+            {!selectedTicket ? (
+              <section className="rounded-2xl border border-slate-200/90 bg-white p-6 text-center shadow-2xs">
+                <div className="mx-auto flex size-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400 mb-2">
+                  <Users className="size-5" />
+                </div>
+                <h4 className="text-xs font-bold text-slate-800">Customer &amp; Ticket Info</h4>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Select a ticket from the queue to view customer contact details, ticket attributes, and quick CRM actions.
+                </p>
+              </section>
+            ) : (
+              <>
             {/* CARD 1: Customer */}
             <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs">
               <div className="flex items-center justify-between">
@@ -1599,6 +1661,8 @@ export function HelpCenterView() {
                 </button>
               </div>
             </section>
+            </>
+            )}
           </div>
         </div>
       </div>
