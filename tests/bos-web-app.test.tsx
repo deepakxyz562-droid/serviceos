@@ -1,5 +1,4 @@
-import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { BOS_PRIMARY_NAV_ITEMS } from '../shared/bos-navigation';
 import { BosWebApp } from '@/components/bos/bos-web-app';
@@ -28,6 +27,12 @@ vi.mock('@/lib/hardware/print-service', () => ({
 }));
 
 describe('BOS Web App (Standalone Business Operating System)', () => {
+  beforeEach(() => {
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
   it('renders the BOS logo PNG, deep forest green sidebar with all 15 menu items, and Upgrade to Pro card', () => {
     render(<BosWebApp />);
 
@@ -270,5 +275,38 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     // Verify Day Book
     clickNavItem('Day Book');
     expect(screen.getAllByText('Day Book').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('supports URL search param deep-linking and browser popstate back/forward navigation', () => {
+    // 1. Initial URL deep link: /?view=inventory
+    window.history.replaceState({}, '', '/?view=inventory');
+    render(<BosWebApp demoMode={true} />);
+
+    expect(
+      screen.getByText('Manage your products, stock, categories and suppliers.'),
+    ).toBeTruthy();
+
+    // 2. Navigation updates window.location search param to ?view=orders
+    const nav = screen.getByRole('navigation', { name: /BOS Primary Navigation/i });
+    const ordersBtn = Array.from(nav.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Orders'),
+    );
+    expect(ordersBtn).toBeTruthy();
+    fireEvent.click(ordersBtn!);
+
+    expect(window.location.search).toContain('view=orders');
+    expect(
+      screen.getByText(
+        'Manage all your orders from POS, online store, WhatsApp and manual entries.',
+      ),
+    ).toBeTruthy();
+
+    // 3. Simulating browser back button (popstate to /?view=pos)
+    window.history.pushState({}, '', '/?view=pos');
+    fireEvent(window, new PopStateEvent('popstate'));
+
+    expect(
+      screen.getByText('Create a new sale, search products, or scan a barcode.'),
+    ).toBeTruthy();
   });
 });

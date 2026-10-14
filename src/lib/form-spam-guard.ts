@@ -52,6 +52,7 @@
  */
 
 import { getClientIp } from '@/lib/rate-limit';
+import { verifyTurnstileToken } from '@/lib/turnstile';
 
 // ─── Layer 3: Duplicate detection (in-memory, 10-min TTL) ──────────────────
 // Key: `${endpointId}:${sha256(email+phone)}`. Value: timestamp.
@@ -130,6 +131,10 @@ interface CheckSpamParams {
   referer?: string | null;
   /** Client IP (if null, will be extracted from request). */
   ip?: string;
+  /** Optional Turnstile token for verification */
+  turnstileToken?: string | null;
+  /** Whether Turnstile verification is strictly required */
+  requireTurnstile?: boolean;
 }
 
 export interface SpamCheckResult {
@@ -142,7 +147,7 @@ export interface SpamCheckResult {
   /** HTTP status code for non-silent blocks. */
   status: number;
   /** Which layer caught it (for logging/metrics). */
-  layer: 'rate-limit-min' | 'rate-limit-hour' | 'origin' | 'duplicate' | 'honeypot' | 'none';
+  layer: 'rate-limit-min' | 'rate-limit-hour' | 'origin' | 'duplicate' | 'honeypot' | 'turnstile' | 'none';
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -244,6 +249,29 @@ export async function checkFormSpam(params: CheckSpamParams): Promise<SpamCheckR
       status: 403,
       layer: 'origin',
     };
+  }
+
+  // ── Layer 5: Cloudflare Turnstile Verification ───────────────────────
+  const tokenCandidate =
+    params.turnstileToken ||
+    (typeof payload.turnstileToken === 'string' ? payload.turnstileToken : null) ||
+    (typeof payload['cf-turnstile-response'] === 'string' ? (payload['cf-turnstile-response'] as string) : null) ||
+    (typeof payload['cf_turnstile_response'] === 'string' ? (payload['cf_turnstile_response'] as string) : null);
+
+  if (params.requireTurnstile || tokenCandidate) {
+    const turnstileResult = await verifyTurnstileToken({
+      token: tokenCandidate,
+      ip: clientIp !== 'unknown' ? clientIp : undefined,
+    });
+    if (!turnstileResult.success) {
+      return {
+        blocked: true,
+        silent: false,
+        reason: turnstileResult.error || 'Turnstile verification failed',
+        status: 400,
+        layer: 'turnstile',
+      };
+    }
   }
 
   // ── Layer 1: Per-endpoint rate limiting ──────────────────────────────

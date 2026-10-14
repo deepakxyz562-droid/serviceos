@@ -758,7 +758,20 @@ export function BosWebApp({
   initialView?: BosNavId | string;
   demoMode?: boolean;
 }) {
-  const [activeView, setActiveView] = useState<BosNavId>(() => normalizeBosView(initialView));
+  const [activeView, setActiveView] = useState<BosNavId>(() => {
+    if (typeof window !== 'undefined' && window.location?.search) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const queryView = params.get('view') || params.get('tab');
+        if (queryView) {
+          return normalizeBosView(queryView);
+        }
+      } catch {
+        // ignore in SSR or test environments
+      }
+    }
+    return normalizeBosView(initialView);
+  });
   const [navContext, setNavContext] = useState<{
     action?: string;
     prompt?: string;
@@ -1512,9 +1525,40 @@ export function BosWebApp({
       setActiveView(view);
       setNavContext(context || null);
       setMobileSidebarOpen(false);
+
+      if (typeof window !== 'undefined' && window.history?.pushState) {
+        try {
+          const currentUrl = new URL(window.location.href);
+          if (currentUrl.searchParams.get('view') !== view) {
+            currentUrl.searchParams.set('view', view);
+            window.history.pushState({ bosView: view }, '', currentUrl.toString());
+          }
+        } catch {
+          // ignore error in non-standard environments
+        }
+      }
     },
     [],
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const viewFromUrl = params.get('view') || params.get('tab');
+        if (viewFromUrl) {
+          setActiveView(normalizeBosView(viewFromUrl));
+        } else {
+          setActiveView(normalizeBosView(initialView));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [initialView]);
 
   // Handlers connected to atomic production /api/commerce/* & /api/tenant/blueprint endpoints
   const handleCompleteSale = async (payload: {

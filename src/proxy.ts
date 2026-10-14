@@ -93,8 +93,65 @@ function nextWithRequestId(requestId: string, extraHeaders?: Record<string, stri
   return response;
 }
 
+/**
+ * Scanner & exploit probe blocker.
+ * Common malicious paths probed by automated vulnerability bots and crawlers.
+ */
+const BLOCKED_PATH_PREFIXES = [
+  '/.env',
+  '/.git',
+  '/.aws',
+  '/.ssh',
+  '/.svn',
+  '/.ds_store',
+  '/wp-admin',
+  '/wp-login',
+  '/wp-content',
+  '/wp-includes',
+  '/wp-config',
+  '/xmlrpc.php',
+  '/phpmyadmin',
+  '/pma',
+  '/myadmin',
+  '/adminer',
+  '/actuator',
+  '/solr',
+  '/cgi-bin',
+];
+
+export function isMaliciousProbe(pathname: string): boolean {
+  const lower = pathname.toLowerCase();
+  for (const prefix of BLOCKED_PATH_PREFIXES) {
+    if (lower === prefix || lower.startsWith(prefix + '/') || lower.startsWith(prefix + '.')) {
+      return true;
+    }
+  }
+  // Block any non-whitelisted script extensions (.php, .asp, .jsp, etc.)
+  // Except downloads of our official WordPress plugin under /downloads/
+  if (
+    !lower.startsWith('/downloads/') &&
+    /\.(php|asp|aspx|jsp|cgi|sql|bak|save|old)(\/|$)/i.test(lower)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── 0. Scanner & exploit probe blocker ───────────────────────────────
+  // Terminate malicious crawler probes (.env, .git, wp-admin, xmlrpc, etc.)
+  // immediately with a lightweight 404 before any routing, redirect, or DB overhead.
+  if (isMaliciousProbe(pathname)) {
+    return new NextResponse('Not Found', {
+      status: 404,
+      headers: {
+        'Content-Type': 'text/plain',
+        'X-Robots-Tag': 'noindex, nofollow',
+      },
+    });
+  }
 
   // ── Canonical-host redirect ────────────────────────────────────────────
   //
@@ -136,11 +193,32 @@ export async function proxy(request: NextRequest) {
     host.endsWith('.sslip.io') ||
     host.endsWith('.preview.fieseros.com');
 
+  const isRawIp = /^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host);
+
+  // In production, reject raw IP access (scanners probing server IP directly without Cloudflare)
+  if (process.env.NODE_ENV === 'production' && isRawIp) {
+    return new NextResponse('Direct IP access forbidden', {
+      status: 403,
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  }
+
   const isLocal =
     !host ||
     host.startsWith('localhost') ||
     host.startsWith('127.0.0.1') ||
-    /^\d+\.\d+\.\d+\.\d+(:\d+)?$/.test(host);
+    (process.env.NODE_ENV !== 'production' && isRawIp);
+
+  // If strict Cloudflare proxy enforcement is enabled, reject production traffic without Cloudflare headers
+  if (process.env.REQUIRE_CLOUDFLARE_PROXY === 'true' && process.env.NODE_ENV === 'production') {
+    const cfRay = request.headers.get('cf-ray');
+    if (!cfRay && !isLocal && !pathname.startsWith('/api/health')) {
+      return new NextResponse('Direct origin access forbidden', {
+        status: 403,
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+  }
 
   // If someone requests /quote-flow directly on fieseros.com, redirect to quoteflow.fieseros.com
   const lowerHost = host.toLowerCase().split(':')[0];

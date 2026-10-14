@@ -9,6 +9,7 @@ import {
   generateOutlookCalendarUrl,
 } from '@/lib/scheduling/calendar-helper';
 import { createAppointmentBooking } from '@/lib/scheduling/booking-service';
+import { checkFormSpam, getClientIp } from '@/lib/form-spam-guard';
 
 /**
  * POST /api/public/forms/[id]/submit
@@ -69,6 +70,37 @@ export async function POST(
       schema = null;
     }
     const normalizedSchema = normalizeFormSchema(schema);
+
+    // ── 2b. Spam protection (honeypot / origin / rate-limiting / duplicates / Turnstile) ──
+    const hasTurnstileField = normalizedSchema?.fields?.some(
+      (f: any) => f.widgetType === 'cloudflare_turnstile' || f.type === 'turnstile',
+    );
+
+    const spamResult = await checkFormSpam({
+      endpoint: null,
+      endpointId: `public-form:${form.id}`,
+      payload: submissionData,
+      origin: request.headers.get('origin'),
+      referer: request.headers.get('referer'),
+      ip: getClientIp(request),
+      requireTurnstile: !!hasTurnstileField,
+      turnstileToken:
+        (typeof (submissionData as any).turnstileToken === 'string'
+          ? (submissionData as any).turnstileToken
+          : (typeof (body as any).turnstileToken === 'string'
+              ? (body as any).turnstileToken
+              : null)),
+    });
+
+    if (spamResult.blocked) {
+      if (spamResult.silent) {
+        return NextResponse.json({ success: true, message: 'Submission received' });
+      }
+      return NextResponse.json(
+        { error: spamResult.reason, code: 'SPAM_BLOCKED', layer: spamResult.layer },
+        { status: spamResult.status }
+      );
+    }
 
     // ── 3. Extract common respondent fields ─────────────────────────────────
     let respondentName: string | undefined;

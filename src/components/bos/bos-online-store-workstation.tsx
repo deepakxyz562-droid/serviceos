@@ -10,17 +10,21 @@ import {
   Download,
   Edit3,
   Eye,
+  FolderTree,
   IndianRupee,
   Link2,
   MapPin,
   Menu,
   MoreVertical,
+  Package,
   Palette,
   Plus,
   QrCode,
   Search,
   ShoppingBag,
   ShoppingCart,
+  Sparkles,
+  Tag,
   Truck,
   Users,
   X,
@@ -250,6 +254,70 @@ export function BosOnlineStoreWorkstation({
     return storeUrl;
   }, [qrMode, qrTableNumber, storeSettings.businessName, storeSettings.upiId, storeName, storeUrl]);
 
+  const [themeColor, setThemeColor] = useState('#0A6847');
+  const [themeLayout, setThemeLayout] = useState<'grid' | 'list'>('grid');
+  const [bannerText, setBannerText] = useState(() => storeSettings.announcementBanner || '');
+  const [minOrderInput, setMinOrderInput] = useState(() => String(storeSettings.minOrderAmount || 0));
+  const [deliveryChargeInput, setDeliveryChargeInput] = useState(() => String(storeSettings.deliveryCharge || 0));
+  const [freeDeliveryAboveInput, setFreeDeliveryAboveInput] = useState(() => String(storeSettings.freeDeliveryAbove || 0));
+
+  const onlineKpiStats = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalOrders: 86,
+        ordersTrend: '↑ 28%',
+        totalSales: 24580,
+        salesTrend: '↑ 32%',
+        avgOrderValue: 286,
+        aovTrend: '↑ 18%',
+        newCustomers: 42,
+        custTrend: '↑ 25%',
+      };
+    }
+    const onlineOrders = orders.filter(
+      (o) => o.channel === 'online' && o.status !== 'cancelled',
+    );
+    const totalOrders = onlineOrders.length;
+    const totalSales = onlineOrders.reduce(
+      (sum, o) => sum + (Number(o.totalAmount) || 0),
+      0,
+    );
+    const avgOrderValue =
+      totalOrders > 0 ? Math.round(totalSales / totalOrders) : 0;
+    const uniqueCusts = new Set(
+      onlineOrders.map((o) => o.customerPhone || o.customerName).filter(Boolean),
+    ).size;
+    return {
+      totalOrders,
+      ordersTrend: totalOrders > 0 ? 'Live' : '—',
+      totalSales,
+      salesTrend: totalSales > 0 ? 'Live' : '—',
+      avgOrderValue,
+      aovTrend: avgOrderValue > 0 ? 'Live' : '—',
+      newCustomers: uniqueCusts,
+      custTrend: uniqueCusts > 0 ? 'Live' : '—',
+    };
+  }, [demoMode, orders]);
+
+  const categoriesList = useMemo(() => {
+    const map = new Map<string, { total: number; online: number }>();
+    for (const p of catalogRows) {
+      const cat = p.category || 'General';
+      const cur = map.get(cat) || { total: 0, online: 0 };
+      cur.total += 1;
+      if (p.featured) cur.online += 1;
+      map.set(cat, cur);
+    }
+    return Array.from(map.entries()).map(([name, stats]) => ({
+      name,
+      ...stats,
+    }));
+  }, [catalogRows]);
+
+  const onlineOrdersList = useMemo(() => {
+    return orders.filter((o) => o.channel === 'online');
+  }, [orders]);
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => {
@@ -324,6 +392,298 @@ export function BosOnlineStoreWorkstation({
     setNewProductForm({ name: '', category: 'Grocery', price: 95, stock: 50 });
     showToast(`Added "${added.name}" to your online store`);
   };
+
+  const renderCategoriesView = () => (
+    <div className="rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xs space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[17px] font-extrabold text-[#111827]">
+            Store Categories ({categoriesList.length})
+          </h2>
+          <p className="text-[12.5px] text-[#64748B]">
+            Manage product categories displayed on your online storefront navigation and search.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSubTab('products');
+            setShowAddProductModal(true);
+          }}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-2 text-[12.5px] font-bold text-white hover:bg-[#085238] transition cursor-pointer"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Add Product</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {categoriesList.map((cat) => (
+          <div
+            key={cat.name}
+            className="flex items-center justify-between rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-3.5 hover:border-[#0A6847] transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                <FolderTree className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[13.5px] font-bold text-[#111827]">{cat.name}</p>
+                <p className="text-[11.5px] text-[#64748B]">
+                  {cat.total} product{cat.total === 1 ? '' : 's'} · {cat.online} online
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setCategoryFilter(cat.name);
+                setSubTab('products');
+              }}
+              className="rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#0A6847] hover:bg-[#F4F8F6] cursor-pointer"
+            >
+              Filter →
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderOrdersView = () => (
+    <div className="rounded-2xl border border-[#DCE9E3] bg-white shadow-2xs overflow-hidden space-y-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[17px] font-extrabold text-[#111827]">
+            Online Store Orders ({onlineOrdersList.length})
+          </h2>
+          <p className="text-[12.5px] text-[#64748B]">
+            Orders placed directly through your online storefront link and QR code menu.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex rounded-full bg-[#E6F6F0] px-3 py-1 text-[12px] font-bold text-[#0A6847]">
+            {onlineOrdersList.length} Total Online
+          </span>
+        </div>
+      </div>
+
+      {onlineOrdersList.length === 0 ? (
+        <div className="py-12 text-center">
+          <ShoppingBag className="mx-auto h-10 w-10 text-[#94A3B8]" />
+          <p className="mt-3 text-[14px] font-bold text-[#1E293B]">
+            No online store orders yet
+          </p>
+          <p className="mt-1 text-[12px] text-[#64748B] max-w-sm mx-auto">
+            Orders placed by customers on your digital storefront ({publicStorePath}) will automatically appear here with delivery details and payment status.
+          </p>
+          <button
+            type="button"
+            onClick={handleOpenStore}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#085238] transition cursor-pointer"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span>Open Online Storefront</span>
+          </button>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-[12px]">
+            <thead>
+              <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                <th className="py-2.5 px-3">Order #</th>
+                <th className="py-2.5 px-3">Customer</th>
+                <th className="py-2.5 px-3">Items</th>
+                <th className="py-2.5 px-3">Payment</th>
+                <th className="py-2.5 px-3 text-right">Total</th>
+                <th className="py-2.5 px-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#EEF5F1]">
+              {onlineOrdersList.map((ord) => (
+                <tr key={ord.id} className="hover:bg-[#F9FCFA]">
+                  <td className="py-2.5 px-3 font-bold text-[#111827]">
+                    #{ord.id}
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <p className="font-semibold text-[#111827]">{ord.customerName}</p>
+                    <p className="text-[10.5px] text-[#64748B]">{ord.customerPhone}</p>
+                  </td>
+                  <td className="py-2.5 px-3 text-[#64748B]">
+                    {ord.items?.length || 0} item{(ord.items?.length || 0) === 1 ? '' : 's'}
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span className="uppercase font-mono text-[11px] font-bold text-[#475569]">
+                      {ord.paymentMode} ({ord.paymentStatus})
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3 text-right font-bold text-[#111827]">
+                    {currencySymbol} {ord.totalAmount}
+                  </td>
+                  <td className="py-2.5 px-3 text-center">
+                    <span className="inline-flex rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                      {ord.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderThemesView = () => (
+    <div className="rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xs space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[17px] font-extrabold text-[#111827]">
+            Storefront Themes &amp; Branding
+          </h2>
+          <p className="text-[12.5px] text-[#64748B]">
+            Customize colors, layout, and visual identity for your public digital storefront.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            void onUpdateStoreSettings({ tagline: storeDescription });
+            showToast('Storefront theme updated successfully');
+          }}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#085238] transition cursor-pointer"
+        >
+          <Palette className="h-4 w-4" />
+          <span>Save Theme</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Brand Primary Color */}
+        <div className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-4 space-y-3">
+          <label className="block text-[13px] font-bold text-[#111827]">
+            Storefront Accent Color
+          </label>
+          <div className="flex items-center gap-3">
+            {[
+              { hex: '#0A6847', label: 'Forest Emerald' },
+              { hex: '#4F46E5', label: 'Royal Indigo' },
+              { hex: '#D97706', label: 'Warm Amber' },
+              { hex: '#E11D48', label: 'Ruby Rose' },
+              { hex: '#0F172A', label: 'Midnight Slate' },
+            ].map((col) => (
+              <button
+                key={col.hex}
+                type="button"
+                onClick={() => {
+                  setThemeColor(col.hex);
+                  showToast(`Selected ${col.label}`);
+                }}
+                className={`h-9 w-9 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                  themeColor === col.hex ? 'scale-110 ring-2 ring-offset-2 ring-[#0A6847]' : ''
+                }`}
+                style={{ backgroundColor: col.hex }}
+                title={col.label}
+              >
+                {themeColor === col.hex && <CheckCircle2 className="h-4 w-4 text-white" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Catalog Layout Style */}
+        <div className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-4 space-y-3">
+          <label className="block text-[13px] font-bold text-[#111827]">
+            Product Catalog Layout
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { id: 'grid', label: '2-Column Cards', desc: 'Recommended for Kirana & Retail' },
+              { id: 'list', label: 'Compact List', desc: 'Recommended for Quick Groceries' },
+            ].map((lt) => (
+              <button
+                key={lt.id}
+                type="button"
+                onClick={() => setThemeLayout(lt.id as 'grid' | 'list')}
+                className={`rounded-xl border p-3 text-left transition cursor-pointer ${
+                  themeLayout === lt.id
+                    ? 'border-[#0A6847] bg-[#E6F6F0] text-[#0A6847]'
+                    : 'border-[#DCE9E3] bg-white text-[#475569] hover:bg-[#F8FCFA]'
+                }`}
+              >
+                <p className="font-bold text-[12.5px]">{lt.label}</p>
+                <p className="text-[10.5px] text-[#64748B] mt-0.5">{lt.desc}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderPromotionsView = () => (
+    <div className="rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xs space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[17px] font-extrabold text-[#111827]">
+            Storefront Promotions &amp; Announcement Banner
+          </h2>
+          <p className="text-[12.5px] text-[#64748B]">
+            Highlight offers, free shipping thresholds, and seasonal sales banner on top of your store.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            void onUpdateStoreSettings({
+              announcementBanner: bannerText,
+              freeDeliveryAbove: Number(freeDeliveryAboveInput) || 0,
+              deliveryCharge: Number(deliveryChargeInput) || 0,
+            });
+            showToast('Promotions and banner saved');
+          }}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white hover:bg-[#085238] transition cursor-pointer"
+        >
+          <Tag className="h-4 w-4" />
+          <span>Save Promotions</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-4 space-y-2">
+          <label className="block text-[12.5px] font-bold text-[#111827]">
+            Top Announcement Banner Text
+          </label>
+          <input
+            type="text"
+            value={bannerText}
+            onChange={(e) => setBannerText(e.target.value)}
+            placeholder="e.g. 🎉 Flat 20% OFF on all Grocery items this weekend!"
+            className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#111827]"
+          />
+          <p className="text-[11px] text-[#64748B]">
+            Appears across the top strip of your online store.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-4 space-y-2">
+          <label className="block text-[12.5px] font-bold text-[#111827]">
+            Free Delivery Threshold ({currencySymbol})
+          </label>
+          <input
+            type="number"
+            value={freeDeliveryAboveInput}
+            onChange={(e) => setFreeDeliveryAboveInput(e.target.value)}
+            placeholder="e.g. 499"
+            className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#111827]"
+          />
+          <p className="text-[11px] text-[#64748B]">
+            Orders above this amount qualify for free home delivery.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="w-full max-w-none space-y-4 pb-6">
@@ -443,7 +803,8 @@ export function BosOnlineStoreWorkstation({
         {/* LEFT COLUMN (9 cols) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-4">
           {/* ROW 1: 4 KPI Cards with Colored Icons & Sparklines */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {subTab === 'overview' && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {/* 1. Total Orders */}
             <div className="flex items-center justify-between rounded-2xl border border-[#DCE9E3] bg-white p-3.5 shadow-2xs">
               <div className="flex items-center gap-3">
@@ -455,9 +816,9 @@ export function BosOnlineStoreWorkstation({
                     Total Orders
                   </p>
                   <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-                    86
+                    {onlineKpiStats.totalOrders}
                   </p>
-                  <p className="text-[11px] font-bold text-[#0A7B56]">↑ 28%</p>
+                  <p className="text-[11px] font-bold text-[#0A7B56]">{onlineKpiStats.ordersTrend}</p>
                 </div>
               </div>
               <svg viewBox="0 0 70 36" className="h-8 w-16 shrink-0" fill="none">
@@ -482,9 +843,9 @@ export function BosOnlineStoreWorkstation({
                     Total Sales
                   </p>
                   <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-                    {currencySymbol} 24,580
+                    {currencySymbol} {onlineKpiStats.totalSales.toLocaleString('en-IN')}
                   </p>
-                  <p className="text-[11px] font-bold text-[#0A7B56]">↑ 32%</p>
+                  <p className="text-[11px] font-bold text-[#0A7B56]">{onlineKpiStats.salesTrend}</p>
                 </div>
               </div>
               <svg viewBox="0 0 70 36" className="h-8 w-16 shrink-0" fill="none">
@@ -509,9 +870,9 @@ export function BosOnlineStoreWorkstation({
                     Avg. Order Value
                   </p>
                   <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-                    {currencySymbol} 286
+                    {currencySymbol} {onlineKpiStats.avgOrderValue.toLocaleString('en-IN')}
                   </p>
-                  <p className="text-[11px] font-bold text-[#0A7B56]">↑ 18%</p>
+                  <p className="text-[11px] font-bold text-[#0A7B56]">{onlineKpiStats.aovTrend}</p>
                 </div>
               </div>
               <svg viewBox="0 0 70 36" className="h-8 w-16 shrink-0" fill="none">
@@ -536,9 +897,9 @@ export function BosOnlineStoreWorkstation({
                     New Customers
                   </p>
                   <p className="text-[22px] font-extrabold text-[#111827] leading-tight">
-                    42
+                    {onlineKpiStats.newCustomers}
                   </p>
-                  <p className="text-[11px] font-bold text-[#0A7B56]">↑ 25%</p>
+                  <p className="text-[11px] font-bold text-[#0A7B56]">{onlineKpiStats.custTrend}</p>
                 </div>
               </div>
               <svg viewBox="0 0 70 36" className="h-8 w-16 shrink-0" fill="none">
@@ -552,11 +913,14 @@ export function BosOnlineStoreWorkstation({
               </svg>
             </div>
           </div>
+        )}
 
-          {/* ROW 2: 3 Configuration Cards (Store Status | Store Settings | Delivery & Ordering) */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {/* CARD 1: Store Status */}
-            <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
+          {/* ROW 2: Configuration Cards (Store Status | Store Settings | Delivery & Ordering) */}
+          {(subTab === 'overview' || subTab === 'storeSettings' || subTab === 'deliverySettings') && (
+            <div className={`grid grid-cols-1 gap-4 ${subTab === 'deliverySettings' ? 'max-w-2xl' : subTab === 'storeSettings' ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+              {(subTab === 'overview' || subTab === 'storeSettings') && (
+                /* CARD 1: Store Status */
+                <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
               <h2 className="text-[15px] font-extrabold text-[#111827]">
                 Store Status
               </h2>
@@ -635,8 +999,10 @@ export function BosOnlineStoreWorkstation({
                 </div>
               </div>
             </div>
+          )}
 
-            {/* CARD 2: Store Settings */}
+          {/* CARD 2: Store Settings */}
+          {(subTab === 'overview' || subTab === 'storeSettings') && (
             <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-[15px] font-extrabold text-[#111827]">
@@ -714,8 +1080,10 @@ export function BosOnlineStoreWorkstation({
                 />
               </div>
             </div>
+          )}
 
-            {/* CARD 3: Delivery & Ordering */}
+          {/* CARD 3: Delivery & Ordering */}
+          {(subTab === 'overview' || subTab === 'deliverySettings') && (
             <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-[15px] font-extrabold text-[#111827]">
@@ -823,16 +1191,24 @@ export function BosOnlineStoreWorkstation({
                 </div>
               </div>
             </div>
-          </div>
+          )}
+        </div>
+      )}
 
-          {/* ROW 3: PRODUCTS (48) TABLE CARD */}
+        {subTab === 'categories' && renderCategoriesView()}
+        {subTab === 'orders' && renderOrdersView()}
+        {subTab === 'themes' && renderThemesView()}
+        {subTab === 'promotions' && renderPromotionsView()}
+
+        {/* ROW 3: PRODUCTS TABLE CARD */}
+        {(subTab === 'overview' || subTab === 'products') && (
           <div className="rounded-2xl border border-[#DCE9E3] bg-white shadow-2xs overflow-hidden">
             {/* Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-[#EBF2EE] px-4 py-3">
               <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[240px]">
                 <h2 className="text-[15.5px] font-extrabold text-[#111827] shrink-0">
                   Products{' '}
-                  <span className="font-medium text-[#64748B]">(48)</span>
+                  <span className="font-medium text-[#64748B]">({catalogRows.length})</span>
                 </h2>
 
                 <div className="relative flex-1 max-w-xs">
@@ -1025,6 +1401,7 @@ export function BosOnlineStoreWorkstation({
               </table>
             </div>
           </div>
+        )}
         </div>
 
         {/* RIGHT COLUMN: LIVE STORE PREVIEW (3 cols) */}
