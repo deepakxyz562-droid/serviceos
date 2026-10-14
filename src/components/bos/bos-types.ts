@@ -124,7 +124,7 @@ export type BosStoreSettings = {
   blueprintType?: import('../../../shared/blueprint/types').BusinessType;
   salesChannels?: import('../../../shared/blueprint/types').SalesChannel[];
   countryCode?: import('../../../shared/blueprint/types').CountryCode;
-  language?: 'en' | 'hi';
+  language?: 'en' | 'hi' | 'both';
   capabilities?: Partial<import('../../../shared/blueprint/types').BusinessCapabilities>;
   cancellationPolicy?:
     | 'before_confirmation'

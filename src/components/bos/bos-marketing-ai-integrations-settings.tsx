@@ -83,6 +83,8 @@ import type {
 } from '../../../shared/blueprint/types';
 import { authFetch } from '@/lib/client-auth';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
+import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
+import type { BosLanguage } from '@/components/bos/i18n/bos-translations';
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
@@ -115,6 +117,7 @@ export function BosMarketingAiIntegrationsSettings({
   onOpenPrinterModal,
   onOpenUpgradeModal,
 }: BosMarketingAiIntegrationsSettingsProps) {
+  const { t, language, setLanguage } = useBosTranslation();
   const currencySymbol = storeSettings.currencySymbol || '₹';
   const [toast, setToast] = useState<string | null>(null);
 
@@ -343,6 +346,7 @@ export function BosMarketingAiIntegrationsSettings({
     | 'businessType'
     | 'documents'
     | 'payments'
+    | 'language'
   >('businessInfo');
   const [settingsBusinessName, setSettingsBusinessName] = useState(() =>
     demoMode ? (storeSettings.businessName || 'Ravi Store') : (storeSettings.businessName || '')
@@ -2577,6 +2581,12 @@ export function BosMarketingAiIntegrationsSettings({
       sub: 'UPI ID, Shop QR Code & Online Pay',
       icon: QrCode,
     },
+    {
+      id: 'language' as const,
+      title: 'Language & Localization',
+      sub: 'English, हिंदी & Bilingual (Both)',
+      icon: Globe,
+    },
   ];
 
   const daysOfWeek = [
@@ -3921,6 +3931,142 @@ export function BosMarketingAiIntegrationsSettings({
                       Active
                     </span>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: Language & Localization Preference */}
+          {settingsSection === 'language' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    {t('settings.languagePref', 'Language & Localization')}
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    {t(
+                      'settings.languageSubtitle',
+                      'Choose whether you want English, Hindi (हिंदी), or Bilingual mode across all BOS screens and print receipts.',
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onUpdateStoreSettings({ language });
+                    setToast(t('settings.savedSuccess', 'Settings saved successfully!'));
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  {t('settings.saveChanges', 'Save Changes')}
+                </button>
+              </div>
+
+              {/* 3 Selectable Language Cards */}
+              <div className="grid grid-cols-1 gap-3.5">
+                {(
+                  [
+                    {
+                      id: 'en' as const,
+                      badge: 'EN',
+                      title: 'English',
+                      nativeTitle: 'English (Default)',
+                      desc: 'Full English interface across POS, inventory, orders, customer ledger and invoices.',
+                      sample: 'Sales / POS • Invoices • Khata • Products & Inventory',
+                    },
+                    {
+                      id: 'hi' as const,
+                      badge: 'हिंदी',
+                      title: 'हिंदी (Hindi)',
+                      nativeTitle: 'संपूर्ण हिंदी (Full Hindi)',
+                      desc: 'संपूर्ण हिंदी इंटरफेस — बिलिंग काउंटर, उधारी खाता, स्टॉक, ऑर्डर्स और सभी रसीदें हिंदी में।',
+                      sample: 'बिलिंग काउंटर (POS) • जीएसटी बिल • उधारी खाता • स्टॉक और उत्पाद',
+                    },
+                    {
+                      id: 'both' as const,
+                      badge: 'EN + हिंदी',
+                      title: 'Bilingual (English + हिंदी)',
+                      nativeTitle: 'दोनों भाषाएँ (Dual Language)',
+                      desc: 'Dual-language labels (English / हिंदी) on every button, table header, summary card and bill — perfect for multi-lingual staff and kirana stores.',
+                      sample: 'Sales / बिलिंग • Invoices / जीएसटी बिल • Customers / ग्राहक',
+                    },
+                  ] as const
+                ).map((item) => {
+                  const isSelected = language === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={async () => {
+                        setLanguage(item.id);
+                        await onUpdateStoreSettings({ language: item.id });
+                        setToast(`Language switched to ${item.title}`);
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className={`flex flex-col gap-2.5 rounded-2xl border p-4 text-left transition cursor-pointer ${
+                        isSelected
+                          ? 'border-[#0A6847] bg-[#F1FAF5] ring-2 ring-[#0A6847]/20 shadow-xs'
+                          : 'border-[#DCE9E3] bg-white hover:border-[#A7F3D0] hover:bg-[#FAFDFB]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-8 w-12 items-center justify-center rounded-xl text-[12px] font-extrabold ${
+                              isSelected
+                                ? 'bg-[#0A6847] text-white'
+                                : 'bg-[#F1F6F3] text-[#0A6847]'
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                          <div>
+                            <p className="text-[14.5px] font-extrabold text-[#111827]">
+                              {item.title}
+                            </p>
+                            <p className="text-[11.5px] font-semibold text-[#0A6847]">
+                              {item.nativeTitle}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          className={`flex h-5 w-5 items-center justify-center rounded-full border ${
+                            isSelected
+                              ? 'border-[#0A6847] bg-[#0A6847] text-white'
+                              : 'border-[#CBD5E1] bg-white'
+                          }`}
+                        >
+                          {isSelected && <Check className="h-3 w-3 stroke-[3]" />}
+                        </div>
+                      </div>
+
+                      <p className="text-[12.5px] text-[#475569] leading-relaxed">
+                        {item.desc}
+                      </p>
+
+                      <div className="rounded-xl border border-[#DCE9E3]/70 bg-white/80 px-3 py-2 text-[11.5px] font-medium text-[#334155]">
+                        <span className="font-bold text-[#64748B]">Preview: </span>
+                        <span>{item.sample}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Informational Callout */}
+              <div className="flex items-start gap-3 rounded-2xl border border-[#DCE9E3] bg-[#F8FCFA] p-3.5 text-[12px] text-[#475569]">
+                <Globe className="h-5 w-5 text-[#0A6847] shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-[#111827]">
+                    Live Switching &amp; Thermal Receipt Alignment
+                  </p>
+                  <p className="mt-0.5 leading-relaxed text-[#64748B]">
+                    Language changes take effect immediately across all BOS workstation screens.
+                    You can also switch anytime using the quick pill [ EN | हिंदी | Both ] in the top header.
+                  </p>
                 </div>
               </div>
             </div>

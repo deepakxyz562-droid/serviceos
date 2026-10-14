@@ -235,7 +235,14 @@ export default async function StorePage({ params, searchParams }: StorePageProps
         billFooterText: `Thank you for shopping local with ${storeName}!`,
       };
 
-      const demoAvailability = computeStoreAvailabilityFromConfig(demoConfig, storeName);
+      let demoStoreLanguage: 'en' | 'hi' | 'both' = 'en';
+      if (demoConfig?.fieldsJson) {
+        try {
+          const parsed = JSON.parse(demoConfig.fieldsJson);
+          if (parsed.language) demoStoreLanguage = parsed.language;
+          if (parsed.storeSettings?.language) demoStoreLanguage = parsed.storeSettings.language;
+        } catch {}
+      }
 
       return (
         <StoreClient
@@ -257,6 +264,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           isStoreOpen={demoAvailability.isOpen}
           storeCloseReason={demoAvailability.reason}
           todayHoursText={demoAvailability.todayHoursText}
+          storeLanguage={demoStoreLanguage}
         />
       );
     }
@@ -315,6 +323,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   let paymentQrUrl: string = '';
   let enableOnlinePayment: boolean = true;
 
+  let storeLanguage: 'en' | 'hi' | 'both' = 'en';
   if (config?.fieldsJson) {
     try {
       const parsedFields = JSON.parse(config.fieldsJson);
@@ -326,6 +335,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       }
       if (parsedFields.paymentQrUrl) paymentQrUrl = parsedFields.paymentQrUrl;
       if (parsedFields.enableOnlinePayment !== undefined) enableOnlinePayment = Boolean(parsedFields.enableOnlinePayment);
+      if (parsedFields.language) storeLanguage = parsedFields.language;
+      if (parsedFields.storeSettings?.language) storeLanguage = parsedFields.storeSettings.language;
     } catch {}
   }
 
@@ -378,6 +389,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       isStoreOpen={availability.isOpen}
       storeCloseReason={availability.reason}
       todayHoursText={availability.todayHoursText}
+      storeLanguage={storeLanguage}
     />
   );
 }

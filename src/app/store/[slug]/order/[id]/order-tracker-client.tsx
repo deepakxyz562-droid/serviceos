@@ -23,6 +23,7 @@ import {
   Check,
   Send,
 } from 'lucide-react';
+import { getBosText, type BosLanguage } from '@/components/bos/i18n/bos-translations';
 
 interface OrderItem {
   name: string;
@@ -84,6 +85,30 @@ export function OrderTrackerClient({
   const [submittingUtr, setSubmittingUtr] = useState(false);
   const [utrSuccess, setUtrSuccess] = useState(false);
   const previousStatusRef = useRef(initialOrder.status);
+
+  const [language, setLanguage] = useState<BosLanguage>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('store_language') as BosLanguage;
+        if (saved === 'en' || saved === 'hi' || saved === 'both') {
+          return saved;
+        }
+      } catch {}
+    }
+    return 'en';
+  });
+
+  const handleSetLanguage = (lang: BosLanguage) => {
+    setLanguage(lang);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('store_language', lang);
+      } catch {}
+    }
+  };
+
+  const t = (key: string, fallbackEn?: string, fallbackHi?: string) =>
+    getBosText(key, language, fallbackEn, fallbackHi);
 
   // Play pleasant acoustic chime using Web Audio API
   const playReadyChime = () => {
@@ -264,13 +289,55 @@ export function OrderTrackerClient({
               className="flex items-center gap-1.5 text-xs text-stone-300 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg transition"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Back to Menu</span>
+              <span>{t('store.continueShopping', 'Back to Menu', 'दुकान पर वापस')}</span>
             </Link>
 
-            <span className="text-[10px] text-stone-400 font-mono flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Live Updates
-            </span>
+            <div className="flex items-center gap-2">
+              {/* Language Switcher Pill */}
+              <div className="flex items-center rounded-lg bg-white/10 p-0.5 border border-white/20">
+                <button
+                  type="button"
+                  onClick={() => handleSetLanguage('en')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-white text-stone-900 shadow-xs'
+                      : 'text-stone-300 hover:text-white'
+                  }`}
+                  title="English"
+                >
+                  EN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetLanguage('hi')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition cursor-pointer ${
+                    language === 'hi'
+                      ? 'bg-white text-stone-900 shadow-xs'
+                      : 'text-stone-300 hover:text-white'
+                  }`}
+                  title="हिंदी"
+                >
+                  हिंदी
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetLanguage('both')}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                    language === 'both'
+                      ? 'bg-white text-stone-900 shadow-xs'
+                      : 'text-stone-300 hover:text-white'
+                  }`}
+                  title="Bilingual / दोनों"
+                >
+                  Both
+                </button>
+              </div>
+
+              <span className="text-[10px] text-stone-400 font-mono hidden sm:flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Live
+              </span>
+            </div>
           </div>
 
           <div className="flex items-baseline justify-between">
@@ -283,7 +350,7 @@ export function OrderTrackerClient({
               </h1>
             </div>
             <div className="text-right">
-              <span className="text-xs text-stone-400 block">Total</span>
+              <span className="text-xs text-stone-400 block">{t('common.total', 'Total', 'कुल योग')}</span>
               <span className="text-lg font-black text-emerald-400">
                 {currencySymbol}{order.total.toFixed(2)}
               </span>
@@ -302,15 +369,15 @@ export function OrderTrackerClient({
                 </div>
                 <div>
                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider mb-0.5">
-                    <Sparkles className="h-3 w-3" /> Ready for Collection
+                    <Sparkles className="h-3 w-3" /> {t('tracker.readyForCollection', 'Ready for Collection', 'प्राप्त करने के लिए तैयार')}
                   </div>
-                  <h2 className="text-xl font-black">Your food is READY!</h2>
+                  <h2 className="text-xl font-black">{t('tracker.orderReady', 'Your food is READY!', 'आपका सामान तैयार है!')}</h2>
                 </div>
               </div>
 
               <div className="mt-4 pt-3 border-t border-white/20 flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-emerald-100 block text-[11px]">Pick up from:</span>
+                  <span className="text-emerald-100 block text-[11px]">{t('tracker.pickupFrom', 'Pick up from:', 'यहाँ से प्राप्त करें:')}</span>
                   <span className="font-black text-sm">
                     {isDineIn ? (order.deliveryAddress || 'Your Table') : (queue.counterNumber || 'Counter 1')}
                   </span>
@@ -321,7 +388,7 @@ export function OrderTrackerClient({
                   className="px-3 py-1.5 rounded-xl bg-white text-emerald-700 font-bold text-xs flex items-center gap-1.5 shadow-sm active:scale-95 transition"
                 >
                   <Volume2 className="h-3.5 w-3.5" />
-                  Chime
+                  {t('tracker.chime', 'Chime', 'घंटी')}
                 </button>
               </div>
             </div>
@@ -333,14 +400,14 @@ export function OrderTrackerClient({
               <div className="flex items-start justify-between">
                 <div>
                   <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-wider text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded-md">
-                    🔥 Live Virtual Queue
+                    🔥 {t('tracker.virtualQueue', 'Live Virtual Queue', 'लाइव कतार')}
                   </span>
                   <h3 className="text-2xl font-black text-amber-950 mt-1.5">
-                    {queue.ordersAhead === 0 ? 'Next in Line!' : `${queue.ordersAhead} orders ahead`}
+                    {queue.ordersAhead === 0 ? t('tracker.nextInLine', 'Next in Line!', 'अगला नंबर आपका है!') : `${queue.ordersAhead} ${t('tracker.ordersAhead', 'orders ahead', 'ऑर्डर आपसे आगे हैं')}`}
                   </h3>
                 </div>
                 {queue.estimatedWaitMinutes != null && <div className="text-right bg-white/80 backdrop-blur-xs px-3 py-2 rounded-2xl border border-amber-200/60">
-                  <span className="text-[10px] text-amber-700 font-semibold block">Est. Wait</span>
+                  <span className="text-[10px] text-amber-700 font-semibold block">{t('tracker.estWait', 'Est. Wait', 'अनुमानित समय')}</span>
                   <span className="text-base font-black text-amber-900 flex items-center gap-1 justify-end">
                     <Clock className="h-3.5 w-3.5 text-amber-600" />
                     ~{queue.estimatedWaitMinutes} min
@@ -349,7 +416,7 @@ export function OrderTrackerClient({
               </div>
 
               <p className="text-xs text-amber-800/80 mt-2.5 leading-relaxed">
-                Your order is queued in our kitchen. You don't need to stand in line — feel free to sit down, you can check its status here.
+                {t('tracker.kitchenQueued', "Your order is queued in our kitchen. You don't need to stand in line — feel free to sit down, you can check its status here.", 'आपका ऑर्डर कतार में है। लाइन में खड़े रहने की आवश्यकता नहीं है — आप आराम से बैठें, यहाँ स्थिति देख सकते हैं।')}
               </p>
 
               {/* Notification opt-in button */}
@@ -360,7 +427,7 @@ export function OrderTrackerClient({
                   className="mt-3 w-full bg-white hover:bg-amber-100/70 border border-amber-300 text-amber-900 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition"
                 >
                   <Bell className="h-3.5 w-3.5 text-amber-600" />
-                  <span>Notify Me When Ready (Sound & Alert)</span>
+                  <span>{t('tracker.notifyMe', 'Notify Me When Ready (Sound & Alert)', 'तैयार होने पर मुझे सूचित करें (घंटी व सूचना)')}</span>
                 </button>
               )}
             </div>
@@ -375,10 +442,10 @@ export function OrderTrackerClient({
                 </div>
                 <div>
                   <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">
-                    Payment Verified
+                    {t('tracker.paymentVerified', 'Payment Verified', 'भुगतान सत्यापित')}
                   </h4>
                   <p className="text-[11px] text-emerald-700">
-                    Paid {currencySymbol}{order.total.toFixed(2)} via {order.paymentMethod || 'UPI'}
+                    {t('tracker.paid', 'Paid', 'भुगतान किया')} {currencySymbol}{order.total.toFixed(2)} {t('tracker.via', 'via', 'माध्यम')} {order.paymentMethod || 'UPI'}
                   </p>
                 </div>
               </div>
@@ -395,19 +462,19 @@ export function OrderTrackerClient({
                   </span>
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-200/80 px-2 py-0.5 rounded-md">
-                      Payment Auto-Matched
+                      {t('tracker.paymentAutoMatched', 'Payment Auto-Matched', 'भुगतान ऑटो-मैच हो गया')}
                     </span>
                     <h3 className="text-sm font-black text-stone-900 mt-0.5">
-                      Amount: {currencySymbol}{order.total.toFixed(2)} Verified
+                      {t('tracker.amount', 'Amount', 'राशि')}: {currencySymbol}{order.total.toFixed(2)} {t('tracker.verified', 'Verified', 'सत्यापित')}
                     </h3>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded-lg">
-                  Confirming...
+                  {t('tracker.confirming', 'Confirming...', 'पुष्टि हो रही है...')}
                 </span>
               </div>
               <p className="text-xs text-emerald-900 font-medium bg-white/70 p-2.5 rounded-xl border border-emerald-200">
-                🔔 Payment notification detected on vendor terminal. Final verification in progress.
+                🔔 {t('tracker.detectionDetected', 'Payment notification detected on vendor terminal. Final verification in progress.', 'दुकानदार के टर्मिनल पर पेमेंट संदेश प्राप्त हुआ। अंतिम सत्यापन जारी है।')}
               </p>
             </div>
           ) : order.paymentStatus === 'DETECTION_PENDING' ? (
@@ -416,23 +483,23 @@ export function OrderTrackerClient({
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-200/80 px-2 py-0.5 rounded-md flex items-center gap-1.5 w-fit">
                     <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping" />
-                    Auto-Matching Payment
+                    {t('tracker.autoMatching', 'Auto-Matching Payment', 'पेमेंट मिलान हो रहा है')}
                   </span>
                   <h3 className="text-sm font-black text-stone-900 mt-1">
-                    Amount: {currencySymbol}{order.total.toFixed(2)}
+                    {t('tracker.amount', 'Amount', 'राशि')}: {currencySymbol}{order.total.toFixed(2)}
                   </h3>
                 </div>
                 <span className="text-[11px] text-amber-800 font-bold bg-amber-100/90 px-2 py-1 rounded-lg">
-                  Listening ⚡
+                  {t('tracker.listening', 'Listening ⚡', 'सक्रिय ⚡')}
                 </span>
               </div>
 
               <div className="p-3 bg-white rounded-2xl border border-amber-200/80 space-y-2 text-xs">
                 <p className="font-semibold text-stone-800">
-                  Please complete payment in your UPI app:
+                  {t('tracker.completePaymentPrompt', 'Please complete payment in your UPI app:', 'कृपया अपने UPI ऐप में भुगतान पूरा करें:')}
                 </p>
                 <p className="text-[11px] text-stone-500">
-                  Once your payment goes through, the vendor's POS device auto-matches the notification and confirms your order.
+                  {t('tracker.autoMatchExplainer', "Once your payment goes through, the vendor's POS device auto-matches the notification and confirms your order.", 'पेमेंट होते ही दुकानदार की POS मशीन स्वचालित मिलान कर आपके ऑर्डर की पुष्टि करेगी।')}
                 </p>
                 {upiUri && (
                   <a
@@ -440,7 +507,7 @@ export function OrderTrackerClient({
                     className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition"
                   >
                     <Smartphone className="h-3.5 w-3.5" />
-                    <span>Open / Re-open UPI App</span>
+                    <span>{t('tracker.openUpiApp', 'Open / Re-open UPI App', 'UPI ऐप खोलें')}</span>
                   </a>
                 )}
               </div>
@@ -448,18 +515,18 @@ export function OrderTrackerClient({
               {/* UTR Input in Detection Mode */}
               <div className="pt-1">
                 <p className="text-[10px] font-bold text-stone-600 mb-1.5">
-                  Have UPI Ref / UTR number from receipt?
+                  {t('tracker.haveUtr', 'Have UPI Ref / UTR number from receipt?', 'क्या आपके पास रसीद का UPI Ref / UTR नंबर है?')}
                 </p>
                 {utrSuccess ? (
                   <div className="p-2 bg-emerald-100/80 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-semibold flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
-                    <span>UTR submitted! Auto-matching against store device.</span>
+                    <span>{t('tracker.utrSubmittedAutoMatch', 'UTR submitted! Auto-matching against store device.', 'UTR दर्ज हो गया! दुकानदार के डिवाइस से मिलान किया जा रहा है।')}</span>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmitUtr} className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="12-digit UTR (e.g. 428198765432)"
+                      placeholder={t('store.utrPlaceholder', '12-digit UTR (e.g. 428198765432)', '12 अंकों का UTR नंबर')}
                       value={utrInput}
                       onChange={(e) => setUtrInput(e.target.value)}
                       maxLength={16}
@@ -470,7 +537,7 @@ export function OrderTrackerClient({
                       disabled={!utrInput.trim() || submittingUtr}
                       className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-black disabled:opacity-50 text-white text-xs font-bold transition shrink-0"
                     >
-                      {submittingUtr ? '...' : 'Submit'}
+                      {submittingUtr ? '...' : t('tracker.submit', 'Submit', 'जमा करें')}
                     </button>
                   </form>
                 )}
@@ -481,14 +548,14 @@ export function OrderTrackerClient({
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                    Payment Pending
+                    {t('tracker.paymentPending', 'Payment Pending', 'भुगतान बाकी है')}
                   </span>
                   <h3 className="text-sm font-black text-stone-900 mt-1">
-                    Amount Due: {currencySymbol}{order.total.toFixed(2)}
+                    {t('tracker.amountDue', 'Amount Due', 'देय राशि')}: {currencySymbol}{order.total.toFixed(2)}
                   </h3>
                 </div>
                 <span className="text-xs text-stone-400 font-mono">
-                  {order.paymentMethod === 'cash' ? 'Pay at Counter' : 'Direct UPI'}
+                  {order.paymentMethod === 'cash' ? t('store.payAtCounter', 'Pay at Counter', 'काउंटर पर भुगतान') : t('store.zeroFeeUpi', 'Direct UPI', 'सीधा UPI')}
                 </span>
               </div>
 
@@ -500,13 +567,13 @@ export function OrderTrackerClient({
                     className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition active:scale-98"
                   >
                     <Smartphone className="h-4 w-4" />
-                    <span>Pay {currencySymbol}{order.total.toFixed(2)} with any UPI App</span>
+                    <span>{t('tracker.payWithAnyUpi', 'Pay with any UPI App', 'किसी भी UPI ऐप से भुगतान करें')} ({currencySymbol}{order.total.toFixed(2)})</span>
                   </a>
 
                   {qrCodeUrl && (
                     <div className="bg-stone-50 border border-stone-100 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
                       <p className="text-[11px] text-stone-600 font-medium mb-2">
-                        Or scan to pay directly to vendor ({upiId})
+                        {t('tracker.orScanToPay', 'Or scan to pay directly to vendor', 'या सीधे दुकानदार को स्कैन करके भुगतान करें')} ({upiId})
                       </p>
                       <img
                         src={qrCodeUrl}
@@ -521,7 +588,7 @@ export function OrderTrackerClient({
                     onClick={handleNotifyPaidUpi}
                     className="w-full py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-bold rounded-xl transition"
                   >
-                    I have paid via UPI • Start Auto-Match
+                    {t('tracker.iHavePaid', 'I have paid via UPI • Start Auto-Match', 'मैंने UPI से भुगतान कर दिया है • ऑटो-मैच शुरू करें')}
                   </button>
                 </div>
               )}
@@ -529,22 +596,22 @@ export function OrderTrackerClient({
               {/* UTR Submission Box */}
               <div className="pt-2 border-t border-stone-100">
                 <p className="text-[11px] font-bold text-stone-800 mb-1">
-                  Already paid via UPI?
+                  {t('tracker.alreadyPaidPrompt', 'Already paid via UPI?', 'क्या पहले ही UPI से भुगतान कर दिया है?')}
                 </p>
                 <p className="text-[10px] text-stone-500 mb-2">
-                  Enter your 12-digit UPI Reference / UTR number for faster verification:
+                  {t('tracker.enter12DigitUtr', 'Enter your 12-digit UPI Reference / UTR number for faster verification:', 'तेज़ सत्यापन के लिए 12 अंकों का UPI रेफरेंस / UTR नंबर दर्ज करें:')}
                 </p>
 
                 {utrSuccess ? (
                   <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                    <span>UTR submitted! Stall owner will verify and mark paid.</span>
+                    <span>{t('tracker.utrSubmittedManual', 'UTR submitted! Stall owner will verify and mark paid.', 'UTR दर्ज हो गया! दुकानदार सत्यापित कर पेड मार्क करेंगे।')}</span>
                   </div>
                 ) : (
                   <form onSubmit={handleSubmitUtr} className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="e.g. 428198765432"
+                      placeholder={t('store.utrPlaceholder', 'e.g. 428198765432', '12 अंकों का UTR नंबर')}
                       value={utrInput}
                       onChange={(e) => setUtrInput(e.target.value)}
                       maxLength={16}
@@ -556,7 +623,7 @@ export function OrderTrackerClient({
                       className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-1.5 transition shrink-0"
                     >
                       <Send className="h-3.5 w-3.5" />
-                      <span>{submittingUtr ? 'Saving...' : 'Submit'}</span>
+                      <span>{submittingUtr ? t('tracker.saving', 'Saving...', 'सहेज रहे हैं...') : t('tracker.submit', 'Submit', 'जमा करें')}</span>
                     </button>
                   </form>
                 )}
@@ -567,7 +634,7 @@ export function OrderTrackerClient({
           {/* STATUS STEPPER */}
           <div className="bg-stone-50 border border-stone-200/80 rounded-3xl p-5">
             <h4 className="text-xs font-black uppercase tracking-wider text-stone-500 mb-4">
-              Live Progress
+              {t('tracker.liveProgress', 'Live Progress', 'लाइव प्रगति')}
             </h4>
 
             <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-stone-200">
@@ -583,9 +650,9 @@ export function OrderTrackerClient({
                   ✓
                 </div>
                 <div>
-                  <h5 className="text-xs font-black text-stone-900">Order Received</h5>
+                  <h5 className="text-xs font-black text-stone-900">{t('tracker.stepReceived', 'Order Received', 'ऑर्डर प्राप्त हुआ')}</h5>
                   <p className="text-[11px] text-stone-500">
-                    Order confirmed and sent to kitchen printer/KDS.
+                    {t('tracker.stepReceivedDesc', 'Order confirmed and sent to kitchen printer/KDS.', 'ऑर्डर कन्फर्म हो गया और रसोई में भेज दिया गया है।')}
                   </p>
                 </div>
               </div>
@@ -605,15 +672,15 @@ export function OrderTrackerClient({
                 </div>
                 <div>
                   <h5 className="text-xs font-black text-stone-900 flex items-center gap-1.5">
-                    Preparing Food
+                    {t('tracker.stepPreparing', 'Preparing Food', 'सामान तैयार हो रहा है')}
                     {currentStep === 1 && (
                       <span className="text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.2 rounded-md">
-                        In Progress
+                        {t('tracker.inProgress', 'In Progress', 'प्रगति पर')}
                       </span>
                     )}
                   </h5>
                   <p className="text-[11px] text-stone-500">
-                    Chef is crafting your items fresh on the grill/stove.
+                    {t('tracker.chefCrafting', 'Chef is crafting your items fresh on the grill/stove.', 'रसोईया आपके सामान को ताज़ा तैयार कर रहा है।')}
                   </p>
                 </div>
               </div>
@@ -631,12 +698,12 @@ export function OrderTrackerClient({
                 </div>
                 <div>
                   <h5 className="text-xs font-black text-stone-900">
-                    Ready for {isDineIn ? 'Serving' : 'Pickup'}
+                    {t('tracker.readyFor', 'Ready for', 'के लिए तैयार')} {isDineIn ? t('tracker.serving', 'Serving', 'परोसने') : t('tracker.pickup', 'Pickup', 'लेने')}
                   </h5>
                   <p className="text-[11px] text-stone-500">
                     {isDineIn
-                      ? `Delivering hot to ${order.deliveryAddress || 'your table'}.`
-                      : `Hot and packaged at ${queue.counterNumber || 'Counter 1'}.`}
+                      ? `${t('tracker.deliveringHotTo', 'Delivering hot to', 'यहाँ परोसा जा रहा है:')} ${order.deliveryAddress || t('tracker.yourTable', 'your table', 'आपकी टेबल')}.`
+                      : `${t('tracker.hotPackagedAt', 'Hot and packaged at', 'पैक होकर तैयार है:')} ${queue.counterNumber || 'Counter 1'}.`}
                   </p>
                 </div>
               </div>
@@ -653,8 +720,8 @@ export function OrderTrackerClient({
                   {currentStep >= 3 ? '✓' : '4'}
                 </div>
                 <div>
-                  <h5 className="text-xs font-black text-stone-900">Completed</h5>
-                  <p className="text-[11px] text-stone-500">Order fulfilled. Enjoy your meal!</p>
+                  <h5 className="text-xs font-black text-stone-900">{t('tracker.stepCompleted', 'Completed', 'ऑर्डर पूरा हुआ')}</h5>
+                  <p className="text-[11px] text-stone-500">{t('tracker.orderFulfilled', 'Order fulfilled. Enjoy your meal!', 'ऑर्डर पूरा हुआ। आपका भोजन स्वादिष्ट हो!')}</p>
                 </div>
               </div>
             </div>
@@ -663,18 +730,18 @@ export function OrderTrackerClient({
           {/* ORDER TYPE & TIMING CARD */}
           <div className="bg-white border border-stone-200/90 rounded-3xl p-4 space-y-3">
             <div className="flex items-center justify-between text-xs pb-3 border-b border-stone-100">
-              <span className="text-stone-500 font-medium">Order Type</span>
+              <span className="text-stone-500 font-medium">{t('tracker.orderType', 'Order Type', 'ऑर्डर प्रकार')}</span>
               <span className="font-bold flex items-center gap-1.5 text-stone-900">
                 {isDineIn && <UtensilsCrossed className="h-3.5 w-3.5 text-amber-600" />}
                 {isTakeout && <ShoppingBag className="h-3.5 w-3.5 text-blue-600" />}
                 {isDelivery && <Truck className="h-3.5 w-3.5 text-purple-600" />}
-                {isDineIn ? `Dine-In (${order.deliveryAddress || 'Table'})` : isTakeout ? 'Stall Pickup' : 'Delivery'}
+                {isDineIn ? `${t('tracker.dineIn', 'Dine-In', 'डाइन-इन')} (${order.deliveryAddress || t('tracker.yourTable', 'Table', 'टेबल')})` : isTakeout ? t('tracker.stallPickup', 'Stall Pickup', 'दुकान से पिकअप') : t('tracker.delivery', 'Delivery', 'होम डिलीवरी')}
               </span>
             </div>
 
             {order.deliveryDate && (
               <div className="flex items-center justify-between text-xs pb-3 border-b border-stone-100">
-                <span className="text-stone-500 font-medium">Scheduled Time</span>
+                <span className="text-stone-500 font-medium">{t('tracker.scheduledTime', 'Scheduled Time', 'नियत समय')}</span>
                 <span className="font-bold text-stone-900 flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-emerald-600" />
                   {order.deliveryDate}
@@ -684,7 +751,7 @@ export function OrderTrackerClient({
 
             {order.deliveryAddress && !isDineIn && (
               <div className="flex items-start justify-between text-xs pb-3 border-b border-stone-100">
-                <span className="text-stone-500 font-medium">Address</span>
+                <span className="text-stone-500 font-medium">{t('tracker.address', 'Address', 'पता')}</span>
                 <span className="font-medium text-stone-800 text-right max-w-[200px] flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5 text-stone-400 shrink-0" />
                   {order.deliveryAddress}
@@ -693,7 +760,7 @@ export function OrderTrackerClient({
             )}
 
             <div className="flex items-center justify-between text-xs">
-              <span className="text-stone-500 font-medium">Payment Status</span>
+              <span className="text-stone-500 font-medium">{t('tracker.paymentStatus', 'Payment Status', 'भुगतान स्थिति')}</span>
               <span
                 className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
                   order.paymentStatus === 'PAID'
@@ -709,7 +776,7 @@ export function OrderTrackerClient({
           {/* ITEMIZED ORDER SUMMARY */}
           <div className="bg-white border border-stone-200/90 rounded-3xl p-4">
             <h4 className="text-xs font-black uppercase tracking-wider text-stone-500 mb-3">
-              Items Ordered ({order.items.reduce((s, i) => s + (i.qty || 1), 0)})
+              {t('tracker.itemsOrdered', 'Items Ordered', 'ऑर्डर किया गया सामान')} ({order.items.reduce((s, i) => s + (i.qty || 1), 0)})
             </h4>
 
             <div className="divide-y divide-stone-100">
@@ -731,13 +798,13 @@ export function OrderTrackerClient({
 
             {order.notes && (
               <div className="mt-3 p-2.5 bg-stone-50 rounded-xl text-[11px] text-stone-600 border border-stone-200/60">
-                <span className="font-bold text-stone-700 block mb-0.5">Special Instructions:</span>
+                <span className="font-bold text-stone-700 block mb-0.5">{t('tracker.specialInstructions', 'Special Instructions', 'विशेष निर्देश')}:</span>
                 {order.notes}
               </div>
             )}
 
             <div className="mt-3 pt-3 border-t border-dashed border-stone-200 flex items-center justify-between text-sm font-black text-stone-900">
-              <span>Total Amount</span>
+              <span>{t('tracker.totalAmount', 'Total Amount', 'कुल राशि')}</span>
               <span className="text-base text-emerald-700">
                 {currencySymbol}{order.total.toFixed(2)}
               </span>
@@ -752,7 +819,7 @@ export function OrderTrackerClient({
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 shadow-md active:scale-98 transition"
             >
               <MessageCircle className="h-4 w-4" />
-              <span>Ask Shop on WhatsApp</span>
+              <span>{t('tracker.askShopWa', 'Ask Shop on WhatsApp', 'व्हाट्सएप पर दुकान से पूछें')}</span>
             </button>
 
             {order.businessPhone && (
@@ -761,7 +828,7 @@ export function OrderTrackerClient({
                 className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-2.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition"
               >
                 <Phone className="h-3.5 w-3.5" />
-                <span>Call {order.businessName}</span>
+                <span>{t('tracker.callShop', 'Call', 'कॉल करें')} {order.businessName}</span>
               </a>
             )}
           </div>
@@ -769,7 +836,7 @@ export function OrderTrackerClient({
 
         {/* Footer timestamp */}
         <div className="p-4 text-center text-[10px] text-stone-400">
-          Last checked: {lastRefreshed.toLocaleTimeString()} • Powered by Commerce OS
+          {t('tracker.lastChecked', 'Last checked', 'अंतिम अपडेट')}: {lastRefreshed.toLocaleTimeString()} • {t('tracker.poweredBy', 'Powered by Commerce OS', 'Commerce OS द्वारा संचालित')}
         </div>
       </div>
     </div>

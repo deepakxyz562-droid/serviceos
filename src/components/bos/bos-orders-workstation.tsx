@@ -30,6 +30,7 @@ import {
 } from '@/components/bos/bos-types';
 import { BosProductThumbnail } from '@/components/bos/bos-product-image-resolver';
 import { authFetch } from '@/lib/client-auth';
+import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
 type OrdersFilterTab =
   | 'all'
@@ -547,6 +548,7 @@ export function BosOrdersWorkstation({
   onPrintOrderBill,
   onNavigateToPos,
 }: BosOrdersWorkstationProps) {
+  const { t, language } = useBosTranslation();
   const [activeTab, setActiveTab] = useState<OrdersFilterTab>('all');
   const [inspectorTab, setInspectorTab] = useState<OrderInspectorTab>('details');
   const [searchQuery, setSearchQuery] = useState('');
@@ -925,10 +927,10 @@ export function BosOrdersWorkstation({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight text-[#111827] leading-tight">
-            Orders
+            {t('orders.title', 'Orders')}
           </h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">
-            Manage all your orders from POS, online store, WhatsApp and manual entries.
+            {t('orders.subtitle', 'Manage all your orders from POS, online store, WhatsApp and manual entries.')}
           </p>
         </div>
 
@@ -981,7 +983,7 @@ export function BosOrdersWorkstation({
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Download className="h-4 w-4 text-[#475569]" />
-            <span>Export</span>
+            <span>{t('orders.export', 'Export')}</span>
           </button>
 
           {/* + New Order Button with Dropdown */}
@@ -992,7 +994,7 @@ export function BosOrdersWorkstation({
               className="inline-flex items-center gap-2 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
             >
               <Plus className="h-4 w-4 stroke-[2.5]" />
-              <span>New Order</span>
+              <span>{t('orders.newOrder', 'New Order')}</span>
               <ChevronDown className="h-3.5 w-3.5 text-white/90" />
             </button>
 
@@ -1007,7 +1009,7 @@ export function BosOrdersWorkstation({
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left font-semibold text-[#1E293B] hover:bg-[#F1FAF5]"
                 >
                   <ShoppingCart className="h-4 w-4 text-[#0A6847]" />
-                  <span>New POS Counter Sale</span>
+                  <span>{t('orders.newPosSale', 'New POS Counter Sale')}</span>
                 </button>
                 <button
                   type="button"
@@ -1018,7 +1020,7 @@ export function BosOrdersWorkstation({
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-[#334155] hover:bg-[#F4F8F6]"
                 >
                   <Store className="h-4 w-4 text-blue-600" />
-                  <span>Manual Online Order</span>
+                  <span>{t('orders.manualOnlineOrder', 'Manual Online Order')}</span>
                 </button>
                 <button
                   type="button"
@@ -1029,7 +1031,7 @@ export function BosOrdersWorkstation({
                   className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left font-medium text-[#334155] hover:bg-[#F4F8F6]"
                 >
                   <MessageCircle className="h-4 w-4 text-emerald-600" />
-                  <span>Record WhatsApp Order</span>
+                  <span>{t('orders.recordWhatsAppOrder', 'Record WhatsApp Order')}</span>
                 </button>
               </div>
             )}
@@ -1041,14 +1043,14 @@ export function BosOrdersWorkstation({
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
         {(
           [
-            { id: 'all', label: 'All Orders', count: 125 },
-            { id: 'pos', label: 'POS Orders', count: 48 },
-            { id: 'online', label: 'Online Store', count: 32 },
-            { id: 'whatsapp', label: 'WhatsApp Orders', count: 18 },
-            { id: 'pending', label: 'Pending', count: 12 },
-            { id: 'processing', label: 'Processing', count: 8 },
-            { id: 'completed', label: 'Completed', count: 96 },
-            { id: 'cancelled', label: 'Cancelled', count: 9 },
+            { id: 'all', label: t('orders.allOrders', 'All Orders'), count: 125 },
+            { id: 'pos', label: t('orders.posOrders', 'POS Orders'), count: 48 },
+            { id: 'online', label: t('orders.onlineOrders', 'Online Store'), count: 32 },
+            { id: 'whatsapp', label: t('orders.whatsappOrders', 'WhatsApp Orders'), count: 18 },
+            { id: 'pending', label: t('orders.pending', 'Pending'), count: 12 },
+            { id: 'processing', label: t('orders.processing', 'Processing'), count: 8 },
+            { id: 'completed', label: t('orders.completed', 'Completed'), count: 96 },
+            { id: 'cancelled', label: t('orders.cancelled', 'Cancelled'), count: 9 },
           ] as const
         ).map((tab) => {
           const active = activeTab === tab.id;
@@ -1104,7 +1106,7 @@ export function BosOrdersWorkstation({
               <ShoppingCart className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[11.5px] font-medium text-[#64748B]">Total Orders</p>
+              <p className="text-[11.5px] font-medium text-[#64748B]">{t('orders.totalOrders', 'Total Orders')}</p>
               <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
                 {ordersKpi.totalOrders}
               </p>
@@ -1131,7 +1133,7 @@ export function BosOrdersWorkstation({
               </span>
             </div>
             <div>
-              <p className="text-[11.5px] font-medium text-[#64748B]">Total Revenue</p>
+              <p className="text-[11.5px] font-medium text-[#64748B]">{t('orders.totalRevenue', 'Total Revenue')}</p>
               <p className="text-[20px] font-extrabold text-[#111827] leading-tight">
                 {currencySymbol} {ordersKpi.totalRevenue.toLocaleString('en-IN')}
               </p>
@@ -1157,7 +1159,7 @@ export function BosOrdersWorkstation({
             </div>
             <div>
               <p className="text-[11.5px] font-medium text-[#64748B]">
-                Avg. Order Value
+                {t('orders.avgOrderValue', 'Avg. Order Value')}
               </p>
               <p className="text-[21px] font-extrabold text-[#111827] leading-tight">
                 {currencySymbol} {ordersKpi.avgOrderValue.toLocaleString('en-IN')}
@@ -1184,7 +1186,7 @@ export function BosOrdersWorkstation({
             </div>
             <div>
               <p className="text-[11.5px] font-medium text-[#64748B]">
-                Pending Orders
+                {t('orders.pending', 'Pending Orders')}
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
                 {ordersKpi.pendingOrders}
@@ -1209,7 +1211,7 @@ export function BosOrdersWorkstation({
               <Truck className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[11.5px] font-medium text-[#64748B]">Processing</p>
+              <p className="text-[11.5px] font-medium text-[#64748B]">{t('orders.processing', 'Processing')}</p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
                 {ordersKpi.processingOrders}
               </p>
@@ -1233,7 +1235,7 @@ export function BosOrdersWorkstation({
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-[11.5px] font-medium text-[#64748B]">Completed</p>
+              <p className="text-[11.5px] font-medium text-[#64748B]">{t('orders.completed', 'Completed')}</p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
                 {ordersKpi.completedOrders}
               </p>
@@ -1264,7 +1266,7 @@ export function BosOrdersWorkstation({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by order ID, customer, phone, product..."
+                placeholder={t('orders.searchPlaceholder', 'Search by order ID, customer, phone, product...')}
                 className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] pl-9 pr-3 text-[12.5px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
               />
             </div>
@@ -1276,7 +1278,7 @@ export function BosOrdersWorkstation({
               onChange={(e) => setChannelFilter(e.target.value)}
               className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
             >
-              <option value="all">All Channels</option>
+              <option value="all">{t('orders.allChannels', 'All Channels')}</option>
               <option value="Online Store">Online Store</option>
               <option value="POS">POS</option>
               <option value="WhatsApp">WhatsApp</option>
@@ -1289,11 +1291,11 @@ export function BosOrdersWorkstation({
               onChange={(e) => setStatusFilter(e.target.value)}
               className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
             >
-              <option value="all">All Status</option>
-              <option value="Completed">Completed</option>
-              <option value="Processing">Processing</option>
-              <option value="Pending">Pending</option>
-              <option value="Cancelled">Cancelled</option>
+              <option value="all">{t('orders.allStatus', 'All Status')}</option>
+              <option value="Completed">{t('orders.completed', 'Completed')}</option>
+              <option value="Processing">{t('orders.processing', 'Processing')}</option>
+              <option value="Pending">{t('orders.pending', 'Pending')}</option>
+              <option value="Cancelled">{t('orders.cancelled', 'Cancelled')}</option>
             </select>
 
             {/* All Payment Methods Select */}
@@ -1303,7 +1305,7 @@ export function BosOrdersWorkstation({
               onChange={(e) => setPaymentFilter(e.target.value)}
               className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
             >
-              <option value="all">All Payment Methods</option>
+              <option value="all">{t('orders.allPayments', 'All Payment Methods')}</option>
               <option value="UPI">UPI</option>
               <option value="Cash">Cash</option>
               <option value="Card">Card</option>
@@ -1333,7 +1335,7 @@ export function BosOrdersWorkstation({
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-medium text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
             >
               <Calendar className="h-3.5 w-3.5 text-[#64748B]" />
-              <span>Latest First</span>
+              <span>{t('orders.latestFirst', 'Latest First')}</span>
             </button>
           </div>
 
@@ -1354,15 +1356,15 @@ export function BosOrdersWorkstation({
                       className="h-4 w-4 rounded border-[#CBD5E1] accent-[#0A6847] cursor-pointer"
                     />
                   </th>
-                  <th className="py-3 px-2.5">Order ID</th>
-                  <th className="py-3 px-2.5">Customer</th>
-                  <th className="py-3 px-2.5">Items</th>
-                  <th className="py-3 px-2.5">Amount</th>
-                  <th className="py-3 px-2.5">Payment</th>
-                  <th className="py-3 px-2.5">Status</th>
-                  <th className="py-3 px-2.5">Channel</th>
-                  <th className="py-3 px-2.5">Date &amp; Time</th>
-                  <th className="py-3 pl-2 pr-4 text-center">Actions</th>
+                  <th className="py-3 px-2.5">{t('orders.orderId', 'Order ID')}</th>
+                  <th className="py-3 px-2.5">{t('orders.customer', 'Customer')}</th>
+                  <th className="py-3 px-2.5">{t('orders.items', 'Items')}</th>
+                  <th className="py-3 px-2.5">{t('common.amount', 'Amount')}</th>
+                  <th className="py-3 px-2.5">{t('orders.payment', 'Payment')}</th>
+                  <th className="py-3 px-2.5">{t('common.status', 'Status')}</th>
+                  <th className="py-3 px-2.5">{t('orders.channel', 'Channel')}</th>
+                  <th className="py-3 px-2.5">{t('orders.dateTime', 'Date & Time')}</th>
+                  <th className="py-3 pl-2 pr-4 text-center">{t('common.actions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
@@ -1614,28 +1616,28 @@ export function BosOrdersWorkstation({
             <div className="flex items-center gap-5 border-b border-[#EBF2EE]">
               {(
                 [
-                  { id: 'details', label: 'Details' },
+                  { id: 'details', label: t('orders.orderDetails', 'Details') },
                   {
                     id: 'items',
-                    label: `Items (${selectedOrder.inspectorItems.length})`,
+                    label: `${t('orders.items', 'Items')} (${selectedOrder.inspectorItems.length})`,
                   },
-                  { id: 'customer', label: 'Customer' },
-                  { id: 'history', label: 'History' },
+                  { id: 'customer', label: t('orders.customer', 'Customer') },
+                  { id: 'history', label: t('orders.history', 'History') },
                 ] as const
-              ).map((t) => {
-                const active = inspectorTab === t.id;
+              ).map((tTab) => {
+                const active = inspectorTab === tTab.id;
                 return (
                   <button
-                    key={t.id}
+                    key={tTab.id}
                     type="button"
-                    onClick={() => setInspectorTab(t.id)}
+                    onClick={() => setInspectorTab(tTab.id)}
                     className={`relative pb-2 text-[12.5px] transition cursor-pointer ${
                       active
                         ? 'font-bold text-[#0A6847]'
                         : 'font-medium text-[#64748B] hover:text-[#111827]'
                     }`}
                   >
-                    <span>{t.label}</span>
+                    <span>{tTab.label}</span>
                     {active && (
                       <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[#0A6847]" />
                     )}
@@ -1678,7 +1680,7 @@ export function BosOrdersWorkstation({
                   onClick={() => setInspectorTab('customer')}
                   className="rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-[11.5px] font-semibold text-[#334155] hover:bg-[#F4F8F6] shrink-0 cursor-pointer"
                 >
-                  View Profile
+                  {t('orders.viewProfile', 'View Profile')}
                 </button>
               </div>
 
@@ -1694,7 +1696,7 @@ export function BosOrdersWorkstation({
                   }
                   className="font-bold text-[#0A7B56] hover:underline shrink-0 cursor-pointer"
                 >
-                  Change
+                  {t('orders.change', 'Change')}
                 </button>
               </div>
             </div>
@@ -1735,19 +1737,19 @@ export function BosOrdersWorkstation({
             {/* Bill Breakdown Totals */}
             <div className="border-t border-[#EBF2EE] pt-2.5 space-y-1.5 text-[12.5px]">
               <div className="flex items-center justify-between">
-                <span className="text-[#64748B]">Subtotal</span>
+                <span className="text-[#64748B]">{t('orders.subtotal', 'Subtotal')}</span>
                 <span className="font-bold text-[#111827]">
                   {formatOrdAmount(selectedOrder.subtotal, currencySymbol)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#64748B]">Discount</span>
+                <span className="text-[#64748B]">{t('orders.discount', 'Discount')}</span>
                 <span className="font-bold text-[#0A7B56]">
                   - {formatOrdAmount(selectedOrder.discount, currencySymbol)}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#64748B]">Delivery Charge</span>
+                <span className="text-[#64748B]">{t('orders.deliveryCharge', 'Delivery Charge')}</span>
                 <span className="font-semibold text-[#111827]">
                   {formatOrdAmount(selectedOrder.deliveryCharge, currencySymbol)}
                 </span>
@@ -1755,7 +1757,7 @@ export function BosOrdersWorkstation({
 
               <div className="border-t border-[#EBF2EE] pt-2 flex items-baseline justify-between">
                 <span className="text-[15.5px] font-extrabold text-[#111827]">
-                  Total Amount
+                  {t('orders.totalAmount', 'Total Amount')}
                 </span>
                 <span className="text-[20px] font-extrabold text-[#111827]">
                   {formatOrdAmount(selectedOrder.inspectorTotal, currencySymbol)}
@@ -1766,7 +1768,7 @@ export function BosOrdersWorkstation({
             {/* Payment Method Metadata */}
             <div className="border-t border-[#EBF2EE] pt-2.5 space-y-1.5 text-[12px]">
               <p className="text-[11.5px] font-semibold text-[#64748B]">
-                Payment Method
+                {t('orders.paymentMethod', 'Payment Method')}
               </p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1795,13 +1797,13 @@ export function BosOrdersWorkstation({
               </div>
 
               <div className="flex items-center justify-between text-[11.5px]">
-                <span className="text-[#64748B]">Transaction ID</span>
+                <span className="text-[#64748B]">{t('orders.transactionId', 'Transaction ID')}</span>
                 <span className="font-semibold text-[#111827]">
                   {selectedOrder.transactionId}
                 </span>
               </div>
               <div className="flex items-center justify-between text-[11.5px]">
-                <span className="text-[#64748B]">Payment Time</span>
+                <span className="text-[#64748B]">{t('orders.paymentTime', 'Payment Time')}</span>
                 <span className="font-semibold text-[#111827]">
                   {selectedOrder.inspectorDateTime}
                 </span>
@@ -1811,7 +1813,7 @@ export function BosOrdersWorkstation({
                 <div className="mt-2 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold uppercase text-[#64748B]">
-                      Update Order Status
+                      {t('orders.updateStatus', 'Update Order Status')}
                     </span>
                     {refundOverrides[selectedOrder.id] === 'refund_pending' && (
                       <button
@@ -1878,7 +1880,7 @@ export function BosOrdersWorkstation({
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-2.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] transition cursor-pointer"
               >
                 <Printer className="h-3.5 w-3.5 text-[#334155]" />
-                <span>Print Bill</span>
+                <span>{t('orders.printBill', 'Print Bill')}</span>
               </button>
 
               <button
@@ -1889,7 +1891,7 @@ export function BosOrdersWorkstation({
                 title="Send WhatsApp via Meta Cloud API"
               >
                 <MessageCircle className="h-3.5 w-3.5 text-[#0A7B56]" />
-                <span>{sendingWhatsAppId === selectedOrder.id ? 'Sending...' : 'WhatsApp'}</span>
+                <span>{sendingWhatsAppId === selectedOrder.id ? 'Sending...' : t('common.share', 'Share')}</span>
               </button>
 
               <button
@@ -1898,7 +1900,7 @@ export function BosOrdersWorkstation({
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0A6847] px-2.5 py-2.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span>Create Return</span>
+                <span>{t('orders.createReturn', 'Create Return')}</span>
               </button>
             </div>
           </div>

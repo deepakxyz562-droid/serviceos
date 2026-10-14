@@ -1,6 +1,7 @@
 'use client';
 import { RequestTracker } from '../../../../shared/money';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
+import { getBosText, type BosLanguage } from '@/components/bos/i18n/bos-translations';
 
 import React, { useState, useMemo, useRef } from 'react';
 import {
@@ -88,6 +89,7 @@ interface StoreClientProps {
   isStoreOpen?: boolean;
   storeCloseReason?: string;
   todayHoursText?: string;
+  storeLanguage?: 'en' | 'hi' | 'both';
 }
 
 export function StoreClient({
@@ -109,8 +111,62 @@ export function StoreClient({
   isStoreOpen = true,
   storeCloseReason = '',
   todayHoursText = '',
+  storeLanguage = 'en',
 }: StoreClientProps) {
   const requestTracker = useRef(new RequestTracker());
+
+  // Language state: defaults to merchant setting, persists to customer localStorage
+  const [language, setLanguage] = useState<BosLanguage>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('store_language') as BosLanguage;
+        if (saved === 'en' || saved === 'hi' || saved === 'both') {
+          return saved;
+        }
+      } catch {}
+    }
+    return storeLanguage || 'en';
+  });
+
+  const handleSetLanguage = (lang: BosLanguage) => {
+    setLanguage(lang);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('store_language', lang);
+      } catch {}
+    }
+  };
+
+  const t = (key: string, fallbackEn?: string, fallbackHi?: string) =>
+    getBosText(key, language, fallbackEn, fallbackHi);
+
+  const getCategoryLabel = (cat: string) => {
+    if (cat === 'ALL') return t('store.allProducts', 'All Products', 'सभी सामान');
+    const catLower = cat.toLowerCase();
+    if (catLower.includes('grocer') || catLower.includes('staple') || catLower.includes('kirana')) {
+      return language === 'hi' ? 'किराना / राशन' : language === 'both' ? `${cat} / किराना` : cat;
+    }
+    if (catLower.includes('dairy') || catLower.includes('egg') || catLower.includes('milk')) {
+      return language === 'hi' ? 'दूध और डेयरी' : language === 'both' ? `${cat} / दूध-डेयरी` : cat;
+    }
+    if (catLower.includes('snack') || catLower.includes('biscuit') || catLower.includes('namkeen')) {
+      return language === 'hi' ? 'नमकीन व स्नैक्स' : language === 'both' ? `${cat} / स्नैक्स` : cat;
+    }
+    if (catLower.includes('beverage') || catLower.includes('drink') || catLower.includes('juice') || catLower.includes('tea')) {
+      return language === 'hi' ? 'चाय व पेय पदार्थ' : language === 'both' ? `${cat} / पेय` : cat;
+    }
+    if (catLower.includes('personal') || catLower.includes('soap') || catLower.includes('shampoo')) {
+      return language === 'hi' ? 'पर्सनल केयर' : language === 'both' ? `${cat} / पर्सनल केयर` : cat;
+    }
+    if (catLower.includes('house') || catLower.includes('clean') || catLower.includes('detergent')) {
+      return language === 'hi' ? 'घरेलू सामान' : language === 'both' ? `${cat} / घरेलू सामान` : cat;
+    }
+    if (catLower.includes('veg') || catLower.includes('fruit')) {
+      return language === 'hi' ? 'फल और सब्जियां' : language === 'both' ? `${cat} / फल-सब्जी` : cat;
+    }
+    return cat;
+  };
+
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cart, setCart] = useState<Record<string, number>>({});
@@ -656,13 +712,13 @@ export function StoreClient({
               <Store className="size-7 text-rose-600" />
             </div>
             <div>
-              <h3 className="text-base font-black text-stone-900">{businessName} is Closed</h3>
+              <h3 className="text-base font-black text-stone-900">{businessName} is {t('store.closed', 'Closed', 'बंद')}</h3>
               <p className="text-xs text-stone-600 mt-1 leading-relaxed">
-                {storeCloseReason || 'This cart/store is currently offline and not taking online orders right now.'}
+                {storeCloseReason || t('store.storeClosedMsg', 'This cart/store is currently offline and not taking online orders right now.', 'यह दुकान अभी ऑनलाइन ऑर्डर स्वीकार नहीं कर रही है।')}
               </p>
               {todayHoursText && (
                 <p className="text-[11px] font-bold text-stone-500 mt-1.5">
-                  Operating Hours: {todayHoursText}
+                  {t('store.operatingHours', 'Operating Hours', 'खुलने का समय')}: {todayHoursText}
                 </p>
               )}
             </div>
@@ -673,7 +729,7 @@ export function StoreClient({
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs"
                 >
                   <Phone className="size-4" />
-                  <span>Call Store Owner ({businessPhone})</span>
+                  <span>{t('store.callOwner', 'Call Store Owner', 'दुकानदार को कॉल करें')} ({businessPhone})</span>
                 </a>
               )}
               {businessPhone && (
@@ -684,7 +740,7 @@ export function StoreClient({
                   className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs transition"
                 >
                   <MessageCircle className="size-4 text-emerald-600" />
-                  <span>Ask on WhatsApp</span>
+                  <span>{t('store.askWhatsApp', 'Ask on WhatsApp', 'व्हाट्सएप पर पूछें')}</span>
                 </a>
               )}
               <button
@@ -692,7 +748,7 @@ export function StoreClient({
                 onClick={() => setStoreClosedAlert(false)}
                 className="w-full py-2 text-stone-400 hover:text-stone-700 text-xs font-semibold cursor-pointer"
               >
-                Close
+                {t('store.close', 'Close', 'बंद करें')}
               </button>
             </div>
           </div>
@@ -716,7 +772,7 @@ export function StoreClient({
                 }}
                 className="shrink-0 ml-3 px-2.5 py-0.5 rounded-full bg-white text-emerald-800 text-[11px] font-bold hover:bg-emerald-50 transition shadow-2xs"
               >
-                Apply Coupon
+                {t('store.applyCoupon', 'Apply Coupon', 'कूपन लगाएं')}
               </button>
             )}
           </div>
@@ -730,7 +786,7 @@ export function StoreClient({
             <div className="flex items-center gap-2 truncate">
               <Smartphone className="h-4 w-4 text-emerald-600 shrink-0" />
               <span className="truncate font-medium">
-                Get the <strong>BOS Customer App</strong> for instant QR ordering, favorites &amp; live delivery tracking.
+                {t('store.smartBanner', 'Get the BOS Customer App for instant QR ordering, favorites & live delivery tracking.', 'त्वरित QR ऑर्डर और लाइव ट्रैकिंग के लिए BOS ऐप देखें।')}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -739,7 +795,7 @@ export function StoreClient({
                 onClick={() => setCustomerAppModalOpen(true)}
                 className="font-bold text-emerald-700 hover:text-emerald-800 underline text-xs cursor-pointer"
               >
-                Explore App →
+                {t('store.exploreApp', 'Explore App →', 'ऐप देखें →')}
               </button>
               <button
                 type="button"
@@ -772,7 +828,7 @@ export function StoreClient({
                       : 'bg-rose-100 text-rose-800'
                   }`}
                 >
-                  {isStoreOpen !== false ? 'Open' : 'Closed'}
+                  {isStoreOpen !== false ? t('store.open', 'Open', 'चालू') : t('store.closed', 'Closed', 'बंद')}
                 </span>
               </h1>
               <p className="text-[11px] sm:text-xs text-slate-500 truncate font-medium">
@@ -787,7 +843,7 @@ export function StoreClient({
               <Search className="h-4 w-4 absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search for products, grocery, snacks..."
+                placeholder={t('store.searchPlaceholder', 'Search for products, grocery, snacks...', 'सामान, किराना या स्नैक्स खोजें...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
@@ -804,15 +860,55 @@ export function StoreClient({
             </div>
           </div>
 
-          {/* Right: Navigation & Cart Action */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {/* Right: Navigation, Language Switcher & Cart Action */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Language Switcher Pill: [ EN | हिंदी | Both ] */}
+            <div className="flex items-center rounded-xl bg-slate-100 p-0.5 border border-slate-200 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => handleSetLanguage('en')}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  language === 'en'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Switch to English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetLanguage('hi')}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  language === 'hi'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="हिंदी में बदलें"
+              >
+                हिंदी
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSetLanguage('both')}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                  language === 'both'
+                    ? 'bg-white text-emerald-800 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Bilingual / दोनों भाषाएँ"
+              >
+                Both
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => setSelectedCategory('ALL')}
               className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
             >
               <Home className="h-4 w-4" />
-              <span>Home</span>
+              <span>{t('store.home', 'Home', 'होम')}</span>
             </button>
             <button
               type="button"
@@ -823,7 +919,7 @@ export function StoreClient({
               className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-emerald-700 transition"
             >
               <Layers className="h-4 w-4" />
-              <span>Categories</span>
+              <span>{t('store.categories', 'Categories', 'श्रेणियां')}</span>
             </button>
             {discounts.length > 0 && (
               <button
@@ -832,7 +928,7 @@ export function StoreClient({
                 className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-700 transition"
               >
                 <Tag className="h-4 w-4" />
-                <span>Offers</span>
+                <span>{t('store.offers', 'Offers', 'ऑफ़र्स')}</span>
               </button>
             )}
 
@@ -843,7 +939,7 @@ export function StoreClient({
               className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition border border-emerald-200"
             >
               <ShoppingCart className="h-4 w-4 text-emerald-700" />
-              <span className="hidden sm:inline">Cart</span>
+              <span className="hidden sm:inline">{t('store.cart', 'Cart', 'कार्ट')}</span>
               {totalItems > 0 && (
                 <span className="h-5 min-w-[20px] px-1.5 rounded-full bg-emerald-700 text-white text-[11px] font-black flex items-center justify-center">
                   {totalItems}
@@ -862,7 +958,7 @@ export function StoreClient({
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-emerald-700 text-white flex items-center justify-center font-black text-[10px] sm:text-[11px]">
                   {(customerName || customerPhone).charAt(0).toUpperCase()}
                 </div>
-                <span className="hidden sm:inline truncate max-w-[90px]">{customerName || 'My Account'}</span>
+                <span className="hidden sm:inline truncate max-w-[90px]">{customerName || t('store.myAccount', 'My Account', 'मेरा खाता')}</span>
                 {customerOrders.length > 0 && (
                   <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black">
                     {customerOrders.length}
@@ -876,8 +972,8 @@ export function StoreClient({
                 className="flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs cursor-pointer"
               >
                 <User className="h-3.5 w-3.5 shrink-0" />
-                <span className="hidden sm:inline">Sign In / Orders</span>
-                <span className="sm:hidden">Sign In</span>
+                <span className="hidden sm:inline">{t('store.signInOrders', 'Sign In / Orders', 'लॉग इन / ऑर्डर्स')}</span>
+                <span className="sm:hidden">{t('store.signIn', 'Sign In', 'लॉग इन')}</span>
               </button>
             )}
           </div>
@@ -889,7 +985,7 @@ export function StoreClient({
             <Search className="h-4 w-4 absolute left-3.5 top-2.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder={t('store.searchShort', 'Search products...', 'सामान खोजें...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-100 border-none text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -904,7 +1000,7 @@ export function StoreClient({
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
               <UtensilsCrossed className="h-4 w-4 text-amber-700" />
-              <span>Dine-In Table #{tableNumber}</span>
+              <span>{t('store.dineInTable', 'Dine-In Table', 'टेबल नं.')} #{tableNumber}</span>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -912,14 +1008,14 @@ export function StoreClient({
                 onClick={() => handleCallWaiter('SERVER')}
                 className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-500 text-stone-950 text-xs font-bold transition"
               >
-                Call Server
+                {t('store.callServer', 'Call Server', 'वेटर बुलाएं')}
               </button>
               <button
                 type="button"
                 onClick={() => handleCallWaiter('BILL')}
                 className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-stone-900 text-xs font-bold transition"
               >
-                Request Bill
+                {t('store.requestBill', 'Request Bill', 'बिल मांगें')}
               </button>
             </div>
           </div>
@@ -935,7 +1031,7 @@ export function StoreClient({
             className="w-full lg:w-64 shrink-0 bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs lg:sticky lg:top-24"
           >
             <div className="px-3 py-2 border-b border-slate-100 mb-2 flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Categories</h2>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('store.categories', 'Categories', 'श्रेणियां')}</h2>
               <span className="text-[11px] font-medium text-slate-400">{categories.length} Total</span>
             </div>
 
@@ -957,7 +1053,7 @@ export function StoreClient({
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <span className="truncate">{cat === 'ALL' ? 'All Products' : cat}</span>
+                    <span className="truncate">{getCategoryLabel(cat)}</span>
                     <span
                       className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
                         isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
@@ -978,11 +1074,11 @@ export function StoreClient({
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span className="font-medium">Delivery: 30 - 45 mins</span>
+                <span className="font-medium">{t('store.deliveryTime', 'Delivery: 30 - 45 mins', 'डिलीवरी: 30 - 45 मिनट')}</span>
               </div>
               <div className="flex items-center gap-2 text-emerald-700 font-bold">
                 <Truck className="h-4 w-4 shrink-0" />
-                <span>Free delivery above ₹299</span>
+                <span>{t('store.freeDeliveryAbove', 'Free delivery above ₹299', '₹299 से ऊपर मुफ्त डिलीवरी')}</span>
               </div>
             </div>
           </aside>
@@ -994,13 +1090,13 @@ export function StoreClient({
               <div className="max-w-md relative z-10 space-y-3">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
                   <Sparkles className="h-3 w-3" />
-                  100% Fresh Guarantee
+                  {t('store.freshGuarantee', '100% Fresh Guarantee', '100% ताज़ा गारंटी')}
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                  Fresh Groceries Delivered to Your Home
+                  {t('store.heroTitle', 'Fresh Groceries Delivered to Your Home', 'ताज़ा राशन और फल-सब्जियां सीधे आपके घर')}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 font-medium">
-                  Farm fresh produce, daily essentials, snacks, and dairy delivered in 30–45 minutes.
+                  {t('store.heroSubtitle', 'Farm fresh produce, daily essentials, snacks, and dairy delivered in 30–45 minutes.', 'दैनिक जरूरत का सामान, दूध और नाश्ता मात्र 30–45 मिनट में डिलीवरी।')}
                 </p>
                 <div className="pt-2">
                   <button
@@ -1011,7 +1107,7 @@ export function StoreClient({
                     }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm transition shadow-sm active:scale-95"
                   >
-                    <span>Shop Now</span>
+                    <span>{t('store.shopNow', 'Shop Now', 'अभी खरीदें')}</span>
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
@@ -1023,7 +1119,7 @@ export function StoreClient({
                   <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-emerald-600 text-white flex flex-col items-center justify-center font-black text-center shadow-lg">
                     <span className="text-[10px] tracking-widest text-emerald-200">CERTIFIED</span>
                     <span className="text-xs sm:text-sm">100%</span>
-                    <span className="text-[10px]">FRESH</span>
+                    <span className="text-[10px]">{t('store.certifiedFresh', 'FRESH', 'ताज़ा')}</span>
                   </div>
                 </div>
               </div>
@@ -1036,8 +1132,8 @@ export function StoreClient({
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Quality Products</h4>
-                  <p className="text-[10px] text-slate-500">Handpicked items</p>
+                  <h4 className="text-xs font-bold text-slate-900">{t('store.qualityProducts', 'Quality Products', 'उत्तम गुणवत्ता')}</h4>
+                  <p className="text-[10px] text-slate-500">{t('store.qualitySub', 'Handpicked items', 'चुनिंदा सामान')}</p>
                 </div>
               </div>
 
@@ -1046,8 +1142,8 @@ export function StoreClient({
                   <Truck className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Fast Delivery</h4>
-                  <p className="text-[10px] text-slate-500">30–45 mins local</p>
+                  <h4 className="text-xs font-bold text-slate-900">{t('store.fastDelivery', 'Fast Delivery', 'तेज़ डिलीवरी')}</h4>
+                  <p className="text-[10px] text-slate-500">{t('store.deliveryTime', '30–45 mins local', '30-45 मिनट डिलीवरी')}</p>
                 </div>
               </div>
 
@@ -1056,8 +1152,8 @@ export function StoreClient({
                   <Lock className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Secure Payment</h4>
-                  <p className="text-[10px] text-slate-500">UPI, Card &amp; Cash</p>
+                  <h4 className="text-xs font-bold text-slate-900">{t('store.securePayment', 'Secure Payment', 'सुरक्षित भुगतान')}</h4>
+                  <p className="text-[10px] text-slate-500">{t('store.paymentModesSub', 'UPI, Card & Cash', 'यूपीआई, कार्ड और नकद')}</p>
                 </div>
               </div>
 
@@ -1066,8 +1162,8 @@ export function StoreClient({
                   <BadgePercent className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Best Prices</h4>
-                  <p className="text-[10px] text-slate-500">Direct kirana rates</p>
+                  <h4 className="text-xs font-bold text-slate-900">{t('store.bestPrices', 'Best Prices', 'किफायती दाम')}</h4>
+                  <p className="text-[10px] text-slate-500">{t('store.kiranaRates', 'Direct kirana rates', 'सीधे बाज़ार दर पर')}</p>
                 </div>
               </div>
             </div>
@@ -1076,9 +1172,11 @@ export function StoreClient({
             <div id="featured-products" className="pt-2 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                  {selectedCategory === 'ALL' ? 'Featured Products' : selectedCategory}
+                  {selectedCategory === 'ALL' ? t('store.featuredProducts', 'Featured Products', 'प्रमुख उत्पाद') : getCategoryLabel(selectedCategory)}
                 </h3>
-                <p className="text-xs text-slate-500">Showing {filteredProducts.length} items available</p>
+                <p className="text-xs text-slate-500">
+                  {t('store.showingItems', 'Showing', 'दिखा रहे हैं')} {filteredProducts.length} {t('store.itemsCount', 'items available', 'सामान उपलब्ध')}
+                </p>
               </div>
               {selectedCategory !== 'ALL' && (
                 <button
@@ -1086,7 +1184,7 @@ export function StoreClient({
                   onClick={() => setSelectedCategory('ALL')}
                   className="text-xs font-bold text-emerald-700 hover:underline"
                 >
-                  View All Products
+                  {t('store.viewAll', 'View All Products', 'सभी उत्पाद देखें')}
                 </button>
               )}
             </div>
@@ -1094,7 +1192,7 @@ export function StoreClient({
             {/* Products Grid (Panel 2 Mockup: 4 Columns on Desktop) */}
             {filteredProducts.length === 0 ? (
               <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">
-                <p className="text-sm font-semibold">No products found matching your search.</p>
+                <p className="text-sm font-semibold">{t('store.noProducts', 'No products found matching your search.', 'आपकी खोज के अनुसार कोई उत्पाद नहीं मिला।')}</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -1103,7 +1201,7 @@ export function StoreClient({
                   }}
                   className="mt-3 px-4 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold"
                 >
-                  Clear Filters
+                  {t('store.clearFilters', 'Clear Filters', 'फ़िल्टर हटाएं')}
                 </button>
               </div>
             ) : (
@@ -1132,7 +1230,7 @@ export function StoreClient({
                         )}
                         {p.category && (
                           <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-white/90 backdrop-blur-xs text-[10px] font-bold text-slate-700 shadow-2xs">
-                            {p.category}
+                            {getCategoryLabel(p.category)}
                           </span>
                         )}
                       </div>
@@ -1152,7 +1250,7 @@ export function StoreClient({
                       {/* Price & Add to Cart Action */}
                       <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
                         <div>
-                          <span className="text-xs text-slate-400 block font-medium">Price</span>
+                          <span className="text-xs text-slate-400 block font-medium">{t('store.price', 'Price', 'कीमत')}</span>
                           <span className="text-sm sm:text-base font-black text-slate-900">
                             {currencySymbol}{p.price}
                           </span>
@@ -1164,7 +1262,7 @@ export function StoreClient({
                             onClick={() => setStoreClosedAlert(true)}
                             className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-500 text-xs font-bold transition cursor-pointer"
                           >
-                            Closed
+                            {t('store.closed', 'Closed', 'दुकान बंद')}
                           </button>
                         ) : qty === 0 ? (
                           <button
@@ -1173,7 +1271,7 @@ export function StoreClient({
                             className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center gap-1 active:scale-95 cursor-pointer"
                           >
                             <Plus className="h-3.5 w-3.5" />
-                            <span>Add</span>
+                            <span>{t('store.add', '+ Add', '+ जोड़ें')}</span>
                           </button>
                         ) : (
                           <div className="flex items-center gap-2 bg-emerald-700 text-white rounded-xl px-2 py-1 shadow-xs">
@@ -1216,7 +1314,7 @@ export function StoreClient({
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs font-black">
                   {totalItems}
                 </span>
-                <span className="text-sm">View Cart</span>
+                <span className="text-sm">{t('store.cart', 'View Cart', 'कार्ट देखें')}</span>
               </div>
               <div className="flex items-center gap-1.5 text-base font-black">
                 <span>{currencySymbol}{grandTotal.toFixed(2)}</span>
@@ -1240,14 +1338,14 @@ export function StoreClient({
                     title="Back to store menu"
                   >
                     <ArrowLeft className="size-4 text-stone-800" />
-                    <span>Back</span>
+                    <span>{t('common.back', 'Back', 'वापस')}</span>
                   </button>
                   <div className="h-4 w-px bg-stone-200" />
                   <div>
                     <h2 className="text-sm sm:text-base font-extrabold text-stone-900 leading-tight flex items-center gap-2">
-                      <span>Your Shopping Cart</span>
+                      <span>{t('store.yourCart', 'Your Shopping Cart', 'आपकी शॉपिंग कार्ट')}</span>
                       <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10.5px] font-black">
-                        {totalItems} {totalItems === 1 ? 'item' : 'items'}
+                        {totalItems} {totalItems === 1 ? t('store.itemSingle', 'item', 'सामान') : t('store.itemsCount', 'items', 'सामान')}
                       </span>
                     </h2>
                     <p className="text-[10.5px] text-stone-500 truncate max-w-[180px] sm:max-w-[300px]">
@@ -1269,7 +1367,7 @@ export function StoreClient({
                       title="Clear Cart"
                     >
                       <Trash2 className="size-3.5" />
-                      <span className="hidden sm:inline">Clear</span>
+                      <span className="hidden sm:inline">{t('store.clearCart', 'Clear', 'खाली करें')}</span>
                     </button>
                   )}
                   <button
@@ -1290,7 +1388,7 @@ export function StoreClient({
                   <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
                     <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                       <ShoppingBag className="size-3.5 text-emerald-600" />
-                      Selected Items ({totalItems})
+                      {t('store.yourCart', 'Selected Items', 'चुने हुए सामान')} ({totalItems})
                     </span>
                     <button
                       type="button"
@@ -1298,20 +1396,20 @@ export function StoreClient({
                       className="text-[11.5px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-0.5 cursor-pointer"
                     >
                       <Plus className="size-3" />
-                      <span>Add More Items</span>
+                      <span>{t('header.newBill', '+ Add More', '+ और सामान जोड़ें')}</span>
                     </button>
                   </div>
 
                   {cartItems.length === 0 ? (
                     <div className="py-8 text-center space-y-2">
                       <ShoppingBag className="size-10 text-stone-300 mx-auto" />
-                      <p className="text-xs font-bold text-stone-600">Your cart is currently empty</p>
+                      <p className="text-xs font-bold text-stone-600">{t('store.emptyCart', 'Your cart is currently empty', 'आपकी कार्ट खाली है')}</p>
                       <button
                         type="button"
                         onClick={closeCart}
                         className="mt-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
                       >
-                        Browse Store Menu
+                        {t('store.continueShopping', 'Browse Store Menu', 'सामान चुनें')}
                       </button>
                     </div>
                   ) : (
@@ -1393,13 +1491,13 @@ export function StoreClient({
                 <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
                   <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                     <Truck className="size-3.5 text-emerald-600" />
-                    Delivery &amp; Fulfillment
+                    {t('store.orderType', 'Delivery & Fulfillment', 'डिलीवरी और प्राप्ति')}
                   </span>
 
                   {tableNumber ? (
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold flex items-center gap-2 text-xs">
                       <UtensilsCrossed className="size-4 text-amber-600 shrink-0" />
-                      <span>Ordering for Dine-In Table #{tableNumber}</span>
+                      <span>{t('store.dineInTable', 'Dine-In Table', 'टेबल नं.')} #{tableNumber}</span>
                     </div>
                   ) : (
                     <div className="grid grid-cols-2 gap-2">
@@ -1413,7 +1511,7 @@ export function StoreClient({
                         }`}
                       >
                         <Truck className="size-3.5" />
-                        <span>Home Delivery</span>
+                        <span>{t('store.delivery', 'Home Delivery', 'होम डिलीवरी')}</span>
                       </button>
                       <button
                         type="button"
@@ -1425,7 +1523,7 @@ export function StoreClient({
                         }`}
                       >
                         <Store className="size-3.5" />
-                        <span>Store Pickup</span>
+                        <span>{t('store.takeout', 'Store Pickup', 'दुकान से पिकअप')}</span>
                       </button>
                     </div>
                   )}
@@ -1435,7 +1533,7 @@ export function StoreClient({
                     <div className="flex items-center justify-between text-[11px] font-bold text-stone-600">
                       <span className="flex items-center gap-1.5">
                         <Clock className="size-3.5 text-stone-500" />
-                        Order Timing
+                        {t('store.orderType', 'Order Timing', 'ऑर्डर का समय')}
                       </span>
                       <span className="text-[10.5px] text-stone-400">
                         {timingType === 'NOW' ? '⚡ Immediate preparation' : '📅 Pre-scheduled slot'}
@@ -1451,7 +1549,7 @@ export function StoreClient({
                             : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
                         }`}
                       >
-                        <span>🟢 Order Now (ASAP)</span>
+                        <span>{t('store.orderNow', '🟢 Order Now (ASAP)', '🟢 अभी मंगाएं (तुरंत)')}</span>
                       </button>
                       <button
                         type="button"
@@ -1462,14 +1560,14 @@ export function StoreClient({
                             : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
                         }`}
                       >
-                        <span>⏰ Order Ahead</span>
+                        <span>{t('store.orderAhead', '⏰ Order Ahead', '⏰ बाद के लिए')}</span>
                       </button>
                     </div>
 
                     {timingType === 'ORDER_AHEAD' && (
                       <div className="pt-1.5">
                         <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block mb-1">
-                          Select Delivery / Pickup Slot:
+                          {t('store.selectSlot', 'Select Delivery / Pickup Slot:', 'डिलीवरी या पिकअप का समय चुनें:')}
                         </label>
                         <select
                           value={scheduledSlot}
@@ -1501,11 +1599,11 @@ export function StoreClient({
                     <div className="space-y-1">
                       <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1">
                         <MapPin className="size-3.5 text-emerald-600" />
-                        <span>Complete Delivery Address *</span>
+                        <span>{t('store.addressLabel', 'Complete Delivery Address *', 'डिलीवरी का पूरा पता *')}</span>
                       </label>
                       <textarea
                         rows={2}
-                        placeholder="House / Flat No., Building, Street Name, Landmark"
+                        placeholder={t('store.addressPlaceholder', 'House / Flat No., Building, Street Name, Landmark', 'मकान / फ्लैट नं., गली का नाम, लैंडमार्क')}
                         value={deliveryAddress}
                         onChange={(e) => setDeliveryAddress(e.target.value)}
                         required
@@ -1518,7 +1616,7 @@ export function StoreClient({
                   <div className="space-y-1">
                     <input
                       type="text"
-                      placeholder="Special instructions or notes for the store (optional)"
+                      placeholder={t('store.instructionsPlaceholder', 'Special instructions or notes for the store (optional)', 'दुकानदार के लिए विशेष निर्देश (ऐच्छिक)')}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       className="w-full p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 focus:bg-white focus:border-emerald-600 focus:outline-hidden transition"
@@ -1530,7 +1628,7 @@ export function StoreClient({
                 <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
                   <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                     <User className="size-3.5 text-emerald-600" />
-                    Customer Information
+                    {t('store.customerInfo', 'Customer Information', 'ग्राहक का विवरण')}
                   </span>
 
                   {isReturningCustomer && customerPhone && (
@@ -1541,7 +1639,7 @@ export function StoreClient({
                         </span>
                         <div>
                           <p className="font-bold text-stone-900 leading-tight">
-                            {customerName ? `${customerName}` : 'Welcome Back'}
+                            {customerName ? `${customerName}` : t('store.welcomeBack', 'Welcome Back', 'स्वागत है')}
                           </p>
                           <p className="text-[10px] text-stone-500 font-mono">
                             Auto-filled: {customerPhone}
@@ -1553,7 +1651,7 @@ export function StoreClient({
                         onClick={handleResetCustomer}
                         className="text-[10px] text-emerald-700 hover:text-emerald-900 underline font-bold cursor-pointer"
                       >
-                        Change
+                        {t('store.change', 'Change', 'बदलें')}
                       </button>
                     </div>
                   )}
@@ -1562,7 +1660,7 @@ export function StoreClient({
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="Your Name (Optional)"
+                        placeholder={t('store.yourName', 'Your Name (Optional)', 'आपका नाम (ऐच्छिक)')}
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                         className="w-full p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 focus:bg-white focus:border-emerald-600 focus:outline-hidden transition"
@@ -1571,7 +1669,7 @@ export function StoreClient({
                     <div className="relative">
                       <input
                         type="tel"
-                        placeholder="WhatsApp Number *"
+                        placeholder={t('store.whatsAppNumber', 'WhatsApp Number *', 'व्हाट्सएप मोबाइल नंबर *')}
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
                         required
@@ -1594,7 +1692,7 @@ export function StoreClient({
                       className="text-xs text-stone-600 font-medium cursor-pointer flex items-center gap-1.5 select-none"
                     >
                       <MessageCircle className="size-3.5 text-emerald-600" />
-                      <span>Send order receipt &amp; status updates to my WhatsApp</span>
+                      <span>{t('store.waUpdatesOptIn', 'Send order receipt & status updates to my WhatsApp', 'ऑर्डर रसीद और लाइव अपडेट व्हाट्सएप पर भेजें')}</span>
                     </label>
                   </div>
                 </div>
@@ -1604,11 +1702,11 @@ export function StoreClient({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                       <CreditCard className="size-3.5 text-emerald-600" />
-                      Payment Method
+                      {t('store.paymentMethod', 'Payment Method', 'भुगतान का तरीका')}
                     </span>
                     {hasOnlinePayment && (
                       <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        Zero Fee UPI
+                        {t('store.zeroFeeUpi', 'Zero Fee UPI', 'मुफ़्त UPI')}
                       </span>
                     )}
                   </div>
@@ -1629,10 +1727,10 @@ export function StoreClient({
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                               <QrCode className="size-4 text-emerald-600" />
-                              Pay Online
+                              {t('store.payOnline', 'Pay Online', 'ऑनलाइन भुगतान')}
                             </span>
                             <span className="text-[8.5px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-                              FAST
+                              {t('store.fast', 'FAST', 'तुरंत')}
                             </span>
                           </div>
                           <p className="text-[10.5px] text-stone-500 font-medium">UPI / QR Scan</p>
@@ -1650,10 +1748,10 @@ export function StoreClient({
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
                               <Store className="size-4 text-stone-700" />
-                              Pay at Counter
+                              {t('store.payAtCounter', 'Pay at Counter', 'काउंटर पर भुगतान')}
                             </span>
                           </div>
-                          <p className="text-[10.5px] text-stone-500 font-medium">Cash / COD</p>
+                          <p className="text-[10.5px] text-stone-500 font-medium">{t('store.cashCod', 'Cash / COD', 'नकद (Cash / COD)')}</p>
                         </button>
                       </div>
 
@@ -1669,10 +1767,10 @@ export function StoreClient({
                                 </div>
                                 <div className="space-y-1">
                                   <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">
-                                    Trust &amp; Safety Check: Do you know this store?
+                                    {t('store.trustShieldTitle', 'Trust & Safety Check: Do you know this store?', 'सुरक्षा जांच: क्या आप इस दुकान को जानते हैं?')}
                                   </h4>
                                   <p className="text-[11px] text-amber-900/90 leading-relaxed font-medium">
-                                    Direct UPI payments transfer instantly to the store owner&apos;s bank account with no middleman. If you are not physically at the shop or haven&apos;t confirmed with {businessName} today, we strongly advise verifying first or choosing Pay at Counter.
+                                    {t('store.trustShieldMsg', "Direct UPI payments transfer instantly to the store owner's bank account with no middleman. If you are not physically at the shop or haven't confirmed with the store today, we strongly advise verifying first or choosing Pay at Counter.", "सीधा UPI भुगतान बिना किसी बिचौलिए के सीधे दुकानदार के बैंक खाते में जाता है। यदि आप दुकान पर नहीं हैं या आज पुष्टि नहीं की है, तो पहले कॉल करें या नकद भुगतान चुनें।")}
                                   </p>
                                 </div>
                               </div>
@@ -1684,7 +1782,7 @@ export function StoreClient({
                                   className="w-full py-2 px-3 bg-white border border-stone-300 hover:bg-stone-50 text-stone-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer"
                                 >
                                   <Store className="size-3.5 text-stone-600" />
-                                  Switch to Cash / COD
+                                  {t('store.switchToCash', 'Switch to Cash / COD', 'नकद (Cash / COD) चुनें')}
                                 </button>
                                 {businessPhone ? (
                                   <a
@@ -1692,7 +1790,7 @@ export function StoreClient({
                                     className="w-full py-2 px-3 bg-white border border-stone-300 hover:bg-stone-50 text-stone-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer"
                                   >
                                     <Phone className="size-3.5 text-emerald-600" />
-                                    Call Store to Confirm
+                                    {t('store.callToConfirm', 'Call Store to Confirm', 'पुष्टि के लिए कॉल करें')}
                                   </a>
                                 ) : null}
                               </div>
@@ -1703,7 +1801,7 @@ export function StoreClient({
                                 className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
                               >
                                 <CheckCircle2 className="size-4" />
-                                <span>I Know This Store &bull; Unlock UPI Payment</span>
+                                <span>{t('store.unlockUpi', 'I Know This Store • Unlock UPI Payment', 'मैं इस दुकान को जानता हूँ • UPI पेमेंट चालू करें')}</span>
                               </button>
                             </div>
                           ) : (
@@ -1711,7 +1809,7 @@ export function StoreClient({
                               <div className="flex items-center justify-between text-[10.5px]">
                                 <span className="font-bold text-stone-700 flex items-center gap-1">
                                   <Sparkles className="size-3 text-emerald-600" />
-                                  Scan &amp; Pay with Any App
+                                  {t('store.scanAndPay', 'Scan & Pay with Any App', 'किसी भी ऐप से स्कैन करके भुगतान करें')}
                                 </span>
                                 <div className="flex items-center gap-1 font-bold text-[9px]">
                                   <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-stone-800 shadow-2xs">
@@ -1741,10 +1839,10 @@ export function StoreClient({
                                   </div>
                                   <div className="text-center sm:text-left space-y-1 flex-1 min-w-0">
                                     <p className="text-xs font-bold text-stone-900">
-                                      Instant UPI QR Payment
+                                      {t('store.instantUpi', 'Instant UPI QR Payment', 'तुरंत UPI QR भुगतान')}
                                     </p>
                                     <p className="text-[11px] text-stone-500 leading-tight">
-                                      Scan using PhonePe, Google Pay, Paytm, or BHIM:
+                                      {t('store.scanAppsPrompt', 'Scan using PhonePe, Google Pay, Paytm, or BHIM:', 'PhonePe, Google Pay, Paytm या BHIM से स्कैन करें:')}
                                     </p>
                                     <p className="text-sm font-black text-emerald-700">
                                       {currencySymbol}{grandTotal.toFixed(2)}
@@ -1758,7 +1856,7 @@ export function StoreClient({
                                 <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-stone-200 text-xs">
                                   <div className="min-w-0 flex-1 pr-2">
                                     <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider">
-                                      Merchant UPI ID
+                                      {t('store.merchantUpiId', 'Merchant UPI ID', 'दुकानदार का UPI ID')}
                                     </p>
                                     <p className="font-mono font-bold text-stone-800 truncate select-all text-xs">
                                       {effectiveUpiId}
@@ -1772,12 +1870,12 @@ export function StoreClient({
                                     {copiedUpi ? (
                                       <>
                                         <Check className="size-3 text-emerald-600" />
-                                        <span className="text-emerald-700">Copied!</span>
+                                        <span className="text-emerald-700">{t('store.copied', 'Copied!', 'कॉपी हो गया!')}</span>
                                       </>
                                     ) : (
                                       <>
                                         <Copy className="size-3" />
-                                        <span>Copy</span>
+                                        <span>{t('store.copy', 'Copy', 'कॉपी')}</span>
                                       </>
                                     )}
                                   </button>
@@ -1792,7 +1890,7 @@ export function StoreClient({
                                 >
                                   <Smartphone className="size-4" />
                                   <span>
-                                    Tap to Open UPI App ({currencySymbol}{grandTotal.toFixed(2)})
+                                    {t('store.tapToOpenUpi', 'Tap to Open UPI App', 'UPI ऐप में खोलें')} ({currencySymbol}{grandTotal.toFixed(2)})
                                   </span>
                                 </a>
                               )}
@@ -1800,14 +1898,14 @@ export function StoreClient({
                               <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 text-[10px] text-stone-500">
                                 <span className="flex items-center gap-1 text-emerald-700 font-semibold">
                                   <ShieldCheck className="size-3" />
-                                  Merchant Verified for this Order
+                                  {t('store.verifiedOrder', 'Merchant Verified for this Order', 'इस ऑर्डर के लिए सत्यापित मर्चेंट')}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => setUpiTrustConfirmed(false)}
                                   className="text-stone-500 hover:text-stone-800 underline font-medium cursor-pointer"
                                 >
-                                  Re-verify safety
+                                  {t('store.reverify', 'Re-verify safety', 'सुरक्षा जांचें')}
                                 </button>
                               </div>
                             </>
@@ -1816,7 +1914,7 @@ export function StoreClient({
                           {/* Optional UTR / Reference Input */}
                           <div>
                             <label className="text-[10px] font-bold text-stone-600 block mb-1">
-                              UPI Reference / UTR Number (Optional after payment)
+                              {t('store.utrLabel', 'UPI Reference / UTR Number (Optional after payment)', 'UPI रेफरेंस / UTR नंबर (पेमेंट के बाद, 12 अंक)')}
                             </label>
                             <input
                               type="text"
@@ -1824,12 +1922,12 @@ export function StoreClient({
                               onChange={(e) =>
                                 setUtrNumber(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))
                               }
-                              placeholder="e.g. 4289xxxxxxxx (12 digits)"
+                              placeholder={t('store.utrPlaceholder', 'e.g. 4289xxxxxxxx (12 digits)', 'उदा. 4289xxxxxxxx (12 अंक)')}
                               maxLength={18}
                               className="w-full text-xs font-mono bg-white border border-stone-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                             />
                             <p className="text-[9.5px] text-stone-400 mt-1">
-                              Helps {businessName} verify and dispatch your order immediately.
+                              {t('store.utrHelp', 'Helps verify and dispatch your order immediately.', 'इससे दुकानदार तुरंत आपका पेमेंट सत्यापित कर ऑर्डर भेज सकेगा।')}
                             </p>
                           </div>
                         </div>
@@ -1838,7 +1936,7 @@ export function StoreClient({
                   ) : (
                     <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs text-stone-600 flex items-center gap-2">
                       <Store className="size-4 text-stone-500 shrink-0" />
-                      <span>Payment will be collected at counter or upon delivery (Cash / COD).</span>
+                      <span>{t('store.codNotice', 'Payment will be collected at counter or upon delivery (Cash / COD).', 'भुगतान डिलीवरी के समय या काउंटर पर नकद लिया जाएगा।')}</span>
                     </div>
                   )}
                 </div>
@@ -1847,7 +1945,7 @@ export function StoreClient({
                 <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
                   <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                     <Tag className="size-3.5 text-emerald-600" />
-                    Offers &amp; Bill Breakdown
+                    {t('store.offersBill', 'Offers & Bill Breakdown', 'ऑफ़र्स और बिल का विवरण')}
                   </span>
 
                   {/* Promo Code Input */}
@@ -1857,7 +1955,7 @@ export function StoreClient({
                         <Tag className="size-3.5 absolute left-3 top-2.5 text-stone-400" />
                         <input
                           type="text"
-                          placeholder="Promo code (e.g. WELCOME10)"
+                          placeholder={t('store.promoPlaceholder', 'Promo code (e.g. WELCOME10)', 'प्रोमो कोड (उदा. WELCOME10)')}
                           value={promoCodeInput}
                           onChange={(e) => setPromoCodeInput(e.target.value)}
                           className="w-full pl-8.5 pr-2 py-2 rounded-xl bg-stone-50/80 border border-stone-200 text-xs uppercase font-bold text-stone-900 focus:bg-white focus:border-emerald-600 focus:outline-hidden"
@@ -1868,14 +1966,14 @@ export function StoreClient({
                         onClick={handleApplyPromo}
                         className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold shrink-0 transition active:scale-95 cursor-pointer"
                       >
-                        Apply
+                        {t('store.apply', 'Apply', 'लागू करें')}
                       </button>
                     </div>
 
                     {appliedDiscount && (
                       <div className="flex justify-between items-center text-[11px] text-emerald-700 font-bold mt-1.5 px-1">
                         <span>
-                          ✓ Code {appliedDiscount.code} applied ({appliedDiscount.label || 'Discount'})
+                          ✓ Code {appliedDiscount.code} applied ({appliedDiscount.label || t('store.discount', 'Discount', 'छूट')})
                         </span>
                         <button
                           type="button"
@@ -1885,7 +1983,7 @@ export function StoreClient({
                           }}
                           className="text-stone-400 hover:text-stone-700 underline text-[10px] cursor-pointer"
                         >
-                          Remove
+                          {t('store.remove', 'Remove', 'हटाएं')}
                         </button>
                       </div>
                     )}
@@ -1897,13 +1995,13 @@ export function StoreClient({
                   {/* Bill Details */}
                   <div className="border-t border-stone-100 pt-3 space-y-1.5 text-xs">
                     <div className="flex justify-between items-center text-stone-500 font-medium">
-                      <span>Item Total ({totalItems} items)</span>
+                      <span>{t('store.itemTotal', 'Item Total', 'सामान का योग')} ({totalItems} {totalItems === 1 ? t('store.itemSingle', 'item', 'सामान') : t('store.itemsCount', 'items', 'सामान')})</span>
                       <span>{currencySymbol}{subtotal.toFixed(2)}</span>
                     </div>
 
                     {discountAmount > 0 && (
                       <div className="flex justify-between items-center text-emerald-600 font-bold">
-                        <span>Discount ({appliedDiscount?.code})</span>
+                        <span>{t('store.discount', 'Discount', 'छूट')} ({appliedDiscount?.code})</span>
                         <span>-{currencySymbol}{discountAmount.toFixed(2)}</span>
                       </div>
                     )}
@@ -1917,13 +2015,13 @@ export function StoreClient({
 
                     {serviceChargeAmount > 0 && (
                       <div className="flex justify-between items-center text-stone-500 font-medium">
-                        <span>Service Charge ({serviceChargeRate}%)</span>
+                        <span>{t('store.serviceCharge', 'Service Charge', 'सर्विस चार्ज')} ({serviceChargeRate}%)</span>
                         <span>{currencySymbol}{serviceChargeAmount.toFixed(2)}</span>
                       </div>
                     )}
 
                     <div className="flex justify-between items-center pt-2 border-t border-dashed border-stone-200 font-black text-sm text-stone-900">
-                      <span>Grand Total</span>
+                      <span>{t('store.grandTotal', 'Grand Total', 'कुल देय राशि')}</span>
                       <span className="text-emerald-700">{currencySymbol}{grandTotal.toFixed(2)}</span>
                     </div>
                   </div>
@@ -1934,13 +2032,13 @@ export function StoreClient({
               <footer className="shrink-0 bg-white border-t border-stone-200/90 px-4 py-3 sm:py-3.5 shadow-[0_-8px_25px_rgba(0,0,0,0.06)] z-20 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                    Total Payable
+                    {t('store.totalPayable', 'Total Payable', 'कुल देय राशि')}
                   </p>
                   <p className="text-base sm:text-lg font-black text-stone-900 leading-tight">
                     {currencySymbol}{grandTotal.toFixed(2)}
                   </p>
                   <p className="text-[10px] text-stone-500 font-medium truncate">
-                    {totalItems} {totalItems === 1 ? 'item' : 'items'} • {orderType === 'DELIVERY' ? 'Delivery' : 'Pickup'}
+                    {totalItems} {totalItems === 1 ? t('store.itemSingle', 'item', 'सामान') : t('store.itemsCount', 'items', 'सामान')} • {orderType === 'DELIVERY' ? t('store.delivery', 'Delivery', 'होम डिलीवरी') : t('store.takeout', 'Pickup', 'पिकअप')}
                   </p>
                 </div>
 
@@ -1955,12 +2053,12 @@ export function StoreClient({
                       {isSubmitting ? (
                         <>
                           <span className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Submitting...</span>
+                          <span>{t('store.submitting', 'Submitting...', 'ऑर्डर भेजा जा रहा है...')}</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="size-4" />
-                          <span>Place Order &amp; Pay</span>
+                          <span>{t('store.placeOrderPay', 'Place Order & Pay', 'ऑर्डर करें और भुगतान करें')}</span>
                           <ArrowRight className="size-4" />
                         </>
                       )}
@@ -1975,12 +2073,12 @@ export function StoreClient({
                       {isSubmitting ? (
                         <>
                           <span className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Submitting...</span>
+                          <span>{t('store.submitting', 'Submitting...', 'ऑर्डर भेजा जा रहा है...')}</span>
                         </>
                       ) : (
                         <>
                           <Store className="size-4" />
-                          <span>Place Order • Cash</span>
+                          <span>{t('store.placeOrderCash', 'Place Order • Cash', 'ऑर्डर करें • नकद')}</span>
                           <ArrowRight className="size-4" />
                         </>
                       )}
@@ -1999,21 +2097,21 @@ export function StoreClient({
               <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
                 <CheckCircle2 className="h-8 w-8" />
               </div>
-              <h3 className="text-xl font-black text-stone-900">Order Confirmed!</h3>
+              <h3 className="text-xl font-black text-stone-900">{t('store.orderConfirmed', 'Order Confirmed!', 'ऑर्डर सफलतापूर्वक दर्ज हो गया!')}</h3>
               <p className="text-xs text-stone-500 mt-1">
-                Order #{orderSuccess.orderNumber} has been received by {businessName}. Keep this link to check its status.
+                Order #{orderSuccess.orderNumber} {t('store.orderReceivedMsg', 'has been received. Keep this link to check its status.', 'प्राप्त हो गया है। स्थिति जांचने के लिए यह लिंक सुरक्षित रखें।')}
               </p>
 
               <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100 rounded-full text-xs font-bold text-stone-700">
                 {orderSuccess.paymentMethod === 'UPI' ? (
                   <>
                     <QrCode className="size-3.5 text-emerald-600" />
-                    <span>Payment Mode: UPI Online</span>
+                    <span>{t('store.paymentModeUpi', 'Payment Mode: UPI Online', 'पेमेंट: यूपीआई ऑनलाइन')}</span>
                   </>
                 ) : (
                   <>
                     <Store className="size-3.5 text-stone-600" />
-                    <span>Payment Mode: Pay at Counter</span>
+                    <span>{t('store.paymentModeCounter', 'Payment Mode: Pay at Counter', 'पेमेंट: काउंटर पर नकद')}</span>
                   </>
                 )}
               </div>
@@ -2024,7 +2122,7 @@ export function StoreClient({
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-black text-xs flex items-center justify-center gap-2 shadow-md active:scale-95 transition"
                 >
                   <Clock className="h-4 w-4" />
-                  <span>🔥 Track Live Order & Virtual Queue</span>
+                  <span>{t('store.trackLiveOrder', '🔥 Track Live Order & Virtual Queue', '🔥 लाइव ऑर्डर और कतार ट्रैक करें')}</span>
                 </a>
 
                 {orderSuccess.waUrl && (
@@ -2035,7 +2133,7 @@ export function StoreClient({
                     className="w-full bg-stone-100 hover:bg-stone-200 text-stone-900 py-2.5 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition"
                   >
                     <MessageCircle className="h-4 w-4 text-emerald-600" />
-                    <span>Open in WhatsApp</span>
+                    <span>{t('store.openInWhatsApp', 'Open in WhatsApp', 'व्हाट्सएप में खोलें')}</span>
                   </a>
                 )}
 
@@ -2048,7 +2146,7 @@ export function StoreClient({
                   }}
                   className="w-full text-stone-400 hover:text-stone-600 py-2 text-xs font-semibold cursor-pointer"
                 >
-                  Back to Menu
+                  {t('store.continueShopping', 'Back to Menu', 'दुकान पर वापस जाएं')}
                 </button>
               </div>
             </div>

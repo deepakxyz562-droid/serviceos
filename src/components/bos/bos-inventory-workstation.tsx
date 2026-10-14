@@ -28,6 +28,7 @@ import {
   BosProductThumbnail,
   lookupPublicProductByBarcodeOrName,
 } from '@/components/bos/bos-product-image-resolver';
+import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
 type InventorySubTab =
   | 'all'
@@ -316,6 +317,7 @@ export function BosInventoryWorkstation({
   onDeleteProduct,
   onAdjustStock,
 }: BosInventoryWorkstationProps) {
+  const { t, language } = useBosTranslation();
   const [subTab, setSubTab] = useState<InventorySubTab>('all');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -931,10 +933,10 @@ export function BosInventoryWorkstation({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight text-[#111827] leading-tight">
-            Products &amp; Inventory
+            {t('inventory.title', 'Products & Inventory')}
           </h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">
-            Manage your products, stock, categories and suppliers.
+            {t('inventory.subtitle', 'Manage your products, stock, categories and suppliers.')}
           </p>
         </div>
 
@@ -945,7 +947,7 @@ export function BosInventoryWorkstation({
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Upload className="h-4 w-4 text-[#475569]" />
-            <span>Import</span>
+            <span>{t('inventory.importCsv', 'Import')}</span>
           </button>
 
           <button
@@ -954,7 +956,7 @@ export function BosInventoryWorkstation({
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Download className="h-4 w-4 text-[#475569]" />
-            <span>Export</span>
+            <span>{t('inventory.exportCsv', 'Export')}</span>
           </button>
 
           <button
@@ -963,7 +965,7 @@ export function BosInventoryWorkstation({
             className="inline-flex items-center gap-2 rounded-xl bg-[#0A6847] px-4 py-2 text-[13px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
-            <span>Add Product</span>
+            <span>{t('inventory.addProduct', 'Add Product')}</span>
           </button>
         </div>
       </div>
@@ -972,12 +974,12 @@ export function BosInventoryWorkstation({
       <div className="flex items-center gap-6 border-b border-[#E2ECE7] overflow-x-auto no-scrollbar">
         {(
           [
-            { id: 'all', label: 'All Products' },
-            { id: 'categories', label: 'Categories' },
-            { id: 'stockInOut', label: 'Stock In/Out' },
-            { id: 'lowStock', label: 'Low Stock' },
-            { id: 'suppliers', label: 'Suppliers' },
-            { id: 'purchaseOrders', label: 'Purchase Orders' },
+            { id: 'all', label: t('inventory.allProducts', 'All Products') },
+            { id: 'categories', label: t('inventory.categories', 'Categories') },
+            { id: 'stockInOut', label: t('inventory.stockInOut', 'Stock In/Out') },
+            { id: 'lowStock', label: t('inventory.lowStock', 'Low Stock') },
+            { id: 'suppliers', label: t('inventory.suppliers', 'Suppliers') },
+            { id: 'purchaseOrders', label: t('inventory.purchaseOrders', 'Purchase Orders') },
           ] as const
         ).map((tab) => {
           const active = subTab === tab.id;
@@ -1026,7 +1028,7 @@ export function BosInventoryWorkstation({
             <Box className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-[12px] font-medium text-[#64748B]">Total Products</p>
+            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.totalProducts', 'Total Products')}</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
               {inventoryStats.totalProducts}
             </p>
@@ -1040,7 +1042,7 @@ export function BosInventoryWorkstation({
             <Box className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-[12px] font-medium text-[#64748B]">In Stock</p>
+            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.inStock', 'In Stock')}</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
               {inventoryStats.inStock}
             </p>
@@ -1054,7 +1056,7 @@ export function BosInventoryWorkstation({
             <AlertTriangle className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-[12px] font-medium text-[#64748B]">Low Stock</p>
+            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.lowStock', 'Low Stock')}</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
               {inventoryStats.lowStock}
             </p>
@@ -1068,7 +1070,7 @@ export function BosInventoryWorkstation({
             <X className="h-6 w-6 stroke-[2.5]" />
           </div>
           <div>
-            <p className="text-[12px] font-medium text-[#64748B]">Out of Stock</p>
+            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.outOfStock', 'Out of Stock')}</p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
               {inventoryStats.outOfStock}
             </p>
@@ -1085,7 +1087,7 @@ export function BosInventoryWorkstation({
           </div>
           <div>
             <p className="text-[12px] font-medium text-[#64748B]">
-              Total Inventory Value
+              {t('inventory.inventoryValue', 'Total Inventory Value')}
             </p>
             <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
               {currencySymbol} {inventoryStats.totalValuation}
@@ -1188,7 +1190,7 @@ export function BosInventoryWorkstation({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search products by name, barcode or SKU..."
+                  placeholder={t('inventory.searchPlaceholder', 'Search products by name, barcode or SKU...')}
                   className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] pl-9 pr-3 text-[12.5px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
                 />
               </div>
@@ -1228,10 +1230,10 @@ export function BosInventoryWorkstation({
                 }
                 className="h-9 rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12.5px] font-medium text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
               >
-                <option value="all">Stock Status</option>
-                <option value="In Stock">In Stock</option>
-                <option value="Low Stock">Low Stock</option>
-                <option value="Out of Stock">Out of Stock</option>
+                <option value="all">{t('inventory.allStockStatus', 'Stock Status')}</option>
+                <option value="In Stock">{t('inventory.inStock', 'In Stock')}</option>
+                <option value="Low Stock">{t('inventory.lowStock', 'Low Stock')}</option>
+                <option value="Out of Stock">{t('inventory.outOfStock', 'Out of Stock')}</option>
               </select>
 
               {/* Brand Select */}
@@ -1243,7 +1245,7 @@ export function BosInventoryWorkstation({
               >
                 {brands.map((b) => (
                   <option key={b} value={b}>
-                    {b === 'All Brands' ? 'Brand' : b}
+                    {b === 'All Brands' ? t('inventory.brand', 'Brand') : b}
                   </option>
                 ))}
               </select>
@@ -1281,13 +1283,13 @@ export function BosInventoryWorkstation({
                         className="h-4 w-4 rounded border-[#CBD5E1] accent-[#0A6847] cursor-pointer"
                       />
                     </th>
-                    <th className="py-3 px-2.5">Product</th>
-                    <th className="py-3 px-2.5">SKU / Barcode</th>
-                    <th className="py-3 px-2.5">Category</th>
-                    <th className="py-3 px-2.5">Stock</th>
-                    <th className="py-3 px-2.5">Price ({currencySymbol})</th>
-                    <th className="py-3 px-2.5">Status</th>
-                    <th className="py-3 pl-2 pr-4 text-center">Actions</th>
+                    <th className="py-3 px-2.5">{t('inventory.productName', 'Product')}</th>
+                    <th className="py-3 px-2.5">{t('inventory.barcode', 'SKU / Barcode')}</th>
+                    <th className="py-3 px-2.5">{t('inventory.category', 'Category')}</th>
+                    <th className="py-3 px-2.5">{t('inventory.stockUnits', 'Stock')}</th>
+                    <th className="py-3 px-2.5">{t('inventory.sellingPrice', 'Price')} ({currencySymbol})</th>
+                    <th className="py-3 px-2.5">{t('common.status', 'Status')}</th>
+                    <th className="py-3 pl-2 pr-4 text-center">{t('common.actions', 'Actions')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#EEF5F1] text-[13px]">
@@ -1507,22 +1509,22 @@ export function BosInventoryWorkstation({
               <div className="flex items-center gap-5 border-b border-[#EBF2EE]">
                 {(
                   [
-                    { id: 'overview', label: 'Overview' },
-                    { id: 'stockHistory', label: 'Stock History' },
-                    { id: 'sales', label: 'Sales' },
-                    { id: 'edit', label: 'Edit' },
+                    { id: 'overview', label: t('inventory.overview', 'Overview') },
+                    { id: 'stockHistory', label: t('inventory.stockHistory', 'Stock History') },
+                    { id: 'sales', label: t('inventory.salesTrend', 'Sales') },
+                    { id: 'edit', label: t('common.edit', 'Edit') },
                   ] as const
-                ).map((t) => {
-                  const active = inspectorTab === t.id;
+                ).map((tabItem) => {
+                  const active = inspectorTab === tabItem.id;
                   return (
                     <button
-                      key={t.id}
+                      key={tabItem.id}
                       type="button"
                       onClick={() => {
-                        if (t.id === 'edit') {
+                        if (tabItem.id === 'edit') {
                           openEditProductModal(selectedEntry.product);
                         } else {
-                          setInspectorTab(t.id);
+                          setInspectorTab(tabItem.id);
                         }
                       }}
                       className={`relative pb-2 text-[12.5px] transition cursor-pointer ${
@@ -1531,7 +1533,7 @@ export function BosInventoryWorkstation({
                           : 'font-medium text-[#64748B] hover:text-[#111827]'
                       }`}
                     >
-                      <span>{t.label}</span>
+                      <span>{tabItem.label}</span>
                       {active && (
                         <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[#0A6847]" />
                       )}

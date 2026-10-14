@@ -31,6 +31,7 @@ import {
   type BosProductItem,
 } from '@/components/bos/bos-types';
 import { BosProductThumbnail } from '@/components/bos/bos-product-image-resolver';
+import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
 type CartItem = {
   product: BosProductItem;
@@ -146,6 +147,7 @@ export function BosPosWorkstation({
   onCompleteSale,
   onOpenPrinterModal,
 }: BosPosWorkstationProps) {
+  const { t, language } = useBosTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All Products');
   const [gridMode, setGridMode] = useState<'grid' | 'compact'>('grid');
@@ -520,7 +522,7 @@ export function BosPosWorkstation({
             <span className="rounded-md bg-white/20 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-white">
               F1
             </span>
-            <span>New Sale</span>
+            <span>{language === 'hi' ? 'नया बिल' : language === 'both' ? 'New Sale / नया बिल' : 'New Sale'}</span>
           </button>
 
           {/* F2 Hold Bill */}
@@ -536,7 +538,7 @@ export function BosPosWorkstation({
             <span className="rounded-md bg-[#F1F5F9] px-1.5 py-0.5 text-[11px] font-bold text-[#475569]">
               F2
             </span>
-            <span>Hold Bill</span>
+            <span>{language === 'hi' ? 'बिल होल्ड करें' : language === 'both' ? 'Hold Bill / होल्ड' : 'Hold Bill'}</span>
             {heldBills.length > 0 && (
               <span className="rounded-full bg-amber-100 px-1.5 py-0.2 text-[10.5px] font-bold text-amber-800">
                 {heldBills.length}
@@ -559,7 +561,7 @@ export function BosPosWorkstation({
             <span className="rounded-md bg-[#F1F5F9] px-1.5 py-0.5 text-[11px] font-bold text-[#475569]">
               F3
             </span>
-            <span>Recent Bills</span>
+            <span>{language === 'hi' ? 'हाल के बिल' : language === 'both' ? 'Recent Bills / हाल के बिल' : 'Recent Bills'}</span>
           </button>
 
           {/* F4 Drafts */}
@@ -577,7 +579,7 @@ export function BosPosWorkstation({
             <span className="rounded-md bg-[#F1F5F9] px-1.5 py-0.5 text-[11px] font-bold text-[#475569]">
               F4
             </span>
-            <span>Drafts</span>
+            <span>{language === 'hi' ? 'ड्राफ्ट' : language === 'both' ? 'Drafts / ड्राफ्ट' : 'Drafts'}</span>
             {draftBills.length > 0 && (
               <span className="rounded-full bg-[#E6F6F0] px-1.5 py-0.2 text-[10.5px] font-bold text-[#0A6847]">
                 {draftBills.length}
@@ -595,7 +597,7 @@ export function BosPosWorkstation({
               className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[13px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] transition cursor-pointer"
             >
               <MoreHorizontal className="h-4 w-4 text-[#64748B]" />
-              <span>More</span>
+              <span>{language === 'hi' ? 'अधिक' : language === 'both' ? 'More / अधिक' : 'More'}</span>
               <ChevronDown className="h-3.5 w-3.5 text-[#64748B]" />
             </button>
 
@@ -1003,7 +1005,13 @@ export function BosPosWorkstation({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
-                placeholder="Search products by name, barcode or SKU..."
+                placeholder={
+                  language === 'hi'
+                    ? 'बारकोड स्कैन करें या सामान खोजें (F2)...'
+                    : language === 'both'
+                      ? 'Search product or barcode / सामान या बारकोड खोजें...'
+                      : 'Search products by name, barcode or SKU...'
+                }
                 className="h-10 w-full rounded-xl border border-[#DCE9E3] bg-[#FBFDFC] pl-10 pr-3 text-[13px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
               />
             </div>
@@ -1013,7 +1021,11 @@ export function BosPosWorkstation({
               type="button"
               onClick={() => {
                 searchInputRef.current?.focus();
-                showToast('Scanner ready — scan barcode or type SKU and press Enter');
+                showToast(
+                  language === 'hi'
+                    ? 'स्कैनर तैयार है — बारकोड स्कैन करें'
+                    : 'Scanner ready — scan barcode or type SKU and press Enter'
+                );
               }}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#DCE9E3] bg-[#F4F8F6] text-[#0A6847] hover:bg-[#E6F6F0] transition cursor-pointer"
               title="Scan Barcode"
@@ -1024,7 +1036,7 @@ export function BosPosWorkstation({
             {/* Floating-Label Category Select */}
             <div className="relative">
               <span className="pointer-events-none absolute -top-2 left-2.5 bg-white px-1 text-[10px] font-medium text-[#64748B]">
-                Category
+                {language === 'hi' ? 'श्रेणी' : language === 'both' ? 'Category / श्रेणी' : 'Category'}
               </span>
               <select
                 aria-label="Category filter"
@@ -1032,13 +1044,15 @@ export function BosPosWorkstation({
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="h-10 rounded-xl border border-[#DCE9E3] bg-white pl-3 pr-8 text-[12.5px] font-semibold text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
               >
-                <option value="All Products">All Categories</option>
-                <option value="Groceries">Groceries</option>
-                <option value="Beverages">Beverages</option>
-                <option value="Snacks">Snacks</option>
-                <option value="Dairy">Dairy</option>
-                <option value="Personal Care">Personal Care</option>
-                <option value="Household">Household</option>
+                <option value="All Products">
+                  {language === 'hi' ? 'सभी श्रेणियां' : language === 'both' ? 'All Categories / सभी' : 'All Categories'}
+                </option>
+                <option value="Groceries">{language === 'hi' ? 'किराना / राशन' : 'Groceries'}</option>
+                <option value="Beverages">{language === 'hi' ? 'पेय पदार्थ (Beverages)' : 'Beverages'}</option>
+                <option value="Snacks">{language === 'hi' ? 'नाश्ता / नमकीन (Snacks)' : 'Snacks'}</option>
+                <option value="Dairy">{language === 'hi' ? 'डेयरी उत्पाद (Dairy)' : 'Dairy'}</option>
+                <option value="Personal Care">{language === 'hi' ? 'पर्सनल केयर (Personal Care)' : 'Personal Care'}</option>
+                <option value="Household">{language === 'hi' ? 'घरेलू सामान (Household)' : 'Household'}</option>
               </select>
             </div>
 
@@ -1185,7 +1199,7 @@ export function BosPosWorkstation({
                   : 'font-medium text-[#64748B] hover:text-[#111827]'
               }`}
             >
-              <span>Walk-in Customer</span>
+              <span>{language === 'hi' ? 'आम ग्राहक (काउंटर)' : language === 'both' ? 'Walk-in / आम ग्राहक' : 'Walk-in Customer'}</span>
               {customerTab === 'walk-in' && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-full bg-[#0A6847]" />
               )}
@@ -1203,7 +1217,7 @@ export function BosPosWorkstation({
                   : 'font-medium text-[#64748B] hover:text-[#111827]'
               }`}
             >
-              <span>Existing Customer</span>
+              <span>{language === 'hi' ? 'पुराने ग्राहक' : language === 'both' ? 'Existing / पुराने ग्राहक' : 'Existing Customer'}</span>
               {customerTab === 'existing' && (
                 <span className="absolute bottom-0 left-0 right-0 h-[2.5px] rounded-full bg-[#0A6847]" />
               )}
@@ -1225,7 +1239,11 @@ export function BosPosWorkstation({
                       setCustomCustomerName(e.target.value);
                     }
                   }}
-                  placeholder="Search customer (name or phone)..."
+                  placeholder={
+                    language === 'hi'
+                      ? 'ग्राहक का नाम या फोन नंबर खोजें...'
+                      : 'Search customer (name or phone)...'
+                  }
                   className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-[#FBFDFC] pl-8 pr-3 text-[12.5px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
                 />
               </div>
@@ -1484,7 +1502,7 @@ export function BosPosWorkstation({
           <div className="border-t border-[#EBF2EE] bg-[#FCFDFD] px-4 py-3 space-y-1.5">
             <div className="flex items-center justify-between text-[13px]">
               <span className="font-medium text-[#475569]">
-                Items ({billCalculations.totalQty})
+                {language === 'hi' ? 'कुल सामान' : language === 'both' ? 'Items / सामान' : 'Items'} ({billCalculations.totalQty})
               </span>
               <span className="font-bold text-[#111827]">
                 {formatPosPrice(billCalculations.subtotal, currencySymbol)}
@@ -1492,7 +1510,9 @@ export function BosPosWorkstation({
             </div>
 
             <div className="flex items-center justify-between text-[13px]">
-              <span className="font-medium text-[#475569]">Discount</span>
+              <span className="font-medium text-[#475569]">
+                {language === 'hi' ? 'छूट (Discount)' : language === 'both' ? 'Discount / छूट' : 'Discount'}
+              </span>
               <span className="font-bold text-[#0A6847]">
                 - {formatPosPrice(billCalculations.totalDiscount, currencySymbol)}
               </span>
@@ -1500,7 +1520,7 @@ export function BosPosWorkstation({
 
             <div className="border-t border-[#E4EFEA] pt-2 flex items-baseline justify-between">
               <span className="text-[16px] font-extrabold text-[#111827]">
-                Total Amount
+                {language === 'hi' ? 'कुल देय राशि' : language === 'both' ? 'Total / कुल राशि' : 'Total Amount'}
               </span>
               <span className="text-[22px] font-extrabold tracking-tight text-[#111827]">
                 {formatPosPrice(billCalculations.grandTotal, currencySymbol)}
@@ -1516,7 +1536,7 @@ export function BosPosWorkstation({
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#BCE3D4] bg-[#F2FAF6] px-3 py-2.5 text-[13.5px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] transition cursor-pointer"
             >
               <FilePlus2 className="h-4 w-4" />
-              <span>Save as Draft</span>
+              <span>{language === 'hi' ? 'ड्राफ्ट सेव करें' : language === 'both' ? 'Save Draft / ड्राफ्ट' : 'Save as Draft'}</span>
             </button>
 
             <button
@@ -1526,7 +1546,11 @@ export function BosPosWorkstation({
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0A6847] px-3 py-2.5 text-[13.5px] font-bold text-white shadow-xs hover:bg-[#085238] disabled:opacity-50 transition cursor-pointer"
             >
               <Receipt className="h-4 w-4" />
-              <span>{submitting ? 'Completing...' : 'Complete Sale'}</span>
+              <span>
+                {submitting
+                  ? (language === 'hi' ? 'पूरा हो रहा है...' : 'Completing...')
+                  : (language === 'hi' ? 'बिल बनाएं और चार्ज करें' : language === 'both' ? 'Complete / बिल बनाएं' : 'Complete Sale')}
+              </span>
             </button>
           </div>
         </div>

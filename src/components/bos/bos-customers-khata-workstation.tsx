@@ -32,6 +32,7 @@ import {
   type BosKhataTransaction,
 } from '@/components/bos/bos-types';
 import { authFetch } from '@/lib/client-auth';
+import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
 type CustomerSubTab = 'all' | 'credit' | 'regular' | 'new';
 type CustomerInspectorTab = 'overview' | 'transactions' | 'orders' | 'notes' | 'settings';
@@ -439,6 +440,7 @@ export function BosCustomersKhataWorkstation({
   onAddCustomer,
   onRecordKhataEntry,
 }: BosCustomersKhataWorkstationProps) {
+  const { t, language } = useBosTranslation();
   const [subTab, setSubTab] = useState<CustomerSubTab>('all');
   const [inspectorTab, setInspectorTab] = useState<CustomerInspectorTab>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -868,10 +870,12 @@ export function BosCustomersKhataWorkstation({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight text-[#111827] leading-tight">
-            Customers &amp; Khata
+            {language === 'hi' ? 'ग्राहक और उधारी खाता' : language === 'both' ? 'Customers & Khata / खाता' : 'Customers & Khata'}
           </h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">
-            Manage your customers, credit/udhar, payments and transaction history.
+            {language === 'hi'
+              ? 'ग्राहक, उधारी (क्रेडिट), भुगतान और लेन-देन का विवरण प्रबंधित करें।'
+              : 'Manage your customers, credit/udhar, payments and transaction history.'}
           </p>
         </div>
 
@@ -884,7 +888,7 @@ export function BosCustomersKhataWorkstation({
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Upload className="h-4 w-4 text-[#475569]" />
-            <span>Import</span>
+            <span>{language === 'hi' ? 'इम्पोर्ट' : language === 'both' ? 'Import / इम्पोर्ट' : 'Import'}</span>
           </button>
 
           <button
@@ -893,7 +897,7 @@ export function BosCustomersKhataWorkstation({
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Download className="h-4 w-4 text-[#475569]" />
-            <span>Export</span>
+            <span>{language === 'hi' ? 'एक्सपोर्ट' : language === 'both' ? 'Export / एक्सपोर्ट' : 'Export'}</span>
           </button>
 
           <button
@@ -902,7 +906,7 @@ export function BosCustomersKhataWorkstation({
             className="inline-flex items-center gap-2 rounded-xl bg-[#0A6847] px-4 py-2 text-[13px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
-            <span>Add Customer</span>
+            <span>{language === 'hi' ? '+ नया ग्राहक' : language === 'both' ? '+ Customer / नया ग्राहक' : 'Add Customer'}</span>
           </button>
         </div>
       </div>
@@ -934,7 +938,7 @@ export function BosCustomersKhataWorkstation({
             </div>
             <div>
               <p className="text-[12px] font-medium text-[#64748B]">
-                Total Customers
+                {language === 'hi' ? 'कुल ग्राहक' : language === 'both' ? 'Total Customers / कुल ग्राहक' : 'Total Customers'}
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
                 {kpiStats.totalCustomers}
@@ -971,7 +975,7 @@ export function BosCustomersKhataWorkstation({
             </div>
             <div>
               <p className="text-[12px] font-medium text-[#64748B]">
-                Total Receivable
+                {language === 'hi' ? 'कुल बाकी (उधारी)' : language === 'both' ? 'Total Udhaar / कुल बाकी' : 'Total Receivable'}
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
                 {kpiStats.totalReceivable}
@@ -1008,7 +1012,7 @@ export function BosCustomersKhataWorkstation({
             </div>
             <div>
               <p className="text-[12px] font-medium text-[#64748B]">
-                Total Received
+                {language === 'hi' ? 'कुल जमा राशि' : language === 'both' ? 'Total Received / कुल जमा' : 'Total Received'}
               </p>
               <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
                 {kpiStats.totalReceived}

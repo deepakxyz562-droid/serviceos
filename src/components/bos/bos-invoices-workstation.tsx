@@ -45,6 +45,7 @@ import {
   type EInvoicePayload,
 } from '@/lib/billing/gst-invoice-helper';
 import { authFetch } from '@/lib/client-auth';
+import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
 type InvoiceDocType = 'gst' | 'non_gst' | 'credit_note';
 type RightPreviewTab = 'preview' | 'einvoice' | 'ewaybill' | 'payment';
@@ -173,6 +174,7 @@ export function BosInvoicesWorkstation({
   onMarkInvoicePaid,
   onDeleteInvoice,
 }: BosInvoicesWorkstationProps) {
+  const { t, language } = useBosTranslation();
   const currencySymbol = storeSettings.currencySymbol || '₹';
 
   // Top & Builder States matching screenshot 1:1 in demoMode, dynamic in production
@@ -818,10 +820,12 @@ export function BosInvoicesWorkstation({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-[24px] font-extrabold tracking-tight text-[#111827] leading-tight">
-            Create Invoice
+            {language === 'hi' ? 'नया टैक्स बिल बनाएं' : language === 'both' ? 'Create Invoice / बिल बनाएं' : 'Create Invoice'}
           </h1>
           <p className="mt-0.5 text-[13px] text-[#64748B]">
-            Create GST invoice with e-Way Bill. Add products, customer, tax details and collect payment.
+            {language === 'hi'
+              ? 'जीएसटी बिल और ई-वे बिल बनाएं। सामान, ग्राहक और टैक्स विवरण दर्ज करें।'
+              : 'Create GST invoice with e-Way Bill. Add products, customer, tax details and collect payment.'}
           </p>
         </div>
 
@@ -832,7 +836,7 @@ export function BosInvoicesWorkstation({
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <FileText className="h-3.5 w-3.5 text-[#0A6847]" />
-            <span>Save as Draft</span>
+            <span>{language === 'hi' ? 'ड्राफ्ट सेव करें' : language === 'both' ? 'Draft / ड्राफ्ट' : 'Save as Draft'}</span>
           </button>
 
           <button
@@ -841,7 +845,7 @@ export function BosInvoicesWorkstation({
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <FileText className="h-3.5 w-3.5 text-[#475569]" />
-            <span>Preview</span>
+            <span>{language === 'hi' ? 'पूर्वावलोकन' : language === 'both' ? 'Preview / देखें' : 'Preview'}</span>
           </button>
 
           <button
@@ -850,7 +854,7 @@ export function BosInvoicesWorkstation({
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Printer className="h-3.5 w-3.5 text-[#475569]" />
-            <span>Print</span>
+            <span>{language === 'hi' ? 'प्रिंट करें' : language === 'both' ? 'Print / प्रिंट' : 'Print'}</span>
           </button>
 
           <button
@@ -859,7 +863,7 @@ export function BosInvoicesWorkstation({
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 text-[12.5px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
           >
             <Share2 className="h-3.5 w-3.5 text-[#475569]" />
-            <span>Share</span>
+            <span>{language === 'hi' ? 'शेयर करें' : language === 'both' ? 'Share / शेयर' : 'Share'}</span>
           </button>
 
           <button
@@ -868,7 +872,7 @@ export function BosInvoicesWorkstation({
             className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 text-[12.5px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
           >
             <Send className="h-3.5 w-3.5" />
-            <span>Create &amp; Send</span>
+            <span>{language === 'hi' ? 'बिल बनाएं और भेजें' : language === 'both' ? 'Create & Send / भेजें' : 'Create & Send'}</span>
             <ChevronDown className="h-3.5 w-3.5 ml-0.5 opacity-90" />
           </button>
         </div>

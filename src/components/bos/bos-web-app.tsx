@@ -92,6 +92,8 @@ import {
 import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { TenantPushManager } from '@/components/pwa/tenant-push-manager';
+import { BosI18nProvider, useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
+import type { BosLanguage } from '@/components/bos/i18n/bos-translations';
 
 const NAV_ICON_MAP: Record<BosNavId, React.ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
@@ -753,13 +755,25 @@ const DEFAULT_COUPONS: BosCoupon[] = [
   },
 ];
 
-export function BosWebApp({
+export function BosWebApp(props: {
+  initialView?: BosNavId | string;
+  demoMode?: boolean;
+}) {
+  return (
+    <BosI18nProvider initialLanguage="en">
+      <BosWebAppInner {...props} />
+    </BosI18nProvider>
+  );
+}
+
+function BosWebAppInner({
   initialView = 'dashboard',
   demoMode = false,
 }: {
   initialView?: BosNavId | string;
   demoMode?: boolean;
 }) {
+  const { language, setLanguage, t } = useBosTranslation();
   const [activeView, setActiveView] = useState<BosNavId>(() => {
     if (typeof window !== 'undefined' && window.location?.search) {
       try {
@@ -2675,10 +2689,10 @@ export function BosWebApp({
             const isActive = activeView === item.id;
             const displayLabel =
               item.id === 'marketing'
-                ? 'Marketing & Promotions'
+                ? t('nav.marketing', 'Marketing & Promotions')
                 : item.id === 'khata' && storeSettings.countryCode && storeSettings.countryCode !== 'IN'
-                  ? `Khata / Credit (${activeCountryPack.vocabulary.customerCredit})`
-                  : item.label;
+                  ? `${t('nav.khata', 'Khata / Credit')} (${activeCountryPack.vocabulary.customerCredit})`
+                  : t(`nav.${item.id}`, item.label);
             return (
               <button
                 key={item.id}
@@ -2709,17 +2723,17 @@ export function BosWebApp({
               <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-amber-400/20 text-amber-300">
                 <Crown className="h-3.5 w-3.5" />
               </span>
-              <span className="text-[13px] font-bold tracking-tight">Upgrade to Pro</span>
+              <span className="text-[13px] font-bold tracking-tight">{t('header.upgradeToPro', 'Upgrade to Pro')}</span>
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-[#B8DCD0]">
-              Get advanced features, team members and more.
+              {t('header.proFeatures', 'Get advanced features, team members and more.')}
             </p>
             <button
               type="button"
               onClick={() => setUpgradeModalOpen(true)}
               className="bos-btn-mint mt-3 w-full rounded-lg py-2 text-[12px] font-bold shadow-xs"
             >
-              Upgrade Now
+              {language === 'hi' ? 'अपग्रेड करें' : language === 'both' ? 'Upgrade / अपग्रेड' : 'Upgrade Now'}
             </button>
           </div>
         </div>
@@ -3055,8 +3069,63 @@ export function BosWebApp({
             )}
           </div>
 
-          {/* Right: Refresh/Sync, Help (?), Notifications Bell, and User Profile */}
+          {/* Right: Language Switcher, Refresh/Sync, Help (?), Notifications Bell, and User Profile */}
           <div className="flex items-center gap-2.5">
+            {/* Language Switcher Pill [ EN | हिंदी | Both ] */}
+            <div
+              className="flex items-center rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-0.5 text-xs font-bold text-[#1E293B]"
+              aria-label="Language Switcher"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setLanguage('en');
+                  void handleUpdateStoreSettings({ language: 'en' });
+                  toast.success('Switched language to English');
+                }}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                  language === 'en'
+                    ? 'bg-[#0A6847] text-white shadow-2xs'
+                    : 'text-[#64748B] hover:text-[#111827]'
+                }`}
+                title="Switch to English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLanguage('hi');
+                  void handleUpdateStoreSettings({ language: 'hi' });
+                  toast.success('भाषा बदलकर हिंदी कर दी गई है');
+                }}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                  language === 'hi'
+                    ? 'bg-[#0A6847] text-white shadow-2xs'
+                    : 'text-[#64748B] hover:text-[#111827]'
+                }`}
+                title="हिंदी में बदलें"
+              >
+                हिंदी
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLanguage('both');
+                  void handleUpdateStoreSettings({ language: 'both' });
+                  toast.success('Bilingual Mode Active (English + हिंदी)');
+                }}
+                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                  language === 'both'
+                    ? 'bg-[#0A6847] text-white shadow-2xs'
+                    : 'text-[#64748B] hover:text-[#111827]'
+                }`}
+                title="Bilingual: English + हिंदी"
+              >
+                Both
+              </button>
+            </div>
+
             {/* Live Sync / Refresh Button */}
             <button
               type="button"
