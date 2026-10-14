@@ -30,6 +30,8 @@ import {
   Layers,
   Smartphone,
   Heart,
+  Copy,
+  ShoppingBag,
 } from 'lucide-react';
 
 interface Product {
@@ -66,6 +68,8 @@ interface StoreClientProps {
   currency: string;
   currencySymbol: string;
   upiId: string;
+  paymentQrUrl?: string;
+  enableOnlinePayment?: boolean;
   greeting?: string;
   catalog: Product[];
   tableNumber: string | null;
@@ -82,6 +86,8 @@ export function StoreClient({
   currency,
   currencySymbol,
   upiId,
+  paymentQrUrl,
+  enableOnlinePayment = true,
   greeting,
   bannerText,
   catalog,
@@ -97,6 +103,15 @@ export function StoreClient({
   const [orderType, setOrderType] = useState<'DINE_IN' | 'DELIVERY' | 'TAKEOUT'>(
     tableNumber ? 'DINE_IN' : 'DELIVERY'
   );
+
+  // Online Payment vs Counter COD state
+  const effectiveUpiId = (upiId || '').trim();
+  const hasOnlinePayment = enableOnlinePayment && (Boolean(effectiveUpiId) || Boolean(paymentQrUrl));
+  const [paymentMode, setPaymentMode] = useState<'ONLINE_UPI' | 'COUNTER_COD'>(() =>
+    hasOnlinePayment ? 'ONLINE_UPI' : 'COUNTER_COD'
+  );
+  const [utrNumber, setUtrNumber] = useState('');
+  const [copiedUpi, setCopiedUpi] = useState(false);
 
   // Customer checkout inputs
   const [customerName, setCustomerName] = useState('');
@@ -214,6 +229,28 @@ export function StoreClient({
 
   const grandTotal = taxableAmount + taxAmount + serviceChargeAmount;
 
+  const upiUri = useMemo(() => {
+    if (!effectiveUpiId) return '';
+    return `upi://pay?pa=${encodeURIComponent(effectiveUpiId)}&pn=${encodeURIComponent(businessName)}&am=${grandTotal.toFixed(2)}&tn=${encodeURIComponent(`Order at ${businessName}`)}&cu=INR`;
+  }, [effectiveUpiId, businessName, grandTotal]);
+
+  const dynamicQrCodeUrl = useMemo(() => {
+    if (paymentQrUrl) return paymentQrUrl;
+    if (effectiveUpiId && upiUri) {
+      return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(upiUri)}`;
+    }
+    return '';
+  }, [paymentQrUrl, effectiveUpiId, upiUri]);
+
+  const handleCopyUpiId = () => {
+    if (!effectiveUpiId) return;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(effectiveUpiId).catch(() => {});
+    }
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2500);
+  };
+
   const handleApplyPromo = async () => {
     setPromoError('');
     const code = promoCodeInput.trim().toUpperCase();
@@ -306,6 +343,24 @@ export function StoreClient({
       if (!response.ok) throw new Error(res.error || 'Order could not be placed.');
       requestTracker.current.clear();
 
+      // If UPI payment and customer entered UTR, record payment ref
+      if (method === 'UPI' && utrNumber.trim() && res.orderId) {
+        try {
+          await fetch('/api/public/store/order', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: res.orderId,
+              trackingToken: res.trackingToken,
+              utrNumber: utrNumber.trim(),
+              paymentStatus: 'DETECTION_PENDING',
+            }),
+          });
+        } catch {
+          // background UTR recording
+        }
+      }
+
       // Persist customer profile to device localStorage for 1-tap re-ordering
       try {
         localStorage.setItem(
@@ -354,6 +409,7 @@ export function StoreClient({
         waMessage += `Service Charge (${serviceChargeRate}%): ${currencySymbol}${serviceChargeAmount.toFixed(2)}\n`;
       }
       waMessage += `*Total Payable:* ${currencySymbol}${grandTotal.toFixed(2)}\n`;
+      waMessage += `💳 *Payment Method:* ${method === 'UPI' ? (utrNumber.trim() ? `UPI (UTR: ${utrNumber.trim()})` : 'UPI (Online)') : 'Pay at Counter / Cash'}\n`;
 
       if (notes) {
         waMessage += `📝 *Notes:* ${notes}\n`;
@@ -372,6 +428,7 @@ export function StoreClient({
         trackingUrl,
         waUrl,
         waMessage,
+        paymentMethod: method === 'UPI' ? 'UPI' : 'COD',
       });
 
       // 3. Only Launch WhatsApp if customer explicitly opted in
@@ -1181,29 +1238,198 @@ export function StoreClient({
                   </label>
                 </div>
 
-                <div className="space-y-2">
-                  {/* Instant Pay with UPI if configured */}
-                  {upiId && (
-                    <button
-                      type="button"
-                      onClick={() => handleCheckout('UPI')}
-                      disabled={isSubmitting}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-md active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
-                    >
-                      <QrCode className="h-5 w-5" />
-                      <span>Pay with UPI ({currencySymbol}{grandTotal.toFixed(2)})</span>
-                    </button>
-                  )}
+                {/* Payment Option Selector & Details */}
+                <div className="pt-2 border-t border-stone-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-stone-500">
+                      Payment Method
+                    </span>
+                    {hasOnlinePayment && (
+                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        Zero Fee UPI
+                      </span>
+                    )}
+                  </div>
 
-                  {/* Place Order & Pay at Counter */}
-                  <button
-                    type="button"
-                    onClick={() => handleCheckout('COD')}
-                    disabled={isSubmitting}
-                    className="w-full bg-stone-900 hover:bg-black text-white py-3 px-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition disabled:opacity-50 cursor-pointer text-xs"
-                  >
-                    <span>Place Order • Pay at Counter ({currencySymbol}{grandTotal.toFixed(2)})</span>
-                  </button>
+                  {hasOnlinePayment ? (
+                    <div className="space-y-3">
+                      {/* 2-Option Selector: Pay Online (UPI / QR) vs Pay at Counter */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMode('ONLINE_UPI')}
+                          className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                            paymentMode === 'ONLINE_UPI'
+                              ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/20'
+                              : 'border-stone-200 hover:border-stone-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                              <QrCode className="size-4 text-emerald-600" />
+                              Pay Online
+                            </span>
+                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                              FAST
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-stone-500 font-medium">UPI / QR Scan</p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setPaymentMode('COUNTER_COD')}
+                          className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                            paymentMode === 'COUNTER_COD'
+                              ? 'border-stone-900 bg-stone-100 ring-2 ring-stone-900/10'
+                              : 'border-stone-200 hover:border-stone-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                              <Store className="size-4 text-stone-700" />
+                              Pay at Counter
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-stone-500 font-medium">Cash / COD</p>
+                        </button>
+                      </div>
+
+                      {/* Pay Online Details Box */}
+                      {paymentMode === 'ONLINE_UPI' && (
+                        <div className="p-3.5 bg-gradient-to-br from-emerald-50/60 via-white to-stone-50 rounded-2xl border border-emerald-200/90 shadow-2xs space-y-3">
+                          {/* App Badges */}
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="font-bold text-stone-700 flex items-center gap-1">
+                              <Sparkles className="size-3 text-emerald-600" />
+                              Scan & Pay with Any App
+                            </span>
+                            <div className="flex items-center gap-1 font-bold text-[9px]">
+                              <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-stone-800 shadow-2xs">GPay</span>
+                              <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-purple-700 shadow-2xs">PhonePe</span>
+                              <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-blue-700 shadow-2xs">Paytm</span>
+                            </div>
+                          </div>
+
+                          {/* QR Code Container */}
+                          {dynamicQrCodeUrl && (
+                            <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
+                              <div className="relative group shrink-0">
+                                <img
+                                  src={dynamicQrCodeUrl}
+                                  alt="Shop UPI QR Code"
+                                  className="size-32 rounded-lg border border-stone-200 bg-white p-1 object-contain shadow-2xs"
+                                />
+                                <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 shadow">
+                                  <QrCode className="size-3" />
+                                </div>
+                              </div>
+                              <div className="text-center sm:text-left space-y-1 flex-1 min-w-0">
+                                <p className="text-xs font-bold text-stone-900">
+                                  Scan to Pay Instant
+                                </p>
+                                <p className="text-[11px] text-stone-500 leading-tight">
+                                  Open your UPI app, scan the QR code and pay:
+                                </p>
+                                <p className="text-sm font-black text-emerald-700">
+                                  {currencySymbol}{grandTotal.toFixed(2)}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* UPI ID Row with 1-Tap Copy */}
+                          {effectiveUpiId && (
+                            <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-stone-200 text-xs">
+                              <div className="min-w-0 flex-1 pr-2">
+                                <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider">Merchant UPI ID</p>
+                                <p className="font-mono font-bold text-stone-800 truncate select-all text-xs">{effectiveUpiId}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleCopyUpiId}
+                                className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-[11px] font-bold transition active:scale-95 cursor-pointer"
+                              >
+                                {copiedUpi ? (
+                                  <>
+                                    <Check className="size-3 text-emerald-600" />
+                                    <span className="text-emerald-700">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="size-3" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Mobile 1-Tap Pay Button */}
+                          {upiUri && (
+                            <a
+                              href={upiUri}
+                              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition cursor-pointer"
+                            >
+                              <Smartphone className="size-4" />
+                              <span>Tap to Open UPI App ({currencySymbol}{grandTotal.toFixed(2)})</span>
+                            </a>
+                          )}
+
+                          {/* Optional UTR / Reference Input */}
+                          <div>
+                            <label className="text-[10px] font-bold text-stone-600 block mb-1">
+                              UPI Reference / UTR Number (Optional after payment)
+                            </label>
+                            <input
+                              type="text"
+                              value={utrNumber}
+                              onChange={(e) => setUtrNumber(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))}
+                              placeholder="e.g. 4289xxxxxxxx (12 digits)"
+                              maxLength={18}
+                              className="w-full text-xs font-mono bg-white border border-stone-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                            />
+                            <p className="text-[9px] text-stone-400 mt-1">
+                              Helps {businessName} verify and dispatch your order immediately.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {/* Checkout Submit Buttons */}
+                  <div className="space-y-2 pt-3">
+                    {paymentMode === 'ONLINE_UPI' && hasOnlinePayment ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCheckout('UPI')}
+                        disabled={isSubmitting}
+                        className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-md active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
+                      >
+                        <CheckCircle2 className="size-4" />
+                        <span>
+                          {isSubmitting
+                            ? 'Submitting Order...'
+                            : `Place Order & Pay via UPI (${currencySymbol}${grandTotal.toFixed(2)})`}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleCheckout('COD')}
+                        disabled={isSubmitting}
+                        className="w-full bg-stone-900 hover:bg-black text-white py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition disabled:opacity-50 cursor-pointer text-xs"
+                      >
+                        <Store className="size-4" />
+                        <span>
+                          {isSubmitting
+                            ? 'Submitting Order...'
+                            : `Place Order • Pay at Counter (${currencySymbol}${grandTotal.toFixed(2)})`}
+                        </span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1220,6 +1446,20 @@ export function StoreClient({
               <p className="text-xs text-stone-500 mt-1">
                 Order #{orderSuccess.orderNumber} has been received by {businessName}. Keep this link to check its status.
               </p>
+
+              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 bg-stone-100 rounded-full text-xs font-bold text-stone-700">
+                {orderSuccess.paymentMethod === 'UPI' ? (
+                  <>
+                    <QrCode className="size-3.5 text-emerald-600" />
+                    <span>Payment Mode: UPI Online</span>
+                  </>
+                ) : (
+                  <>
+                    <Store className="size-3.5 text-stone-600" />
+                    <span>Payment Mode: Pay at Counter</span>
+                  </>
+                )}
+              </div>
 
               <div className="mt-5 space-y-2">
                 <a
@@ -1249,7 +1489,7 @@ export function StoreClient({
                     setCart({});
                     setCartOpen(false);
                   }}
-                  className="w-full text-stone-400 hover:text-stone-600 py-2 text-xs font-semibold"
+                  className="w-full text-stone-400 hover:text-stone-600 py-2 text-xs font-semibold cursor-pointer"
                 >
                   Back to Menu
                 </button>

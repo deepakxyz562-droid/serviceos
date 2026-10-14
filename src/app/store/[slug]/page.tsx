@@ -196,6 +196,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           currency={DEMO_STORE.currency}
           currencySymbol={DEMO_STORE.currencySymbol}
           upiId="sharmakirana@okhdfcbank"
+          paymentQrUrl=""
+          enableOnlinePayment={true}
           greeting={DEMO_STORE.greeting}
           bannerText={DEMO_STORE.bannerText}
           catalog={DEMO_STORE.catalog}
@@ -249,6 +251,9 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   let discountsConfig: any[] = DEMO_STORE.discounts;
   let bannerText: string = DEMO_STORE.bannerText;
 
+  let paymentQrUrl: string = '';
+  let enableOnlinePayment: boolean = true;
+
   if (config?.fieldsJson) {
     try {
       const parsedFields = JSON.parse(config.fieldsJson);
@@ -256,6 +261,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       if (typeof parsedFields.bannerText === 'string' && parsedFields.bannerText.trim()) {
         bannerText = parsedFields.bannerText;
       }
+      if (parsedFields.paymentQrUrl) paymentQrUrl = parsedFields.paymentQrUrl;
+      if (parsedFields.enableOnlinePayment !== undefined) enableOnlinePayment = Boolean(parsedFields.enableOnlinePayment);
     } catch {}
   }
 
@@ -291,6 +298,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       currency={config?.currency || 'INR'}
       currencySymbol={config?.currencySymbol || '₹'}
       upiId={config?.upiId || ''}
+      paymentQrUrl={paymentQrUrl}
+      enableOnlinePayment={enableOnlinePayment}
       greeting={config?.greetingMessage || `Welcome to ${businessName}!`}
       bannerText={bannerText}
       catalog={catalog}

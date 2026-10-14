@@ -162,6 +162,8 @@ export type BosStoreSettings = {
   estimatedDeliveryTime?: string;
   eInvoiceStatus?: boolean;
   registrationType?: string;
+  paymentQrUrl?: string;
+  enableOnlinePayment?: boolean;
 };
 
 export function formatBosCurrency(amount: number, symbol = '₹'): string {

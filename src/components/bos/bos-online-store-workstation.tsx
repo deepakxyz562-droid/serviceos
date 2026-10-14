@@ -275,6 +275,15 @@ export function BosOnlineStoreWorkstation({
   const [deliveryRadiusInput, setDeliveryRadiusInput] = useState(() => String(storeSettings.deliveryRadiusKm || 5));
   const [estimatedDeliveryTimeInput, setEstimatedDeliveryTimeInput] = useState(() => storeSettings.estimatedDeliveryTime || '30 - 45 minutes');
   const [bannerText, setBannerText] = useState(() => storeSettings.announcementBanner || '');
+  const [storeUpiId, setStoreUpiId] = useState(() => storeSettings.upiId || '');
+  const [storePaymentQr, setStorePaymentQr] = useState(() => storeSettings.paymentQrUrl || '');
+  const [storeOnlinePayEnabled, setStoreOnlinePayEnabled] = useState(() => storeSettings.enableOnlinePayment ?? true);
+
+  useEffect(() => {
+    if (storeSettings.upiId !== undefined) setStoreUpiId(storeSettings.upiId);
+    if (storeSettings.paymentQrUrl !== undefined) setStorePaymentQr(storeSettings.paymentQrUrl);
+    if (storeSettings.enableOnlinePayment !== undefined) setStoreOnlinePayEnabled(storeSettings.enableOnlinePayment);
+  }, [storeSettings.upiId, storeSettings.paymentQrUrl, storeSettings.enableOnlinePayment]);
 
   const onlineKpiStats = useMemo(() => {
     if (demoMode) {
@@ -1248,6 +1257,89 @@ export function BosOnlineStoreWorkstation({
                   placeholder="e.g. 30 - 45 minutes"
                   className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* CARD 4: Online Payments & UPI QR */}
+          {(subTab === 'overview' || subTab === 'storeSettings') && (
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-[15px] font-extrabold text-[#111827]">
+                    Online Payments &amp; UPI QR
+                  </h2>
+                  <p className="text-[11px] text-[#64748B]">
+                    Receive instant direct-to-bank customer payments
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void onUpdateStoreSettings({
+                      upiId: storeUpiId.trim(),
+                      paymentQrUrl: storePaymentQr,
+                      enableOnlinePayment: storeOnlinePayEnabled,
+                    });
+                    showToast('Updated Online Payment Settings');
+                  }}
+                  className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#DCE9E3] bg-white px-2.5 text-[11.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Edit3 className="h-3 w-3 text-[#0A6847]" />
+                  <span>Save</span>
+                </button>
+              </div>
+
+              {/* Toggle */}
+              <label className="flex items-center justify-between gap-2 text-[12px] font-semibold text-[#111827] cursor-pointer">
+                <span>Accept UPI Payments on Store</span>
+                <input
+                  type="checkbox"
+                  checked={storeOnlinePayEnabled}
+                  onChange={(e) => setStoreOnlinePayEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded accent-[#0A6847]"
+                />
+              </label>
+
+              {/* UPI ID Input */}
+              <div className="border-t border-[#F1F5F3] pt-2.5">
+                <label className="block text-[11px] font-medium text-[#64748B] mb-1">
+                  Merchant UPI ID
+                </label>
+                <input
+                  type="text"
+                  value={storeUpiId}
+                  onChange={(e) => setStoreUpiId(e.target.value.toLowerCase().trim())}
+                  placeholder="e.g. storename@okhdfcbank"
+                  className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12px] font-semibold text-[#111827]"
+                />
+              </div>
+
+              {/* QR Code thumbnail */}
+              <div className="border-t border-[#F1F5F3] pt-2.5 flex items-center gap-3">
+                <div className="h-14 w-14 overflow-hidden rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-1 flex items-center justify-center shrink-0">
+                  {storePaymentQr ? (
+                    <img src={storePaymentQr} alt="Payment QR" className="h-full w-full object-contain" />
+                  ) : storeUpiId ? (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(
+                        `upi://pay?pa=${storeUpiId}&pn=${storeName}&cu=INR`
+                      )}`}
+                      alt="UPI QR"
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <QrCode className="h-6 w-6 text-[#94A3B8]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 text-[11px]">
+                  <p className="font-semibold text-[#111827]">
+                    {storePaymentQr ? 'Custom Shop QR Active' : storeUpiId ? 'Auto-generated UPI QR' : 'No Payment QR Set'}
+                  </p>
+                  <p className="text-[#64748B] text-[10.5px] truncate">
+                    Customers can scan or 1-tap open UPI apps
+                  </p>
+                </div>
               </div>
             </div>
           )}

@@ -813,6 +813,8 @@ export function BosWebApp({
         gstin: '27AABCS1429B1Z5',
         pan: 'AABCS1429B',
         upiId: 'sharmastore@okhdfcbank',
+        paymentQrUrl: '',
+        enableOnlinePayment: true,
         bankName: 'HDFC Bank',
         accountNumber: '50200048291042',
         ifscCode: 'HDFC0001204',
@@ -855,6 +857,8 @@ export function BosWebApp({
       gstin: '',
       pan: '',
       upiId: '',
+      paymentQrUrl: '',
+      enableOnlinePayment: true,
       bankName: '',
       accountNumber: '',
       ifscCode: '',
@@ -1137,6 +1141,8 @@ export function BosWebApp({
             setStoreSettings((prev) => {
               const next = { ...prev };
               if (cfg.upiId) next.upiId = String(cfg.upiId);
+              if (cfg.paymentQrUrl) next.paymentQrUrl = String(cfg.paymentQrUrl);
+              if (cfg.enableOnlinePayment !== undefined) next.enableOnlinePayment = Boolean(cfg.enableOnlinePayment);
               if (typeof cfg.isActive === 'boolean') next.storeLive = cfg.isActive;
               if (cfg.currencySymbol) next.currencySymbol = String(cfg.currencySymbol);
               if (cfg.billing?.gstin) next.gstin = String(cfg.billing.gstin);
@@ -2247,6 +2253,8 @@ export function BosWebApp({
     // Persist Storefront & Billing Config updates
     const configPatch: Record<string, unknown> = {};
     if (patch.upiId !== undefined) configPatch.upiId = patch.upiId;
+    if (patch.paymentQrUrl !== undefined) configPatch.paymentQrUrl = patch.paymentQrUrl;
+    if (patch.enableOnlinePayment !== undefined) configPatch.enableOnlinePayment = patch.enableOnlinePayment;
     if (patch.storeLive !== undefined) configPatch.isActive = patch.storeLive;
     if (patch.gstin !== undefined) configPatch.billing = { gstin: patch.gstin };
     if (patch.phone !== undefined) configPatch.phone = patch.phone;

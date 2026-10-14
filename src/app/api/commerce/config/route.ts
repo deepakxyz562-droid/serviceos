@@ -34,6 +34,8 @@ export async function GET(req: NextRequest) {
           billing: DEFAULT_BILLING,
           discounts: DEFAULT_DISCOUNTS,
           deliverySettings: DEFAULT_DELIVERY_SETTINGS,
+          paymentQrUrl: '',
+          enableOnlinePayment: true,
         };
       } else {
         parsedFieldsData = {
@@ -42,6 +44,8 @@ export async function GET(req: NextRequest) {
           billing: { ...DEFAULT_BILLING, ...(raw.billing || {}) },
           discounts: raw.discounts || DEFAULT_DISCOUNTS,
           deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
+          paymentQrUrl: raw.paymentQrUrl || '',
+          enableOnlinePayment: raw.enableOnlinePayment !== undefined ? Boolean(raw.enableOnlinePayment) : true,
         };
       }
     } catch {
@@ -51,6 +55,8 @@ export async function GET(req: NextRequest) {
         billing: DEFAULT_BILLING,
         discounts: DEFAULT_DISCOUNTS,
         deliverySettings: DEFAULT_DELIVERY_SETTINGS,
+        paymentQrUrl: '',
+        enableOnlinePayment: true,
       };
     }
 
@@ -72,6 +78,8 @@ export async function GET(req: NextRequest) {
         discounts: parsedFieldsData.discounts,
         fields: parsedFieldsData.fields,
         deliverySettings: parsedFieldsData.deliverySettings,
+        paymentQrUrl: parsedFieldsData.paymentQrUrl || '',
+        enableOnlinePayment: parsedFieldsData.enableOnlinePayment,
         businessHours: parsedHours,
         deliveryAreas: parsedDeliveryAreas,
       },
@@ -145,6 +153,8 @@ export async function PATCH(req: NextRequest) {
             discounts: raw.discounts || DEFAULT_DISCOUNTS,
             deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
             logoUrl: raw.logoUrl,
+            paymentQrUrl: raw.paymentQrUrl,
+            enableOnlinePayment: raw.enableOnlinePayment,
           };
         }
       } catch {}
@@ -160,6 +170,8 @@ export async function PATCH(req: NextRequest) {
     if (body.billing !== undefined) container.billing = { ...container.billing, ...body.billing };
     if (body.discounts !== undefined) container.discounts = body.discounts;
     if (body.logoUrl !== undefined) container.logoUrl = body.logoUrl;
+    if (body.paymentQrUrl !== undefined) container.paymentQrUrl = body.paymentQrUrl;
+    if (body.enableOnlinePayment !== undefined) container.enableOnlinePayment = Boolean(body.enableOnlinePayment);
     if (body.deliverySettings !== undefined) {
       container.deliverySettings = { ...container.deliverySettings, ...body.deliverySettings };
     }
