@@ -13,6 +13,11 @@ export interface Store {
   minOrder?: number;
   freeDeliveryAbove?: number;
   isOpen: boolean;
+  closeReason?: string;
+  todayHoursText?: string;
+  phone?: string;
+  upiId?: string;
+  paymentQrUrl?: string;
   distanceKm?: number;
   isFavorite?: boolean;
   itemCount: number;

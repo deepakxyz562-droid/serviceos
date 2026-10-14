@@ -149,6 +149,10 @@ export type BosStoreSettings = {
   currencySymbol: string;
   openingBalance?: number;
   storeLive: boolean;
+  isStoreOpen?: boolean;
+  lastActiveDate?: string;
+  autoCloseIfInactive?: boolean;
+  manualCloseReason?: string;
   minOrderAmount: number;
   deliveryCharge: number;
   freeDeliveryAbove: number;

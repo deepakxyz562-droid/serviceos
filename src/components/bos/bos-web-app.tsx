@@ -2875,6 +2875,38 @@ export function BosWebApp({
                 </div>
               )}
             </div>
+
+            {/* Master Store Availability Toggle (Zomato / Swiggy Style) */}
+            <div className="hidden sm:flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  const nextState = storeSettings.isStoreOpen === false;
+                  void handleUpdateStoreSettings({
+                    isStoreOpen: nextState,
+                    lastActiveDate: new Date().toISOString().slice(0, 10),
+                    manualCloseReason: nextState ? '' : 'Closed manually by merchant',
+                  });
+                }}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-2xs cursor-pointer ${
+                  storeSettings.isStoreOpen !== false
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                    : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                }`}
+                title={
+                  storeSettings.isStoreOpen !== false
+                    ? 'Store is Live & accepting orders. Tap to Pause/Close.'
+                    : 'Store is Closed/Offline. Tap to Open & accept orders.'
+                }
+              >
+                <span
+                  className={`size-2.5 rounded-full ${
+                    storeSettings.isStoreOpen !== false ? 'bg-emerald-600 animate-pulse' : 'bg-rose-500'
+                  }`}
+                />
+                <span>{storeSettings.isStoreOpen !== false ? 'Store Open' : 'Store Closed'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Center: Global Search & Ask BOS AI Bar */}
@@ -3233,6 +3265,39 @@ export function BosWebApp({
         {/* Main Scrollable Canvas (#F4F8F6) — 100% Full Width */}
         <main className="w-full flex-1 overflow-y-auto px-4 py-5 lg:px-6">
           <div className="w-full max-w-none">
+            {/* Store Offline / Closed Status Alert */}
+            {storeSettings.isStoreOpen === false && (
+              <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50 via-white to-rose-50/50 p-3.5 shadow-2xs">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 shrink-0">
+                    <Store className="size-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-rose-950 uppercase tracking-wide">
+                      Your Online Store is Currently Closed
+                    </h3>
+                    <p className="text-[11.5px] text-rose-800 font-medium">
+                      Customers browsing your storefront cannot place orders or send online payments.
+                      {storeSettings.manualCloseReason ? ` (${storeSettings.manualCloseReason})` : ''}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleUpdateStoreSettings({
+                      isStoreOpen: true,
+                      lastActiveDate: new Date().toISOString().slice(0, 10),
+                      manualCloseReason: '',
+                    });
+                  }}
+                  className="shrink-0 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white hover:bg-emerald-700 shadow-2xs transition active:scale-95 cursor-pointer"
+                >
+                  Open Store &bull; Start Accepting Orders
+                </button>
+              </div>
+            )}
+
             {activeView === 'dashboard' && (
               <BosDashboardWorkstation
                 demoMode={demoMode}

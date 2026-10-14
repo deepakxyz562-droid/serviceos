@@ -20,6 +20,30 @@ export function BusinessHomeScreen() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<'connection' | 'setup' | 'account' | null>(null);
     const [revision, setRevision] = useState(0);
+    const [storeOpen, setStoreOpen] = useState(true);
+    const [togglingStore, setTogglingStore] = useState(false);
+
+    const handleToggleStore = async () => {
+        if (togglingStore) return;
+        setTogglingStore(true);
+        const nextState = !storeOpen;
+        setStoreOpen(nextState);
+        try {
+            await apiRequest('/api/commerce/config', {
+                method: 'PATCH',
+                body: {
+                    isStoreOpen: nextState,
+                    lastActiveDate: new Date().toISOString().slice(0, 10),
+                    manualCloseReason: nextState ? '' : 'Closed manually from mobile app',
+                },
+            });
+        } catch {
+            setStoreOpen(!nextState);
+        } finally {
+            setTogglingStore(false);
+        }
+    };
+
     useFocusEffect(useCallback(() => {
         if (!hydrated || !user?.id)
             return;
@@ -32,11 +56,19 @@ export function BusinessHomeScreen() {
             void promise.catch(() => { if (bootstrap.current?.promise === promise) bootstrap.current = null; });
         }
         bootstrap.current.promise
-            .then(() => apiRequest<BusinessHomeSnapshot>('/api/commerce/home'))
-            .then(data => { if (active)
-            setLoaded({ identity, data }); })
+            .then(() => Promise.all([
+                apiRequest<BusinessHomeSnapshot>('/api/commerce/home'),
+                apiRequest<any>('/api/commerce/config').catch(() => null),
+            ]))
+            .then(([data, config]) => {
+                if (active) {
+                    setLoaded({ identity, data });
+                    if (config && typeof config.isStoreOpen === 'boolean') {
+                        setStoreOpen(config.isStoreOpen);
+                    }
+                }
+            })
             .catch(e => { if (active) {
-
             setError(e instanceof ApiError && e.statusCode === 409 ? 'account' : e instanceof ApiError && e.statusCode === 404 ? 'setup' : 'connection');
         } })
             .finally(() => { if (active)
@@ -47,6 +79,40 @@ export function BusinessHomeScreen() {
     const actions = home.actions.filter(a => HOME_DESTINATIONS[a].native).slice(0, 4);
     return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading && hydrated} onRefresh={() => setRevision(v => v + 1)} tintColor="#047857"/>}>
   <View style={styles.header}><View style={{ flex: 1 }}><Text style={styles.eyebrow}>{t('YOUR BUSINESS', 'आपका व्यवसाय')}</Text><Text style={styles.title}>{blueprint.businessName || t('Welcome back', 'स्वागत है')}</Text><Text style={styles.subtitle}>{homeText(home.type, home.language)}</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel={t('Business settings', 'व्यवसाय की सेटिंग')} onPress={() => router.push('/blueprint-setup')} style={styles.settings}><MaterialIcons name="tune" size={23} color="#334155"/></TouchableOpacity></View>
+
+  {/* Store Availability & Daily Heartbeat Card (Zomato/Swiggy Parity) */}
+  <View style={[styles.storeStatusCard, storeOpen ? styles.storeStatusCardOpen : styles.storeStatusCardClosed]}>
+    <View style={styles.storeStatusHeader}>
+      <View style={styles.storeStatusIndicator}>
+        <View style={[styles.storeStatusDot, storeOpen ? styles.storeStatusDotOpen : styles.storeStatusDotClosed]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.storeStatusTitle, storeOpen ? styles.storeStatusTitleOpen : styles.storeStatusTitleClosed]}>
+            {storeOpen ? t('Store is Open • Taking Orders', 'दुकान खुली है • ऑर्डर चालू हैं') : t('Store is Paused / Closed', 'दुकान बंद है • ऑर्डर बंद हैं')}
+          </Text>
+          <Text style={styles.storeStatusSub}>
+            {storeOpen
+              ? t('Online catalog is open for customers. Auto-pauses if app is not opened daily.', 'दुकान ऑनलाइन चालू है। हर रोज़ ऐप न खोलने पर अपने आप बंद हो जाएगी।')
+              : t('Store is offline. Customers cannot order or mistakenly send UPI payments.', 'दुकान बंद है। ग्राहक कोई गलत UPI पेमेंट या ऑर्डर नहीं कर सकते।')}
+          </Text>
+        </View>
+      </View>
+      <TouchableOpacity
+        accessibilityRole="button"
+        disabled={togglingStore}
+        onPress={handleToggleStore}
+        style={[styles.storeToggleBtn, storeOpen ? styles.storeToggleBtnClose : styles.storeToggleBtnOpen]}
+      >
+        {togglingStore ? (
+          <ActivityIndicator size="small" color={storeOpen ? '#991b1b' : '#047857'} />
+        ) : (
+          <Text style={[styles.storeToggleBtnText, storeOpen ? styles.storeToggleBtnTextClose : styles.storeToggleBtnTextOpen]}>
+            {storeOpen ? t('Pause Store', 'बंद करें') : t('Open Store', 'दुकान खोलें')}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  </View>
+
   {!hydrated || (loading && !snapshot) ? <View style={styles.state}><ActivityIndicator color="#047857"/><Text style={styles.subtitle}>{t('Getting your business ready…', 'आपका व्यवसाय लोड हो रहा है…')}</Text></View> : error && !snapshot ? <View style={styles.state}><View style={styles.stateIcon}><MaterialIcons name={error === 'account' ? 'manage-accounts' : error === 'setup' ? 'storefront' : 'wifi-off'} size={30} color="#475569"/></View><Text style={styles.stateTitle}>{error === 'account' ? t('Check your workspace', 'अपना वर्कस्पेस जाँचें') : error === 'setup' ? t('Let’s set up your business', 'अपना व्यवसाय सेट करें') : t('Unable to connect', 'कनेक्शन नहीं हो पाया')}</Text><Text style={styles.stateText}>{error === 'account' ? t('This account is currently registered for Fieseros CRM. Contact support to review its GPTForm workspace.', 'यह खाता Fieseros CRM में दर्ज है। GPTForm वर्कस्पेस की जाँच के लिए सहायता से संपर्क करें।') : error === 'setup' ? t('Add your business details to get started.', 'शुरू करने के लिए व्यवसाय की जानकारी जोड़ें।') : t('Check your connection, then try again. Your saved data is safe.', 'इंटरनेट जाँचें और फिर कोशिश करें। आपका सेव किया डेटा सुरक्षित है।')}</Text><TouchableOpacity accessibilityRole="button" style={styles.primary} onPress={() => error === 'account' ? router.push('/(tabs)/more') : error === 'setup' ? router.push('/blueprint-setup') : setRevision(v => v + 1)}><Text style={styles.primaryText}>{error === 'account' ? t('Help & account', 'सहायता और खाता') : error === 'setup' ? t('Set up business', 'व्यवसाय सेट करें') : t('Try again', 'फिर कोशिश करें')}</Text></TouchableOpacity></View> : <>
    {error && <TouchableOpacity onPress={() => setRevision(v => v + 1)}><Text style={styles.stateText}>{t('Could not refresh. Showing your last loaded summary. Tap to retry.', 'जानकारी अपडेट नहीं हुई। पिछली जानकारी दिखाई जा रही है। फिर कोशिश करने के लिए टैप करें।')}</Text></TouchableOpacity>}
    <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t('Today at a glance', 'आज की जानकारी')}</Text><Text style={styles.subtitle}>{new Date().toLocaleDateString(home.language === 'hi' ? 'hi-IN' : 'en-IN', { day: 'numeric', month: 'short' })}</Text></View>
@@ -55,4 +121,23 @@ export function BusinessHomeScreen() {
   </>}
  </ScrollView></SafeAreaView>;
 }
-const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: '#f6f8f7' }, content: { padding: 16, paddingBottom: 36, gap: 20 }, header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 4 }, eyebrow: { fontSize: 10, letterSpacing: 1.7, fontWeight: '700', color: '#64748b', marginBottom: 7 }, title: { fontSize: 26, fontWeight: '700', color: '#142d25' }, subtitle: { fontSize: 13, color: '#64748b', marginTop: 4 }, settings: { height: 48, width: 48, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }, sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, sectionTitle: { fontSize: 17, fontWeight: '700', color: '#142d25' }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { padding: 20, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e6ebe8' }, half: { flexGrow: 1, width: '46%' }, hero: { width: '100%', backgroundColor: '#064e3b', borderColor: '#064e3b', padding: 24 }, metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, metricLabel: { fontSize: 13, color: '#52645d', flex: 1 }, heroLabel: { color: '#d1fae5' }, value: { fontSize: 24, fontWeight: '700', color: '#142d25', marginTop: 14 }, heroValue: { fontSize: 40, color: '#fff' }, action: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8e4', minHeight: 76 }, primaryAction: { borderColor: '#a7d7bf', backgroundColor: '#eef8f2' }, actionIcon: { padding: 10, backgroundColor: '#dff0e5', borderRadius: 13 }, actionText: { flex: 1, fontSize: 16, fontWeight: '600', color: '#173d2d' }, state: { padding: 26, borderRadius: 20, backgroundColor: '#fff', alignItems: 'center', gap: 16 }, stateIcon: { padding: 18, backgroundColor: '#f1f5f4', borderRadius: 24 }, stateTitle: { fontSize: 21, fontWeight: '700', textAlign: 'center', color: '#142d25' }, stateText: { fontSize: 14, lineHeight: 22, color: '#64748b', textAlign: 'center' }, primary: { minHeight: 50, paddingHorizontal: 24, borderRadius: 14, backgroundColor: '#047857', justifyContent: 'center' }, primaryText: { color: '#fff', fontSize: 15, fontWeight: '700' } });
+const styles = StyleSheet.create({ safe: { flex: 1, backgroundColor: '#f6f8f7' }, content: { padding: 16, paddingBottom: 36, gap: 20 }, header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 8, paddingBottom: 4 }, eyebrow: { fontSize: 10, letterSpacing: 1.7, fontWeight: '700', color: '#64748b', marginBottom: 7 }, title: { fontSize: 26, fontWeight: '700', color: '#142d25' }, subtitle: { fontSize: 13, color: '#64748b', marginTop: 4 }, settings: { height: 48, width: 48, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }, sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, sectionTitle: { fontSize: 17, fontWeight: '700', color: '#142d25' }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 }, metric: { padding: 20, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e6ebe8' }, half: { flexGrow: 1, width: '46%' }, hero: { width: '100%', backgroundColor: '#064e3b', borderColor: '#064e3b', padding: 24 }, metricTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, metricLabel: { fontSize: 13, color: '#52645d', flex: 1 }, heroLabel: { color: '#d1fae5' }, value: { fontSize: 24, fontWeight: '700', color: '#142d25', marginTop: 14 }, heroValue: { fontSize: 40, color: '#fff' }, action: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8e4', minHeight: 76 }, primaryAction: { borderColor: '#a7d7bf', backgroundColor: '#eef8f2' }, actionIcon: { padding: 10, backgroundColor: '#dff0e5', borderRadius: 13 }, actionText: { flex: 1, fontSize: 16, fontWeight: '600', color: '#173d2d' }, state: { padding: 26, borderRadius: 20, backgroundColor: '#fff', alignItems: 'center', gap: 16 }, stateIcon: { padding: 18, backgroundColor: '#f1f5f4', borderRadius: 24 }, stateTitle: { fontSize: 21, fontWeight: '700', textAlign: 'center', color: '#142d25' }, stateText: { fontSize: 14, lineHeight: 22, color: '#64748b', textAlign: 'center' }, primary: { minHeight: 50, paddingHorizontal: 24, borderRadius: 14, backgroundColor: '#047857', justifyContent: 'center' }, primaryText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  storeStatusCard: { borderRadius: 18, padding: 14, borderWidth: 1.5 },
+  storeStatusCardOpen: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
+  storeStatusCardClosed: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  storeStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  storeStatusIndicator: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, flex: 1 },
+  storeStatusDot: { width: 10, height: 10, borderRadius: 5, marginTop: 4 },
+  storeStatusDotOpen: { backgroundColor: '#16a34a' },
+  storeStatusDotClosed: { backgroundColor: '#e11d48' },
+  storeStatusTitle: { fontSize: 14, fontWeight: '700' },
+  storeStatusTitleOpen: { color: '#14532d' },
+  storeStatusTitleClosed: { color: '#881337' },
+  storeStatusSub: { fontSize: 11, color: '#64748b', marginTop: 2, lineHeight: 15 },
+  storeToggleBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  storeToggleBtnOpen: { backgroundColor: '#047857', borderColor: '#047857' },
+  storeToggleBtnClose: { backgroundColor: '#ffffff', borderColor: '#fda4af' },
+  storeToggleBtnText: { fontSize: 12, fontWeight: '700' },
+  storeToggleBtnTextOpen: { color: '#ffffff' },
+  storeToggleBtnTextClose: { color: '#be123c' },
+});

@@ -2,6 +2,7 @@ import React from 'react';
 import { db } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { StoreClient } from './store-client';
+import { computeStoreAvailabilityFromConfig } from '@/lib/commerce/store-availability';
 
 interface StorePageProps {
   params: Promise<{ slug: string }>;
@@ -298,6 +299,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     }
   } catch {}
 
+  const availability = computeStoreAvailabilityFromConfig(config, businessName);
+
   return (
     <StoreClient
       businessId={businessId}
@@ -315,6 +318,9 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       tableNumber={table || null}
       billing={billingConfig}
       discounts={discountsConfig}
+      isStoreOpen={availability.isOpen}
+      storeCloseReason={availability.reason}
+      todayHoursText={availability.todayHoursText}
     />
   );
 }

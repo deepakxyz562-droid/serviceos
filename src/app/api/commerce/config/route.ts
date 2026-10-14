@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { requireQuoteFlowBusiness } from '@/lib/quote-flow-session';
 import { sanitizeUpiId } from '@/lib/upi-qr';
+import { computeStoreAvailability, getIstCurrentDateStr } from '@/lib/commerce/store-availability';
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,6 +51,10 @@ export async function GET(req: NextRequest) {
           deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
           paymentQrUrl: raw.paymentQrUrl || '',
           enableOnlinePayment: raw.enableOnlinePayment !== undefined ? Boolean(raw.enableOnlinePayment) : true,
+          isStoreOpen: raw.isStoreOpen !== undefined ? Boolean(raw.isStoreOpen) : true,
+          lastActiveDate: raw.lastActiveDate || '',
+          autoCloseIfInactive: raw.autoCloseIfInactive !== undefined ? Boolean(raw.autoCloseIfInactive) : true,
+          manualCloseReason: raw.manualCloseReason || '',
         };
       }
     } catch {
@@ -61,7 +66,24 @@ export async function GET(req: NextRequest) {
         deliverySettings: DEFAULT_DELIVERY_SETTINGS,
         paymentQrUrl: '',
         enableOnlinePayment: true,
+        isStoreOpen: true,
+        lastActiveDate: '',
+        autoCloseIfInactive: true,
+        manualCloseReason: '',
       };
+    }
+
+    // Auto-record today's heartbeat (merchant active in BOS app today)
+    const todayIst = getIstCurrentDateStr();
+    if (parsedFieldsData.lastActiveDate !== todayIst) {
+      parsedFieldsData.lastActiveDate = todayIst;
+      // Persist heartbeat in background
+      void db.gptformCommerceConfig.update({
+        where: { id: config.id },
+        data: {
+          fieldsJson: JSON.stringify(parsedFieldsData),
+        },
+      }).catch(() => null);
     }
 
     let parsedHours: Record<string, any> = {};
@@ -74,6 +96,15 @@ export async function GET(req: NextRequest) {
       if (config.deliveryAreasJson) parsedDeliveryAreas = JSON.parse(config.deliveryAreasJson);
     } catch {}
 
+    const availability = computeStoreAvailability({
+      isStoreOpen: parsedFieldsData.isStoreOpen,
+      lastActiveDate: parsedFieldsData.lastActiveDate,
+      autoCloseIfInactive: parsedFieldsData.autoCloseIfInactive,
+      manualCloseReason: parsedFieldsData.manualCloseReason,
+      businessHours: parsedHours,
+      businessName: business.name,
+    });
+
     return NextResponse.json({
       config: {
         ...config,
@@ -84,6 +115,11 @@ export async function GET(req: NextRequest) {
         deliverySettings: parsedFieldsData.deliverySettings,
         paymentQrUrl: parsedFieldsData.paymentQrUrl || '',
         enableOnlinePayment: parsedFieldsData.enableOnlinePayment,
+        isStoreOpen: parsedFieldsData.isStoreOpen,
+        lastActiveDate: parsedFieldsData.lastActiveDate,
+        autoCloseIfInactive: parsedFieldsData.autoCloseIfInactive,
+        manualCloseReason: parsedFieldsData.manualCloseReason,
+        availability,
         businessHours: parsedHours,
         deliveryAreas: parsedDeliveryAreas,
       },
@@ -179,6 +215,10 @@ export async function PATCH(req: NextRequest) {
     if (body.deliverySettings !== undefined) {
       container.deliverySettings = { ...container.deliverySettings, ...body.deliverySettings };
     }
+    if (body.isStoreOpen !== undefined) container.isStoreOpen = Boolean(body.isStoreOpen);
+    if (body.lastActiveDate !== undefined) container.lastActiveDate = String(body.lastActiveDate);
+    if (body.autoCloseIfInactive !== undefined) container.autoCloseIfInactive = Boolean(body.autoCloseIfInactive);
+    if (body.manualCloseReason !== undefined) container.manualCloseReason = String(body.manualCloseReason);
     // Also accept individual delivery fields
     if (body.minOrderAmount !== undefined) container.deliverySettings.minOrderAmount = Number(body.minOrderAmount);
     if (body.deliveryCharge !== undefined) container.deliverySettings.deliveryCharge = Number(body.deliveryCharge);
@@ -241,6 +281,15 @@ export async function PATCH(req: NextRequest) {
       if (config.businessHoursJson) parsedHours = JSON.parse(config.businessHoursJson);
     } catch {}
 
+    const availability = computeStoreAvailability({
+      isStoreOpen: container.isStoreOpen !== undefined ? Boolean(container.isStoreOpen) : (config.isActive ?? true),
+      lastActiveDate: container.lastActiveDate,
+      autoCloseIfInactive: container.autoCloseIfInactive !== undefined ? Boolean(container.autoCloseIfInactive) : true,
+      manualCloseReason: container.manualCloseReason || '',
+      businessHours: parsedHours,
+      businessName: businessUpdates.name || business.name,
+    });
+
     return NextResponse.json({
       config: {
         ...config,
@@ -249,6 +298,13 @@ export async function PATCH(req: NextRequest) {
         discounts: container.discounts,
         fields: container.fields,
         deliverySettings: container.deliverySettings,
+        paymentQrUrl: container.paymentQrUrl || '',
+        enableOnlinePayment: container.enableOnlinePayment,
+        isStoreOpen: container.isStoreOpen,
+        lastActiveDate: container.lastActiveDate,
+        autoCloseIfInactive: container.autoCloseIfInactive,
+        manualCloseReason: container.manualCloseReason,
+        availability,
         businessHours: parsedHours,
       },
       business: {

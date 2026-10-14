@@ -18,6 +18,7 @@ import {
   QrCode,
   ArrowRight,
   ShieldCheck,
+  ShieldAlert,
   ChevronRight,
   Sparkles,
   Bell,
@@ -33,6 +34,10 @@ import {
   Heart,
   Copy,
   ShoppingBag,
+  ArrowLeft,
+  Trash2,
+  User,
+  Phone,
 } from 'lucide-react';
 
 interface Product {
@@ -77,6 +82,9 @@ interface StoreClientProps {
   billing?: BillingConfig | null;
   discounts?: DiscountRule[];
   bannerText?: string;
+  isStoreOpen?: boolean;
+  storeCloseReason?: string;
+  todayHoursText?: string;
 }
 
 export function StoreClient({
@@ -95,12 +103,17 @@ export function StoreClient({
   tableNumber,
   billing,
   discounts = [],
+  isStoreOpen = true,
+  storeCloseReason = '',
+  todayHoursText = '',
 }: StoreClientProps) {
   const requestTracker = useRef(new RequestTracker());
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cart, setCart] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
+  const [upiTrustConfirmed, setUpiTrustConfirmed] = useState(false);
+  const [storeClosedAlert, setStoreClosedAlert] = useState(false);
   const [orderType, setOrderType] = useState<'DINE_IN' | 'DELIVERY' | 'TAKEOUT'>(
     tableNumber ? 'DINE_IN' : 'DELIVERY'
   );
@@ -131,6 +144,38 @@ export function StoreClient({
   const [callServerSuccess, setCallServerSuccess] = useState(false);
   const [whatsappUpdatesOptIn, setWhatsappUpdatesOptIn] = useState(false);
   const [isReturningCustomer, setIsReturningCustomer] = useState(false);
+
+  // Open / Close Cart with browser history & hardware back button support
+  const openCart = () => {
+    setCartOpen(true);
+    if (typeof window !== 'undefined' && window.location.hash !== '#cart') {
+      window.history.pushState({ cartOpen: true }, '', '#cart');
+    }
+  };
+
+  const closeCart = () => {
+    setCartOpen(false);
+    if (typeof window !== 'undefined' && window.location.hash === '#cart') {
+      window.history.back();
+    }
+  };
+
+  React.useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        if (window.location.hash === '#cart') {
+          setCartOpen(true);
+        } else {
+          setCartOpen(false);
+        }
+      }
+    };
+    if (typeof window !== 'undefined' && window.location.hash === '#cart') {
+      setCartOpen(true);
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Restore customer from device localStorage on QR scan / page load
   React.useEffect(() => {
@@ -181,6 +226,10 @@ export function StoreClient({
 
   // Cart operations
   const updateQty = (productId: string, delta: number) => {
+    if (!isStoreOpen && delta > 0) {
+      setStoreClosedAlert(true);
+      return;
+    }
     setCart((prev) => {
       const current = prev[productId] || 0;
       const next = current + delta;
@@ -307,6 +356,10 @@ export function StoreClient({
 
   // Checkout via WhatsApp, UPI, or Counter COD
   const handleCheckout = async (method: 'WHATSAPP' | 'UPI' | 'COD') => {
+    if (!isStoreOpen) {
+      alert(storeCloseReason || `${businessName} is currently closed and not accepting orders.`);
+      return;
+    }
     if (cartItems.length === 0) return;
     if (!customerPhone.trim()) {
       alert('Please enter your phone / WhatsApp number so we can confirm your order.');
@@ -433,6 +486,11 @@ export function StoreClient({
         paymentMethod: method === 'UPI' ? 'UPI' : 'COD',
       });
 
+      setCartOpen(false);
+      if (typeof window !== 'undefined' && window.location.hash === '#cart') {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+
       // 3. Only Launch WhatsApp if customer explicitly opted in
       if (whatsappUpdatesOptIn && cleanBizPhone) {
         window.open(waUrl, '_blank');
@@ -446,6 +504,99 @@ export function StoreClient({
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-stone-900 font-sans pb-32">
+      {/* ── Store Closed / Offline Warning Banner ────────────────────────── */}
+      {!isStoreOpen && (
+        <div className="bg-gradient-to-r from-rose-700 via-rose-800 to-amber-900 text-white px-4 py-3 shadow-md z-30">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <span className="flex size-3 shrink-0 rounded-full bg-rose-400 animate-pulse mt-0.5 sm:mt-0" />
+              <div>
+                <p className="text-xs sm:text-sm font-extrabold tracking-wide uppercase flex items-center gap-1.5">
+                  <span>Store is Currently Closed • Not Taking Orders</span>
+                </p>
+                <p className="text-[11px] text-rose-100 font-medium leading-relaxed">
+                  {storeCloseReason || `${businessName} is currently offline and not taking orders right now.`}
+                  {todayHoursText ? ` • Hours: ${todayHoursText}` : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              {businessPhone && (
+                <a
+                  href={`tel:${businessPhone.replace(/\D/g, '')}`}
+                  className="px-3 py-1.5 bg-white text-stone-900 rounded-xl text-xs font-bold hover:bg-stone-100 transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Phone className="size-3.5 text-rose-600" />
+                  <span>Call Store</span>
+                </a>
+              )}
+              {businessPhone && (
+                <a
+                  href={`https://wa.me/${businessPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Namaste ${businessName}, is your store/cart open today?`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <MessageCircle className="size-3.5" />
+                  <span>WhatsApp</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Store Closed Alert Modal (Triggered on Attempted Add-to-Cart) ── */}
+      {storeClosedAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 text-center shadow-2xl space-y-4 animate-scale-in">
+            <div className="size-14 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Store className="size-7 text-rose-600" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-stone-900">{businessName} is Closed</h3>
+              <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                {storeCloseReason || 'This cart/store is currently offline and not taking online orders right now.'}
+              </p>
+              {todayHoursText && (
+                <p className="text-[11px] font-bold text-stone-500 mt-1.5">
+                  Operating Hours: {todayHoursText}
+                </p>
+              )}
+            </div>
+            <div className="space-y-2 pt-1">
+              {businessPhone && (
+                <a
+                  href={`tel:${businessPhone.replace(/\D/g, '')}`}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs"
+                >
+                  <Phone className="size-4" />
+                  <span>Call Store Owner ({businessPhone})</span>
+                </a>
+              )}
+              {businessPhone && (
+                <a
+                  href={`https://wa.me/${businessPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Namaste ${businessName}, is your store open today?`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold text-xs transition"
+                >
+                  <MessageCircle className="size-4 text-emerald-600" />
+                  <span>Ask on WhatsApp</span>
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setStoreClosedAlert(false)}
+                className="w-full py-2 text-stone-400 hover:text-stone-700 text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Top Promotional Announcement Bar ────────────────────────────── */}
       {bannerText && (
         <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-xs">
@@ -561,7 +712,7 @@ export function StoreClient({
             {discounts.length > 0 && (
               <button
                 type="button"
-                onClick={() => setCartOpen(true)}
+                onClick={openCart}
                 className="hidden lg:flex items-center gap-1.5 text-xs font-bold text-amber-600 hover:text-amber-700 transition"
               >
                 <Tag className="h-4 w-4" />
@@ -572,7 +723,7 @@ export function StoreClient({
             {/* Cart Button */}
             <button
               type="button"
-              onClick={() => setCartOpen(true)}
+              onClick={openCart}
               className="relative flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs transition border border-emerald-200"
             >
               <ShoppingCart className="h-4 w-4 text-emerald-700" />
@@ -594,7 +745,7 @@ export function StoreClient({
             ) : (
               <button
                 type="button"
-                onClick={() => setCartOpen(true)}
+                onClick={openCart}
                 className="hidden sm:block px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition shadow-xs"
               >
                 Login
@@ -878,11 +1029,19 @@ export function StoreClient({
                           </span>
                         </div>
 
-                        {qty === 0 ? (
+                        {!isStoreOpen ? (
+                          <button
+                            type="button"
+                            onClick={() => setStoreClosedAlert(true)}
+                            className="px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-500 text-xs font-bold transition cursor-pointer"
+                          >
+                            Closed
+                          </button>
+                        ) : qty === 0 ? (
                           <button
                             type="button"
                             onClick={() => updateQty(p.id, 1)}
-                            className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center gap-1 active:scale-95"
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-200 text-emerald-800 text-xs font-bold transition flex items-center gap-1 active:scale-95 cursor-pointer"
                           >
                             <Plus className="h-3.5 w-3.5" />
                             <span>Add</span>
@@ -921,8 +1080,8 @@ export function StoreClient({
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-30">
             <button
               type="button"
-              onClick={() => setCartOpen(true)}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-2xl shadow-xl flex items-center justify-between font-bold active:scale-[0.99] transition"
+              onClick={openCart}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-3.5 rounded-2xl shadow-xl flex items-center justify-between font-bold active:scale-[0.99] transition cursor-pointer"
             >
               <div className="flex items-center gap-2.5">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs font-black">
@@ -938,316 +1097,388 @@ export function StoreClient({
           </div>
         )}
 
-        {/* Cart Slide-Over / Modal */}
+        {/* Full-Screen Mobile Checkout View & Desktop Modal */}
         {cartOpen && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs">
-            <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-slide-up">
-              {/* Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="h-5 w-5 text-emerald-600" />
-                  <h2 className="text-base font-bold text-stone-900">Your Shopping Cart</h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setCartOpen(false)}
-                  className="p-1.5 rounded-full text-stone-400 hover:text-stone-800 hover:bg-stone-100"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Items List */}
-              <div className="overflow-y-auto py-3 space-y-2.5 flex-1 max-h-52">
-                {cartItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between text-xs">
-                    <div className="flex-1 pr-2">
-                      <span className="font-bold text-stone-900">{item.name}</span>
-                      <span className="text-stone-400 ml-1.5">
-                        {currencySymbol}{item.price} each
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs">
+            <div className="w-full h-[100dvh] sm:h-auto sm:max-h-[90vh] sm:max-w-xl bg-[#F8FAFC] flex flex-col sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up">
+              {/* ── Fixed Top App Bar / Header ────────────────────────── */}
+              <header className="shrink-0 bg-white border-b border-stone-200/90 px-4 py-3.5 flex items-center justify-between shadow-2xs z-10">
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={closeCart}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 -ml-1.5 text-stone-700 hover:text-stone-950 hover:bg-stone-100 rounded-xl font-bold text-xs transition cursor-pointer active:scale-95"
+                    title="Back to store menu"
+                  >
+                    <ArrowLeft className="size-4 text-stone-800" />
+                    <span>Back</span>
+                  </button>
+                  <div className="h-4 w-px bg-stone-200" />
+                  <div>
+                    <h2 className="text-sm sm:text-base font-extrabold text-stone-900 leading-tight flex items-center gap-2">
+                      <span>Your Shopping Cart</span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10.5px] font-black">
+                        {totalItems} {totalItems === 1 ? 'item' : 'items'}
                       </span>
-                    </div>
-                    <div className="flex items-center gap-2 bg-stone-100 rounded-lg px-1.5 py-0.5">
+                    </h2>
+                    <p className="text-[10.5px] text-stone-500 truncate max-w-[180px] sm:max-w-[300px]">
+                      {businessName}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  {cartItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== 'undefined' && window.confirm('Remove all items from your cart?')) {
+                          setCart({});
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition cursor-pointer"
+                      title="Clear Cart"
+                    >
+                      <Trash2 className="size-3.5" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={closeCart}
+                    className="p-1.5 rounded-xl text-stone-400 hover:text-stone-800 hover:bg-stone-100 transition cursor-pointer"
+                    title="Close"
+                  >
+                    <X className="size-5" />
+                  </button>
+                </div>
+              </header>
+
+              {/* ── Unified Scrollable Content Area ──────────────────────── */}
+              <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-3.5 pb-28 sm:pb-6">
+                {/* 1. Selected Products Card */}
+                <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+                    <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                      <ShoppingBag className="size-3.5 text-emerald-600" />
+                      Selected Items ({totalItems})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={closeCart}
+                      className="text-[11.5px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="size-3" />
+                      <span>Add More Items</span>
+                    </button>
+                  </div>
+
+                  {cartItems.length === 0 ? (
+                    <div className="py-8 text-center space-y-2">
+                      <ShoppingBag className="size-10 text-stone-300 mx-auto" />
+                      <p className="text-xs font-bold text-stone-600">Your cart is currently empty</p>
                       <button
                         type="button"
-                        onClick={() => updateQty(item.id, -1)}
-                        className="text-stone-600 font-bold px-1"
+                        onClick={closeCart}
+                        className="mt-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
                       >
-                        -
-                      </button>
-                      <span className="font-black text-stone-900">{item.qty}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQty(item.id, 1)}
-                        className="text-stone-600 font-bold px-1"
-                      >
-                        +
+                        Browse Store Menu
                       </button>
                     </div>
-                    <span className="w-16 text-right font-black text-stone-900">
-                      {currencySymbol}{item.amount.toFixed(2)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                  ) : (
+                    <div className="divide-y divide-stone-100">
+                      {cartItems.map((item) => (
+                        <div key={item.id} className="py-3 first:pt-1 last:pb-1 flex items-center gap-3">
+                          {/* Image Thumbnail */}
+                          <div className="relative size-14 shrink-0 rounded-xl border border-stone-200/80 bg-stone-50 overflow-hidden flex items-center justify-center shadow-2xs">
+                            {item.imageUrl ? (
+                              <img
+                                src={item.imageUrl}
+                                alt={item.name}
+                                className="size-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center justify-center text-stone-400 p-1 text-center">
+                                <ShoppingBag className="size-4 text-emerald-600/70 mb-0.5" />
+                                <span className="text-[7.5px] font-bold uppercase truncate max-w-[48px]">
+                                  {item.category || 'Item'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
 
-              {/* Order Info & Delivery Inputs */}
-              <div className="border-t border-stone-100 pt-3 space-y-2.5 text-xs">
-                {/* Order Type Toggle */}
-                {!tableNumber && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOrderType('DELIVERY')}
-                      className={`py-1.5 rounded-xl font-bold border transition ${
-                        orderType === 'DELIVERY'
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-stone-50 text-stone-600 border-stone-200'
-                      }`}
-                    >
-                      🚚 Home Delivery
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrderType('TAKEOUT')}
-                      className={`py-1.5 rounded-xl font-bold border transition ${
-                        orderType === 'TAKEOUT'
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-stone-50 text-stone-600 border-stone-200'
-                      }`}
-                    >
-                      🛍️ Store Takeout
-                    </button>
-                  </div>
-                )}
+                          {/* Details */}
+                          <div className="flex-1 min-w-0 pr-1">
+                            <h4 className="text-xs sm:text-sm font-bold text-stone-900 leading-snug line-clamp-1">
+                              {item.name}
+                            </h4>
+                            <p className="text-[11px] text-stone-500 font-medium mt-0.5">
+                              {currencySymbol}{item.price.toFixed(2)} each
+                            </p>
+                          </div>
 
-                {/* Timing Selector: Immediate vs Order Ahead */}
-                <div className="bg-stone-50 p-2.5 rounded-2xl border border-stone-200/80 space-y-2">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-stone-600">
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-stone-500" />
-                      Order Timing
-                    </span>
-                    <span className="text-[10px] text-stone-400">
-                      {timingType === 'NOW' ? '⚡ Immediate preparation' : '📅 Pre-scheduled'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setTimingType('NOW')}
-                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 ${
-                        timingType === 'NOW'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
-                      }`}
-                    >
-                      <span>🟢 Order Now (ASAP)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTimingType('ORDER_AHEAD')}
-                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 ${
-                        timingType === 'ORDER_AHEAD'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
-                      }`}
-                    >
-                      <span>⏰ Order Ahead</span>
-                    </button>
-                  </div>
+                          {/* Stepper with Trash Icon when Qty is 1 */}
+                          <div className="flex items-center gap-1.5 bg-stone-100/90 rounded-xl p-1 border border-stone-200/70 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => updateQty(item.id, -1)}
+                              className={`size-7 rounded-lg flex items-center justify-center transition active:scale-90 cursor-pointer ${
+                                item.qty === 1
+                                  ? 'text-red-500 hover:bg-red-50 hover:text-red-600'
+                                  : 'text-stone-700 hover:bg-white shadow-2xs'
+                              }`}
+                              title={item.qty === 1 ? 'Remove item' : 'Decrease quantity'}
+                            >
+                              {item.qty === 1 ? (
+                                <Trash2 className="size-3.5 text-red-500" />
+                              ) : (
+                                <Minus className="size-3.5" />
+                              )}
+                            </button>
+                            <span className="font-black text-xs min-w-[20px] text-center text-stone-900">
+                              {item.qty}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateQty(item.id, 1)}
+                              className="size-7 rounded-lg flex items-center justify-center text-stone-700 hover:bg-white shadow-2xs transition active:scale-90 cursor-pointer"
+                              title="Increase quantity"
+                            >
+                              <Plus className="size-3.5" />
+                            </button>
+                          </div>
 
-                  {timingType === 'ORDER_AHEAD' && (
-                    <div className="pt-1">
-                      <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block mb-1">
-                        Select Pickup Slot:
-                      </label>
-                      <select
-                        value={scheduledSlot}
-                        onChange={(e) => setScheduledSlot(e.target.value)}
-                        className="w-full p-2 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-800"
-                      >
-                        <option value="Today at 12:30 PM">Today at 12:30 PM</option>
-                        <option value="Today at 1:00 PM">Today at 1:00 PM</option>
-                        <option value="Today at 1:30 PM">Today at 1:30 PM</option>
-                        <option value="Today at 2:00 PM">Today at 2:00 PM</option>
-                        <option value="Today at 4:30 PM">Today at 4:30 PM</option>
-                        <option value="Today at 5:00 PM">Today at 5:00 PM</option>
-                        <option value="Today at 5:30 PM">Today at 5:30 PM</option>
-                        <option value="Today at 6:00 PM">Today at 6:00 PM</option>
-                        <option value="Today at 6:30 PM">Today at 6:30 PM</option>
-                        <option value="Today at 7:00 PM">Today at 7:00 PM</option>
-                        <option value="Today at 7:30 PM">Today at 7:30 PM</option>
-                        <option value="Today at 8:00 PM">Today at 8:00 PM</option>
-                        <option value="Tomorrow at 10:00 AM">Tomorrow at 10:00 AM</option>
-                        <option value="Tomorrow at 1:00 PM">Tomorrow at 1:00 PM</option>
-                        <option value="Tomorrow at 6:00 PM">Tomorrow at 6:00 PM</option>
-                      </select>
+                          {/* Line Total */}
+                          <div className="w-16 text-right shrink-0">
+                            <span className="text-xs sm:text-sm font-black text-stone-900">
+                              {currencySymbol}{item.amount.toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
 
-                {tableNumber && (
-                  <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold flex items-center gap-2">
-                    <UtensilsCrossed className="h-4 w-4 text-amber-600" />
-                    <span>Ordering for Dine-In Table #{tableNumber}</span>
-                  </div>
-                )}
+                {/* 2. Order Fulfillment & Delivery Card */}
+                <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                    <Truck className="size-3.5 text-emerald-600" />
+                    Delivery &amp; Fulfillment
+                  </span>
 
-                {/* Customer Details */}
-                {isReturningCustomer && customerPhone && (
-                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px]">
-                        ✓
-                      </span>
-                      <div>
-                        <p className="font-bold text-stone-900 leading-tight">
-                          {customerName ? `${customerName}` : 'Recognized Customer'}
-                        </p>
-                        <p className="text-[10px] text-stone-500 font-mono">Auto-filled: {customerPhone}</p>
-                      </div>
+                  {tableNumber ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 font-bold flex items-center gap-2 text-xs">
+                      <UtensilsCrossed className="size-4 text-amber-600 shrink-0" />
+                      <span>Ordering for Dine-In Table #{tableNumber}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleResetCustomer}
-                      className="text-[10px] text-stone-400 hover:text-stone-700 underline font-medium"
-                    >
-                      Change
-                    </button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOrderType('DELIVERY')}
+                        className={`py-2 px-3 rounded-xl font-bold text-xs border transition flex items-center justify-center gap-2 cursor-pointer ${
+                          orderType === 'DELIVERY'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                        }`}
+                      >
+                        <Truck className="size-3.5" />
+                        <span>Home Delivery</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOrderType('TAKEOUT')}
+                        className={`py-2 px-3 rounded-xl font-bold text-xs border transition flex items-center justify-center gap-2 cursor-pointer ${
+                          orderType === 'TAKEOUT'
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                            : 'bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100'
+                        }`}
+                      >
+                        <Store className="size-3.5" />
+                        <span>Store Pickup</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Order Timing: ASAP vs Order Ahead */}
+                  <div className="bg-stone-50/90 p-3 rounded-xl border border-stone-200/80 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-stone-600">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="size-3.5 text-stone-500" />
+                        Order Timing
+                      </span>
+                      <span className="text-[10.5px] text-stone-400">
+                        {timingType === 'NOW' ? '⚡ Immediate preparation' : '📅 Pre-scheduled slot'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setTimingType('NOW')}
+                        className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          timingType === 'NOW'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
+                        }`}
+                      >
+                        <span>🟢 Order Now (ASAP)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTimingType('ORDER_AHEAD')}
+                        className={`py-1.5 px-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                          timingType === 'ORDER_AHEAD'
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white text-stone-700 border border-stone-200 hover:bg-stone-100'
+                        }`}
+                      >
+                        <span>⏰ Order Ahead</span>
+                      </button>
+                    </div>
+
+                    {timingType === 'ORDER_AHEAD' && (
+                      <div className="pt-1.5">
+                        <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block mb-1">
+                          Select Delivery / Pickup Slot:
+                        </label>
+                        <select
+                          value={scheduledSlot}
+                          onChange={(e) => setScheduledSlot(e.target.value)}
+                          className="w-full p-2 bg-white border border-stone-300 rounded-xl text-xs font-bold text-stone-800 focus:outline-hidden focus:border-emerald-600"
+                        >
+                          <option value="Today at 12:30 PM">Today at 12:30 PM</option>
+                          <option value="Today at 1:00 PM">Today at 1:00 PM</option>
+                          <option value="Today at 1:30 PM">Today at 1:30 PM</option>
+                          <option value="Today at 2:00 PM">Today at 2:00 PM</option>
+                          <option value="Today at 4:30 PM">Today at 4:30 PM</option>
+                          <option value="Today at 5:00 PM">Today at 5:00 PM</option>
+                          <option value="Today at 5:30 PM">Today at 5:30 PM</option>
+                          <option value="Today at 6:00 PM">Today at 6:00 PM</option>
+                          <option value="Today at 6:30 PM">Today at 6:30 PM</option>
+                          <option value="Today at 7:00 PM">Today at 7:00 PM</option>
+                          <option value="Today at 7:30 PM">Today at 7:30 PM</option>
+                          <option value="Today at 8:00 PM">Today at 8:00 PM</option>
+                          <option value="Tomorrow at 10:00 AM">Tomorrow at 10:00 AM</option>
+                          <option value="Tomorrow at 1:00 PM">Tomorrow at 1:00 PM</option>
+                          <option value="Tomorrow at 6:00 PM">Tomorrow at 6:00 PM</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Your Name (Optional)"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="p-2 rounded-xl bg-stone-50 border border-stone-200 text-xs"
-                  />
-                  <input
-                    type="tel"
-                    placeholder="WhatsApp Number *"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    required
-                    className="p-2 rounded-xl bg-stone-50 border border-stone-200 text-xs font-bold"
-                  />
-                </div>
+                  {/* Delivery Address if Home Delivery */}
+                  {orderType === 'DELIVERY' && !tableNumber && (
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1">
+                        <MapPin className="size-3.5 text-emerald-600" />
+                        <span>Complete Delivery Address *</span>
+                      </label>
+                      <textarea
+                        rows={2}
+                        placeholder="House / Flat No., Building, Street Name, Landmark"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        required
+                        className="w-full p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 focus:bg-white focus:border-emerald-600 focus:outline-hidden transition"
+                      />
+                    </div>
+                  )}
 
-                {orderType === 'DELIVERY' && !tableNumber && (
-                  <input
-                    type="text"
-                    placeholder="Complete Delivery Address *"
-                    value={deliveryAddress}
-                    onChange={(e) => setDeliveryAddress(e.target.value)}
-                    className="w-full p-2 rounded-xl bg-stone-50 border border-stone-200 text-xs"
-                  />
-                )}
-
-                <input
-                  type="text"
-                  placeholder="Special instructions or dietary notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full p-2 rounded-xl bg-stone-50 border border-stone-200 text-xs"
-                />
-              </div>
-
-              {/* Promo Code Box (Take.app Parity) */}
-              <div className="border-t border-stone-100 pt-3">
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Tag className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-stone-400" />
+                  {/* Special Instructions / Notes */}
+                  <div className="space-y-1">
                     <input
                       type="text"
-                      placeholder="Promo code (e.g. WELCOME10)"
-                      value={promoCodeInput}
-                      onChange={(e) => setPromoCodeInput(e.target.value)}
-                      className="w-full pl-8 pr-2 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-xs uppercase font-bold"
+                      placeholder="Special instructions or notes for the store (optional)"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="w-full p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 focus:bg-white focus:border-emerald-600 focus:outline-hidden transition"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleApplyPromo}
-                    className="px-3 py-1.5 rounded-xl bg-stone-900 text-white text-xs font-bold shrink-0 hover:bg-black transition"
-                  >
-                    Apply
-                  </button>
                 </div>
-                {appliedDiscount && (
-                  <div className="flex justify-between items-center text-[11px] text-emerald-700 font-bold mt-1 px-1">
-                    <span>✓ Code {appliedDiscount.code} applied ({appliedDiscount.label || 'Discount'})</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAppliedDiscount(null);
-                        setPromoCodeInput('');
-                      }}
-                      className="text-stone-400 hover:text-stone-700 underline text-[10px]"
+
+                {/* 3. Customer Contact Details Card */}
+                <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                    <User className="size-3.5 text-emerald-600" />
+                    Customer Information
+                  </span>
+
+                  {isReturningCustomer && customerPhone && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="size-5 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-[10px]">
+                          ✓
+                        </span>
+                        <div>
+                          <p className="font-bold text-stone-900 leading-tight">
+                            {customerName ? `${customerName}` : 'Welcome Back'}
+                          </p>
+                          <p className="text-[10px] text-stone-500 font-mono">
+                            Auto-filled: {customerPhone}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleResetCustomer}
+                        className="text-[10px] text-emerald-700 hover:text-emerald-900 underline font-bold cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Your Name (Optional)"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs text-stone-900 placeholder:text-stone-400 focus:bg-white focus:border-emerald-600 focus:outline-hidden transition"
+                      />
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="tel"
+                        placeholder="WhatsApp Number *"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        required
+                        className="w-full p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs font-bold text-stone-900 placeholder:font-normal placeholder:text-stone-400 focus:bg-white focus:border-emerald-600 focus:outline-hidden transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Updates Checkbox */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="checkbox"
+                      id="waOptInCheckbox"
+                      checked={whatsappUpdatesOptIn}
+                      onChange={(e) => setWhatsappUpdatesOptIn(e.target.checked)}
+                      className="size-4 rounded-md accent-emerald-600 cursor-pointer"
+                    />
+                    <label
+                      htmlFor="waOptInCheckbox"
+                      className="text-xs text-stone-600 font-medium cursor-pointer flex items-center gap-1.5 select-none"
                     >
-                      Remove
-                    </button>
+                      <MessageCircle className="size-3.5 text-emerald-600" />
+                      <span>Send order receipt &amp; status updates to my WhatsApp</span>
+                    </label>
                   </div>
-                )}
-                {promoError && (
-                  <p className="text-[10px] text-red-600 font-bold mt-1 px-1">{promoError}</p>
-                )}
-              </div>
-
-              {/* Total & Tax Breakdown */}
-              <div className="border-t border-stone-100 pt-3 mt-3 space-y-1 text-xs">
-                <div className="flex justify-between items-center text-stone-500">
-                  <span>Subtotal</span>
-                  <span>{currencySymbol}{subtotal.toFixed(2)}</span>
-                </div>
-                {discountAmount > 0 && (
-                  <div className="flex justify-between items-center text-emerald-600 font-bold">
-                    <span>Discount ({appliedDiscount?.code})</span>
-                    <span>-{currencySymbol}{discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-                {taxAmount > 0 && (
-                  <div className="flex justify-between items-center text-stone-500">
-                    <span>{taxName} ({taxRate}%)</span>
-                    <span>{currencySymbol}{taxAmount.toFixed(2)}</span>
-                  </div>
-                )}
-                {serviceChargeAmount > 0 && (
-                  <div className="flex justify-between items-center text-stone-500">
-                    <span>Service Charge ({serviceChargeRate}%)</span>
-                    <span>{currencySymbol}{serviceChargeAmount.toFixed(2)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center pt-1.5 border-t border-dashed border-stone-200 font-black text-base text-stone-900">
-                  <span>Total Amount</span>
-                  <span>{currencySymbol}{grandTotal.toFixed(2)}</span>
-                </div>
-              </div>
-
-                {/* Optional WhatsApp Updates Checkbox */}
-                <div className="flex items-center gap-2 py-2 px-1">
-                  <input
-                    type="checkbox"
-                    id="waOptInCheckbox"
-                    checked={whatsappUpdatesOptIn}
-                    onChange={(e) => setWhatsappUpdatesOptIn(e.target.checked)}
-                    className="size-4 rounded accent-emerald-600 cursor-pointer"
-                  />
-                  <label htmlFor="waOptInCheckbox" className="text-xs text-stone-600 font-medium cursor-pointer">
-                    Send order updates to my WhatsApp
-                  </label>
                 </div>
 
-                {/* Payment Option Selector & Details */}
-                <div className="pt-2 border-t border-stone-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-black uppercase tracking-wider text-stone-500">
+                {/* 4. Payment Method Card */}
+                <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                      <CreditCard className="size-3.5 text-emerald-600" />
                       Payment Method
                     </span>
                     {hasOnlinePayment && (
-                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                         Zero Fee UPI
                       </span>
                     )}
@@ -1255,12 +1486,12 @@ export function StoreClient({
 
                   {hasOnlinePayment ? (
                     <div className="space-y-3">
-                      {/* 2-Option Selector: Pay Online (UPI / QR) vs Pay at Counter */}
+                      {/* Segmented 2-option selector */}
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => setPaymentMode('ONLINE_UPI')}
-                          className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                          className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
                             paymentMode === 'ONLINE_UPI'
                               ? 'border-emerald-600 bg-emerald-50/70 ring-2 ring-emerald-500/20'
                               : 'border-stone-200 hover:border-stone-300 bg-white'
@@ -1271,17 +1502,17 @@ export function StoreClient({
                               <QrCode className="size-4 text-emerald-600" />
                               Pay Online
                             </span>
-                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                            <span className="text-[8.5px] font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
                               FAST
                             </span>
                           </div>
-                          <p className="text-[10px] text-stone-500 font-medium">UPI / QR Scan</p>
+                          <p className="text-[10.5px] text-stone-500 font-medium">UPI / QR Scan</p>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setPaymentMode('COUNTER_COD')}
-                          className={`p-2.5 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                          className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between cursor-pointer ${
                             paymentMode === 'COUNTER_COD'
                               ? 'border-stone-900 bg-stone-100 ring-2 ring-stone-900/10'
                               : 'border-stone-200 hover:border-stone-300 bg-white'
@@ -1293,89 +1524,164 @@ export function StoreClient({
                               Pay at Counter
                             </span>
                           </div>
-                          <p className="text-[10px] text-stone-500 font-medium">Cash / COD</p>
+                          <p className="text-[10.5px] text-stone-500 font-medium">Cash / COD</p>
                         </button>
                       </div>
 
-                      {/* Pay Online Details Box */}
+                      {/* Pay Online UPI Details Container */}
                       {paymentMode === 'ONLINE_UPI' && (
-                        <div className="p-3.5 bg-gradient-to-br from-emerald-50/60 via-white to-stone-50 rounded-2xl border border-emerald-200/90 shadow-2xs space-y-3">
-                          {/* App Badges */}
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="font-bold text-stone-700 flex items-center gap-1">
-                              <Sparkles className="size-3 text-emerald-600" />
-                              Scan & Pay with Any App
-                            </span>
-                            <div className="flex items-center gap-1 font-bold text-[9px]">
-                              <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-stone-800 shadow-2xs">GPay</span>
-                              <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-purple-700 shadow-2xs">PhonePe</span>
-                              <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-blue-700 shadow-2xs">Paytm</span>
-                            </div>
-                          </div>
-
-                          {/* QR Code Container */}
-                          {dynamicQrCodeUrl && (
-                            <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
-                              <div className="relative group shrink-0">
-                                <img
-                                  src={dynamicQrCodeUrl}
-                                  alt="Shop UPI QR Code"
-                                  className="size-32 rounded-lg border border-stone-200 bg-white p-1 object-contain shadow-2xs"
-                                />
-                                <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 shadow">
-                                  <QrCode className="size-3" />
+                        <div className="p-3.5 bg-gradient-to-br from-emerald-50/70 via-white to-stone-50 rounded-2xl border border-emerald-200/90 shadow-2xs space-y-3">
+                          {/* PRE-UPI TRUST SHIELD: Protect roadside stalls and prevent lost payments */}
+                          {!upiTrustConfirmed ? (
+                            <div className="p-3.5 bg-amber-50/90 rounded-xl border border-amber-300 space-y-3 text-left">
+                              <div className="flex items-start gap-2.5">
+                                <div className="p-2 bg-amber-100 rounded-lg text-amber-800 shrink-0 mt-0.5">
+                                  <ShieldAlert className="size-5" />
+                                </div>
+                                <div className="space-y-1">
+                                  <h4 className="text-xs font-black text-amber-950 uppercase tracking-wide">
+                                    Trust &amp; Safety Check: Do you know this store?
+                                  </h4>
+                                  <p className="text-[11px] text-amber-900/90 leading-relaxed font-medium">
+                                    Direct UPI payments transfer instantly to the store owner&apos;s bank account with no middleman. If you are not physically at the shop or haven&apos;t confirmed with {businessName} today, we strongly advise verifying first or choosing Pay at Counter.
+                                  </p>
                                 </div>
                               </div>
-                              <div className="text-center sm:text-left space-y-1 flex-1 min-w-0">
-                                <p className="text-xs font-bold text-stone-900">
-                                  Scan to Pay Instant
-                                </p>
-                                <p className="text-[11px] text-stone-500 leading-tight">
-                                  Open your UPI app, scan the QR code and pay:
-                                </p>
-                                <p className="text-sm font-black text-emerald-700">
-                                  {currencySymbol}{grandTotal.toFixed(2)}
-                                </p>
-                              </div>
-                            </div>
-                          )}
 
-                          {/* UPI ID Row with 1-Tap Copy */}
-                          {effectiveUpiId && (
-                            <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-stone-200 text-xs">
-                              <div className="min-w-0 flex-1 pr-2">
-                                <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider">Merchant UPI ID</p>
-                                <p className="font-mono font-bold text-stone-800 truncate select-all text-xs">{effectiveUpiId}</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setPaymentMode('COUNTER_COD')}
+                                  className="w-full py-2 px-3 bg-white border border-stone-300 hover:bg-stone-50 text-stone-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer"
+                                >
+                                  <Store className="size-3.5 text-stone-600" />
+                                  Switch to Cash / COD
+                                </button>
+                                {businessPhone ? (
+                                  <a
+                                    href={`tel:${businessPhone.replace(/[^0-9+]/g, '')}`}
+                                    className="w-full py-2 px-3 bg-white border border-stone-300 hover:bg-stone-50 text-stone-900 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition active:scale-95 cursor-pointer"
+                                  >
+                                    <Phone className="size-3.5 text-emerald-600" />
+                                    Call Store to Confirm
+                                  </a>
+                                ) : null}
                               </div>
+
                               <button
                                 type="button"
-                                onClick={handleCopyUpiId}
-                                className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-[11px] font-bold transition active:scale-95 cursor-pointer"
+                                onClick={() => setUpiTrustConfirmed(true)}
+                                className="w-full py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-sm transition active:scale-95 cursor-pointer"
                               >
-                                {copiedUpi ? (
-                                  <>
-                                    <Check className="size-3 text-emerald-600" />
-                                    <span className="text-emerald-700">Copied!</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="size-3" />
-                                    <span>Copy</span>
-                                  </>
-                                )}
+                                <CheckCircle2 className="size-4" />
+                                <span>I Know This Store &bull; Unlock UPI Payment</span>
                               </button>
                             </div>
-                          )}
+                          ) : (
+                            <>
+                              <div className="flex items-center justify-between text-[10.5px]">
+                                <span className="font-bold text-stone-700 flex items-center gap-1">
+                                  <Sparkles className="size-3 text-emerald-600" />
+                                  Scan &amp; Pay with Any App
+                                </span>
+                                <div className="flex items-center gap-1 font-bold text-[9px]">
+                                  <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-stone-800 shadow-2xs">
+                                    GPay
+                                  </span>
+                                  <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-purple-700 shadow-2xs">
+                                    PhonePe
+                                  </span>
+                                  <span className="px-1.5 py-0.5 bg-white border border-stone-200 rounded text-blue-700 shadow-2xs">
+                                    Paytm
+                                  </span>
+                                </div>
+                              </div>
 
-                          {/* Mobile 1-Tap Pay Button */}
-                          {upiUri && (
-                            <a
-                              href={upiUri}
-                              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition cursor-pointer"
-                            >
-                              <Smartphone className="size-4" />
-                              <span>Tap to Open UPI App ({currencySymbol}{grandTotal.toFixed(2)})</span>
-                            </a>
+                              {/* Dynamic QR Code Card */}
+                              {dynamicQrCodeUrl && (
+                                <div className="flex flex-col sm:flex-row items-center gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
+                                  <div className="relative group shrink-0">
+                                    <img
+                                      src={dynamicQrCodeUrl}
+                                      alt="Shop UPI QR Code"
+                                      className="size-32 rounded-lg border border-stone-200 bg-white p-1 object-contain shadow-2xs"
+                                    />
+                                    <div className="absolute -bottom-1 -right-1 bg-emerald-600 text-white rounded-full p-1 shadow">
+                                      <QrCode className="size-3" />
+                                    </div>
+                                  </div>
+                                  <div className="text-center sm:text-left space-y-1 flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-stone-900">
+                                      Instant UPI QR Payment
+                                    </p>
+                                    <p className="text-[11px] text-stone-500 leading-tight">
+                                      Scan using PhonePe, Google Pay, Paytm, or BHIM:
+                                    </p>
+                                    <p className="text-sm font-black text-emerald-700">
+                                      {currencySymbol}{grandTotal.toFixed(2)}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* UPI ID Row with 1-Tap Copy */}
+                              {effectiveUpiId && (
+                                <div className="flex items-center justify-between bg-white px-3 py-2 rounded-xl border border-stone-200 text-xs">
+                                  <div className="min-w-0 flex-1 pr-2">
+                                    <p className="text-[9px] text-stone-400 font-bold uppercase tracking-wider">
+                                      Merchant UPI ID
+                                    </p>
+                                    <p className="font-mono font-bold text-stone-800 truncate select-all text-xs">
+                                      {effectiveUpiId}
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={handleCopyUpiId}
+                                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-[11px] font-bold transition active:scale-95 cursor-pointer"
+                                  >
+                                    {copiedUpi ? (
+                                      <>
+                                        <Check className="size-3 text-emerald-600" />
+                                        <span className="text-emerald-700">Copied!</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="size-3" />
+                                        <span>Copy</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Mobile 1-Tap Pay Button */}
+                              {upiUri && (
+                                <a
+                                  href={upiUri}
+                                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition cursor-pointer"
+                                >
+                                  <Smartphone className="size-4" />
+                                  <span>
+                                    Tap to Open UPI App ({currencySymbol}{grandTotal.toFixed(2)})
+                                  </span>
+                                </a>
+                              )}
+
+                              <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 text-[10px] text-stone-500">
+                                <span className="flex items-center gap-1 text-emerald-700 font-semibold">
+                                  <ShieldCheck className="size-3" />
+                                  Merchant Verified for this Order
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setUpiTrustConfirmed(false)}
+                                  className="text-stone-500 hover:text-stone-800 underline font-medium cursor-pointer"
+                                >
+                                  Re-verify safety
+                                </button>
+                              </div>
+                            </>
                           )}
 
                           {/* Optional UTR / Reference Input */}
@@ -1386,55 +1692,175 @@ export function StoreClient({
                             <input
                               type="text"
                               value={utrNumber}
-                              onChange={(e) => setUtrNumber(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))}
+                              onChange={(e) =>
+                                setUtrNumber(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))
+                              }
                               placeholder="e.g. 4289xxxxxxxx (12 digits)"
                               maxLength={18}
-                              className="w-full text-xs font-mono bg-white border border-stone-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                              className="w-full text-xs font-mono bg-white border border-stone-200 rounded-xl px-3 py-2 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                             />
-                            <p className="text-[9px] text-stone-400 mt-1">
+                            <p className="text-[9.5px] text-stone-400 mt-1">
                               Helps {businessName} verify and dispatch your order immediately.
                             </p>
                           </div>
                         </div>
                       )}
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs text-stone-600 flex items-center gap-2">
+                      <Store className="size-4 text-stone-500 shrink-0" />
+                      <span>Payment will be collected at counter or upon delivery (Cash / COD).</span>
+                    </div>
+                  )}
+                </div>
 
-                  {/* Checkout Submit Buttons */}
-                  <div className="space-y-2 pt-3">
-                    {paymentMode === 'ONLINE_UPI' && hasOnlinePayment ? (
+                {/* 5. Promo Code & Itemized Bill Card */}
+                <div className="bg-white rounded-2xl border border-stone-200/90 shadow-2xs p-4 space-y-3">
+                  <span className="text-xs font-black uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                    <Tag className="size-3.5 text-emerald-600" />
+                    Offers &amp; Bill Breakdown
+                  </span>
+
+                  {/* Promo Code Input */}
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="size-3.5 absolute left-3 top-2.5 text-stone-400" />
+                        <input
+                          type="text"
+                          placeholder="Promo code (e.g. WELCOME10)"
+                          value={promoCodeInput}
+                          onChange={(e) => setPromoCodeInput(e.target.value)}
+                          className="w-full pl-8.5 pr-2 py-2 rounded-xl bg-stone-50/80 border border-stone-200 text-xs uppercase font-bold text-stone-900 focus:bg-white focus:border-emerald-600 focus:outline-hidden"
+                        />
+                      </div>
                       <button
                         type="button"
-                        onClick={() => handleCheckout('UPI')}
-                        disabled={isSubmitting}
-                        className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-md active:scale-[0.99] transition disabled:opacity-50 cursor-pointer"
+                        onClick={handleApplyPromo}
+                        className="px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-black text-white text-xs font-bold shrink-0 transition active:scale-95 cursor-pointer"
                       >
-                        <CheckCircle2 className="size-4" />
-                        <span>
-                          {isSubmitting
-                            ? 'Submitting Order...'
-                            : `Place Order & Pay via UPI (${currencySymbol}${grandTotal.toFixed(2)})`}
-                        </span>
+                        Apply
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleCheckout('COD')}
-                        disabled={isSubmitting}
-                        className="w-full bg-stone-900 hover:bg-black text-white py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition disabled:opacity-50 cursor-pointer text-xs"
-                      >
-                        <Store className="size-4" />
+                    </div>
+
+                    {appliedDiscount && (
+                      <div className="flex justify-between items-center text-[11px] text-emerald-700 font-bold mt-1.5 px-1">
                         <span>
-                          {isSubmitting
-                            ? 'Submitting Order...'
-                            : `Place Order • Pay at Counter (${currencySymbol}${grandTotal.toFixed(2)})`}
+                          ✓ Code {appliedDiscount.code} applied ({appliedDiscount.label || 'Discount'})
                         </span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAppliedDiscount(null);
+                            setPromoCodeInput('');
+                          }}
+                          className="text-stone-400 hover:text-stone-700 underline text-[10px] cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     )}
+                    {promoError && (
+                      <p className="text-[10px] text-red-600 font-bold mt-1 px-1">{promoError}</p>
+                    )}
+                  </div>
+
+                  {/* Bill Details */}
+                  <div className="border-t border-stone-100 pt-3 space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center text-stone-500 font-medium">
+                      <span>Item Total ({totalItems} items)</span>
+                      <span>{currencySymbol}{subtotal.toFixed(2)}</span>
+                    </div>
+
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between items-center text-emerald-600 font-bold">
+                        <span>Discount ({appliedDiscount?.code})</span>
+                        <span>-{currencySymbol}{discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    {taxAmount > 0 && (
+                      <div className="flex justify-between items-center text-stone-500 font-medium">
+                        <span>{taxName} ({taxRate}%)</span>
+                        <span>{currencySymbol}{taxAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    {serviceChargeAmount > 0 && (
+                      <div className="flex justify-between items-center text-stone-500 font-medium">
+                        <span>Service Charge ({serviceChargeRate}%)</span>
+                        <span>{currencySymbol}{serviceChargeAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-2 border-t border-dashed border-stone-200 font-black text-sm text-stone-900">
+                      <span>Grand Total</span>
+                      <span className="text-emerald-700">{currencySymbol}{grandTotal.toFixed(2)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {/* ── Fixed Sticky Bottom Bar (Safe-Area Aware) ────────────── */}
+              <footer className="shrink-0 bg-white border-t border-stone-200/90 px-4 py-3 sm:py-3.5 shadow-[0_-8px_25px_rgba(0,0,0,0.06)] z-20 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                    Total Payable
+                  </p>
+                  <p className="text-base sm:text-lg font-black text-stone-900 leading-tight">
+                    {currencySymbol}{grandTotal.toFixed(2)}
+                  </p>
+                  <p className="text-[10px] text-stone-500 font-medium truncate">
+                    {totalItems} {totalItems === 1 ? 'item' : 'items'} • {orderType === 'DELIVERY' ? 'Delivery' : 'Pickup'}
+                  </p>
+                </div>
+
+                <div className="flex-1 max-w-xs">
+                  {paymentMode === 'ONLINE_UPI' && hasOnlinePayment ? (
+                    <button
+                      type="button"
+                      onClick={() => handleCheckout('UPI')}
+                      disabled={isSubmitting || cartItems.length === 0}
+                      className="w-full bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-700/20 active:scale-[0.98] transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="size-4" />
+                          <span>Place Order &amp; Pay</span>
+                          <ArrowRight className="size-4" />
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleCheckout('COD')}
+                      disabled={isSubmitting || cartItems.length === 0}
+                      className="w-full bg-stone-900 hover:bg-black text-white py-3 px-4 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <span className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Store className="size-4" />
+                          <span>Place Order • Cash</span>
+                          <ArrowRight className="size-4" />
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </footer>
             </div>
+          </div>
         )}
 
         {/* Order Confirmed Dialog */}
@@ -1489,7 +1915,7 @@ export function StoreClient({
                   onClick={() => {
                     setOrderSuccess(null);
                     setCart({});
-                    setCartOpen(false);
+                    closeCart();
                   }}
                   className="w-full text-stone-400 hover:text-stone-600 py-2 text-xs font-semibold cursor-pointer"
                 >

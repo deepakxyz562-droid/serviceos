@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -69,6 +71,13 @@ export default function StoreViewCustomerScreen() {
   };
 
   const handleOpenCart = () => {
+    if (!store.isOpen) {
+      Alert.alert(
+        'Store is Closed',
+        store.closeReason || 'This store is currently not taking orders. Please call or WhatsApp the shop directly.'
+      );
+      return;
+    }
     void haptic.light();
     router.push('/checkout');
   };
@@ -134,7 +143,9 @@ export default function StoreViewCustomerScreen() {
                   <Text style={styles.dot}>•</Text>
                   <Text style={styles.storeDistance}>{store.distanceKm || 1.2} km</Text>
                   <Text style={styles.dot}>•</Text>
-                  <Text style={styles.storeOpenTag}>Open</Text>
+                  <Text style={store.isOpen ? styles.storeOpenTag : styles.storeClosedTag}>
+                    {store.isOpen ? 'Open' : 'Closed'}
+                  </Text>
                 </View>
               </View>
 
@@ -165,6 +176,41 @@ export default function StoreViewCustomerScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Store Closed Alert Banner ─────────────────────────────────── */}
+        {!store.isOpen && (
+          <View style={styles.storeClosedBanner}>
+            <View style={styles.closedBannerTop}>
+              <MaterialIcons name="storefront" size={20} color="#B91C1C" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.closedBannerTitle}>Store is Currently Closed</Text>
+                <Text style={styles.closedBannerSub}>
+                  {store.closeReason || 'This shop is outside operating hours or has not opened today.'}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.closedActionsRow}>
+              {store.phone ? (
+                <TouchableOpacity
+                  style={styles.closedActionBtn}
+                  onPress={() => Linking.openURL(`tel:${store.phone!.replace(/[^0-9+]/g, '')}`)}
+                >
+                  <MaterialIcons name="call" size={16} color="#0F172A" />
+                  <Text style={styles.closedActionBtnText}>Call Store</Text>
+                </TouchableOpacity>
+              ) : null}
+              {store.phone ? (
+                <TouchableOpacity
+                  style={[styles.closedActionBtn, styles.closedWhatsappBtn]}
+                  onPress={() => Linking.openURL(`https://wa.me/${store.phone!.replace(/[^0-9]/g, '')}`)}
+                >
+                  <MaterialIcons name="chat" size={16} color="#059669" />
+                  <Text style={[styles.closedActionBtnText, { color: '#059669' }]}>WhatsApp</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        )}
 
         {/* ── Category Filter Pills ───────────────────────────────────── */}
         <View style={styles.categoriesBar}>
@@ -219,14 +265,23 @@ export default function StoreViewCustomerScreen() {
                 <View style={styles.actionContainer}>
                   {qty === 0 ? (
                     <TouchableOpacity
-                      style={styles.addButton}
+                      style={[styles.addButton, !store.isOpen && styles.addButtonDisabled]}
                       onPress={async () => {
+                        if (!store.isOpen) {
+                          Alert.alert(
+                            'Store is Closed',
+                            store.closeReason || 'This store is currently not taking orders. Please call or WhatsApp the shop directly.'
+                          );
+                          return;
+                        }
                         await haptic.medium();
                         addItem(p, store.id, store.name, store.slug);
                       }}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.addButtonText}>Add +</Text>
+                      <Text style={[styles.addButtonText, !store.isOpen && styles.addButtonTextDisabled]}>
+                        {store.isOpen ? 'Add +' : 'Closed'}
+                      </Text>
                     </TouchableOpacity>
                   ) : (
                     <View style={styles.qtyContainer}>
@@ -243,6 +298,10 @@ export default function StoreViewCustomerScreen() {
                       <TouchableOpacity
                         style={styles.qtyBtn}
                         onPress={async () => {
+                          if (!store.isOpen) {
+                            Alert.alert('Store is Closed', 'This store is currently not taking orders.');
+                            return;
+                          }
                           await haptic.light();
                           addItem(p, store.id, store.name, store.slug);
                         }}
@@ -403,6 +462,68 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#059669',
     fontWeight: '700',
+  },
+  storeClosedTag: {
+    fontSize: 11,
+    color: '#B91C1C',
+    fontWeight: '700',
+  },
+  storeClosedBanner: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: 14,
+  },
+  closedBannerTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  closedBannerTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  closedBannerSub: {
+    fontSize: 11,
+    color: '#7F1D1D',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  closedActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  closedActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingVertical: 8,
+  },
+  closedActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  closedWhatsappBtn: {
+    borderColor: '#A7F3D0',
+    backgroundColor: '#ECFDF5',
+  },
+  addButtonDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  addButtonTextDisabled: {
+    color: '#94A3B8',
   },
   heartButton: {
     padding: 4,

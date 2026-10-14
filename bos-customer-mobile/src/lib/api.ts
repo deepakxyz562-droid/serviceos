@@ -246,7 +246,60 @@ function filterStores(stores: Store[], category?: string, query?: string): Store
 
 /** Get Store details and catalog by slug */
 export async function getStoreBySlug(slug: string): Promise<{ store: Store; products: Product[] }> {
-  const store = SAMPLE_STORES.find((s) => s.slug === slug || s.id === slug) || SAMPLE_STORES[0];
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/public/store/${slug}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.business) {
+        const b = data.business;
+        const config = data.config || {};
+        const isStoreOpen = typeof data.isStoreOpen === 'boolean'
+          ? data.isStoreOpen
+          : (typeof config.isStoreOpen === 'boolean' ? config.isStoreOpen : true);
+        const store: Store = {
+          id: b.id,
+          name: b.name || 'Store',
+          slug: b.slug || slug,
+          category: 'Kirana',
+          description: b.tagline || 'Local store with fast delivery',
+          bannerUrl: b.coverImageUrl || 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=600&auto=format&fit=crop&q=80',
+          address: b.address || 'Local Area',
+          city: b.city || 'Patna',
+          rating: 4.6,
+          reviewCount: 150,
+          deliveryTime: config.estimatedDeliveryTime || '30-45 min',
+          freeDeliveryAbove: config.freeDeliveryAbove || 299,
+          minOrder: config.minOrderAmount || 100,
+          isOpen: isStoreOpen,
+          closeReason: data.storeCloseReason || '',
+          todayHoursText: data.todayHoursText || '',
+          phone: b.phone || '+91 98765 43210',
+          upiId: config.upiId || '',
+          paymentQrUrl: config.paymentQrUrl || '',
+          itemCount: Array.isArray(data.catalog) ? data.catalog.length : 20,
+          featuredItems: [],
+        };
+        const products: Product[] = (data.catalog || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          price: Number(p.price) || 0,
+          category: p.category || 'General',
+          description: p.description || '',
+          imageUrl: p.imageUrl || '',
+          isAvailable: p.isAvailable !== false,
+        }));
+        return { store, products: products.length > 0 ? products : SAMPLE_PRODUCTS['sharma-kirana'] };
+      }
+    }
+  } catch {}
+
+  const fallbackStore = SAMPLE_STORES.find((s) => s.slug === slug || s.id === slug) || SAMPLE_STORES[0];
   const products = SAMPLE_PRODUCTS[slug] || SAMPLE_PRODUCTS['sharma-kirana'];
-  return { store, products };
+  return {
+    store: {
+      ...fallbackStore,
+      phone: fallbackStore.phone || '+91 98765 43210',
+    },
+    products,
+  };
 }

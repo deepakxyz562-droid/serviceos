@@ -20,8 +20,10 @@ import {
   Package,
   Palette,
   Plus,
+  Power,
   QrCode,
   Search,
+  ShieldCheck,
   ShoppingBag,
   ShoppingCart,
   Sparkles,
@@ -966,17 +968,45 @@ export function BosOnlineStoreWorkstation({
               {(subTab === 'overview' || subTab === 'storeSettings') && (
                 /* CARD 1: Store Status */
                 <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
-              <h2 className="text-[15px] font-extrabold text-[#111827]">
-                Store Status
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="text-[15px] font-extrabold text-[#111827]">
+                  Store Status
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextOpen = storeSettings.isStoreOpen === false;
+                    void onUpdateStoreSettings({
+                      isStoreOpen: nextOpen,
+                      lastActiveDate: new Date().toISOString().slice(0, 10),
+                      manualCloseReason: nextOpen ? '' : 'Closed manually by merchant',
+                    });
+                  }}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-black transition cursor-pointer ${
+                    storeSettings.isStoreOpen !== false
+                      ? 'bg-[#E6F6F0] text-[#0A7B56] hover:bg-[#D4EFE4]'
+                      : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      storeSettings.isStoreOpen !== false ? 'bg-[#0A7B56]' : 'bg-rose-600'
+                    }`}
+                  />
+                  <span>{storeSettings.isStoreOpen !== false ? 'Open • Accepting Orders' : 'Store Paused / Closed'}</span>
+                </button>
+              </div>
 
-              <div className="space-y-1.5">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11.5px] font-bold text-[#0A7B56]">
-                  <span className="h-2 w-2 rounded-full bg-[#0A7B56]" />
-                  <span>Live</span>
-                </span>
-                <p className="text-[11.5px] text-[#64748B]">
-                  Your online store is active and accepting orders.
+              <div className="space-y-1 rounded-xl bg-[#FAFDFB] border border-[#E4EFEA] p-2.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-[#1E293B]">Daily Auto-Close Protection</span>
+                  <span className="inline-flex items-center gap-1 text-[#0A7B56] font-semibold text-[10px]">
+                    <ShieldCheck className="h-3 w-3" />
+                    Active
+                  </span>
+                </div>
+                <p className="text-[10.5px] text-[#64748B] leading-tight">
+                  Protects roadside stalls &amp; small shops: store auto-pauses if you haven&apos;t opened the app today.
                 </p>
               </div>
 

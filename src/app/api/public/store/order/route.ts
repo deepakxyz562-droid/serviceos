@@ -5,6 +5,7 @@ import { commerceError } from '@/lib/commerce/atomic';
 import { apiLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 import { orderAccessToken, verifyOrderAccess } from '@/lib/commerce/order-access';
 import { triggerImmediateOrderNotifications } from '@/lib/commerce/order-notification-dispatch';
+import { computeStoreAvailabilityFromConfig } from '@/lib/commerce/store-availability';
 
 export const runtime = 'nodejs';
 export async function POST(req: Request) {
@@ -19,6 +20,21 @@ export async function POST(req: Request) {
       if (tenant) business = await db.aiBusiness.findFirst({ where: { tenantId: tenant.id } });
     }
     if (!business) return NextResponse.json({ error: 'Store not found' }, { status: 404 });
+    // Check store availability (Operating hours & daily check-in)
+    const storeConfig = await db.gptformCommerceConfig.findFirst({
+      where: {
+        OR: [{ businessId: business.id }, ...(business.tenantId ? [{ businessId: business.tenantId }] : [])],
+      },
+    });
+    if (storeConfig) {
+      const availability = computeStoreAvailabilityFromConfig(storeConfig, business.name);
+      if (!availability.isOpen) {
+        return NextResponse.json(
+          { error: availability.reason || `${business.name} is currently closed and not taking orders.` },
+          { status: 422 }
+        );
+      }
+    }
     // Check signing configuration before committing a guest order.
     orderAccessToken('configuration-check',business.id);
     const result = await createCommerceOrder(business, body, req.headers.get('Idempotency-Key') || body.requestKey || '', true);

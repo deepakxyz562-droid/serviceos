@@ -39,6 +39,7 @@ export default function CheckoutScreen() {
   const [customerPhone, setCustomerPhone] = useState('+91 98765 43210');
   const [address, setAddress] = useState('Flat 402, Ganga Heights, Kankarbagh, Patna');
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CASH'>('UPI');
+  const [upiTrustConfirmed, setUpiTrustConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState<CustomerOrder | null>(null);
 
@@ -53,6 +54,24 @@ export default function CheckoutScreen() {
     }
     if (deliveryType === 'delivery' && !address.trim()) {
       Alert.alert('Missing Address', 'Please enter your delivery address.');
+      return;
+    }
+
+    if (paymentMethod === 'UPI' && !upiTrustConfirmed) {
+      Alert.alert(
+        'Safety Check: Do you know this store?',
+        `Direct UPI payments transfer instantly to the vendor's bank account. If you are not at the shop or haven't confirmed with ${storeName || 'the merchant'}, we recommend paying Cash on Delivery / Counter.`,
+        [
+          { text: 'Switch to Cash / COD', onPress: () => setPaymentMethod('CASH') },
+          {
+            text: 'I Know This Store',
+            onPress: () => {
+              setUpiTrustConfirmed(true);
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
       return;
     }
 
@@ -287,6 +306,51 @@ export default function CheckoutScreen() {
                 <MaterialIcons name="check-circle" size={20} color="#059669" />
               )}
             </TouchableOpacity>
+
+            {/* PRE-UPI TRUST SHIELD */}
+            {paymentMethod === 'UPI' && (
+              <View style={styles.upiTrustCard}>
+                {!upiTrustConfirmed ? (
+                  <View style={styles.upiTrustAlert}>
+                    <View style={styles.upiTrustHeader}>
+                      <MaterialIcons name="security" size={18} color="#D97706" />
+                      <Text style={styles.upiTrustTitle}>Safety Check: Do you know this store?</Text>
+                    </View>
+                    <Text style={styles.upiTrustDesc}>
+                      Direct UPI transfers go straight to the shopkeeper with no intermediary. If you are not at the stall/counter, please verify first or switch to Cash / Counter payment.
+                    </Text>
+                    <View style={styles.upiTrustButtons}>
+                      <TouchableOpacity
+                        style={styles.trustSwitchCodBtn}
+                        onPress={() => setPaymentMethod('CASH')}
+                      >
+                        <MaterialIcons name="payments" size={14} color="#0F172A" />
+                        <Text style={styles.trustSwitchCodText}>Switch to Cash / COD</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.trustConfirmBtn}
+                        onPress={() => setUpiTrustConfirmed(true)}
+                      >
+                        <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
+                        <Text style={styles.trustConfirmText}>I Know This Store</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.upiVerifiedBox}>
+                    <View style={styles.upiVerifiedRow}>
+                      <MaterialIcons name="verified-user" size={16} color="#059669" />
+                      <Text style={styles.upiVerifiedText}>
+                        Store Verified &bull; Ready for Instant Payment
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setUpiTrustConfirmed(false)}>
+                      <Text style={styles.upiRecheckText}>Re-verify</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
 
             <TouchableOpacity
               style={[
@@ -634,5 +698,96 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 13,
     fontWeight: '600',
+  },
+  upiTrustCard: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  upiTrustAlert: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 12,
+  },
+  upiTrustHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  upiTrustTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  upiTrustDesc: {
+    fontSize: 11,
+    color: '#78350F',
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  upiTrustButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  trustSwitchCodBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingVertical: 8,
+  },
+  trustSwitchCodText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  trustConfirmBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    borderRadius: 10,
+    paddingVertical: 8,
+  },
+  trustConfirmText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  upiVerifiedBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upiVerifiedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  upiVerifiedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  upiRecheckText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748B',
+    textDecorationLine: 'underline',
   },
 });
