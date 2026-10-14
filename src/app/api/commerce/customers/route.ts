@@ -141,6 +141,7 @@ export async function GET(req: NextRequest) {
         phone: c.phone,
         name: c.name,
         deliveryAddress: c.deliveryAddress,
+        address: c.deliveryAddress,
         ordersCount: c.ordersCount,
         totalSpent: Number(c.totalSpent.toFixed(2)),
         avgOrderValue: c.ordersCount ? Number((c.totalSpent / c.ordersCount).toFixed(2)) : 0,
@@ -203,7 +204,11 @@ export async function POST(req: NextRequest) {
     try { phone = counterCustomerPhone(body.phone); } catch { return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 }); }
     if (!phone) return NextResponse.json({ error: 'Enter a valid phone number.' }, { status: 400 });
     const id = `contact_${createHash('sha256').update(JSON.stringify([business.id, key])).digest('hex')}`;
-    const data = { businessId: business.id, name: body.name.trim(), phone };
+    const address = typeof body.address === 'string' && body.address.trim() ? body.address.trim() : null;
+    const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;
+    const gstin = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim() : null;
+    const notes = gstin ? `GSTIN: ${gstin}` : (typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null);
+    const data: any = { businessId: business.id, name: body.name.trim(), phone, address, email, notes };
     const replay = (customer: { businessId: string; name: string; phone: string | null }) => customer.businessId === data.businessId && customer.name === data.name && customer.phone === data.phone;
     const existing = await db.aiCustomer.findUnique({ where: { id } });
     if (existing) return replay(existing) ? NextResponse.json({ customer: existing, replayed: true }) : NextResponse.json({ error: 'This request was used for different customer details.' }, { status: 409 });

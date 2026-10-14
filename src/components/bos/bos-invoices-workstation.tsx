@@ -14,6 +14,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Link2,
   Plus,
   Printer,
   QrCode,
@@ -83,6 +84,8 @@ type BosInvoicesWorkstationProps = {
   invoices?: SavedBosInvoice[];
   demoMode?: boolean;
   onInvoiceSaved?: (invoice: SavedBosInvoice) => void;
+  /** Persist a new customer into the merchant's customer directory & database */
+  onAddCustomer?: (customer: Omit<BosCustomer, 'id'>) => Promise<BosCustomer | void> | void;
   /** Mark an invoice as fully paid via PATCH /api/commerce/invoices/[id]. */
   onMarkInvoicePaid?: (invoiceId: string) => Promise<void> | void;
   /** Delete an invoice via DELETE /api/commerce/invoices/[id]. */
@@ -166,6 +169,7 @@ export function BosInvoicesWorkstation({
   invoices = [],
   demoMode = false,
   onInvoiceSaved,
+  onAddCustomer,
   onMarkInvoicePaid,
   onDeleteInvoice,
 }: BosInvoicesWorkstationProps) {
@@ -224,8 +228,11 @@ export function BosInvoicesWorkstation({
   });
   const [sameAsBilling, setSameAsBilling] = useState(true);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [editingBillingAddress, setEditingBillingAddress] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [addingCustomer, setAddingCustomer] = useState(false);
+  const [customerAddError, setCustomerAddError] = useState<string | null>(null);
   const [newCustomerForm, setNewCustomerForm] = useState({
     name: '',
     gstin: '',
@@ -715,7 +722,9 @@ export function BosInvoicesWorkstation({
       showToast('Please enter customer phone number to share invoice on WhatsApp.');
       return;
     }
-    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *${storeSettings.businessName || 'Ravi Store'}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks}`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
+    const payLink = `${origin}/pay/${encodeURIComponent(invoiceNumber)}`;
+    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *${storeSettings.businessName || 'Ravi Store'}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks ? `${remarks}\n` : ''}👉 *View & Pay Online via UPI:* ${payLink}`;
     if (typeof window !== 'undefined') {
       window.open(
         `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${encodeURIComponent(text)}`,
@@ -723,29 +732,50 @@ export function BosInvoicesWorkstation({
         'noopener,noreferrer',
       );
     }
-    showToast(`Shared ${invoiceNumber} with ${selectedCustomerName}`);
+    showToast(`Shared ${invoiceNumber} payment link with ${selectedCustomerName}`);
   };
 
-  const handleAddNewCustomerSubmit = (e: React.FormEvent) => {
+  const handleAddNewCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustomerForm.name.trim()) return;
-    // ── Real customer data only ──────────────────────────────────────
-    // Previously this invented fake GSTIN/phone/address values when the
-    // user left fields blank. Those fake values then leaked into the
-    // invoice POST and the saved invoice record. We now use whatever the
-    // user actually typed — empty strings stay empty.
     const trimmedName = newCustomerForm.name.trim();
+    if (!trimmedName) return;
     const trimmedGstin = newCustomerForm.gstin.trim();
     const trimmedPhone = newCustomerForm.phone.trim();
     const trimmedAddress = newCustomerForm.address.trim();
-    setSelectedCustomerName(trimmedName);
-    setSelectedCustomerGstin(trimmedGstin);
-    setSelectedCustomerPhone(trimmedPhone);
-    setBillingAddressLines(
-      trimmedAddress ? [trimmedName, trimmedAddress] : [trimmedName],
-    );
-    setShowAddCustomerModal(false);
-    showToast(`Selected customer "${trimmedName}"`);
+
+    setAddingCustomer(true);
+    setCustomerAddError(null);
+
+    try {
+      if (onAddCustomer) {
+        await onAddCustomer({
+          name: trimmedName,
+          phone: trimmedPhone || '0000000000',
+          gstin: trimmedGstin || undefined,
+          address: trimmedAddress || undefined,
+          segment: 'Regular',
+          ordersCount: 0,
+          totalSpent: 0,
+          khataBalance: 0,
+          loyaltyPoints: 0,
+          lastVisit: 'Just now',
+        });
+      }
+
+      setSelectedCustomerName(trimmedName);
+      setSelectedCustomerGstin(trimmedGstin);
+      setSelectedCustomerPhone(trimmedPhone);
+      setBillingAddressLines(
+        trimmedAddress ? [trimmedName, trimmedAddress] : [trimmedName],
+      );
+      setShowAddCustomerModal(false);
+      setNewCustomerForm({ name: '', gstin: '', phone: '', address: '' });
+      showToast(`Customer "${trimmedName}" saved & selected`);
+    } catch (err: any) {
+      setCustomerAddError(err?.message || 'Failed to save customer');
+    } finally {
+      setAddingCustomer(false);
+    }
   };
 
   return (
@@ -987,9 +1017,16 @@ export function BosInvoicesWorkstation({
                   <div className="flex items-center gap-1 text-[#64748B]">
                     <button
                       type="button"
-                      onClick={() => setShowCustomerDropdown((prev) => !prev)}
-                      aria-label="Clear or switch customer"
-                      className="rounded p-1 hover:bg-[#EBF2EE] hover:text-[#111827]"
+                      onClick={() => {
+                        setSelectedCustomerName('');
+                        setSelectedCustomerGstin('');
+                        setSelectedCustomerPhone('');
+                        setBillingAddressLines([]);
+                        showToast('Customer cleared');
+                      }}
+                      aria-label="Clear customer"
+                      className="rounded p-1 hover:bg-[#EBF2EE] hover:text-[#111827] cursor-pointer"
+                      title="Clear customer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -997,7 +1034,7 @@ export function BosInvoicesWorkstation({
                       type="button"
                       onClick={() => setShowCustomerDropdown((prev) => !prev)}
                       aria-label="Toggle customer dropdown"
-                      className="rounded p-1 hover:bg-[#EBF2EE] hover:text-[#111827]"
+                      className="rounded p-1 hover:bg-[#EBF2EE] hover:text-[#111827] cursor-pointer"
                     >
                       <ChevronDown className="h-4 w-4" />
                     </button>
@@ -1005,34 +1042,109 @@ export function BosInvoicesWorkstation({
                 </div>
 
                 {showCustomerDropdown && (
-                  <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-[#DCE9E3] bg-white p-1.5 shadow-lg">
-                    {customers.slice(0, 5).map((c, idx) => {
-                      const cName = c.name;
-                      const cGstin = c.gstin || '';
-                      const cPhone = c.phone || '';
-                      const cAddress = c.address || '';
-                      return (
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-[#DCE9E3] bg-white p-2 shadow-xl space-y-1.5">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-[#94A3B8]" />
+                      <input
+                        type="text"
+                        value={customerSearchQuery}
+                        onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                        placeholder="Search by name, phone or GSTIN..."
+                        className="w-full pl-8 pr-2.5 py-1.5 text-[12px] bg-[#F8FAFC] border border-[#DCE9E3] rounded-lg focus:outline-none focus:border-[#0A6847] text-[#1E293B]"
+                        autoFocus
+                      />
+                    </div>
+
+                    {/* Customers List */}
+                    <div className="max-h-52 overflow-y-auto divide-y divide-[#F1F5F9] pr-1">
+                      {customers
+                        .filter((c) => {
+                          if (!customerSearchQuery.trim()) return true;
+                          const q = customerSearchQuery.trim().toLowerCase();
+                          return (
+                            (c.name && c.name.toLowerCase().includes(q)) ||
+                            (c.phone && c.phone.includes(q)) ||
+                            (c.gstin && c.gstin.toLowerCase().includes(q))
+                          );
+                        })
+                        .map((c, idx) => {
+                          const cName = c.name;
+                          const cGstin = c.gstin || '';
+                          const cPhone = c.phone || '';
+                          const cAddress = c.address || '';
+                          return (
+                            <button
+                              key={c.id || idx}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCustomerName(cName);
+                                setSelectedCustomerGstin(cGstin);
+                                setSelectedCustomerPhone(cPhone);
+                                setBillingAddressLines(
+                                  cAddress ? [cName, cAddress] : [cName],
+                                );
+                                setShowCustomerDropdown(false);
+                                setCustomerSearchQuery('');
+                              }}
+                              className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] hover:bg-[#F1FAF5] transition cursor-pointer"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <span className="font-bold text-[#111827] block truncate">
+                                  {cName}
+                                </span>
+                                {cPhone && (
+                                  <span className="text-[11px] text-[#64748B] block">
+                                    📱 {cPhone}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-mono text-[11px] text-[#0A6847] bg-[#ECFDF5] px-1.5 py-0.5 rounded shrink-0">
+                                {cGstin ? `GST: ${cGstin.slice(0, 8)}...` : 'Retail'}
+                              </span>
+                            </button>
+                          );
+                        })}
+
+                      {customers.filter((c) => {
+                        if (!customerSearchQuery.trim()) return true;
+                        const q = customerSearchQuery.trim().toLowerCase();
+                        return (
+                          (c.name && c.name.toLowerCase().includes(q)) ||
+                          (c.phone && c.phone.includes(q)) ||
+                          (c.gstin && c.gstin.toLowerCase().includes(q))
+                        );
+                      }).length === 0 && (
+                        <div className="py-4 text-center text-[12px] text-[#64748B]">
+                          No customers found matching &quot;{customerSearchQuery}&quot;
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Add Button */}
+                    <div className="pt-1.5 border-t border-[#EBF2EE]">
                       <button
-                        key={idx}
                         type="button"
                         onClick={() => {
-                          setSelectedCustomerName(cName);
-                          setSelectedCustomerGstin(cGstin);
-                          setSelectedCustomerPhone(cPhone);
-                          setBillingAddressLines(
-                            cAddress ? [cName, cAddress] : [cName],
-                          );
+                          if (customerSearchQuery.trim()) {
+                            setNewCustomerForm((prev) => ({
+                              ...prev,
+                              name: customerSearchQuery.trim(),
+                            }));
+                          }
                           setShowCustomerDropdown(false);
+                          setShowAddCustomerModal(true);
                         }}
-                        className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] hover:bg-[#F1FAF5]"
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-[#F4FBF7] hover:bg-[#E8F7EE] text-[#0A6847] font-bold text-[12px] transition cursor-pointer border border-[#D0EADB]"
                       >
-                        <span className="font-bold text-[#111827]">{cName}</span>
-                        <span className="font-mono text-[11px] text-[#64748B]">
-                          {cGstin || '—'}
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>
+                          {customerSearchQuery.trim()
+                            ? `Add "${customerSearchQuery.trim()}" as New Customer`
+                            : 'Add New Customer'}
                         </span>
                       </button>
-                      );
-                    })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -2455,6 +2567,12 @@ export function BosInvoicesWorkstation({
             </div>
 
             <form onSubmit={handleAddNewCustomerSubmit} className="mt-4 space-y-3">
+              {customerAddError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {customerAddError}
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11.5px] font-semibold text-[#334155]">
                   Business / Customer Name *
@@ -2463,11 +2581,13 @@ export function BosInvoicesWorkstation({
                   type="text"
                   required
                   value={newCustomerForm.name}
-                  onChange={(e) =>
-                    setNewCustomerForm((s) => ({ ...s, name: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    setNewCustomerForm((s) => ({ ...s, name: e.target.value }));
+                    setCustomerAddError(null);
+                  }}
                   placeholder="e.g. Amit Kumar Traders"
-                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
+                  autoFocus
                 />
               </div>
 
@@ -2480,10 +2600,11 @@ export function BosInvoicesWorkstation({
                     type="text"
                     value={newCustomerForm.gstin}
                     onChange={(e) =>
-                      setNewCustomerForm((s) => ({ ...s, gstin: e.target.value }))
+                      setNewCustomerForm((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))
                     }
                     placeholder="07AAKCA1234F1Z5"
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                    maxLength={15}
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono uppercase focus:outline-none focus:border-[#0A6847]"
                   />
                 </div>
                 <div>
@@ -2491,13 +2612,14 @@ export function BosInvoicesWorkstation({
                     Phone
                   </label>
                   <input
-                    type="text"
+                    type="tel"
                     value={newCustomerForm.phone}
                     onChange={(e) =>
                       setNewCustomerForm((s) => ({ ...s, phone: e.target.value }))
                     }
                     placeholder="9876543210"
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                    maxLength={10}
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
                   />
                 </div>
               </div>
@@ -2513,23 +2635,34 @@ export function BosInvoicesWorkstation({
                     setNewCustomerForm((s) => ({ ...s, address: e.target.value }))
                   }
                   placeholder="123 Green Park, Metro Station Road, New Delhi"
-                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
                 <button
                   type="button"
-                  onClick={() => setShowAddCustomerModal(false)}
-                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569]"
+                  onClick={() => {
+                    setShowAddCustomerModal(false);
+                    setCustomerAddError(null);
+                  }}
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#085238]"
+                  disabled={addingCustomer || !newCustomerForm.name.trim()}
+                  className="rounded-xl bg-[#0A6847] hover:bg-[#085238] disabled:opacity-50 px-4 py-2 text-[12px] font-semibold text-white flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
                 >
-                  Select Customer
+                  {addingCustomer ? (
+                    <>
+                      <div className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving Customer...</span>
+                    </>
+                  ) : (
+                    <span>Save &amp; Select Customer</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -2607,6 +2740,39 @@ export function BosInvoicesWorkstation({
                       </td>
                       <td className="py-2 pl-1 pr-2 text-right">
                         <div className="inline-flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const origin =
+                                typeof window !== 'undefined' ? window.location.origin : '';
+                              const payUrl = `${origin}/pay/${encodeURIComponent(inv.invoiceNumber || inv.id)}`;
+                              navigator.clipboard.writeText(payUrl);
+                              showToast(`Payment link copied for ${inv.invoiceNumber}!`);
+                            }}
+                            title="Copy public payment link"
+                            className="inline-flex h-7 px-2 items-center justify-center gap-1 rounded-lg border border-[#DCE9E3] bg-white text-[10.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                          >
+                            <Link2 className="h-3 w-3 text-[#0A6847]" />
+                            <span className="hidden sm:inline">Pay Link</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const origin =
+                                typeof window !== 'undefined' ? window.location.origin : '';
+                              const payUrl = `${origin}/pay/${encodeURIComponent(inv.invoiceNumber || inv.id)}`;
+                              const text = `Hello ${inv.customerName || 'Customer'},\nHere is your invoice *${inv.invoiceNumber}* for *${currencySymbol} ${formatTwoDecimals(inv.totalAmount)}*.\n👉 *View & Pay Online via UPI:* ${payUrl}`;
+                              window.open(
+                                `https://wa.me/?text=${encodeURIComponent(text)}`,
+                                '_blank',
+                                'noopener,noreferrer',
+                              );
+                            }}
+                            title="Share invoice on WhatsApp"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#25D366] hover:bg-[#F4F8F6] cursor-pointer"
+                          >
+                            <Share2 className="h-3 w-3" />
+                          </button>
                           {isUnpaid && onMarkInvoicePaid && (
                             <button
                               type="button"

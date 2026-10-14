@@ -79,6 +79,8 @@ export interface NewInvoicePageProps {
   customers: Customer[];
   /** True while customers are being fetched (drives the picker placeholder). */
   loadingCustomers: boolean;
+  /** Callback when a customer is newly created in the CustomerPicker dialog */
+  onCustomerCreated?: (c: any) => void;
 
   // ── Line items handlers ───────────────────────────────────────────────
   /** Add a fresh empty line item to the form. */
@@ -117,6 +119,7 @@ export function NewInvoicePage({
   saving,
   customers,
   loadingCustomers,
+  onCustomerCreated: parentOnCustomerCreated,
   onAddLineItem,
   onRemoveLineItem,
   onLineItemChange,
@@ -263,6 +266,7 @@ export function NewInvoicePage({
                   }}
                   onCustomerCreated={(c) => {
                     setForm((prev) => ({ ...prev, customer: c.id }));
+                    parentOnCustomerCreated?.(c);
                   }}
                 />
               </div>

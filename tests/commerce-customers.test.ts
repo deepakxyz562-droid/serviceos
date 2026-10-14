@@ -60,6 +60,30 @@ describe('persisted customer creation', () => {
     expect(saved).toMatchObject({ businessId: 'own-business', phone: '919876543210' });
     expect((await POST(req('Different'))).status).toBe(409);
   });
+  it('persists address and GSTIN when provided', async () => {
+    let saved: any = null;
+    mocks.find.mockImplementation(async () => null);
+    mocks.create.mockImplementation(async ({ data }) => { saved = data; return data; });
+    const fullReq = new NextRequest('http://localhost/api/commerce/customers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'request-contact-full-1' },
+      body: JSON.stringify({
+        name: 'Sharma Traders',
+        phone: '9876543210',
+        address: '123 Market Road, New Delhi',
+        gstin: '07AAKCA1234F1Z5',
+      }),
+    });
+    const res = await POST(fullReq);
+    expect(res.status).toBe(201);
+    expect(saved).toMatchObject({
+      businessId: 'own-business',
+      name: 'Sharma Traders',
+      phone: '9876543210',
+      address: '123 Market Road, New Delhi',
+      notes: 'GSTIN: 07AAKCA1234F1Z5',
+    });
+  });
   it('never acknowledges a failed write', async () => {
     mocks.find.mockResolvedValue(null); mocks.create.mockRejectedValue(new Error('offline'));
     expect((await POST(req())).status).toBe(503);

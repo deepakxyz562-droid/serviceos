@@ -2104,7 +2104,7 @@ export function BosWebApp({
     );
   };
 
-  const handleAddCustomer = async (customer: Omit<BosCustomer, 'id'>) => {
+  const handleAddCustomer = async (customer: Omit<BosCustomer, 'id'>): Promise<BosCustomer> => {
     const requestKey = newRequestKey();
     const res = await authFetch('/api/commerce/customers', {
       method: 'POST',
@@ -2115,6 +2115,9 @@ export function BosWebApp({
       body: JSON.stringify({
         name: customer.name,
         phone: customer.phone,
+        address: customer.address || undefined,
+        gstin: customer.gstin || undefined,
+        email: customer.email || undefined,
       }),
     });
 
@@ -2136,6 +2139,7 @@ export function BosWebApp({
       lastVisit: 'Just now',
     };
     setCustomers((prev) => [created, ...prev]);
+    return created;
   };
 
   const handleRecordKhataEntry = async (entry: {
@@ -3406,6 +3410,7 @@ export function BosWebApp({
                 customers={customers}
                 products={products}
                 invoices={invoices}
+                onAddCustomer={handleAddCustomer}
                 onInvoiceSaved={handleInvoiceSaved}
                 onMarkInvoicePaid={handleMarkInvoicePaid}
                 onDeleteInvoice={handleDeleteInvoice}

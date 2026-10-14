@@ -1458,6 +1458,9 @@ export function InvoicesView() {
           saving={saving}
           customers={customers}
           loadingCustomers={loadingCustomers}
+          onCustomerCreated={(newCust) => {
+            setCustomers((prev) => [newCust, ...prev]);
+          }}
           onAddLineItem={handleAddLineItem}
           onRemoveLineItem={handleRemoveLineItem}
           onLineItemChange={handleLineItemChange}
