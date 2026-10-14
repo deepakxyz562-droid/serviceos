@@ -35,6 +35,7 @@ import {
   type BosProductItem,
   type BosStoreSettings,
 } from '@/components/bos/bos-types';
+import { authFetch } from '@/lib/client-auth';
 
 type StoreSubTab =
   | 'overview'
@@ -223,7 +224,7 @@ export function BosOnlineStoreWorkstation({
 
   useEffect(() => {
     let active = true;
-    fetch('/api/commerce/store-share')
+    authFetch('/api/commerce/store-share')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!active || !data) return;
@@ -256,10 +257,12 @@ export function BosOnlineStoreWorkstation({
 
   const [themeColor, setThemeColor] = useState('#0A6847');
   const [themeLayout, setThemeLayout] = useState<'grid' | 'list'>('grid');
+  const [minOrderInput, setMinOrderInput] = useState(() => String(storeSettings.minOrderAmount || 200));
+  const [deliveryChargeInput, setDeliveryChargeInput] = useState(() => String(storeSettings.deliveryCharge || 30));
+  const [freeDeliveryAboveInput, setFreeDeliveryAboveInput] = useState(() => String(storeSettings.freeDeliveryAbove || 500));
+  const [deliveryRadiusInput, setDeliveryRadiusInput] = useState(() => String(storeSettings.deliveryRadiusKm || 5));
+  const [estimatedDeliveryTimeInput, setEstimatedDeliveryTimeInput] = useState(() => storeSettings.estimatedDeliveryTime || '30 - 45 minutes');
   const [bannerText, setBannerText] = useState(() => storeSettings.announcementBanner || '');
-  const [minOrderInput, setMinOrderInput] = useState(() => String(storeSettings.minOrderAmount || 0));
-  const [deliveryChargeInput, setDeliveryChargeInput] = useState(() => String(storeSettings.deliveryCharge || 0));
-  const [freeDeliveryAboveInput, setFreeDeliveryAboveInput] = useState(() => String(storeSettings.freeDeliveryAbove || 0));
 
   const onlineKpiStats = useMemo(() => {
     if (demoMode) {
@@ -1027,7 +1030,15 @@ export function BosOnlineStoreWorkstation({
 
               {/* Store Thumbnail */}
               <div className="h-14 w-14 overflow-hidden rounded-xl border border-[#DCE9E3] bg-[#E6F6F0] text-[#0A7B56] flex items-center justify-center font-bold text-base shadow-2xs">
-                {storeName.slice(0, 2).toUpperCase()}
+                {storeSettings.logoUrl ? (
+                  <img
+                    src={storeSettings.logoUrl}
+                    alt={storeName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  storeName.slice(0, 2).toUpperCase()
+                )}
               </div>
 
               {/* Store Name */}
@@ -1095,6 +1106,11 @@ export function BosOnlineStoreWorkstation({
                     void onUpdateStoreSettings({
                       enableLocalDelivery: homeDelivery,
                       enableStorePickup: selfPickup,
+                      minOrderAmount: Number(minOrderInput) || 0,
+                      deliveryCharge: Number(deliveryChargeInput) || 0,
+                      freeDeliveryAbove: Number(freeDeliveryAboveInput) || 0,
+                      deliveryRadiusKm: Number(deliveryRadiusInput) || 0,
+                      estimatedDeliveryTime: estimatedDeliveryTimeInput,
                     });
                     showToast('Updated Delivery & Ordering rules');
                   }}
@@ -1108,87 +1124,118 @@ export function BosOnlineStoreWorkstation({
               {/* Order Types */}
               <div className="flex items-start gap-2.5">
                 <ShoppingBag className="mt-0.5 h-4 w-4 text-[#475569] shrink-0" />
-                <div className="space-y-1.5 text-[12px]">
+                <div className="space-y-1.5 text-[12px] flex-1">
                   <p className="font-bold text-[#111827]">Order Types</p>
-                  <label className="flex items-center gap-2 text-[#334155] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={homeDelivery}
-                      onChange={(e) => setHomeDelivery(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded accent-[#2563EB]"
-                    />
-                    <span>Home Delivery</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-[#334155] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selfPickup}
-                      onChange={(e) => setSelfPickup(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded accent-[#2563EB]"
-                    />
-                    <span>Self Pickup</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-[#334155] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={dineInTakeaway}
-                      onChange={(e) => setDineInTakeaway(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded accent-[#2563EB]"
-                    />
-                    <span>Dine-in / Takeaway</span>
-                  </label>
+                  <div className="flex flex-wrap gap-4 pt-0.5">
+                    <label className="flex items-center gap-2 text-[#334155] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={homeDelivery}
+                        onChange={(e) => setHomeDelivery(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded accent-[#2563EB]"
+                      />
+                      <span>Home Delivery</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[#334155] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selfPickup}
+                        onChange={(e) => setSelfPickup(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded accent-[#2563EB]"
+                      />
+                      <span>Self Pickup</span>
+                    </label>
+                    <label className="flex items-center gap-2 text-[#334155] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={dineInTakeaway}
+                        onChange={(e) => setDineInTakeaway(e.target.checked)}
+                        className="h-3.5 w-3.5 rounded accent-[#2563EB]"
+                      />
+                      <span>Dine-in / Takeaway</span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
               {/* Delivery Area */}
-              <div className="flex items-start justify-between gap-2 border-t border-[#F1F5F3] pt-2.5">
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="mt-0.5 h-4 w-4 text-[#475569] shrink-0" />
-                  <div className="text-[11.5px]">
-                    <p className="font-bold text-[#111827]">Delivery Area</p>
-                    <p className="text-[#64748B]">5 km around your location</p>
-                  </div>
+              <div className="border-t border-[#F1F5F3] pt-2.5">
+                <label className="flex items-center gap-2 text-[11.5px] font-bold text-[#111827] mb-1">
+                  <MapPin className="h-4 w-4 text-[#475569] shrink-0" />
+                  <span>Delivery Radius (km)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={deliveryRadiusInput}
+                    onChange={(e) => setDeliveryRadiusInput(e.target.value)}
+                    className="h-8 w-28 rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                  />
+                  <span className="text-[11.5px] text-[#64748B]">km around your location</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => showToast('Delivery radius set to 5 km')}
-                  className="text-[11.5px] font-bold text-[#0A6847] hover:underline cursor-pointer"
-                >
-                  Edit
-                </button>
               </div>
 
               {/* Minimum Order Amount */}
-              <div className="flex items-start gap-2.5 border-t border-[#F1F5F3] pt-2.5">
-                <Calendar className="mt-0.5 h-4 w-4 text-[#475569] shrink-0" />
-                <div className="text-[11.5px]">
-                  <p className="font-bold text-[#111827]">
-                    Minimum Order Amount
-                  </p>
-                  <p className="text-[#64748B]">{currencySymbol} 200</p>
-                </div>
+              <div className="border-t border-[#F1F5F3] pt-2.5">
+                <label className="flex items-center gap-2 text-[11.5px] font-bold text-[#111827] mb-1">
+                  <Calendar className="h-4 w-4 text-[#475569] shrink-0" />
+                  <span>Minimum Order Amount ({currencySymbol})</span>
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="10"
+                  value={minOrderInput}
+                  onChange={(e) => setMinOrderInput(e.target.value)}
+                  className="h-8 w-36 rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                />
               </div>
 
               {/* Delivery Charges */}
-              <div className="flex items-start gap-2.5 border-t border-[#F1F5F3] pt-2.5">
-                <Truck className="mt-0.5 h-4 w-4 text-[#475569] shrink-0" />
-                <div className="text-[11.5px]">
-                  <p className="font-bold text-[#111827]">Delivery Charges</p>
-                  <p className="text-[#64748B]">
-                    {currencySymbol} 30 (Free above {currencySymbol} 500)
-                  </p>
+              <div className="border-t border-[#F1F5F3] pt-2.5">
+                <label className="flex items-center gap-2 text-[11.5px] font-bold text-[#111827] mb-1">
+                  <Truck className="h-4 w-4 text-[#475569] shrink-0" />
+                  <span>Delivery Charges &amp; Free Delivery Threshold</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <span className="block text-[10.5px] text-[#64748B] mb-0.5">Base Delivery Fee ({currencySymbol})</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={deliveryChargeInput}
+                      onChange={(e) => setDeliveryChargeInput(e.target.value)}
+                      className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10.5px] text-[#64748B] mb-0.5">Free Delivery Above ({currencySymbol})</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={freeDeliveryAboveInput}
+                      onChange={(e) => setFreeDeliveryAboveInput(e.target.value)}
+                      className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Estimated Delivery Time */}
-              <div className="flex items-start gap-2.5 border-t border-[#F1F5F3] pt-2.5">
-                <Clock className="mt-0.5 h-4 w-4 text-[#475569] shrink-0" />
-                <div className="text-[11.5px]">
-                  <p className="font-bold text-[#111827]">
-                    Estimated Delivery Time
-                  </p>
-                  <p className="text-[#64748B]">30 - 45 minutes</p>
-                </div>
+              <div className="border-t border-[#F1F5F3] pt-2.5">
+                <label className="flex items-center gap-2 text-[11.5px] font-bold text-[#111827] mb-1">
+                  <Clock className="h-4 w-4 text-[#475569] shrink-0" />
+                  <span>Estimated Delivery Time</span>
+                </label>
+                <input
+                  type="text"
+                  value={estimatedDeliveryTimeInput}
+                  onChange={(e) => setEstimatedDeliveryTimeInput(e.target.value)}
+                  placeholder="e.g. 30 - 45 minutes"
+                  className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                />
               </div>
             </div>
           )}
@@ -1457,19 +1504,23 @@ export function BosOnlineStoreWorkstation({
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <Menu className="h-4 w-4 shrink-0 text-white/90" />
-                  <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-white/25 bg-[#78350F] flex items-center justify-center">
-                    <img
-                      src="/bos/products/coca-cola.png"
-                      alt={storeName}
-                      className="h-7 w-7 object-contain"
-                    />
+                  <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-white/25 bg-[#78350F] flex items-center justify-center font-bold text-xs text-white">
+                    {storeSettings.logoUrl ? (
+                      <img
+                        src={storeSettings.logoUrl}
+                        alt={storeName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      storeName.slice(0, 2).toUpperCase()
+                    )}
                   </div>
                   <div className="min-w-0 leading-tight">
                     <p className="text-[13px] font-extrabold truncate">
                       {storeName}
                     </p>
                     <p className="text-[9.5px] text-white/80 line-clamp-2">
-                      Daily groceries, home essentials and more
+                      {storeDescription || 'Daily groceries, home essentials and more'}
                     </p>
                   </div>
                 </div>
@@ -1524,42 +1575,53 @@ export function BosOnlineStoreWorkstation({
 
               {/* 5 Circular Category Icons */}
               <div className="grid grid-cols-5 gap-1.5 text-center">
-                {[
-                  {
-                    label: 'Grocery',
-                    img: '/bos/products/sunflower-oil.png',
-                    bg: 'bg-[#FEF3C7]',
-                  },
-                  {
-                    label: 'Beverages',
-                    img: '/bos/products/tropicana-juice.png',
-                    bg: 'bg-[#DCFCE7]',
-                  },
-                  {
-                    label: 'Snacks',
-                    img: '/bos/products/maggi-noodles.png',
-                    bg: 'bg-[#FFEDD5]',
-                  },
-                  {
-                    label: 'Home Care',
-                    img: '/bos/products/surf-excel.png',
-                    bg: 'bg-[#DBEAFE]',
-                  },
-                  {
-                    label: 'Personal Care',
-                    img: '/bos/products/clinic-plus.png',
-                    bg: 'bg-[#F3E8FF]',
-                  },
-                ].map((cat) => (
+                {(categoriesList.length > 0
+                  ? categoriesList.slice(0, 5).map((cat, idx) => ({
+                      label: cat.name,
+                      bg: ['bg-[#FEF3C7]', 'bg-[#DCFCE7]', 'bg-[#FFEDD5]', 'bg-[#DBEAFE]', 'bg-[#F3E8FF]'][idx % 5],
+                      img: catalogRows.find((p) => p.category === cat.name && p.imageUrl)?.imageUrl || null,
+                    }))
+                  : [
+                      {
+                        label: 'Grocery',
+                        img: '/bos/products/sunflower-oil.png',
+                        bg: 'bg-[#FEF3C7]',
+                      },
+                      {
+                        label: 'Beverages',
+                        img: '/bos/products/tropicana-juice.png',
+                        bg: 'bg-[#DCFCE7]',
+                      },
+                      {
+                        label: 'Snacks',
+                        img: '/bos/products/maggi-noodles.png',
+                        bg: 'bg-[#FFEDD5]',
+                      },
+                      {
+                        label: 'Home Care',
+                        img: '/bos/products/surf-excel.png',
+                        bg: 'bg-[#DBEAFE]',
+                      },
+                      {
+                        label: 'Personal Care',
+                        img: '/bos/products/clinic-plus.png',
+                        bg: 'bg-[#F3E8FF]',
+                      },
+                    ]
+                ).map((cat) => (
                   <div key={cat.label} className="space-y-1">
                     <div
-                      className={`mx-auto flex h-10 w-10 items-center justify-center rounded-full ${cat.bg} p-1.5`}
+                      className={`mx-auto flex h-10 w-10 items-center justify-center rounded-full ${cat.bg} p-1.5 text-[#0A6847] font-bold text-xs`}
                     >
-                      <img
-                        src={cat.img}
-                        alt={cat.label}
-                        className="h-full w-full object-contain"
-                      />
+                      {cat.img ? (
+                        <img
+                          src={cat.img}
+                          alt={cat.label}
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <span>{cat.label.slice(0, 2).toUpperCase()}</span>
+                      )}
                     </div>
                     <p className="truncate text-[8.5px] font-semibold text-[#334155]">
                       {cat.label}
@@ -1584,42 +1646,58 @@ export function BosOnlineStoreWorkstation({
                 </div>
 
                 <div className="grid grid-cols-3 gap-1.5">
-                  {[
-                    {
-                      name: 'Maggi Noodles',
-                      unit: '70g',
-                      price: 14,
-                      img: '/bos/products/maggi-noodles.png',
-                    },
-                    {
-                      name: 'Coca Cola',
-                      unit: '500ml',
-                      price: 40,
-                      img: '/bos/products/coca-cola.png',
-                    },
-                    {
-                      name: 'Ariel Detergent',
-                      unit: '1kg',
-                      price: 360,
-                      img: '/bos/products/ariel-detergent.png',
-                    },
-                  ].map((item) => (
+                  {(catalogRows.length > 0
+                    ? catalogRows.slice(0, 3).map((item) => ({
+                        id: item.id,
+                        name: item.name,
+                        unit: item.stock ? `${item.stock} in stock` : 'Standard',
+                        price: item.price,
+                        img: item.imageUrl || null,
+                      }))
+                    : [
+                        {
+                          id: '1',
+                          name: 'Maggi Noodles',
+                          unit: '70g',
+                          price: 14,
+                          img: '/bos/products/maggi-noodles.png',
+                        },
+                        {
+                          id: '2',
+                          name: 'Coca Cola',
+                          unit: '500ml',
+                          price: 40,
+                          img: '/bos/products/coca-cola.png',
+                        },
+                        {
+                          id: '3',
+                          name: 'Ariel Detergent',
+                          unit: '1kg',
+                          price: 360,
+                          img: '/bos/products/ariel-detergent.png',
+                        },
+                      ]
+                  ).map((item) => (
                     <div
-                      key={item.name}
+                      key={item.id}
                       className="flex flex-col justify-between rounded-xl border border-[#EBF2EE] bg-white p-1.5 shadow-2xs"
                     >
                       <div>
-                        <div className="flex h-12 items-center justify-center rounded-lg bg-[#FAFDFB] p-1">
-                          <img
-                            src={item.img}
-                            alt={item.name}
-                            className="h-full w-full object-contain"
-                          />
+                        <div className="flex h-12 items-center justify-center rounded-lg bg-[#FAFDFB] p-1 text-[#0A6847] font-bold text-xs">
+                          {item.img ? (
+                            <img
+                              src={item.img}
+                              alt={item.name}
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <span>{item.name.slice(0, 2).toUpperCase()}</span>
+                          )}
                         </div>
                         <p className="mt-1 truncate text-[9px] font-bold text-[#111827]">
                           {item.name}
                         </p>
-                        <p className="text-[8px] text-[#64748B]">{item.unit}</p>
+                        <p className="text-[8px] text-[#64748B] truncate">{item.unit}</p>
                         <p className="mt-0.5 text-[10px] font-extrabold text-[#111827]">
                           {currencySymbol} {item.price}
                         </p>

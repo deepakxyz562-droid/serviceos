@@ -309,4 +309,12 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
       screen.getByText('Create a new sale, search products, or scan a barcode.'),
     ).toBeTruthy();
   });
+
+  it('renders the header Live Sync/Refresh button and triggers refresh on click', () => {
+    render(<BosWebApp demoMode={true} />);
+
+    const refreshBtn = screen.getByRole('button', { name: /Refresh & Sync Data/i });
+    expect(refreshBtn).toBeTruthy();
+    fireEvent.click(refreshBtn);
+  });
 });

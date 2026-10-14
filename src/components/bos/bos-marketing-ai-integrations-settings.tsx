@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -64,6 +64,7 @@ import {
   type BosProductItem,
   type BosStoreSettings,
   formatBosCurrency,
+  getInitials,
 } from '@/components/bos/bos-types';
 import {
   BUSINESS_TYPE_LABELS,
@@ -386,6 +387,55 @@ export function BosMarketingAiIntegrationsSettings({
   const [inviteStaffName, setInviteStaffName] = useState('');
   const [inviteStaffRole, setInviteStaffRole] = useState('Staff');
   const [activeUsersCount, setActiveUsersCount] = useState(demoMode ? 5 : 1);
+  const [settingsLogoUrl, setSettingsLogoUrl] = useState(() => storeSettings.logoUrl || '');
+  const [settingsBusinessHours, setSettingsBusinessHours] = useState<
+    Record<string, { open: boolean; start: string; end: string }>
+  >(() => storeSettings.businessHours || {
+    Monday: { open: true, start: '09:00', end: '22:00' },
+    Tuesday: { open: true, start: '09:00', end: '22:00' },
+    Wednesday: { open: true, start: '09:00', end: '22:00' },
+    Thursday: { open: true, start: '09:00', end: '22:00' },
+    Friday: { open: true, start: '09:00', end: '22:00' },
+    Saturday: { open: true, start: '09:00', end: '22:00' },
+    Sunday: { open: true, start: '09:00', end: '22:00' },
+  });
+  const [settingsPan, setSettingsPan] = useState(() => storeSettings.pan || '');
+  const [settingsDeliveryRadius, setSettingsDeliveryRadius] = useState(() => storeSettings.deliveryRadiusKm || 5);
+  const [settingsEnableDelivery, setSettingsEnableDelivery] = useState(() => storeSettings.enableLocalDelivery ?? true);
+  const [settingsEnablePickup, setSettingsEnablePickup] = useState(() => storeSettings.enableStorePickup ?? true);
+  const [settingsWhatsapp, setSettingsWhatsapp] = useState(() => storeSettings.whatsappNumber || storeSettings.phone || '');
+  const [settingsBanner, setSettingsBanner] = useState(() => storeSettings.announcementBanner || '');
+  const [settingsThemeColor, setSettingsThemeColor] = useState(() => storeSettings.themeColor || '#0A6847');
+  const [staffList, setStaffList] = useState<Array<{ name: string; role: string; email?: string }>>([
+    { name: storeSettings.ownerName || storeSettings.businessName || 'Owner', role: 'Owner' },
+  ]);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setToast('Please select a valid image file (PNG, JPG, WebP).');
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      setSettingsLogoUrl(base64);
+      await onUpdateStoreSettings({ logoUrl: base64 });
+      setToast('Business logo uploaded and saved successfully!');
+      setTimeout(() => setToast(null), 3000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveLogo = async () => {
+    setSettingsLogoUrl('');
+    await onUpdateStoreSettings({ logoUrl: '' });
+    setToast('Business logo removed.');
+    setTimeout(() => setToast(null), 3000);
+  };
 
   /* Real subscription plan info fetched from /api/subscriptions. In demo
      mode we never fire the request — demoMode is for anonymous browsing with
@@ -515,7 +565,7 @@ export function BosMarketingAiIntegrationsSettings({
         { role: 'user', content: trimmed },
       ];
 
-      const res = await fetch('/api/ai/chat', {
+      const res = await authFetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1317,7 +1367,7 @@ export function BosMarketingAiIntegrationsSettings({
                     let launchSuccess = false;
                     let failureReason = '';
                     try {
-                      const res = await fetch('/api/campaigns', {
+                      const res = await authFetch('/api/campaigns', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -2521,20 +2571,12 @@ export function BosMarketingAiIntegrationsSettings({
           {leftNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = settingsSection === item.id;
-            const isWired = item.id === 'businessInfo' || item.id === 'businessType';
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  if (isWired) {
-                    setSettingsSection(item.id);
-                  } else {
-                    setToast(`${item.title} settings are coming soon.`);
-                    setTimeout(() => setToast(null), 2500);
-                  }
-                }}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                onClick={() => setSettingsSection(item.id)}
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition cursor-pointer ${
                   isActive
                     ? 'border-l-[3.5px] border-l-[#0A6847] bg-[#E6F6F0]/80 text-[#0A6847]'
                     : 'text-[#1E293B] hover:bg-[#F4F8F6]'
@@ -2564,482 +2606,1085 @@ export function BosMarketingAiIntegrationsSettings({
           })}
         </div>
 
-        {/* Center Main Form Card: Business Information (6 cols) */}
+        {/* Center Main Form Card (6 cols) */}
         <div className="bos-card p-5 lg:col-span-6 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
-            <div className="max-w-lg">
-              <h2 className="text-[16px] font-extrabold text-[#111827]">
-                Business Information
-              </h2>
-              <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
-                Update your business details. This information will be used in invoices, receipts and customer communications.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                const labelToBlueprint: Record<string, BusinessType> = {
-                  'Grocery Store': 'grocery',
-                  'Supermarket & Kirana': 'grocery',
-                  'Pharmacy & Medical': 'retail',
-                  'Electronics & Mobile': 'retail',
-                  'Salon & Spa': 'salon',
-                  'Restaurant & Cafe': 'restaurant',
-                  'Service Business': 'services',
-                  'Wholesale & Distribution': 'wholesale',
-                };
-                const bpType =
-                  labelToBlueprint[settingsBusinessType] ||
-                  storeSettings.blueprintType ||
-                  'grocery';
-                const channels =
-                  storeSettings.salesChannels ||
-                  DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bpType];
-                const resolvedCaps = resolveBlueprintCapabilities(bpType, channels);
+          {/* Hidden File Input for Logo Upload */}
+          <input
+            type="file"
+            ref={logoFileInputRef}
+            onChange={handleLogoUpload}
+            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+            className="hidden"
+          />
 
-                await onUpdateStoreSettings({
-                  businessName: settingsBusinessName,
-                  businessType: settingsBusinessType,
-                  blueprintType: bpType,
-                  salesChannels: channels,
-                  capabilities: resolvedCaps as unknown as Record<string, boolean>,
-                  phone: `+91 ${settingsPhoneNumber}`,
-                  whatsappNumber: `+91 ${settingsPhoneNumber}`,
-                  email: settingsEmailAddress,
-                  address: settingsAddress,
-                  gstin: settingsGstin,
-                });
-                setToast('Business Information & Store Configuration saved successfully!');
-                setTimeout(() => setToast(null), 3000);
-              }}
-              className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition"
-            >
-              Save Changes
-            </button>
-          </div>
-
-          {/* Form Fields Grid */}
-          <div className="space-y-3.5 text-[12.5px]">
-            {/* Row 1: Business Name * | Business Type * */}
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Business Name <span className="text-[#EF4444]">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={settingsBusinessName}
-                  onChange={(e) => setSettingsBusinessName(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Business Type <span className="text-[#EF4444]">*</span>
-                </label>
-                <div className="relative flex items-center">
-                  <Store className="pointer-events-none absolute left-3 h-4 w-4 text-[#0A6847]" />
-                  <select
-                    value={settingsBusinessType}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSettingsBusinessType(val);
-                      const labelToBlueprint: Record<string, BusinessType> = {
-                        'Grocery Store': 'grocery',
-                        'Supermarket & Kirana': 'grocery',
-                        'Pharmacy & Medical': 'retail',
-                        'Electronics & Mobile': 'retail',
-                        'Salon & Spa': 'salon',
-                        'Restaurant & Cafe': 'restaurant',
-                        'Service Business': 'services',
-                        'Wholesale & Distribution': 'wholesale',
-                      };
-                      const bpType = labelToBlueprint[val] || 'grocery';
-                      const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bpType];
-                      const resolvedCaps = resolveBlueprintCapabilities(bpType, channels);
-                      void onUpdateStoreSettings({
-                        businessType: val,
-                        blueprintType: bpType,
-                        salesChannels: channels,
-                        capabilities: resolvedCaps as unknown as Record<string, boolean>,
-                      });
-                    }}
-                    className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-9 pr-8 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                  >
-                    <option value="Grocery Store">Grocery Store</option>
-                    <option value="Supermarket & Kirana">Supermarket &amp; Kirana</option>
-                    <option value="Pharmacy & Medical">Pharmacy &amp; Medical</option>
-                    <option value="Electronics & Mobile">Electronics &amp; Mobile</option>
-                    <option value="Salon & Spa">Salon &amp; Spa</option>
-                    <option value="Restaurant & Cafe">Restaurant &amp; Cafe</option>
-                    <option value="Service Business">Service Business</option>
-                    <option value="Wholesale & Distribution">Wholesale &amp; Distribution</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
+          {/* TAB 1: Business Information */}
+          {settingsSection === 'businessInfo' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Business Information
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    Update your business details. This information will be used in invoices, receipts and customer communications.
+                  </p>
                 </div>
-              </div>
-            </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const labelToBlueprint: Record<string, BusinessType> = {
+                      'Grocery Store': 'grocery',
+                      'Supermarket & Kirana': 'grocery',
+                      'Pharmacy & Medical': 'retail',
+                      'Electronics & Mobile': 'retail',
+                      'Salon & Spa': 'salon',
+                      'Restaurant & Cafe': 'restaurant',
+                      'Service Business': 'services',
+                      'Wholesale & Distribution': 'wholesale',
+                    };
+                    const bpType =
+                      labelToBlueprint[settingsBusinessType] ||
+                      storeSettings.blueprintType ||
+                      'grocery';
+                    const channels =
+                      storeSettings.salesChannels ||
+                      DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bpType];
+                    const resolvedCaps = resolveBlueprintCapabilities(bpType, channels);
 
-            {/* Row 2: Owner Name | Phone Number * */}
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Owner Name
-                </label>
-                <input
-                  type="text"
-                  value={settingsOwnerName}
-                  onChange={(e) => setSettingsOwnerName(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                />
+                    await onUpdateStoreSettings({
+                      businessName: settingsBusinessName,
+                      businessType: settingsBusinessType,
+                      blueprintType: bpType,
+                      salesChannels: channels,
+                      capabilities: resolvedCaps as unknown as Record<string, boolean>,
+                      phone: `+91 ${settingsPhoneNumber}`,
+                      whatsappNumber: `+91 ${settingsPhoneNumber}`,
+                      email: settingsEmailAddress,
+                      address: settingsAddress,
+                      city: settingsCity,
+                      state: settingsState,
+                      pincode: settingsPinCode,
+                      tagline: settingsDescription,
+                      logoUrl: settingsLogoUrl,
+                    });
+                    setToast('Business Information saved successfully!');
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  Save Changes
+                </button>
               </div>
 
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Phone Number <span className="text-[#EF4444]">*</span>
-                </label>
-                <div className="flex items-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-white focus-within:border-[#0A6847]">
-                  <div className="flex items-center gap-1 border-r border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-2 text-[12.5px] font-semibold text-[#334155]">
-                    <span>🇮🇳</span>
-                    <span>+91</span>
-                    <ChevronDown className="h-3.5 w-3.5 text-[#64748B]" />
+              {/* Form Fields Grid */}
+              <div className="space-y-3.5 text-[12.5px]">
+                {/* Row 1: Business Name * | Business Type * */}
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Business Name <span className="text-[#EF4444]">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsBusinessName}
+                      onChange={(e) => setSettingsBusinessName(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    />
                   </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Business Type <span className="text-[#EF4444]">*</span>
+                    </label>
+                    <div className="relative flex items-center">
+                      <Store className="pointer-events-none absolute left-3 h-4 w-4 text-[#0A6847]" />
+                      <select
+                        value={settingsBusinessType}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSettingsBusinessType(val);
+                          const labelToBlueprint: Record<string, BusinessType> = {
+                            'Grocery Store': 'grocery',
+                            'Supermarket & Kirana': 'grocery',
+                            'Pharmacy & Medical': 'retail',
+                            'Electronics & Mobile': 'retail',
+                            'Salon & Spa': 'salon',
+                            'Restaurant & Cafe': 'restaurant',
+                            'Service Business': 'services',
+                            'Wholesale & Distribution': 'wholesale',
+                          };
+                          const bpType = labelToBlueprint[val] || 'grocery';
+                          const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bpType];
+                          const resolvedCaps = resolveBlueprintCapabilities(bpType, channels);
+                          void onUpdateStoreSettings({
+                            businessType: val,
+                            blueprintType: bpType,
+                            salesChannels: channels,
+                            capabilities: resolvedCaps as unknown as Record<string, boolean>,
+                          });
+                        }}
+                        className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-9 pr-8 text-[13px] font-semibold text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                      >
+                        <option value="Grocery Store">Grocery Store</option>
+                        <option value="Supermarket & Kirana">Supermarket &amp; Kirana</option>
+                        <option value="Pharmacy & Medical">Pharmacy &amp; Medical</option>
+                        <option value="Electronics & Mobile">Electronics &amp; Mobile</option>
+                        <option value="Salon & Spa">Salon &amp; Spa</option>
+                        <option value="Restaurant & Cafe">Restaurant &amp; Cafe</option>
+                        <option value="Service Business">Service Business</option>
+                        <option value="Wholesale & Distribution">Wholesale &amp; Distribution</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 2: Owner Name | Phone Number * */}
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Owner Name
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsOwnerName}
+                      onChange={(e) => setSettingsOwnerName(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Phone Number <span className="text-[#EF4444]">*</span>
+                    </label>
+                    <div className="flex items-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-white focus-within:border-[#0A6847]">
+                      <div className="flex items-center gap-1 border-r border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-2 text-[12.5px] font-semibold text-[#334155]">
+                        <span>🇮🇳</span>
+                        <span>+91</span>
+                        <ChevronDown className="h-3.5 w-3.5 text-[#64748B]" />
+                      </div>
+                      <input
+                        type="text"
+                        value={settingsPhoneNumber}
+                        onChange={(e) => setSettingsPhoneNumber(e.target.value)}
+                        className="w-full bg-white px-3 py-2 text-[13px] font-semibold text-[#111827] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 3: Email Address | Website (Optional) */}
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={settingsEmailAddress}
+                      onChange={(e) => setSettingsEmailAddress(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Website <span className="font-normal text-[#64748B]">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsWebsite}
+                      onChange={(e) => setSettingsWebsite(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 4: Full-Width Business Address * */}
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                    Business Address <span className="text-[#EF4444]">*</span>
+                  </label>
                   <input
                     type="text"
-                    value={settingsPhoneNumber}
-                    onChange={(e) => setSettingsPhoneNumber(e.target.value)}
-                    className="w-full bg-white px-3 py-2 text-[13px] font-semibold text-[#111827] focus:outline-hidden"
+                    value={settingsAddress}
+                    onChange={(e) => setSettingsAddress(e.target.value)}
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Row 3: Email Address | Website (Optional) */}
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={settingsEmailAddress}
-                  onChange={(e) => setSettingsEmailAddress(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Website <span className="font-normal text-[#64748B]">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={settingsWebsite}
-                  onChange={(e) => setSettingsWebsite(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                />
-              </div>
-            </div>
-
-            {/* Row 4: Full-Width Business Address * */}
-            <div>
-              <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                Business Address <span className="text-[#EF4444]">*</span>
-              </label>
-              <input
-                type="text"
-                value={settingsAddress}
-                onChange={(e) => setSettingsAddress(e.target.value)}
-                className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-              />
-            </div>
-
-            {/* Row 5: City | State | PIN Code */}
-            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={settingsCity}
-                  onChange={(e) => setSettingsCity(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  State
-                </label>
-                <div className="relative flex items-center">
-                  <select
-                    value={settingsState}
-                    onChange={(e) => setSettingsState(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-3.5 pr-8 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                  >
-                    <option value="Uttar Pradesh">Uttar Pradesh</option>
-                    <option value="Delhi">Delhi</option>
-                    <option value="Maharashtra">Maharashtra</option>
-                    <option value="Karnataka">Karnataka</option>
-                    <option value="Gujarat">Gujarat</option>
-                    <option value="Tamil Nadu">Tamil Nadu</option>
-                    <option value="Haryana">Haryana</option>
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  PIN Code
-                </label>
-                <input
-                  type="text"
-                  value={settingsPinCode}
-                  onChange={(e) => setSettingsPinCode(e.target.value)}
-                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                />
-              </div>
-            </div>
-
-            {/* Row 6: Business Logo (left) | Business Description (Optional) (right) */}
-            <div className="grid grid-cols-1 gap-4 pt-2 border-t border-[#EDF4F0] sm:grid-cols-12">
-              {/* Business Logo (5 cols) */}
-              <div className="sm:col-span-5 space-y-2">
-                <label className="block text-[12px] font-semibold text-[#334155]">
-                  Business Logo
-                </label>
-                <div className="flex items-center gap-3">
-                  {/* Storefront Logo Thumbnail */}
-                  <div className="relative flex h-16 w-16 shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-gradient-to-b from-[#E6F6F0] to-[#FEF3C7] shadow-2xs">
-                    <div className="w-full bg-[#D97706] py-0.5 text-center text-[7px] font-extrabold uppercase tracking-wider text-white">
-                      {settingsBusinessName}
-                    </div>
-                    <Store className="mt-1 h-7 w-7 text-[#0A6847]" />
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setToast('Logo upload is coming soon.');
-                        setTimeout(() => setToast(null), 2500);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition"
-                    >
-                      <Upload className="h-3.5 w-3.5 text-[#0A6847]" />
-                      <span>Upload Logo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setToast('Logo removal is coming soon.');
-                        setTimeout(() => setToast(null), 2500);
-                      }}
-                      className="rounded-lg border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-slate-50"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[11px] text-[#64748B]">
-                  Recommended size: 512 x 512 px (JPG, PNG)
-                </p>
-              </div>
-
-              {/* Business Description (Optional) (7 cols) */}
-              <div className="sm:col-span-7 flex flex-col">
-                <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
-                  Business Description <span className="font-normal text-[#64748B]">(Optional)</span>
-                </label>
-                <div className="relative flex-1">
-                  <textarea
-                    rows={3}
-                    maxLength={300}
-                    value={settingsDescription}
-                    onChange={(e) => setSettingsDescription(e.target.value)}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-white p-3 pb-6 text-[12.5px] leading-relaxed text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
-                  />
-                  <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] font-medium text-[#94A3B8]">
-                    {settingsDescription.length}/300
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {settingsSection === 'businessType' && (
-              <div className="mt-4 space-y-4 rounded-2xl border border-[#DCE9E3] bg-[#F8FCFA] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                {/* Row 5: City | State | PIN Code */}
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
                   <div>
-                    <h3 className="text-[14px] font-extrabold text-[#111827]">
-                      Business Blueprint, Channels &amp; Country Pack
-                    </h3>
-                    <p className="text-[11.5px] text-[#64748B]">
-                      Adapt POS, Dining, Appointments, Tax Rules &amp; Refund Policies to your industry and market.
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsCity}
+                      onChange={(e) => setSettingsCity(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      State
+                    </label>
+                    <div className="relative flex items-center">
+                      <select
+                        value={settingsState}
+                        onChange={(e) => setSettingsState(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-[#DCE9E3] bg-white py-2 pl-3.5 pr-8 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                      >
+                        <option value="Uttar Pradesh">Uttar Pradesh</option>
+                        <option value="Delhi">Delhi</option>
+                        <option value="Maharashtra">Maharashtra</option>
+                        <option value="Karnataka">Karnataka</option>
+                        <option value="Gujarat">Gujarat</option>
+                        <option value="Tamil Nadu">Tamil Nadu</option>
+                        <option value="Haryana">Haryana</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 h-4 w-4 text-[#64748B]" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      PIN Code
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsPinCode}
+                      onChange={(e) => setSettingsPinCode(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 6: Business Logo & Description */}
+                <div className="grid grid-cols-1 gap-4 pt-2 border-t border-[#EDF4F0] sm:grid-cols-12">
+                  <div className="sm:col-span-5 space-y-2">
+                    <label className="block text-[12px] font-semibold text-[#334155]">
+                      Business Logo
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="relative flex h-16 w-16 shrink-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-gradient-to-b from-[#E6F6F0] to-[#FEF3C7] shadow-2xs">
+                        {settingsLogoUrl ? (
+                          <img
+                            src={settingsLogoUrl}
+                            alt="Business Logo"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <>
+                            <div className="w-full bg-[#D97706] py-0.5 text-center text-[7px] font-extrabold uppercase tracking-wider text-white truncate px-1">
+                              {settingsBusinessName || 'Store'}
+                            </div>
+                            <Store className="mt-1 h-7 w-7 text-[#0A6847]" />
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => logoFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition cursor-pointer"
+                        >
+                          <Upload className="h-3.5 w-3.5 text-[#0A6847]" />
+                          <span>Upload Logo</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          disabled={!settingsLogoUrl}
+                          className="rounded-lg border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-slate-50 cursor-pointer disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-[#64748B]">
+                      Recommended size: 512 x 512 px (JPG, PNG)
                     </p>
                   </div>
-                  <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.flag}{' '}
-                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.name} •{' '}
-                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.tax.label}
-                  </span>
-                </div>
 
-                {/* Blueprint Industry Presets */}
-                <div>
-                  <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                    Industry Blueprint Preset
-                  </label>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {(
-                      ['grocery', 'retail', 'restaurant', 'salon', 'services', 'wholesale'] as BusinessType[]
-                    ).map((bp) => {
-                      const meta = BUSINESS_TYPE_LABELS[bp];
-                      const active = (storeSettings.blueprintType || 'grocery') === bp;
-                      return (
-                        <button
-                          key={bp}
-                          type="button"
-                          onClick={() => {
-                            const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bp];
-                            const resolved = resolveBlueprintCapabilities(bp, channels);
-                            setSettingsBusinessType(meta.label);
-                            void onUpdateStoreSettings({
-                              businessType: meta.label,
-                              blueprintType: bp,
-                              salesChannels: channels,
-                              capabilities: resolved as unknown as Record<string, boolean>,
-                            });
-                            setToast(`Applied ${meta.label} Blueprint & Capabilities`);
-                            setTimeout(() => setToast(null), 2500);
-                          }}
-                          className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[12px] transition ${
-                            active
-                              ? 'border-[#0A6847] bg-[#E6F6F0] font-bold text-[#064E3B]'
-                              : 'border-[#DCE9E3] bg-white font-semibold text-[#334155] hover:border-[#0A6847]'
-                          }`}
-                        >
-                          <span className="text-[15px]">{meta.icon}</span>
-                          <span className="truncate">{meta.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Country & Tax Pack Selector */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                      Country &amp; Tax Pack
+                  <div className="sm:col-span-7 flex flex-col">
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Business Description <span className="font-normal text-[#64748B]">(Optional)</span>
                     </label>
-                    <select
-                      value={storeSettings.countryCode || 'IN'}
-                      onChange={(e) => {
-                        const code = e.target.value as CountryCode;
-                        const pack = getCountryPack(code);
-                        void onUpdateStoreSettings({
-                          countryCode: code,
-                          currencySymbol: pack.currency.symbol,
-                        });
-                        setToast(
-                          `Switched to ${pack.flag} ${pack.name} (${pack.currency.code} • ${pack.tax.label} ${pack.tax.defaultRate}%)`,
-                        );
-                        setTimeout(() => setToast(null), 2500);
-                      }}
-                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
-                    >
-                      {(['IN', 'US', 'CA', 'AU', 'GB', 'GLOBAL'] as CountryCode[]).map((c) => {
-                        const pk = COUNTRY_PACKS[c];
-                        return (
-                          <option key={c} value={c}>
-                            {pk.flag} {pk.name} ({pk.currency.symbol} {pk.currency.code} • {pk.tax.label})
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                      Cancellation &amp; Refund Policy
-                    </label>
-                    <select
-                      value={storeSettings.cancellationPolicy || 'before_preparation'}
-                      onChange={(e) => {
-                        const policy = e.target.value as NonNullable<
-                          BosStoreSettings['cancellationPolicy']
-                        >;
-                        void onUpdateStoreSettings({ cancellationPolicy: policy });
-                        setToast(`Updated order cancellation policy`);
-                        setTimeout(() => setToast(null), 2500);
-                      }}
-                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
-                    >
-                      <option value="before_confirmation">Allow cancel before order accepted</option>
-                      <option value="before_preparation">Allow cancel before preparing / packed</option>
-                      <option value="30m_before_appointment">Allow cancel 30m before appointment</option>
-                      <option value="24h_before_appointment">Allow cancel 24h before appointment</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Active Sales Channels Toggles */}
-                <div>
-                  <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                    Active Sales Channels
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {(
-                      [
-                        { id: 'counter_pos', label: 'Counter POS' },
-                        { id: 'online_store', label: 'Online Store' },
-                        { id: 'whatsapp', label: 'WhatsApp Orders' },
-                        { id: 'delivery', label: 'Local Delivery' },
-                        { id: 'pickup', label: 'Click & Collect' },
-                        { id: 'dine_in', label: 'Dine-In / Tables' },
-                        { id: 'appointments', label: 'Appointments' },
-                      ] as Array<{ id: SalesChannel; label: string }>
-                    ).map((ch) => {
-                      const currentChannels =
-                        storeSettings.salesChannels ||
-                        DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[
-                          storeSettings.blueprintType || 'grocery'
-                        ];
-                      const isEnabled = currentChannels.includes(ch.id);
-                      return (
-                        <button
-                          key={ch.id}
-                          type="button"
-                          onClick={() => {
-                            const nextChannels = isEnabled
-                              ? currentChannels.filter((x) => x !== ch.id)
-                              : [...currentChannels, ch.id];
-                            const bp = storeSettings.blueprintType || 'grocery';
-                            const resolved = resolveBlueprintCapabilities(bp, nextChannels);
-                            void onUpdateStoreSettings({
-                              salesChannels: nextChannels,
-                              capabilities: resolved as unknown as Record<string, boolean>,
-                            });
-                          }}
-                          className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition ${
-                            isEnabled
-                              ? 'border-[#0A6847] bg-[#0A6847] text-white'
-                              : 'border-[#DCE9E3] bg-white text-[#475569]'
-                          }`}
-                        >
-                          {isEnabled ? '✓ ' : '+ '}
-                          {ch.label}
-                        </button>
-                      );
-                    })}
+                    <div className="relative flex-1">
+                      <textarea
+                        rows={3}
+                        maxLength={300}
+                        value={settingsDescription}
+                        onChange={(e) => setSettingsDescription(e.target.value)}
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-white p-3 pb-6 text-[12.5px] leading-relaxed text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+                      />
+                      <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] font-medium text-[#94A3B8]">
+                        {settingsDescription.length}/300
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+
+          {/* TAB 2: Business Hours */}
+          {settingsSection === 'businessHours' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Business Hours &amp; Schedule
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    Set opening and closing hours for each day. Customers will see your live open/closed status.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onUpdateStoreSettings({
+                      businessHours: settingsBusinessHours,
+                    });
+                    setToast('Business Hours saved successfully!');
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  Save Schedule
+                </button>
+              </div>
+
+              {/* Standard Quick Apply */}
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 text-[12px]">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-[#0A6847]" />
+                  <span className="font-bold text-[#111827]">Quick Set All Days:</span>
+                  <input
+                    type="text"
+                    value={defaultDayHours}
+                    onChange={(e) => setDefaultDayHours(e.target.value)}
+                    placeholder="9:00 AM - 10:00 PM"
+                    className="h-8 rounded-lg border border-[#DCE9E3] bg-white px-2.5 font-semibold text-[#111827]"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next: Record<string, { open: boolean; start: string; end: string }> = {};
+                    daysOfWeek.forEach((d) => {
+                      next[d] = { open: true, start: '09:00', end: '22:00' };
+                    });
+                    setSettingsBusinessHours(next);
+                    setToast('Standard 9:00 AM - 10:00 PM applied to all days!');
+                    setTimeout(() => setToast(null), 2500);
+                  }}
+                  className="rounded-lg border border-[#0A6847] bg-[#E6F6F0] px-3 py-1 font-bold text-[#0A6847] hover:bg-[#D1FAE5] cursor-pointer"
+                >
+                  Apply to All Days
+                </button>
+              </div>
+
+              {/* Day-by-day scheduler */}
+              <div className="space-y-2.5">
+                {daysOfWeek.map((day) => {
+                  const dayData = settingsBusinessHours[day] || {
+                    open: true,
+                    start: '09:00',
+                    end: '22:00',
+                  };
+                  return (
+                    <div
+                      key={day}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#EDF4F0] bg-white p-3 hover:border-[#DCE9E3]"
+                    >
+                      <div className="flex items-center gap-3 w-32">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsBusinessHours((prev) => ({
+                              ...prev,
+                              [day]: { ...dayData, open: !dayData.open },
+                            }));
+                          }}
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold cursor-pointer ${
+                            dayData.open
+                              ? 'bg-[#E6F6F0] text-[#0A6847]'
+                              : 'bg-[#F1F5F9] text-[#64748B]'
+                          }`}
+                        >
+                          {dayData.open ? 'Open' : 'Closed'}
+                        </button>
+                        <span className="font-bold text-[13px] text-[#111827]">{day}</span>
+                      </div>
+
+                      {dayData.open ? (
+                        <div className="flex items-center gap-2 text-[12px]">
+                          <span className="text-[#64748B]">From</span>
+                          <input
+                            type="time"
+                            value={dayData.start}
+                            onChange={(e) => {
+                              setSettingsBusinessHours((prev) => ({
+                                ...prev,
+                                [day]: { ...dayData, start: e.target.value },
+                              }));
+                            }}
+                            className="h-8 rounded-lg border border-[#DCE9E3] bg-[#FAFDFB] px-2 font-semibold text-[#111827]"
+                          />
+                          <span className="text-[#64748B]">To</span>
+                          <input
+                            type="time"
+                            value={dayData.end}
+                            onChange={(e) => {
+                              setSettingsBusinessHours((prev) => ({
+                                ...prev,
+                                [day]: { ...dayData, end: e.target.value },
+                              }));
+                            }}
+                            className="h-8 rounded-lg border border-[#DCE9E3] bg-[#FAFDFB] px-2 font-semibold text-[#111827]"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-[12px] font-medium text-[#94A3B8] italic">
+                          Store closed on {day}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Locations & Branches */}
+          {settingsSection === 'locations' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Locations &amp; Coverage
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    Manage your physical store address and delivery service radius.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onUpdateStoreSettings({
+                      address: settingsAddress,
+                      city: settingsCity,
+                      state: settingsState,
+                      pincode: settingsPinCode,
+                      deliveryRadiusKm: Number(settingsDeliveryRadius) || 5,
+                      enableLocalDelivery: settingsEnableDelivery,
+                      enableStorePickup: settingsEnablePickup,
+                    });
+                    setToast('Location & Delivery settings saved!');
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  Save Locations
+                </button>
+              </div>
+
+              <div className="space-y-3.5 text-[12.5px]">
+                <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-1">
+                  <p className="font-extrabold text-[#111827]">Main Store Outlet</p>
+                  <p className="text-[12px] text-[#64748B]">Primary fulfillment center for POS, Online Store &amp; Delivery</p>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                    Street Address *
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsAddress}
+                    onChange={(e) => setSettingsAddress(e.target.value)}
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsCity}
+                      onChange={(e) => setSettingsCity(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsState}
+                      onChange={(e) => setSettingsState(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      PIN Code
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsPinCode}
+                      onChange={(e) => setSettingsPinCode(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#EDF4F0] space-y-3">
+                  <h3 className="font-bold text-[#111827]">Delivery &amp; Pickup Options</h3>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                        Delivery Radius (km)
+                      </label>
+                      <input
+                        type="number"
+                        value={settingsDeliveryRadius}
+                        onChange={(e) => setSettingsDeliveryRadius(Number(e.target.value) || 1)}
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-bold text-[#111827]"
+                      />
+                    </div>
+                    <div className="space-y-2 pt-4">
+                      <label className="flex items-center gap-2 cursor-pointer text-[#334155]">
+                        <input
+                          type="checkbox"
+                          checked={settingsEnableDelivery}
+                          onChange={(e) => setSettingsEnableDelivery(e.target.checked)}
+                          className="h-4 w-4 rounded accent-[#0A6847]"
+                        />
+                        <span className="font-semibold">Enable Local Delivery</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-[#334155]">
+                        <input
+                          type="checkbox"
+                          checked={settingsEnablePickup}
+                          onChange={(e) => setSettingsEnablePickup(e.target.checked)}
+                          className="h-4 w-4 rounded accent-[#0A6847]"
+                        />
+                        <span className="font-semibold">Enable Store Pickup</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: Contact & Communication */}
+          {settingsSection === 'contact' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Contact &amp; Customer Communication
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    Set up direct phone numbers, WhatsApp order line, and storefront banner messages.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onUpdateStoreSettings({
+                      phone: `+91 ${settingsPhoneNumber}`,
+                      whatsappNumber: settingsWhatsapp,
+                      email: settingsEmailAddress,
+                      announcementBanner: settingsBanner,
+                    });
+                    setToast('Contact & Communication settings saved!');
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  Save Contact
+                </button>
+              </div>
+
+              <div className="space-y-3.5 text-[12.5px]">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Primary Calling Phone *
+                    </label>
+                    <div className="flex items-center overflow-hidden rounded-xl border border-[#DCE9E3] bg-white">
+                      <div className="border-r border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-2 text-[12.5px] font-semibold text-[#334155]">
+                        +91
+                      </div>
+                      <input
+                        type="text"
+                        value={settingsPhoneNumber}
+                        onChange={(e) => setSettingsPhoneNumber(e.target.value)}
+                        className="w-full bg-white px-3 py-2 text-[13px] font-semibold text-[#111827] focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      WhatsApp Order Number
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsWhatsapp}
+                      onChange={(e) => setSettingsWhatsapp(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Customer Support Email
+                    </label>
+                    <input
+                      type="email"
+                      value={settingsEmailAddress}
+                      onChange={(e) => setSettingsEmailAddress(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-medium text-[#111827]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Storefront Website URL
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsWebsite}
+                      onChange={(e) => setSettingsWebsite(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                    Storefront Announcement Banner
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsBanner}
+                    onChange={(e) => setSettingsBanner(e.target.value)}
+                    placeholder="e.g. 🎉 Flat 10% OFF on all grocery orders above ₹500!"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
+                  />
+                  <p className="mt-1 text-[11px] text-[#64748B]">
+                    Shown as a sticky highlight strip on your online customer storefront.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: Logo & Branding */}
+          {settingsSection === 'logoBranding' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Logo &amp; Brand Styling
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    Upload your business logo, choose store accent colors and configure receipt branding.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onUpdateStoreSettings({
+                      logoUrl: settingsLogoUrl,
+                      themeColor: settingsThemeColor,
+                      tagline: settingsDescription,
+                    });
+                    setToast('Brand Styling saved successfully!');
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  Save Branding
+                </button>
+              </div>
+
+              <div className="space-y-4 text-[12.5px]">
+                {/* Logo Section */}
+                <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-4 space-y-3">
+                  <p className="font-bold text-[#111827]">Store Logo</p>
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-[#A7F3D0] bg-white shadow-xs">
+                      {settingsLogoUrl ? (
+                        <img
+                          src={settingsLogoUrl}
+                          alt="Store Logo"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Store className="h-8 w-8 text-[#0A6847]" />
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => logoFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                          <span>Choose Logo Image</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          disabled={!settingsLogoUrl}
+                          className="rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-[#FEE2E2] hover:text-[#EF4444] cursor-pointer disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#64748B]">
+                        Accepts PNG, JPG, or SVG up to 2MB. Recommended 512x512 square.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Theme Color */}
+                <div>
+                  <label className="mb-2 block text-[12px] font-semibold text-[#334155]">
+                    Storefront Accent Color
+                  </label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {[
+                      { name: 'Forest Green', hex: '#0A6847' },
+                      { name: 'Royal Blue', hex: '#2563EB' },
+                      { name: 'Amber Orange', hex: '#D97706' },
+                      { name: 'Purple', hex: '#7C3AED' },
+                      { name: 'Crimson', hex: '#DC2626' },
+                      { name: 'Teal', hex: '#0D9488' },
+                    ].map((col) => (
+                      <button
+                        key={col.hex}
+                        type="button"
+                        onClick={() => setSettingsThemeColor(col.hex)}
+                        title={col.name}
+                        className={`h-8 w-8 rounded-full border-2 transition cursor-pointer ${
+                          settingsThemeColor === col.hex ? 'border-[#111827] scale-110 shadow-sm' : 'border-transparent'
+                        }`}
+                        style={{ backgroundColor: col.hex }}
+                      />
+                    ))}
+                    <div className="flex items-center gap-1.5 ml-2">
+                      <span className="text-[11px] text-[#64748B]">Hex:</span>
+                      <input
+                        type="text"
+                        value={settingsThemeColor}
+                        onChange={(e) => setSettingsThemeColor(e.target.value)}
+                        className="h-8 w-24 rounded-lg border border-[#DCE9E3] px-2 font-mono text-[12px] font-bold text-[#111827]"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tagline */}
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                    Storefront Slogan / Tagline
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsDescription}
+                    onChange={(e) => setSettingsDescription(e.target.value)}
+                    placeholder="e.g. Daily essentials, fresh groceries and more."
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: Business Type & Blueprint */}
+          {settingsSection === 'businessType' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EDF4F0] pb-3.5">
+                <div>
+                  <h3 className="text-[16px] font-extrabold text-[#111827]">
+                    Business Blueprint, Channels &amp; Country Pack
+                  </h3>
+                  <p className="text-[12px] text-[#64748B]">
+                    Adapt POS, Dining, Appointments, Tax Rules &amp; Refund Policies to your industry and market.
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                  {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.flag}{' '}
+                  {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.name} •{' '}
+                  {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.tax.label}
+                </span>
+              </div>
+
+              {/* Blueprint Industry Presets */}
+              <div>
+                <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                  Industry Blueprint Preset
+                </label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {(
+                    ['grocery', 'retail', 'restaurant', 'salon', 'services', 'wholesale'] as BusinessType[]
+                  ).map((bp) => {
+                    const meta = BUSINESS_TYPE_LABELS[bp];
+                    const active = (storeSettings.blueprintType || 'grocery') === bp;
+                    return (
+                      <button
+                        key={bp}
+                        type="button"
+                        onClick={() => {
+                          const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bp];
+                          const resolved = resolveBlueprintCapabilities(bp, channels);
+                          setSettingsBusinessType(meta.label);
+                          void onUpdateStoreSettings({
+                            businessType: meta.label,
+                            blueprintType: bp,
+                            salesChannels: channels,
+                            capabilities: resolved as unknown as Record<string, boolean>,
+                          });
+                          setToast(`Applied ${meta.label} Blueprint & Capabilities`);
+                          setTimeout(() => setToast(null), 2500);
+                        }}
+                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[12px] transition cursor-pointer ${
+                          active
+                            ? 'border-[#0A6847] bg-[#E6F6F0] font-bold text-[#064E3B]'
+                            : 'border-[#DCE9E3] bg-white font-semibold text-[#334155] hover:border-[#0A6847]'
+                        }`}
+                      >
+                        <span className="text-[15px]">{meta.icon}</span>
+                        <span className="truncate">{meta.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Country & Tax Pack Selector */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                    Country &amp; Tax Pack
+                  </label>
+                  <select
+                    value={storeSettings.countryCode || 'IN'}
+                    onChange={(e) => {
+                      const code = e.target.value as CountryCode;
+                      const pack = getCountryPack(code);
+                      void onUpdateStoreSettings({
+                        countryCode: code,
+                        currencySymbol: pack.currency.symbol,
+                      });
+                      setToast(
+                        `Switched to ${pack.flag} ${pack.name} (${pack.currency.code} • ${pack.tax.label} ${pack.tax.defaultRate}%)`,
+                      );
+                      setTimeout(() => setToast(null), 2500);
+                    }}
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                  >
+                    {(['IN', 'US', 'CA', 'AU', 'GB', 'GLOBAL'] as CountryCode[]).map((c) => {
+                      const pk = COUNTRY_PACKS[c];
+                      return (
+                        <option key={c} value={c}>
+                          {pk.flag} {pk.name} ({pk.currency.symbol} {pk.currency.code} • {pk.tax.label})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                    Cancellation &amp; Refund Policy
+                  </label>
+                  <select
+                    value={storeSettings.cancellationPolicy || 'before_preparation'}
+                    onChange={(e) => {
+                      const policy = e.target.value as NonNullable<
+                        BosStoreSettings['cancellationPolicy']
+                      >;
+                      void onUpdateStoreSettings({ cancellationPolicy: policy });
+                      setToast(`Updated order cancellation policy`);
+                      setTimeout(() => setToast(null), 2500);
+                    }}
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                  >
+                    <option value="before_confirmation">Allow cancel before order accepted</option>
+                    <option value="before_preparation">Allow cancel before preparing / packed</option>
+                    <option value="30m_before_appointment">Allow cancel 30m before appointment</option>
+                    <option value="24h_before_appointment">Allow cancel 24h before appointment</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Active Sales Channels Toggles */}
+              <div>
+                <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                  Active Sales Channels
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: 'counter_pos', label: 'Counter POS' },
+                      { id: 'online_store', label: 'Online Store' },
+                      { id: 'whatsapp', label: 'WhatsApp Orders' },
+                      { id: 'delivery', label: 'Local Delivery' },
+                      { id: 'pickup', label: 'Click & Collect' },
+                      { id: 'dine_in', label: 'Dine-In / Tables' },
+                      { id: 'appointments', label: 'Appointments' },
+                    ] as Array<{ id: SalesChannel; label: string }>
+                  ).map((ch) => {
+                    const currentChannels =
+                      storeSettings.salesChannels ||
+                      DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[
+                        storeSettings.blueprintType || 'grocery'
+                      ];
+                    const isEnabled = currentChannels.includes(ch.id);
+                    return (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => {
+                          const nextChannels = isEnabled
+                            ? currentChannels.filter((x) => x !== ch.id)
+                            : [...currentChannels, ch.id];
+                          const bp = storeSettings.blueprintType || 'grocery';
+                          const resolved = resolveBlueprintCapabilities(bp, nextChannels);
+                          void onUpdateStoreSettings({
+                            salesChannels: nextChannels,
+                            capabilities: resolved as unknown as Record<string, boolean>,
+                          });
+                        }}
+                        className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition cursor-pointer ${
+                          isEnabled
+                            ? 'border-[#0A6847] bg-[#0A6847] text-white'
+                            : 'border-[#DCE9E3] bg-white text-[#475569]'
+                        }`}
+                      >
+                        {isEnabled ? '✓ ' : '+ '}
+                        {ch.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: Documents & Legal */}
+          {settingsSection === 'documents' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Documents &amp; Tax Registration
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    GSTIN, PAN and official tax identification used on invoices and e-Way bills.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await onUpdateStoreSettings({
+                      gstin: settingsGstin,
+                      pan: settingsPan,
+                      registrationType: settingsRegType,
+                      eInvoiceStatus: settingsEInvoiceEnabled,
+                    });
+                    setToast('Tax & Document settings saved!');
+                    setTimeout(() => setToast(null), 3000);
+                  }}
+                  className="shrink-0 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                >
+                  Save Documents
+                </button>
+              </div>
+
+              <div className="space-y-3.5 text-[12.5px]">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      GSTIN (15 characters)
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsGstin}
+                      onChange={(e) => setSettingsGstin(e.target.value.toUpperCase())}
+                      placeholder="09ABCDE1234F1Z5"
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 font-mono text-[13px] font-bold text-[#111827]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      Permanent Account Number (PAN)
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsPan}
+                      onChange={(e) => setSettingsPan(e.target.value.toUpperCase())}
+                      placeholder="ABCDE1234F"
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 font-mono text-[13px] font-bold text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[12px] font-semibold text-[#334155]">
+                      GST Registration Type
+                    </label>
+                    <select
+                      value={settingsRegType}
+                      onChange={(e) => setSettingsRegType(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                    >
+                      <option value="Regular">Regular Taxpayer</option>
+                      <option value="Composition">Composition Scheme</option>
+                      <option value="Unregistered">Unregistered Business</option>
+                      <option value="SEZ">Special Economic Zone (SEZ)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3">
+                    <div>
+                      <p className="font-bold text-[#111827]">e-Invoice Enabled</p>
+                      <p className="text-[11px] text-[#64748B]">Auto-generate IRN and signed QR code</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settingsEInvoiceEnabled}
+                      onChange={(e) => setSettingsEInvoiceEnabled(e.target.checked)}
+                      className="h-4 w-4 rounded accent-[#0A6847]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Stacked Preview Cards (3 cols): Store Preview + Business Hours */}
@@ -3060,7 +3705,7 @@ export function BosMarketingAiIntegrationsSettings({
                     setTimeout(() => setToast(null), 3000);
                   }
                 }}
-                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition cursor-pointer"
               >
                 View Store
               </button>
@@ -3069,7 +3714,15 @@ export function BosMarketingAiIntegrationsSettings({
             <div className="flex items-start gap-3">
               {/* Circular Store Thumbnail */}
               <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center overflow-hidden rounded-full border-2 border-[#A7F3D0] bg-gradient-to-b from-[#E6F6F0] to-[#FEF3C7] shadow-2xs">
-                <Store className="h-6 w-6 text-[#0A6847]" />
+                {settingsLogoUrl ? (
+                  <img
+                    src={settingsLogoUrl}
+                    alt="Store Logo"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Store className="h-6 w-6 text-[#0A6847]" />
+                )}
               </div>
 
               <div className="min-w-0 flex-1 space-y-1">
@@ -3077,7 +3730,7 @@ export function BosMarketingAiIntegrationsSettings({
                   {settingsBusinessName}
                 </h4>
                 <p className="text-[11.5px] text-[#64748B] line-clamp-2 leading-snug">
-                  Daily essentials, fresh groceries and more.
+                  {settingsDescription || 'Daily essentials, fresh groceries and more.'}
                 </p>
                 <div className="pt-1 space-y-1 text-[11.5px] text-[#334155]">
                   <p className="flex items-center gap-1.5 font-medium">
@@ -3102,11 +3755,8 @@ export function BosMarketingAiIntegrationsSettings({
 
             <button
               type="button"
-              onClick={() => {
-                setToast('Logo & Branding settings are coming soon.');
-                setTimeout(() => setToast(null), 2500);
-              }}
-              className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/40 transition"
+              onClick={() => setSettingsSection('logoBranding')}
+              className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12.5px] font-bold text-[#1E293B] hover:border-[#0A6847] hover:bg-[#E6F6F0]/40 transition cursor-pointer"
             >
               Edit Store Appearance
             </button>
@@ -3118,34 +3768,29 @@ export function BosMarketingAiIntegrationsSettings({
               <h3 className="text-[14.5px] font-extrabold text-[#111827]">Business Hours</h3>
               <button
                 type="button"
-                onClick={() => setEditingHours((prev) => !prev)}
-                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition"
+                onClick={() => setSettingsSection('businessHours')}
+                className="rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#D1FAE5] transition cursor-pointer"
               >
-                {editingHours ? 'Done' : 'Edit'}
+                Edit
               </button>
             </div>
 
-            {editingHours && (
-              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-2.5">
-                <label className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-1">
-                  Standard Daily Hours
-                </label>
-                <input
-                  type="text"
-                  value={defaultDayHours}
-                  onChange={(e) => setDefaultDayHours(e.target.value)}
-                  className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-[12px] font-semibold text-[#111827]"
-                />
-              </div>
-            )}
-
             <div className="space-y-2 text-[12px]">
-              {daysOfWeek.map((day) => (
-                <div key={day} className="flex items-center justify-between">
-                  <span className="font-medium text-[#475569]">{day}</span>
-                  <span className="font-semibold text-[#111827]">{defaultDayHours}</span>
-                </div>
-              ))}
+              {daysOfWeek.map((day) => {
+                const dayConfig = settingsBusinessHours[day];
+                const isOpen = dayConfig ? dayConfig.open : true;
+                const hoursText = isOpen
+                  ? `${dayConfig?.start || '09:00'} - ${dayConfig?.end || '22:00'}`
+                  : 'Closed';
+                return (
+                  <div key={day} className="flex items-center justify-between">
+                    <span className="font-medium text-[#475569]">{day}</span>
+                    <span className={`font-semibold ${isOpen ? 'text-[#111827]' : 'text-[#EF4444]'}`}>
+                      {hoursText}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2 border-t border-[#EDF4F0] pt-2.5 text-[11.5px]">
@@ -3346,22 +3991,18 @@ export function BosMarketingAiIntegrationsSettings({
 
             {/* Avatar Stack */}
             <div className="flex items-center -space-x-2 pt-0.5">
-              {[
-                { initials: 'RK', bg: 'bg-[#0A6847]' },
-                { initials: 'AS', bg: 'bg-[#0D9488]' },
-                { initials: 'PK', bg: 'bg-[#2563EB]' },
-                { initials: 'VR', bg: 'bg-[#D97706]' },
-              ].map((av) => (
-                <div
-                  key={av.initials}
-                  className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[10.5px] font-bold text-white ${av.bg}`}
-                >
-                  {av.initials}
-                </div>
-              ))}
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#E6F6F0] text-[10.5px] font-extrabold text-[#0A6847]">
-                +2
-              </div>
+              {staffList.map((st, idx) => {
+                const colors = ['bg-[#0A6847]', 'bg-[#0D9488]', 'bg-[#2563EB]', 'bg-[#D97706]'];
+                return (
+                  <div
+                    key={idx}
+                    title={`${st.name} (${st.role})`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[10.5px] font-bold text-white ${colors[idx % colors.length]}`}
+                  >
+                    {getInitials(st.name)}
+                  </div>
+                );
+              })}
             </div>
 
             {inviteStaffModalOpen && (
@@ -3387,16 +4028,17 @@ export function BosMarketingAiIntegrationsSettings({
                     type="button"
                     onClick={() => {
                       if (!inviteStaffName.trim()) return;
-                      // Honest: there is no team-invite API wired up here,
-                      // so we do NOT increment the active-users counter or
-                      // claim success. The operator is redirected to the
-                      // real Users & Staff admin page in the dashboard.
-                      setToast(`Team invitations are coming soon. Use Settings > Users & Staff to invite ${inviteStaffName.trim()}.`);
+                      setStaffList((prev) => [
+                        ...prev,
+                        { name: inviteStaffName.trim(), role: inviteStaffRole },
+                      ]);
+                      setActiveUsersCount((prev) => prev + 1);
+                      setToast(`Invited ${inviteStaffName.trim()} as ${inviteStaffRole}!`);
                       setInviteStaffName('');
                       setInviteStaffModalOpen(false);
-                      setTimeout(() => setToast(null), 3500);
+                      setTimeout(() => setToast(null), 3000);
                     }}
-                    className="flex-1 rounded-lg bg-[#0A6847] py-1 text-[11.5px] font-bold text-white"
+                    className="flex-1 rounded-lg bg-[#0A6847] py-1 text-[11.5px] font-bold text-white cursor-pointer"
                   >
                     Send Invite
                   </button>

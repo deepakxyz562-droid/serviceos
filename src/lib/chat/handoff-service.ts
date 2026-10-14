@@ -11,6 +11,7 @@
 import { db } from '@/lib/db';
 import { createNotification } from '@/lib/notifications';
 import { checkAgentAvailability, type AgentAvailabilityResult } from '@/lib/presence';
+import { findOrCreateLiveChatConversation, mirrorLiveChatMessageToInbox } from '@/lib/live-chat-bridge';
 
 export interface ChatHistoryMessage {
   role?: 'user' | 'assistant' | 'system';
@@ -247,58 +248,121 @@ export async function requestHumanHandoff(
     const liveSessionId = session?.id || null;
 
     if (liveSessionId) {
-      // Seed prior chat history for operator console context
+      const inboxTenantId = tenantId || session?.tenantId || 'default';
+      let inboxConversationId: string | null = null;
+      try {
+        inboxConversationId = await findOrCreateLiveChatConversation(
+          liveSessionId,
+          inboxTenantId,
+          visitorName,
+          visitorPhone,
+          visitorEmail
+        );
+      } catch (bridgeErr) {
+        console.warn('[handoff-service] Failed to create live chat conversation bridge:', bridgeErr);
+      }
+
+      // Seed prior chat history for operator console context and omnichannel inbox
       if (Array.isArray(history) && history.length > 0) {
         for (const h of history.slice(-10)) {
           const body = h.content || h.text;
           if (!body) continue;
           const isUser = h.role === 'user' || h.sender === 'user';
-          await db.publicChatMessage.create({
+          const historyMsg = await db.publicChatMessage.create({
             data: {
               sessionId: liveSessionId,
               senderType: isUser ? 'visitor' : 'system',
               senderName: isUser ? visitorName : agentName,
               body: String(body),
             },
-          }).catch(() => {});
+          }).catch(() => null);
+
+          if (historyMsg && inboxTenantId) {
+            await mirrorLiveChatMessageToInbox(
+              historyMsg.id,
+              liveSessionId,
+              inboxTenantId,
+              historyMsg.senderType,
+              historyMsg.body,
+              null,
+              historyMsg.senderName
+            ).catch(() => {});
+          }
         }
       }
 
       // Add the user's triggering message if provided
       if (message) {
-        await db.publicChatMessage.create({
+        const userMsg = await db.publicChatMessage.create({
           data: {
             sessionId: liveSessionId,
             senderType: 'visitor',
             senderName: visitorName,
             body: message,
           },
-        }).catch(() => {});
+        }).catch(() => null);
+
+        if (userMsg && inboxTenantId) {
+          await mirrorLiveChatMessageToInbox(
+            userMsg.id,
+            liveSessionId,
+            inboxTenantId,
+            'visitor',
+            userMsg.body,
+            null,
+            userMsg.senderName
+          ).catch(() => {});
+        }
       }
 
       // Add system escalation alert banner
-      await db.publicChatMessage.create({
+      const alertMsg = await db.publicChatMessage.create({
         data: {
           sessionId: liveSessionId,
           senderType: 'system',
           senderName: 'System',
           body: `🔔 Visitor requested live human agent escalation. Summary: ${recap}`,
         },
-      }).catch(() => {});
+      }).catch(() => null);
+
+      if (alertMsg && inboxTenantId) {
+        await mirrorLiveChatMessageToInbox(
+          alertMsg.id,
+          liveSessionId,
+          inboxTenantId,
+          'system',
+          alertMsg.body,
+          null,
+          'System'
+        ).catch(() => {});
+      }
 
       // Dispatch urgent in-app notification to all tenant/workspace operators and admins
       try {
-        const recipients = await db.user.findMany({
+        let recipients = await db.user.findMany({
           where: {
             ...(tenantId ? { tenantId } : { workspaceId: effectiveWorkspaceId }),
-            role: { in: ['owner', 'admin', 'operator', 'agent'] },
+            role: { in: ['owner', 'admin', 'operator', 'agent', 'OWNER', 'ADMIN', 'OPERATOR', 'AGENT'] },
             isActive: true,
           },
           select: { id: true },
         });
 
-        const snippet = message.length > 90 ? `${message.slice(0, 87)}...` : message;
+        // Fallback: If no users with specific operator roles exist, notify any active tenant users
+        if (recipients.length === 0) {
+          recipients = await db.user.findMany({
+            where: {
+              ...(tenantId ? { tenantId } : { workspaceId: effectiveWorkspaceId }),
+              isActive: true,
+            },
+            take: 5,
+            select: { id: true },
+          });
+        }
+
+        const snippet = message && message.length > 90 ? `${message.slice(0, 87)}...` : message;
         const alertText = `${visitorName || 'A visitor'} requested live specialist assistance on ${agentName}${snippet ? `: "${snippet}"` : ''}`;
+        const targetConversationId = inboxConversationId || `live_chat_${liveSessionId}`;
 
         await Promise.all(
           recipients.map((r) =>
@@ -310,11 +374,12 @@ export async function requestHumanHandoff(
               title: '🔔 Live Agent Escalation',
               message: alertText,
               priority: 'urgent',
-              actionUrl: `/?view=liveChat&session=${liveSessionId}`,
-              actionLabel: 'Join Live Chat',
+              actionUrl: `/?product=bgos&view=omnichannel&conversation=${targetConversationId}`,
+              actionLabel: 'Open in Inbox',
               senderType: 'system',
               metadataJson: JSON.stringify({
                 sessionId: liveSessionId,
+                conversationId: targetConversationId,
                 agentName,
                 visitorName,
                 source: 'live_chat_escalation',

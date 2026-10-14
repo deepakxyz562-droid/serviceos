@@ -150,6 +150,445 @@ const problemCards = [
     description: 'Writing invoices by hand, chasing payments for weeks, no visibility into cash flow. You finish the job but wait weeks to get paid.',
     image: '/images/landing/problem-invoices.png',
   },
+];
+
+const howItWorksSteps = [
+  {
+    step: 1,
+    title: 'Capture Every Lead',
+    subtitle: 'Email · SMS · Web Forms · Calls',
+    description: 'Every inquiry — from email, SMS, web form, or phone call — auto-lands in one unified inbox. Nothing is missed, nothing is duplicated.',
+    icon: Target,
+    image: '/images/landing/step-capture.png',
+  },
+  {
+    step: 2,
+    title: 'Dispatch & Track Jobs',
+    subtitle: 'Smart Routing · Real-time',
+    description: 'Assign jobs to the nearest available technician with smart auto-dispatch, live status tracking, and automated customer notifications.',
+    icon: Route,
+    image: '/images/landing/step-dispatch.png',
+  },
+  {
+    step: 3,
+    title: 'Get Paid Faster',
+    subtitle: 'Invoicing · Payments · Reminders',
+    description: 'Auto-generate invoices the moment a job completes. Send reminders via Email & SMS, collect payments online, and reconcile instantly.',
+    icon: DollarSign,
+    image: '/images/landing/step-invoice.png',
+  },
+];
+
+const coreFlowSteps = [
+  { label: 'Lead', icon: Target },
+  { label: 'Booking', icon: Calendar },
+  { label: 'Dispatch', icon: Route },
+  { label: 'Assignment', icon: ClipboardList },
+  { label: 'Communication', icon: MessageSquare },
+  { label: 'Invoice', icon: Receipt },
+  { label: 'Payment', icon: CreditCard },
+  { label: 'Review', icon: Star },
+  { label: 'Analytics', icon: BarChart3 },
+];
+
+const featurePillars = [
+  {
+    icon: Target,
+    title: 'CRM & Leads',
+    tagline: 'Never lose a lead again',
+    image: '/images/landing/pillar-crm.png',
+    features: ['Leads pipeline & qualification', 'Customer 360° view', 'Sales pipeline kanban', 'Smart segments & tags', 'Lead discovery & scoring', 'Drag-and-drop form builder'],
+  },
+  {
+    icon: Calendar,
+    title: 'Operations & Dispatch',
+    tagline: 'Run jobs like clockwork',
+    image: '/images/landing/pillar-operations.png',
+    features: ['Bookings & calendar', 'Smart dispatch center', 'Smart auto-dispatch', 'Employee timesheets', 'Service catalog & checklists', 'Job status tracking'],
+  },
+  {
+    icon: Inbox,
+    title: 'Omnichannel Communication',
+    tagline: 'Reach customers where they are',
+    image: '/images/landing/pillar-communication.png',
+    features: ['Unified inbox (Email + SMS)', 'Email campaigns', 'SMS broadcasts', 'Push notifications', 'Marketing templates', 'Omnichannel journeys'],
+  },
+  {
+    icon: Wallet,
+    title: 'Finance & Automation',
+    tagline: 'Get paid faster, work less',
+    image: '/images/landing/pillar-finance.png',
+    features: ['Quotes & estimates', 'Invoices & payments', 'Expenses tracking', 'No-code workflow builder', 'AI Assistant & automations', 'Custom workflow triggers'],
+  },
+];
+
+const aiHighlights = [
+  { icon: PhoneCall, title: 'AI Receptionist', description: 'Answers every call 24/7, books appointments, qualifies leads, and routes urgent calls — never miss a customer again.' },
+  { icon: Bot, title: 'AI Assistant', description: 'Drafts replies, summarizes threads, suggests next-best-actions across your inbox.' },
+  { icon: Megaphone, title: 'AI Campaign Generator', description: 'Generates email & SMS campaign copy, audience segments, and send-time suggestions.' },
+  { icon: MessageSquare, title: 'Chatbot Builder', description: 'Build custom chatbots for your website and inbox to qualify leads and answer FAQs 24/7.' },
+];
+
+// AI Receptionist — flagship voice-agent feature.
+const aiReceptionistCapabilities = [
+  {
+    icon: PhoneCall,
+    title: 'Answers every call, 24/7',
+    description: 'No more missed leads after hours. Your AI agent picks up on the first ring — weekends, holidays, and 3 AM emergencies included.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Books appointments live',
+    description: 'Checks your real-time calendar, quotes availability, and confirms bookings straight into your schedule — no callbacks needed.',
+  },
+  {
+    icon: UserCheck,
+    title: 'Qualifies & captures leads',
+    description: 'Asks the right qualifying questions, captures name, address, and job details, then drops a clean lead into your CRM.',
+  },
+  {
+    icon: PhoneForwarded,
+    title: 'Transfers urgent calls',
+    description: 'Recognises emergencies (no heat, burst pipe, gas leak) and warm-transfers to your on-call technician instantly.',
+  },
+  {
+    icon: Voicemail,
+    title: 'Takes detailed messages',
+    description: 'When a transfer isn\'t needed, the agent records a structured message with transcript, summary, and callback number.',
+  },
+  {
+    icon: Languages,
+    title: 'Speaks 30+ languages',
+    description: 'Greets callers in their preferred language and switches mid-call. Perfect for multilingual neighbourhoods.',
+  },
+];
+
+const aiReceptionistSteps = [
+  {
+    step: '01',
+    title: 'Connect your Vapi.ai key',
+    description: 'Bring your own Vapi account (BYOK). Paste your API key once in Settings → AI Voice. No Twilio contract, no phone-line setup.',
+  },
+  {
+    step: '02',
+    title: 'Pick a local number & train your agent',
+    description: 'Buy a local number in one click, choose a voice, and pick an industry preset. Your agent learns your services, hours, and pricing.',
+  },
+  {
+    step: '03',
+    title: 'Never miss a call again',
+    description: 'Forward your business line to your new AI number. Every call is answered, logged, transcribed, and synced to your CRM automatically.',
+  },
+];
+
+// Sample live-call transcript shown in the AI Receptionist showcase mockup.
+const aiReceptionistTranscript = [
+  { role: 'agent', text: 'Thanks for calling Brightwater Plumbing, this is Riley. How can I help you today?', time: '0:00' },
+  { role: 'caller', text: 'Hi, my kitchen sink is leaking pretty badly — water is everywhere.', time: '0:04' },
+  { role: 'agent', text: 'I\'m sorry to hear that. I can get a technician out to you today. What\'s your address?', time: '0:09' },
+  { role: 'caller', text: '412 Maple Street, Apartment 3B.', time: '0:14' },
+  { role: 'agent', text: 'Got it. I have an opening at 2:15 PM — shall I lock that in for you?', time: '0:19' },
+  { role: 'caller', text: 'Yes please, that works.', time: '0:23' },
+];
+
+const primaryChannels = [
+  {
+    icon: Mail,
+    title: 'Email',
+    setup: 'Instant',
+    approval: 'None required',
+    bestFor: 'Quotes, invoices, receipts, newsletters',
+    description: 'Send branded emails from day one. Built-in templates for quotes, invoices, receipts, and campaigns.',
+    image: '/images/landing/channel-email.png',
+    alt: 'Fieseros branded email template for quotes, invoices, and receipts',
+    primary: true,
+  },
+  {
+    icon: MessageSquareText,
+    title: 'SMS',
+    setup: 'Instant',
+    approval: 'None required',
+    bestFor: 'Reminders, confirmations, urgent updates',
+    description: 'Reach customers instantly with SMS reminders, booking confirmations, and payment links.',
+    image: '/images/landing/channel-sms.png',
+    alt: 'Fieseros SMS message showing a booking confirmation and payment link',
+    primary: true,
+  },
+  {
+    icon: Bell,
+    title: 'Push Notifications',
+    setup: 'Instant',
+    approval: 'None required',
+    bestFor: 'Job updates, owner alerts, real-time pings',
+    description: 'Keep owners and technicians instantly informed with web and mobile push notifications for every job lifecycle event.',
+    image: '/images/landing/channel-push.png',
+    alt: 'Fieseros push notification alert for real-time job updates',
+    primary: true,
+  },
+];
+
+const personas = [
+  {
+    icon: Briefcase,
+    title: 'Business Owner',
+    image: '/images/landing/persona-owner.png',
+    points: ['Real-time revenue & KPI dashboards', 'Full visibility into operations', 'Automated reports in your inbox'],
+  },
+  {
+    icon: Headphones,
+    title: 'Dispatcher',
+    image: '/images/landing/persona-dispatcher.png',
+    points: ['Smart dispatch board with map view', 'Drag-and-drop job assignment', 'Real-time technician tracking'],
+  },
+  {
+    icon: HardHat,
+    title: 'Field Technician',
+    image: '/images/landing/persona-technician.png',
+    points: ['Mobile app with job details & checklists', 'Photo capture & customer signatures', 'Turn-by-turn navigation'],
+  },
+  {
+    icon: UserCheck,
+    title: 'Customer',
+    image: '/images/landing/persona-customer.png',
+    points: ['Self-service booking portal', 'Email & SMS reminders', 'One-tap invoice payment'],
+  },
+];
+
+// NOTE (Creem compliance): These are factual product capabilities (not
+// customer-outcome claims). Previous values like "8 hrs saved", "2× faster
+// payments", or "35% fewer no-shows" implied aggregated customer results we
+// cannot evidence. App store reviewers require verifiable proof for such claims.
+const roiStats = [
+  { value: 25, suffix: '+', label: 'Industries supported', icon: Briefcase },
+  { value: 3, suffix: '', label: 'Notification channels', icon: Bell },
+  { value: 14, suffix: '', label: 'Day free trial', icon: CalendarCheck },
+  { value: 24, suffix: '/7', label: 'AI receptionist', icon: Bot },
+];
+
+interface PricingPlan {
+  name: string;
+  monthlyPrice: number | null;
+  yearlyPrice: number | null;
+  description: string;
+  icon: LucideIcon;
+  features: string[];
+  popular?: boolean;
+  cta: string;
+}
+
+const pricingPlans: PricingPlan[] = [
+  {
+    name: 'Launch Special',
+    monthlyPrice: 5,
+    yearlyPrice: null, // Monthly only
+    description: 'Founding member offer — first 100 only',
+    icon: Zap,
+    features: ['Up to 5 users', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Cancel anytime'],
+    popular: true,
+    cta: 'Claim Launch Special',
+  },
+  {
+    name: 'Starter',
+    monthlyPrice: 29,
+    yearlyPrice: 290,
+    description: 'For solo entrepreneurs',
+    icon: Zap,
+    features: ['Up to 5 users', '200 jobs/month', 'Email & SMS notifications', 'Basic CRM & leads', 'Invoice generation', 'Email support'],
+    cta: 'Start Free Trial',
+  },
+  {
+    name: 'Professional',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
+    description: 'For growing teams',
+    icon: Building2,
+    features: ['Up to 10 users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'AI Receptionist (BYOK)', 'Priority support'],
+    popular: true,
+    cta: 'Start Free Trial',
+  },
+  {
+    name: 'Business',
+    monthlyPrice: 149,
+    yearlyPrice: 1490,
+    description: 'For scaling businesses',
+    icon: Shield,
+    features: ['Up to 25 users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'No-code automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
+    cta: 'Start Free Trial',
+  },
+  {
+    name: 'Enterprise',
+    monthlyPrice: null,
+    yearlyPrice: null,
+    description: 'For large organizations',
+    icon: Globe,
+    features: ['Everything in Pro', 'White-label branding', 'Custom integrations', 'SLA guarantee', 'Dedicated account manager', 'Onboarding & training'],
+    cta: 'Contact Sales',
+  },
+];
+
+const faqs = [
+  {
+    question: 'How does the AI Receptionist work, and do I need a Twilio account?',
+    answer: 'The AI Receptionist is a voice agent that answers every call to your business number 24/7 — it greets callers, qualifies leads, books appointments into your calendar, takes messages, and transfers urgent calls to your on-call technician. It is powered by Vapi.ai using a bring-your-own-key (BYOK) model: you paste your Vapi API key once in Settings → AI Voice, buy a local number in one click, and forward your line. No separate Twilio account, no phone-line installation. Numbers cost ~$2/month and calls ~$0.05–0.15/min (which already includes speech-to-text, the LLM brain, and text-to-speech), billed directly by Vapi. Available on Growth and Pro plans.',
+  },
+  {
+    question: 'What can the AI Receptionist actually do on a call?',
+    answer: 'Quite a lot. Out of the box your agent can: answer in 30+ languages and switch mid-call, quote real-time availability from your calendar and confirm bookings, ask qualifying questions and capture name, address, and job details into your CRM, look up service prices and business hours, take structured voicemails with a full transcript and summary, and warm-transfer genuine emergencies (no heat, burst pipe, gas leak) to your on-call tech. Every call is logged with a transcript, sentiment analysis, and cost breakdown in your Call History. You can customise the voice, greeting, and knowledge base per agent.',
+  },
+  {
+    question: 'Do I need any third-party approvals to get started?',
+    answer: 'No. Fieseros works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. You can capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one. Everything you need to run your service business is included on every plan.',
+  },
+  {
+    question: 'How long does it take to get set up?',
+    answer: 'Most businesses are up and running in under an hour. Sign up with your email, import your customer list (CSV upload), set up your services and pricing, and start capturing leads immediately. Email, SMS, and Push notifications work from minute one — no setup or approvals required.',
+  },
+  {
+    question: 'Can I import my existing customers?',
+    answer: 'Absolutely. Use our CSV import tool to bring in customers, contacts, and job history from spreadsheets, your old CRM, or accounting software. You can also export invoices and reports as CSV for any accounting tool, and use webhooks to connect Fieseros to external tools like Zapier or your own n8n instance.',
+  },
+  {
+    question: 'What can I automate with the automation builder?',
+    answer: 'Our built-in no-code automation builder lets you automate tasks like sending SMS reminders before appointments, updating customer records when jobs complete, generating recurring invoices on schedule, and triggering follow-up campaigns after payments — all without writing code. Pro and Enterprise plans include custom workflow triggers and webhook integrations so you can connect Fieseros to external tools like Zapier or your own n8n instance.',
+  },
+  {
+    question: 'Do you charge per message or per call?',
+    answer: 'Email and SMS are included in every plan with generous monthly limits (1,000 emails + 1,000 SMS on Growth, unlimited on Pro). Push and in-app notifications are always unlimited. No hidden fees, no per-seat charges, no per-message surprises.'
+  },
+  {
+    question: 'Is my data secure and backed up?',
+    answer: 'Yes. We use enterprise-grade AES-256 encryption for all data at rest and in transit. Daily automated backups, 99.9% uptime SLA, and SOC 2 Type II compliance. Your business data is safer with us than on spreadsheets or paper. You can export or delete your data anytime — see our Data Deletion policy.',
+  },
+  {
+    question: 'Can I try Fieseros before committing?',
+    answer: 'Of course. We offer a 14-day free trial with full access to all Growth plan features. No credit card required. You can also explore our Live Demo — a real plumbing business with 2,000 customers, 300 bookings, and 500 invoices — no signup needed.',
+  },
+  {
+    question: 'What happens after my free trial ends?',
+    answer: 'If you don\'t subscribe, your account is paused (not deleted) for 30 days so you can pick up where you left off. After 30 days of inactivity, your data is permanently deleted per our Data Deletion policy. Subscribe at any time during the pause to resume instantly.',
+  },
+];
+
+// SEO cornerstone industry pages — linked from navbar dropdown + footer.
+const seoIndustries = [
+  { label: 'Plumbing Software', href: '/plumbing-software' },
+  { label: 'HVAC Software', href: '/hvac-software' },
+  { label: 'Cleaning Business Software', href: '/cleaning-business-software' },
+  { label: 'Electrical Contractor Software', href: '/electrical-contractor-software' },
+  { label: 'Landscaping Software', href: '/landscaping-software' },
+  { label: 'Lawn Care Software', href: '/lawn-care-software' },
+  { label: 'Painting Software', href: '/painting-software' },
+  { label: 'Handyman Software', href: '/handyman-software' },
+  { label: 'Tree Care Software', href: '/tree-care-software' },
+  { label: 'Snow Removal Software', href: '/snow-removal-software' },
+  { label: 'Pest Control Software', href: '/pest-control-software' },
+  { label: 'Roofing Software', href: '/roofing-software' },
+  { label: 'Pool Service Software', href: '/pool-service-software' },
+  { label: 'Window Cleaning Software', href: '/window-cleaning-software' },
+  { label: 'Concrete Software', href: '/concrete-software' },
+  { label: 'Garage Door Software', href: '/garage-door-software' },
+  { label: 'Solar Software', href: '/solar-software' },
+  { label: 'Pet Services Software', href: '/pet-services-software' },
+];
+
+const seoCompare = [
+  { label: 'Fieseros vs Typeform', href: '/fieseros-vs-typeform' },
+  { label: 'Fieseros vs Chatbase', href: '/fieseros-vs-chatbase' },
+  { label: 'Fieseros vs Tidio', href: '/fieseros-vs-tidio' },
+  { label: 'Fieseros vs Jotform', href: '/fieseros-vs-jotform' },
+  { label: 'Fieseros vs ElfChatbot', href: '/fieseros-vs-elfchatbot' },
+  { label: 'AI Chatbot Alternatives', href: '/ai-chatbot-alternatives' },
+  { label: 'Conversational Forms Guide', href: '/conversational-forms-alternatives' },
+  { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
+  { label: 'Housecall Pro Alternatives', href: '/housecall-pro-alternatives' },
+  { label: 'ServiceTitan Alternatives', href: '/servicetitan-alternatives' },
+];
+
+
+const seoUseCases = [
+  { label: 'All Use Cases Hub', href: '/use-cases' },
+  { label: 'AI Lead Capture', href: '/use-cases/lead-capture' },
+  { label: 'Appointment Booking', href: '/use-cases/appointment-booking' },
+  { label: 'Quote Generation', href: '/use-cases/quote-generation' },
+  { label: 'Payment Collection', href: '/use-cases/payment-collection' },
+  { label: 'Review Collection', href: '/use-cases/review-collection' },
+  { label: 'Lead Nurturing', href: '/use-cases/lead-nurturing' },
+  { label: 'AI Customer Support', href: '/use-cases/customer-support' },
+  { label: 'Job Dispatch', href: '/use-cases/job-dispatch' },
+];
+
+const seoFeatures = [
+  { label: 'Field Service Software', href: '/field-service-software' },
+  { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
+  { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
+  { label: 'Customer CRM', href: '/customer-crm' },
+  { label: 'Technician App', href: '/technician-app' },
+  { label: 'Automations', href: '/automations' },
+];
+
+const footerLinks = {
+  aiForms: [
+    { label: '24/7 AI Voice Receptionist', href: '/ai-employee' },
+    { label: 'AI Chatbot Builder', href: '/chatbot' },
+    { label: 'GPTForm™ AI Platform', href: '/gptform' },
+    { label: '24/7 AI Employee & Agent', href: '/ai-agent' },
+    { label: '20,000+ Form Templates', href: '/templates' },
+    { label: 'Quote Calculators', href: '/templates/quote' },
+  ],
+  product: [
+    { label: 'Features Hub', href: '/features' },
+    { label: 'Field Service Software', href: '/field-service-software' },
+    { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
+    { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
+    { label: 'Verified Marketplace', href: '/marketplace' },
+    { label: 'Pricing Plans', href: '/pricing' },
+  ],
+  industries: seoIndustries,
+  useCases: seoUseCases,
+  compare: seoCompare,
+  resources: [
+    { label: 'GPTForm™ Smart Forms', href: '/gptform' },
+    { label: '20,000+ Form Templates', href: '/templates' },
+    { label: 'Contractor Marketplace', href: '/marketplace' },
+    { label: 'Free Invoice Generator', href: '/invoice-generator' },
+    { label: 'Contact Us', href: '/contact-us' },
+    ...seoFeatures,
+  ],
+  legal: [
+    { label: 'Privacy Policy', href: '/privacy-policy' },
+    { label: 'Terms of Service', href: '/terms-of-service' },
+    { label: 'Cookie Policy', href: '/cookie-policy' },
+    { label: 'Data Deletion', href: '/data-deletion' },
+  ],
+};
+
+function AnimatedSection({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <motion.div ref={ref} initial="hidden" animate={isInView ? 'visible' : 'hidden'} variants={staggerContainer} className={className}>
+      {children}
+    </motion.div>
+  );
+}
+
+function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <motion.nav
+      initial={{ y: -100 }}
+      animate={{ y: 0 }}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 pt-[env(safe-area-inset-top,0px)] ${
+        scrolled ? 'bg-white/85 backdrop-blur-xl border-b border-border shadow-sm' : 'bg-transparent'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -512,9 +951,6 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
           </motion.div>
         </div>
       </div>
-
-      {/* Bottom fade into next section */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-muted/30 to-transparent" />
     </section>
   );
 }

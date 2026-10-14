@@ -146,7 +146,16 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const { message = '', history = [], agentConfig } = body;
+    const {
+      message = '',
+      history = [],
+      agentConfig,
+      sessionId = body.sessionId,
+      visitor = body.visitor,
+      visitorName = body.visitorName,
+      visitorEmail = body.visitorEmail,
+      visitorPhone = body.visitorPhone,
+    } = body;
 
     const agent: FormAgentData = await loadAgentFromDb(id, agentConfig);
     const lowerMessage = (message || '').toLowerCase().trim();
@@ -581,12 +590,24 @@ Instructions: Tell the customer their exact order status and details warmly!`;
       const effectiveTenantId = formRecord?.tenantId || agent.tenantId || authUser?.tenantId || null;
       const effectiveWorkspaceId = formRecord?.workspaceId || authUser?.workspaceId || null;
 
+      const resolvedVisitor =
+        visitor ||
+        (visitorName || visitorEmail || visitorPhone
+          ? {
+              name: visitorName,
+              email: visitorEmail,
+              phone: visitorPhone,
+            }
+          : undefined);
+
       const handoff = await requestHumanHandoff({
         tenantId: effectiveTenantId,
         workspaceId: effectiveWorkspaceId,
         agentId: agent.id && agent.id !== 'preview' ? agent.id : null,
         agentName: agent.name || 'AI Assistant',
         formId: primaryConnectedForm?.id || null,
+        visitor: resolvedVisitor,
+        existingSessionId: sessionId || null,
         message,
         history,
       });

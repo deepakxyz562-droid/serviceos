@@ -437,3 +437,386 @@ export function generateGstInvoiceHtml(
 </html>
   `.trim();
 }
+
+export function extractGstStateCode(gstinOrState?: string): string {
+  if (!gstinOrState) return '07';
+  const clean = gstinOrState.trim();
+  const match = clean.match(/^(\d{2})/);
+  if (match) return match[1];
+  const stateMap: Record<string, string> = {
+    delhi: '07',
+    'uttar pradesh': '09',
+    maharashtra: '27',
+    karnataka: '29',
+    'tamil nadu': '33',
+    gujarat: '24',
+    haryana: '06',
+    punjab: '03',
+    rajasthan: '08',
+    'west bengal': '19',
+    bihar: '10',
+    telangana: '36',
+    'andhra pradesh': '37',
+    kerala: '32',
+    odisha: '21',
+    'madhya pradesh': '23',
+    chhattisgarh: '22',
+    jharkhand: '20',
+    uttarakhand: '05',
+    assam: '18',
+    goa: '30',
+  };
+  const lower = clean.toLowerCase();
+  for (const [s, code] of Object.entries(stateMap)) {
+    if (lower.includes(s)) return code;
+  }
+  return '07';
+}
+
+export function computeIrnHash(
+  supplierGstin: string,
+  finYear: string,
+  docType: string,
+  docNumber: string
+): string {
+  const raw = `${supplierGstin || '07TESTG1234F1Z5'}${finYear || '2026-27'}${docType || 'INV'}${docNumber || '1'}`.toUpperCase();
+  let h1 = 0xdeadbeef, h2 = 0x41c64e6d, h3 = 0x12345678, h4 = 0x87654321;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+    h3 = Math.imul(h3 ^ ch, 2246822507);
+    h4 = Math.imul(h4 ^ ch, 3266489909);
+  }
+  const p1 = ((h1 ^ (h1 >>> 16)) >>> 0).toString(16).padStart(8, '0');
+  const p2 = ((h2 ^ (h2 >>> 16)) >>> 0).toString(16).padStart(8, '0');
+  const p3 = ((h3 ^ (h3 >>> 16)) >>> 0).toString(16).padStart(8, '0');
+  const p4 = ((h4 ^ (h4 >>> 16)) >>> 0).toString(16).padStart(8, '0');
+  const p5 = ((h1 ^ h3) >>> 0).toString(16).padStart(8, '0');
+  const p6 = ((h2 ^ h4) >>> 0).toString(16).padStart(8, '0');
+  const p7 = ((h1 ^ h2 ^ h3) >>> 0).toString(16).padStart(8, '0');
+  const p8 = ((h2 ^ h3 ^ h4) >>> 0).toString(16).padStart(8, '0');
+  return `${p1}${p2}${p3}${p4}${p5}${p6}${p7}${p8}`.toLowerCase();
+}
+
+export interface EWayBillPayload {
+  supplyType: 'O' | 'I';
+  subSupplyType: string;
+  docType: string;
+  docNo: string;
+  docDate: string;
+  fromGstin: string;
+  fromTrdName: string;
+  fromAddr1: string;
+  fromPlace: string;
+  fromPincode: number;
+  fromStateCode: number;
+  toGstin: string;
+  toTrdName: string;
+  toAddr1: string;
+  toPlace: string;
+  toPincode: number;
+  toStateCode: number;
+  totalValue: number;
+  cgstValue: number;
+  sgstValue: number;
+  igstValue: number;
+  cessValue: number;
+  totInvValue: number;
+  transporterId?: string;
+  transporterName?: string;
+  transDocNo?: string;
+  transDocDate?: string;
+  transMode: string;
+  distance: number;
+  vehicleNo?: string;
+  vehicleType: string;
+  itemList: Array<{
+    itemNo: number;
+    productName: string;
+    productDesc?: string;
+    hsnCode: number;
+    quantity: number;
+    qtyUnit: string;
+    cgstRate: number;
+    sgstRate: number;
+    igstRate: number;
+    cessRate: number;
+    taxableAmount: number;
+  }>;
+}
+
+export function generateEWayBillPayload(params: {
+  invoiceNumber: string;
+  invoiceDate: string;
+  store: {
+    businessName: string;
+    gstin?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
+  customer: {
+    name: string;
+    gstin?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
+  items: Array<{
+    name: string;
+    hsnSac?: string;
+    qty: number;
+    unit?: string;
+    rate: number;
+    gstRate: number;
+    taxableAmount: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+  }>;
+  transport?: {
+    transporterId?: string;
+    transporterName?: string;
+    vehicleNo?: string;
+    distanceKm?: number;
+    mode?: string;
+  };
+  totals: {
+    taxableAmount: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    totalAmount: number;
+  };
+}): EWayBillPayload {
+  const fromState = Number(extractGstStateCode(params.store.gstin || params.store.state)) || 7;
+  const toState = Number(extractGstStateCode(params.customer.gstin || params.customer.state)) || fromState;
+  const isInterstate = fromState !== toState;
+
+  const dateParts = params.invoiceDate.split(/[-/ ]/);
+  const formattedDate = dateParts.length === 3 ? `${dateParts[0].padStart(2, '0')}/${dateParts[1].padStart(2, '0')}/${dateParts[2]}` : new Date().toLocaleDateString('en-GB');
+
+  return {
+    supplyType: 'O',
+    subSupplyType: '1',
+    docType: 'INV',
+    docNo: params.invoiceNumber,
+    docDate: formattedDate,
+    fromGstin: params.store.gstin || 'URP',
+    fromTrdName: params.store.businessName || 'Business Store',
+    fromAddr1: params.store.address || 'Store Address',
+    fromPlace: params.store.city || 'City',
+    fromPincode: Number(params.store.pincode?.replace(/\D/g, '')) || 110001,
+    fromStateCode: fromState,
+    toGstin: params.customer.gstin || 'URP',
+    toTrdName: params.customer.name || 'Walk-in Customer',
+    toAddr1: params.customer.address || 'Delivery Address',
+    toPlace: params.customer.city || params.store.city || 'City',
+    toPincode: Number(params.customer.pincode?.replace(/\D/g, '')) || 110001,
+    toStateCode: toState,
+    totalValue: Math.round(params.totals.taxableAmount * 100) / 100,
+    cgstValue: isInterstate ? 0 : Math.round(params.totals.cgst * 100) / 100,
+    sgstValue: isInterstate ? 0 : Math.round(params.totals.sgst * 100) / 100,
+    igstValue: isInterstate ? Math.round(params.totals.igst * 100) / 100 : 0,
+    cessValue: 0,
+    totInvValue: Math.round(params.totals.totalAmount * 100) / 100,
+    transporterId: params.transport?.transporterId || '',
+    transporterName: params.transport?.transporterName || '',
+    transMode: params.transport?.mode || '1',
+    distance: Number(params.transport?.distanceKm) || 25,
+    vehicleNo: params.transport?.vehicleNo || '',
+    vehicleType: 'R',
+    itemList: params.items.map((it, idx) => ({
+      itemNo: idx + 1,
+      productName: it.name,
+      productDesc: it.name,
+      hsnCode: Number(it.hsnSac?.replace(/\D/g, '')) || 19023090,
+      quantity: it.qty,
+      qtyUnit: (it.unit || 'NOS').toUpperCase(),
+      cgstRate: isInterstate ? 0 : it.gstRate / 2,
+      sgstRate: isInterstate ? 0 : it.gstRate / 2,
+      igstRate: isInterstate ? it.gstRate : 0,
+      cessRate: 0,
+      taxableAmount: Math.round(it.taxableAmount * 100) / 100,
+    })),
+  };
+}
+
+export interface EInvoicePayload {
+  Version: string;
+  TranDtls: {
+    TaxSch: string;
+    SupTyp: string;
+    RegRev: string;
+  };
+  DocDtls: {
+    Typ: string;
+    No: string;
+    Dt: string;
+  };
+  SellerDtls: {
+    Gstin: string;
+    LglNm: string;
+    TrdNm: string;
+    Addr1: string;
+    Loc: string;
+    Pin: number;
+    Stcd: string;
+    Ph?: string;
+  };
+  BuyerDtls: {
+    Gstin: string;
+    LglNm: string;
+    TrdNm?: string;
+    Pos: string;
+    Addr1: string;
+    Loc: string;
+    Pin: number;
+    Stcd: string;
+  };
+  ValDtls: {
+    AssVal: number;
+    CgstVal: number;
+    SgstVal: number;
+    IgstVal: number;
+    TotInvVal: number;
+  };
+  ItemList: Array<{
+    SlNo: string;
+    PrdDesc: string;
+    IsServc: string;
+    HsnCd: string;
+    Qty: number;
+    Unit: string;
+    UnitPrice: number;
+    TotAmt: number;
+    AssAmt: number;
+    GstRt: number;
+    CgstAmt: number;
+    SgstAmt: number;
+    IgstAmt: number;
+    TotItemVal: number;
+  }>;
+  Irn?: string;
+  SignedQRCode?: string;
+}
+
+export function generateEInvoicePayload(params: {
+  invoiceNumber: string;
+  invoiceDate: string;
+  store: {
+    businessName: string;
+    gstin?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+    phone?: string;
+  };
+  customer: {
+    name: string;
+    gstin?: string;
+    address?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
+  items: Array<{
+    name: string;
+    hsnSac?: string;
+    qty: number;
+    unit?: string;
+    rate: number;
+    gstRate: number;
+    taxableAmount: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+  }>;
+  totals: {
+    taxableAmount: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    totalAmount: number;
+  };
+}): EInvoicePayload {
+  const fromState = extractGstStateCode(params.store.gstin || params.store.state);
+  const toState = extractGstStateCode(params.customer.gstin || params.customer.state) || fromState;
+  const isInterstate = fromState !== toState;
+
+  const dateParts = params.invoiceDate.split(/[-/ ]/);
+  const formattedDate = dateParts.length === 3 ? `${dateParts[0].padStart(2, '0')}/${dateParts[1].padStart(2, '0')}/${dateParts[2]}` : new Date().toLocaleDateString('en-GB');
+  const irn = computeIrnHash(params.store.gstin || '07ABCDE1234F1Z5', '2026-27', 'INV', params.invoiceNumber);
+
+  return {
+    Version: '1.1',
+    TranDtls: {
+      TaxSch: 'GST',
+      SupTyp: 'B2B',
+      RegRev: 'N',
+    },
+    DocDtls: {
+      Typ: 'INV',
+      No: params.invoiceNumber,
+      Dt: formattedDate,
+    },
+    SellerDtls: {
+      Gstin: params.store.gstin || '07ABCDE1234F1Z5',
+      LglNm: params.store.businessName || 'Business Store',
+      TrdNm: params.store.businessName || 'Business Store',
+      Addr1: params.store.address || 'Store Location',
+      Loc: params.store.city || 'City',
+      Pin: Number(params.store.pincode?.replace(/\D/g, '')) || 110001,
+      Stcd: fromState,
+      Ph: params.store.phone || '',
+    },
+    BuyerDtls: {
+      Gstin: params.customer.gstin || '07AAKCA1234F1Z5',
+      LglNm: params.customer.name || 'Client Trade Corp',
+      TrdNm: params.customer.name || 'Client Trade Corp',
+      Pos: toState,
+      Addr1: params.customer.address || 'Client Address',
+      Loc: params.customer.city || params.store.city || 'City',
+      Pin: Number(params.customer.pincode?.replace(/\D/g, '')) || 110001,
+      Stcd: toState,
+    },
+    ValDtls: {
+      AssVal: Math.round(params.totals.taxableAmount * 100) / 100,
+      CgstVal: isInterstate ? 0 : Math.round(params.totals.cgst * 100) / 100,
+      SgstVal: isInterstate ? 0 : Math.round(params.totals.sgst * 100) / 100,
+      IgstVal: isInterstate ? Math.round(params.totals.igst * 100) / 100 : 0,
+      TotInvVal: Math.round(params.totals.totalAmount * 100) / 100,
+    },
+    ItemList: params.items.map((it, idx) => {
+      const itemTaxable = Math.round(it.taxableAmount * 100) / 100;
+      const itemCgst = isInterstate ? 0 : Math.round((it.cgst || (itemTaxable * (it.gstRate / 200))) * 100) / 100;
+      const itemSgst = isInterstate ? 0 : Math.round((it.sgst || (itemTaxable * (it.gstRate / 200))) * 100) / 100;
+      const itemIgst = isInterstate ? Math.round((it.igst || (itemTaxable * (it.gstRate / 100))) * 100) / 100 : 0;
+      const totItem = Math.round((itemTaxable + itemCgst + itemSgst + itemIgst) * 100) / 100;
+
+      return {
+        SlNo: String(idx + 1),
+        PrdDesc: it.name,
+        IsServc: 'N',
+        HsnCd: it.hsnSac || '19023090',
+        Qty: it.qty,
+        Unit: (it.unit || 'NOS').toUpperCase(),
+        UnitPrice: it.rate,
+        TotAmt: itemTaxable,
+        AssAmt: itemTaxable,
+        GstRt: it.gstRate,
+        CgstAmt: itemCgst,
+        SgstAmt: itemSgst,
+        IgstAmt: itemIgst,
+        TotItemVal: totItem,
+      };
+    }),
+    Irn: irn,
+    SignedQRCode: `GSTIN:${params.store.gstin || ''};INV:${params.invoiceNumber};DATE:${formattedDate};VAL:${params.totals.totalAmount};IRN:${irn}`,
+  };
+}
+

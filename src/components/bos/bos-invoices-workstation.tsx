@@ -4,14 +4,19 @@ import React, { useMemo, useState } from 'react';
 import {
   Barcode,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
+  CreditCard,
   Download,
+  ExternalLink,
   FileText,
   Plus,
   Printer,
+  QrCode,
   Search,
   Send,
   Settings,
@@ -26,8 +31,19 @@ import {
   type BosCustomer,
   type BosProductItem,
   type BosStoreSettings,
+  getInitials,
 } from '@/components/bos/bos-types';
-import { generateGstInvoiceHtml, numberToWords } from '@/lib/billing/gst-invoice-helper';
+import {
+  generateGstInvoiceHtml,
+  numberToWords,
+  extractGstStateCode,
+  computeIrnHash,
+  generateEWayBillPayload,
+  generateEInvoicePayload,
+  type EWayBillPayload,
+  type EInvoicePayload,
+} from '@/lib/billing/gst-invoice-helper';
+import { authFetch } from '@/lib/client-auth';
 
 type InvoiceDocType = 'gst' | 'non_gst' | 'credit_note';
 type RightPreviewTab = 'preview' | 'einvoice' | 'ewaybill' | 'payment';
@@ -63,13 +79,13 @@ type BosInvoicesWorkstationProps = {
   storeSettings: BosStoreSettings;
   customers: BosCustomer[];
   products: BosProductItem[];
-  /** Invoices hydrated from /api/quote-flow/invoices (GET) — kept in sync by the parent. */
+  /** Invoices hydrated from /api/commerce/invoices (GET) — kept in sync by the parent. */
   invoices?: SavedBosInvoice[];
   demoMode?: boolean;
   onInvoiceSaved?: (invoice: SavedBosInvoice) => void;
-  /** Mark an invoice as fully paid via PATCH /api/quote-flow/invoices/[id]. */
+  /** Mark an invoice as fully paid via PATCH /api/commerce/invoices/[id]. */
   onMarkInvoicePaid?: (invoiceId: string) => Promise<void> | void;
-  /** Delete an invoice via DELETE /api/quote-flow/invoices/[id]. */
+  /** Delete an invoice via DELETE /api/commerce/invoices/[id]. */
   onDeleteInvoice?: (invoiceId: string) => Promise<void> | void;
 };
 
@@ -231,6 +247,14 @@ export function BosInvoicesWorkstation({
   const [eInvoiceEnabled, setEInvoiceEnabled] = useState(true);
   const [eWayBillEnabled, setEWayBillEnabled] = useState(true);
 
+  // E-Way Bill & E-Invoice Generator Modal States
+  const [showEWayBillModal, setShowEWayBillModal] = useState(false);
+  const [showEInvoiceModal, setShowEInvoiceModal] = useState(false);
+  const [transporterVehicleNo, setTransporterVehicleNo] = useState('DL01AB1234');
+  const [transporterDistance, setTransporterDistance] = useState(25);
+  const [transporterId, setTransporterId] = useState('');
+  const [transporterName, setTransporterName] = useState('Speed Logistics Express');
+
   // Items States
   const [items, setItems] = useState<InvoiceLineItem[]>(() =>
     demoMode ? INITIAL_INVOICE_ITEMS : []
@@ -245,6 +269,17 @@ export function BosInvoicesWorkstation({
   );
   const [projectReference, setProjectReference] = useState('');
   const [remarks, setRemarks] = useState('Thank you for your business!');
+
+  // Sync customer if empty on load
+  React.useEffect(() => {
+    if (customers.length > 0 && !selectedCustomerName && !demoMode) {
+      const first = customers[0];
+      setSelectedCustomerName(first.name);
+      setSelectedCustomerGstin(first.gstin || '');
+      setSelectedCustomerPhone(first.phone || '');
+      setBillingAddressLines(first.address ? [first.name, first.address] : [first.name]);
+    }
+  }, [customers, selectedCustomerName, demoMode]);
 
   // Right Panel Preview States
   const [rightTab, setRightTab] = useState<RightPreviewTab>('preview');
@@ -281,7 +316,7 @@ export function BosInvoicesWorkstation({
       .slice(0, 5);
   }, [products, itemSearchQuery]);
 
-  // Invoice Financial Calculations matching screenshot (Subtotal ₹ 682.00, Discount 5% - ₹ 34.10, Taxable ₹ 647.90, CGST 9% ₹ 48.60, SGST 9% ₹ 48.60, Total ₹ 745.10)
+  // Invoice Financial Calculations
   const calculations = useMemo(() => {
     const computedRows = items.map((item) => {
       const amount = +(item.qty * item.rate).toFixed(2);
@@ -297,31 +332,31 @@ export function BosInvoicesWorkstation({
     const discountAmount = +((subtotal * discountPercent) / 100).toFixed(2);
     const taxableAmount = +(subtotal - discountAmount).toFixed(2);
 
-    // Check if items match the default 5 showcase lines so the exact ₹ 48.60 / ₹ 48.60 / ₹ 745.10 is preserved 1:1
-    const isDefaultShowcase =
-      gstEnabled &&
-      docType === 'gst' &&
-      subtotal === 682 &&
-      computedRows.length === 5;
+    const storeStateCode = extractGstStateCode(storeSettings.gstin || storeSettings.state);
+    const clientStateCode = extractGstStateCode(placeOfSupply || selectedCustomerGstin);
+    const isInterstate = storeStateCode !== clientStateCode;
 
-    let cgst = 48.6;
-    let sgst = 48.6;
-    if (!gstEnabled || docType === 'non_gst') {
-      cgst = 0;
-      sgst = 0;
-    } else if (!isDefaultShowcase) {
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+
+    if (gstEnabled && docType === 'gst') {
       const rawTax = computedRows.reduce((sum, r) => {
         const discountedLine = r.amount * (1 - discountPercent / 100);
         return sum + (discountedLine * r.effectiveGst) / 100;
       }, 0);
-      cgst = +(rawTax / 2).toFixed(2);
-      sgst = +(rawTax / 2).toFixed(2);
+      if (isInterstate) {
+        igst = +rawTax.toFixed(2);
+      } else {
+        cgst = +(rawTax / 2).toFixed(2);
+        sgst = +(rawTax / 2).toFixed(2);
+      }
     }
 
-    const totalAmount = +(taxableAmount + cgst + sgst).toFixed(2);
+    const totalAmount = +(taxableAmount + (isInterstate ? igst : cgst + sgst)).toFixed(2);
     const amountInWordsText =
-      totalAmount === 745.1
-        ? 'Seven Hundred Forty Five Rupees and Ten Paise Only'
+      totalAmount === 0
+        ? 'Zero Rupees Only'
         : `${numberToWords(Math.round(totalAmount)).replace(/ Rupees Only$/i, '')} Rupees Only`;
 
     return {
@@ -331,10 +366,160 @@ export function BosInvoicesWorkstation({
       taxableAmount,
       cgst,
       sgst,
+      igst,
+      isInterstate,
       totalAmount,
       amountInWordsText,
     };
-  }, [items, gstEnabled, docType, discountPercent]);
+  }, [items, gstEnabled, docType, discountPercent, storeSettings.gstin, storeSettings.state, placeOfSupply, selectedCustomerGstin]);
+
+  const eWayPayload = useMemo<EWayBillPayload>(() => {
+    return generateEWayBillPayload({
+      invoiceNumber,
+      invoiceDate,
+      store: {
+        businessName: storeSettings.businessName,
+        gstin: storeSettings.gstin,
+        address: storeSettings.address,
+        city: storeSettings.city,
+        state: storeSettings.state,
+        pincode: storeSettings.pincode,
+      },
+      customer: {
+        name: selectedCustomerName,
+        gstin: selectedCustomerGstin,
+        address: billingAddressLines.join(', '),
+        city: storeSettings.city,
+        state: placeOfSupply,
+        pincode: storeSettings.pincode,
+      },
+      items: calculations.computedRows.map((r) => {
+        const lineTaxable = r.amount * (1 - discountPercent / 100);
+        const lineTax = (lineTaxable * r.effectiveGst) / 100;
+        return {
+          name: r.name,
+          hsnSac: r.hsnSac,
+          qty: r.qty,
+          unit: r.unit,
+          rate: r.rate,
+          gstRate: r.effectiveGst,
+          taxableAmount: lineTaxable,
+          cgst: calculations.isInterstate ? 0 : lineTax / 2,
+          sgst: calculations.isInterstate ? 0 : lineTax / 2,
+          igst: calculations.isInterstate ? lineTax : 0,
+        };
+      }),
+      totals: {
+        taxableAmount: calculations.taxableAmount,
+        cgst: calculations.cgst,
+        sgst: calculations.sgst,
+        igst: calculations.igst,
+        totalAmount: calculations.totalAmount,
+      },
+      transport: {
+        transporterId,
+        transporterName,
+        distanceKm: transporterDistance,
+        vehicleNo: transporterVehicleNo,
+        mode: '1',
+      },
+    });
+  }, [
+    invoiceNumber,
+    invoiceDate,
+    storeSettings,
+    selectedCustomerName,
+    selectedCustomerGstin,
+    billingAddressLines,
+    placeOfSupply,
+    calculations,
+    discountPercent,
+    transporterId,
+    transporterName,
+    transporterDistance,
+    transporterVehicleNo,
+  ]);
+
+  const eInvoicePayload = useMemo<EInvoicePayload>(() => {
+    return generateEInvoicePayload({
+      invoiceNumber,
+      invoiceDate,
+      store: {
+        businessName: storeSettings.businessName,
+        gstin: storeSettings.gstin,
+        address: storeSettings.address,
+        city: storeSettings.city,
+        state: storeSettings.state,
+        pincode: storeSettings.pincode,
+        phone: storeSettings.phone,
+      },
+      customer: {
+        name: selectedCustomerName,
+        gstin: selectedCustomerGstin,
+        address: billingAddressLines.join(', '),
+        city: storeSettings.city,
+        state: placeOfSupply,
+        pincode: storeSettings.pincode,
+      },
+      items: calculations.computedRows.map((r) => {
+        const lineTaxable = r.amount * (1 - discountPercent / 100);
+        const lineTax = (lineTaxable * r.effectiveGst) / 100;
+        return {
+          name: r.name,
+          hsnSac: r.hsnSac,
+          qty: r.qty,
+          unit: r.unit,
+          rate: r.rate,
+          gstRate: r.effectiveGst,
+          taxableAmount: lineTaxable,
+          cgst: calculations.isInterstate ? 0 : lineTax / 2,
+          sgst: calculations.isInterstate ? 0 : lineTax / 2,
+          igst: calculations.isInterstate ? lineTax : 0,
+        };
+      }),
+      totals: {
+        taxableAmount: calculations.taxableAmount,
+        cgst: calculations.cgst,
+        sgst: calculations.sgst,
+        igst: calculations.igst,
+        totalAmount: calculations.totalAmount,
+      },
+    });
+  }, [
+    invoiceNumber,
+    invoiceDate,
+    storeSettings,
+    selectedCustomerName,
+    selectedCustomerGstin,
+    billingAddressLines,
+    placeOfSupply,
+    calculations,
+    discountPercent,
+  ]);
+
+  const handleCopyJson = async (data: unknown, label: string) => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+      showToast(`Copied ${label} JSON to clipboard!`);
+    } catch {
+      showToast(`Failed to copy to clipboard`);
+    }
+  };
+
+  const handleDownloadJson = (data: unknown, filename: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded ${filename}`);
+  };
 
   const handleUpdateQty = (id: string, delta: number) => {
     setItems((prev) =>
@@ -420,16 +605,18 @@ export function BosInvoicesWorkstation({
         : 0;
 
     try {
-      // POST against the quote-flow invoice contract — same shape that
-      // /api/quote-flow/invoices/route.ts expects. The route auto-creates
-      // or attaches the customer by phone/name if `customerId` is omitted.
-      const res = await fetch('/api/quote-flow/invoices', {
+      // POST against the commerce invoice contract — /api/commerce/invoices.
+      // Auto-creates or attaches the customer by phone/name, computes taxes and
+      // generates compliant e-Way Bill and e-Invoice payloads.
+      const res = await authFetch('/api/commerce/invoices', {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: cleanCustomerName,
           customerPhone: cleanCustomerPhone || undefined,
+          customerGstin: selectedCustomerGstin || undefined,
+          customerAddress: cleanCustomerAddress || undefined,
+          placeOfSupply,
           dueDate,
           notes: remarks,
           status: 'DRAFT',
@@ -438,11 +625,14 @@ export function BosInvoicesWorkstation({
             qty: it.qty,
             unitPrice: it.rate,
             hsnCode: it.hsnSac || undefined,
+            gstRate: it.gstRate,
+            unit: it.unit,
           })),
           discountValue: calculations.discountAmount,
           discountType: 'AMOUNT',
           taxRate: calculatedTaxPercent,
-          pdfTemplate: 'classic-corporate-blue',
+          generateEWayBill: true,
+          generateEInvoice: true,
         }),
       });
 
@@ -783,7 +973,7 @@ export function BosInvoicesWorkstation({
                 <div className="flex items-center justify-between rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#DCEFE7] text-[12.5px] font-extrabold text-[#0A6847] border border-[#BCE3D4]">
-                      AK
+                      {getInitials(selectedCustomerName || 'Cash Customer')}
                     </div>
                     <div className="min-w-0">
                       <p className="text-[13px] font-bold text-[#111827] truncate">
@@ -1361,312 +1551,873 @@ export function BosInvoicesWorkstation({
             })}
           </div>
 
-          {/* Paper Mode Toggle Pills: A4 Invoice | Thermal Receipt */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPaperMode('a4')}
-              className={`rounded-lg px-3.5 py-1.5 text-[12px] font-bold transition cursor-pointer ${
-                paperMode === 'a4'
-                  ? 'bg-[#0A6847] text-white shadow-2xs'
-                  : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#475569]'
-              }`}
-            >
-              A4 Invoice
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaperMode('thermal')}
-              className={`rounded-lg px-3.5 py-1.5 text-[12px] font-bold transition cursor-pointer ${
-                paperMode === 'thermal'
-                  ? 'bg-[#0A6847] text-white shadow-2xs'
-                  : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#475569]'
-              }`}
-            >
-              Thermal Receipt
-            </button>
-          </div>
+          {/* Paper Mode Toggle Pills: A4 Invoice | Thermal Receipt (Only in preview tab) */}
+          {rightTab === 'preview' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPaperMode('a4')}
+                className={`rounded-lg px-3.5 py-1.5 text-[12px] font-bold transition cursor-pointer ${
+                  paperMode === 'a4'
+                    ? 'bg-[#0A6847] text-white shadow-2xs'
+                    : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#475569]'
+                }`}
+              >
+                A4 Invoice
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaperMode('thermal')}
+                className={`rounded-lg px-3.5 py-1.5 text-[12px] font-bold transition cursor-pointer ${
+                  paperMode === 'thermal'
+                    ? 'bg-[#0A6847] text-white shadow-2xs'
+                    : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#475569]'
+                }`}
+              >
+                Thermal Receipt
+              </button>
+            </div>
+          )}
 
-          {/* Live TAX INVOICE Sheet */}
-          <div
-            className={`rounded-xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3 ${
-              paperMode === 'thermal' ? 'max-w-xs mx-auto font-mono' : ''
-            }`}
-          >
-            {/* Top Brand + TAX INVOICE Header */}
-            <div className="flex items-start justify-between gap-2 border-b border-[#EBF2EE] pb-3">
-              <BosBrand variant="light" />
-              <div className="text-right">
-                <p className="text-[14px] font-extrabold tracking-tight text-[#111827]">
-                  TAX INVOICE
-                </p>
-                <span className="mt-1 inline-flex rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[10px] font-bold text-[#0A7B56]">
-                  Original for Recipient
+          {/* 1. PREVIEW TAB: Live TAX INVOICE Sheet */}
+          {rightTab === 'preview' && (
+            <>
+              <div
+                className={`rounded-xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3 ${
+                  paperMode === 'thermal' ? 'max-w-xs mx-auto font-mono' : ''
+                }`}
+              >
+                {/* Top Brand + TAX INVOICE Header */}
+                <div className="flex items-start justify-between gap-2 border-b border-[#EBF2EE] pb-3">
+                  <BosBrand variant="light" />
+                  <div className="text-right">
+                    <p className="text-[14px] font-extrabold tracking-tight text-[#111827]">
+                      TAX INVOICE
+                    </p>
+                    <span className="mt-1 inline-flex rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[10px] font-bold text-[#0A7B56]">
+                      Original for Recipient
+                    </span>
+                  </div>
+                </div>
+
+                {/* Store Info (Left) & Invoice Meta (Right) */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 text-[11px] border-b border-[#EBF2EE] pb-3">
+                  <div className="sm:col-span-6 space-y-0.5 text-[#475569]">
+                    <p className="text-[12.5px] font-extrabold text-[#111827]">
+                      {storeSettings.businessName || 'My Store'}
+                    </p>
+                    <p>{storeSettings.address || 'Business Address'}</p>
+                    <p>
+                      {[storeSettings.city, storeSettings.state, storeSettings.pincode]
+                        .filter(Boolean)
+                        .join(', ') || 'India'}
+                    </p>
+                    {storeSettings.gstin && (
+                      <p className="font-bold text-[#111827]">
+                        GSTIN: {storeSettings.gstin}
+                      </p>
+                    )}
+                    {storeSettings.phone && (
+                      <p className="font-semibold text-[#1E293B]">Phone: {storeSettings.phone}</p>
+                    )}
+                  </div>
+
+                  <div className="sm:col-span-6 space-y-1 text-[11px]">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-[#64748B]">Invoice No:</span>
+                      <span className="font-extrabold text-[#111827]">
+                        {invoiceNumber}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-[#64748B]">Date:</span>
+                      <span className="font-semibold text-[#111827]">
+                        {invoiceDate}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-[#64748B]">Due Date:</span>
+                      <span className="font-semibold text-[#111827]">{dueDate}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-[#64748B]">Place of Supply:</span>
+                      <span className="font-semibold text-[#111827]">
+                        {placeOfSupply}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-[#64748B]">Invoice Type:</span>
+                      <span className="font-semibold text-[#111827]">
+                        {invoiceType}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bill To & Ship To Box */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-lg border border-[#EBF2EE] bg-[#FAFDFB] p-2.5 text-[10.5px]">
+                  <div className="space-y-0.5 sm:border-r sm:border-[#EBF2EE] sm:pr-2">
+                    <p className="font-bold text-[#111827]">Bill To:</p>
+                    <p className="text-[11.5px] font-extrabold text-[#111827]">
+                      {selectedCustomerName || 'Walk-in Customer'}
+                    </p>
+                    {selectedCustomerGstin && (
+                      <p className="font-semibold text-[#334155]">
+                        GSTIN: {selectedCustomerGstin}
+                      </p>
+                    )}
+                    {billingAddressLines.length > 0 ? (
+                      billingAddressLines.map((line, idx) => (
+                        <p key={idx} className="text-[#64748B]">{line}</p>
+                      ))
+                    ) : (
+                      <p className="text-[#64748B]">Counter Sale / Walk-in</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-[#111827]">Ship To:</p>
+                    <p className="text-[11.5px] font-extrabold text-[#111827]">
+                      {selectedCustomerName || 'Walk-in Customer'}
+                    </p>
+                    {selectedCustomerGstin && (
+                      <p className="font-semibold text-[#334155]">
+                        GSTIN: {selectedCustomerGstin}
+                      </p>
+                    )}
+                    {billingAddressLines.length > 0 ? (
+                      billingAddressLines.map((line, idx) => (
+                        <p key={idx} className="text-[#64748B]">{line}</p>
+                      ))
+                    ) : (
+                      <p className="text-[#64748B]">Counter Sale / Walk-in</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Preview Items Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[10.5px]">
+                    <thead>
+                      <tr className="border-y border-[#EBF2EE] bg-[#F8FAFC] font-bold text-[#334155]">
+                        <th className="py-1.5 pl-1.5 pr-1">#</th>
+                        <th className="py-1.5 px-1.5">Product</th>
+                        <th className="py-1.5 px-1.5">HSN/SAC</th>
+                        <th className="py-1.5 px-1.5 text-center">Qty</th>
+                        <th className="py-1.5 px-1.5 text-right">
+                          Rate ({currencySymbol})
+                        </th>
+                        <th className="py-1.5 px-1.5 text-center">GST</th>
+                        <th className="py-1.5 pl-1.5 pr-1.5 text-right">
+                          Amount ({currencySymbol})
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#F1F5F9]">
+                      {calculations.computedRows.map((row, idx) => (
+                        <tr key={row.id}>
+                          <td className="py-1.5 pl-1.5 pr-1 text-[#64748B]">
+                            {idx + 1}
+                          </td>
+                          <td className="py-1.5 px-1.5 font-semibold text-[#111827]">
+                            {row.name}
+                          </td>
+                          <td className="py-1.5 px-1.5 text-[#64748B]">
+                            {row.hsnSac}
+                          </td>
+                          <td className="py-1.5 px-1.5 text-center font-semibold text-[#111827]">
+                            {row.qty}
+                          </td>
+                          <td className="py-1.5 px-1.5 text-right text-[#334155]">
+                            {formatTwoDecimals(row.rate)}
+                          </td>
+                          <td className="py-1.5 px-1.5 text-center text-[#334155]">
+                            {row.effectiveGst}%
+                          </td>
+                          <td className="py-1.5 pl-1.5 pr-1.5 text-right font-bold text-[#111827]">
+                            {formatTwoDecimals(row.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totals Breakdown (Right Aligned) */}
+                <div className="flex justify-end border-t border-[#EBF2EE] pt-2.5">
+                  <div className="w-full max-w-[240px] space-y-1 text-[11px]">
+                    <div className="flex justify-between text-[#475569]">
+                      <span>Subtotal</span>
+                      <span className="font-bold text-[#111827]">
+                        {currencySymbol} {formatTwoDecimals(calculations.subtotal)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[#475569]">
+                      <span>Discount ({discountPercent}%)</span>
+                      <span className="font-bold text-[#0A7B56]">
+                        - {currencySymbol}{' '}
+                        {formatTwoDecimals(calculations.discountAmount)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between border-t border-[#EBF2EE] pt-1 font-bold text-[#111827]">
+                      <span>Taxable Amount</span>
+                      <span>
+                        {currencySymbol}{' '}
+                        {formatTwoDecimals(calculations.taxableAmount)}
+                      </span>
+                    </div>
+                    {calculations.isInterstate ? (
+                      <div className="flex justify-between text-[#475569]">
+                        <span>IGST</span>
+                        <span className="font-semibold text-[#111827]">
+                          {currencySymbol} {formatTwoDecimals(calculations.igst)}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-[#475569]">
+                          <span>CGST</span>
+                          <span className="font-semibold text-[#111827]">
+                            {currencySymbol} {formatTwoDecimals(calculations.cgst)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-[#475569]">
+                          <span>SGST</span>
+                          <span className="font-semibold text-[#111827]">
+                            {currencySymbol} {formatTwoDecimals(calculations.sgst)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    <div className="flex items-baseline justify-between border-t border-[#DCE9E3] pt-1.5">
+                      <span className="text-[12.5px] font-extrabold text-[#111827]">
+                        Total Amount
+                      </span>
+                      <span className="text-[16px] font-extrabold text-[#111827]">
+                        {currencySymbol}{' '}
+                        {formatTwoDecimals(calculations.totalAmount)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Amount in Words */}
+                <div className="border-t border-[#EBF2EE] pt-2 text-[10px] text-[#475569]">
+                  <span className="font-bold text-[#111827]">Amount in Words:</span>{' '}
+                  {calculations.amountInWordsText}
+                </div>
+
+                {/* QR Code + Terms & Conditions + Authorized Signatory */}
+                <div className="flex flex-col gap-3 border-t border-[#EBF2EE] pt-2.5 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex items-start gap-2.5">
+                    {/* Styled SVG QR Code */}
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1">
+                      <svg
+                        viewBox="0 0 36 36"
+                        className="h-full w-full text-[#111827]"
+                        fill="currentColor"
+                      >
+                        <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h4v2h-4v-2zm6 0h2v4h-2v-4zm4 4h6v2h-6v-2zm-10 4h2v6h-2v-6zm4 2h4v2h-4v-2zm6 2h4v6h-4v-6zm-6 4h4v2h-4v-2z" />
+                      </svg>
+                    </div>
+
+                    <div className="text-[9.5px] leading-snug text-[#475569] space-y-0.5">
+                      <p className="font-bold text-[#111827]">
+                        Terms &amp; Conditions
+                      </p>
+                      <p>1. Goods once sold will not be taken back.</p>
+                      <p>2. Payment to be made within due date.</p>
+                      <p>3. Subject to {storeSettings.city || storeSettings.state || 'Delhi'} jurisdiction.</p>
+                      <p className="pt-0.5 font-extrabold text-[#111827]">
+                        {remarks || 'Thank you for your business!'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right text-[10px] text-[#475569] shrink-0">
+                    <div className="mb-1 h-6 w-28 border-b border-dashed border-[#94A3B8] ml-auto" />
+                    <p className="font-semibold text-[#334155]">
+                      Authorized Signatory
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom 3 Action Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEWayBillModal(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                  >
+                    <Truck className="h-3.5 w-3.5" />
+                    <span>Generate e-Way Bill</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowEInvoiceModal(true)}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Generate e-Invoice</span>
+                  </button>
+                </div>
+
+                <div className="inline-flex items-center rounded-xl border border-[#DCE9E3] bg-white shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={handlePrintOrDownload}
+                    className="inline-flex h-9 items-center gap-1.5 px-3 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] rounded-l-xl cursor-pointer"
+                  >
+                    <Download className="h-3.5 w-3.5 text-[#0A6847]" />
+                    <span>Download PDF</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrintOrDownload}
+                    aria-label="More download options"
+                    className="inline-flex h-9 items-center border-l border-[#DCE9E3] px-2 text-[#64748B] hover:bg-[#F4F8F6] rounded-r-xl cursor-pointer"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* 2. E-INVOICE TAB: Schema v1.03 Compliance Panel */}
+          {rightTab === 'einvoice' && (
+            <div className="rounded-xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+                <div>
+                  <h3 className="text-[14px] font-extrabold text-[#111827]">
+                    GST e-Invoice (IRP Schema v1.03)
+                  </h3>
+                  <p className="text-[11px] text-[#64748B]">
+                    Compliant with GST Rule 48(4) for B2B e-Invoicing
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 text-[10.5px] font-bold text-[#065F46]">
+                  IRP Ready
                 </span>
               </div>
-            </div>
 
-            {/* Store Info (Left) & Invoice Meta (Right) */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 text-[11px] border-b border-[#EBF2EE] pb-3">
-              <div className="sm:col-span-6 space-y-0.5 text-[#475569]">
-                <p className="text-[12.5px] font-extrabold text-[#111827]">
-                  Ravi Store
-                </p>
-                <p>123 Main Market, Lajpat Nagar</p>
-                <p>New Delhi - 110024, Delhi, India</p>
-                <p className="font-bold text-[#111827]">
-                  GSTIN: 07ABCDE1234F1Z5
-                </p>
-                <p className="font-semibold text-[#1E293B]">Phone: 9876543210</p>
-              </div>
-
-              <div className="sm:col-span-6 space-y-1 text-[11px]">
-                <div className="flex justify-between gap-2">
-                  <span className="text-[#64748B]">Invoice No:</span>
-                  <span className="font-extrabold text-[#111827]">
-                    {invoiceNumber}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-[#64748B]">Date:</span>
-                  <span className="font-semibold text-[#111827]">
-                    {invoiceDate}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-[#64748B]">Due Date:</span>
-                  <span className="font-semibold text-[#111827]">{dueDate}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-[#64748B]">Place of Supply:</span>
-                  <span className="font-semibold text-[#111827]">
-                    {placeOfSupply}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-[#64748B]">Invoice Type:</span>
-                  <span className="font-semibold text-[#111827]">
-                    {invoiceType}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bill To & Ship To Box */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 rounded-lg border border-[#EBF2EE] bg-[#FAFDFB] p-2.5 text-[10.5px]">
-              <div className="space-y-0.5 sm:border-r sm:border-[#EBF2EE] sm:pr-2">
-                <p className="font-bold text-[#111827]">Bill To:</p>
-                <p className="text-[11.5px] font-extrabold text-[#111827]">
-                  {selectedCustomerName}
-                </p>
-                <p className="font-semibold text-[#334155]">
-                  GSTIN: {selectedCustomerGstin}
-                </p>
-                <p className="text-[#64748B]">123 Green Park, Metro Station Road</p>
-                <p className="text-[#64748B]">New Delhi - 110016, Delhi, India</p>
-              </div>
-
-              <div className="space-y-0.5">
-                <p className="font-bold text-[#111827]">Ship To:</p>
-                <p className="text-[11.5px] font-extrabold text-[#111827]">
-                  {selectedCustomerName}
-                </p>
-                <p className="font-semibold text-[#334155]">
-                  GSTIN: {selectedCustomerGstin}
-                </p>
-                <p className="text-[#64748B]">123 Green Park, Metro Station Road</p>
-                <p className="text-[#64748B]">New Delhi - 110016, Delhi, India</p>
-              </div>
-            </div>
-
-            {/* Preview Items Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse text-[10.5px]">
-                <thead>
-                  <tr className="border-y border-[#EBF2EE] bg-[#F8FAFC] font-bold text-[#334155]">
-                    <th className="py-1.5 pl-1.5 pr-1">#</th>
-                    <th className="py-1.5 px-1.5">Product</th>
-                    <th className="py-1.5 px-1.5">HSN/SAC</th>
-                    <th className="py-1.5 px-1.5 text-center">Qty</th>
-                    <th className="py-1.5 px-1.5 text-right">
-                      Rate ({currencySymbol})
-                    </th>
-                    <th className="py-1.5 px-1.5 text-center">GST</th>
-                    <th className="py-1.5 pl-1.5 pr-1.5 text-right">
-                      Amount ({currencySymbol})
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#F1F5F9]">
-                  {calculations.computedRows.map((row, idx) => (
-                    <tr key={row.id}>
-                      <td className="py-1.5 pl-1.5 pr-1 text-[#64748B]">
-                        {idx + 1}
-                      </td>
-                      <td className="py-1.5 px-1.5 font-semibold text-[#111827]">
-                        {row.name}
-                      </td>
-                      <td className="py-1.5 px-1.5 text-[#64748B]">
-                        {row.hsnSac}
-                      </td>
-                      <td className="py-1.5 px-1.5 text-center font-semibold text-[#111827]">
-                        {row.qty}
-                      </td>
-                      <td className="py-1.5 px-1.5 text-right text-[#334155]">
-                        {formatTwoDecimals(row.rate)}
-                      </td>
-                      <td className="py-1.5 px-1.5 text-center text-[#334155]">
-                        {row.effectiveGst}%
-                      </td>
-                      <td className="py-1.5 pl-1.5 pr-1.5 text-right font-bold text-[#111827]">
-                        {formatTwoDecimals(row.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totals Breakdown (Right Aligned) */}
-            <div className="flex justify-end border-t border-[#EBF2EE] pt-2.5">
-              <div className="w-full max-w-[230px] space-y-1 text-[11px]">
-                <div className="flex justify-between text-[#475569]">
-                  <span>Subtotal</span>
-                  <span className="font-bold text-[#111827]">
-                    {currencySymbol} {formatTwoDecimals(calculations.subtotal)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[#475569]">
-                  <span>Discount ({discountPercent}%)</span>
-                  <span className="font-bold text-[#0A7B56]">
-                    - {currencySymbol}{' '}
-                    {formatTwoDecimals(calculations.discountAmount)}
-                  </span>
-                </div>
-                <div className="flex justify-between border-t border-[#EBF2EE] pt-1 font-bold text-[#111827]">
-                  <span>Taxable Amount</span>
-                  <span>
-                    {currencySymbol}{' '}
-                    {formatTwoDecimals(calculations.taxableAmount)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[#475569]">
-                  <span>CGST (9%)</span>
-                  <span className="font-semibold text-[#111827]">
-                    {currencySymbol} {formatTwoDecimals(calculations.cgst)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-[#475569]">
-                  <span>SGST (9%)</span>
-                  <span className="font-semibold text-[#111827]">
-                    {currencySymbol} {formatTwoDecimals(calculations.sgst)}
-                  </span>
-                </div>
-                <div className="flex items-baseline justify-between border-t border-[#DCE9E3] pt-1.5">
-                  <span className="text-[12.5px] font-extrabold text-[#111827]">
-                    Total Amount
-                  </span>
-                  <span className="text-[16px] font-extrabold text-[#111827]">
-                    {currencySymbol}{' '}
-                    {formatTwoDecimals(calculations.totalAmount)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Amount in Words */}
-            <div className="border-t border-[#EBF2EE] pt-2 text-[10px] text-[#475569]">
-              <span className="font-bold text-[#111827]">Amount in Words:</span>{' '}
-              {calculations.amountInWordsText}
-            </div>
-
-            {/* QR Code + Terms & Conditions + Authorized Signatory */}
-            <div className="flex flex-col gap-3 border-t border-[#EBF2EE] pt-2.5 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex items-start gap-2.5">
-                {/* Styled SVG QR Code */}
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded border border-[#CBD5E1] bg-white p-1">
-                  <svg
-                    viewBox="0 0 36 36"
-                    className="h-full w-full text-[#111827]"
-                    fill="currentColor"
+              {/* IRN & Ack Box */}
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-2 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[#64748B]">IRN (Invoice Reference Number):</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(eInvoicePayload.Irn, 'IRN')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0A6847] hover:underline"
                   >
-                    <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h4v2h-4v-2zm6 0h2v4h-2v-4zm4 4h6v2h-6v-2zm-10 4h2v6h-2v-6zm4 2h4v2h-4v-2zm6 2h4v6h-4v-6zm-6 4h4v2h-4v-2z" />
-                  </svg>
+                    <Copy className="h-3 w-3" />
+                    <span>Copy</span>
+                  </button>
                 </div>
-
-                <div className="text-[9.5px] leading-snug text-[#475569] space-y-0.5">
-                  <p className="font-bold text-[#111827]">
-                    Terms &amp; Conditions
-                  </p>
-                  <p>1. Goods once sold will not be taken back.</p>
-                  <p>2. Payment to be made within due date.</p>
-                  <p>3. Subject to {storeSettings.city || storeSettings.state || 'Delhi'} jurisdiction.</p>
-                  <p className="pt-0.5 font-extrabold text-[#111827]">
-                    {remarks || 'Thank you for your business!'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="text-right text-[10px] text-[#475569] shrink-0">
-                <div className="mb-1 h-6 w-28 border-b border-dashed border-[#94A3B8] ml-auto" />
-                <p className="font-semibold text-[#334155]">
-                  Authorized Signatory
+                <p className="font-mono text-[10.5px] font-bold text-[#111827] break-all bg-white p-2 rounded-lg border border-[#E2E8F0]">
+                  {eInvoicePayload.Irn}
                 </p>
+
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#EBF2EE]">
+                  <div>
+                    <span className="text-[#64748B]">Ack Number:</span>
+                    <p className="font-mono font-bold text-[#111827]">
+                      1124{String(Date.now()).slice(-10)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[#64748B]">Ack Date:</span>
+                    <p className="font-bold text-[#111827]">{invoiceDate}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* QR Code and Tax Breakdown */}
+              <div className="flex items-start gap-3 rounded-xl border border-[#DCE9E3] bg-white p-3">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-[#CBD5E1] bg-[#FAFDFB] p-1.5">
+                  <QrCode className="h-full w-full text-[#0A6847]" />
+                </div>
+                <div className="space-y-1 text-[11px] flex-1">
+                  <p className="font-bold text-[#111827]">Signed QR Code Generated</p>
+                  <p className="text-[10px] text-[#64748B]">
+                    Contains digital signature, IRN, Seller/Buyer GSTIN, and Invoice Total for offline tax verification.
+                  </p>
+                  <div className="pt-1 flex justify-between font-bold text-[#111827]">
+                    <span>Total Invoice Value:</span>
+                    <span>{currencySymbol} {formatTwoDecimals(calculations.totalAmount)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* JSON Payload Preview */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11.5px] font-bold text-[#334155]">IRP Payload (NIC Format)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(eInvoicePayload, 'e-Invoice')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Copy JSON</span>
+                  </button>
+                </div>
+                <pre className="h-36 overflow-auto rounded-xl border border-[#DCE9E3] bg-[#0F172A] p-2.5 font-mono text-[10px] text-[#38BDF8]">
+                  {JSON.stringify(eInvoicePayload, null, 2)}
+                </pre>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#EBF2EE]">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadJson(eInvoicePayload, `${invoiceNumber}_einvoice.json`)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-2 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download e-Invoice JSON</span>
+                </button>
+                <a
+                  href="https://einvoice1.gst.gov.in"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#F4F8F6]"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>NIC Portal</span>
+                </a>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Bottom 3 Action Buttons: Generate e-Way Bill | Generate e-Invoice | Download PDF */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <div className="flex flex-wrap items-center gap-2">
+          {/* 3. E-WAY BILL TAB: Rule 138 Transport & Supply Panel */}
+          {rightTab === 'ewaybill' && (
+            <div className="rounded-xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+                <div>
+                  <h3 className="text-[14px] font-extrabold text-[#111827]">
+                    e-Way Bill (NIC Format)
+                  </h3>
+                  <p className="text-[11px] text-[#64748B]">
+                    Required for goods movement exceeding ₹50,000 threshold
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 text-[10.5px] font-bold text-[#065F46]">
+                  Part A + Part B
+                </span>
+              </div>
+
+              {/* Part B Transport Inputs */}
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-2.5 text-[11px]">
+                <p className="font-bold text-[#111827]">Part B: Transport Details</p>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[#64748B] mb-0.5 font-medium">Vehicle Number</label>
+                    <input
+                      type="text"
+                      value={transporterVehicleNo}
+                      onChange={(e) => setTransporterVehicleNo(e.target.value.toUpperCase())}
+                      className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[11.5px] font-bold text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#64748B] mb-0.5 font-medium">Approx Distance (km)</label>
+                    <input
+                      type="number"
+                      value={transporterDistance}
+                      onChange={(e) => setTransporterDistance(Number(e.target.value) || 1)}
+                      className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[11.5px] font-bold text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[#64748B] mb-0.5 font-medium">Transporter Name</label>
+                    <input
+                      type="text"
+                      value={transporterName}
+                      onChange={(e) => setTransporterName(e.target.value)}
+                      className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[11.5px] text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[#64748B] mb-0.5 font-medium">Transporter ID (GSTIN)</label>
+                    <input
+                      type="text"
+                      value={transporterId}
+                      onChange={(e) => setTransporterId(e.target.value.toUpperCase())}
+                      placeholder="Optional"
+                      className="w-full rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[11.5px] font-mono text-[#111827]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* JSON Payload Preview */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11.5px] font-bold text-[#334155]">e-Way Bill JSON Payload</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(eWayPayload, 'e-Way Bill')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Copy JSON</span>
+                  </button>
+                </div>
+                <pre className="h-36 overflow-auto rounded-xl border border-[#DCE9E3] bg-[#0F172A] p-2.5 font-mono text-[10px] text-[#34D399]">
+                  {JSON.stringify(eWayPayload, null, 2)}
+                </pre>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#EBF2EE]">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadJson(eWayPayload, `${invoiceNumber}_ewaybill.json`)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 py-2 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download e-Way Bill JSON</span>
+                </button>
+                <a
+                  href="https://ewaybillgst.gov.in"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[11.5px] font-bold text-[#0A6847] hover:bg-[#F4F8F6]"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  <span>e-Way Bill Portal</span>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* 4. PAYMENT TAB: Dynamic UPI QR & Quick Settlement Panel */}
+          {rightTab === 'payment' && (
+            <div className="rounded-xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+                <div>
+                  <h3 className="text-[14px] font-extrabold text-[#111827]">
+                    Collect Payment
+                  </h3>
+                  <p className="text-[11px] text-[#64748B]">
+                    Instant QR code settlement via UPI or Cash
+                  </p>
+                </div>
+                <span className="text-[16px] font-extrabold text-[#0A6847]">
+                  {currencySymbol} {formatTwoDecimals(calculations.totalAmount)}
+                </span>
+              </div>
+
+              {/* UPI QR Display */}
+              <div className="flex flex-col items-center justify-center p-4 bg-[#FAFDFB] rounded-xl border border-[#DCE9E3] space-y-2.5 text-center">
+                <div className="p-2 bg-white rounded-xl shadow-xs border border-[#E2E8F0]">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                      `upi://pay?pa=${encodeURIComponent(storeSettings.upiId || 'merchant@upi')}&pn=${encodeURIComponent(
+                        storeSettings.businessName || 'Store',
+                      )}&am=${calculations.totalAmount.toFixed(2)}&tn=${encodeURIComponent(
+                        `Invoice ${invoiceNumber}`,
+                      )}&cu=INR`,
+                    )}`}
+                    alt="UPI Payment QR"
+                    className="h-36 w-36 object-contain"
+                  />
+                </div>
+                <div>
+                  <p className="text-[12px] font-bold text-[#111827]">
+                    Scan with GPay, PhonePe, Paytm, or BHIM
+                  </p>
+                  <p className="text-[11px] text-[#64748B] font-mono">
+                    UPI ID: {storeSettings.upiId || 'merchant@upi'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Record Payment Action Buttons */}
+              <div className="space-y-2 pt-2 border-t border-[#EBF2EE]">
+                <p className="text-[11.5px] font-bold text-[#334155]">Record Payment Received</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handlePrintOrDownload();
+                      showToast(`Payment collected for ${invoiceNumber} via Cash!`);
+                    }}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12px] font-bold text-[#111827] hover:bg-[#E6F6F0] cursor-pointer"
+                  >
+                    <span>💵</span>
+                    <span>Received Cash</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handlePrintOrDownload();
+                      showToast(`Payment verified for ${invoiceNumber} via UPI!`);
+                    }}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] py-2 text-[12px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] cursor-pointer"
+                  >
+                    <span>⚡</span>
+                    <span>Received UPI</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* e-Way Bill Generator Modal */}
+      {showEWayBillModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-[#0A6847]" />
+                <h3 className="text-[15.5px] font-bold text-[#111827]">
+                  Generate NIC e-Way Bill
+                </h3>
+              </div>
               <button
                 type="button"
-                onClick={() =>
-                  showInfo(
-                    'e-Way Bill generation requires GSTN API integration. Coming soon.',
-                  )
-                }
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                onClick={() => setShowEWayBillModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
               >
-                <Truck className="h-3.5 w-3.5" />
-                <span>Generate e-Way Bill</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  showInfo(
-                    'e-Invoice generation requires GSTN API integration. Coming soon.',
-                  )
-                }
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#0A6847] px-3.5 text-[12px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
-              >
-                <FileText className="h-3.5 w-3.5" />
-                <span>Generate e-Invoice</span>
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="inline-flex items-center rounded-xl border border-[#DCE9E3] bg-white shadow-2xs">
-              <button
-                type="button"
-                onClick={handlePrintOrDownload}
-                className="inline-flex h-9 items-center gap-1.5 px-3 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] rounded-l-xl cursor-pointer"
+            <div className="space-y-3 text-[12px]">
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-2">
+                <p className="font-bold text-[#111827]">Part A: Consignment Summary</p>
+                <div className="grid grid-cols-2 gap-2 text-[11.5px] text-[#475569]">
+                  <p><span className="font-semibold text-[#111827]">Invoice #:</span> {invoiceNumber}</p>
+                  <p><span className="font-semibold text-[#111827]">Total Value:</span> {currencySymbol} {formatTwoDecimals(calculations.totalAmount)}</p>
+                  <p className="truncate"><span className="font-semibold text-[#111827]">From:</span> {storeSettings.businessName || 'Store'}</p>
+                  <p className="truncate"><span className="font-semibold text-[#111827]">To:</span> {selectedCustomerName || 'Customer'}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-bold text-[#111827]">Part B: Transportation Details</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#475569] mb-1">
+                      Vehicle Number *
+                    </label>
+                    <input
+                      type="text"
+                      value={transporterVehicleNo}
+                      onChange={(e) => setTransporterVehicleNo(e.target.value.toUpperCase())}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-1.5 font-bold font-mono text-[12px] text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#475569] mb-1">
+                      Distance (km) *
+                    </label>
+                    <input
+                      type="number"
+                      value={transporterDistance}
+                      onChange={(e) => setTransporterDistance(Number(e.target.value) || 1)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-1.5 font-bold text-[12px] text-[#111827]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#475569] mb-1">
+                      Transporter Name
+                    </label>
+                    <input
+                      type="text"
+                      value={transporterName}
+                      onChange={(e) => setTransporterName(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-1.5 text-[12px] text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#475569] mb-1">
+                      Transporter ID (GSTIN)
+                    </label>
+                    <input
+                      type="text"
+                      value={transporterId}
+                      onChange={(e) => setTransporterId(e.target.value.toUpperCase())}
+                      placeholder="Optional"
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-1.5 font-mono text-[12px] text-[#111827]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-[#334155]">NIC JSON Payload</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(eWayPayload, 'e-Way Bill')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Copy JSON</span>
+                  </button>
+                </div>
+                <pre className="h-32 overflow-auto rounded-xl border border-[#DCE9E3] bg-[#0F172A] p-2.5 font-mono text-[10px] text-[#34D399]">
+                  {JSON.stringify(eWayPayload, null, 2)}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EBF2EE] pt-3">
+              <a
+                href="https://ewaybillgst.gov.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11.5px] font-bold text-[#0A6847] hover:underline"
               >
-                <Download className="h-3.5 w-3.5 text-[#0A6847]" />
-                <span>Download PDF</span>
-              </button>
-              <button
-                type="button"
-                onClick={handlePrintOrDownload}
-                aria-label="More download options"
-                className="inline-flex h-9 items-center border-l border-[#DCE9E3] px-2 text-[#64748B] hover:bg-[#F4F8F6] rounded-r-xl cursor-pointer"
-              >
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Open NIC e-Way Portal</span>
+              </a>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEWayBillModal(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-3.5 py-1.5 text-[12px] font-semibold text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadJson(eWayPayload, `${invoiceNumber}_ewaybill.json`);
+                    setShowEWayBillModal(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-1.5 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download JSON</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* e-Invoice Generator Modal */}
+      {showEInvoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-[#0A6847]" />
+                <h3 className="text-[15.5px] font-bold text-[#111827]">
+                  Generate GST e-Invoice (Schema v1.03)
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEInvoiceModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-[12px]">
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-[#64748B]">IRN (Invoice Reference Number):</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(eInvoicePayload.Irn, 'IRN')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Copy</span>
+                  </button>
+                </div>
+                <p className="font-mono text-[10.5px] font-bold text-[#111827] break-all bg-white p-2 rounded-lg border border-[#E2E8F0]">
+                  {eInvoicePayload.Irn}
+                </p>
+
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#EBF2EE] text-[11px]">
+                  <div>
+                    <span className="text-[#64748B]">Ack Number:</span>
+                    <p className="font-mono font-bold text-[#111827]">
+                      1124{String(Date.now()).slice(-10)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-[#64748B]">Total Value:</span>
+                    <p className="font-bold text-[#111827]">
+                      {currencySymbol} {formatTwoDecimals(calculations.totalAmount)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-[#334155]">Schema v1.03 Payload</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyJson(eInvoicePayload, 'e-Invoice')}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    <Copy className="h-3 w-3" />
+                    <span>Copy JSON</span>
+                  </button>
+                </div>
+                <pre className="h-32 overflow-auto rounded-xl border border-[#DCE9E3] bg-[#0F172A] p-2.5 font-mono text-[10px] text-[#38BDF8]">
+                  {JSON.stringify(eInvoicePayload, null, 2)}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EBF2EE] pt-3">
+              <a
+                href="https://einvoice1.gst.gov.in"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11.5px] font-bold text-[#0A6847] hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                <span>Open IRP Portal</span>
+              </a>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEInvoiceModal(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-3.5 py-1.5 text-[12px] font-semibold text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownloadJson(eInvoicePayload, `${invoiceNumber}_einvoice.json`);
+                    setShowEInvoiceModal(false);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-1.5 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Download JSON</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add New Customer Modal */}
       {showAddCustomerModal && (

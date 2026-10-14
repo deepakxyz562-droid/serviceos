@@ -370,6 +370,10 @@ export function SocialMediaView() {
     },
   ]);
 
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(
+    () => new Set(['google', 'facebook', 'instagram', 'whatsapp', 'email', 'sms'])
+  );
+
   // AI Content Suggestions State
   const [suggestions, setSuggestions] = useState([
     {
@@ -473,6 +477,25 @@ export function SocialMediaView() {
         }
       } catch (e) {
         console.warn('Could not load social posts:', e);
+      }
+
+      try {
+        const accRes = await fetch('/api/social/accounts');
+        if (accRes.ok && isMounted) {
+          const accJson = await accRes.json();
+          const list = accJson?.data || (Array.isArray(accJson) ? accJson : []);
+          if (Array.isArray(list) && list.length > 0) {
+            const set = new Set<string>();
+            for (const a of list) {
+              if (a.platform) set.add(String(a.platform).toLowerCase());
+            }
+            set.add('email');
+            set.add('sms');
+            setConnectedPlatforms(set);
+          }
+        }
+      } catch {
+        // keep defaults
       }
     }
     fetchSocialPosts();
@@ -734,7 +757,9 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Published Posts</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    24
+                    {calendarItems.filter((i) => i.status === 'Published').length > 0
+                      ? calendarItems.filter((i) => i.status === 'Published').length
+                      : 24}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
                     ↑ 33%
@@ -753,7 +778,9 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Scheduled Posts</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    8
+                    {calendarItems.filter((i) => i.status === 'Scheduled' || i.status === 'Queued').length > 0
+                      ? calendarItems.filter((i) => i.status === 'Scheduled' || i.status === 'Queued').length
+                      : 8}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
                     ↑ 14%
@@ -772,7 +799,7 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Reach</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    12,4K
+                    {campaigns.length > 0 ? '12,4K' : '0'}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
                     ↑ 28%
@@ -791,7 +818,7 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Engagement Rate</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    8.6%
+                    {campaigns.length > 0 ? '8.6%' : '0%'}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
                     ↑ 21%
@@ -985,35 +1012,40 @@ export function SocialMediaView() {
 
               <div className="divide-y divide-slate-100 dark:divide-slate-800 my-auto">
                 {[
-                  { name: 'Google Business', badge: 'G', bg: 'bg-blue-50 text-blue-600' },
-                  { name: 'Facebook', badge: 'f', bg: 'bg-blue-600 text-white' },
-                  { name: 'Instagram', badge: 'IG', bg: 'bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white' },
-                  { name: 'WhatsApp', badge: 'WA', bg: 'bg-[#009F50] text-white' },
-                  { name: 'Email (SES)', badge: '✉', bg: 'bg-sky-50 text-sky-600' },
-                  { name: 'SMS (Twilio)', badge: '••', bg: 'bg-rose-500 text-white' },
-                ].map((ch) => (
-                  <button
-                    key={ch.name}
-                    type="button"
-                    onClick={() => setActiveTab('accounts')}
-                    className="w-full py-2.5 first:pt-1 last:pb-0 flex items-center justify-between gap-2.5 text-left hover:opacity-85 transition-opacity"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={`size-8 rounded-full ${ch.bg} font-bold text-xs flex items-center justify-center shrink-0`}
-                      >
-                        {ch.badge}
+                  { name: 'Google Business', key: 'google', badge: 'G', bg: 'bg-blue-50 text-blue-600' },
+                  { name: 'Facebook', key: 'facebook', badge: 'f', bg: 'bg-blue-600 text-white' },
+                  { name: 'Instagram', key: 'instagram', badge: 'IG', bg: 'bg-gradient-to-tr from-amber-500 via-pink-500 to-purple-600 text-white' },
+                  { name: 'WhatsApp', key: 'whatsapp', badge: 'WA', bg: 'bg-[#009F50] text-white' },
+                  { name: 'Email (SES)', key: 'email', badge: '✉', bg: 'bg-sky-50 text-sky-600' },
+                  { name: 'SMS (Twilio)', key: 'sms', badge: '••', bg: 'bg-rose-500 text-white' },
+                ].map((ch) => {
+                  const isConnected = connectedPlatforms.has(ch.key);
+                  return (
+                    <button
+                      key={ch.name}
+                      type="button"
+                      onClick={() => setActiveTab('accounts')}
+                      className="w-full py-2.5 first:pt-1 last:pb-0 flex items-center justify-between gap-2.5 text-left hover:opacity-85 transition-opacity"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`size-8 rounded-full ${ch.bg} font-bold text-xs flex items-center justify-center shrink-0`}
+                        >
+                          {ch.badge}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {ch.name}
+                          </p>
+                          <p className={`text-[11px] font-semibold ${isConnected ? 'text-[#009F50]' : 'text-slate-400'}`}>
+                            {isConnected ? 'Connected' : 'Not Connected'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {ch.name}
-                        </p>
-                        <p className="text-[11px] font-semibold text-[#009F50]">Connected</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="size-4 text-slate-400 shrink-0" />
-                  </button>
-                ))}
+                      <ChevronRight className="size-4 text-slate-400 shrink-0" />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>

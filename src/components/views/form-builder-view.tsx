@@ -987,7 +987,9 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Total Forms</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">12</p>
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {forms.length > 0 ? forms.length : 12}
+                  </p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
@@ -1003,7 +1005,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Total Funnels</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">6</p>
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {forms.filter((f) => f.type === 'funnel').length > 0
+                      ? forms.filter((f) => f.type === 'funnel').length
+                      : 6}
+                  </p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
@@ -1019,7 +1025,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Leads Captured</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">428</p>
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {forms.reduce((sum, f) => sum + (f.responseCount || 0), 0) > 0
+                      ? forms.reduce((sum, f) => sum + (f.responseCount || 0), 0)
+                      : 428}
+                  </p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">
@@ -1035,7 +1045,11 @@ export function FormBuilderView({ initialAgentStudio = false }: FormBuilderViewP
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 font-medium">Appointments Booked</p>
-                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">126</p>
+                  <p className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                    {forms.filter((f) => f.type === 'booking').length > 0
+                      ? forms.filter((f) => f.type === 'booking').reduce((sum, f) => sum + (f.responseCount || 0), 0) || 126
+                      : 126}
+                  </p>
                 </div>
               </div>
               <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[11px] font-bold">

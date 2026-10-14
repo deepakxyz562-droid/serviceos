@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
           tables: DEFAULT_TABLES,
           billing: DEFAULT_BILLING,
           discounts: DEFAULT_DISCOUNTS,
+          deliverySettings: DEFAULT_DELIVERY_SETTINGS,
         };
       } else {
         parsedFieldsData = {
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
           tables: raw.tables && raw.tables.length > 0 ? raw.tables : DEFAULT_TABLES,
           billing: { ...DEFAULT_BILLING, ...(raw.billing || {}) },
           discounts: raw.discounts || DEFAULT_DISCOUNTS,
+          deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
         };
       }
     } catch {
@@ -48,8 +50,19 @@ export async function GET(req: NextRequest) {
         tables: DEFAULT_TABLES,
         billing: DEFAULT_BILLING,
         discounts: DEFAULT_DISCOUNTS,
+        deliverySettings: DEFAULT_DELIVERY_SETTINGS,
       };
     }
+
+    let parsedHours: Record<string, any> = {};
+    try {
+      if (config.businessHoursJson) parsedHours = JSON.parse(config.businessHoursJson);
+    } catch {}
+
+    let parsedDeliveryAreas: string[] = [];
+    try {
+      if (config.deliveryAreasJson) parsedDeliveryAreas = JSON.parse(config.deliveryAreasJson);
+    } catch {}
 
     return NextResponse.json({
       config: {
@@ -58,6 +71,20 @@ export async function GET(req: NextRequest) {
         billing: parsedFieldsData.billing,
         discounts: parsedFieldsData.discounts,
         fields: parsedFieldsData.fields,
+        deliverySettings: parsedFieldsData.deliverySettings,
+        businessHours: parsedHours,
+        deliveryAreas: parsedDeliveryAreas,
+      },
+      business: {
+        id: business.id,
+        name: business.name,
+        ownerName: business.ownerName || '',
+        phone: business.phone || '',
+        email: business.email || '',
+        address: business.address || '',
+        logoUrl: business.logoUrl || (parsedFieldsData.logoUrl || ''),
+        currency: business.currency || 'INR',
+        currencySymbol: business.currencySymbol || '₹',
       },
     });
   } catch (e: any) {
@@ -73,6 +100,25 @@ export async function PATCH(req: NextRequest) {
     const { business } = await requireQuoteFlowBusiness(req);
     const body = await req.json();
 
+    // 1. Update business profile fields on db.aiBusiness if supplied
+    const businessUpdates: Record<string, any> = {};
+    if (body.businessName !== undefined) businessUpdates.name = String(body.businessName).trim();
+    if (body.name !== undefined) businessUpdates.name = String(body.name).trim();
+    if (body.ownerName !== undefined) businessUpdates.ownerName = String(body.ownerName).trim();
+    if (body.phone !== undefined) businessUpdates.phone = String(body.phone).trim();
+    if (body.email !== undefined) businessUpdates.email = String(body.email).trim();
+    if (body.address !== undefined) businessUpdates.address = String(body.address).trim();
+    if (body.logoUrl !== undefined) businessUpdates.logoUrl = body.logoUrl ? String(body.logoUrl) : null;
+    if (body.currency !== undefined) businessUpdates.currency = String(body.currency);
+    if (body.currencySymbol !== undefined) businessUpdates.currencySymbol = String(body.currencySymbol);
+
+    if (Object.keys(businessUpdates).length > 0) {
+      await db.aiBusiness.update({
+        where: { id: business.id },
+        data: businessUpdates,
+      });
+    }
+
     let config = await db.gptformCommerceConfig.findFirst({
       where: { businessId: business.id },
     });
@@ -83,6 +129,7 @@ export async function PATCH(req: NextRequest) {
       tables: DEFAULT_TABLES,
       billing: DEFAULT_BILLING,
       discounts: DEFAULT_DISCOUNTS,
+      deliverySettings: DEFAULT_DELIVERY_SETTINGS,
     };
 
     if (config?.fieldsJson) {
@@ -96,6 +143,8 @@ export async function PATCH(req: NextRequest) {
             tables: raw.tables || DEFAULT_TABLES,
             billing: { ...DEFAULT_BILLING, ...(raw.billing || {}) },
             discounts: raw.discounts || DEFAULT_DISCOUNTS,
+            deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
+            logoUrl: raw.logoUrl,
           };
         }
       } catch {}
@@ -110,6 +159,34 @@ export async function PATCH(req: NextRequest) {
     if (body.tables !== undefined) container.tables = body.tables;
     if (body.billing !== undefined) container.billing = { ...container.billing, ...body.billing };
     if (body.discounts !== undefined) container.discounts = body.discounts;
+    if (body.logoUrl !== undefined) container.logoUrl = body.logoUrl;
+    if (body.deliverySettings !== undefined) {
+      container.deliverySettings = { ...container.deliverySettings, ...body.deliverySettings };
+    }
+    // Also accept individual delivery fields
+    if (body.minOrderAmount !== undefined) container.deliverySettings.minOrderAmount = Number(body.minOrderAmount);
+    if (body.deliveryCharge !== undefined) container.deliverySettings.deliveryCharge = Number(body.deliveryCharge);
+    if (body.freeDeliveryAbove !== undefined) container.deliverySettings.freeDeliveryAbove = Number(body.freeDeliveryAbove);
+    if (body.deliveryRadiusKm !== undefined) container.deliverySettings.deliveryRadiusKm = Number(body.deliveryRadiusKm);
+    if (body.enableLocalDelivery !== undefined) container.deliverySettings.enableLocalDelivery = Boolean(body.enableLocalDelivery);
+    if (body.enableStorePickup !== undefined) container.deliverySettings.enableStorePickup = Boolean(body.enableStorePickup);
+    if (body.estimatedDeliveryTime !== undefined) container.deliverySettings.estimatedDeliveryTime = String(body.estimatedDeliveryTime);
+
+    // Business hours JSON handling
+    let businessHoursJsonVal: string | undefined = undefined;
+    if (body.businessHoursJson !== undefined) {
+      businessHoursJsonVal = typeof body.businessHoursJson === 'object' ? JSON.stringify(body.businessHoursJson) : String(body.businessHoursJson);
+    } else if (body.businessHours !== undefined) {
+      businessHoursJsonVal = JSON.stringify(body.businessHours);
+    }
+
+    // Delivery areas JSON handling
+    let deliveryAreasJsonVal: string | undefined = undefined;
+    if (body.deliveryAreasJson !== undefined) {
+      deliveryAreasJsonVal = typeof body.deliveryAreasJson === 'object' ? JSON.stringify(body.deliveryAreasJson) : String(body.deliveryAreasJson);
+    } else if (body.deliveryAreas !== undefined) {
+      deliveryAreasJsonVal = JSON.stringify(body.deliveryAreas);
+    }
 
     if (!config) {
       config = await db.gptformCommerceConfig.create({
@@ -118,8 +195,12 @@ export async function PATCH(req: NextRequest) {
           catalogJson: JSON.stringify(body.catalogJson || []),
           fieldsJson: JSON.stringify(container),
           upiId: body.upiId || null,
-          currency: business.currency || 'INR',
-          currencySymbol: business.currencySymbol || '₹',
+          currency: businessUpdates.currency || business.currency || 'INR',
+          currencySymbol: businessUpdates.currencySymbol || business.currencySymbol || '₹',
+          businessHoursJson: businessHoursJsonVal || '{}',
+          deliveryAreasJson: deliveryAreasJsonVal || '[]',
+          greetingMessage: body.greetingMessage || null,
+          isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
         },
       });
     } else {
@@ -129,12 +210,18 @@ export async function PATCH(req: NextRequest) {
           ...(body.catalogJson !== undefined ? { catalogJson: JSON.stringify(body.catalogJson) } : {}),
           fieldsJson: JSON.stringify(container),
           ...(body.upiId !== undefined ? { upiId: body.upiId } : {}),
-          ...(body.deliveryAreasJson !== undefined ? { deliveryAreasJson: JSON.stringify(body.deliveryAreasJson) } : {}),
+          ...(deliveryAreasJsonVal !== undefined ? { deliveryAreasJson: deliveryAreasJsonVal } : {}),
+          ...(businessHoursJsonVal !== undefined ? { businessHoursJson: businessHoursJsonVal } : {}),
           ...(body.greetingMessage !== undefined ? { greetingMessage: body.greetingMessage } : {}),
           ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
         },
       });
     }
+
+    let parsedHours: Record<string, any> = {};
+    try {
+      if (config.businessHoursJson) parsedHours = JSON.parse(config.businessHoursJson);
+    } catch {}
 
     return NextResponse.json({
       config: {
@@ -143,6 +230,17 @@ export async function PATCH(req: NextRequest) {
         billing: container.billing,
         discounts: container.discounts,
         fields: container.fields,
+        deliverySettings: container.deliverySettings,
+        businessHours: parsedHours,
+      },
+      business: {
+        id: business.id,
+        name: businessUpdates.name || business.name,
+        ownerName: businessUpdates.ownerName !== undefined ? businessUpdates.ownerName : business.ownerName,
+        phone: businessUpdates.phone !== undefined ? businessUpdates.phone : business.phone,
+        email: businessUpdates.email !== undefined ? businessUpdates.email : business.email,
+        address: businessUpdates.address !== undefined ? businessUpdates.address : business.address,
+        logoUrl: businessUpdates.logoUrl !== undefined ? businessUpdates.logoUrl : business.logoUrl,
       },
     });
   } catch (e: any) {
@@ -152,6 +250,16 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+const DEFAULT_DELIVERY_SETTINGS = {
+  minOrderAmount: 200,
+  deliveryCharge: 30,
+  freeDeliveryAbove: 500,
+  deliveryRadiusKm: 5,
+  enableLocalDelivery: true,
+  enableStorePickup: true,
+  estimatedDeliveryTime: '30 - 45 minutes',
+};
 
 const DEFAULT_TABLES = [
   { id: 'tbl_1', name: 'Table 1', capacity: 4, section: 'Main Floor' },

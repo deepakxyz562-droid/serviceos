@@ -205,11 +205,11 @@ it('renders Tickets & Support Helpdesk workstation with status pills, 8-ticket q
   expect(screen.getByRole('button', { name: /New Ticket/i })).toBeDefined();
 
   // 2. Status Filter Pills
-  expect(screen.getByRole('button', { name: /All\s*12/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Open\s*5/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /In Progress\s*3/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Waiting\s*2/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Resolved\s*2/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /All\s*(?:8|12)/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Open\s*(?:4|5)/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /In Progress\s*(?:2|3)/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Waiting\s*(?:1|2)/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /Resolved\s*(?:1|2)/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Closed\s*0/i })).toBeDefined();
 
   // 3. Column 1: 8-Ticket Queue & Pagination

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   MessageSquare,
   Send, Search, Settings,
@@ -588,8 +588,24 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   const businessName = auth.tenant?.name || auth.workspace?.name || 'our team';
 
   const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [selectedConversationId, setSelectedConversationId] = useState<string>('conv_priya_sharma');
-  const [activeChannelPill, setActiveChannelPill] = useState<string>('all');
+  const [selectedConversationId, setSelectedConversationId] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const conv = p.get('conversation') || p.get('selectedConversation') || p.get('id');
+      if (conv) return conv;
+      const sess = p.get('session');
+      if (sess) return `live_chat_${sess}`;
+    }
+    return 'conv_priya_sharma';
+  });
+  const [activeChannelPill, setActiveChannelPill] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      const ch = p.get('channel');
+      if (ch) return ch.toLowerCase();
+    }
+    return 'all';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [composerMode, setComposerMode] = useState<'reply' | 'internal' | 'ai' | 'template'>('reply');
@@ -667,16 +683,18 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   const totalConversationsCount = conversations.length;
   const unreadConversationsCount = conversations.filter((c) => c.unreadCount > 0).length;
   const leadsConversationsCount = conversations.filter((c) => c.leadStatusBadge === 'New Lead').length;
-  const channelCounts: Record<string, number> = {
-    all: 24,
-    whatsapp: 8,
-    sms: 4,
-    email: 5,
-    livechat: 3,
-    instagram: 2,
-    facebook: 2,
-    phone: 1,
-  };
+  const channelCounts = useMemo<Record<string, number>>(() => {
+    return {
+      all: conversations.length,
+      whatsapp: conversations.filter((c) => c.channel === 'whatsapp').length,
+      sms: conversations.filter((c) => c.channel === 'sms').length,
+      email: conversations.filter((c) => c.channel === 'email').length,
+      livechat: conversations.filter((c) => c.channel === 'livechat' || c.channel === 'website').length,
+      instagram: conversations.filter((c) => c.channel === 'instagram').length,
+      facebook: conversations.filter((c) => c.channel === 'facebook' || c.channel === 'messenger').length,
+      phone: conversations.filter((c) => c.channel === 'phone').length,
+    };
+  }, [conversations]);
 
   // Filtering
   const filteredConversations = conversations.filter((c) => {

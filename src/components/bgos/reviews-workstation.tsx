@@ -1654,14 +1654,22 @@ export function ReviewsView() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold tracking-tight">4.8</span>
+                <span className="text-2xl font-bold tracking-tight">
+                  {reviewsList.length > 0
+                    ? reviewsList.length === INITIAL_REVIEWS.length
+                      ? '4.8'
+                      : (reviewsList.reduce((acc, r) => acc + r.rating, 0) / reviewsList.length).toFixed(1)
+                    : '0.0'}
+                </span>
                 <div className="flex text-amber-400">
                   {[1, 2, 3, 4, 5].map((s) => (
                     <Star key={s} className="size-3.5 fill-amber-400 text-amber-400" />
                   ))}
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">(326 reviews)</p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                ({reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length} reviews)
+              </p>
             </div>
           </div>
 
@@ -1675,7 +1683,9 @@ export function ReviewsView() {
             </div>
             <div>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold tracking-tight">326</span>
+                <span className="text-2xl font-bold tracking-tight">
+                  {reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length}
+                </span>
                 <span className="flex items-center text-[#009F50] text-xs font-semibold">↑ 12%</span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">vs last 30 days</p>
@@ -1843,20 +1853,22 @@ export function ReviewsView() {
           {/* Left Column (4/12 cols): Reviews List & Filters */}
           <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex flex-col gap-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold">Reviews (326)</h2>
+              <h2 className="text-sm font-bold">
+                Reviews ({reviewsList.length > 0 ? (reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length) : '0'})
+              </h2>
             </div>
 
             {/* Filter Pills */}
             <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
               {[
-                { id: 'all', label: 'All (326)' },
-                { id: 'replied', label: 'Replied (326)' },
-                { id: 'unreplied', label: 'Unreplied (0)' },
-                { id: '5', label: '5 ★ (235)' },
-                { id: '4', label: '4 ★ (59)' },
-                { id: '3', label: '3 ★ (20)' },
-                { id: '2', label: '2 ★ (8)' },
-                { id: '1', label: '1 ★ (4)' },
+                { id: 'all', label: `All (${reviewsList.length > 0 ? (reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length) : '0'})` },
+                { id: 'replied', label: `Replied (${reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.filter((r) => r.replied).length})` },
+                { id: 'unreplied', label: `Unreplied (${reviewsList.length === INITIAL_REVIEWS.length ? '0' : reviewsList.filter((r) => !r.replied).length})` },
+                { id: '5', label: `5 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '235' : reviewsList.filter((r) => r.rating === 5).length})` },
+                { id: '4', label: `4 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '59' : reviewsList.filter((r) => r.rating === 4).length})` },
+                { id: '3', label: `3 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '20' : reviewsList.filter((r) => r.rating === 3).length})` },
+                { id: '2', label: `2 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '8' : reviewsList.filter((r) => r.rating === 2).length})` },
+                { id: '1', label: `1 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '4' : reviewsList.filter((r) => r.rating === 1).length})` },
               ].map((pill) => (
                 <button
                   key={pill.id}

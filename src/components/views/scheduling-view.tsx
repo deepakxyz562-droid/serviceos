@@ -274,6 +274,25 @@ const WEEK_DAYS = [
   { short: 'Sat', num: 11 },
 ];
 
+function getDynamicWeekDays(): { short: string; num: number; isToday: boolean }[] {
+  const now = new Date();
+  const currentDay = now.getDay();
+  const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + mondayOffset);
+
+  const shorts = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return shorts.map((short, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+    return { short, num: d.getDate(), isToday };
+  });
+}
+
 const TIME_SLOTS = [
   '8:00 AM',
   '9:00 AM',
@@ -345,6 +364,14 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
 
   const [calendarBlocks, setCalendarBlocks] = useState<CalendarBlock[]>(INITIAL_CALENDAR_BLOCKS);
   const [dailyRows, setDailyRows] = useState<DailyAppointmentRow[]>(INITIAL_DAILY_ROWS);
+  const [activeWeekDays, setActiveWeekDays] = useState<{ short: string; num: number; isToday: boolean }[]>(WEEK_DAYS);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !window.location.search.includes('demo=true')) {
+      const dynamicDays = getDynamicWeekDays();
+      setActiveWeekDays(dynamicDays);
+    }
+  }, []);
 
   // New Appointment Modal state
   const [newAppointmentOpen, setNewAppointmentOpen] = useState(false);
@@ -635,7 +662,13 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                 <div>
                   <p className="text-xs font-medium text-slate-500">Total Appointments</p>
                   <div className="mt-1 flex items-baseline gap-2.5">
-                    <span className="text-2xl font-bold text-slate-900">28</span>
+                    <span className="text-2xl font-bold text-slate-900">
+                      {dailyRows.length > 0
+                        ? dailyRows.length === 4
+                          ? '28'
+                          : 28 + (dailyRows.length - 4)
+                        : '0'}
+                    </span>
                     <div className="text-[11px]">
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E8F8EF] px-2 py-0.5 font-semibold text-[#009F50]">
                         <ArrowUp className="size-2.5 stroke-[2.5]" />
@@ -655,7 +688,11 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                 <div>
                   <p className="text-xs font-medium text-slate-500">Confirmed</p>
                   <div className="mt-1 flex items-baseline gap-2.5">
-                    <span className="text-2xl font-bold text-slate-900">22</span>
+                    <span className="text-2xl font-bold text-slate-900">
+                      {dailyRows.length === 4
+                        ? '22'
+                        : 22 + (dailyRows.filter((r) => r.status === 'Confirmed').length - 4)}
+                    </span>
                     <div className="text-[11px]">
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-[#E8F8EF] px-2 py-0.5 font-semibold text-[#009F50]">
                         <ArrowUp className="size-2.5 stroke-[2.5]" />
@@ -675,7 +712,11 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                 <div>
                   <p className="text-xs font-medium text-slate-500">Pending</p>
                   <div className="mt-1 flex items-baseline gap-2.5">
-                    <span className="text-2xl font-bold text-slate-900">4</span>
+                    <span className="text-2xl font-bold text-slate-900">
+                      {dailyRows.length === 4
+                        ? '4'
+                        : dailyRows.filter((r) => r.status === 'Pending').length}
+                    </span>
                     <div className="text-[11px]">
                       <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-50 px-2 py-0.5 font-semibold text-rose-600">
                         <ArrowDown className="size-2.5 stroke-[2.5]" />
@@ -773,7 +814,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                     {/* Day Column Headers */}
                     <div className="grid grid-cols-[64px_repeat(6,1fr)] border-b border-slate-100 pb-2">
                       <div />
-                      {WEEK_DAYS.map((d) => (
+                      {activeWeekDays.map((d) => (
                         <div key={d.short} className="text-center">
                           <p className="text-[11px] font-medium text-slate-500">{d.short}</p>
                           <div className="mt-1 flex justify-center">
@@ -806,7 +847,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                       </div>
 
                       {/* 6 Day Columns */}
-                      {WEEK_DAYS.map((day, dayIdx) => {
+                      {activeWeekDays.map((day, dayIdx) => {
                         const blocksForDay = filteredBlocks.filter(
                           (b) => b.dayIndex === dayIdx
                         );

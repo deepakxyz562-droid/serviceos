@@ -25,6 +25,7 @@ import {
   Plus,
   Printer,
   Receipt,
+  RefreshCw,
   Search,
   Send,
   Settings,
@@ -1046,11 +1047,10 @@ export function BosWebApp({
           authFetch('/api/commerce/khata', { credentials: 'include' }),
           authFetch('/api/commerce/daybook', { credentials: 'include' }),
           authFetch('/api/commerce/promotions', { credentials: 'include' }),
-          authFetch('/api/customers', { credentials: 'include' }),
+          authFetch('/api/commerce/customers', { credentials: 'include' }),
           authFetch('/api/bookings', { credentials: 'include' }),
-          // Quote-flow invoices — separate contract from /api/invoices (CRM tenant system).
-          // Used by the BOS Invoices workstation. GET returns { invoices: [...enriched], overview }
-          authFetch('/api/quote-flow/invoices', { credentials: 'include' }),
+          // Commerce invoices — authoritative BOS API route for invoices
+          authFetch('/api/commerce/invoices', { credentials: 'include' }),
         ]);
 
         if (cancelled) return;
@@ -1123,6 +1123,7 @@ export function BosWebApp({
         if (configRes.status === 'fulfilled' && configRes.value.ok) {
           const cfgData = await configRes.value.json().catch(() => null);
           const cfg = cfgData?.config;
+          const biz = cfgData?.business;
           if (cfg) {
             try {
               const parsed =
@@ -1133,12 +1134,33 @@ export function BosWebApp({
             } catch {
               // ignore
             }
-            setStoreSettings((prev) => ({
-              ...prev,
-              ...(cfg.upiId ? { upiId: String(cfg.upiId) } : {}),
-              ...(typeof cfg.isActive === 'boolean' ? { storeLive: cfg.isActive } : {}),
-              ...(cfg.currencySymbol ? { currencySymbol: String(cfg.currencySymbol) } : {}),
-            }));
+            setStoreSettings((prev) => {
+              const next = { ...prev };
+              if (cfg.upiId) next.upiId = String(cfg.upiId);
+              if (typeof cfg.isActive === 'boolean') next.storeLive = cfg.isActive;
+              if (cfg.currencySymbol) next.currencySymbol = String(cfg.currencySymbol);
+              if (cfg.billing?.gstin) next.gstin = String(cfg.billing.gstin);
+              if (cfg.businessHours && typeof cfg.businessHours === 'object') {
+                next.businessHours = cfg.businessHours;
+              }
+              if (cfg.deliverySettings) {
+                if (cfg.deliverySettings.minOrderAmount !== undefined) next.minOrderAmount = Number(cfg.deliverySettings.minOrderAmount);
+                if (cfg.deliverySettings.deliveryCharge !== undefined) next.deliveryCharge = Number(cfg.deliverySettings.deliveryCharge);
+                if (cfg.deliverySettings.freeDeliveryAbove !== undefined) next.freeDeliveryAbove = Number(cfg.deliverySettings.freeDeliveryAbove);
+                if (cfg.deliverySettings.deliveryRadiusKm !== undefined) next.deliveryRadiusKm = Number(cfg.deliverySettings.deliveryRadiusKm);
+                if (cfg.deliverySettings.enableLocalDelivery !== undefined) next.enableLocalDelivery = Boolean(cfg.deliverySettings.enableLocalDelivery);
+                if (cfg.deliverySettings.enableStorePickup !== undefined) next.enableStorePickup = Boolean(cfg.deliverySettings.enableStorePickup);
+                if (cfg.deliverySettings.estimatedDeliveryTime !== undefined) next.estimatedDeliveryTime = String(cfg.deliverySettings.estimatedDeliveryTime);
+              }
+              if (biz) {
+                if (biz.name && !/default|workspace|demo/i.test(biz.name)) next.businessName = biz.name;
+                if (biz.phone) next.phone = biz.phone;
+                if (biz.email) next.email = biz.email;
+                if (biz.address) next.address = biz.address;
+                if (biz.logoUrl) next.logoUrl = biz.logoUrl;
+              }
+              return next;
+            });
           }
         }
 
@@ -1404,22 +1426,32 @@ export function BosWebApp({
             setCustomers((prev) => {
               const byName = new Set(prev.map((c) => c.name.toLowerCase()));
               const extras: BosCustomer[] = [];
-              for (const raw of list.slice(0, 10) as Array<Record<string, unknown>>) {
+              for (const raw of list as Array<Record<string, unknown>>) {
                 const name = String(raw.name || '').trim();
                 if (!name || byName.has(name.toLowerCase())) continue;
                 byName.add(name.toLowerCase());
+                const spent = Number(raw.totalSpent) || 0;
+                const count = Number(raw.ordersCount) || 0;
+                const rawTag = String(raw.tag || 'REGULAR').toUpperCase();
+                const segment: BosCustomer['segment'] =
+                  rawTag === 'VIP' ? 'VIP' : rawTag === 'NEW' ? 'New' : 'Regular';
                 extras.push({
                   id: String(raw.id || `db-cust-${extras.length}`),
                   name,
                   phone: String(raw.phone || '+91 98765 12345'),
                   email: raw.email ? String(raw.email) : undefined,
-                  address: String(raw.address || 'Local Area'),
-                  segment: 'Regular',
-                  ordersCount: 3,
-                  totalSpent: 3200,
-                  khataBalance: 0,
-                  loyaltyPoints: 95,
-                  lastVisit: 'This Week',
+                  address: String(raw.deliveryAddress || raw.address || 'Local Customer'),
+                  segment,
+                  ordersCount: count,
+                  totalSpent: spent,
+                  khataBalance: Number(raw.khataBalance ?? 0),
+                  loyaltyPoints: Math.round(spent / 100) * 5,
+                  lastVisit: raw.lastVisit
+                    ? new Date(String(raw.lastVisit)).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                      })
+                    : 'Recently',
                 });
               }
               return [...prev, ...extras];
@@ -1720,6 +1752,12 @@ export function BosWebApp({
       }),
     );
 
+    if (!demoMode) {
+      setTimeout(() => {
+        setBootstrapNonce((prev) => prev + 1);
+      }, 500);
+    }
+
     // 5. Trigger receipt printing ONLY after server confirmation
     if (payload.printReceipt) {
       void printCustomerBill(
@@ -1927,14 +1965,16 @@ export function BosWebApp({
   };
 
   const handleAddCustomer = async (customer: Omit<BosCustomer, 'id'>) => {
-    const res = await authFetch('/api/customers', {
+    const requestKey = newRequestKey();
+    const res = await authFetch('/api/commerce/customers', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Idempotency-Key': requestKey,
+      },
       body: JSON.stringify({
         name: customer.name,
         phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
       }),
     });
 
@@ -1949,6 +1989,11 @@ export function BosWebApp({
     const created: BosCustomer = {
       ...customer,
       id: realId,
+      ordersCount: 0,
+      totalSpent: 0,
+      khataBalance: 0,
+      loyaltyPoints: 0,
+      lastVisit: 'Just now',
     };
     setCustomers((prev) => [created, ...prev]);
   };
@@ -2211,11 +2256,16 @@ export function BosWebApp({
     if (patch.city !== undefined) configPatch.city = patch.city;
     if (patch.state !== undefined) configPatch.state = patch.state;
     if (patch.pincode !== undefined) configPatch.pincode = patch.pincode;
+    if (patch.logoUrl !== undefined) configPatch.logoUrl = patch.logoUrl;
+    if (patch.businessName !== undefined) configPatch.businessName = patch.businessName;
+    if (patch.businessHours !== undefined) configPatch.businessHours = patch.businessHours;
     if (patch.minOrderAmount !== undefined) configPatch.minOrderAmount = patch.minOrderAmount;
     if (patch.deliveryCharge !== undefined) configPatch.deliveryCharge = patch.deliveryCharge;
     if (patch.freeDeliveryAbove !== undefined) configPatch.freeDeliveryAbove = patch.freeDeliveryAbove;
+    if (patch.deliveryRadiusKm !== undefined) configPatch.deliveryRadiusKm = patch.deliveryRadiusKm;
     if (patch.enableLocalDelivery !== undefined) configPatch.enableLocalDelivery = patch.enableLocalDelivery;
     if (patch.enableStorePickup !== undefined) configPatch.enableStorePickup = patch.enableStorePickup;
+    if (patch.estimatedDeliveryTime !== undefined) configPatch.estimatedDeliveryTime = patch.estimatedDeliveryTime;
 
     if (Object.keys(configPatch).length > 0) {
       promises.push(
@@ -2261,7 +2311,7 @@ export function BosWebApp({
   };
 
   // ── BOS Invoices Workstation wiring ───────────────────────────────────
-  // The workstation POSTs to /api/quote-flow/invoices on its own (so it can
+  // The workstation POSTs to /api/commerce/invoices on its own (so it can
   // open the print window immediately), then calls `onInvoiceSaved` with the
   // server-verified record. We prepend to local state so the new invoice
   // shows up in the "Recent Invoices" panel without waiting for a refetch.
@@ -2273,7 +2323,7 @@ export function BosWebApp({
     });
   }, []);
 
-  // PATCH /api/quote-flow/invoices/[id] with { status: 'PAID' }.
+  // PATCH /api/commerce/invoices/[id] with { status: 'PAID' }.
   // The route enforces atomicity: it records an INVOICE_PAYMENT via the
   // shared money route, then re-fetches and returns the updated invoice.
   const handleMarkInvoicePaid = useCallback(async (invoiceId: string) => {
@@ -2293,7 +2343,7 @@ export function BosWebApp({
 
     try {
       const res = await authFetch(
-        `/api/quote-flow/invoices/${encodeURIComponent(invoiceId)}`,
+        `/api/commerce/invoices/${encodeURIComponent(invoiceId)}`,
         {
           method: 'PATCH',
           credentials: 'include',
@@ -2310,8 +2360,7 @@ export function BosWebApp({
             `Failed to mark invoice paid (HTTP ${res.status})`,
         );
       }
-      // Reconcile with the server-verified record (the PATCH handler returns
-      // the enriched invoice shape via its inner GET call).
+      // Reconcile with the server-verified record
       const updated = data?.invoice;
       if (updated) {
         const statusMap: Record<string, SavedBosInvoice['status']> = {
@@ -2351,15 +2400,13 @@ export function BosWebApp({
     }
   }, [invoices]);
 
-  // DELETE /api/quote-flow/invoices/[id]. The server refuses to delete
-  // invoices that already have payments (409 Conflict) — we surface that
-  // to the user instead of silently removing from the local list.
+  // DELETE /api/commerce/invoices/[id].
   const handleDeleteInvoice = useCallback(async (invoiceId: string) => {
     const prev = invoices;
     setInvoices((cur) => cur.filter((i) => i.id !== invoiceId));
     try {
       const res = await authFetch(
-        `/api/quote-flow/invoices/${encodeURIComponent(invoiceId)}`,
+        `/api/commerce/invoices/${encodeURIComponent(invoiceId)}`,
         {
           method: 'DELETE',
           credentials: 'include',
@@ -2815,8 +2862,22 @@ export function BosWebApp({
             )}
           </div>
 
-          {/* Right: Help (?), Notifications Bell, and User Profile */}
+          {/* Right: Refresh/Sync, Help (?), Notifications Bell, and User Profile */}
           <div className="flex items-center gap-2.5">
+            {/* Live Sync / Refresh Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setBootstrapNonce((prev) => prev + 1);
+                toast.success('Syncing data with server...');
+              }}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E4EFEA] bg-[#F8FCFA] text-[#475569] hover:bg-[#E6F6F0] hover:text-[#0A6847] transition cursor-pointer"
+              aria-label="Refresh & Sync Data"
+              title="Refresh & Sync Data"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+
             {/* Help Button */}
             <div className="relative">
               <button

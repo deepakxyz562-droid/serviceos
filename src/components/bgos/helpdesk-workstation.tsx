@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus,
   Search,
@@ -511,6 +511,9 @@ export function HelpCenterView() {
             });
             setTickets(mappedTickets);
             if (mappedTickets[0]) setSelectedTicketId(mappedTickets[0].id);
+          } else if (isMounted && data && (data.empty === true || (Array.isArray(data?.tickets) && data.tickets.length === 0 && !data.isSample))) {
+            setTickets([]);
+            setSelectedTicketId('');
           }
         }
       } catch {
@@ -538,14 +541,16 @@ export function HelpCenterView() {
     return true;
   });
 
-  const statusPills: { label: StatusFilterPill; count: number }[] = [
-    { label: 'All', count: 12 },
-    { label: 'Open', count: 5 },
-    { label: 'In Progress', count: 3 },
-    { label: 'Waiting', count: 2 },
-    { label: 'Resolved', count: 2 },
-    { label: 'Closed', count: 0 },
-  ];
+  const statusPills = useMemo<{ label: StatusFilterPill; count: number }[]>(() => {
+    return [
+      { label: 'All', count: tickets.length },
+      { label: 'Open', count: tickets.filter((t) => t.status === 'Open').length },
+      { label: 'In Progress', count: tickets.filter((t) => t.status === 'In Progress').length },
+      { label: 'Waiting', count: tickets.filter((t) => t.status === 'Waiting').length },
+      { label: 'Resolved', count: tickets.filter((t) => t.status === 'Resolved').length },
+      { label: 'Closed', count: tickets.filter((t) => t.status === 'Closed').length },
+    ];
+  }, [tickets]);
 
   const toggleTicketCheck = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

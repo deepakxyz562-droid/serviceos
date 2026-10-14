@@ -118,6 +118,7 @@ export type BosCoupon = {
 
 export type BosStoreSettings = {
   businessName: string;
+  ownerName?: string;
   businessSlug: string;
   businessType: string;
   blueprintType?: import('../../../shared/blueprint/types').BusinessType;
@@ -156,6 +157,11 @@ export type BosStoreSettings = {
   enableStorePickup: boolean;
   themeColor: string;
   announcementBanner: string;
+  logoUrl?: string;
+  businessHours?: Record<string, { open: boolean; start: string; end: string }>;
+  estimatedDeliveryTime?: string;
+  eInvoiceStatus?: boolean;
+  registrationType?: string;
 };
 
 export function formatBosCurrency(amount: number, symbol = '₹'): string {
