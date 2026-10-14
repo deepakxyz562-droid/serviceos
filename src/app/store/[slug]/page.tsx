@@ -137,10 +137,17 @@ const DEMO_STORE = {
 export async function generateMetadata({ params }: StorePageProps) {
   const { slug } = await params;
 
-  if (slug === 'my-store' || slug === 'sharma-kirana' || slug.startsWith('demo')) {
+  if (slug === 'sharma-kirana') {
     return {
       title: `${DEMO_STORE.businessName} — Digital Menu & Storefront`,
       description: `Browse fresh groceries, dairy, snacks, and daily essentials delivered to your home.`,
+    };
+  }
+
+  if (slug === 'my-store' || slug.startsWith('demo')) {
+    return {
+      title: `My Store — Digital Menu & Storefront`,
+      description: `Browse products and daily essentials with fast local delivery.`,
     };
   }
 
@@ -156,8 +163,8 @@ export async function generateMetadata({ params }: StorePageProps) {
     };
   } catch {
     return {
-      title: `${DEMO_STORE.businessName} — Digital Menu & Storefront`,
-      description: `Browse groceries and essentials.`,
+      title: `Online Store — Digital Menu & Storefront`,
+      description: `Browse products and daily essentials.`,
     };
   }
 }
@@ -197,7 +204,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     console.warn('[store/page] Database lookup failed for tenant, checking fallback:', err);
   }
 
-  // If no tenant is found and it's a demo slug or fallback is requested, serve DEMO_STORE
+  // If no tenant is found and it's a demo slug or fallback is requested, serve dynamic fallback
   if (!tenant) {
     if (isDemoSlug || slug === 'store') {
       let demoConfig: any = null;
@@ -213,25 +220,39 @@ export default async function StorePage({ params, searchParams }: StorePageProps
         });
       } catch {}
 
-      const demoAvailability = computeStoreAvailabilityFromConfig(demoConfig, DEMO_STORE.businessName);
+      const isExplicitSharma = slug === 'sharma-kirana';
+      const storeName = isExplicitSharma ? 'Sharma Kirana Store' : (slug === 'my-store' ? 'My Store' : 'Local Store');
+      const storeAddress = isExplicitSharma ? 'Station Road, Kankarbagh, Patna, Bihar' : 'Local Neighborhood';
+      const storeBanner = isExplicitSharma ? '🎉 Welcome to Sharma Kirana Store! Order online for 30-45 min local delivery.' : '';
+      const storeDiscounts = isExplicitSharma ? DEMO_STORE.discounts : [];
+      const storeBilling = {
+        taxRate: isExplicitSharma ? 5 : 0,
+        taxType: 'inclusive' as const,
+        taxName: 'GST',
+        serviceChargeRate: 0,
+        gstin: isExplicitSharma ? '10AAACS1429B1Z8' : '',
+        billFooterText: `Thank you for shopping local with ${storeName}!`,
+      };
+
+      const demoAvailability = computeStoreAvailabilityFromConfig(demoConfig, storeName);
 
       return (
         <StoreClient
-          businessId={DEMO_STORE.businessId}
-          businessName={DEMO_STORE.businessName}
-          businessPhone={DEMO_STORE.businessPhone}
-          businessAddress={DEMO_STORE.businessAddress}
+          businessId={isExplicitSharma ? DEMO_STORE.businessId : slug}
+          businessName={storeName}
+          businessPhone={isExplicitSharma ? DEMO_STORE.businessPhone : ''}
+          businessAddress={storeAddress}
           currency={DEMO_STORE.currency}
           currencySymbol={DEMO_STORE.currencySymbol}
-          upiId={demoConfig?.upiId || 'sharmakirana@okhdfcbank'}
+          upiId={demoConfig?.upiId || (isExplicitSharma ? 'sharmakirana@okhdfcbank' : '')}
           paymentQrUrl=""
           enableOnlinePayment={true}
-          greeting={DEMO_STORE.greeting}
-          bannerText={DEMO_STORE.bannerText}
+          greeting={`Welcome to ${storeName}!`}
+          bannerText={storeBanner}
           catalog={DEMO_STORE.catalog}
           tableNumber={table || null}
-          billing={DEMO_STORE.billing}
-          discounts={DEMO_STORE.discounts}
+          billing={storeBilling}
+          discounts={storeDiscounts}
           isStoreOpen={demoAvailability.isOpen}
           storeCloseReason={demoAvailability.reason}
           todayHoursText={demoAvailability.todayHoursText}
@@ -278,9 +299,16 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     catalog = DEMO_STORE.catalog;
   }
 
-  let billingConfig: any = DEMO_STORE.billing;
-  let discountsConfig: any[] = DEMO_STORE.discounts;
-  let bannerText: string = DEMO_STORE.bannerText;
+  let billingConfig: any = {
+    taxRate: 0,
+    taxType: 'inclusive' as const,
+    taxName: 'GST',
+    serviceChargeRate: 0,
+    gstin: '',
+    billFooterText: `Thank you for shopping local with ${businessName}!`,
+  };
+  let discountsConfig: any[] = [];
+  let bannerText: string = '';
 
   let paymentQrUrl: string = '';
   let enableOnlinePayment: boolean = true;
@@ -288,9 +316,11 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   if (config?.fieldsJson) {
     try {
       const parsedFields = JSON.parse(config.fieldsJson);
-      if (parsedFields.billing) billingConfig = parsedFields.billing;
+      if (parsedFields.billing) {
+        billingConfig = { ...billingConfig, ...parsedFields.billing };
+      }
       if (typeof parsedFields.bannerText === 'string' && parsedFields.bannerText.trim()) {
-        bannerText = parsedFields.bannerText;
+        bannerText = parsedFields.bannerText.trim();
       }
       if (parsedFields.paymentQrUrl) paymentQrUrl = parsedFields.paymentQrUrl;
       if (parsedFields.enableOnlinePayment !== undefined) enableOnlinePayment = Boolean(parsedFields.enableOnlinePayment);
@@ -322,12 +352,16 @@ export default async function StorePage({ params, searchParams }: StorePageProps
 
   const availability = computeStoreAvailabilityFromConfig(config, businessName);
 
+  const businessAddress = tenant?.address
+    ? [tenant.address, tenant.city].filter(Boolean).join(', ')
+    : 'Local Neighborhood';
+
   return (
     <StoreClient
       businessId={businessId}
       businessName={businessName}
       businessPhone={businessPhone}
-      businessAddress={tenant?.address ? `${tenant.address}, ${tenant.city || ''}` : DEMO_STORE.businessAddress}
+      businessAddress={businessAddress}
       currency={config?.currency || 'INR'}
       currencySymbol={config?.currencySymbol || '₹'}
       upiId={config?.upiId || ''}

@@ -27,7 +27,7 @@ export default function ScanQrScreen() {
   const { setScannedStore } = useAffinityStore();
 
   const [scanned, setScanned] = useState(false);
-  const [detectedStore, setDetectedStore] = useState<Store | null>(SAMPLE_STORES[0]); // Default to Sharma Kirana Store for instant preview
+  const [detectedStore, setDetectedStore] = useState<Store | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -42,11 +42,11 @@ export default function ScanQrScreen() {
     await haptic.success();
 
     try {
-      let slug = 'sharma-kirana';
+      let slug = 'store';
       if (data.includes('/store/')) {
         const parts = data.split('/store/');
         const queryClean = parts[1].split('?')[0];
-        slug = queryClean.split('/')[0] || 'sharma-kirana';
+        slug = queryClean.split('/')[0] || 'store';
       } else if (data.startsWith('bos://store/')) {
         slug = data.replace('bos://store/', '').split('?')[0];
       }
@@ -54,7 +54,7 @@ export default function ScanQrScreen() {
       const { store } = await getStoreBySlug(slug);
       setDetectedStore(store);
     } catch {
-      setDetectedStore(SAMPLE_STORES[0]);
+      setDetectedStore(null);
     }
   };
 

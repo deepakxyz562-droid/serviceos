@@ -40,9 +40,9 @@ export async function GET(
     } catch {}
 
     let businessId = tenant?.id || slug;
-    let businessName = tenant?.name || 'Local Store';
-    let businessPhone = tenant?.phone || '+91 98765 43210';
-    let businessAddress = [tenant?.address, tenant?.city].filter(Boolean).join(', ') || 'Local Area';
+    let businessName = tenant?.name || (slug === 'sharma-kirana' ? 'Sharma Kirana Store' : (slug === 'my-store' ? 'My Store' : 'Local Store'));
+    let businessPhone = tenant?.phone || (slug === 'sharma-kirana' ? '+91 98765 43210' : '');
+    let businessAddress = [tenant?.address, tenant?.city].filter(Boolean).join(', ') || (slug === 'sharma-kirana' ? 'Station Road, Kankarbagh, Patna, Bihar' : 'Local Area');
 
     try {
       if (tenant?.id) {
@@ -90,7 +90,7 @@ export async function GET(
         phone: businessPhone,
         address: businessAddress,
         coverImageUrl: tenant?.logo || '',
-        tagline: config?.greetingMessage || `${businessName} • Fresh Products & Fast Delivery`,
+        tagline: config?.greetingMessage || `${businessName} • Direct Store Ordering`,
       },
       config: {
         isStoreOpen: availability.isOpen,

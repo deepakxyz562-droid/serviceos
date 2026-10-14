@@ -117,6 +117,8 @@ export function StoreClient({
   const [orderType, setOrderType] = useState<'DINE_IN' | 'DELIVERY' | 'TAKEOUT'>(
     tableNumber ? 'DINE_IN' : 'DELIVERY'
   );
+  const [customerAppModalOpen, setCustomerAppModalOpen] = useState(false);
+  const [appBannerDismissed, setAppBannerDismissed] = useState(false);
 
   // Online Payment vs Counter COD state
   const effectiveUpiId = sanitizeUpiId(upiId);
@@ -622,27 +624,35 @@ export function StoreClient({
       )}
 
       {/* ── Smart App Banner (BOS Customer Mobile App Link) ──────────────── */}
-      <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 text-xs text-emerald-900">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 truncate">
-            <Smartphone className="h-4 w-4 text-emerald-600 shrink-0" />
-            <span className="truncate font-medium">
-              Get the <strong>BOS Customer App</strong> for instant QR ordering, favorites &amp; live delivery tracking.
-            </span>
+      {!appBannerDismissed && (
+        <div className="bg-emerald-50 border-b border-emerald-100 px-4 py-2 text-xs text-emerald-900">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 truncate">
+              <Smartphone className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span className="truncate font-medium">
+                Get the <strong>BOS Customer App</strong> for instant QR ordering, favorites &amp; live delivery tracking.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setCustomerAppModalOpen(true)}
+                className="font-bold text-emerald-700 hover:text-emerald-800 underline text-xs cursor-pointer"
+              >
+                Explore App →
+              </button>
+              <button
+                type="button"
+                onClick={() => setAppBannerDismissed(true)}
+                className="text-emerald-500 hover:text-emerald-800 p-0.5 rounded cursor-pointer transition"
+                aria-label="Dismiss banner"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.location.href = '/marketplace';
-              }
-            }}
-            className="shrink-0 font-bold text-emerald-700 hover:text-emerald-800 underline text-xs"
-          >
-            Explore App →
-          </button>
         </div>
-      </div>
+      )}
 
       {/* ── Main Web Storefront Header (Panel 2 from Mockup) ───────────── */}
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80 shadow-xs">
@@ -655,12 +665,18 @@ export function StoreClient({
             <div className="min-w-0">
               <h1 className="text-base sm:text-lg font-black text-slate-900 tracking-tight truncate flex items-center gap-1.5">
                 {businessName}
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                  Open
+                <span
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isStoreOpen !== false
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-rose-100 text-rose-800'
+                  }`}
+                >
+                  {isStoreOpen !== false ? 'Open' : 'Closed'}
                 </span>
               </h1>
               <p className="text-[11px] sm:text-xs text-slate-500 truncate font-medium">
-                Fresh Products • Best Prices • Home Delivery
+                {greeting || businessAddress || 'Direct Online Store'}
               </p>
             </div>
           </div>
@@ -1921,6 +1937,102 @@ export function StoreClient({
                 >
                   Back to Menu
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── BOS Customer App Modal ────────────────────────────────────── */}
+        {customerAppModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+            <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden animate-slide-up flex flex-col">
+              {/* Modal Header */}
+              <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 p-6 text-white text-center">
+                <button
+                  type="button"
+                  onClick={() => setCustomerAppModalOpen(false)}
+                  className="absolute right-4 top-4 p-1.5 rounded-full bg-black/20 hover:bg-black/30 text-white transition cursor-pointer"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center mb-3 shadow-inner border border-white/20">
+                  <Smartphone className="h-7 w-7 text-white" />
+                </div>
+                <h2 className="text-lg font-black tracking-tight">BOS Customer App</h2>
+                <p className="text-xs text-emerald-100 mt-1 max-w-xs mx-auto">
+                  Instant mobile ordering, favorites &amp; live WhatsApp tracking for {businessName}
+                </p>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 space-y-4 text-xs text-stone-600">
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70">
+                    <span className="text-base mb-1 block">⚡</span>
+                    <p className="font-bold text-stone-900 text-xs">Instant QR Order</p>
+                    <p className="text-[11px] text-stone-500 mt-0.5">Scan store standee or table to view catalog &amp; order</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70">
+                    <span className="text-base mb-1 block">📍</span>
+                    <p className="font-bold text-stone-900 text-xs">Live Tracking</p>
+                    <p className="text-[11px] text-stone-500 mt-0.5">Real-time status &amp; virtual queue notifications on WhatsApp</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70">
+                    <span className="text-base mb-1 block">💳</span>
+                    <p className="font-bold text-stone-900 text-xs">Direct UPI</p>
+                    <p className="text-[11px] text-stone-500 mt-0.5">100% direct payment to store owner with zero middleman</p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-stone-50 border border-stone-200/70">
+                    <span className="text-base mb-1 block">❤️</span>
+                    <p className="font-bold text-stone-900 text-xs">Saved Favorites</p>
+                    <p className="text-[11px] text-stone-500 mt-0.5">Bookmark your favorite local shops for 1-tap reordering</p>
+                  </div>
+                </div>
+
+                {/* QR Code / Mobile Deep Link Section */}
+                <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-100 flex items-center gap-3">
+                  <div className="bg-white p-1.5 rounded-xl border border-emerald-200 shadow-2xs shrink-0">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : 'https://bos.fieseros.com')}`}
+                      alt="Scan QR code"
+                      className="w-16 h-16 rounded"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-emerald-950 text-xs">Scan with phone camera</p>
+                    <p className="text-[11px] text-emerald-700 mt-0.5 leading-snug">
+                      Instant mobile store app. Add to your phone&apos;s home screen for 1-tap ordering.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
+                      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                        window.location.href = `boscustomer://store/${businessId}`;
+                      } else if (navigator.clipboard) {
+                        void navigator.clipboard.writeText(currentUrl);
+                        alert('Store link copied! Paste on your phone or WhatsApp to open.');
+                      }
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition active:scale-98 cursor-pointer"
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    <span>Open in App or Copy Store Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomerAppModalOpen(false)}
+                    className="w-full py-2 text-stone-400 hover:text-stone-600 font-semibold text-xs transition cursor-pointer"
+                  >
+                    Continue Shopping in Browser
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -99,8 +99,8 @@ export default function CheckoutScreen() {
     const newOrder: CustomerOrder = {
       id: `ord-${Date.now()}`,
       orderNumber: `${Math.floor(100000 + Math.random() * 900000)}`,
-      storeName: storeName || 'Sharma Kirana Store',
-      storeSlug: storeSlug || 'sharma-kirana',
+      storeName: storeName || 'Local Store',
+      storeSlug: storeSlug || 'store',
       items: [...items],
       total: grandTotal,
       status: 'CONFIRMED',
@@ -115,13 +115,13 @@ export default function CheckoutScreen() {
 
     // Also add to recent stores
     await addRecentStore({
-      id: storeId || 'sharma-kirana',
-      name: storeName || 'Sharma Kirana Store',
-      slug: storeSlug || 'sharma-kirana',
-      category: 'Kirana',
+      id: storeId || 'store',
+      name: storeName || 'Local Store',
+      slug: storeSlug || 'store',
+      category: 'General',
       description: 'Local Store',
       bannerUrl: '',
-      address: 'Patna',
+      address: 'Neighborhood',
       rating: 4.6,
       reviewCount: 250,
       deliveryTime: '30-45 min',
@@ -203,7 +203,7 @@ export default function CheckoutScreen() {
           {/* Store Info Banner */}
           <View style={styles.storeBanner}>
             <MaterialIcons name="storefront" size={22} color="#059669" />
-            <Text style={styles.storeNameText}>{storeName || 'Sharma Kirana Store'}</Text>
+            <Text style={styles.storeNameText}>{storeName || 'Local Store'}</Text>
           </View>
 
           {/* Delivery Mode Toggle */}
