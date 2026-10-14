@@ -4,6 +4,9 @@ import { notFound } from 'next/navigation';
 import { StoreClient } from './store-client';
 import { computeStoreAvailabilityFromConfig } from '@/lib/commerce/store-availability';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface StorePageProps {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ table?: string; ref?: string }>;
@@ -197,6 +200,21 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   // If no tenant is found and it's a demo slug or fallback is requested, serve DEMO_STORE
   if (!tenant) {
     if (isDemoSlug || slug === 'store') {
+      let demoConfig: any = null;
+      try {
+        demoConfig = await db.gptformCommerceConfig.findFirst({
+          where: {
+            OR: [
+              { businessId: DEMO_STORE.businessId },
+              { businessId: slug },
+            ],
+          },
+          orderBy: { updatedAt: 'desc' },
+        });
+      } catch {}
+
+      const demoAvailability = computeStoreAvailabilityFromConfig(demoConfig, DEMO_STORE.businessName);
+
       return (
         <StoreClient
           businessId={DEMO_STORE.businessId}
@@ -205,7 +223,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           businessAddress={DEMO_STORE.businessAddress}
           currency={DEMO_STORE.currency}
           currencySymbol={DEMO_STORE.currencySymbol}
-          upiId="sharmakirana@okhdfcbank"
+          upiId={demoConfig?.upiId || 'sharmakirana@okhdfcbank'}
           paymentQrUrl=""
           enableOnlinePayment={true}
           greeting={DEMO_STORE.greeting}
@@ -214,6 +232,9 @@ export default async function StorePage({ params, searchParams }: StorePageProps
           tableNumber={table || null}
           billing={DEMO_STORE.billing}
           discounts={DEMO_STORE.discounts}
+          isStoreOpen={demoAvailability.isOpen}
+          storeCloseReason={demoAvailability.reason}
+          todayHoursText={demoAvailability.todayHoursText}
         />
       );
     }

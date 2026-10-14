@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
           deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
           paymentQrUrl: raw.paymentQrUrl || '',
           enableOnlinePayment: raw.enableOnlinePayment !== undefined ? Boolean(raw.enableOnlinePayment) : true,
-          isStoreOpen: raw.isStoreOpen !== undefined ? Boolean(raw.isStoreOpen) : true,
+          isStoreOpen: raw.isStoreOpen !== undefined ? Boolean(raw.isStoreOpen) : (config?.isActive ?? true),
           lastActiveDate: raw.lastActiveDate || '',
           autoCloseIfInactive: raw.autoCloseIfInactive !== undefined ? Boolean(raw.autoCloseIfInactive) : true,
           manualCloseReason: raw.manualCloseReason || '',
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         deliverySettings: DEFAULT_DELIVERY_SETTINGS,
         paymentQrUrl: '',
         enableOnlinePayment: true,
-        isStoreOpen: true,
+        isStoreOpen: config?.isActive ?? true,
         lastActiveDate: '',
         autoCloseIfInactive: true,
         manualCloseReason: '',
@@ -195,6 +195,10 @@ export async function PATCH(req: NextRequest) {
             logoUrl: raw.logoUrl,
             paymentQrUrl: raw.paymentQrUrl,
             enableOnlinePayment: raw.enableOnlinePayment,
+            isStoreOpen: raw.isStoreOpen !== undefined ? Boolean(raw.isStoreOpen) : (config?.isActive ?? true),
+            lastActiveDate: raw.lastActiveDate || '',
+            autoCloseIfInactive: raw.autoCloseIfInactive !== undefined ? Boolean(raw.autoCloseIfInactive) : true,
+            manualCloseReason: raw.manualCloseReason || '',
           };
         }
       } catch {}
@@ -246,6 +250,10 @@ export async function PATCH(req: NextRequest) {
 
     const cleanUpiId = body.upiId !== undefined ? (sanitizeUpiId(body.upiId) || null) : undefined;
 
+    const effectiveIsActive = body.isStoreOpen !== undefined
+      ? Boolean(body.isStoreOpen)
+      : (body.isActive !== undefined ? Boolean(body.isActive) : undefined);
+
     if (!config) {
       config = await db.gptformCommerceConfig.create({
         data: {
@@ -258,7 +266,7 @@ export async function PATCH(req: NextRequest) {
           businessHoursJson: businessHoursJsonVal || '{}',
           deliveryAreasJson: deliveryAreasJsonVal || '[]',
           greetingMessage: body.greetingMessage || null,
-          isActive: body.isActive !== undefined ? Boolean(body.isActive) : true,
+          isActive: effectiveIsActive !== undefined ? effectiveIsActive : true,
         },
       });
     } else {
@@ -271,7 +279,7 @@ export async function PATCH(req: NextRequest) {
           ...(deliveryAreasJsonVal !== undefined ? { deliveryAreasJson: deliveryAreasJsonVal } : {}),
           ...(businessHoursJsonVal !== undefined ? { businessHoursJson: businessHoursJsonVal } : {}),
           ...(body.greetingMessage !== undefined ? { greetingMessage: body.greetingMessage } : {}),
-          ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+          ...(effectiveIsActive !== undefined ? { isActive: effectiveIsActive } : {}),
         },
       });
     }

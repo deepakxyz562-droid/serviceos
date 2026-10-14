@@ -1193,7 +1193,15 @@ export function BosWebApp({
               if (cfg.upiId) next.upiId = String(cfg.upiId);
               if (cfg.paymentQrUrl) next.paymentQrUrl = String(cfg.paymentQrUrl);
               if (cfg.enableOnlinePayment !== undefined) next.enableOnlinePayment = Boolean(cfg.enableOnlinePayment);
-              if (typeof cfg.isActive === 'boolean') next.storeLive = cfg.isActive;
+              if (typeof cfg.isActive === 'boolean') {
+                next.storeLive = cfg.isActive;
+                next.isStoreOpen = cfg.isStoreOpen !== undefined ? Boolean(cfg.isStoreOpen) : cfg.isActive;
+              } else if (cfg.isStoreOpen !== undefined) {
+                next.isStoreOpen = Boolean(cfg.isStoreOpen);
+              }
+              if (cfg.lastActiveDate) next.lastActiveDate = String(cfg.lastActiveDate);
+              if (cfg.autoCloseIfInactive !== undefined) next.autoCloseIfInactive = Boolean(cfg.autoCloseIfInactive);
+              if (cfg.manualCloseReason) next.manualCloseReason = String(cfg.manualCloseReason);
               if (cfg.currencySymbol) next.currencySymbol = String(cfg.currencySymbol);
               if (cfg.billing?.gstin) next.gstin = String(cfg.billing.gstin);
               if (cfg.businessHours && typeof cfg.businessHours === 'object') {
@@ -2395,6 +2403,13 @@ export function BosWebApp({
     if (patch.enableLocalDelivery !== undefined) configPatch.enableLocalDelivery = patch.enableLocalDelivery;
     if (patch.enableStorePickup !== undefined) configPatch.enableStorePickup = patch.enableStorePickup;
     if (patch.estimatedDeliveryTime !== undefined) configPatch.estimatedDeliveryTime = patch.estimatedDeliveryTime;
+    if (patch.isStoreOpen !== undefined) {
+      configPatch.isStoreOpen = patch.isStoreOpen;
+      configPatch.isActive = patch.isStoreOpen;
+    }
+    if (patch.lastActiveDate !== undefined) configPatch.lastActiveDate = patch.lastActiveDate;
+    if (patch.autoCloseIfInactive !== undefined) configPatch.autoCloseIfInactive = patch.autoCloseIfInactive;
+    if (patch.manualCloseReason !== undefined) configPatch.manualCloseReason = patch.manualCloseReason;
 
     if (Object.keys(configPatch).length > 0) {
       promises.push(

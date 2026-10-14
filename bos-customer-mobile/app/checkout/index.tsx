@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useCartStore } from '../../src/stores/cart-store';
 import { useAffinityStore } from '../../src/stores/affinity-store';
 import { CustomerOrder } from '../../src/types';
-import { COLORS } from '../../src/lib/constants';
+import { COLORS, API_BASE_URL } from '../../src/lib/constants';
 import { haptic } from '../../src/lib/haptics';
 
 export default function CheckoutScreen() {
@@ -56,6 +56,23 @@ export default function CheckoutScreen() {
       Alert.alert('Missing Address', 'Please enter your delivery address.');
       return;
     }
+
+    // Live availability check
+    try {
+      if (storeSlug) {
+        const checkRes = await fetch(`${API_BASE_URL}/api/public/store/${storeSlug}`);
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          if (checkData && checkData.isStoreOpen === false) {
+            Alert.alert(
+              'Store is Closed',
+              checkData.storeCloseReason || 'This store is currently closed and not accepting orders.'
+            );
+            return;
+          }
+        }
+      }
+    } catch {}
 
     if (paymentMethod === 'UPI' && !upiTrustConfirmed) {
       Alert.alert(
