@@ -4,10 +4,12 @@ import { Platform, View, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../../src/lib/constants';
 import { useCartStore } from '../../src/stores/cart-store';
+import { useMobileTranslation } from '../../src/stores/language-store';
 import { haptic } from '../../src/lib/haptics';
 
 export default function TabsLayout() {
   const totalCartItems = useCartStore((s) => s.getTotalItems());
+  const { t } = useMobileTranslation();
 
   return (
     <Tabs
@@ -42,8 +44,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarLabel: 'Home',
+          title: t('tab.home', 'Home'),
+          tabBarLabel: t('tab.home', 'Home'),
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="home" size={24} color={color} />
           ),
@@ -52,8 +54,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="orders"
         options={{
-          title: 'Orders',
-          tabBarLabel: 'Orders',
+          title: t('tab.orders', 'Orders'),
+          tabBarLabel: t('tab.orders', 'Orders'),
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="receipt-long" size={24} color={color} />
           ),
@@ -62,8 +64,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="favorites"
         options={{
-          title: 'Favorites',
-          tabBarLabel: 'Favorites',
+          title: t('tab.favorites', 'Favorites'),
+          tabBarLabel: t('tab.favorites', 'Favorites'),
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="favorite" size={24} color={color} />
           ),
@@ -72,8 +74,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="scan"
         options={{
-          title: 'Scan',
-          tabBarLabel: 'Scan',
+          title: t('tab.scan', 'Scan'),
+          tabBarLabel: t('tab.scan', 'Scan'),
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="qr-code-scanner" size={24} color={color} />
           ),
@@ -82,8 +84,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
-          tabBarLabel: 'Profile',
+          title: t('tab.profile', 'Profile'),
+          tabBarLabel: t('tab.profile', 'Profile'),
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="person-outline" size={24} color={color} />
           ),

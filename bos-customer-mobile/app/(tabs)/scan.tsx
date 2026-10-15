@@ -13,7 +13,8 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAffinityStore } from '../../src/stores/affinity-store';
-import { getStoreBySlug, SAMPLE_STORES } from '../../src/lib/api';
+import { useMobileTranslation } from '../../src/stores/language-store';
+import { getStoreBySlug } from '../../src/lib/api';
 import { Store } from '../../src/types';
 import { COLORS } from '../../src/lib/constants';
 import { haptic } from '../../src/lib/haptics';
@@ -25,6 +26,7 @@ export default function ScanQrScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const { setScannedStore } = useAffinityStore();
+  const { t } = useMobileTranslation();
 
   const [scanned, setScanned] = useState(false);
   const [detectedStore, setDetectedStore] = useState<Store | null>(null);
@@ -80,12 +82,14 @@ export default function ScanQrScreen() {
         >
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Scan QR Code</Text>
+        <Text style={styles.headerTitle}>{t('scan.title', 'Scan QR Code')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       {/* ── Subtitle Prompt ─────────────────────────────────────────── */}
-      <Text style={styles.subtitle}>Scan store QR code to quickly open the store</Text>
+      <Text style={styles.subtitle}>
+        {t('scan.subtitle', 'Scan store QR code to quickly open the store')}
+      </Text>
 
       {/* ── Camera Viewfinder Area ──────────────────────────────────── */}
       <View style={styles.cameraContainer}>
@@ -103,7 +107,9 @@ export default function ScanQrScreen() {
             <View style={styles.qrMock}>
               <MaterialIcons name="qr-code-2" size={120} color="#059669" />
             </View>
-            <Text style={styles.scanSimulateText}>Aim camera at store standee QR code</Text>
+            <Text style={styles.scanSimulateText}>
+              {t('scan.aimCamera', 'Aim camera at store standee QR code')}
+            </Text>
           </View>
         )}
 
@@ -130,6 +136,7 @@ export default function ScanQrScreen() {
                   source={{ uri: detectedStore.bannerUrl }}
                   style={styles.avatarImage}
                   resizeMode="cover"
+                  accessibilityLabel="Store logo"
                 />
               ) : (
                 <MaterialIcons name="storefront" size={24} color="#059669" />
@@ -137,7 +144,9 @@ export default function ScanQrScreen() {
             </View>
             <View style={styles.storeInfo}>
               <Text style={styles.storeName}>{detectedStore.name}</Text>
-              <Text style={styles.storePrompt}>Open store and start shopping</Text>
+              <Text style={styles.storePrompt}>
+                {t('scan.openPrompt', 'Open store and start shopping')}
+              </Text>
             </View>
           </View>
 
@@ -147,7 +156,7 @@ export default function ScanQrScreen() {
             onPress={handleOpenStore}
             activeOpacity={0.85}
           >
-            <Text style={styles.openButtonText}>Open Store</Text>
+            <Text style={styles.openButtonText}>{t('scan.openStore', 'Open Store')}</Text>
           </TouchableOpacity>
         </View>
       )}

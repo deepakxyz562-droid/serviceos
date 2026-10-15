@@ -11,11 +11,19 @@ export interface ListedStore {
   description: string;
   bannerUrl: string;
   address: string;
+  city?: string;
+  phone?: string;
   rating: number;
   deliveryTime: string;
   isOpen: boolean;
   itemCount: number;
   featuredItems: string[];
+  minOrderAmount?: number;
+  minDeliveryAmount?: number;
+  freeDeliveryAbove?: number;
+  deliveryCharge?: number;
+  enableStorePickup?: boolean;
+  enableLocalDelivery?: boolean;
 }
 
 /**
@@ -47,6 +55,7 @@ export async function GET(req: NextRequest) {
         address: true,
         city: true,
         logo: true,
+        phone: true,
       },
       take: 20,
     });
@@ -58,7 +67,7 @@ export async function GET(req: NextRequest) {
       take: 20,
     });
 
-    const configMap = new Map(configs.map((c) => [c.businessId, c]));
+    const configMap = new Map<string, any>(configs.map((c: any) => [c.businessId, c]));
 
     // 2. Compute average rating per tenant from the `Review` model.
     //    Review model: rating Int, tenantId String?, status String @default("published")
@@ -96,7 +105,7 @@ export async function GET(req: NextRequest) {
 
     // 3. Build the real DB-backed store list (no fake samples merged in).
     const dbStores: ListedStore[] = tenants.map((t) => {
-      const cfg = configMap.get(t.id);
+      const cfg: any = configMap.get(t.id);
       let cat = 'General';
       const ind = (t.industry || '').toLowerCase();
       if (ind.includes('food') || ind.includes('restaurant')) cat = 'Restaurant';
@@ -127,10 +136,20 @@ export async function GET(req: NextRequest) {
         } catch {}
       }
 
+      const deliverySettings = (fields && typeof fields === 'object' && fields.deliverySettings) || {};
+      const minOrderAmount = Number(deliverySettings.minOrderAmount) || 0;
+      const freeDeliveryAbove = Number(deliverySettings.freeDeliveryAbove) || 299;
+      const deliveryCharge = Number(deliverySettings.deliveryCharge) || 30;
+      const minDeliveryAmount = Number(deliverySettings.minDeliveryAmount) || freeDeliveryAbove || 299;
+      const enableStorePickup = deliverySettings.enableStorePickup !== false;
+      const enableLocalDelivery = deliverySettings.enableLocalDelivery !== false;
+
       const deliveryTime =
         typeof fields.deliveryTime === 'string' && fields.deliveryTime.trim()
           ? fields.deliveryTime.trim()
-          : 'Varies';
+          : (typeof deliverySettings.estimatedDeliveryTime === 'string' && deliverySettings.estimatedDeliveryTime.trim()
+              ? deliverySettings.estimatedDeliveryTime.trim()
+              : '30-45 min');
 
       return {
         id: t.id,
@@ -138,16 +157,21 @@ export async function GET(req: NextRequest) {
         slug: t.slug || t.id,
         category: cat,
         description: `${cat} store with instant WhatsApp ordering and live tracking`,
-        // Neutral placeholder: empty string when the tenant has no real logo.
-        // (Do NOT hot-link Unsplash images — UI renders its own fallback.)
         bannerUrl: t.logo || '',
         address: [t.address, t.city].filter(Boolean).join(', ') || 'Local Store',
+        city: t.city || '',
+        phone: t.phone || '',
         rating: ratingMap.get(t.id) ?? 0,
         deliveryTime,
         isOpen: cfg ? cfg.isActive : true,
-        // Real catalog count only — no fabricated fallback.
         itemCount: Array.isArray(items) ? items.length : 0,
         featuredItems: Array.isArray(items) ? items.slice(0, 3).map((i) => i.name).filter(Boolean) : [],
+        minOrderAmount,
+        minDeliveryAmount,
+        freeDeliveryAbove,
+        deliveryCharge,
+        enableStorePickup,
+        enableLocalDelivery,
       };
     });
 

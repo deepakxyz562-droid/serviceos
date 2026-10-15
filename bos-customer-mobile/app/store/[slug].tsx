@@ -9,14 +9,16 @@ import {
   Dimensions,
   Alert,
   Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { getStoreBySlug, SAMPLE_STORES, SAMPLE_PRODUCTS } from '../../src/lib/api';
+import { getStoreBySlug } from '../../src/lib/api';
 import { Store, Product } from '../../src/types';
 import { useCartStore } from '../../src/stores/cart-store';
 import { useAffinityStore } from '../../src/stores/affinity-store';
+import { useMobileTranslation } from '../../src/stores/language-store';
 import { COLORS } from '../../src/lib/constants';
 import { haptic } from '../../src/lib/haptics';
 
@@ -27,22 +29,44 @@ export default function StoreViewCustomerScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
 
   const { isFavorite, toggleFavorite, addRecentStore } = useAffinityStore();
-  const { items: cartItems, addItem, removeItem, getTotalItems, getTotalAmount } = useCartStore();
+  const {
+    items: cartItems,
+    storeId: cartStoreId,
+    storeName: cartStoreName,
+    addItem,
+    replaceCartWithItem,
+    removeItem,
+    clearCart,
+    getTotalItems,
+    getTotalAmount,
+  } = useCartStore();
+  const { t } = useMobileTranslation();
 
-  const [store, setStore] = useState<Store>(SAMPLE_STORES[0]);
-  const [products, setProducts] = useState<Product[]>(SAMPLE_PRODUCTS['sharma-kirana']);
+  const [store, setStore] = useState<Store | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!slug) return;
     void (async () => {
-      const data = await getStoreBySlug(slug || 'sharma-kirana');
-      setStore(data.store);
-      setProducts(data.products);
-      await addRecentStore(data.store);
+      setLoading(true);
+      try {
+        const data = await getStoreBySlug(slug);
+        setStore(data.store);
+        setProducts(data.products);
+        if (data.store && data.store.id) {
+          await addRecentStore(data.store);
+        }
+      } catch (err) {
+        console.warn('Failed to load store:', err);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [slug, addRecentStore]);
 
-  const favorited = isFavorite(store.id) || isFavorite(store.slug);
+  const favorited = store ? isFavorite(store.id) || isFavorite(store.slug) : false;
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -61,26 +85,124 @@ export default function StoreViewCustomerScreen() {
   const totalCartAmount = getTotalAmount();
 
   const getItemQty = (productId: string) => {
+    // If cart belongs to a different store, show 0 on this store's items
+    if (cartStoreId && store && cartStoreId !== store.id) return 0;
     const item = cartItems.find((i) => i.id === productId);
     return item ? item.qty : 0;
   };
 
   const handleToggleFavorite = async () => {
+    if (!store) return;
     await haptic.medium();
-    await toggleFavorite(store.slug || store.id);
+    await toggleFavorite(store);
   };
 
   const handleOpenCart = () => {
-    if (!store.isOpen) {
+    if (store && !store.isOpen) {
       Alert.alert(
-        'Store is Closed',
-        store.closeReason || 'This store is currently not taking orders. Please call or WhatsApp the shop directly.'
+        t('store.storeClosedNotice', 'Store is Closed'),
+        store.closeReason ||
+          t('store.storeClosedMsg', 'This store is currently not taking orders. Please call or WhatsApp the shop directly.')
       );
       return;
     }
     void haptic.light();
     router.push('/checkout');
   };
+
+  const handleAddItem = async (p: Product) => {
+    if (!store) return;
+    if (!store.isOpen) {
+      Alert.alert(
+        t('store.storeClosedNotice', 'Store is Closed'),
+        store.closeReason || t('store.storeClosedMsg', 'This store is currently not taking orders.')
+      );
+      return;
+    }
+
+    // ── Zomato / Swiggy Pattern: Replace Cart Confirmation ──
+    if (cartStoreId && cartStoreId !== store.id && cartItems.length > 0) {
+      Alert.alert(
+        t('cart.replaceTitle', 'Replace cart items?'),
+        t(
+          'cart.replaceMessage',
+          'Your cart contains items from {currentStore}. Would you like to discard them and add items from {newStore}?'
+        )
+          .replace('{currentStore}', cartStoreName || 'another store')
+          .replace('{newStore}', store.name),
+        [
+          {
+            text: t('cart.keepExisting', 'Keep Existing Cart'),
+            style: 'cancel',
+          },
+          {
+            text: t('cart.discardAndAdd', 'Discard & Add'),
+            style: 'destructive',
+            onPress: async () => {
+              await haptic.medium();
+              replaceCartWithItem(p, store.id, store.name, store.slug, {
+                minOrderAmount: store.minOrderAmount,
+                minDeliveryAmount: store.minDeliveryAmount,
+                freeDeliveryAbove: store.freeDeliveryAbove,
+                deliveryCharge: store.deliveryCharge,
+                enableStorePickup: store.enableStorePickup,
+                enableLocalDelivery: store.enableLocalDelivery,
+              });
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    await haptic.medium();
+    addItem(p, store.id, store.name, store.slug, {
+      minOrderAmount: store.minOrderAmount,
+      minDeliveryAmount: store.minDeliveryAmount,
+      freeDeliveryAbove: store.freeDeliveryAbove,
+      deliveryCharge: store.deliveryCharge,
+      enableStorePickup: store.enableStorePickup,
+      enableLocalDelivery: store.enableLocalDelivery,
+    });
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.topHeader}>
+          <TouchableOpacity style={styles.iconCircle} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={22} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading store catalog...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!store) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.topHeader}>
+          <TouchableOpacity style={styles.iconCircle} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={22} color="#0F172A" />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingBox}>
+          <MaterialIcons name="storefront" size={56} color="#94A3B8" />
+          <Text style={styles.errorTitle}>Store Not Found</Text>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+            <Text style={styles.backBtnText}>Back to Stores</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const effectiveMinDelivery = store.minDeliveryAmount || store.freeDeliveryAbove || 299;
+  const effectiveFreeDelivery = store.freeDeliveryAbove || 299;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -117,14 +239,21 @@ export default function StoreViewCustomerScreen() {
       >
         {/* ── Hero Store Photo ────────────────────────────────────────── */}
         <View style={styles.heroContainer}>
-          <Image
-            source={{ uri: store.bannerUrl }}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {store.bannerUrl ? (
+            <Image
+              source={{ uri: store.bannerUrl }}
+              style={styles.heroImage}
+              resizeMode="cover"
+              accessibilityLabel={store.name}
+            />
+          ) : (
+            <View style={styles.heroPlaceholder}>
+              <MaterialIcons name="storefront" size={54} color="#CBD5E1" />
+            </View>
+          )}
         </View>
 
-        {/* ── Store Header Card (Matching Mockup Screen 2) ────────────── */}
+        {/* ── Store Header Card ───────────────────────────────────────── */}
         <View style={styles.storeCardWrapper}>
           <View style={styles.storeCard}>
             <View style={styles.cardHeaderRow}>
@@ -137,14 +266,24 @@ export default function StoreViewCustomerScreen() {
               <View style={styles.storeMainInfo}>
                 <Text style={styles.storeName}>{store.name}</Text>
                 <View style={styles.storeMetaRow}>
-                  <MaterialIcons name="star" size={15} color="#F59E0B" />
-                  <Text style={styles.storeRating}>{store.rating.toFixed(1)}</Text>
-                  <Text style={styles.storeReviewCount}>({store.reviewCount})</Text>
-                  <Text style={styles.dot}>•</Text>
-                  <Text style={styles.storeDistance}>{store.distanceKm || 1.2} km</Text>
-                  <Text style={styles.dot}>•</Text>
+                  {store.rating > 0 ? (
+                    <>
+                      <MaterialIcons name="star" size={15} color="#F59E0B" />
+                      <Text style={styles.storeRating}>{store.rating.toFixed(1)}</Text>
+                      {store.reviewCount > 0 && (
+                        <Text style={styles.storeReviewCount}>({store.reviewCount})</Text>
+                      )}
+                      <Text style={styles.dot}>•</Text>
+                    </>
+                  ) : null}
+                  {store.distanceKm ? (
+                    <>
+                      <Text style={styles.storeDistance}>{store.distanceKm} km</Text>
+                      <Text style={styles.dot}>•</Text>
+                    </>
+                  ) : null}
                   <Text style={store.isOpen ? styles.storeOpenTag : styles.storeClosedTag}>
-                    {store.isOpen ? 'Open' : 'Closed'}
+                    {store.isOpen ? t('store.openBadge', 'Open') : t('store.closed', 'Closed')}
                   </Text>
                 </View>
               </View>
@@ -163,15 +302,28 @@ export default function StoreViewCustomerScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Delivery Badges */}
+            {/* Delivery Badges: Dynamic Store-Managed Policy */}
             <View style={styles.badgesRow}>
               <View style={styles.badgePill}>
                 <MaterialIcons name="local-shipping" size={14} color="#059669" />
-                <Text style={styles.badgePillText}>Free delivery above ₹299</Text>
+                <Text style={styles.badgePillText}>
+                  {t('store.freeDelivery', 'Free delivery')} &gt; ₹{effectiveFreeDelivery}
+                </Text>
               </View>
+
+              <View style={styles.badgePill}>
+                <MaterialIcons name="shopping-bag" size={14} color="#059669" />
+                <Text style={styles.badgePillText}>
+                  {t('store.minDeliveryNotice', 'Min. delivery ₹{min}').replace(
+                    '{min}',
+                    String(effectiveMinDelivery)
+                  )}
+                </Text>
+              </View>
+
               <View style={styles.badgePill}>
                 <MaterialIcons name="access-time" size={14} color="#059669" />
-                <Text style={styles.badgePillText}>30-45 min</Text>
+                <Text style={styles.badgePillText}>{store.deliveryTime || '30-45 min'}</Text>
               </View>
             </View>
           </View>
@@ -183,9 +335,9 @@ export default function StoreViewCustomerScreen() {
             <View style={styles.closedBannerTop}>
               <MaterialIcons name="storefront" size={20} color="#B91C1C" />
               <View style={{ flex: 1, marginLeft: 8 }}>
-                <Text style={styles.closedBannerTitle}>Store is Currently Closed</Text>
+                <Text style={styles.closedBannerTitle}>{t('store.storeClosedNotice', 'Store is Currently Closed')}</Text>
                 <Text style={styles.closedBannerSub}>
-                  {store.closeReason || 'This shop is outside operating hours or has not opened today.'}
+                  {store.closeReason || t('store.storeClosedMsg', 'This shop is outside operating hours or has not opened today.')}
                 </Text>
               </View>
             </View>
@@ -213,112 +365,116 @@ export default function StoreViewCustomerScreen() {
         )}
 
         {/* ── Category Filter Pills ───────────────────────────────────── */}
-        <View style={styles.categoriesBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryScroll}
-          >
-            {categories.map((cat) => {
-              const isSelected = selectedCategory === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.catPill, isSelected && styles.catPillSelected]}
-                  onPress={async () => {
-                    await haptic.light();
-                    setSelectedCategory(cat);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Text style={[styles.catText, isSelected && styles.catTextSelected]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+        {categories.length > 1 && (
+          <View style={styles.categoriesBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryScroll}
+            >
+              {categories.map((cat) => {
+                const isSelected = selectedCategory === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.catPill, isSelected && styles.catPillSelected]}
+                    onPress={async () => {
+                      await haptic.light();
+                      setSelectedCategory(cat);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.catText, isSelected && styles.catTextSelected]}>
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
 
-        {/* ── Products List (Matching Mockup Screen 2) ────────────────── */}
+        {/* ── Products List ───────────────────────────────────────────── */}
         <View style={styles.productsList}>
-          {filteredProducts.map((p) => {
-            const qty = getItemQty(p.id);
-            return (
-              <View key={p.id} style={styles.productRow}>
-                {/* Product Thumbnail */}
-                <View style={styles.productImageBox}>
-                  {p.imageUrl ? (
-                    <Image source={{ uri: p.imageUrl }} style={styles.productImage} />
-                  ) : (
-                    <MaterialIcons name="shopping-basket" size={24} color="#94A3B8" />
-                  )}
-                </View>
+          {filteredProducts.length === 0 ? (
+            <View style={styles.emptyCatalogBox}>
+              <MaterialIcons name="inventory-2" size={40} color="#94A3B8" />
+              <Text style={styles.emptyCatalogTitle}>No Products Found</Text>
+              <Text style={styles.emptyCatalogSub}>
+                This store has not published catalog items in this section yet.
+              </Text>
+            </View>
+          ) : (
+            filteredProducts.map((p) => {
+              const qty = getItemQty(p.id);
+              return (
+                <View key={p.id} style={styles.productRow}>
+                  {/* Product Thumbnail */}
+                  <View style={styles.productImageBox}>
+                    {p.imageUrl ? (
+                      <Image
+                        source={{ uri: p.imageUrl }}
+                        style={styles.productImage}
+                        accessibilityLabel={p.name}
+                      />
+                    ) : (
+                      <MaterialIcons name="shopping-basket" size={24} color="#94A3B8" />
+                    )}
+                  </View>
 
-                {/* Info */}
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{p.name}</Text>
-                  <Text style={styles.productPrice}>₹{p.price}</Text>
-                </View>
-
-                {/* Add / Qty Controller Button (Matching Mockup) */}
-                <View style={styles.actionContainer}>
-                  {qty === 0 ? (
-                    <TouchableOpacity
-                      style={[styles.addButton, !store.isOpen && styles.addButtonDisabled]}
-                      onPress={async () => {
-                        if (!store.isOpen) {
-                          Alert.alert(
-                            'Store is Closed',
-                            store.closeReason || 'This store is currently not taking orders. Please call or WhatsApp the shop directly.'
-                          );
-                          return;
-                        }
-                        await haptic.medium();
-                        addItem(p, store.id, store.name, store.slug);
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.addButtonText, !store.isOpen && styles.addButtonTextDisabled]}>
-                        {store.isOpen ? 'Add +' : 'Closed'}
+                  {/* Info */}
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productName}>{p.name}</Text>
+                    {p.description ? (
+                      <Text style={styles.productDesc} numberOfLines={1}>
+                        {p.description}
                       </Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.qtyContainer}>
+                    ) : null}
+                    <Text style={styles.productPrice}>₹{p.price}</Text>
+                  </View>
+
+                  {/* Add / Qty Controller Button */}
+                  <View style={styles.actionContainer}>
+                    {qty === 0 ? (
                       <TouchableOpacity
-                        style={styles.qtyBtn}
-                        onPress={async () => {
-                          await haptic.light();
-                          removeItem(p.id);
-                        }}
+                        style={[styles.addButton, !store.isOpen && styles.addButtonDisabled]}
+                        onPress={() => handleAddItem(p)}
+                        activeOpacity={0.85}
                       >
-                        <MaterialIcons name="remove" size={16} color="#FFFFFF" />
+                        <Text style={[styles.addButtonText, !store.isOpen && styles.addButtonTextDisabled]}>
+                          {store.isOpen ? t('store.add', '+ Add') : t('store.closed', 'Closed')}
+                        </Text>
                       </TouchableOpacity>
-                      <Text style={styles.qtyText}>{qty}</Text>
-                      <TouchableOpacity
-                        style={styles.qtyBtn}
-                        onPress={async () => {
-                          if (!store.isOpen) {
-                            Alert.alert('Store is Closed', 'This store is currently not taking orders.');
-                            return;
-                          }
-                          await haptic.light();
-                          addItem(p, store.id, store.name, store.slug);
-                        }}
-                      >
-                        <MaterialIcons name="add" size={16} color="#FFFFFF" />
-                      </TouchableOpacity>
-                    </View>
-                  )}
+                    ) : (
+                      <View style={styles.qtyContainer}>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={async () => {
+                            await haptic.light();
+                            removeItem(p.id);
+                          }}
+                        >
+                          <MaterialIcons name="remove" size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <Text style={styles.qtyText}>{qty}</Text>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={() => handleAddItem(p)}
+                        >
+                          <MaterialIcons name="add" size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
         </View>
       </ScrollView>
 
-      {/* ── Floating Cart Bar at Bottom ───────────────────────────────── */}
-      {totalCartCount > 0 && (
+      {/* ── Floating Cart Bar at Bottom with Delivery Threshold Hint ─── */}
+      {cartStoreId === store.id && totalCartCount > 0 && (
         <View style={styles.floatingCartContainer}>
           <TouchableOpacity
             style={styles.floatingCart}
@@ -328,9 +484,58 @@ export default function StoreViewCustomerScreen() {
             <View style={styles.cartCountCircle}>
               <Text style={styles.cartCountText}>{totalCartCount}</Text>
             </View>
-            <Text style={styles.viewCartText}>View Cart</Text>
+            <View style={{ flex: 1, marginHorizontal: 10 }}>
+              <Text style={styles.viewCartText}>{t('store.viewCart', 'View Cart')}</Text>
+              {totalCartAmount < effectiveMinDelivery ? (
+                <Text style={styles.cartSubPrompt}>
+                  {t('store.addMoreForDelivery', 'Add ₹{deficit} more for Delivery').replace(
+                    '{deficit}',
+                    String(effectiveMinDelivery - totalCartAmount)
+                  )}
+                </Text>
+              ) : (
+                <Text style={styles.cartSubPrompt}>
+                  {t('checkout.homeDelivery', 'Home Delivery Available')}
+                </Text>
+              )}
+            </View>
             <Text style={styles.cartTotalText}>₹{totalCartAmount.toFixed(2)} →</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Active Cart in Different Store Notice ─── */}
+      {cartStoreId && cartStoreId !== store.id && totalCartCount > 0 && (
+        <View style={styles.floatingCartContainer}>
+          <View style={styles.otherStoreCartNotice}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.otherStoreTitle} numberOfLines={1}>
+                {t('cart.differentStoreBanner', 'Cart has items from {store}').replace(
+                  '{store}',
+                  cartStoreName || 'another store'
+                )}
+              </Text>
+              <Text style={styles.otherStoreSub}>
+                {totalCartCount} {t('store.items', 'items')} (₹{totalCartAmount.toFixed(2)})
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.viewCartOtherBtn}
+              onPress={() => router.push('/checkout')}
+            >
+              <Text style={styles.viewCartOtherText}>{t('store.viewCart', 'View Cart')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.clearCartOtherBtn}
+              onPress={() => {
+                void haptic.light();
+                clearCart();
+              }}
+              accessibilityLabel="Clear cart"
+            >
+              <MaterialIcons name="delete-outline" size={20} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -341,6 +546,35 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  loadingBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 12,
+  },
+  backBtn: {
+    marginTop: 16,
+    backgroundColor: '#059669',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  backBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   topHeader: {
     flexDirection: 'row',
@@ -395,6 +629,13 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  heroPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
   storeCardWrapper: {
     paddingHorizontal: 16,
@@ -530,6 +771,7 @@ const styles = StyleSheet.create({
   },
   badgesRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
     marginTop: 12,
@@ -583,6 +825,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
+  emptyCatalogBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    paddingHorizontal: 24,
+  },
+  emptyCatalogTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 10,
+  },
+  emptyCatalogSub: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+  },
   productRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -613,6 +877,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  productDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
   productPrice: {
     fontSize: 15,
@@ -692,9 +961,57 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
+  cartSubPrompt: {
+    color: '#D1FAE5',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 1,
+  },
   cartTotalText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+  },
+  otherStoreCartNotice: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  otherStoreTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  otherStoreSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#B45309',
+    marginTop: 2,
+  },
+  viewCartOtherBtn: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    marginRight: 6,
+  },
+  viewCartOtherText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  clearCartOtherBtn: {
+    padding: 6,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
   },
 });

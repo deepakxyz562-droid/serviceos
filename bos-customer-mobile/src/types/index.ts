@@ -11,7 +11,12 @@ export interface Store {
   reviewCount: number;
   deliveryTime: string;
   minOrder?: number;
+  minOrderAmount?: number;
+  minDeliveryAmount?: number;
   freeDeliveryAbove?: number;
+  deliveryCharge?: number;
+  enableStorePickup?: boolean;
+  enableLocalDelivery?: boolean;
   isOpen: boolean;
   closeReason?: string;
   todayHoursText?: string;

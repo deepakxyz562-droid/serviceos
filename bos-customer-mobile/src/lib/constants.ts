@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { CityLocation } from '../types';
 
 export const APP_NAME = 'BOS Customer';
 
@@ -29,12 +30,20 @@ export const CATEGORIES = [
   { id: 'Pharmacy', name: 'Pharmacy', icon: 'pill', color: '#0284C7', bg: '#E0F2FE' },
 ] as const;
 
-export const DEFAULT_CITIES = [
+export const DEFAULT_CITIES: CityLocation[] = [
   { city: 'Patna', state: 'Bihar', displayName: 'Patna, Bihar' },
   { city: 'Delhi', state: 'Delhi', displayName: 'New Delhi, Delhi' },
   { city: 'Mumbai', state: 'Maharashtra', displayName: 'Mumbai, Maharashtra' },
   { city: 'Bangalore', state: 'Karnataka', displayName: 'Bangalore, Karnataka' },
   { city: 'Kolkata', state: 'West Bengal', displayName: 'Kolkata, West Bengal' },
+  { city: 'Hyderabad', state: 'Telangana', displayName: 'Hyderabad, Telangana' },
+  { city: 'Pune', state: 'Maharashtra', displayName: 'Pune, Maharashtra' },
+  { city: 'Jaipur', state: 'Rajasthan', displayName: 'Jaipur, Rajasthan' },
+  { city: 'Lucknow', state: 'Uttar Pradesh', displayName: 'Lucknow, Uttar Pradesh' },
+  { city: 'Noida', state: 'Uttar Pradesh', displayName: 'Noida, Uttar Pradesh' },
+  { city: 'Ahmedabad', state: 'Gujarat', displayName: 'Ahmedabad, Gujarat' },
+  { city: 'Chandigarh', state: 'Punjab', displayName: 'Chandigarh' },
+  { city: 'ALL', state: '', displayName: 'All Stores (Across India)' },
 ];
 
 export const STORAGE_KEYS = {
@@ -44,4 +53,6 @@ export const STORAGE_KEYS = {
   SAVED_LOCATION: 'bos_customer_location',
   CUSTOMER_PROFILE: 'bos_customer_profile',
   ORDERS: 'bos_customer_orders',
+  CART: 'bos_customer_cart',
+  LANGUAGE: 'bos_customer_language',
 };

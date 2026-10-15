@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,15 +8,26 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Image,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCartStore } from '../../src/stores/cart-store';
 import { useAffinityStore } from '../../src/stores/affinity-store';
+import { useProfileStore } from '../../src/stores/profile-store';
+import { useMobileTranslation } from '../../src/stores/language-store';
+import { submitCustomerOrder } from '../../src/lib/api';
 import { CustomerOrder } from '../../src/types';
 import { COLORS, API_BASE_URL } from '../../src/lib/constants';
 import { haptic } from '../../src/lib/haptics';
+import {
+  getCartoMapTileUrl,
+  getOpenStreetMapEmbedUrl,
+  getDeviceCoordinates,
+  reverseGeocodeCoords,
+} from '../../src/lib/location';
 
 export default function CheckoutScreen() {
   const router = useRouter();
@@ -25,6 +36,12 @@ export default function CheckoutScreen() {
     storeId,
     storeName,
     storeSlug,
+    minOrderAmount,
+    minDeliveryAmount,
+    freeDeliveryAbove,
+    deliveryCharge,
+    enableStorePickup,
+    enableLocalDelivery,
     updateQty,
     removeItem,
     clearCart,
@@ -32,32 +49,186 @@ export default function CheckoutScreen() {
     addOrder,
   } = useCartStore();
 
-  const { addRecentStore, setScannedStore } = useAffinityStore();
+  const { addRecentStore } = useAffinityStore();
+  const {
+    name: profileName,
+    phone: profilePhone,
+    defaultAddress: profileAddress,
+    defaultLatitude: profileLat,
+    defaultLongitude: profileLng,
+    savedAddresses,
+    updateProfile,
+  } = useProfileStore();
+  const { t } = useMobileTranslation();
 
-  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
-  const [customerName, setCustomerName] = useState('Deepak Chandra');
-  const [customerPhone, setCustomerPhone] = useState('+91 98765 43210');
-  const [address, setAddress] = useState('Flat 402, Ganga Heights, Kankarbagh, Patna');
+  const subtotal = getTotalAmount();
+  const effectiveMinDelivery = minDeliveryAmount || freeDeliveryAbove || 299;
+  const effectiveFreeDelivery = freeDeliveryAbove || 299;
+  const effectiveDeliveryCharge = deliveryCharge !== undefined ? deliveryCharge : 30;
+  const effectiveMinOrder = minOrderAmount || 0;
+
+  const isDeliveryEligible = subtotal >= effectiveMinDelivery && enableLocalDelivery;
+
+  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>(() =>
+    isDeliveryEligible ? 'delivery' : 'pickup'
+  );
+  const [customerName, setCustomerName] = useState(profileName || '');
+  const [customerPhone, setCustomerPhone] = useState(profilePhone || '');
+  const [address, setAddress] = useState(profileAddress || '');
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(() =>
+    profileLat && profileLng ? { latitude: profileLat, longitude: profileLng } : null
+  );
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [selectedAddressLabel, setSelectedAddressLabel] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'CASH'>('UPI');
   const [upiTrustConfirmed, setUpiTrustConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState<CustomerOrder | null>(null);
 
-  const subtotal = getTotalAmount();
-  const deliveryFee = deliveryType === 'delivery' ? (subtotal >= 299 ? 0 : 30) : 0;
+  // Auto-switch to pickup if cart falls below minDeliveryAmount
+  useEffect(() => {
+    if (!isDeliveryEligible && deliveryType === 'delivery') {
+      setDeliveryType('pickup');
+    }
+  }, [isDeliveryEligible, deliveryType]);
+
+  // Sync profile defaults if profile loads after initial render
+  useEffect(() => {
+    if (!customerName && profileName) setCustomerName(profileName);
+    if (!customerPhone && profilePhone) setCustomerPhone(profilePhone);
+    if (!address && profileAddress) setAddress(profileAddress);
+    if (!coords && profileLat && profileLng) {
+      setCoords({ latitude: profileLat, longitude: profileLng });
+    }
+  }, [profileName, profilePhone, profileAddress, profileLat, profileLng, coords]);
+
+  const deliveryFee =
+    deliveryType === 'delivery'
+      ? subtotal >= effectiveFreeDelivery
+        ? 0
+        : effectiveDeliveryCharge
+      : 0;
   const grandTotal = subtotal + deliveryFee;
+
+  const handleUseGpsLocation = async () => {
+    try {
+      setIsDetectingLocation(true);
+      await haptic.light();
+      const newCoords = await getDeviceCoordinates();
+      setCoords(newCoords);
+
+      const geo = await reverseGeocodeCoords(newCoords.latitude, newCoords.longitude);
+      if (geo.formattedAddress) {
+        setAddress(geo.formattedAddress);
+        setSelectedAddressLabel('GPS');
+        await updateProfile({
+          defaultAddress: geo.formattedAddress,
+          defaultLatitude: newCoords.latitude,
+          defaultLongitude: newCoords.longitude,
+        });
+        await haptic.success();
+      }
+    } catch (err: any) {
+      console.warn('GPS location detection notice:', err);
+      Alert.alert(
+        'GPS Detection Notice',
+        err?.message || 'Could not automatically detect location. Please type your delivery address.'
+      );
+    } finally {
+      setIsDetectingLocation(false);
+    }
+  };
+
+  const handleSelectDelivery = async () => {
+    if (!enableLocalDelivery) {
+      void haptic.warning();
+      Alert.alert(
+        'Delivery Unavailable',
+        'This store currently only accepts Store Pickup orders.'
+      );
+      return;
+    }
+
+    if (!isDeliveryEligible) {
+      void haptic.warning();
+      const deficit = effectiveMinDelivery - subtotal;
+      Alert.alert(
+        t('checkout.minDeliveryAlert', `Minimum Delivery Order: ₹${effectiveMinDelivery}`).replace(
+          '{min}',
+          String(effectiveMinDelivery)
+        ),
+        t(
+          'checkout.minDeliveryNotice',
+          `Home Delivery is available on orders of ₹${effectiveMinDelivery} or more. Add ₹${deficit} more items to your cart, or choose Store Pickup to collect it directly.`
+        )
+          .replace('{min}', String(effectiveMinDelivery))
+          .replace('{deficit}', String(deficit)),
+        [{ text: t('common.close', 'OK'), style: 'cancel' }]
+      );
+      return;
+    }
+
+    await haptic.light();
+    setDeliveryType('delivery');
+  };
+
+  const handleSelectPickup = async () => {
+    await haptic.light();
+    setDeliveryType('pickup');
+  };
 
   const handlePlaceOrder = async () => {
     if (items.length === 0) {
-      Alert.alert('Empty Cart', 'Please add items before checking out.');
-      return;
-    }
-    if (deliveryType === 'delivery' && !address.trim()) {
-      Alert.alert('Missing Address', 'Please enter your delivery address.');
+      Alert.alert(t('store.viewCart', 'Cart Empty'), 'Please add items before checking out.');
       return;
     }
 
-    // Live availability check
+    // 1. Check overall store minimum order amount
+    if (effectiveMinOrder > 0 && subtotal < effectiveMinOrder) {
+      void haptic.warning();
+      const deficit = effectiveMinOrder - subtotal;
+      Alert.alert(
+        'Minimum Order Required',
+        t(
+          'checkout.minOrderNotice',
+          `Minimum order amount for this shop is ₹${effectiveMinOrder}. Please add ₹${deficit} more to place order.`
+        )
+          .replace('{min}', String(effectiveMinOrder))
+          .replace('{deficit}', String(deficit))
+      );
+      return;
+    }
+
+    // 2. Check minimum delivery threshold rule
+    if (deliveryType === 'delivery' && !isDeliveryEligible) {
+      void haptic.warning();
+      const deficit = effectiveMinDelivery - subtotal;
+      Alert.alert(
+        t('checkout.minDeliveryAlert', `Minimum Delivery Order: ₹${effectiveMinDelivery}`).replace(
+          '{min}',
+          String(effectiveMinDelivery)
+        ),
+        t(
+          'checkout.minDeliveryNotice',
+          `Home Delivery is available on orders of ₹${effectiveMinDelivery} or more. Add ₹${deficit} more items to your cart, or choose Store Pickup to collect it directly.`
+        )
+          .replace('{min}', String(effectiveMinDelivery))
+          .replace('{deficit}', String(deficit))
+      );
+      setDeliveryType('pickup');
+      return;
+    }
+
+    if (deliveryType === 'delivery' && !address.trim()) {
+      Alert.alert('Missing Address', t('checkout.addressPlaceholder', 'Please enter your delivery address.'));
+      return;
+    }
+    if (!customerPhone.trim()) {
+      Alert.alert('Phone Required', t('checkout.phonePlaceholder', 'Please enter your mobile number for delivery updates.'));
+      return;
+    }
+
+    // Live availability check with backend
     try {
       if (storeSlug) {
         const checkRes = await fetch(`${API_BASE_URL}/api/public/store/${storeSlug}`);
@@ -65,8 +236,9 @@ export default function CheckoutScreen() {
           const checkData = await checkRes.json();
           if (checkData && checkData.isStoreOpen === false) {
             Alert.alert(
-              'Store is Closed',
-              checkData.storeCloseReason || 'This store is currently closed and not accepting orders.'
+              t('store.storeClosedNotice', 'Store is Closed'),
+              checkData.storeCloseReason ||
+                t('store.storeClosedMsg', 'This store is currently closed and not accepting orders.')
             );
             return;
           }
@@ -76,17 +248,20 @@ export default function CheckoutScreen() {
 
     if (paymentMethod === 'UPI' && !upiTrustConfirmed) {
       Alert.alert(
-        'Safety Check: Do you know this store?',
+        t('checkout.trustTitle', 'Safety Check: Do you know this store?'),
         `Direct UPI payments transfer instantly to the vendor's bank account. If you are not at the shop or haven't confirmed with ${storeName || 'the merchant'}, we recommend paying Cash on Delivery / Counter.`,
         [
-          { text: 'Switch to Cash / COD', onPress: () => setPaymentMethod('CASH') },
           {
-            text: 'I Know This Store',
+            text: t('checkout.switchToCash', 'Switch to Cash / COD'),
+            onPress: () => setPaymentMethod('CASH'),
+          },
+          {
+            text: t('checkout.iKnowStore', 'I Know This Store'),
             onPress: () => {
               setUpiTrustConfirmed(true);
             },
           },
-          { text: 'Cancel', style: 'cancel' },
+          { text: t('profile.cancel', 'Cancel'), style: 'cancel' },
         ]
       );
       return;
@@ -95,40 +270,73 @@ export default function CheckoutScreen() {
     setIsSubmitting(true);
     await haptic.medium();
 
-    // Create order object
+    // 1. Submit order to the ServiceOS backend POS pipeline
+    const orderPayload = {
+      businessId: storeId || 'store',
+      customerName: customerName.trim() || 'Valued Customer',
+      customerPhone: customerPhone.trim(),
+      deliveryAddress: deliveryType === 'delivery' ? address.trim() : 'Store Pickup',
+      deliveryType,
+      paymentMethod: paymentMethod === 'UPI' ? ('UPI' as const) : ('COD' as const),
+      items: items.map((item) => ({
+        productId: item.id,
+        name: item.name,
+        qty: item.qty,
+        price: item.price,
+        amount: item.price * item.qty,
+      })),
+      total: grandTotal,
+      notes: `Order placed via BOS Customer Mobile App (${deliveryType === 'delivery' ? 'Home Delivery' : 'Store Pickup'})`,
+      whatsappConsent: true,
+    };
+
+    const apiResult = await submitCustomerOrder(orderPayload);
+
+    // 2. Persist customer contact details to profile store for future orders
+    await updateProfile({
+      name: customerName.trim() || undefined,
+      phone: customerPhone.trim() || undefined,
+      defaultAddress: deliveryType === 'delivery' ? address.trim() : undefined,
+    });
+
+    // 3. Create local order record
+    const finalOrderNumber = apiResult.orderNumber || `${Math.floor(100000 + Math.random() * 900000)}`;
+    const finalOrderId = apiResult.orderId || `ord-${Date.now()}`;
+
     const newOrder: CustomerOrder = {
-      id: `ord-${Date.now()}`,
-      orderNumber: `${Math.floor(100000 + Math.random() * 900000)}`,
+      id: finalOrderId,
+      orderNumber: finalOrderNumber,
       storeName: storeName || 'Local Store',
       storeSlug: storeSlug || 'store',
       items: [...items],
       total: grandTotal,
       status: 'CONFIRMED',
       deliveryType,
-      deliveryAddress: deliveryType === 'delivery' ? address : undefined,
+      deliveryAddress: deliveryType === 'delivery' ? address.trim() : undefined,
       createdAt: new Date().toISOString(),
-      phone: customerPhone,
+      phone: customerPhone.trim(),
     };
 
-    // Save order in store & bump affinity
+    // Save order in local cart store history & bump store affinity
     await addOrder(newOrder);
 
-    // Also add to recent stores
-    await addRecentStore({
-      id: storeId || 'store',
-      name: storeName || 'Local Store',
-      slug: storeSlug || 'store',
-      category: 'General',
-      description: 'Local Store',
-      bannerUrl: '',
-      address: 'Neighborhood',
-      rating: 4.6,
-      reviewCount: 250,
-      deliveryTime: '30-45 min',
-      isOpen: true,
-      itemCount: 48,
-      featuredItems: [],
-    });
+    if (storeSlug) {
+      await addRecentStore({
+        id: storeId || storeSlug,
+        name: storeName || 'Local Store',
+        slug: storeSlug,
+        category: 'General',
+        description: 'Verified Merchant',
+        bannerUrl: '',
+        address: address.trim() || 'Local Area',
+        rating: 0,
+        reviewCount: 0,
+        deliveryTime: 'Fast Delivery',
+        isOpen: true,
+        itemCount: items.length,
+        featuredItems: [],
+      });
+    }
 
     clearCart();
     setIsSubmitting(false);
@@ -147,7 +355,7 @@ export default function CheckoutScreen() {
         >
           <MaterialIcons name="close" size={24} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Checkout &amp; Review</Text>
+        <Text style={styles.headerTitle}>{t('checkout.title', 'Checkout & Review')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -157,7 +365,7 @@ export default function CheckoutScreen() {
           <View style={styles.successIconBox}>
             <MaterialIcons name="check-circle" size={64} color="#059669" />
           </View>
-          <Text style={styles.successTitle}>Order Confirmed!</Text>
+          <Text style={styles.successTitle}>{t('checkout.orderConfirmed', 'Order Confirmed!')}</Text>
           <Text style={styles.successSubtitle}>
             Your order #{orderPlaced.orderNumber} has been received by{' '}
             <Text style={{ fontWeight: '800', color: '#0F172A' }}>{orderPlaced.storeName}</Text>.
@@ -165,13 +373,15 @@ export default function CheckoutScreen() {
 
           <View style={styles.summaryBox}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Delivery Type:</Text>
+              <Text style={styles.summaryLabel}>{t('checkout.deliveryType', 'Delivery Type')}:</Text>
               <Text style={styles.summaryValue}>
-                {orderPlaced.deliveryType === 'delivery' ? 'Home Delivery (30-45 min)' : 'Store Pickup'}
+                {orderPlaced.deliveryType === 'delivery'
+                  ? t('checkout.homeDelivery', 'Home Delivery')
+                  : t('checkout.storePickup', 'Store Pickup')}
               </Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Paid:</Text>
+              <Text style={styles.summaryLabel}>{t('checkout.grandTotal', 'Total Paid')}:</Text>
               <Text style={styles.summaryValue}>₹{orderPlaced.total.toFixed(2)}</Text>
             </View>
           </View>
@@ -182,7 +392,7 @@ export default function CheckoutScreen() {
               router.replace('/(tabs)/orders');
             }}
           >
-            <Text style={styles.trackButtonText}>View Order Details &amp; Tracking</Text>
+            <Text style={styles.trackButtonText}>{t('checkout.trackLive', 'View Order Details & Tracking')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -191,7 +401,7 @@ export default function CheckoutScreen() {
               router.replace('/(tabs)');
             }}
           >
-            <Text style={styles.backHomeButtonText}>Back to Marketplace</Text>
+            <Text style={styles.backHomeButtonText}>{t('checkout.backHome', 'Back to Marketplace')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -208,30 +418,73 @@ export default function CheckoutScreen() {
 
           {/* Delivery Mode Toggle */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Delivery Option</Text>
+            <Text style={styles.sectionTitle}>{t('checkout.deliveryType', 'Delivery Option')}</Text>
+
+            {/* Ineligible Delivery Notice Card */}
+            {!isDeliveryEligible && (
+              <View style={styles.pickupOnlyNoticeCard}>
+                <View style={styles.pickupOnlyNoticeHeader}>
+                  <MaterialIcons name="storefront" size={16} color="#B45309" />
+                  <Text style={styles.pickupOnlyNoticeTitle}>
+                    {t('checkout.pickupOnlyBanner', 'Store Pickup Only (Under ₹{min})').replace(
+                      '{min}',
+                      String(effectiveMinDelivery)
+                    )}
+                  </Text>
+                </View>
+                <Text style={styles.pickupOnlyNoticeText}>
+                  {t(
+                    'checkout.minDeliveryNotice',
+                    `Home Delivery requires orders of ₹${effectiveMinDelivery} or more. Add ₹${effectiveMinDelivery - subtotal} more items to unlock delivery, or pick up directly from store.`
+                  )
+                    .replace('{min}', String(effectiveMinDelivery))
+                    .replace('{deficit}', String(effectiveMinDelivery - subtotal))}
+                </Text>
+              </View>
+            )}
+
             <View style={styles.toggleRow}>
+              {/* Home Delivery Option */}
               <TouchableOpacity
-                style={[styles.toggleBtn, deliveryType === 'delivery' && styles.toggleBtnActive]}
-                onPress={() => setDeliveryType('delivery')}
+                style={[
+                  styles.toggleBtn,
+                  deliveryType === 'delivery' && styles.toggleBtnActive,
+                  !isDeliveryEligible && styles.toggleBtnRestricted,
+                ]}
+                onPress={handleSelectDelivery}
+                activeOpacity={0.8}
               >
                 <MaterialIcons
                   name="local-shipping"
                   size={18}
-                  color={deliveryType === 'delivery' ? '#059669' : '#64748B'}
+                  color={deliveryType === 'delivery' ? '#059669' : !isDeliveryEligible ? '#94A3B8' : '#64748B'}
                 />
-                <Text
-                  style={[
-                    styles.toggleBtnText,
-                    deliveryType === 'delivery' && styles.toggleBtnTextActive,
-                  ]}
-                >
-                  Home Delivery
-                </Text>
+                <View style={{ alignItems: 'center' }}>
+                  <Text
+                    style={[
+                      styles.toggleBtnText,
+                      deliveryType === 'delivery' && styles.toggleBtnTextActive,
+                      !isDeliveryEligible && styles.toggleBtnTextRestricted,
+                    ]}
+                  >
+                    {t('checkout.homeDelivery', 'Home Delivery')}
+                  </Text>
+                  {!isDeliveryEligible && (
+                    <Text style={styles.restrictedBadge}>
+                      {t('checkout.deliveryMinBadge', 'Min. ₹{min}').replace(
+                        '{min}',
+                        String(effectiveMinDelivery)
+                      )}
+                    </Text>
+                  )}
+                </View>
               </TouchableOpacity>
 
+              {/* Self Pickup Option */}
               <TouchableOpacity
                 style={[styles.toggleBtn, deliveryType === 'pickup' && styles.toggleBtnActive]}
-                onPress={() => setDeliveryType('pickup')}
+                onPress={handleSelectPickup}
+                activeOpacity={0.8}
               >
                 <MaterialIcons
                   name="storefront"
@@ -244,41 +497,185 @@ export default function CheckoutScreen() {
                     deliveryType === 'pickup' && styles.toggleBtnTextActive,
                   ]}
                 >
-                  Self Pickup
+                  {t('checkout.storePickup', 'Self Pickup')}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* Delivery Address Input */}
-          {deliveryType === 'delivery' && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Delivery Address</Text>
-              <TextInput
-                style={styles.inputBox}
-                value={address}
-                onChangeText={setAddress}
-                placeholder="Enter complete address, landmark, floor..."
-                multiline
-              />
-            </View>
-          )}
+          {/* Customer Name */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('checkout.namePlaceholder', 'Customer Name')}</Text>
+            <TextInput
+              style={[styles.inputBox, { height: 46 }]}
+              value={customerName}
+              onChangeText={setCustomerName}
+              placeholder={t('checkout.namePlaceholder', 'Enter your name')}
+              placeholderTextColor="#94A3B8"
+            />
+          </View>
 
           {/* Customer Phone */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contact Number (WhatsApp Updates)</Text>
+            <Text style={styles.sectionTitle}>{t('checkout.contactInfo', 'Contact Number (WhatsApp Updates)')}</Text>
             <TextInput
               style={[styles.inputBox, { height: 46 }]}
               value={customerPhone}
               onChangeText={setCustomerPhone}
-              placeholder="+91 Phone number"
+              placeholder={t('checkout.phonePlaceholder', '+91 Mobile number')}
+              placeholderTextColor="#94A3B8"
               keyboardType="phone-pad"
             />
           </View>
 
+          {/* Delivery Address Input, Map Pinpoint & Saved Addresses */}
+          {deliveryType === 'delivery' && (
+            <View style={styles.section}>
+              <View style={styles.addressHeaderRow}>
+                <Text style={styles.sectionTitle}>{t('checkout.addressLabel', 'Delivery Address')}</Text>
+                <TouchableOpacity
+                  style={styles.gpsDetectButton}
+                  onPress={handleUseGpsLocation}
+                  disabled={isDetectingLocation}
+                  activeOpacity={0.7}
+                >
+                  {isDetectingLocation ? (
+                    <ActivityIndicator size="small" color="#059669" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="my-location" size={14} color="#059669" />
+                      <Text style={styles.gpsDetectText}>
+                        {t('checkout.useGpsLocation', '📍 GPS Detect')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Saved Address Quick Selectors */}
+              {savedAddresses && savedAddresses.length > 0 && (
+                <View style={styles.savedAddressesRow}>
+                  {savedAddresses.map((sa) => (
+                    <TouchableOpacity
+                      key={sa.id}
+                      style={[
+                        styles.savedAddressChip,
+                        selectedAddressLabel === sa.label && styles.savedAddressChipActive,
+                      ]}
+                      onPress={() => {
+                        void haptic.light();
+                        setAddress(sa.address);
+                        setSelectedAddressLabel(sa.label);
+                      }}
+                    >
+                      <MaterialIcons
+                        name={sa.label === 'Home' ? 'home' : sa.label === 'Office' ? 'business' : 'place'}
+                        size={14}
+                        color={selectedAddressLabel === sa.label ? '#059669' : '#64748B'}
+                      />
+                      <Text
+                        style={[
+                          styles.savedAddressChipText,
+                          selectedAddressLabel === sa.label && styles.savedAddressChipTextActive,
+                        ]}
+                      >
+                        {sa.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Map Pinpoint Visual Card */}
+              <View style={styles.mapPreviewCard}>
+                {coords ? (
+                  Platform.OS === 'web' ? (
+                    // @ts-ignore - iframe is supported on web in React Native Web
+                    <iframe
+                      title="Delivery Map Location"
+                      src={getOpenStreetMapEmbedUrl(coords.latitude, coords.longitude)}
+                      style={{
+                        width: '100%',
+                        height: 140,
+                        border: 0,
+                        borderRadius: 14,
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <View style={styles.nativeMapContainer}>
+                      <Image
+                        source={{
+                          uri: getCartoMapTileUrl(coords.latitude, coords.longitude, 15),
+                        }}
+                        style={styles.mapSnapshotImage}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.centerPinContainer}>
+                        <MaterialIcons name="location-on" size={32} color="#EF4444" />
+                      </View>
+                    </View>
+                  )
+                ) : (
+                  <TouchableOpacity
+                    style={styles.mapPlaceholderContent}
+                    onPress={handleUseGpsLocation}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.mapPinPlaceholderCircle}>
+                      <MaterialIcons name="my-location" size={24} color="#059669" />
+                    </View>
+                    <Text style={styles.mapPlaceholderTitle}>
+                      {t('checkout.tapToDetectLocation', 'Pinpoint Location on Map')}
+                    </Text>
+                    <Text style={styles.mapPlaceholderSubtitle}>
+                      {t(
+                        'checkout.gpsDetectSubtitle',
+                        'Tap here to auto-detect GPS coordinates and street address.'
+                      )}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {coords && (
+                  <View style={styles.mapOverlayPill}>
+                    <MaterialIcons name="place" size={16} color="#EF4444" />
+                    <Text style={styles.mapOverlayText}>
+                      {`${t('checkout.gpsDetected', 'GPS Pin')}: ${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <TextInput
+                style={styles.inputBox}
+                value={address}
+                onChangeText={(text) => {
+                  setAddress(text);
+                  setSelectedAddressLabel(null);
+                }}
+                placeholder={t('checkout.addressPlaceholder', 'Enter complete address, landmark, floor...')}
+                placeholderTextColor="#94A3B8"
+                multiline
+              />
+
+              <View style={styles.storageNoticeRow}>
+                <MaterialIcons name="save" size={13} color="#059669" />
+                <Text style={styles.storageNoticeText}>
+                  {t(
+                    'checkout.storageNotice',
+                    'Saved securely on your device for fast guest checkout'
+                  )}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Items In Cart */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Items ({items.length})</Text>
+            <Text style={styles.sectionTitle}>
+              {t('store.items', 'Items')} ({items.length})
+            </Text>
             <View style={styles.itemsCard}>
               {items.map((item) => (
                 <View key={item.id} style={styles.itemRow}>
@@ -309,14 +706,14 @@ export default function CheckoutScreen() {
 
           {/* Payment Method */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Payment Method</Text>
+            <Text style={styles.sectionTitle}>{t('checkout.paymentMethod', 'Payment Method')}</Text>
             <TouchableOpacity
               style={[styles.paymentOption, paymentMethod === 'UPI' && styles.paymentOptionActive]}
               onPress={() => setPaymentMethod('UPI')}
             >
               <MaterialIcons name="qr-code-scanner" size={20} color="#059669" />
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.paymentName}>UPI / Instant QR Payment</Text>
+                <Text style={styles.paymentName}>{t('checkout.upi', 'Direct UPI (Instant & Zero Fee)')}</Text>
                 <Text style={styles.paymentSub}>Google Pay, PhonePe, Paytm, BHIM</Text>
               </View>
               {paymentMethod === 'UPI' && (
@@ -331,10 +728,15 @@ export default function CheckoutScreen() {
                   <View style={styles.upiTrustAlert}>
                     <View style={styles.upiTrustHeader}>
                       <MaterialIcons name="security" size={18} color="#D97706" />
-                      <Text style={styles.upiTrustTitle}>Safety Check: Do you know this store?</Text>
+                      <Text style={styles.upiTrustTitle}>
+                        {t('checkout.trustTitle', 'Safety Check: Do you know this store?')}
+                      </Text>
                     </View>
                     <Text style={styles.upiTrustDesc}>
-                      Direct UPI transfers go straight to the shopkeeper with no intermediary. If you are not at the stall/counter, please verify first or switch to Cash / Counter payment.
+                      {t(
+                        'checkout.trustMsg',
+                        'Direct UPI transfers go straight to the shopkeeper with no intermediary. If you are not at the stall/counter, please verify first or switch to Cash / Counter payment.'
+                      )}
                     </Text>
                     <View style={styles.upiTrustButtons}>
                       <TouchableOpacity
@@ -342,14 +744,18 @@ export default function CheckoutScreen() {
                         onPress={() => setPaymentMethod('CASH')}
                       >
                         <MaterialIcons name="payments" size={14} color="#0F172A" />
-                        <Text style={styles.trustSwitchCodText}>Switch to Cash / COD</Text>
+                        <Text style={styles.trustSwitchCodText}>
+                          {t('checkout.switchToCash', 'Switch to Cash / COD')}
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.trustConfirmBtn}
                         onPress={() => setUpiTrustConfirmed(true)}
                       >
                         <MaterialIcons name="check-circle" size={14} color="#FFFFFF" />
-                        <Text style={styles.trustConfirmText}>I Know This Store</Text>
+                        <Text style={styles.trustConfirmText}>
+                          {t('checkout.iKnowStore', 'I Know This Store')}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -378,8 +784,16 @@ export default function CheckoutScreen() {
             >
               <MaterialIcons name="payments" size={20} color="#64748B" />
               <View style={{ flex: 1, marginLeft: 10 }}>
-                <Text style={styles.paymentName}>Cash on Delivery / Counter</Text>
-                <Text style={styles.paymentSub}>Pay when receiving groceries</Text>
+                <Text style={styles.paymentName}>
+                  {deliveryType === 'delivery'
+                    ? t('checkout.cash', 'Pay on Delivery (Cash / COD)')
+                    : 'Pay at Store Counter (Cash / UPI)'}
+                </Text>
+                <Text style={styles.paymentSub}>
+                  {deliveryType === 'delivery'
+                    ? 'Pay when receiving groceries at your doorstep'
+                    : 'Pay when picking up goods at the shop counter'}
+                </Text>
               </View>
               {paymentMethod === 'CASH' && (
                 <MaterialIcons name="check-circle" size={20} color="#059669" />
@@ -390,17 +804,28 @@ export default function CheckoutScreen() {
           {/* Bill Summary */}
           <View style={styles.billCard}>
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Item Total</Text>
+              <Text style={styles.billLabel}>{t('checkout.subtotal', 'Item Total')}</Text>
               <Text style={styles.billVal}>₹{subtotal.toFixed(2)}</Text>
             </View>
+
             <View style={styles.billRow}>
-              <Text style={styles.billLabel}>Delivery Fee</Text>
-              <Text style={[styles.billVal, deliveryFee === 0 && { color: '#059669' }]}>
-                {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee}`}
+              <Text style={styles.billLabel}>{t('checkout.deliveryFee', 'Delivery Fee')}</Text>
+              <Text
+                style={[
+                  styles.billVal,
+                  (deliveryFee === 0 || deliveryType === 'pickup') && { color: '#059669' },
+                ]}
+              >
+                {deliveryType === 'pickup'
+                  ? 'FREE (Store Pickup)'
+                  : deliveryFee === 0
+                  ? t('checkout.free', 'FREE')
+                  : `₹${deliveryFee}`}
               </Text>
             </View>
+
             <View style={[styles.billRow, styles.grandTotalRow]}>
-              <Text style={styles.grandLabel}>To Pay</Text>
+              <Text style={styles.grandLabel}>{t('checkout.grandTotal', 'To Pay')}</Text>
               <Text style={styles.grandVal}>₹{grandTotal.toFixed(2)}</Text>
             </View>
           </View>
@@ -420,7 +845,8 @@ export default function CheckoutScreen() {
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.placeOrderText}>
-                Place Order • ₹{grandTotal.toFixed(2)}
+                {deliveryType === 'pickup' ? 'Confirm Store Pickup Order' : t('checkout.placeOrder', 'Place Order')} • ₹
+                {grandTotal.toFixed(2)}
               </Text>
             )}
           </TouchableOpacity>
@@ -483,6 +909,30 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginBottom: 8,
   },
+  pickupOnlyNoticeCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  pickupOnlyNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  pickupOnlyNoticeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  pickupOnlyNoticeText: {
+    fontSize: 11,
+    color: '#78350F',
+    lineHeight: 16,
+  },
   toggleRow: {
     flexDirection: 'row',
     gap: 10,
@@ -503,6 +953,11 @@ const styles = StyleSheet.create({
     borderColor: '#059669',
     backgroundColor: '#F0FDF4',
   },
+  toggleBtnRestricted: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    opacity: 0.85,
+  },
   toggleBtnText: {
     fontSize: 13,
     fontWeight: '600',
@@ -512,6 +967,15 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontWeight: '700',
   },
+  toggleBtnTextRestricted: {
+    color: '#94A3B8',
+  },
+  restrictedBadge: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+    marginTop: 1,
+  },
   inputBox: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -520,7 +984,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 13,
     color: '#0F172A',
-    minHeight: 60,
+    minHeight: 46,
   },
   itemsCard: {
     backgroundColor: '#FFFFFF',
@@ -806,5 +1270,147 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
     textDecorationLine: 'underline',
+  },
+  addressHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  gpsDetectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  gpsDetectText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  savedAddressesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  savedAddressChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  savedAddressChipActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#059669',
+  },
+  savedAddressChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  savedAddressChipTextActive: {
+    color: '#059669',
+    fontWeight: '700',
+  },
+  mapPreviewCard: {
+    height: 140,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  nativeMapContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  centerPinContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPlaceholderContent: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: '#F0FDF4',
+  },
+  mapPinPlaceholderCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  mapPlaceholderTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065F46',
+    marginBottom: 2,
+  },
+  mapPlaceholderSubtitle: {
+    fontSize: 11,
+    color: '#047857',
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  mapSnapshotImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mapOverlayPill: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  mapOverlayText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  storageNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  storageNoticeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#059669',
   },
 });

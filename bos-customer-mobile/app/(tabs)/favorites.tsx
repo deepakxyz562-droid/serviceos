@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,25 +11,45 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { StoreCard } from '../../src/components/StoreCard';
 import { useAffinityStore } from '../../src/stores/affinity-store';
-import { SAMPLE_STORES } from '../../src/lib/api';
+import { useMobileTranslation } from '../../src/stores/language-store';
+import { getStoreDirectory } from '../../src/lib/api';
 import { Store } from '../../src/types';
 import { COLORS } from '../../src/lib/constants';
 import { haptic } from '../../src/lib/haptics';
 
 export default function MyStoresScreen() {
   const router = useRouter();
-  const { favorites, recentStores } = useAffinityStore();
+  const { favorites, favoriteStores, recentStores } = useAffinityStore();
+  const { t } = useMobileTranslation();
   const [activeTab, setActiveTab] = useState<'favorites' | 'recent'>('favorites');
+  const [directoryStores, setDirectoryStores] = useState<Store[]>([]);
 
-  // Filter favorite stores
+  useEffect(() => {
+    void (async () => {
+      try {
+        const list = await getStoreDirectory();
+        setDirectoryStores(list);
+      } catch {}
+    })();
+  }, []);
+
+  // Filter favorite stores from local persisted favoriteStores + recent stores + directory
   const favoriteStoreList = useMemo(() => {
-    return SAMPLE_STORES.filter((s) => favorites.includes(s.id) || favorites.includes(s.slug));
-  }, [favorites]);
+    const combined = [...favoriteStores, ...recentStores, ...directoryStores];
+    const seen = new Set<string>();
+    const unique: Store[] = [];
+    for (const s of combined) {
+      if (!seen.has(s.slug)) {
+        seen.add(s.slug);
+        unique.push(s);
+      }
+    }
+    return unique.filter((s) => favorites.includes(s.id) || favorites.includes(s.slug));
+  }, [favorites, favoriteStores, recentStores, directoryStores]);
 
-  // Recent stores (fallback to samples if none in session yet)
+  // Real recent stores only
   const recentStoreList = useMemo(() => {
-    if (recentStores.length > 0) return recentStores.slice(0, 5);
-    return SAMPLE_STORES.slice(0, 5);
+    return recentStores.slice(0, 10);
   }, [recentStores]);
 
   const displayedStores = activeTab === 'favorites' ? favoriteStoreList : recentStoreList;
@@ -52,7 +72,7 @@ export default function MyStoresScreen() {
         >
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Stores</Text>
+        <Text style={styles.headerTitle}>{t('favorites.title', 'My Stores')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -70,7 +90,7 @@ export default function MyStoresScreen() {
             <Text
               style={[styles.segmentText, activeTab === 'favorites' && styles.segmentTextActive]}
             >
-              Favorites
+              {t('favorites.tabFavorites', 'Favorites')}
             </Text>
           </TouchableOpacity>
 
@@ -85,7 +105,7 @@ export default function MyStoresScreen() {
             <Text
               style={[styles.segmentText, activeTab === 'recent' && styles.segmentTextActive]}
             >
-              Recent ({recentStoreList.length})
+              {t('favorites.tabRecent', 'Recent')} ({recentStoreList.length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -105,11 +125,16 @@ export default function MyStoresScreen() {
               color="#94A3B8"
             />
             <Text style={styles.emptyTitle}>
-              {activeTab === 'favorites' ? 'No Favorite Stores Yet' : 'No Recent Stores'}
+              {activeTab === 'favorites'
+                ? t('favorites.emptyFav', 'No Favorite Stores Yet')
+                : 'No Recent Stores'}
             </Text>
             <Text style={styles.emptySubtitle}>
               {activeTab === 'favorites'
-                ? 'Tap the heart icon on any store to save it here for fast reordering.'
+                ? t(
+                    'favorites.emptyFavSub',
+                    'Tap the heart icon on any store to save it here for fast reordering.'
+                  )
                 : 'Stores you visit or scan QR codes for will appear here.'}
             </Text>
           </View>
@@ -133,7 +158,7 @@ export default function MyStoresScreen() {
           }}
           activeOpacity={0.8}
         >
-          <Text style={styles.seeAllButtonText}>See All Stores</Text>
+          <Text style={styles.seeAllButtonText}>{t('home.viewAll', 'See All Stores')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

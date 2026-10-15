@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Store } from '../types';
 import { COLORS } from '../lib/constants';
 import { useAffinityStore } from '../stores/affinity-store';
+import { useMobileTranslation } from '../stores/language-store';
 import { haptic } from '../lib/haptics';
 
 interface StoreCardProps {
@@ -14,11 +15,12 @@ interface StoreCardProps {
 
 export function StoreCard({ store, onPress, showFavoriteButton = true }: StoreCardProps) {
   const { isFavorite, toggleFavorite } = useAffinityStore();
+  const { t } = useMobileTranslation();
   const favorited = isFavorite(store.id) || isFavorite(store.slug);
 
   const handleToggleFavorite = async () => {
     await haptic.medium();
-    await toggleFavorite(store.slug || store.id);
+    await toggleFavorite(store);
   };
 
   return (
@@ -33,7 +35,12 @@ export function StoreCard({ store, onPress, showFavoriteButton = true }: StoreCa
       {/* Store Logo / Thumbnail */}
       <View style={styles.imageContainer}>
         {store.bannerUrl ? (
-          <Image source={{ uri: store.bannerUrl }} style={styles.image} resizeMode="cover" />
+          <Image
+            source={{ uri: store.bannerUrl }}
+            style={styles.image}
+            resizeMode="cover"
+            accessibilityLabel={store.name}
+          />
         ) : (
           <View style={styles.placeholder}>
             <MaterialIcons name="storefront" size={28} color="#94A3B8" />
@@ -49,25 +56,50 @@ export function StoreCard({ store, onPress, showFavoriteButton = true }: StoreCa
           </Text>
         </View>
 
-        {/* Rating & Distance Row */}
+        {/* Rating & Real Distance / City Row */}
         <View style={styles.metaRow}>
-          <MaterialIcons name="star" size={15} color="#F59E0B" />
-          <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
-          <Text style={styles.reviewCount}>({store.reviewCount})</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.distance}>{store.distanceKm || 1.2} km</Text>
+          {store.rating > 0 ? (
+            <>
+              <MaterialIcons name="star" size={14} color="#F59E0B" />
+              <Text style={styles.ratingText}>{store.rating.toFixed(1)}</Text>
+              {store.reviewCount > 0 && (
+                <Text style={styles.reviewCount}>({store.reviewCount})</Text>
+              )}
+              <Text style={styles.dot}>•</Text>
+            </>
+          ) : (
+            <>
+              <View style={styles.verifiedBadge}>
+                <MaterialIcons name="verified" size={13} color="#059669" />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
+              <Text style={styles.dot}>•</Text>
+            </>
+          )}
+
+          {store.distanceKm ? (
+            <Text style={styles.distance}>{store.distanceKm} km</Text>
+          ) : (
+            <Text style={styles.distance} numberOfLines={1}>
+              {store.city || store.address || 'Local'}
+            </Text>
+          )}
         </View>
 
         {/* Delivery / Min Order Tag */}
         <View style={styles.badgeRow}>
           {store.freeDeliveryAbove ? (
             <Text style={styles.freeDelivery}>
-              {store.distanceKm && store.distanceKm <= 1.5 ? 'Free delivery' : `Free delivery > ₹${store.freeDeliveryAbove}`}
+              {t('store.freeDelivery', 'Free delivery')} &gt; ₹{store.freeDeliveryAbove}
             </Text>
-          ) : store.minOrder ? (
-            <Text style={styles.minOrder}>Min. order ₹{store.minOrder} • {store.distanceKm || 2.1} km</Text>
+          ) : store.minOrderAmount ? (
+            <Text style={styles.minOrder}>
+              {t('store.minOrder', 'Min order')} ₹{store.minOrderAmount}
+            </Text>
+          ) : store.deliveryTime ? (
+            <Text style={styles.timeTag}>🕒 {store.deliveryTime}</Text>
           ) : (
-            <Text style={styles.timeTag}>🕒 {store.deliveryTime || '30-45 min'}</Text>
+            <Text style={styles.timeTag}>⚡ Fast Delivery</Text>
           )}
         </View>
       </View>
@@ -193,5 +225,19 @@ const styles = StyleSheet.create({
   },
   heartButton: {
     padding: 6,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  verifiedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
   },
 });

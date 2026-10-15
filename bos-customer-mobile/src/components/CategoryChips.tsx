@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { CATEGORIES, COLORS } from '../lib/constants';
+import { useLanguageStore } from '../stores/language-store';
 import { haptic } from '../lib/haptics';
 
 interface CategoryChipsProps {
@@ -10,6 +11,8 @@ interface CategoryChipsProps {
 }
 
 export function CategoryChips({ selectedCategory, onSelectCategory }: CategoryChipsProps) {
+  const t = useLanguageStore((s) => s.t);
+
   const getIconName = (id: string): React.ComponentProps<typeof MaterialIcons>['name'] => {
     switch (id) {
       case 'ALL':
@@ -36,6 +39,7 @@ export function CategoryChips({ selectedCategory, onSelectCategory }: CategoryCh
       >
         {CATEGORIES.map((cat) => {
           const isSelected = selectedCategory === cat.id;
+          const translatedName = t(`cat.${cat.id.toLowerCase()}`, cat.name);
           return (
             <TouchableOpacity
               key={cat.id}
@@ -67,7 +71,7 @@ export function CategoryChips({ selectedCategory, onSelectCategory }: CategoryCh
                   isSelected && styles.chipLabelSelected,
                 ]}
               >
-                {cat.name}
+                {translatedName}
               </Text>
             </TouchableOpacity>
           );

@@ -17,6 +17,7 @@ import { HeaderBar } from '../../src/components/HeaderBar';
 import { CategoryChips } from '../../src/components/CategoryChips';
 import { StoreCard } from '../../src/components/StoreCard';
 import { useAffinityStore } from '../../src/stores/affinity-store';
+import { useMobileTranslation } from '../../src/stores/language-store';
 import { getStoreDirectory } from '../../src/lib/api';
 import { Store } from '../../src/types';
 import { COLORS } from '../../src/lib/constants';
@@ -24,17 +25,20 @@ import { haptic } from '../../src/lib/haptics';
 
 export default function HomeMarketplaceScreen() {
   const router = useRouter();
-  const { rankStores, scannedStore, setScannedStore } = useAffinityStore();
+  const { rankStores, scannedStore, setScannedStore, currentLocation } = useAffinityStore();
+  const { t } = useMobileTranslation();
 
   const [rawStores, setRawStores] = useState<Store[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAllRegions, setShowAllRegions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchStores = useCallback(async () => {
     try {
-      const list = await getStoreDirectory(selectedCategory, searchQuery);
+      const activeCity = showAllRegions ? undefined : currentLocation?.city;
+      const list = await getStoreDirectory(selectedCategory, searchQuery, activeCity);
       setRawStores(list);
     } catch {
       // Fallback handles gracefully
@@ -42,7 +46,7 @@ export default function HomeMarketplaceScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedCategory, searchQuery]);
+  }, [selectedCategory, searchQuery, showAllRegions, currentLocation?.city]);
 
   useEffect(() => {
     void fetchStores();
@@ -94,7 +98,7 @@ export default function HomeMarketplaceScreen() {
             <MaterialIcons name="search" size={20} color="#94A3B8" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search stores, products..."
+              placeholder={t('home.searchPlaceholder', 'Search stores, products...')}
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -125,15 +129,19 @@ export default function HomeMarketplaceScreen() {
                 <MaterialIcons name="qr-code-scanner" size={20} color="#059669" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.scannedTitle}>Currently At: {scannedStore.name}</Text>
-                <Text style={styles.scannedSub}>Tap to open in-store catalog &amp; quick order</Text>
+                <Text style={styles.scannedTitle}>
+                  {t('home.currentlyAt', 'Currently At:')} {scannedStore.name}
+                </Text>
+                <Text style={styles.scannedSub}>
+                  {t('home.scannedSub', 'Tap to open in-store catalog & quick order')}
+                </Text>
               </View>
             </View>
             <TouchableOpacity
               style={styles.scannedButton}
               onPress={() => handleOpenStore(scannedStore)}
             >
-              <Text style={styles.scannedButtonText}>Open</Text>
+              <Text style={styles.scannedButtonText}>{t('home.open', 'Open')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -142,8 +150,10 @@ export default function HomeMarketplaceScreen() {
         <View style={styles.bannerContainer}>
           <View style={styles.bannerCard}>
             <View style={styles.bannerTextContainer}>
-              <Text style={styles.bannerTitle}>Local Stores Near You</Text>
-              <Text style={styles.bannerSubtitle}>Fresh products from trusted local shops</Text>
+              <Text style={styles.bannerTitle}>{t('home.bannerTitle', 'Local Stores Near You')}</Text>
+              <Text style={styles.bannerSubtitle}>
+                {t('home.bannerSubtitle', 'Fresh products from trusted local shops')}
+              </Text>
               <TouchableOpacity
                 style={styles.bannerButton}
                 onPress={() => {
@@ -154,7 +164,7 @@ export default function HomeMarketplaceScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.bannerButtonText}>Order Now</Text>
+                <Text style={styles.bannerButtonText}>{t('home.orderNow', 'Order Now')}</Text>
                 <MaterialIcons name="arrow-forward" size={14} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
@@ -167,6 +177,7 @@ export default function HomeMarketplaceScreen() {
                 }}
                 style={styles.bannerImage}
                 resizeMode="cover"
+                accessibilityLabel="Local grocery produce"
               />
             </View>
           </View>
@@ -174,7 +185,7 @@ export default function HomeMarketplaceScreen() {
 
         {/* ── Nearby Stores Section Header ─────────────────────────────── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Nearby Stores</Text>
+          <Text style={styles.sectionTitle}>{t('home.nearbyStores', 'Nearby Stores')}</Text>
           <TouchableOpacity
             onPress={() => {
               void haptic.light();
@@ -182,7 +193,7 @@ export default function HomeMarketplaceScreen() {
               setSearchQuery('');
             }}
           >
-            <Text style={styles.viewAllText}>View All</Text>
+            <Text style={styles.viewAllText}>{t('home.viewAll', 'View All')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -191,15 +202,43 @@ export default function HomeMarketplaceScreen() {
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator color={COLORS.primary} size="large" />
-              <Text style={styles.loadingText}>Discovering local stores near you...</Text>
+              <Text style={styles.loadingText}>
+                {t('home.discovering', 'Discovering local stores near you...')}
+              </Text>
             </View>
           ) : rankedStores.length === 0 ? (
             <View style={styles.emptyContainer}>
               <MaterialIcons name="storefront" size={48} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>No Stores Found</Text>
-              <Text style={styles.emptySub}>
-                Try changing your search or selecting a different category.
+              <Text style={styles.emptyTitle}>
+                {!showAllRegions && currentLocation?.city
+                  ? t('home.noStoresInCity', 'No Stores in {city} Yet').replace(
+                      '{city}',
+                      currentLocation.city
+                    )
+                  : t('home.noStores', 'No Stores Found')}
               </Text>
+              <Text style={styles.emptySub}>
+                {!showAllRegions && currentLocation?.city
+                  ? t(
+                      'home.noStoresInCitySub',
+                      'We are expanding to more local shops soon. You can explore all available stores across regions.'
+                    )
+                  : t('home.noStoresSub', 'Try changing your search or selecting a different category.')}
+              </Text>
+              {!showAllRegions && (
+                <TouchableOpacity
+                  style={styles.viewAllRegionsBtn}
+                  onPress={() => {
+                    void haptic.light();
+                    setShowAllRegions(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.viewAllRegionsText}>
+                    {t('home.viewAllStores', 'View All Stores Across Regions')}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             rankedStores.map((store) => (
@@ -402,5 +441,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     maxWidth: 240,
+  },
+  viewAllRegionsBtn: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 12,
+  },
+  viewAllRegionsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#059669',
   },
 });

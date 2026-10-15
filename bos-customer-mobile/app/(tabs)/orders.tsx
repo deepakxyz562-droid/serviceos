@@ -10,12 +10,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useCartStore } from '../../src/stores/cart-store';
+import { useMobileTranslation } from '../../src/stores/language-store';
 import { COLORS } from '../../src/lib/constants';
 import { haptic } from '../../src/lib/haptics';
 
 export default function CustomerOrdersScreen() {
   const router = useRouter();
   const { orders } = useCartStore();
+  const { t } = useMobileTranslation();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -34,15 +36,15 @@ export default function CustomerOrdersScreen() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'DELIVERED':
-        return 'Delivered';
+        return t('orders.delivered', 'Delivered');
       case 'OUT_FOR_DELIVERY':
-        return 'Out for Delivery';
+        return t('orders.outForDelivery', 'Out for Delivery');
       case 'PREPARING':
-        return 'Preparing in Store';
+        return t('orders.preparing', 'Preparing in Store');
       case 'CONFIRMED':
-        return 'Order Confirmed';
+        return t('orders.confirmed', 'Order Confirmed');
       default:
-        return 'Order Placed';
+        return t('orders.placed', 'Order Placed');
     }
   };
 
@@ -50,7 +52,7 @@ export default function CustomerOrdersScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Orders</Text>
+        <Text style={styles.headerTitle}>{t('orders.title', 'My Orders')}</Text>
       </View>
 
       <ScrollView
@@ -61,15 +63,18 @@ export default function CustomerOrdersScreen() {
         {orders.length === 0 ? (
           <View style={styles.emptyContainer}>
             <MaterialIcons name="receipt-long" size={56} color="#94A3B8" />
-            <Text style={styles.emptyTitle}>No Orders Yet</Text>
+            <Text style={styles.emptyTitle}>{t('orders.emptyTitle', 'No Orders Yet')}</Text>
             <Text style={styles.emptySub}>
-              Discover nearby kirana and grocery stores to place your first quick delivery order.
+              {t(
+                'orders.emptySub',
+                'Discover nearby kirana and grocery stores to place your first quick delivery order.'
+              )}
             </Text>
             <TouchableOpacity
               style={styles.browseButton}
               onPress={() => router.push('/(tabs)')}
             >
-              <Text style={styles.browseButtonText}>Browse Stores</Text>
+              <Text style={styles.browseButtonText}>{t('orders.browseStores', 'Browse Stores')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -111,7 +116,7 @@ export default function CustomerOrdersScreen() {
               {/* Footer */}
               <View style={styles.cardFooter}>
                 <View>
-                  <Text style={styles.totalLabel}>Total Amount</Text>
+                  <Text style={styles.totalLabel}>{t('checkout.grandTotal', 'Total Amount')}</Text>
                   <Text style={styles.totalValue}>₹{ord.total.toFixed(2)}</Text>
                 </View>
 
@@ -126,7 +131,7 @@ export default function CustomerOrdersScreen() {
                   }}
                 >
                   <MaterialIcons name="refresh" size={16} color="#059669" />
-                  <Text style={styles.reorderText}>Order Again</Text>
+                  <Text style={styles.reorderText}>{t('orders.reorder', 'Order Again')}</Text>
                 </TouchableOpacity>
               </View>
             </View>

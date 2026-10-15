@@ -5,13 +5,14 @@ import { STORAGE_KEYS, DEFAULT_CITIES } from '../lib/constants';
 
 interface AffinityState {
   favorites: string[];
+  favoriteStores: Store[];
   recentStores: Store[];
   scannedStore: Store | null;
   currentLocation: CityLocation;
   isLoading: boolean;
 
   // Actions
-  toggleFavorite: (storeId: string) => Promise<void>;
+  toggleFavorite: (storeOrId: Store | string) => Promise<void>;
   isFavorite: (storeId: string) => boolean;
   setScannedStore: (store: Store | null) => Promise<void>;
   addRecentStore: (store: Store) => Promise<void>;
@@ -20,24 +21,55 @@ interface AffinityState {
   rankStores: (stores: Store[]) => Store[];
 }
 
+export const LEGACY_MOCK_SLUGS = new Set([
+  'sharma-kirana',
+  'gupta-sweets',
+  'patna-medicos',
+  'verma-salon',
+  'store',
+]);
+
+export function isRealStoreSlug(slugOrId?: string | null): boolean {
+  if (!slugOrId) return false;
+  return !LEGACY_MOCK_SLUGS.has(slugOrId.toLowerCase().trim());
+}
+
 export const useAffinityStore = create<AffinityState>((set, get) => ({
-  favorites: ['sharma-kirana'], // Pre-favorite demo store for immediate showcase
+  favorites: [],
+  favoriteStores: [],
   recentStores: [],
   scannedStore: null,
-  currentLocation: DEFAULT_CITIES[0], // Patna, Bihar
+  currentLocation: DEFAULT_CITIES[0],
   isLoading: true,
 
   isFavorite: (storeId: string) => {
     return get().favorites.includes(storeId);
   },
 
-  toggleFavorite: async (storeId: string) => {
-    const current = get().favorites;
-    const exists = current.includes(storeId);
-    const updated = exists ? current.filter((id) => id !== storeId) : [storeId, ...current];
-    set({ favorites: updated });
+  toggleFavorite: async (storeOrId: Store | string) => {
+    const isObj = typeof storeOrId === 'object' && storeOrId !== null;
+    const storeId = isObj ? storeOrId.id : storeOrId;
+    const storeSlug = isObj ? storeOrId.slug : storeOrId;
+
+    const currentFavs = get().favorites;
+    const currentStores = get().favoriteStores;
+
+    const exists = currentFavs.includes(storeId) || (storeSlug && currentFavs.includes(storeSlug));
+
+    let updatedFavs: string[];
+    let updatedStores: Store[];
+
+    if (exists) {
+      updatedFavs = currentFavs.filter((id) => id !== storeId && id !== storeSlug);
+      updatedStores = currentStores.filter((s) => s.id !== storeId && s.slug !== storeSlug);
+    } else {
+      updatedFavs = [storeId, ...(storeSlug && storeSlug !== storeId ? [storeSlug] : []), ...currentFavs];
+      updatedStores = isObj ? [storeOrId, ...currentStores.filter((s) => s.id !== storeId)] : currentStores;
+    }
+
+    set({ favorites: updatedFavs, favoriteStores: updatedStores });
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(updated));
+      await AsyncStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(updatedStores.length > 0 ? updatedStores : updatedFavs));
     } catch {}
   },
 
@@ -82,10 +114,82 @@ export const useAffinityStore = create<AffinityState>((set, get) => ({
         AsyncStorage.getItem(STORAGE_KEYS.SAVED_LOCATION),
       ]);
 
+      let parsedFavs: string[] = [];
+      let parsedStores: Store[] = [];
+      let hadMockFavs = false;
+
+      if (favRaw) {
+        try {
+          const raw = JSON.parse(favRaw);
+          if (Array.isArray(raw)) {
+            for (const item of raw) {
+              if (typeof item === 'object' && item !== null && item.id) {
+                if (isRealStoreSlug(item.id) && isRealStoreSlug(item.slug)) {
+                  parsedStores.push(item as Store);
+                  parsedFavs.push(item.id);
+                  if (item.slug) parsedFavs.push(item.slug);
+                } else {
+                  hadMockFavs = true;
+                }
+              } else if (typeof item === 'string') {
+                if (isRealStoreSlug(item)) {
+                  parsedFavs.push(item);
+                } else {
+                  hadMockFavs = true;
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+
+      let parsedRecent: Store[] = [];
+      let hadMockRecent = false;
+      if (recentRaw) {
+        try {
+          const raw = JSON.parse(recentRaw);
+          if (Array.isArray(raw)) {
+            parsedRecent = raw.filter((s: Store) => {
+              const keep = s && isRealStoreSlug(s.id) && isRealStoreSlug(s.slug);
+              if (!keep) hadMockRecent = true;
+              return keep;
+            });
+          }
+        } catch {}
+      }
+
+      let parsedScanned: Store | null = null;
+      let hadMockScanned = false;
+      if (scannedRaw) {
+        try {
+          const raw = JSON.parse(scannedRaw);
+          if (raw && isRealStoreSlug(raw.id) && isRealStoreSlug(raw.slug)) {
+            parsedScanned = raw;
+          } else if (raw) {
+            hadMockScanned = true;
+          }
+        } catch {}
+      }
+
+      // If mock entries were stripped, overwrite storage with clean data
+      if (hadMockFavs) {
+        void AsyncStorage.setItem(
+          STORAGE_KEYS.FAVORITES,
+          JSON.stringify(parsedStores.length > 0 ? parsedStores : parsedFavs)
+        );
+      }
+      if (hadMockRecent) {
+        void AsyncStorage.setItem(STORAGE_KEYS.RECENT_STORES, JSON.stringify(parsedRecent));
+      }
+      if (hadMockScanned) {
+        void AsyncStorage.removeItem(STORAGE_KEYS.ACTIVE_SCANNED_STORE);
+      }
+
       set({
-        favorites: favRaw ? JSON.parse(favRaw) : ['sharma-kirana'],
-        recentStores: recentRaw ? JSON.parse(recentRaw) : [],
-        scannedStore: scannedRaw ? JSON.parse(scannedRaw) : null,
+        favorites: parsedFavs,
+        favoriteStores: parsedStores,
+        recentStores: parsedRecent,
+        scannedStore: parsedScanned,
         currentLocation: locRaw ? JSON.parse(locRaw) : DEFAULT_CITIES[0],
         isLoading: false,
       });

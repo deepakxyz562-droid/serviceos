@@ -30,4 +30,11 @@ export const haptic = {
       } catch {}
     }
   },
+  selection: async () => {
+    if (Platform.OS !== 'web') {
+      try {
+        await Haptics.selectionAsync();
+      } catch {}
+    }
+  },
 };

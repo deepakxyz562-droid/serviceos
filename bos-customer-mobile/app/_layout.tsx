@@ -4,15 +4,23 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAffinityStore } from '../src/stores/affinity-store';
 import { useCartStore } from '../src/stores/cart-store';
+import { useLanguageStore } from '../src/stores/language-store';
+import { useProfileStore } from '../src/stores/profile-store';
 
 export default function RootLayout() {
   const loadPersistedAffinity = useAffinityStore((s) => s.loadPersisted);
   const loadOrders = useCartStore((s) => s.loadOrders);
+  const loadCart = useCartStore((s) => s.loadPersisted);
+  const loadLanguage = useLanguageStore((s) => s.loadLanguage);
+  const loadProfile = useProfileStore((s) => s.loadProfile);
 
   useEffect(() => {
     void loadPersistedAffinity();
     void loadOrders();
-  }, [loadPersistedAffinity, loadOrders]);
+    void loadCart();
+    void loadLanguage();
+    void loadProfile();
+  }, [loadPersistedAffinity, loadOrders, loadCart, loadLanguage, loadProfile]);
 
   return (
     <SafeAreaProvider>
