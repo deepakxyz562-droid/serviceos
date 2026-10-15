@@ -16,6 +16,7 @@ interface AffinityState {
   isFavorite: (storeId: string) => boolean;
   setScannedStore: (store: Store | null) => Promise<void>;
   addRecentStore: (store: Store) => Promise<void>;
+  clearRecentStores: () => Promise<void>;
   setCurrentLocation: (loc: CityLocation) => Promise<void>;
   loadPersisted: () => Promise<void>;
   rankStores: (stores: Store[]) => Store[];
@@ -23,15 +24,50 @@ interface AffinityState {
 
 export const LEGACY_MOCK_SLUGS = new Set([
   'sharma-kirana',
+  'store-sharma-kirana',
   'gupta-sweets',
+  'store-gupta-sweets',
   'patna-medicos',
+  'store-patna-medicos',
   'verma-salon',
+  'store-verma-salon',
+  'fresh-mart',
+  'store-fresh-mart',
+  'daily-needs',
+  'daily-needs-store',
+  'store-daily-needs',
+  'apollo-pharmacy',
+  'store-apollo-pharmacy',
+  'the-cake-corner',
+  'cake-corner',
+  'store-cake-corner',
+  'green-leaf',
+  'green-leaf-vegetables',
+  'store-green-leaf',
   'store',
+  'sample-store',
+  'test-store',
+  'demo-store',
 ]);
 
 export function isRealStoreSlug(slugOrId?: string | null): boolean {
   if (!slugOrId) return false;
-  return !LEGACY_MOCK_SLUGS.has(slugOrId.toLowerCase().trim());
+  const s = slugOrId.toLowerCase().trim();
+  if (LEGACY_MOCK_SLUGS.has(s)) return false;
+  if (
+    s === 'store' ||
+    s.startsWith('sample-') ||
+    s.endsWith('-sample') ||
+    s.startsWith('mock-') ||
+    s.endsWith('-mock') ||
+    s.startsWith('demo-') ||
+    s.endsWith('-demo') ||
+    s === 'test' ||
+    s === 'demo'
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export const useAffinityStore = create<AffinityState>((set, get) => ({
@@ -88,13 +124,30 @@ export const useAffinityStore = create<AffinityState>((set, get) => ({
   },
 
   addRecentStore: async (store: Store) => {
+    if (
+      !store ||
+      !store.name ||
+      store.name === 'Store' ||
+      !isRealStoreSlug(store.id) ||
+      !isRealStoreSlug(store.slug)
+    ) {
+      return;
+    }
+
     const current = get().recentStores;
     // Deduplicate and put at front
     const filtered = current.filter((s) => s.id !== store.id && s.slug !== store.slug);
-    const updated = [store, ...filtered].slice(0, 10);
+    const updated = [store, ...filtered].slice(0, 15);
     set({ recentStores: updated });
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.RECENT_STORES, JSON.stringify(updated));
+    } catch {}
+  },
+
+  clearRecentStores: async () => {
+    set({ recentStores: [] });
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.RECENT_STORES);
     } catch {}
   },
 
@@ -150,7 +203,12 @@ export const useAffinityStore = create<AffinityState>((set, get) => ({
           const raw = JSON.parse(recentRaw);
           if (Array.isArray(raw)) {
             parsedRecent = raw.filter((s: Store) => {
-              const keep = s && isRealStoreSlug(s.id) && isRealStoreSlug(s.slug);
+              const keep =
+                s &&
+                s.name &&
+                s.name !== 'Store' &&
+                isRealStoreSlug(s.id) &&
+                isRealStoreSlug(s.slug);
               if (!keep) hadMockRecent = true;
               return keep;
             });

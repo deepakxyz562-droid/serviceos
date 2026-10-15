@@ -49,7 +49,7 @@ export default function CheckoutScreen() {
     addOrder,
   } = useCartStore();
 
-  const { addRecentStore } = useAffinityStore();
+  const { addRecentStore, favoriteStores, recentStores } = useAffinityStore();
   const {
     name: profileName,
     phone: profilePhone,
@@ -321,21 +321,27 @@ export default function CheckoutScreen() {
     await addOrder(newOrder);
 
     if (storeSlug) {
-      await addRecentStore({
-        id: storeId || storeSlug,
-        name: storeName || 'Local Store',
-        slug: storeSlug,
-        category: 'General',
-        description: 'Verified Merchant',
-        bannerUrl: '',
-        address: address.trim() || 'Local Area',
-        rating: 0,
-        reviewCount: 0,
-        deliveryTime: 'Fast Delivery',
-        isOpen: true,
-        itemCount: items.length,
-        featuredItems: [],
-      });
+      const existing =
+        favoriteStores.find((s) => s.slug === storeSlug || s.id === storeId) ||
+        recentStores.find((s) => s.slug === storeSlug || s.id === storeId);
+
+      await addRecentStore(
+        existing || {
+          id: storeId || storeSlug,
+          name: storeName || 'Store',
+          slug: storeSlug,
+          category: 'General',
+          description: 'Verified Merchant',
+          bannerUrl: '',
+          address: 'Local Store',
+          rating: 0,
+          reviewCount: 0,
+          deliveryTime: '⚡ Fast Delivery',
+          isOpen: true,
+          itemCount: items.length,
+          featuredItems: [],
+        }
+      );
     }
 
     clearCart();

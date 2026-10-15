@@ -121,6 +121,10 @@ export const MOBILE_TRANSLATIONS: Record<string, TranslationItem> = {
   'favorites.tabRecent': { en: 'Recent', hi: 'हाल ही में देखी' },
   'favorites.emptyFav': { en: 'No Favorite Stores', hi: 'कोई पसंदीदा दुकान नहीं है' },
   'favorites.emptyFavSub': { en: 'Tap the heart icon on any store to quickly access it here.', hi: 'किसी भी दुकान के दिल आइकन पर टैप करके यहाँ सेव करें।' },
+  'favorites.emptyRecent': { en: 'No Recent Stores', hi: 'कोई हाल ही में देखी दुकान नहीं' },
+  'favorites.emptyRecentSub': { en: 'Stores you browse, visit, or order from will automatically appear here.', hi: 'दुकानें जिन्हें आप देखते हैं या जिनसे आर्डर करते हैं, यहाँ दिखाई देंगी।' },
+  'favorites.clearRecent': { en: 'Clear History', hi: 'इतिहास हटाएं' },
+  'favorites.clearRecentConfirm': { en: 'Clear all recently viewed stores?', hi: 'क्या आप हाल ही में देखी गई दुकानों का इतिहास हटाना चाहते हैं?' },
 
   // ── Profile Screen ────────────────────────────────────────────────────────
   'profile.title': { en: 'My Profile', hi: 'मेरी प्रोफ़ाइल' },
@@ -176,6 +180,7 @@ export const MOBILE_TRANSLATIONS: Record<string, TranslationItem> = {
   // ── Common Actions ────────────────────────────────────────────────────────
   'common.close': { en: 'Close', hi: 'बंद करें' },
   'common.apply': { en: 'Apply', hi: 'लागू करें' },
+  'common.clear': { en: 'Clear', hi: 'हटाएं' },
   'common.selectLocation': { en: 'Select Location', hi: 'शहर / इलाका चुनें' },
 };
 

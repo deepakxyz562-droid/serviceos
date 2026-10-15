@@ -5,12 +5,13 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { StoreCard } from '../../src/components/StoreCard';
-import { useAffinityStore } from '../../src/stores/affinity-store';
+import { useAffinityStore, isRealStoreSlug } from '../../src/stores/affinity-store';
 import { useMobileTranslation } from '../../src/stores/language-store';
 import { getStoreDirectory } from '../../src/lib/api';
 import { Store } from '../../src/types';
@@ -19,17 +20,20 @@ import { haptic } from '../../src/lib/haptics';
 
 export default function MyStoresScreen() {
   const router = useRouter();
-  const { favorites, favoriteStores, recentStores } = useAffinityStore();
+  const { favorites, favoriteStores, recentStores, clearRecentStores } = useAffinityStore();
   const { t } = useMobileTranslation();
   const [activeTab, setActiveTab] = useState<'favorites' | 'recent'>('favorites');
   const [directoryStores, setDirectoryStores] = useState<Store[]>([]);
+  const [isDirLoaded, setIsDirLoaded] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
         const list = await getStoreDirectory();
         setDirectoryStores(list);
-      } catch {}
+      } catch {} finally {
+        setIsDirLoaded(true);
+      }
     })();
   }, []);
 
@@ -39,7 +43,15 @@ export default function MyStoresScreen() {
     const seen = new Set<string>();
     const unique: Store[] = [];
     for (const s of combined) {
-      if (!seen.has(s.slug)) {
+      if (
+        s &&
+        s.slug &&
+        !seen.has(s.slug) &&
+        isRealStoreSlug(s.slug) &&
+        isRealStoreSlug(s.id) &&
+        s.name &&
+        s.name !== 'Store'
+      ) {
         seen.add(s.slug);
         unique.push(s);
       }
@@ -47,10 +59,37 @@ export default function MyStoresScreen() {
     return unique.filter((s) => favorites.includes(s.id) || favorites.includes(s.slug));
   }, [favorites, favoriteStores, recentStores, directoryStores]);
 
-  // Real recent stores only
+  // Real recent stores: stores visited/scanned by the user, enriched and validated against live directory
   const recentStoreList = useMemo(() => {
-    return recentStores.slice(0, 10);
-  }, [recentStores]);
+    const combined: Store[] = [];
+    const seenSlugs = new Set<string>();
+
+    for (const s of recentStores) {
+      if (
+        s &&
+        s.slug &&
+        !seenSlugs.has(s.slug) &&
+        isRealStoreSlug(s.slug) &&
+        isRealStoreSlug(s.id) &&
+        s.name &&
+        s.name !== 'Store'
+      ) {
+        if (isDirLoaded) {
+          // Verify store exists in live backend directory
+          const live = directoryStores.find((ds) => ds.slug === s.slug || ds.id === s.id);
+          if (live) {
+            seenSlugs.add(s.slug);
+            combined.push({ ...s, ...live });
+          }
+        } else {
+          seenSlugs.add(s.slug);
+          combined.push(s);
+        }
+      }
+    }
+
+    return combined.slice(0, 15);
+  }, [recentStores, directoryStores, isDirLoaded]);
 
   const displayedStores = activeTab === 'favorites' ? favoriteStoreList : recentStoreList;
 
@@ -59,6 +98,24 @@ export default function MyStoresScreen() {
       pathname: '/store/[slug]',
       params: { slug: store.slug },
     });
+  };
+
+  const handleClearRecent = () => {
+    Alert.alert(
+      t('favorites.clearRecent', 'Clear History'),
+      t('favorites.clearRecentConfirm', 'Clear all recently viewed stores?'),
+      [
+        { text: t('profile.cancel', 'Cancel'), style: 'cancel' },
+        {
+          text: t('common.clear', 'Clear'),
+          style: 'destructive',
+          onPress: async () => {
+            await haptic.medium();
+            await clearRecentStores();
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -76,7 +133,7 @@ export default function MyStoresScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* ── Segmented Control: [Favorites] | [Recent (5)] ───────────── */}
+      {/* ── Segmented Control: [Favorites] | [Recent (N)] ───────────── */}
       <View style={styles.segmentedContainer}>
         <View style={styles.segmentedTrack}>
           <TouchableOpacity
@@ -90,7 +147,7 @@ export default function MyStoresScreen() {
             <Text
               style={[styles.segmentText, activeTab === 'favorites' && styles.segmentTextActive]}
             >
-              {t('favorites.tabFavorites', 'Favorites')}
+              {t('favorites.tabFavorites', 'Favorites')} ({favoriteStoreList.length})
             </Text>
           </TouchableOpacity>
 
@@ -117,6 +174,23 @@ export default function MyStoresScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Recent Subheader: Store count & Clear Button */}
+        {activeTab === 'recent' && recentStoreList.length > 0 && (
+          <View style={styles.recentActionHeader}>
+            <Text style={styles.recentCountText}>
+              {recentStoreList.length} {recentStoreList.length === 1 ? 'store' : 'stores'}
+            </Text>
+            <TouchableOpacity
+              style={styles.clearRecentButton}
+              onPress={handleClearRecent}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <MaterialIcons name="delete-outline" size={16} color="#64748B" />
+              <Text style={styles.clearRecentText}>{t('favorites.clearRecent', 'Clear History')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {displayedStores.length === 0 ? (
           <View style={styles.emptyContainer}>
             <MaterialIcons
@@ -127,7 +201,7 @@ export default function MyStoresScreen() {
             <Text style={styles.emptyTitle}>
               {activeTab === 'favorites'
                 ? t('favorites.emptyFav', 'No Favorite Stores Yet')
-                : 'No Recent Stores'}
+                : t('favorites.emptyRecent', 'No Recent Stores')}
             </Text>
             <Text style={styles.emptySubtitle}>
               {activeTab === 'favorites'
@@ -135,7 +209,10 @@ export default function MyStoresScreen() {
                     'favorites.emptyFavSub',
                     'Tap the heart icon on any store to save it here for fast reordering.'
                   )
-                : 'Stores you visit or scan QR codes for will appear here.'}
+                : t(
+                    'favorites.emptyRecentSub',
+                    'Stores you browse, visit, or order from will automatically appear here.'
+                  )}
             </Text>
           </View>
         ) : (
@@ -261,5 +338,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  recentActionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  recentCountText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  clearRecentButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  clearRecentText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
   },
 });

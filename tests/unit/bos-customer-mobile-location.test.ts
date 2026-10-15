@@ -60,11 +60,24 @@ describe('BOS Customer Mobile Geolocation, Maps & Data Sanity', () => {
   });
 
   describe('Legacy Mock Slug Sanitization in Affinity Store', () => {
-    it('identifies and rejects known legacy mock slugs', () => {
+    it('identifies and rejects known legacy mock slugs and patterns', () => {
       expect(isRealStoreSlug('sharma-kirana')).toBe(false);
+      expect(isRealStoreSlug('store-sharma-kirana')).toBe(false);
       expect(isRealStoreSlug('gupta-sweets')).toBe(false);
       expect(isRealStoreSlug('patna-medicos')).toBe(false);
       expect(isRealStoreSlug('verma-salon')).toBe(false);
+      expect(isRealStoreSlug('fresh-mart')).toBe(false);
+      expect(isRealStoreSlug('store-fresh-mart')).toBe(false);
+      expect(isRealStoreSlug('daily-needs')).toBe(false);
+      expect(isRealStoreSlug('daily-needs-store')).toBe(false);
+      expect(isRealStoreSlug('store-daily-needs')).toBe(false);
+      expect(isRealStoreSlug('apollo-pharmacy')).toBe(false);
+      expect(isRealStoreSlug('store-apollo-pharmacy')).toBe(false);
+      expect(isRealStoreSlug('the-cake-corner')).toBe(false);
+      expect(isRealStoreSlug('green-leaf-vegetables')).toBe(false);
+      expect(isRealStoreSlug('sample-grocery')).toBe(false);
+      expect(isRealStoreSlug('mock-store-1')).toBe(false);
+      expect(isRealStoreSlug('demo-store')).toBe(false);
       expect(isRealStoreSlug('store')).toBe(false);
       expect(isRealStoreSlug(null)).toBe(false);
       expect(isRealStoreSlug(undefined)).toBe(false);
@@ -153,4 +166,102 @@ describe('BOS Customer Mobile Geolocation, Maps & Data Sanity', () => {
       }
     });
   });
+
+  describe('Recent Stores Lifecycle in Affinity Store', () => {
+    it('adds valid stores and ignores mock or placeholder stores', async () => {
+      const { useAffinityStore } = await import(
+        '../../bos-customer-mobile/src/stores/affinity-store'
+      );
+      useAffinityStore.setState({ recentStores: [] });
+
+      // Add valid store
+      await useAffinityStore.getState().addRecentStore({
+        id: 'real-store-1',
+        name: 'Sharma General Store',
+        slug: 'sharma-general-store',
+        category: 'Grocery',
+        description: 'Neighborhood Groceries',
+        bannerUrl: '',
+        address: 'MG Road',
+        rating: 4.5,
+        reviewCount: 12,
+        deliveryTime: '20 min',
+        isOpen: true,
+        itemCount: 50,
+        featuredItems: [],
+      });
+
+      expect(useAffinityStore.getState().recentStores.length).toBe(1);
+      expect(useAffinityStore.getState().recentStores[0].slug).toBe('sharma-general-store');
+
+      // Attempt to add mock store
+      await useAffinityStore.getState().addRecentStore({
+        id: 'sharma-kirana',
+        name: 'Sharma Kirana',
+        slug: 'sharma-kirana',
+        category: 'Grocery',
+        description: 'Mock',
+        bannerUrl: '',
+        address: '',
+        rating: 0,
+        reviewCount: 0,
+        deliveryTime: '',
+        isOpen: true,
+        itemCount: 0,
+        featuredItems: [],
+      });
+
+      // Still 1 because mock store is rejected
+      expect(useAffinityStore.getState().recentStores.length).toBe(1);
+
+      // Attempt to add placeholder 'Store'
+      await useAffinityStore.getState().addRecentStore({
+        id: 'store',
+        name: 'Store',
+        slug: 'store',
+        category: 'General',
+        description: '',
+        bannerUrl: '',
+        address: '',
+        rating: 0,
+        reviewCount: 0,
+        deliveryTime: '',
+        isOpen: true,
+        itemCount: 0,
+        featuredItems: [],
+      });
+
+      expect(useAffinityStore.getState().recentStores.length).toBe(1);
+
+      // Clear recent stores
+      await useAffinityStore.getState().clearRecentStores();
+      expect(useAffinityStore.getState().recentStores.length).toBe(0);
+    });
+
+    it('purges legacy sample stores when loading from AsyncStorage', async () => {
+      const { useAffinityStore } = await import(
+        '../../bos-customer-mobile/src/stores/affinity-store'
+      );
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+
+      // Mock storage returning 3 legacy sample stores that used to produce Recent (3)
+      const mockLegacyRecent = JSON.stringify([
+        { id: 'fresh-mart', slug: 'fresh-mart', name: 'Fresh Mart' },
+        { id: 'daily-needs-store', slug: 'daily-needs-store', name: 'Daily Needs' },
+        { id: 'apollo-pharmacy', slug: 'apollo-pharmacy', name: 'Apollo Pharmacy' },
+      ]);
+
+      vi.spyOn(AsyncStorage, 'getItem').mockImplementation(async (key: string) => {
+        if (key === 'bos_customer_recent_stores') return mockLegacyRecent;
+        return null;
+      });
+
+      await useAffinityStore.getState().loadPersisted();
+
+      // All 3 legacy sample stores must be stripped, leaving 0 recent stores
+      expect(useAffinityStore.getState().recentStores.length).toBe(0);
+    });
+  });
 });
+
+
