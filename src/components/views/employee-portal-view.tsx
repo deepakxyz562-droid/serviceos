@@ -42,6 +42,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import { authFetch } from '@/lib/client-auth';
+import { useAppStore } from '@/store/app-store';
 import { GpsTrackingProvider, useGpsTracking } from '@/hooks/use-gps-tracking';
 import { formatDistance, formatTimer } from '@/features/employee-portal/utils/portal-helpers';
 import { formatMinutes, formatTime } from '@/lib/format-utils';
@@ -126,14 +127,16 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
   const [isOnline, setIsOnline] = useState(true);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
 
-  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const [isPreview, setIsPreview] = useState(false);
 
-  const { connected: realtimeConnected } = useRealtime({
-    employeeId: currentEmployee?.id,
-    onJobUpdate: useCallback(() => {
-      if (currentEmployee?.id) fetchAllJobs();
-    }, [currentEmployee?.id, fetchAllJobs]),
-  });
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem('fieseros_preview_employee_id')) {
+      setIsPreview(true);
+    }
+  }, []);
+
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Fetch Employee ──
   const fetchCurrentEmployee = useCallback(async () => {
@@ -150,20 +153,31 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
+          const previewId = typeof window !== 'undefined' ? sessionStorage.getItem('fieseros_preview_employee_id') : null;
+          if (previewId) {
+            const previewMatching = data.find((e: Employee) => e.id === previewId);
+            if (previewMatching) {
+              setCurrentEmployee(previewMatching);
+              onEmployeeId(previewMatching.id);
+              return;
+            }
+          }
           if (userId) {
             const matching = data.find((e: Employee) => (e as any).userId === userId);
             if (matching) {
               setCurrentEmployee(matching);
+              onEmployeeId(matching.id);
               return;
             }
           }
           setCurrentEmployee(data[0]);
+          onEmployeeId(data[0].id);
         }
       }
     } catch {
       // Silent
     }
-  }, []);
+  }, [onEmployeeId]);
 
   // ── Fetch Active Shift ──
   const fetchShift = useCallback(async () => {
@@ -239,6 +253,13 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
       }
     }
   }, [currentEmployee?.id]);
+
+  const { connected: realtimeConnected } = useRealtime({
+    employeeId: currentEmployee?.id,
+    onJobUpdate: useCallback(() => {
+      if (currentEmployee?.id) fetchAllJobs();
+    }, [currentEmployee?.id, fetchAllJobs]),
+  });
 
   // ── Initial Load ──
   useEffect(() => {
@@ -610,6 +631,44 @@ function EmployeePortalViewInner({ onEmployeeId }: { onEmployeeId: (id: string |
 
   return (
     <div className="space-y-4 max-w-2xl mx-auto pb-24">
+      {/* ─── Admin Preview Banner ─── */}
+      {isPreview && (
+        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 px-3.5 py-2.5 rounded-lg flex items-center justify-between gap-3 text-xs shadow-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <Badge variant="outline" className="bg-amber-200/80 dark:bg-amber-900 text-amber-900 dark:text-amber-100 border-amber-400 font-bold text-[10px] shrink-0">
+              PREVIEW
+            </Badge>
+            <span className="truncate">
+              Viewing technician field portal for <strong>{currentEmployee.name}</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs bg-white dark:bg-card border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900"
+              onClick={() => {
+                sessionStorage.removeItem('fieseros_preview_employee_id');
+                setCurrentView('dispatch');
+              }}
+            >
+              Back to Dispatch
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+              onClick={() => {
+                sessionStorage.removeItem('fieseros_preview_employee_id');
+                setCurrentView('employees');
+              }}
+            >
+              Employees
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ─── Offline Banner / Sync Status ─── */}
       <OfflineStatusBar variant="banner" />
 

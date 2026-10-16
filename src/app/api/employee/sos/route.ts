@@ -151,23 +151,9 @@ export async function POST(request: NextRequest) {
             userId: m.id,
             tenantId: user.tenantId,
             title: `🚨 EMERGENCY SOS: ${employee.name}`,
-            message: `Technician ${employee.name} triggered an emergency distress signal at ${timeStr}. Check dispatch immediately.`,
+            message: `Technician ${employee.name} triggered an emergency distress signal at ${timeStr}. Location: ${address || 'GPS coordinates available'}. Check dispatch immediately.`,
             type: 'emergency_sos',
             read: false,
-            metadataJson: JSON.stringify({
-              employeeId: employee.id,
-              employeeName: employee.name,
-              employeePhone: employee.phone,
-              latitude,
-              longitude,
-              mapsLink,
-              address,
-              jobId: job?.id ?? null,
-              jobTitle: job?.title ?? null,
-              batteryLevel,
-              notes,
-              timestamp: now.toISOString(),
-            }),
           })),
         });
       } catch (err) {
@@ -205,28 +191,38 @@ export async function POST(request: NextRequest) {
       console.warn('[api/employee/sos] failed to emit employee.sos via EventBus:', err);
     }
 
-    // Audit log
+    // Audit log with full emergency distress metadata
     try {
       await db.activityLog.create({
         data: {
           tenantId: user.tenantId,
-          userId: user.id,
+          actorId: user.id,
+          actorName: employee.name,
           actorType: 'employee',
           action: 'emergency_distress_sos',
           entityType: 'employee',
           entityId: employee.id,
           entityName: employee.name,
           description: `Emergency SOS signal triggered by ${employee.name}. Dispatched to ${phoneRecipients.size} managers.`,
+          severity: 'critical',
           metadataJson: JSON.stringify({
             alertId,
+            employeeId: employee.id,
+            employeeName: employee.name,
+            employeePhone: employee.phone,
             latitude,
             longitude,
+            mapsLink,
             address,
             jobId: job?.id ?? null,
+            jobTitle: job?.title ?? null,
+            customerName: job?.customer?.name ?? null,
             batteryLevel,
             notes,
             smsDispatchedCount,
             emergencyNumber: emergency.number,
+            emergencyLabel: emergency.label,
+            timestamp: now.toISOString(),
           }),
         },
       });

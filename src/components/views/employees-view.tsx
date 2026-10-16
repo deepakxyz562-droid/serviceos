@@ -111,7 +111,7 @@ function getCompensationBadge(emp: Employee) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function EmployeesView() {
-  const { currentWorkspaceId, auth, countryPack, pendingCreate, setPendingCreate } = useAppStore();
+  const { currentWorkspaceId, auth, countryPack, pendingCreate, setPendingCreate, setCurrentView } = useAppStore();
   const queryClient = useQueryClient();
 
   // Pagination state (server-side). Default page size = 10.
@@ -974,6 +974,12 @@ export function EmployeesView() {
                             <DropdownMenuItem onClick={() => openEditDialog(emp)}>
                               <Pencil className="size-3.5 mr-2" /> Edit Employee
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              sessionStorage.setItem('fieseros_preview_employee_id', emp.id);
+                              setCurrentView('employeePortal');
+                            }}>
+                              <Wrench className="size-3.5 mr-2 text-primary" /> Preview Field Portal
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             {(!emp.invitationStatus || emp.invitationStatus === 'none') && (
                               <DropdownMenuItem onClick={() => handleSendInvite(emp)} disabled={inviteLoading || actionLoading}>
@@ -1570,6 +1576,12 @@ function EmployeeDetail({
                     <Power className="size-3.5 mr-2" /> Reactivate
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onClick={() => {
+                  sessionStorage.setItem('fieseros_preview_employee_id', employee.id);
+                  setCurrentView('employeePortal');
+                }}>
+                  <Wrench className="size-3.5 mr-2 text-primary" /> Preview Field Portal
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-red-600 font-semibold" onClick={onDelete}>
                   <Trash2 className="size-3.5 mr-2" /> Delete

@@ -446,42 +446,96 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const trialStatus = useTrialStatus();
   const queryClient = useQueryClient();
 
+  const effectiveTenantId = auth.tenant?.id || auth.user?.tenantId;
+
   // Active Realtime Technician Emergency Distress Alert
   const [activeSosAlert, setActiveSosAlert] = useState<SosDistressAlert | null>(null);
+  const dismissedAlertIdsRef = useRef<Set<string>>(new Set());
 
   const handleSosReceived = useCallback((payload: any) => {
     if (payload && payload.employeeName) {
-      setActiveSosAlert({
-        alertId: payload.alertId || `sos_${Date.now()}`,
-        employeeId: payload.employeeId,
-        employeeName: payload.employeeName,
-        employeePhone: payload.employeePhone,
-        latitude: payload.latitude,
-        longitude: payload.longitude,
-        mapsLink: payload.mapsLink,
-        address: payload.address,
-        jobId: payload.jobId,
-        jobTitle: payload.jobTitle,
-        customerName: payload.customerName,
-        batteryLevel: payload.batteryLevel,
-        emergencyNumber: payload.emergencyNumber,
-        emergencyLabel: payload.emergencyLabel,
-        notes: payload.notes,
-        timestamp: payload.timestamp || new Date().toISOString(),
-      });
+      const aid = payload.alertId || `sos_${Date.now()}`;
+      if (!dismissedAlertIdsRef.current.has(aid)) {
+        setActiveSosAlert({
+          alertId: aid,
+          employeeId: payload.employeeId,
+          employeeName: payload.employeeName,
+          employeePhone: payload.employeePhone,
+          latitude: payload.latitude,
+          longitude: payload.longitude,
+          mapsLink: payload.mapsLink,
+          address: payload.address,
+          jobId: payload.jobId,
+          jobTitle: payload.jobTitle,
+          customerName: payload.customerName,
+          batteryLevel: payload.batteryLevel,
+          emergencyNumber: payload.emergencyNumber,
+          emergencyLabel: payload.emergencyLabel,
+          notes: payload.notes,
+          timestamp: payload.timestamp || new Date().toISOString(),
+        });
+      }
     }
   }, []);
 
   useRealtime({
     enabled: true,
-    tenantId: auth.tenant?.id,
+    tenantId: effectiveTenantId,
     onEmployeeSos: handleSosReceived,
   });
 
-  const handleViewSosDispatch = useCallback((alert: SosDistressAlert) => {
+  // High-Availability Active SOS Poller (Fires every 4s to guarantee zero missed distress signals)
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+
+    let cancelled = false;
+
+    const checkActiveSos = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      try {
+        const res = await fetch('/api/employee/sos/active?XTransformPort=3000');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+
+        if (data.active && data.alert) {
+          const aid = data.alert.alertId || data.alert.employeeId;
+          if (!dismissedAlertIdsRef.current.has(aid)) {
+            setActiveSosAlert(data.alert);
+          }
+        }
+      } catch {
+        // Non-fatal
+      }
+    };
+
+    checkActiveSos();
+    const interval = setInterval(checkActiveSos, 4000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [auth.isAuthenticated]);
+
+  const handleDismissSos = useCallback(async () => {
+    if (activeSosAlert) {
+      dismissedAlertIdsRef.current.add(activeSosAlert.alertId);
+      try {
+        await fetch('/api/employee/sos/acknowledge?XTransformPort=3000', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alertId: activeSosAlert.alertId }),
+        });
+      } catch {}
+    }
     setActiveSosAlert(null);
+  }, [activeSosAlert]);
+
+  const handleViewSosDispatch = useCallback((alert: SosDistressAlert) => {
+    handleDismissSos();
     setCurrentView('dispatch');
-  }, [setCurrentView]);
+  }, [handleDismissSos, setCurrentView]);
 
   // PERF-P2: ViewCache invalidation key-prefix fix.
   // The ViewCache's DEFAULT invalidation uses `queryKey: [currentView]`,
@@ -673,7 +727,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         {/* Realtime Emergency SOS Distress Modal */}
         <EmergencySosModal
           alert={activeSosAlert}
-          onDismiss={() => setActiveSosAlert(null)}
+          onDismiss={handleDismissSos}
           onViewDispatch={handleViewSosDispatch}
         />
       </div>
@@ -788,7 +842,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       {/* Realtime Emergency SOS Distress Modal */}
       <EmergencySosModal
         alert={activeSosAlert}
-        onDismiss={() => setActiveSosAlert(null)}
+        onDismiss={handleDismissSos}
         onViewDispatch={handleViewSosDispatch}
       />
     </div>

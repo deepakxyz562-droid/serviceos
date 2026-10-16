@@ -163,7 +163,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'recurringJobs', label: 'Recurring Jobs', icon: Repeat },
       { view: 'inventory', label: 'Inventory', icon: Package },
-      { view: 'employeePortal', label: 'Technician Field View', icon: WrenchIcon, badge: 'FIELD' },
     ],
   },
   {

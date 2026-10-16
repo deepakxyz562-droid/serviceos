@@ -25,8 +25,9 @@ import {
   MapPin, Clock, User, MessageCircle, Play,
   Loader2, ArrowRight, Sparkles, Star,
   Briefcase,
-  Phone, Navigation, AlertTriangle, Gauge, Locate, UserX,
+  Phone, Navigation, AlertTriangle, Gauge, Locate, UserX, Wrench,
 } from 'lucide-react';
+import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -73,6 +74,7 @@ export function InspectorTechnician({
   onReassignAbsent,
   onMarkOnLeave,
 }: InspectorTechnicianProps) {
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   const e = employee;
   const currentJob = activeJobs[0];
   const skills = parseSkills(e.skills);
@@ -320,6 +322,20 @@ export function InspectorTechnician({
             onClick={() => { onDeselect(); onRefreshMarkers(); }}
           >
             <Navigation className="size-3.5 mr-1" /> Follow on map
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full h-8 text-xs gap-1.5 border-dashed border-teal-300 dark:border-teal-700 hover:bg-teal-50 dark:hover:bg-teal-950/30 text-teal-800 dark:text-teal-200"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                sessionStorage.setItem('fieseros_preview_employee_id', e.id);
+              }
+              setCurrentView('employeePortal');
+            }}
+          >
+            <Wrench className="size-3.5 text-teal-600 dark:text-teal-400" /> Preview Tech Field Portal
           </Button>
         </div>
       </ScrollArea>
