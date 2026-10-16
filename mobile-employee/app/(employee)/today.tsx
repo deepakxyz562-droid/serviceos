@@ -44,6 +44,7 @@ import {
   Navigation,
   Phone,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -51,6 +52,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
+import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
 import { useEmployeeJobs } from '@/hooks/use-jobs';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -157,6 +159,7 @@ export default function TodayScreen() {
   const user = useAuthStore((s) => s.user);
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const [ownerScope, setOwnerScope] = useState<'my' | 'all'>('my');
+  const [showCopilot, setShowCopilot] = useState(false);
 
   const todaysJobs = useMemo<Job[]>(() => {
     const list = todayJobs.data ?? [];
@@ -418,6 +421,19 @@ export default function TodayScreen() {
                 </Pressable>
 
                 <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                    setShowCopilot(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Field AI Copilot"
+                  className="flex-row items-center gap-1.5 h-10 px-3 rounded-full bg-emerald-50 border border-emerald-300 active:bg-emerald-100 shadow-xs"
+                >
+                  <Sparkles size={15} color="#059669" />
+                  <Text className="text-xs font-bold text-emerald-800">AI Copilot</Text>
+                </Pressable>
+
+                <Pressable
                   onPress={() => router.push('/(employee)/notifications')}
                   hitSlop={12}
                   accessibilityRole="button"
@@ -563,6 +579,36 @@ export default function TodayScreen() {
                 )}
               </View>
             </Card>
+
+            {/* Universal Field Copilot Quick Banner (All Trades) */}
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                setShowCopilot(true);
+              }}
+              style={{ backgroundColor: '#059669' }}
+              className="mb-3.5 p-3.5 rounded-2xl active:opacity-90 shadow-xs"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-3 flex-1">
+                  <View className="size-10 rounded-xl bg-white/20 items-center justify-center">
+                    <Sparkles size={20} color="#ffffff" />
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="text-sm font-bold text-white">Universal Field Copilot</Text>
+                      <View className="bg-emerald-400/30 px-1.5 py-0.5 rounded">
+                        <Text className="text-[9px] font-extrabold text-emerald-100">ALL TRADES</Text>
+                      </View>
+                    </View>
+                    <Text className="text-xs text-emerald-100 mt-0.5">
+                      Ask diagnosis, safety checks, chemical dilution, or wiring
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={18} color="#A7F3D0" />
+              </View>
+            </Pressable>
 
             {/* "Next Up" Hero Card (Jobber / Housecall Pro style) */}
             {activeJob ? (
@@ -766,6 +812,11 @@ export default function TodayScreen() {
             />
           )
         }
+      />
+
+      <FieldCopilotModal
+        visible={showCopilot}
+        onClose={() => setShowCopilot(false)}
       />
     </SafeAreaView>
   );

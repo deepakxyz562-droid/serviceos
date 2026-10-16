@@ -378,20 +378,22 @@ async function handleTroubleshoot(
   const assets = job.customerId ? await loadCustomerAssets(job.customerId) : [];
 
   const systemPrompt =
-    'You are an expert field-service troubleshooter. Given the job details and the customer\'s equipment, ' +
-    'provide clear, step-by-step troubleshooting instructions. Start with the most likely causes. ' +
-    'Use numbered steps, with safety warnings where appropriate. Mention any tools or parts that may be needed. ' +
-    'Use markdown formatting. Keep it practical and under 350 words.';
+    'You are an expert universal field-service troubleshooter across all trades (cleaning, plumbing, electrical, HVAC, pest control, landscaping, appliance repair, roofing, painting, handyman, pool care, etc.). ' +
+    'Given the job details, service type, and any customer equipment, ' +
+    'provide clear, step-by-step diagnostic and troubleshooting instructions tailored to that exact trade. Start with the most likely causes. ' +
+    'Use numbered steps, with safety warnings where appropriate (electrical lock-out, PPE, chemical dilution, water shut-off). Mention any tools or supplies needed. ' +
+    'Use markdown formatting. Keep it practical, professional, and under 350 words.';
 
   const userPrompt = `JOB DETAILS:
 Title: ${job.title}
+Service Category: ${job.service?.name || job.type || 'General Service'}
 Description: ${truncate(job.description || '—', 600)}
 Priority: ${job.priority}
 Type: ${job.type}
 Notes: ${truncate(job.notes || '—', 400)}
 Visit instructions: ${truncate(job.visitInstructions || '—', 400)}
 
-CUSTOMER ASSETS (${assets.length}):
+CUSTOMER ASSETS / EQUIPMENT (${assets.length}):
 ${assets
   .map(
     (a) =>
@@ -399,7 +401,7 @@ ${assets
   )
   .join('\n') || '(none linked to this customer)'}
 
-Provide troubleshooting steps for the issue described in the job.`;
+Provide troubleshooting and diagnostic steps for this service job.`;
 
   const result = await callLLM(zai, systemPrompt, userPrompt, 0.6);
   if (result.error) return { error: result.error };
@@ -565,31 +567,32 @@ async function handleAsk(
     return { error: 'Please provide a question.', status: 400 };
   }
 
-  const [assets, timeline] = await Promise.all([
-    job.customerId ? loadCustomerAssets(job.customerId) : Promise.resolve([]),
-    job.customerId ? loadCustomerTimeline(job.customerId, tenantId) : Promise.resolve([]),
-  ]);
+  const [assets, timeline] = job
+    ? await Promise.all([
+        job.customerId ? loadCustomerAssets(job.customerId) : Promise.resolve([]),
+        job.customerId ? loadCustomerTimeline(job.customerId, tenantId) : Promise.resolve([]),
+      ])
+    : [[], []];
 
   const systemPrompt =
-    'You are an AI field assistant helping a technician with a specific job. ' +
-    'Answer the technician\'s question using the provided job + customer context. ' +
-    'If the question is unrelated to the job, give a general best-practice answer. ' +
+    'You are an expert universal AI Field-Service Copilot assisting field technicians across all service industries ' +
+    '(cleaning, plumbing, electrical, HVAC, pest control, landscaping, appliance repair, roofing, painting, handyman, pool care, etc.). ' +
+    'Provide clear, safety-first, step-by-step guidance tailored to the technician’s trade and question. ' +
+    'Highlight safety warnings (power shut-off, chemical dilution, PPE, gas/water isolation) where applicable. ' +
     'Be concise, practical, and use markdown formatting where helpful.';
 
-  const userPrompt = `JOB CONTEXT:
+  const userPrompt = job
+    ? `JOB CONTEXT:
 Title: ${job.title}
+Service Category: ${job.service?.name || job.type || 'General Service'}
 Description: ${truncate(job.description || '—', 600)}
 Status: ${job.status}
-Type: ${job.type}
 Priority: ${job.priority}
-Notes: ${truncate(job.notes || '—', 400)}
-Visit instructions: ${truncate(job.visitInstructions || '—', 300)}
 Customer: ${job.customerName || '—'}
-Phone: ${job.customerPhone || '—'}
 Address: ${job.address || '—'}
 Assignee: ${job.assigneeName || '—'}
 
-CUSTOMER ASSETS:
+CUSTOMER ASSETS / EQUIPMENT:
 ${assets
   .map(
     (a) =>
@@ -597,16 +600,14 @@ ${assets
   )
   .join('\n') || '(none)'}
 
-RECENT TIMELINE:
-${timeline
-  .slice(0, 8)
-  .map((t) => `- [${t.entryType}] ${t.title}${t.description ? ' — ' + truncate(t.description, 100) : ''}`)
-  .join('\n') || '(none)'}
-
 TECHNICIAN'S QUESTION:
 ${question}
 
-Please answer.`;
+Please provide clear, professional, trade-appropriate step-by-step guidance.`
+    : `TECHNICIAN'S FIELD QUESTION:
+${question}
+
+Please provide clear, professional, safety-minded step-by-step guidance for this field question.`;
 
   const result = await callLLM(zai, systemPrompt, userPrompt, 0.6);
   if (result.error) return { error: result.error };
@@ -672,9 +673,9 @@ export async function POST(request: NextRequest) {
     if (!quotaCheck.ok) return quotaCheck.response;
 
     const body = (await request.json()) as RequestBody;
-    if (!body || !body.jobId || !body.action) {
+    if (!body || !body.action) {
       return NextResponse.json(
-        { error: 'jobId and action are required.' },
+        { error: 'action is required.' },
         { status: 400 },
       );
     }
@@ -695,12 +696,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load the job + customer context first
-    const job = await loadJobContext(body.jobId, tenantId);
-    if (!job) {
+    // Load the job + customer context if jobId is provided
+    let job: any = null;
+    if (body.jobId) {
+      job = await loadJobContext(body.jobId, tenantId);
+      if (!job && body.action !== 'ask') {
+        return NextResponse.json(
+          { error: 'Job not found (or not in your tenant).' },
+          { status: 404 },
+        );
+      }
+    } else if (body.action !== 'ask') {
       return NextResponse.json(
-        { error: 'Job not found (or not in your tenant).' },
-        { status: 404 },
+        { error: 'jobId is required for this action.' },
+        { status: 400 },
       );
     }
 
@@ -744,12 +753,12 @@ export async function POST(request: NextRequest) {
         actorType: 'ai',
         action: 'ai_query',
         entityType: 'job',
-        entityId: job.id,
-        entityName: job.title,
+        entityId: job?.id || 'field-assistant',
+        entityName: job?.title || 'Universal Field AI',
         description: `AI query [${body.action}]${body.question ? `: ${truncate(body.question, 120)}` : ''}${result.error ? ' — FAILED' : ''}`,
         metadataJson: JSON.stringify({
           action: body.action,
-          jobId: job.id,
+          jobId: job?.id ?? null,
           question: body.question ?? null,
           messageType: body.messageType ?? null,
           success: !result.error,
@@ -773,7 +782,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       action: body.action,
-      jobId: job.id,
+      jobId: job?.id ?? null,
       text: result.text,
     });
   } catch (error: unknown) {

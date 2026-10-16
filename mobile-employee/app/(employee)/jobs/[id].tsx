@@ -836,6 +836,54 @@ export default function JobDetailScreen() {
           </View>
         </Card>
 
+        {/* Dedicated Universal AI Field Copilot Card (All Trades) */}
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+            setShowCopilotModal(true);
+          }}
+          className="mb-3 overflow-hidden rounded-2xl border border-emerald-200 p-4 shadow-xs active:opacity-90"
+          style={{ backgroundColor: '#ECFDF5' }}
+        >
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-3 flex-1">
+              <View className="h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 shadow-xs">
+                <Sparkles size={20} color="#ffffff" />
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-center gap-1.5">
+                  <Text className="text-sm font-bold text-emerald-950">
+                    AI Field Copilot
+                  </Text>
+                  <View className="rounded bg-emerald-200/80 px-1.5 py-0.5">
+                    <Text className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-900">
+                      All Trades
+                    </Text>
+                  </View>
+                </View>
+                <Text className="mt-0.5 text-xs text-emerald-700 font-medium">
+                  Instant recap, diagnostic steps & upsell advice
+                </Text>
+              </View>
+            </View>
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+              <ChevronRight size={18} color="#059669" />
+            </View>
+          </View>
+
+          <View className="mt-3 flex-row items-center gap-2 pt-2.5 border-t border-emerald-200/70">
+            <View className="rounded-full bg-white px-2.5 py-1 border border-emerald-200">
+              <Text className="text-[11px] font-semibold text-emerald-800">👤 Customer Recap</Text>
+            </View>
+            <View className="rounded-full bg-white px-2.5 py-1 border border-emerald-200">
+              <Text className="text-[11px] font-semibold text-emerald-800">🔧 Troubleshoot</Text>
+            </View>
+            <View className="rounded-full bg-white px-2.5 py-1 border border-emerald-200">
+              <Text className="text-[11px] font-semibold text-emerald-800">💡 Upsell</Text>
+            </View>
+          </View>
+        </Pressable>
+
         {/* V1.5 Lifecycle Progress — 7-stage pill row + timestamp grid.
             Mirrors the PWA's LifecycleProgress component. Placed above the
             Schedule/Address card per Phase-4 task spec. */}
