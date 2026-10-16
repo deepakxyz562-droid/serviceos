@@ -162,14 +162,8 @@ const ownerNavSections: NavSection[] = [
       { view: 'dispatch', label: 'Live Dispatch', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'recurringJobs', label: 'Recurring Jobs', icon: Repeat },
-      // ── Inventory (Phase 3 audit fix) ──
-      // Catalog entry exists in MENU_CATALOG (key='inventory', minPlan='business')
-      // and the view is mapped in app-layout.tsx, but the sidebar nav item was
-      // missing — making the entire Inventory module unreachable from the UI.
-      // Plan gating is auto-applied by checkMenuAccess() (Lock icon for trial,
-      // hidden for paid starter/growth). Menu-visibility toggle (superadmin
-      // Menu Management) also honours this entry.
       { view: 'inventory', label: 'Inventory', icon: Package },
+      { view: 'employeePortal', label: 'Technician Field View', icon: WrenchIcon, badge: 'FIELD' },
     ],
   },
   {

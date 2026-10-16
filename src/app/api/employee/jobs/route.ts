@@ -59,6 +59,17 @@ export async function GET(request: NextRequest) {
       assigneeId: employee.id,
     };
 
+    // If an owner or admin logs into the employee app to test, but their personal
+    // employee row has 0 assigned jobs, query by workspaceId instead so they can
+    // test and see the jobs.
+    if ((user.role === 'owner' || user.role === 'admin') && user.workspaceId) {
+      const assignedCount = await db.job.count({ where: { assigneeId: employee.id } });
+      if (assignedCount === 0) {
+        where.workspaceId = user.workspaceId;
+        delete where.assigneeId;
+      }
+    }
+
     if (filter === 'today') {
       where.OR = [
         { scheduledAt: { gte: startOfDay, lte: endOfDay } },
@@ -66,14 +77,18 @@ export async function GET(request: NextRequest) {
           scheduledAt: null,
           createdAt: { gte: startOfDay, lte: endOfDay },
         },
+        // Active in-progress jobs assigned to this employee remain visible until completed
+        {
+          status: { in: ['en_route', 'on_site', 'in_progress', 'travelling', 'arrived', 'working', 'paused', 'assigned', 'accepted'] },
+        },
       ];
-      // Exclude completed from "today" list (they go in completed)
-      where.status = { not: 'completed' };
+      // Exclude completed from active "today" list (they are viewable under completed filter)
+      where.status = { notIn: ['completed', 'invoice_generated', 'paid', 'cancelled'] };
     } else if (filter === 'upcoming') {
       where.scheduledAt = { gt: endOfDay };
-      where.status = { notIn: ['completed', 'cancelled'] };
+      where.status = { notIn: ['completed', 'invoice_generated', 'paid', 'cancelled'] };
     } else if (filter === 'completed') {
-      where.status = 'completed';
+      where.status = { in: ['completed', 'invoice_generated', 'paid'] };
     } else if (filter === 'scheduled') {
       // Mobile app Schedule screen: jobs within [from, to] date range.
       // Exclude cancelled jobs. If from/to are missing, behaves like 'all'.
@@ -320,7 +335,14 @@ function deriveLifecycleState(
   job: { status: string; actualStartTime?: Date | null; completedAt?: Date | null; assignmentStatus?: string | null },
   ts: LifecycleTimestamps,
 ): string {
-  if (job.status === 'completed' || job.completedAt) return 'completed';
+  if (
+    job.status === 'completed' ||
+    job.status === 'invoice_generated' ||
+    job.status === 'paid' ||
+    job.completedAt
+  ) {
+    return 'completed';
+  }
   // FIX (Q1.5): Correctly resolve working vs paused across multi-cycle
   // pause/resume. If the most recent pause/resume event was a resume
   // (i.e. resumed > paused), the job is working again. ISO 8601 timestamps

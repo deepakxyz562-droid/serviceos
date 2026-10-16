@@ -92,6 +92,7 @@ import { Input } from '@/components/ui/Input';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
+import { NotesPolishButton } from '@/components/ai/NotesPolishButton';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   useJob,
@@ -1384,12 +1385,21 @@ export default function JobCompletionScreen() {
 
         {/* Completion Notes */}
         <Card className="mb-4">
-          <SectionHeader
-            icon={FileText}
-            iconColor={COLORS.mutedForeground}
-            title="Completion Notes"
-            badge="(optional)"
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <SectionHeader
+              icon={FileText}
+              iconColor={COLORS.mutedForeground}
+              title="Completion Notes"
+              badge="(optional)"
+            />
+            {job?.id ? (
+              <NotesPolishButton
+                jobId={job.id}
+                rawNotes={notes}
+                onPolished={(polished) => setNotes(polished)}
+              />
+            ) : null}
+          </View>
           <TextInput
             value={notes}
             onChangeText={setNotes}

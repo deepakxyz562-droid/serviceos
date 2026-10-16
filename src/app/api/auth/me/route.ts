@@ -179,6 +179,35 @@ export async function GET() {
       );
     }
 
+    // Include employeeId from JWT if present, or fallback to resolving by userId / email
+    let resolvedEmployeeId = authUser.employeeId || null;
+    if (!resolvedEmployeeId) {
+      try {
+        let emp = await db.employee.findFirst({
+          where: { userId: user.id },
+          select: { id: true, userId: true },
+        });
+        if (!emp && user.email) {
+          emp = await db.employee.findFirst({
+            where: {
+              email: { equals: user.email, mode: 'insensitive' },
+              ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}),
+            },
+            select: { id: true, userId: true },
+          });
+          if (emp && !emp.userId) {
+            db.employee.update({
+              where: { id: emp.id },
+              data: { userId: user.id },
+            }).catch(() => {});
+          }
+        }
+        resolvedEmployeeId = emp?.id || null;
+      } catch {
+        // best-effort
+      }
+    }
+
     const adminResponse = {
       user: {
         id: user.id,
@@ -195,8 +224,7 @@ export async function GET() {
         isActive: user.isActive,
         lastLoginAt: user.lastLoginAt,
         createdAt: user.createdAt,
-        // Include employeeId from JWT if present (set during employee portal login)
-        employeeId: authUser.employeeId || null,
+        employeeId: resolvedEmployeeId,
       },
       workspace: user.workspace ? {id:user.workspace.id,productType:user.workspace.productType,name:user.workspace.name}:null,
       tenant: user.tenant

@@ -57,12 +57,19 @@ import {
   Briefcase,
   DollarSign,
   AlertCircle,
+  Banknote,
+  MessageSquare,
+  Share2,
+  Sparkles,
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { CollectPaymentModal } from '@/components/payment/CollectPaymentModal';
+import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { useToast } from '@/components/ui/Toast';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -349,15 +356,54 @@ export default function JobDetailScreen() {
     apiBaseUrl: API_BASE_URL,
   });
 
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCopilotModal, setShowCopilotModal] = useState(false);
+
+  const handleSmartEta = useCallback(() => {
+    if (!job?.customer?.phone) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const clean = job.customer.phone.replace(/[^0-9+]/g, '');
+    const custName = job.customer.name ? job.customer.name.split(' ')[0] : 'there';
+    const msg = encodeURIComponent(
+      `Hi ${custName}, this is your technician from the service team. I am en route to your location and will arrive shortly. See you soon!`
+    );
+    Linking.openURL(`whatsapp://send?phone=${clean}&text=${msg}`).catch(() => {
+      Linking.openURL(`sms:${clean}?body=${msg}`).catch(() => {
+        show('Unable to open messaging app.', 'error');
+      });
+    });
+  }, [job, show]);
+
   const handleCall = useCallback(() => {
     if (!job?.customer?.phone) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     Linking.openURL(`tel:${job.customer.phone}`).catch(() => {
       show('Unable to open phone app.', 'error');
     });
   }, [job, show]);
 
+  const handleSms = useCallback(() => {
+    if (!job?.customer?.phone) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    Linking.openURL(`sms:${job.customer.phone}`).catch(() => {
+      show('Unable to open SMS app.', 'error');
+    });
+  }, [job, show]);
+
+  const handleWhatsApp = useCallback(() => {
+    if (!job?.customer?.phone) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    const clean = job.customer.phone.replace(/[^0-9+]/g, '');
+    Linking.openURL(`whatsapp://send?phone=${clean}`).catch(() => {
+      Linking.openURL(`https://wa.me/${clean}`).catch(() => {
+        show('WhatsApp not installed.', 'error');
+      });
+    });
+  }, [job, show]);
+
   const handleDirections = useCallback(() => {
     if (!job?.address) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     const encoded = encodeURIComponent(job.address);
     Linking.openURL(
       `https://www.google.com/maps/search/?api=1&query=${encoded}`
@@ -714,21 +760,80 @@ export default function JobDetailScreen() {
             </View>
           </View>
 
-          {job.customer.phone ? (
+          {/* Quick Action Dock (Jobber / Housecall Pro Style) */}
+          <View className="mt-3.5 flex-row items-center justify-between border-t border-border pt-3">
+            {job.customer.phone ? (
+              <>
+                <Pressable
+                  onPress={handleCall}
+                  className="flex-1 items-center justify-center py-1 active:opacity-70"
+                >
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-100">
+                    <Phone size={16} color={COLORS.primary} />
+                  </View>
+                  <Text className="mt-1 text-[11px] font-semibold text-foreground">Call</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={handleSms}
+                  className="flex-1 items-center justify-center py-1 active:opacity-70"
+                >
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-sky-100">
+                    <MessageSquare size={16} color="#0284C7" />
+                  </View>
+                  <Text className="mt-1 text-[11px] font-semibold text-foreground">SMS</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={handleWhatsApp}
+                  className="flex-1 items-center justify-center py-1 active:opacity-70"
+                >
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                    <MessageSquare size={16} color="#059669" />
+                  </View>
+                  <Text className="mt-1 text-[11px] font-semibold text-foreground">WhatsApp</Text>
+                </Pressable>
+              </>
+            ) : null}
+
+            {job.address ? (
+              <Pressable
+                onPress={handleDirections}
+                className="flex-1 items-center justify-center py-1 active:opacity-70"
+              >
+                <View className="h-9 w-9 items-center justify-center rounded-full bg-indigo-100">
+                  <Navigation size={16} color="#4F46E5" />
+                </View>
+                <Text className="mt-1 text-[11px] font-semibold text-foreground">Map</Text>
+              </Pressable>
+            ) : null}
+
             <Pressable
-              onPress={handleCall}
-              className="mt-3 flex-row items-center"
-              accessibilityRole="button"
-              accessibilityLabel={`Call ${job.customer.phone}`}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                setShowPaymentModal(true);
+              }}
+              className="flex-1 items-center justify-center py-1 active:opacity-70"
             >
-              <View className="mr-2 h-9 w-9 items-center justify-center rounded-full bg-primary-100">
-                <Phone size={16} color={COLORS.primary} />
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
+                <Banknote size={16} color={COLORS.success} />
               </View>
-              <Text className="text-sm font-semibold text-primary-700">
-                {job.customer.phone}
-              </Text>
+              <Text className="mt-1 text-[11px] font-semibold text-foreground">Collect</Text>
             </Pressable>
-          ) : null}
+
+            <Pressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                setShowCopilotModal(true);
+              }}
+              className="flex-1 items-center justify-center py-1 active:opacity-70"
+            >
+              <View className="h-9 w-9 items-center justify-center rounded-full bg-amber-100">
+                <Sparkles size={16} color="#D97706" />
+              </View>
+              <Text className="mt-1 text-[11px] font-semibold text-foreground">AI Copilot</Text>
+            </Pressable>
+          </View>
         </Card>
 
         {/* V1.5 Lifecycle Progress — 7-stage pill row + timestamp grid.
@@ -1043,6 +1148,19 @@ export default function JobDetailScreen() {
               })
             }
           />
+          <QuickAction
+            icon={<Banknote size={20} color={COLORS.success} />}
+            label="Collect Payment"
+            countLabel={
+              job.quotedAmount
+                ? formatCurrency(job.quotedAmount, tenantCurrency)
+                : 'Collect'
+            }
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+              setShowPaymentModal(true);
+            }}
+          />
         </View>
 
         {/* Line items preview */}
@@ -1303,6 +1421,32 @@ export default function JobDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      <CollectPaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        jobId={job.id}
+        invoiceId={(job as any).invoiceId || (job as any).invoice?.id}
+        invoiceNumber={(job as any).invoiceNumber || (job as any).invoice?.number}
+        amount={Number(job.quotedAmount || (job as any).totalAmount || 0)}
+        customerName={job.customer?.name || 'Customer'}
+        customerPhone={job.customer?.phone}
+        onPaymentSuccess={() => {
+          refetch();
+          show('Payment confirmed and updated.', 'success');
+        }}
+      />
+
+      <FieldCopilotModal
+        visible={showCopilotModal}
+        onClose={() => setShowCopilotModal(false)}
+        jobId={job.id}
+        jobTitle={job.title || 'Service Job'}
+        customerName={job.customer?.name || 'Customer'}
+        onApplyNotes={() => {
+          router.push(`/(employee)/jobs/${job.id}/notes` as any);
+        }}
+      />
     </SafeAreaView>
   );
 }

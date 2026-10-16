@@ -29,7 +29,9 @@ import {
   // as FileText/DollarSign/PenLine/Send).
   Copy, FileSpreadsheet,
   ChevronLeft,
+  Mic,
 } from 'lucide-react';
+import { VoiceCreateJobModal } from '@/components/modals/voice-job-modal';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -470,6 +472,7 @@ export function JobsView() {
   // page focused on work-in-progress; the History tab is the single place
   // to review finished work.
   const [jobsTab, setJobsTab] = useState<'active' | 'history'>('active');
+  const [voiceModalOpen, setVoiceModalOpen] = useState(false);
   // ── Bulk select state ──
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -2599,6 +2602,13 @@ export function JobsView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 gap-1.5 font-semibold shadow-xs"
+            onClick={() => setVoiceModalOpen(true)}
+          >
+            <Mic className="size-4 text-emerald-600 animate-pulse" /> Voice AI
+          </Button>
           <Button variant="outline" onClick={() => openChecklistBuilder()}>
             <ClipboardList className="size-4 mr-1.5" /> New Checklist
           </Button>
@@ -3206,6 +3216,15 @@ export function JobsView() {
         onSent={() => {
           // Reset the prefill after a successful send
           setComposerInitial({});
+        }}
+      />
+
+      {/* ─── Hands-Free Voice AI Create Job Modal ────────────────────── */}
+      <VoiceCreateJobModal
+        open={voiceModalOpen}
+        onOpenChange={setVoiceModalOpen}
+        onJobCreated={() => {
+          fetchJobs();
         }}
       />
     </div>

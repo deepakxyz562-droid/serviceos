@@ -3,29 +3,19 @@ import { getAuthUser } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
 import { checkAiQuota, trackAiUsage } from '@/lib/ai-usage-tracker';
+import { callAI } from '@/lib/ai-client';
 
 /**
  * AI Field Assistant (Fieseros V1.5)
  * -----------------------------------
- * A single POST endpoint that powers 6 different LLM-backed actions for the
- * job-detail AI panel. Each action fetches the relevant context from the DB,
- * builds a system + user prompt, calls the z-ai-web-dev-sdk, and returns
- * the text response.
- *
- * Actions:
+ * A single POST endpoint that powers LLM-backed actions for field technicians:
  *   - summarize_customer  → concise customer-history summary
  *   - troubleshoot        → troubleshooting steps for the asset/issue
  *   - completion_notes    → professional job-completion notes
+ *   - polish_notes        → polish raw notes / voice dictation into clear summary
  *   - upsell              → upsell service recommendations
  *   - draft_message       → draft SMS/Email/WhatsApp message
  *   - ask                 → free-form Q&A with context
- *
- * The LLM call is wrapped in try/catch. If the SDK fails (e.g. missing API
- * key, network error) we return a 503 with a friendly message so the job
- * page doesn't crash.
- *
- * Every request is logged to ActivityLog (action='ai_query',
- * entityType='job') for auditability.
  */
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -34,6 +24,7 @@ type Action =
   | 'summarize_customer'
   | 'troubleshoot'
   | 'completion_notes'
+  | 'polish_notes'
   | 'upsell'
   | 'draft_message'
   | 'ask';
@@ -43,6 +34,7 @@ interface RequestBody {
   action: Action;
   question?: string;
   context?: string;
+  rawNotes?: string;
   messageType?: 'sms' | 'email' | 'whatsapp';
 }
 
@@ -98,8 +90,9 @@ async function getZai(): Promise<{ zai: any; error?: string } | null> {
 }
 
 /**
- * Wrap zai.chat.completions.create in try/catch and extract the text.
- * On failure, returns null + an error string.
+ * Multi-provider callLLM wrapper.
+ * Attempts callAI() first (OpenRouter → OpenAI → Anthropic → Gemini),
+ * then falls back to ZAI SDK.
  */
 async function callLLM(
   zai: any,
@@ -108,26 +101,36 @@ async function callLLM(
   temperature = 0.7,
 ): Promise<{ text: string | null; error?: string }> {
   try {
-    const response = await zai.chat.completions.create({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature,
-    });
-    const text = response?.choices?.[0]?.message?.content;
-    if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      return { text: null, error: 'AI returned an empty response. Please retry.' };
+    const aiRes = await callAI([
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ], { temperature });
+    if (aiRes && aiRes.text && aiRes.text.trim()) {
+      return { text: aiRes.text };
     }
-    return { text };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[ai/field-assistant] LLM call failed:', msg);
-    return {
-      text: null,
-      error: `The AI service could not be reached (${msg}). Please try again in a moment.`,
-    };
+  } catch (aiErr) {
+    console.warn('[ai/field-assistant] callAI failed, trying zai fallback:', aiErr);
   }
+
+  if (zai) {
+    try {
+      const response = await zai.chat.completions.create({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature,
+      });
+      const text = response?.choices?.[0]?.message?.content;
+      if (text && typeof text === 'string' && text.trim().length > 0) {
+        return { text };
+      }
+    } catch (err) {
+      console.error('[ai/field-assistant] zai fallback failed:', err);
+    }
+  }
+
+  return { text: null, error: 'AI service could not be reached. Please check AI provider settings.' };
 }
 
 // ─── Context loaders ───────────────────────────────────────────────────────
@@ -610,6 +613,41 @@ Please answer.`;
   return { text: result.text! };
 }
 
+async function handlePolishNotes(
+  zai: any,
+  job: any,
+  body: RequestBody,
+): Promise<ActionResult | ActionError> {
+  const rawNotes = (body.rawNotes || body.context || '').trim();
+  if (!rawNotes) {
+    return { error: 'Please provide notes to polish.', status: 400 };
+  }
+
+  const systemPrompt =
+    'You are a professional field-service documentation assistant. ' +
+    'The technician has provided raw, quick notes or voice dictation from on-site work. ' +
+    'Transform them into a clean, well-formatted, professional work summary. ' +
+    'Use concise sections:\n' +
+    '• Work Performed: Clear summary of service/repairs completed.\n' +
+    '• Parts / Materials: Any parts replaced or materials used.\n' +
+    '• System Test & Verification: Operational checks and test results.\n' +
+    '• Recommendations: Any preventative tips or future actions.\n' +
+    'Correct any spelling, abbreviations, or grammar issues while maintaining all technical specifics. Keep it practical and under 250 words.';
+
+  const userPrompt = `Job: ${job.title}
+Customer: ${job.customerName || 'Customer'}
+Address: ${job.address || 'Job Site'}
+
+Raw technician notes:
+"${rawNotes}"
+
+Please polish and format these notes into clear, professional summary.`;
+
+  const result = await callLLM(zai, systemPrompt, userPrompt, 0.4);
+  if (result.error) return { error: result.error };
+  return { text: result.text! };
+}
+
 // ─── Main route handler ────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -645,6 +683,7 @@ export async function POST(request: NextRequest) {
       'summarize_customer',
       'troubleshoot',
       'completion_notes',
+      'polish_notes',
       'upsell',
       'draft_message',
       'ask',
@@ -656,8 +695,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Load the job + customer context first (so we can return a 404 before
-    // spending tokens on the LLM if the job doesn't exist).
+    // Load the job + customer context first
     const job = await loadJobContext(body.jobId, tenantId);
     if (!job) {
       return NextResponse.json(
@@ -666,36 +704,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the ZAI client.
-    const zaiResult = await getZai();
-    if (!zaiResult || !zaiResult.zai) {
-      const errMsg =
-        zaiResult?.error ||
-        'AI assistant is not configured. Set ZAI_API_KEY to enable this feature.';
-      return NextResponse.json({ error: errMsg }, { status: 503 });
-    }
+    // Optional ZAI client for fallback
+    const zaiResult = await getZai().catch(() => null);
+    const zai = zaiResult?.zai || null;
 
     // Dispatch to the appropriate handler.
     let result: ActionResult | ActionError;
     switch (body.action) {
       case 'summarize_customer':
-        result = await handleSummarizeCustomer(zaiResult.zai, job, tenantId);
+        result = await handleSummarizeCustomer(zai, job, tenantId);
         break;
       case 'troubleshoot':
-        result = await handleTroubleshoot(zaiResult.zai, job, tenantId);
+        result = await handleTroubleshoot(zai, job, tenantId);
         break;
       case 'completion_notes':
-        result = await handleCompletionNotes(zaiResult.zai, job);
+        result = await handleCompletionNotes(zai, job);
+        break;
+      case 'polish_notes':
+        result = await handlePolishNotes(zai, job, body);
         break;
       case 'upsell':
-        result = await handleUpsell(zaiResult.zai, job, tenantId);
+        result = await handleUpsell(zai, job, tenantId);
         break;
       case 'draft_message':
-        result = await handleDraftMessage(zaiResult.zai, job, body);
+        result = await handleDraftMessage(zai, job, body);
         break;
       case 'ask':
       default:
-        result = await handleAsk(zaiResult.zai, job, tenantId, body);
+        result = await handleAsk(zai, job, tenantId, body);
         break;
     }
 

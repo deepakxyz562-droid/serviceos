@@ -33,6 +33,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { useJob, useUpdateJob } from '@/hooks/use-jobs';
 import { COLORS } from '@/lib/constants';
+import { NotesPolishButton } from '@/components/ai/NotesPolishButton';
 
 const MAX_LEN = 5000;
 
@@ -134,9 +135,18 @@ export default function JobNotesScreen() {
                 </Text>
               </View>
             </View>
-            <Text className="text-xs text-muted-foreground">
-              {notes.length}/{MAX_LEN}
-            </Text>
+            <View className="flex-row items-center gap-2">
+              {id ? (
+                <NotesPolishButton
+                  jobId={id}
+                  rawNotes={notes}
+                  onPolished={(polished) => setNotes(polished)}
+                />
+              ) : null}
+              <Text className="text-xs text-muted-foreground">
+                {notes.length}/{MAX_LEN}
+              </Text>
+            </View>
           </View>
           <TextInput
             value={notes}
@@ -167,9 +177,18 @@ export default function JobNotesScreen() {
                 </Text>
               </View>
             </View>
-            <Text className="text-xs text-muted-foreground">
-              {internalNotes.length}/{MAX_LEN}
-            </Text>
+            <View className="flex-row items-center gap-2">
+              {id ? (
+                <NotesPolishButton
+                  jobId={id}
+                  rawNotes={internalNotes}
+                  onPolished={(polished) => setInternalNotes(polished)}
+                />
+              ) : null}
+              <Text className="text-xs text-muted-foreground">
+                {internalNotes.length}/{MAX_LEN}
+              </Text>
+            </View>
           </View>
           <TextInput
             value={internalNotes}

@@ -20,6 +20,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Search, MapPin, Clock, X, Briefcase } from 'lucide-react-native';
@@ -90,7 +91,15 @@ export default function JobsListScreen() {
     const q = searchInput.trim().toLowerCase();
     return list.filter((j) => {
       const state = (j.lifecycleState || j.status || '').toLowerCase();
-      if (filter !== 'all' && state !== filter) return false;
+      if (filter !== 'all') {
+        if (filter === 'completed') {
+          if (state !== 'completed' && state !== 'invoice_generated' && state !== 'paid') {
+            return false;
+          }
+        } else if (state !== filter) {
+          return false;
+        }
+      }
       if (!q) return true;
       const name = j.customer?.name?.toLowerCase() ?? '';
       const address = j.address?.toLowerCase() ?? '';
@@ -161,6 +170,30 @@ export default function JobsListScreen() {
     );
   };
 
+  const filterCounts = useMemo<Record<FilterKey, number>>(() => {
+    const counts: Record<FilterKey, number> = {
+      all: data?.length ?? 0,
+      assigned: 0,
+      accepted: 0,
+      travelling: 0,
+      arrived: 0,
+      working: 0,
+      paused: 0,
+      completed: 0,
+      invoice_generated: 0,
+      cancelled: 0,
+    };
+    (data ?? []).forEach((j) => {
+      const state = (j.lifecycleState || j.status || '').toLowerCase() as FilterKey;
+      if (state === 'completed' || state === 'invoice_generated' || (state as string) === 'paid') {
+        counts.completed = (counts.completed || 0) + 1;
+      } else if (counts[state] !== undefined) {
+        counts[state] += 1;
+      }
+    });
+    return counts;
+  }, [data]);
+
   const renderHeader = () => (
     <View className="mb-3">
       {/* Search bar */}
@@ -191,10 +224,14 @@ export default function JobsListScreen() {
         contentContainerStyle={{ paddingVertical: 10 }}
         renderItem={({ item: f }) => {
           const selected = filter === f.key;
+          const count = filterCounts[f.key] ?? 0;
           return (
             <Pressable
-              onPress={() => setFilter(f.key)}
-              className={`mr-2 rounded-full border px-3 py-1.5 ${
+              onPress={() => {
+                Haptics.selectionAsync().catch(() => {});
+                setFilter(f.key);
+              }}
+              className={`mr-2 flex-row items-center rounded-full border px-3 py-1.5 ${
                 selected
                   ? 'border-primary-500 bg-primary-500'
                   : 'border-border bg-white'
@@ -207,6 +244,21 @@ export default function JobsListScreen() {
               >
                 {f.label}
               </Text>
+              {count > 0 ? (
+                <View
+                  className={`ml-1.5 rounded-full px-1.5 py-0.5 ${
+                    selected ? 'bg-primary-700' : 'bg-muted'
+                  }`}
+                >
+                  <Text
+                    className={`text-[10px] font-bold ${
+                      selected ? 'text-white' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {count}
+                  </Text>
+                </View>
+              ) : null}
             </Pressable>
           );
         }}

@@ -63,12 +63,29 @@ async function resolveRefreshSubject(
   if (!user?.isActive) return null;
 
   let employeeId: string | null = null;
-  if (user.role === 'employee') {
-    const employee = await db.employee.findFirst({
+  try {
+    let employee = await db.employee.findFirst({
       where: { userId: user.id },
-      select: { id: true },
+      select: { id: true, userId: true },
     });
+    if (!employee && user.email) {
+      employee = await db.employee.findFirst({
+        where: {
+          email: { equals: user.email, mode: 'insensitive' },
+          ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}),
+        },
+        select: { id: true, userId: true },
+      });
+      if (employee && !employee.userId) {
+        db.employee.update({
+          where: { id: employee.id },
+          data: { userId: user.id },
+        }).catch(() => {});
+      }
+    }
     employeeId = employee?.id || null;
+  } catch {
+    // best-effort
   }
 
   return {

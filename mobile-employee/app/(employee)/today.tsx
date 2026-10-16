@@ -21,7 +21,9 @@ import {
   FlatList,
   RefreshControl,
   Alert,
+  Linking,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -38,6 +40,10 @@ import {
   CalendarClock,
   Hourglass,
   AlertCircle,
+  Zap,
+  Navigation,
+  Phone,
+  ShieldCheck,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -46,6 +52,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useEmployeeJobs } from '@/hooks/use-jobs';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   useTodayShift,
   useWeekShifts,
@@ -147,20 +154,31 @@ export default function TodayScreen() {
   // Use the dedicated ?filter=today endpoint result, but keep a defensive
   // client-side filter on scheduledAt too (in case the API returns future
   // scheduled items along with today's).
+  const user = useAuthStore((s) => s.user);
+  const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
+  const [ownerScope, setOwnerScope] = useState<'my' | 'all'>('my');
+
   const todaysJobs = useMemo<Job[]>(() => {
     const list = todayJobs.data ?? [];
     const filtered = list.filter((j) => isToday(j.scheduledAt));
     return filtered.length > 0 ? filtered : list; // trust the API if it returned something
   }, [todayJobs.data]);
 
-  const completedToday = useMemo<Job[]>(() => {
-    const list = allJobs.data ?? todayJobs.data ?? [];
+  const completedJobs = useMemo<Job[]>(() => {
+    const list = allJobs.data ?? [];
     return list.filter(
       (j) =>
-        (j.lifecycleState === 'completed' || j.status === 'completed') &&
-        isToday(j.completedAt)
+        j.lifecycleState === 'completed' ||
+        j.status === 'completed' ||
+        j.status === 'invoice_generated' ||
+        j.status === 'paid' ||
+        !!j.completedAt
     );
-  }, [allJobs.data, todayJobs.data]);
+  }, [allJobs.data]);
+
+  const completedToday = useMemo<Job[]>(() => {
+    return completedJobs.filter((j) => isToday(j.completedAt));
+  }, [completedJobs]);
 
   const pending = useMemo<Job[]>(() => {
     const list = todaysJobs;
@@ -172,6 +190,28 @@ export default function TodayScreen() {
         j.status !== 'cancelled'
     );
   }, [todaysJobs]);
+
+  // Active or Next Up Job (Jobber / Housecall Pro Hero Card)
+  const activeJob = useMemo<Job | null>(() => {
+    const list = allJobs.data ?? [];
+    const activeStates = ['working', 'paused', 'arrived', 'travelling'];
+    const active = list.find((j) => {
+      const state = (j.lifecycleState || j.status || '').toLowerCase();
+      return activeStates.includes(state);
+    });
+    if (active) return active;
+
+    if (pending.length > 0) return pending[0];
+
+    return (
+      list.find(
+        (j) =>
+          j.status !== 'completed' &&
+          j.status !== 'invoice_generated' &&
+          j.status !== 'cancelled'
+      ) ?? null
+    );
+  }, [allJobs.data, pending]);
 
   const weekHours = useMemo(
     () => computeWeekHours(weekShifts.data),
@@ -331,10 +371,30 @@ export default function TodayScreen() {
         }
         ListHeaderComponent={
           <View className="mb-4">
-            {/* Header row: title + notification bell */}
+            {/* Header row: title + presence + sync status + notification bell */}
             <View className="mb-3 mt-2 flex-row items-center justify-between">
               <View className="flex-1">
-                <Text className="text-2xl font-bold text-foreground">Today</Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-2xl font-bold text-foreground">Today</Text>
+                  <View
+                    className={`flex-row items-center rounded-full px-2 py-0.5 ${
+                      isClockedIn ? 'bg-emerald-100' : 'bg-muted'
+                    }`}
+                  >
+                    <View
+                      className={`mr-1 h-2 w-2 rounded-full ${
+                        isClockedIn ? 'bg-emerald-600' : 'bg-muted-foreground'
+                      }`}
+                    />
+                    <Text
+                      className={`text-[10px] font-bold ${
+                        isClockedIn ? 'text-emerald-700' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {isClockedIn ? 'ON DUTY' : 'OFF DUTY'}
+                    </Text>
+                  </View>
+                </View>
                 <Text className="mt-0.5 text-sm text-muted-foreground">
                   {new Date().toLocaleDateString([], {
                     weekday: 'long',
@@ -343,23 +403,79 @@ export default function TodayScreen() {
                   })}
                 </Text>
               </View>
-              <Pressable
-                onPress={() => router.push('/(employee)/notifications')}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Notifications"
-                className="relative h-10 w-10 items-center justify-center rounded-full bg-muted"
-              >
-                <Bell size={20} color={COLORS.foreground} />
-                {unread.data ? (
-                  <View className="absolute -right-1 -top-1 min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-destructive">
-                    <Text className="text-[10px] font-bold text-white">
-                      {unread.data > 99 ? '99+' : unread.data}
-                    </Text>
-                  </View>
-                ) : null}
-              </Pressable>
+
+              <View className="flex-row items-center gap-2">
+                {/* Cloud sync status pill */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                    refreshAll();
+                  }}
+                  className="flex-row items-center rounded-full bg-emerald-50 px-2.5 py-1 border border-emerald-200"
+                >
+                  <ShieldCheck size={12} color={COLORS.success} />
+                  <Text className="ml-1 text-[11px] font-semibold text-emerald-800">Synced</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => router.push('/(employee)/notifications')}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Notifications"
+                  className="relative h-10 w-10 items-center justify-center rounded-full bg-muted"
+                >
+                  <Bell size={18} color={COLORS.foreground} />
+                  {unread.data ? (
+                    <View className="absolute -right-1 -top-1 min-w-[18px] h-[18px] px-1 items-center justify-center rounded-full bg-destructive">
+                      <Text className="text-[10px] font-bold text-white">
+                        {unread.data > 99 ? '99+' : unread.data}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              </View>
             </View>
+
+            {/* Owner / Admin Workspace Scope Toggle */}
+            {isOwnerOrAdmin ? (
+              <View className="mb-3 flex-row rounded-xl bg-muted p-1 border border-border/60">
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setOwnerScope('my');
+                  }}
+                  className={`flex-1 items-center justify-center rounded-lg py-1.5 ${
+                    ownerScope === 'my' ? 'bg-white shadow-xs' : ''
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      ownerScope === 'my' ? 'text-primary-700 font-extrabold' : 'text-muted-foreground'
+                    }`}
+                  >
+                    My Assigned Jobs
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    Haptics.selectionAsync().catch(() => {});
+                    setOwnerScope('all');
+                  }}
+                  className={`flex-1 items-center justify-center rounded-lg py-1.5 ${
+                    ownerScope === 'all' ? 'bg-white shadow-xs' : ''
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      ownerScope === 'all' ? 'text-primary-700 font-extrabold' : 'text-muted-foreground'
+                    }`}
+                  >
+                    All Company Jobs
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {/* Shift status card */}
             <Card className="mb-3">
@@ -448,6 +564,96 @@ export default function TodayScreen() {
               </View>
             </Card>
 
+            {/* "Next Up" Hero Card (Jobber / Housecall Pro style) */}
+            {activeJob ? (
+              <Card className="mb-3.5 border-2 border-primary-200 bg-primary-50/20 p-4 shadow-sm">
+                <View className="mb-2 flex-row items-center justify-between">
+                  <View className="flex-row items-center rounded-full bg-primary-100 px-2.5 py-0.5">
+                    <Zap size={12} color={COLORS.primary} />
+                    <Text className="ml-1 text-[11px] font-bold uppercase tracking-wider text-primary-800">
+                      {activeJob.lifecycleState === 'working'
+                        ? 'In Progress Now'
+                        : activeJob.lifecycleState === 'travelling'
+                        ? 'En Route'
+                        : activeJob.lifecycleState === 'arrived'
+                        ? 'Arrived on Site'
+                        : 'Next Up Today'}
+                    </Text>
+                  </View>
+                  <StatusBadge status={activeJob.lifecycleState || activeJob.status} />
+                </View>
+
+                <Text className="text-lg font-extrabold text-foreground" numberOfLines={1}>
+                  {activeJob.customer?.name || activeJob.title}
+                </Text>
+
+                {activeJob.service ? (
+                  <Text className="mt-0.5 text-xs font-semibold text-primary-700">
+                    {activeJob.service.name}
+                  </Text>
+                ) : null}
+
+                {activeJob.address ? (
+                  <View className="mt-2 flex-row items-center">
+                    <MapPin size={13} color={COLORS.mutedForeground} />
+                    <Text className="ml-1.5 flex-1 text-xs text-muted-foreground" numberOfLines={1}>
+                      {activeJob.address}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Hero Action Buttons */}
+                <View className="mt-3.5 flex-row gap-2">
+                  <Button
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                      router.push({
+                        pathname: '/(employee)/jobs/[id]',
+                        params: { id: activeJob.id },
+                      });
+                    }}
+                    className="flex-1"
+                    size="md"
+                    variant="primary"
+                  >
+                    <View className="flex-row items-center justify-center">
+                      <Briefcase size={15} color="#fff" />
+                      <Text className="ml-1.5 font-bold text-white">
+                        {activeJob.lifecycleState === 'working' ? 'Open Active Job' : 'View Job Details'}
+                      </Text>
+                    </View>
+                  </Button>
+
+                  {activeJob.address ? (
+                    <Button
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        const encoded = encodeURIComponent(activeJob.address!);
+                        Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encoded}`);
+                      }}
+                      variant="outline"
+                      size="md"
+                    >
+                      <Navigation size={15} color={COLORS.primary} />
+                    </Button>
+                  ) : null}
+
+                  {activeJob.customer?.phone ? (
+                    <Button
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        Linking.openURL(`tel:${activeJob.customer.phone}`);
+                      }}
+                      variant="outline"
+                      size="md"
+                    >
+                      <Phone size={15} color={COLORS.primary} />
+                    </Button>
+                  ) : null}
+                </View>
+              </Card>
+            ) : null}
+
             {/* Stats row */}
             <View className="mb-3 flex-row gap-2">
               <StatCard
@@ -457,8 +663,8 @@ export default function TodayScreen() {
               />
               <StatCard
                 icon={<CircleCheck size={16} color={COLORS.success} />}
-                label="Done"
-                value={String(completedToday.length)}
+                label={completedToday.length > 0 ? 'Done Today' : 'Completed'}
+                value={String(completedToday.length > 0 ? completedToday.length : completedJobs.length)}
               />
               <StatCard
                 icon={<Hourglass size={16} color={COLORS.accent} />}
@@ -504,6 +710,52 @@ export default function TodayScreen() {
         ListEmptyComponent={
           isLoading ? (
             <SkeletonList count={3} />
+          ) : completedJobs.length > 0 ? (
+            <View className="py-2">
+              <View className="items-center rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5">
+                <View className="mb-2 h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+                  <CircleCheck size={26} color={COLORS.success} />
+                </View>
+                <Text className="text-base font-bold text-foreground">
+                  No active jobs for today
+                </Text>
+                <Text className="mt-1 text-center text-xs text-muted-foreground">
+                  You have {completedJobs.length} completed {completedJobs.length === 1 ? 'job' : 'jobs'} on your account. Tap below to view your full history.
+                </Text>
+                <View className="mt-3.5">
+                  <Button
+                    onPress={() => router.push('/(employee)/jobs')}
+                    size="sm"
+                  >
+                    <View className="flex-row items-center">
+                      <Briefcase size={14} color="#fff" />
+                      <Text className="ml-1.5 text-xs font-semibold text-white">
+                        View All Completed Jobs ({completedJobs.length})
+                      </Text>
+                    </View>
+                  </Button>
+                </View>
+              </View>
+
+              {/* Show preview of recently completed jobs right on Today */}
+              <View className="mt-5">
+                <View className="mb-2.5 flex-row items-center justify-between">
+                  <Text className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    Recently Completed
+                  </Text>
+                  <Pressable onPress={() => router.push('/(employee)/jobs')}>
+                    <Text className="text-xs font-semibold text-primary-700">
+                      See all ({completedJobs.length})
+                    </Text>
+                  </Pressable>
+                </View>
+                {completedJobs.slice(0, 3).map((job) => (
+                  <View key={job.id} className="mb-1">
+                    {renderJob({ item: job })}
+                  </View>
+                ))}
+              </View>
+            </View>
           ) : (
             <EmptyState
               icon={<Briefcase size={48} color={COLORS.mutedForeground} />}

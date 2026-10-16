@@ -343,6 +343,8 @@ export async function resolveEmployee(user: {
   employeeId?: string | null;
   workspaceId?: string | null;
   tenantId?: string | null;
+  email?: string | null;
+  role?: string;
 }) {
   // 1. Direct employeeId claim
   if (user.employeeId) {
@@ -354,8 +356,36 @@ export async function resolveEmployee(user: {
   const linked = await db.employee.findFirst({ where: { userId: user.id } });
   if (linked) return linked;
 
-  // 3. Fall back: any employee in the user's workspace
+  // 3. Match by email (case-insensitive) in the workspace/tenant
+  if (user.email) {
+    const emailMatched = await db.employee.findFirst({
+      where: {
+        email: { equals: user.email, mode: 'insensitive' },
+        ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}),
+      },
+    });
+    if (emailMatched) {
+      if (!emailMatched.userId) {
+        db.employee.update({
+          where: { id: emailMatched.id },
+          data: { userId: user.id },
+        }).catch(() => {});
+      }
+      return emailMatched;
+    }
+  }
+
+  // 4. Fall back: workspace employee (prefer employee with completed/assigned jobs)
   if (user.workspaceId) {
+    const fallbackWithJobs = await db.employee.findFirst({
+      where: {
+        workspaceId: user.workspaceId,
+        completedJobs: { gt: 0 },
+      },
+      orderBy: { completedJobs: 'desc' },
+    });
+    if (fallbackWithJobs) return fallbackWithJobs;
+
     const fallback = await db.employee.findFirst({
       where: { workspaceId: user.workspaceId },
       orderBy: { createdAt: 'asc' },

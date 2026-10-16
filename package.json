@@ -49,14 +49,17 @@
     "typecheck:bgos": "npm --prefix apps/bgos run typecheck",
     "dev:customer": "npm --prefix mobile-customer run dev",
     "dev:pro": "npm --prefix mobile-pro run dev",
+    "dev:employee": "npm --prefix mobile-employee run dev",
     "typecheck:customer": "npm --prefix mobile-customer run typecheck",
-    "typecheck:pro": "npm --prefix mobile-pro run typecheck"
+    "typecheck:pro": "npm --prefix mobile-pro run typecheck",
+    "typecheck:employee": "npm --prefix mobile-employee run typecheck"
   },
   "workspaces": [
     "bosmobile",
     "bgosmobile",
     "mobile-customer",
     "mobile-pro",
+    "mobile-employee",
     "apps/*"
   ],
   "dependencies": {

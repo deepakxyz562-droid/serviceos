@@ -41,6 +41,7 @@ import {
   ArrowRight,
   Repeat,
   Zap,
+  Mic,
 } from 'lucide-react-native';
 
 import { useAuthStore } from '@/stores/auth-store';
@@ -315,6 +316,66 @@ export default function ProHomeScreen() {
             </View>
             <ArrowRight size={20} color="#A7F3D0" />
           </View>
+        </Pressable>
+
+        {/* Voice AI Dispatch Banner */}
+        <Pressable
+          onPress={() => {
+            Alert.prompt
+              ? Alert.prompt(
+                  '🎙️ Voice AI Dispatcher',
+                  'Speak or type your command:\n(e.g., "Schedule AC repair for John tomorrow at 2 PM for ₹1500")',
+                  async (text) => {
+                    if (!text?.trim()) return;
+                    try {
+                      const res = await api.post<{ success: boolean; spokenFeedback?: string }>(
+                        '/api/ai/voice-command',
+                        { transcript: text }
+                      );
+                      Alert.alert('AI Dispatch Result', res?.spokenFeedback || 'Command executed successfully!');
+                    } catch (err: any) {
+                      Alert.alert('Error', err?.message || 'Failed to process command.');
+                    }
+                  }
+                )
+              : Alert.alert('Voice AI', 'Speak your command on the Web app or Mobile Employee app for voice creation.');
+          }}
+          style={{
+            backgroundColor: '#064E3B',
+            borderRadius: 16,
+            padding: 16,
+            marginBottom: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: '#059669',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Sparkles size={22} color="#fff" />
+            </View>
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#fff' }}>Voice AI Dispatcher</Text>
+                <View style={{ backgroundColor: '#10B981', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, marginLeft: 6 }}>
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: '#064E3B' }}>HANDS-FREE</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, color: '#A7F3D0', marginTop: 2 }}>
+                Speak commands to schedule jobs & create invoices
+              </Text>
+            </View>
+          </View>
+          <Mic size={20} color="#A7F3D0" />
         </Pressable>
 
         {/* Next Scheduled Job (Screen P11 / P12) */}

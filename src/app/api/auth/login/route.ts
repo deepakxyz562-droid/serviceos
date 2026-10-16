@@ -86,23 +86,33 @@ export async function POST(request: NextRequest) {
       data: { lastLoginAt: new Date() },
     });
 
-    // ── Employee lookup (fix: employeeId was missing from the JWT) ────────
-    // The EmployeePortalLayout checks `auth.user?.employeeId` — if null,
-    // it shows "Employee ID Not Found". The company-login route does this
-    // lookup, but the direct login route didn't — causing employees who
-    // log in via the web app to see the error.
-    // This also fixes clock in/out (the shift API uses employeeId from JWT).
+    // ── Employee lookup (fix: employeeId was missing or unlinked) ────────
+    // Looks up Employee by userId first, then email (case-insensitive) in the workspace.
+    // Also auto-links Employee.userId if matched by email.
     let employeeId: string | null = null;
-    if (user.role === 'employee') {
-      try {
-        const emp = await db.employee.findFirst({
-          where: { userId: user.id },
-          select: { id: true },
+    try {
+      let emp = await db.employee.findFirst({
+        where: { userId: user.id },
+        select: { id: true, userId: true },
+      });
+      if (!emp && user.email) {
+        emp = await db.employee.findFirst({
+          where: {
+            email: { equals: user.email, mode: 'insensitive' },
+            ...(user.workspaceId ? { workspaceId: user.workspaceId } : {}),
+          },
+          select: { id: true, userId: true },
         });
-        employeeId = emp?.id || null;
-      } catch (empErr) {
-        console.warn('[login] Employee lookup failed:', empErr instanceof Error ? empErr.message : empErr);
+        if (emp && !emp.userId) {
+          db.employee.update({
+            where: { id: emp.id },
+            data: { userId: user.id },
+          }).catch(() => {});
+        }
       }
+      employeeId = emp?.id || null;
+    } catch (empErr) {
+      console.warn('[login] Employee lookup failed:', empErr instanceof Error ? empErr.message : empErr);
     }
 
     // Generate JWT token

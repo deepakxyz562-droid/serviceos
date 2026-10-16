@@ -17,6 +17,7 @@ COPY bosmobile/package.json ./bosmobile/
 COPY bgosmobile/package.json ./bgosmobile/
 COPY mobile-customer/package.json ./mobile-customer/
 COPY mobile-pro/package.json ./mobile-pro/
+COPY mobile-employee/package.json ./mobile-employee/
 COPY apps/bos/package.json ./apps/bos/
 COPY apps/bgos/package.json ./apps/bgos/
 COPY apps/chatbotly/package.json ./apps/chatbotly/
