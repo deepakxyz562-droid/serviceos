@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRoutingDecision } from '@/lib/phone-number-service';
 import { checkAdmission } from '@/lib/ai-admission-controller';
 import { db } from '@/lib/db';
+import { triggerVoiceFailover } from '@/lib/ai-voice-failover';
 
 /**
  * POST /api/voice/inbound
@@ -86,6 +87,15 @@ export async function POST(request: NextRequest) {
             `Fallback: ${routing.fallbackRoutingMode}`,
         );
 
+        // Automated Failover SMS to caller + manager
+        triggerVoiceFailover({
+          tenantId: routing.tenantId,
+          fromNumber: from,
+          toNumber: to,
+          callId: callSid,
+          reason: `AI Admission pre-check rejected: ${precheck.reason}`,
+        }).catch(() => {});
+
         // Return fallback TwiML (don't connect to Vapi at all)
         return getFallbackTwiML(routing.fallbackRoutingMode, routing.fallbackRoutingTarget);
       }
@@ -95,6 +105,15 @@ export async function POST(request: NextRequest) {
       const deployment = await getActiveDeploymentId(routing.tenantId);
       if (!deployment) {
         console.warn(`[voice/inbound] no active deployment for tenant ${routing.tenantId}`);
+
+        triggerVoiceFailover({
+          tenantId: routing.tenantId,
+          fromNumber: from,
+          toNumber: to,
+          callId: callSid,
+          reason: `AI assistant deployment missing or offline`,
+        }).catch(() => {});
+
         return twimlResponse(
           `<Response><Say>AI assistant not configured. Please contact support.</Say></Response>`,
         );

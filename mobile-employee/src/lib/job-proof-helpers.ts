@@ -138,3 +138,35 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return new Blob([arr], { type: mime });
 }
+
+/** Build FormData for signature upload on native and web. */
+export async function buildSignatureFormData(
+  signatureUri: string,
+  signerType: 'customer' | 'employee',
+  signerName: string,
+  gps?: GpsCoords | null
+): Promise<FormData> {
+  const fd = new FormData();
+  if (Platform.OS === 'web') {
+    const res = await fetch(signatureUri);
+    const blob = await res.blob();
+    fd.append('file', blob, 'signature.png');
+  } else {
+    fd.append('file', {
+      uri: signatureUri,
+      name: 'signature.png',
+      type: 'image/png',
+    } as unknown as Blob);
+  }
+  fd.append('type', signerType);
+  fd.append('signerName', signerName.trim());
+  if (gps) {
+    fd.append('latitude', String(gps.latitude));
+    fd.append('longitude', String(gps.longitude));
+    if (gps.accuracy !== null && gps.accuracy !== undefined) {
+      fd.append('accuracy', String(gps.accuracy));
+    }
+  }
+  return fd;
+}
+

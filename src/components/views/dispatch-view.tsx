@@ -57,6 +57,8 @@ import { AutoAssignModal } from '@/features/dispatch/components/auto-assign-moda
 import { AttentionPanel } from '@/features/dispatch/components/attention-panel';
 import { RouteOptimizerDialog } from '@/features/dispatch/components/route-optimizer-dialog';
 import { AbsenceReassignWizard } from '@/features/dispatch/components/absence-reassign-wizard';
+import { LiveTripTrackerCard } from '@/features/dispatch/components/live-trip-tracker-card';
+import { QuickDispatchTray } from '@/features/dispatch/components/quick-dispatch-tray';
 
 const LiveDispatchMap = dynamic(
   () => import('@/components/dispatch/live-dispatch-map'),
@@ -84,6 +86,12 @@ export function DispatchView() {
   const [activeKpiFilter, setActiveKpiFilter] = useState<string>('all');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'sidebar' | 'map'>('sidebar');
+
+  // ─── Map Styling & Floating HUD State ─────────────────────────────
+  const [showTraffic, setShowTraffic] = useState(false);
+  const [mapTheme, setMapTheme] = useState<'standard' | 'silver' | 'dark'>('silver');
+  const [isFollowingTech, setIsFollowingTech] = useState(false);
+  const [trackingHudOpen, setTrackingHudOpen] = useState(false);
 
   // ─── Drawers & Modals ─────────────────────────────────────────────
   const [inspectTarget, setInspectTarget] = useState<
@@ -218,6 +226,9 @@ export function DispatchView() {
           lastGpsAt: p.capturedAt,
         });
         mapControllerRef.current?.handleGpsPing(p);
+        if (isFollowingTech && selectedTechnicianId === p.employeeId) {
+          mapControllerRef.current?.recenterOnTech(p.employeeId);
+        }
       }
     },
     onJobUpdate: () => {
@@ -290,17 +301,30 @@ export function DispatchView() {
     return jobs.filter((j) => hasGps(j) && ['assigned', 'accepted', 'travelling', 'arrived', 'working', 'pending'].includes(j.status)) as unknown as MapJob[];
   }, [jobs]);
 
+  // ─── Tracking HUD Derived Data ────────────────────────────────────
+  const activeTrackingEmployee = useMemo(() => {
+    if (!selectedTechnicianId) return null;
+    return employees.find((e) => e.id === selectedTechnicianId) || null;
+  }, [selectedTechnicianId, employees]);
+
+  const activeTrackingJob = useMemo(() => {
+    if (!activeTrackingEmployee) return null;
+    const empJobs = activeJobsByEmployee.get(activeTrackingEmployee.id) || [];
+    return empJobs[0] || null;
+  }, [activeTrackingEmployee, activeJobsByEmployee]);
+
   // ─── Inspector Handlers ───────────────────────────────────────────
   const handleInspectTechnician = useCallback((techId: string | null) => {
     if (!techId) {
       setSelectedTechnicianId(null);
+      setTrackingHudOpen(false);
       return;
     }
     const tech = employees.find((e) => e.id === techId);
     if (tech) {
       setSelectedTechnicianId(techId);
       setInspectTarget({ type: 'technician', data: tech });
-      setInspectorOpen(true);
+      setTrackingHudOpen(true);
       mapControllerRef.current?.recenterOnTech(techId);
     }
   }, [employees]);
@@ -327,6 +351,39 @@ export function DispatchView() {
       // ignore
     } finally {
       setIsSearchingSmartMatch(false);
+    }
+  }, []);
+
+  const handleInspectJobById = useCallback((jobId: string) => {
+    const job = jobs.find((j) => j.id === jobId);
+    if (job) {
+      handleInspectJob(job);
+    }
+  }, [jobs, handleInspectJob]);
+
+  const handleQuickAssign = useCallback(async (job: Job, employee: Employee) => {
+    try {
+      const res = await fetch(apiUrl(`/api/jobs/${job.id}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: job.id, assigneeId: employee.id, status: 'assigned' }),
+      });
+      if (res.ok) {
+        toast.success(`Assigned ${job.title} to ${employee.name}`);
+        await Promise.all([fetchJobs(), fetchEmployees()]);
+        connection.markSync();
+      } else {
+        toast.error('Failed to assign job');
+      }
+    } catch {
+      toast.error('Failed to assign job');
+    }
+  }, [fetchJobs, fetchEmployees, connection]);
+
+  const handleLocateJob = useCallback((job: Job) => {
+    if (typeof job.latitude === 'number' && typeof job.longitude === 'number') {
+      mapControllerRef.current?.recenterOnCoords(job.latitude, job.longitude, 16);
+      toast.info(`Centered on Job #${job.jobNumber || job.title}`);
     }
   }, []);
 
@@ -519,7 +576,10 @@ export function DispatchView() {
             jobs={activeJobsForMap}
             selectedTechnicianId={selectedTechnicianId}
             onTechnicianSelect={handleInspectTechnician}
+            onJobSelect={handleInspectJobById}
             controllerRef={mapControllerRef}
+            showTraffic={showTraffic}
+            mapTheme={mapTheme}
             className="absolute inset-0 h-full w-full"
           />
 
@@ -531,13 +591,68 @@ export function DispatchView() {
             onItemClick={handleAttentionClick}
           />
 
-          {/* Map floating controls */}
-          <div className="absolute top-3 right-3 z-[1000] flex flex-col gap-2">
+          {/* ── Top-Right Map Floating Controls (Theme, Traffic, Recenter) ── */}
+          <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 flex-wrap">
+            {/* Map Theme Toggle */}
+            <div className="flex items-center bg-background/95 backdrop-blur border border-border shadow-md rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => setMapTheme('silver')}
+                className={cn(
+                  'px-2 py-1 text-[11px] font-medium rounded-md transition-all',
+                  mapTheme === 'silver' ? 'bg-muted text-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Modern Silver Minimalist Theme"
+              >
+                Light
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapTheme('dark')}
+                className={cn(
+                  'px-2 py-1 text-[11px] font-medium rounded-md transition-all',
+                  mapTheme === 'dark' ? 'bg-muted text-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Midnight Operations Dark Theme"
+              >
+                Dark
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapTheme('standard')}
+                className={cn(
+                  'px-2 py-1 text-[11px] font-medium rounded-md transition-all',
+                  mapTheme === 'standard' ? 'bg-muted text-foreground font-semibold shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                )}
+                title="Google Standard Road Map"
+              >
+                Road
+              </button>
+            </div>
+
+            {/* Live Traffic Toggle */}
+            <Button
+              variant={showTraffic ? 'default' : 'secondary'}
+              size="sm"
+              onClick={() => setShowTraffic((v) => !v)}
+              className={cn(
+                'h-8 px-2.5 text-xs gap-1.5 shadow-md backdrop-blur border transition-all',
+                showTraffic
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500'
+                  : 'bg-background/95 border-border text-foreground hover:bg-muted'
+              )}
+              title="Toggle Google Maps real-time traffic layer"
+            >
+              <span className={cn('size-2 rounded-full', showTraffic ? 'bg-white animate-pulse' : 'bg-emerald-500')} />
+              <span>Traffic</span>
+            </Button>
+
+            {/* Recenter / Fit Team */}
             <Button
               variant="secondary"
               size="sm"
               onClick={() => mapControllerRef.current?.recenter()}
-              className="h-8 px-2.5 text-xs gap-1.5 shadow-md bg-background/95 backdrop-blur border border-border"
+              className="h-8 px-2.5 text-xs gap-1.5 shadow-md bg-background/95 backdrop-blur border border-border hover:bg-muted"
               title="Recenter map on all active units"
             >
               <Locate className="size-3.5 text-teal-600" />
@@ -545,20 +660,51 @@ export function DispatchView() {
             </Button>
           </div>
 
-          {/* Floating live summary count badge */}
-          <div className="absolute bottom-3 left-3 z-[1000] pointer-events-none">
-            <Badge
-              variant="secondary"
-              className="text-[11px] px-2.5 py-1 bg-background/95 backdrop-blur shadow-sm border border-border gap-1.5"
-            >
-              <MapPin className="size-3 text-teal-600 shrink-0" />
-              <span className="font-semibold text-foreground">{mapTechnicians.length}</span>
-              <span className="text-muted-foreground">Techs Mapped</span>
-              <span className="text-border">·</span>
-              <span className="font-semibold text-foreground">{activeJobsForMap.length}</span>
-              <span className="text-muted-foreground">Jobs Mapped</span>
-            </Badge>
-          </div>
+          {/* ── Zomato / Swiggy-Style Floating Live Trip HUD ────────── */}
+          {trackingHudOpen && activeTrackingEmployee && (
+            <div className="absolute bottom-3 left-3 sm:left-4 z-[1001] max-w-[calc(100vw-1.5rem)]">
+              <LiveTripTrackerCard
+                employee={activeTrackingEmployee}
+                job={activeTrackingJob}
+                onClose={() => setTrackingHudOpen(false)}
+                onViewJob={handleInspectJob}
+                onFollowToggle={() => setIsFollowingTech((v) => !v)}
+                isFollowing={isFollowingTech}
+              />
+            </div>
+          )}
+
+          {/* ── Jobber / Housecall Pro Quick Dispatch Tray ──────────── */}
+          {!trackingHudOpen && pendingJobs.length > 0 && (
+            <div className="absolute bottom-3 left-3 right-3 z-[1000] flex justify-center pointer-events-none">
+              <QuickDispatchTray
+                unassignedJobs={pendingJobs}
+                employees={employees}
+                activeJobsByEmployee={activeJobsByEmployee}
+                onAssignJob={handleOpenAssignDrawer}
+                onQuickAssign={handleQuickAssign}
+                onLocateJob={handleLocateJob}
+                onSelectJob={handleInspectJob}
+              />
+            </div>
+          )}
+
+          {/* Floating live summary count badge (when tray & HUD are closed) */}
+          {!trackingHudOpen && pendingJobs.length === 0 && (
+            <div className="absolute bottom-3 left-3 z-[1000] pointer-events-none">
+              <Badge
+                variant="secondary"
+                className="text-[11px] px-2.5 py-1 bg-background/95 backdrop-blur shadow-sm border border-border gap-1.5"
+              >
+                <MapPin className="size-3 text-teal-600 shrink-0" />
+                <span className="font-semibold text-foreground">{mapTechnicians.length}</span>
+                <span className="text-muted-foreground">Techs Mapped</span>
+                <span className="text-border">·</span>
+                <span className="font-semibold text-foreground">{activeJobsForMap.length}</span>
+                <span className="text-muted-foreground">Jobs Mapped</span>
+              </Badge>
+            </div>
+          )}
         </main>
       </div>
 

@@ -54,6 +54,7 @@ import { useJob, useJobSignatures, useUploadSignature } from '@/hooks/use-jobs';
 import { assetUrl } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { captureGps } from '@/lib/gps';
+import { enqueueSignature } from '@/lib/offline-queue';
 import {
   strokeToPath,
   strokesToPngDataUrlWeb,
@@ -167,9 +168,11 @@ export default function JobSignatureScreen() {
     try {
       let formData: FormData;
 
+      let savedUri = '';
       if (Platform.OS === 'web') {
         const dataUrl = strokesToPngDataUrlWeb(allStrokes, CANVAS_WIDTH, CANVAS_HEIGHT);
         if (!dataUrl) throw new Error('Failed to render signature.');
+        savedUri = dataUrl;
         const blob = dataUrlToBlob(dataUrl);
         formData = new FormData();
         formData.append('file', blob, 'signature.png');
@@ -181,9 +184,8 @@ export default function JobSignatureScreen() {
         const fileUri = await captureRef(svgContainerRef, {
           format: 'png',
           quality: 1,
-          // default result is 'tmpfile' which returns a file:// URI suitable
-          // for FormData upload on iOS + Android.
         });
+        savedUri = fileUri;
         formData = new FormData();
         formData.append('file', {
           uri: fileUri,
@@ -195,10 +197,6 @@ export default function JobSignatureScreen() {
       formData.append('type', signerType);
       formData.append('signerName', signerName.trim());
 
-      // Best-effort GPS capture at save time (matches PWA's SignaturePad).
-      // If the user denied location permission or the fix times out, we
-      // still upload the signature — just without coordinates. captureGps
-      // swallows errors and returns null.
       const gps = await captureGps();
       if (gps) {
         formData.append('latitude', String(gps.latitude));
@@ -208,11 +206,20 @@ export default function JobSignatureScreen() {
         }
       }
 
-      await uploadSignature.mutateAsync({ id, formData });
-      show('Signature saved.', 'success');
-      handleClear();
-      signaturesQuery.refetch();
-      router.back();
+      try {
+        await uploadSignature.mutateAsync({ id, formData });
+        show('Signature saved.', 'success');
+        handleClear();
+        signaturesQuery.refetch();
+        router.back();
+      } catch (uploadErr) {
+        // Offline / Basement resilience: save to durable offline queue
+        console.warn('[signature] upload failed, queuing offline:', uploadErr);
+        await enqueueSignature(id, savedUri, signerType, signerName, gps);
+        show('Saved offline (Basement Mode) — will sync automatically ✓', 'info');
+        handleClear();
+        router.back();
+      }
     } catch (err) {
       show(
         err instanceof Error ? err.message : 'Save failed. Please try again.',

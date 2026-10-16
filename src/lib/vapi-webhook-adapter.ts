@@ -27,6 +27,7 @@ import { admitCall } from '@/lib/ai-admission-controller';
 import { reserveSeconds, finalizeUsage, releaseReservation } from '@/lib/usage-service';
 import { getVapiVoiceProvider } from '@/lib/vapi-voice-provider';
 import { onCallStart, onCallInProgress, onCallFailed, onCallEnd } from '@/lib/call-lifecycle-service';
+import { triggerVoiceFailover, isAiProviderFailure } from '@/lib/ai-voice-failover';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -373,6 +374,15 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
         // Mark the call as failed (AI was rejected)
         await onCallFailed(call.id, `admission_rejected: ${admission.reason}`).catch(() => {});
 
+        // Trigger automated recovery failover SMS
+        triggerVoiceFailover({
+          tenantId: routing.tenantId,
+          fromNumber: customerPhone,
+          toNumber: call.to || '',
+          callId: call.id,
+          reason: `Admission rejected: ${admission.reason}`,
+        }).catch(() => {});
+
         return NextResponse.json({
           received: true,
           action: 'fallback',
@@ -421,8 +431,28 @@ async function handleStatusUpdate(event: VapiWebhookEvent): Promise<NextResponse
   // ── On call failed: release reservation + mark AiCall as failed ──
   if (status === 'failed') {
     console.log(`[vapi-webhook] call ${call.id} FAILED — releasing reservation`);
-    // Phase 7: call lifecycle service handles both AiCall update + reservation release
-    await onCallFailed(call.id, call.endedReason || 'failed').catch(() => {});
+    const failReason = call.endedReason || 'failed';
+    await onCallFailed(call.id, failReason).catch(() => {});
+
+    // Look up AiCall to get tenantId and numbers for failover
+    db.aiCall
+      .findUnique({
+        where: { vapiCallId: call.id },
+        select: { tenantId: true, fromNumber: true, toNumber: true },
+      })
+      .then((aiCall) => {
+        if (aiCall) {
+          triggerVoiceFailover({
+            tenantId: aiCall.tenantId,
+            fromNumber: aiCall.fromNumber,
+            toNumber: aiCall.toNumber,
+            callId: call.id,
+            reason: failReason,
+          }).catch(() => {});
+        }
+      })
+      .catch(() => {});
+
     return NextResponse.json({ received: true, status: 'failed', action: 'call_failed' });
   }
 
@@ -501,6 +531,27 @@ async function handleEndOfCall(event: VapiWebhookEvent): Promise<NextResponse> {
         `callId=${result.callId}, usageFinalized=${result.usageFinalized}, ` +
         `idempotent=${result.usageIdempotent}`,
     );
+
+    // Automated Error Recovery Failover if provider rate limited or failed
+    if (isAiProviderFailure(callDetails.endedReason)) {
+      db.aiCall
+        .findUnique({
+          where: { vapiCallId: call.id },
+          select: { tenantId: true, fromNumber: true, toNumber: true },
+        })
+        .then((aiCall) => {
+          if (aiCall) {
+            triggerVoiceFailover({
+              tenantId: aiCall.tenantId,
+              fromNumber: aiCall.fromNumber,
+              toNumber: aiCall.toNumber,
+              callId: call.id,
+              reason: callDetails.endedReason || 'AI provider rate-limit or error',
+            }).catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
   } else {
     console.warn(`[vapi-webhook] end-of-call-report: no AiCall found for ${call.id}`);
   }

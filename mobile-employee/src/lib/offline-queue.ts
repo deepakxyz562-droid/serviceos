@@ -61,7 +61,13 @@ async function writeRaw(value: string): Promise<void> {
   }
 }
 
-export type OfflineItemType = 'photo' | 'checklist';
+export type OfflineItemType =
+  | 'photo'
+  | 'checklist'
+  | 'signature'
+  | 'notes'
+  | 'lifecycle'
+  | 'completion';
 
 export interface OfflineQueueItem {
   /** Stable client-generated id (used as a dedup key + for removal). */
@@ -208,7 +214,7 @@ export async function count(): Promise<number> {
 
 import * as ImagePicker from 'expo-image-picker';
 import { api } from './api';
-import { buildPhotoFormData } from './job-proof-helpers';
+import { buildPhotoFormData, buildSignatureFormData } from './job-proof-helpers';
 import type { GpsCoords } from './gps';
 
 const PHOTO_QUEUE_KEY = 'fieseros_photo_queue';
@@ -502,3 +508,386 @@ export async function getPendingPhotosForJob(
   const items = await readPhotoQueue();
   return items.filter((i) => i.jobId === jobId);
 }
+
+// ── Signature Offline Queue ──────────────────────────────────────────
+const SIGNATURE_QUEUE_KEY = 'fieseros_signature_queue';
+let _sigDir: string | null = null;
+
+async function getSigDir(): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  if (_sigDir) return _sigDir;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const FileSystem = require('expo-file-system/legacy');
+    const dir = `${FileSystem.documentDirectory}fieseros-signatures/`;
+    const dirInfo = await FileSystem.getInfoAsync(dir);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    }
+    _sigDir = dir;
+    return dir;
+  } catch (err) {
+    console.warn('[offline-queue] getSigDir failed:', err);
+    return null;
+  }
+}
+
+export interface QueuedSignatureUpload {
+  id: string;
+  jobId: string;
+  signatureUri: string;
+  signerType: 'customer' | 'employee';
+  signerName: string;
+  gps?: GpsCoords | null;
+  createdAt: string;
+  attempts: number;
+}
+
+interface SignatureQueueStore {
+  items: QueuedSignatureUpload[];
+}
+
+async function readSignatureQueue(): Promise<QueuedSignatureUpload[]> {
+  try {
+    if (Platform.OS === 'web') {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(SIGNATURE_QUEUE_KEY) : null;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as SignatureQueueStore;
+      return Array.isArray(parsed?.items) ? parsed.items : [];
+    }
+    const raw = await AsyncStorage.getItem(SIGNATURE_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as SignatureQueueStore;
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch (err) {
+    console.warn('[offline-queue] signature queue read failed:', err);
+    return [];
+  }
+}
+
+async function writeSignatureQueue(items: QueuedSignatureUpload[]): Promise<void> {
+  try {
+    const serialized = JSON.stringify({ items } satisfies SignatureQueueStore);
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(SIGNATURE_QUEUE_KEY, serialized);
+      return;
+    }
+    await AsyncStorage.setItem(SIGNATURE_QUEUE_KEY, serialized);
+  } catch (err) {
+    console.warn('[offline-queue] signature queue write failed:', err);
+  }
+}
+
+export async function enqueueSignature(
+  jobId: string,
+  sourceUri: string,
+  signerType: 'customer' | 'employee',
+  signerName: string,
+  gps?: GpsCoords | null
+): Promise<QueuedSignatureUpload> {
+  let persistentUri = sourceUri;
+  if (Platform.OS !== 'web') {
+    try {
+      const dir = await getSigDir();
+      if (dir) {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const FileSystem = require('expo-file-system/legacy');
+        const fileName = `sig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`;
+        const dest = `${dir}${fileName}`;
+        await FileSystem.copyAsync({ from: sourceUri, to: dest });
+        persistentUri = dest;
+      }
+    } catch (err) {
+      console.warn('[offline-queue] persist signature URI failed, keeping temp URI:', err);
+    }
+  }
+
+  const items = await readSignatureQueue();
+  const item: QueuedSignatureUpload = {
+    id: generateId(),
+    jobId,
+    signatureUri: persistentUri,
+    signerType,
+    signerName,
+    gps: gps ?? null,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  };
+  items.push(item);
+  await writeSignatureQueue(items);
+  return item;
+}
+
+export async function processSignatureQueue(): Promise<number> {
+  const items = await readSignatureQueue();
+  if (items.length === 0) return 0;
+
+  let successCount = 0;
+  let stopped = false;
+
+  for (const item of items) {
+    if (stopped) break;
+    try {
+      const fd = await buildSignatureFormData(item.signatureUri, item.signerType, item.signerName, item.gps);
+      await api.post(`/api/jobs/${item.jobId}/signatures`, fd, { formData: true });
+
+      // Remove from queue
+      const current = await readSignatureQueue();
+      await writeSignatureQueue(current.filter((i) => i.id !== item.id));
+
+      if (Platform.OS !== 'web') {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const FileSystem = require('expo-file-system/legacy');
+          await FileSystem.deleteAsync(item.signatureUri, { idempotent: true });
+        } catch {}
+      }
+      successCount++;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 0 || (typeof status === 'number' && status >= 500)) {
+        stopped = true;
+      }
+      console.warn(`[offline-queue] signature upload failed (${status ?? 'unknown'}):`, err);
+    }
+  }
+
+  return successCount;
+}
+
+// ── Notes Offline Queue ──────────────────────────────────────────────
+const NOTES_QUEUE_KEY = 'fieseros_notes_queue';
+
+export interface QueuedNotesUpdate {
+  id: string;
+  jobId: string;
+  notes: string | null;
+  internalNotes: string | null;
+  createdAt: string;
+  attempts: number;
+}
+
+interface NotesQueueStore {
+  items: QueuedNotesUpdate[];
+}
+
+async function readNotesQueue(): Promise<QueuedNotesUpdate[]> {
+  try {
+    if (Platform.OS === 'web') {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(NOTES_QUEUE_KEY) : null;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as NotesQueueStore;
+      return Array.isArray(parsed?.items) ? parsed.items : [];
+    }
+    const raw = await AsyncStorage.getItem(NOTES_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as NotesQueueStore;
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeNotesQueue(items: QueuedNotesUpdate[]): Promise<void> {
+  try {
+    const serialized = JSON.stringify({ items } satisfies NotesQueueStore);
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(NOTES_QUEUE_KEY, serialized);
+      return;
+    }
+    await AsyncStorage.setItem(NOTES_QUEUE_KEY, serialized);
+  } catch (err) {
+    console.warn('[offline-queue] notes queue write failed:', err);
+  }
+}
+
+export async function enqueueNotesUpdate(
+  jobId: string,
+  notes: string | null,
+  internalNotes: string | null
+): Promise<QueuedNotesUpdate> {
+  const items = await readNotesQueue();
+  // If there's an existing item for this job, replace it so we send the latest
+  const next = items.filter((i) => i.jobId !== jobId);
+  const item: QueuedNotesUpdate = {
+    id: generateId(),
+    jobId,
+    notes,
+    internalNotes,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  };
+  next.push(item);
+  await writeNotesQueue(next);
+  return item;
+}
+
+export async function processNotesQueue(): Promise<number> {
+  const items = await readNotesQueue();
+  if (items.length === 0) return 0;
+
+  let successCount = 0;
+  let stopped = false;
+
+  for (const item of items) {
+    if (stopped) break;
+    try {
+      await api.patch(`/api/jobs/${item.jobId}`, {
+        notes: item.notes,
+        internalNotes: item.internalNotes,
+      });
+
+      const current = await readNotesQueue();
+      await writeNotesQueue(current.filter((i) => i.id !== item.id));
+      successCount++;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 0 || (typeof status === 'number' && status >= 500)) {
+        stopped = true;
+      }
+      console.warn(`[offline-queue] notes replay failed (${status ?? 'unknown'}):`, err);
+    }
+  }
+
+  return successCount;
+}
+
+// ── Lifecycle Transitions Queue ──────────────────────────────────────
+const LIFECYCLE_QUEUE_KEY = 'fieseros_lifecycle_queue';
+
+export interface QueuedLifecycleAction {
+  id: string;
+  jobId: string;
+  action: string;
+  pin?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  createdAt: string;
+  attempts: number;
+}
+
+interface LifecycleQueueStore {
+  items: QueuedLifecycleAction[];
+}
+
+async function readLifecycleQueue(): Promise<QueuedLifecycleAction[]> {
+  try {
+    if (Platform.OS === 'web') {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(LIFECYCLE_QUEUE_KEY) : null;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as LifecycleQueueStore;
+      return Array.isArray(parsed?.items) ? parsed.items : [];
+    }
+    const raw = await AsyncStorage.getItem(LIFECYCLE_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as LifecycleQueueStore;
+    return Array.isArray(parsed?.items) ? parsed.items : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeLifecycleQueue(items: QueuedLifecycleAction[]): Promise<void> {
+  try {
+    const serialized = JSON.stringify({ items } satisfies LifecycleQueueStore);
+    if (Platform.OS === 'web') {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(LIFECYCLE_QUEUE_KEY, serialized);
+      return;
+    }
+    await AsyncStorage.setItem(LIFECYCLE_QUEUE_KEY, serialized);
+  } catch (err) {
+    console.warn('[offline-queue] lifecycle queue write failed:', err);
+  }
+}
+
+export async function enqueueLifecycleAction(
+  jobId: string,
+  action: string,
+  pin?: string,
+  coords?: { latitude: number; longitude: number } | null
+): Promise<QueuedLifecycleAction> {
+  const items = await readLifecycleQueue();
+  const item: QueuedLifecycleAction = {
+    id: generateId(),
+    jobId,
+    action,
+    pin,
+    latitude: coords?.latitude ?? null,
+    longitude: coords?.longitude ?? null,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  };
+  items.push(item);
+  await writeLifecycleQueue(items);
+  return item;
+}
+
+export async function processLifecycleQueue(): Promise<number> {
+  const items = await readLifecycleQueue();
+  if (items.length === 0) return 0;
+
+  let successCount = 0;
+  let stopped = false;
+
+  for (const item of items) {
+    if (stopped) break;
+    try {
+      await api.post(`/api/employee/jobs/${item.jobId}/lifecycle`, {
+        action: item.action,
+        ...(item.pin ? { pin: item.pin } : {}),
+        ...(item.latitude != null ? { latitude: item.latitude } : {}),
+        ...(item.longitude != null ? { longitude: item.longitude } : {}),
+      });
+
+      const current = await readLifecycleQueue();
+      await writeLifecycleQueue(current.filter((i) => i.id !== item.id));
+      successCount++;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 0 || (typeof status === 'number' && status >= 500)) {
+        stopped = true;
+      }
+      console.warn(`[offline-queue] lifecycle replay failed (${status ?? 'unknown'}):`, err);
+    }
+  }
+
+  return successCount;
+}
+
+// ── Master Drain & Global Count ──────────────────────────────────────
+
+export async function drainAllOfflineQueues(): Promise<{
+  photos: number;
+  signatures: number;
+  notes: number;
+  lifecycle: number;
+  total: number;
+}> {
+  const [photos, signatures, notes, lifecycle] = await Promise.all([
+    processPhotoQueue().catch(() => 0),
+    processSignatureQueue().catch(() => 0),
+    processNotesQueue().catch(() => 0),
+    processLifecycleQueue().catch(() => 0),
+  ]);
+
+  return {
+    photos,
+    signatures,
+    notes,
+    lifecycle,
+    total: photos + signatures + notes + lifecycle,
+  };
+}
+
+export async function getTotalPendingOfflineCount(): Promise<number> {
+  const [photos, signatures, notes, lifecycle, generic] = await Promise.all([
+    readPhotoQueue().then((i) => i.length).catch(() => 0),
+    readSignatureQueue().then((i) => i.length).catch(() => 0),
+    readNotesQueue().then((i) => i.length).catch(() => 0),
+    readLifecycleQueue().then((i) => i.length).catch(() => 0),
+    readQueue().then((i) => i.length).catch(() => 0),
+  ]);
+
+  return photos + signatures + notes + lifecycle + generic;
+}
+

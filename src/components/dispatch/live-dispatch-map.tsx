@@ -123,24 +123,30 @@ export interface LiveTechnicianMapController {
   /**
    * Recenter/reframe the map on a SPECIFIC technician. Called by the
    * dispatcher's "Recenter" button — NOT on every GPS ping.
-   *
-   * Logic:
-   *   - Tech has coords AND assigned job has coords → fitBounds([tech, job])
-   *   - Only tech has coords → panTo(tech) at zoom 15
-   *   - No coords → no-op
    */
   recenterOnTech: (employeeId: string) => void;
+  /** Recenter the map on a specific job pin. */
+  recenterOnJob: (jobId: string) => void;
+  /** Pan and zoom to specific coordinates. */
+  recenterOnCoords: (lat: number, lng: number, zoom?: number) => void;
   /** Force a refresh of all marker icons (used when selection changes). */
   refreshMarkers: () => void;
+  /** Toggle real-time Google TrafficLayer overlay. */
+  setTrafficEnabled: (enabled: boolean) => void;
+  /** Switch custom map visual styling. */
+  setMapTheme: (theme: 'standard' | 'silver' | 'dark') => void;
 }
 
-interface LiveDispatchMapProps {
+export interface LiveDispatchMapProps {
   employees: MapTechnician[];
   jobs?: MapJob[];
   selectedTechnicianId?: string | null;
   onTechnicianSelect?: (techId: string | null) => void;
+  onJobSelect?: (jobId: string) => void;
   controllerRef?: React.RefObject<LiveTechnicianMapController | null> | React.MutableRefObject<LiveTechnicianMapController | null>;
   className?: string;
+  showTraffic?: boolean;
+  mapTheme?: 'standard' | 'silver' | 'dark';
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────
@@ -188,6 +194,50 @@ const ASSUMED_SPEED_KMH = 35;
 // too large = unhelpful.
 const ACCURACY_CIRCLE_MIN_RADIUS_M = 5;
 const ACCURACY_CIRCLE_MAX_RADIUS_M = 500;
+
+// ── Custom Map Style Definitions ──────────────────────────────────────────
+export const MAP_STYLES_SILVER: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f5f5' }] },
+  { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadada' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+  { featureType: 'transit.station', elementType: 'geometry', stylers: [{ color: '#eeeeee' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#c9c9c9' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+];
+
+export const MAP_STYLES_DARK: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#475569' }] },
+  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
+  { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#e2e8f0' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#475569' }] },
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#334155' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#475569' }] },
+  { featureType: 'road.highway.controlled_access', elementType: 'geometry', stylers: [{ color: '#64748b' }] },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
+  { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0b1329' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3b82f6' }] },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -571,14 +621,29 @@ function createTechMarkerElement(
 
 /** Build the HTML content for a job pin AdvancedMarkerElement. */
 function createJobMarkerElement(job: MapJob, color: string): HTMLDivElement {
+  const isUrgent = (job.priority || '').toLowerCase() === 'urgent';
+  const isHigh = (job.priority || '').toLowerCase() === 'high';
   const wrapper = document.createElement('div');
   wrapper.style.cssText =
-    'position:relative;width:24px;height:30px;cursor:pointer;';
+    'position:relative;width:28px;height:34px;cursor:pointer;transition:transform 0.15s ease;';
+
+  const pulseBeacon = isUrgent
+    ? `<span style="position:absolute;top:2px;left:50%;transform:translateX(-50%);width:26px;height:26px;border-radius:9999px;background:#ef4444;opacity:0.4;animation:fieseros-tech-pulse 1.6s ease-out infinite;pointer-events:none;"></span>`
+    : '';
+
+  const priorityDot = isUrgent
+    ? `<span style="position:absolute;top:7px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:900;color:#ffffff;line-height:1;pointer-events:none;font-family:ui-sans-serif,system-ui,sans-serif;">!</span>`
+    : isHigh
+      ? `<span style="position:absolute;top:9px;left:50%;transform:translateX(-50%);width:6px;height:6px;border-radius:9999px;background:#ffffff;pointer-events:none;"></span>`
+      : `<circle cx="14" cy="13" r="4.5" fill="#ffffff"/>`;
+
   wrapper.innerHTML = `
-    <svg width="24" height="30" viewBox="0 0 24 30" xmlns="http://www.w3.org/2000/svg" style="display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));">
-      <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 18 12 18s12-9 12-18C24 5.4 18.6 0 12 0z" fill="${color}" stroke="#ffffff" stroke-width="2"/>
-      <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+    ${pulseBeacon}
+    <svg width="28" height="34" viewBox="0 0 28 34" xmlns="http://www.w3.org/2000/svg" style="display:block;filter:drop-shadow(0 2px 5px rgba(0,0,0,0.35));">
+      <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 20 14 20s14-9.5 14-20C28 6.268 21.732 0 14 0z" fill="${color}" stroke="#ffffff" stroke-width="2.2"/>
+      ${typeof priorityDot === 'string' && priorityDot.startsWith('<circle') ? priorityDot : ''}
     </svg>
+    ${typeof priorityDot === 'string' && !priorityDot.startsWith('<circle') ? priorityDot : ''}
   `;
   return wrapper;
 }
@@ -742,8 +807,11 @@ export default function LiveDispatchMap({
   jobs = [],
   selectedTechnicianId = null,
   onTechnicianSelect,
+  onJobSelect,
   controllerRef,
   className,
+  showTraffic = false,
+  mapTheme = 'silver',
 }: LiveDispatchMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -751,6 +819,7 @@ export default function LiveDispatchMap({
   const techMarkersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
   const jobMarkersRef = useRef<Map<string, google.maps.marker.AdvancedMarkerElement>>(new Map());
   const clustererRef = useRef<MarkerClusterer | null>(null);
+  const trafficLayerRef = useRef<google.maps.TrafficLayer | null>(null);
 
   // Per-job route polyline cache (replaces the flat routeLines array so we
   // can update only the affected tech's route on each GPS ping).
@@ -772,6 +841,9 @@ export default function LiveDispatchMap({
   const jobsRef = useRef(jobs);
   const selectedTechIdRef = useRef<string | null>(selectedTechnicianId);
   const onTechnicianSelectRef = useRef(onTechnicianSelect);
+  const onJobSelectRef = useRef(onJobSelect);
+  onJobSelectRef.current = onJobSelect;
+
   // Tracks jobIds for which we have already auto-framed the map (Uber-style
   // zoom to tech → destination). Prevents re-framing on every 5s poll.
   const autoFramedJobIdsRef = useRef<Set<string>>(new Set());
@@ -1142,7 +1214,10 @@ export default function LiveDispatchMap({
         content: createJobMarkerElement(job, color),
         zIndex: 1,
       });
-      marker.addListener('gmp-click', () => openJobInfoWindow(marker, job, color));
+      marker.addListener('gmp-click', () => {
+        openJobInfoWindow(marker, job, color);
+        onJobSelectRef.current?.(job.id);
+      });
       jobMarkersRef.current.set(job.id, marker);
       markers.push(marker);
       // [dispatch-map] diagnostic — checkpoints 1+2: destination + END marker
@@ -1688,10 +1763,9 @@ export default function LiveDispatchMap({
           roadRouteCacheRef.current.clear();
           roadFetchInFlightRef.current.clear();
           markerSigRef.current.clear();
-          // Close + null the InfoWindow + map.
-          if (infoWindowRef.current) {
-            infoWindowRef.current.close();
-            infoWindowRef.current = null;
+          if (trafficLayerRef.current) {
+            trafficLayerRef.current.setMap(null);
+            trafficLayerRef.current = null;
           }
           mapRef.current = null;
         };
@@ -1711,6 +1785,51 @@ export default function LiveDispatchMap({
       cleanupRef.current();
     };
   }, []);
+
+  // ── Traffic and Theme Handlers ──────────────────────────────────────────
+  const applyTraffic = (enabled: boolean) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const g = (window as unknown as { google?: typeof globalThis.google }).google;
+    if (!g?.maps?.TrafficLayer) return;
+
+    if (enabled) {
+      if (!trafficLayerRef.current) {
+        trafficLayerRef.current = new g.maps.TrafficLayer();
+      }
+      trafficLayerRef.current.setMap(map);
+    } else {
+      trafficLayerRef.current?.setMap(null);
+    }
+  };
+
+  const applyMapTheme = (theme: 'standard' | 'silver' | 'dark') => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      if (theme === 'silver') {
+        map.setOptions({ styles: MAP_STYLES_SILVER });
+      } else if (theme === 'dark') {
+        map.setOptions({ styles: MAP_STYLES_DARK });
+      } else {
+        map.setOptions({ styles: [] });
+      }
+    } catch (err) {
+      console.warn('[dispatch-map] Map theme warning:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isReady && showTraffic !== undefined) {
+      applyTraffic(showTraffic);
+    }
+  }, [isReady, showTraffic]);
+
+  useEffect(() => {
+    if (isReady && mapTheme !== undefined) {
+      applyMapTheme(mapTheme);
+    }
+  }, [isReady, mapTheme]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -2031,8 +2150,27 @@ export default function LiveDispatchMap({
           // ignore bounds errors (e.g. identical points)
         }
       },
+      recenterOnJob: (jobId: string) => {
+        const job = jobsRef.current.find((j) => j.id === jobId);
+        if (job && isValidCoord(job.latitude, job.longitude) && mapRef.current) {
+          mapRef.current.panTo(new google.maps.LatLng(job.latitude, job.longitude));
+          mapRef.current.setZoom(16);
+        }
+      },
+      recenterOnCoords: (lat: number, lng: number, zoom = 15) => {
+        if (isValidCoord(lat, lng) && mapRef.current) {
+          mapRef.current.panTo(new google.maps.LatLng(lat, lng));
+          mapRef.current.setZoom(zoom);
+        }
+      },
       refreshMarkers: () => {
         rerenderTechMarkers();
+      },
+      setTrafficEnabled: (enabled: boolean) => {
+        applyTraffic(enabled);
+      },
+      setMapTheme: (theme: 'standard' | 'silver' | 'dark') => {
+        applyMapTheme(theme);
       },
     };
     return () => {

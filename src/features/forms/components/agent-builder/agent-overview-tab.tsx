@@ -317,7 +317,7 @@ export function AgentOverviewTab({
 
   return (
     <div className="flex-1 min-h-0 h-full overflow-y-auto lg:overflow-hidden bg-[#F8FAFC] dark:bg-slate-950 p-4 lg:p-5 text-slate-900 dark:text-slate-100 select-none">
-      <div className="max-w-[1680px] mx-auto h-full min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className="w-full h-full min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* ═══════════════════════════════════════════════════════════════════
             LEFT COLUMN: ASSISTANT STATUS & CONNECTED CHANNELS (~3 Cols)
            ═══════════════════════════════════════════════════════════════════ */}

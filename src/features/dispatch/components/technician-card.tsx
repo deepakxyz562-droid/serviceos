@@ -23,6 +23,7 @@ import {
   Share2,
   DollarSign,
   Link2,
+  Phone,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -106,6 +107,10 @@ export function TechnicianCard({
       </div>
     );
   }
+
+  const completedCount = typeof e.completedJobs === 'number' ? e.completedJobs : 0;
+  const totalDailyJobs = completedCount + activeCount;
+  const progressPct = totalDailyJobs > 0 ? Math.round((completedCount / totalDailyJobs) * 100) : 0;
 
   return (
     <div
@@ -231,6 +236,24 @@ export function TechnicianCard({
       {/* Activity snippet if assigned to a job */}
       {activitySnippet}
 
+      {/* Daily Progress Bar if active or completed jobs exist */}
+      {totalDailyJobs > 0 && (
+        <div className="mt-2 pt-1.5 border-t border-border/40">
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground font-medium mb-1">
+            <span>Daily Schedule</span>
+            <span className="font-mono text-foreground font-semibold">
+              {completedCount}/{totalDailyJobs} jobs ({progressPct}%)
+            </span>
+          </div>
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-teal-600 rounded-full transition-all duration-300"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Action Footer */}
       <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-border/60 text-xs min-w-0">
         <span
@@ -242,6 +265,19 @@ export function TechnicianCard({
         </span>
 
         <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {e.phone && (
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="h-6 text-[10px] px-2 text-teal-700 hover:text-teal-800 hover:bg-teal-100/60 dark:text-teal-300 dark:hover:bg-teal-950/60 font-medium"
+              title={`Call ${e.name} (${e.phone})`}
+            >
+              <a href={`tel:${e.phone}`}>
+                <Phone className="size-3 mr-1 shrink-0" /> Call
+              </a>
+            </Button>
+          )}
           {currentJob && (
             <Button
               variant="ghost"

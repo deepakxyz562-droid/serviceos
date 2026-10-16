@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/stores/auth-store';
 import { API_BASE_URL, COLORS } from '@/lib/constants';
 import { getToken } from '@/lib/auth';
-import { processPhotoQueue } from '@/lib/offline-queue';
+import { drainAllOfflineQueues } from '@/lib/offline-queue';
 import { trackingManager, ActiveTravelState } from '@/lib/tracking-manager';
 import { useLiveTracking } from '@/hooks/use-live-tracking';
 
@@ -109,8 +109,8 @@ export default function EmployeeLayout() {
   useEffect(() => {
     if (!employeeId) return;
     const drain = () => {
-      // Best-effort — failures stay queued and will retry on next drain.
-      processPhotoQueue().catch(() => {});
+      // Best-effort — drains photos, signatures, notes, and lifecycle queues.
+      drainAllOfflineQueues().catch(() => {});
     };
     drain();
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {

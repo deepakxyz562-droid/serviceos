@@ -511,7 +511,7 @@ export function FormAgentStudio({
         <div className="flex-1 min-h-0 h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
           {/* Left: Assistant Persona, Instructions & Channel Behavior */}
           <div className="flex-1 min-h-0 h-full overflow-y-auto p-6 space-y-6">
-            <div className="max-w-4xl mx-auto space-y-6">
+            <div className="w-full space-y-6">
               {/* Card 1: Core Identity & Persona */}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-xs space-y-5">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -691,7 +691,7 @@ export function FormAgentStudio({
           <div className="flex-1 min-h-0 h-full flex flex-col justify-between p-6 relative overflow-hidden">
             <div
               className={cn(
-                'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
+                'w-full flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
                 isSidebar && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
               )}
               style={
@@ -746,7 +746,7 @@ export function FormAgentStudio({
             </div>
 
             {/* Bottom Stage Bar */}
-            <div className="max-w-4xl mx-auto w-full pt-3 flex items-center justify-between z-20">
+            <div className="w-full pt-3 flex items-center justify-between z-20">
               <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 rounded-xl shadow-xs text-xs">
                 <button
                   type="button"
@@ -807,7 +807,7 @@ export function FormAgentStudio({
       {/* ── VOICE & PHONE TAB ── */}
       {studioTab === 'phone' && (
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-3xl mx-auto bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 shadow-xs">
+          <div className="w-full bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 shadow-xs">
             <div className="flex items-center gap-3">
               <div className="size-10 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 flex items-center justify-center">
                 <Phone className="size-5" />
@@ -1048,7 +1048,7 @@ export function FormAgentStudio({
               <>
                 <div
                   className={cn(
-                    'w-full max-w-4xl mx-auto flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
+                    'w-full flex-1 flex flex-col relative rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 p-6 shadow-sm overflow-hidden transition-all duration-300',
                     isSidebar && (isLeftPos ? 'pl-[390px]' : 'pr-[390px]')
                   )}
                   style={
@@ -1117,7 +1117,7 @@ export function FormAgentStudio({
                 </div>
 
                 {/* Bottom Canvas Toolbar (Page Switcher + Edit/Test Mode) */}
-                <div className="max-w-4xl mx-auto w-full pt-3 flex items-center justify-between z-20">
+                <div className="w-full pt-3 flex items-center justify-between z-20">
                   <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2.5 py-1 rounded-lg shadow-xs text-xs font-semibold">
                     <button
                       type="button"
@@ -1232,7 +1232,7 @@ export function FormAgentStudio({
       {studioTab === 'skills' && (
         <div className="flex-1 min-h-0 h-full flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
           <div className="flex-1 min-h-0 h-full overflow-y-auto p-6">
-            <div className="max-w-4xl mx-auto">
+            <div className="w-full">
               <AgentSkillsTab agent={agent} onChange={setAgent} />
             </div>
           </div>
@@ -1268,7 +1268,7 @@ export function FormAgentStudio({
       {(studioTab === 'knowledge' || studioTab === 'train') && (
         <div className="flex-1 min-h-0 h-full flex flex-row overflow-hidden bg-slate-50 dark:bg-slate-950">
           <div className="flex-1 min-h-0 h-full overflow-y-auto p-6">
-            <div className="max-w-4xl mx-auto">
+            <div className="w-full">
               <AgentTrainTab agent={agent} onChange={setAgent} />
             </div>
           </div>
@@ -1303,7 +1303,7 @@ export function FormAgentStudio({
       {/* ── TEST LAB TAB ── */}
       {studioTab === 'test' && (
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-4xl mx-auto">
+          <div className="w-full">
             <AgentTestLab agentId={agent.id} />
           </div>
         </div>
@@ -1438,7 +1438,7 @@ export function FormAgentStudio({
       {/* ── PUBLISH TAB ── */}
       {studioTab === 'publish' && (
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950">
-          <div className="max-w-4xl mx-auto">
+          <div className="w-full">
             <AgentPublishTab
               agent={agent}
               onChange={setAgent}

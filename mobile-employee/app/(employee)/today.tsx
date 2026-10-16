@@ -45,6 +45,7 @@ import {
   Phone,
   ShieldCheck,
   Sparkles,
+  ShieldAlert,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -53,6 +54,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
+import { SosModal } from '@/components/safety/SosModal';
+import { OfflineStatusBar } from '@/components/ui/OfflineStatusBar';
 import { useEmployeeJobs } from '@/hooks/use-jobs';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -160,6 +163,7 @@ export default function TodayScreen() {
   const isOwnerOrAdmin = user?.role === 'owner' || user?.role === 'admin';
   const [ownerScope, setOwnerScope] = useState<'my' | 'all'>('my');
   const [showCopilot, setShowCopilot] = useState(false);
+  const [showSosModal, setShowSosModal] = useState(false);
 
   const todaysJobs = useMemo<Job[]>(() => {
     const list = todayJobs.data ?? [];
@@ -374,6 +378,7 @@ export default function TodayScreen() {
         }
         ListHeaderComponent={
           <View className="mb-4">
+            <OfflineStatusBar />
             {/* Header row: title + presence + sync status + notification bell */}
             <View className="mb-3 mt-2 flex-row items-center justify-between">
               <View className="flex-1">
@@ -431,6 +436,20 @@ export default function TodayScreen() {
                 >
                   <Sparkles size={15} color="#059669" />
                   <Text className="text-xs font-bold text-emerald-800">AI Copilot</Text>
+                </Pressable>
+
+                {/* SOS Emergency Button */}
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+                    setShowSosModal(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Emergency SOS Distress Signal"
+                  className="flex-row items-center gap-1 h-10 px-2.5 rounded-full bg-red-50 border border-red-300 active:bg-red-100 shadow-xs"
+                >
+                  <ShieldAlert size={15} color="#DC2626" />
+                  <Text className="text-xs font-black text-red-600">SOS</Text>
                 </Pressable>
 
                 <Pressable
@@ -817,6 +836,13 @@ export default function TodayScreen() {
       <FieldCopilotModal
         visible={showCopilot}
         onClose={() => setShowCopilot(false)}
+      />
+
+      <SosModal
+        visible={showSosModal}
+        onClose={() => setShowSosModal(false)}
+        activeJobId={activeJob?.id}
+        activeJobAddress={activeJob?.address}
       />
     </SafeAreaView>
   );

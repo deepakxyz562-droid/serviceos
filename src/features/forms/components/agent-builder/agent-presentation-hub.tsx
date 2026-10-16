@@ -194,7 +194,7 @@ export function AgentPresentationHub({
   };
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 max-w-4xl mx-auto">
+    <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 w-full">
       {/* ── Top Alert Banner (Matching Screenshot) ── */}
       <div className="p-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 text-white flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">

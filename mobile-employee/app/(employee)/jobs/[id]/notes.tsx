@@ -34,6 +34,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useJob, useUpdateJob } from '@/hooks/use-jobs';
 import { COLORS } from '@/lib/constants';
 import { NotesPolishButton } from '@/components/ai/NotesPolishButton';
+import { enqueueNotesUpdate } from '@/lib/offline-queue';
 
 const MAX_LEN = 5000;
 
@@ -72,10 +73,10 @@ export default function JobNotesScreen() {
       show('Notes saved.', 'success');
       router.back();
     } catch (err) {
-      show(
-        err instanceof Error ? err.message : 'Save failed. Please try again.',
-        'error'
-      );
+      console.warn('[notes] updateJob failed, queuing offline:', err);
+      await enqueueNotesUpdate(id, notes.trim() || null, internalNotes.trim() || null);
+      show('Notes saved locally (Basement Mode) — will sync when online ✓', 'info');
+      router.back();
     }
   }, [id, notes, internalNotes, updateJob, show]);
 

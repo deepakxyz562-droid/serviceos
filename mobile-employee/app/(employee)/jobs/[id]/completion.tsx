@@ -110,6 +110,7 @@ import { assetUrl, ApiRequestError } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { captureGps } from '@/lib/gps';
 import { trackingManager } from '@/lib/tracking-manager';
+import { enqueueSignature, enqueueLifecycleAction } from '@/lib/offline-queue';
 import {
   buildPhotoFormData,
   strokeToPath,
@@ -513,9 +514,11 @@ function InlineSignaturePad({
     try {
       let formData: FormData;
 
+      let savedUri = '';
       if (Platform.OS === 'web') {
         const dataUrl = strokesToPngDataUrlWeb(allStrokes, SIG_CANVAS_WIDTH, SIG_CANVAS_HEIGHT);
         if (!dataUrl) throw new Error('Failed to render signature.');
+        savedUri = dataUrl;
         const blob = dataUrlToBlob(dataUrl);
         formData = new FormData();
         formData.append('file', blob, 'signature.png');
@@ -527,6 +530,7 @@ function InlineSignaturePad({
           format: 'png',
           quality: 1,
         });
+        savedUri = fileUri;
         formData = new FormData();
         formData.append('file', {
           uri: fileUri,
@@ -538,7 +542,6 @@ function InlineSignaturePad({
       formData.append('type', signerType);
       formData.append('signerName', signerName.trim());
 
-      // Best-effort GPS attach (matches PWA's SignaturePad + photos.tsx).
       const gps = await captureGps();
       if (gps) {
         formData.append('latitude', String(gps.latitude));
@@ -548,9 +551,17 @@ function InlineSignaturePad({
         }
       }
 
-      await uploadSignature.mutateAsync({ id: jobId, formData });
-      show(`${defaultRole} signature saved.`, 'success');
-      handleClear();
+      try {
+        await uploadSignature.mutateAsync({ id: jobId, formData });
+        show(`${defaultRole} signature saved.`, 'success');
+        handleClear();
+      } catch (uploadErr) {
+        // Offline / Basement fallback
+        console.warn('[completion] signature upload failed, queuing offline:', uploadErr);
+        await enqueueSignature(jobId, savedUri, signerType, signerName, gps);
+        show(`${defaultRole} signature saved offline (Basement Mode) ✓`, 'info');
+        handleClear();
+      }
     } catch (err) {
       show(
         err instanceof Error ? err.message : 'Save failed. Please try again.',
@@ -1171,11 +1182,10 @@ export default function JobCompletionScreen() {
         if (trackingManager.getState()?.jobId === id) {
           trackingManager.stopTravelling();
         }
+        await enqueueLifecycleAction(id, 'complete').catch(() => {});
         show(
-          lcErr instanceof Error
-            ? `Proof saved, but lifecycle update failed: ${lcErr.message}`
-            : 'Proof saved, but lifecycle update failed.',
-          'warning'
+          'Proof saved! Completion queued offline — will sync once reconnected ✓',
+          'info'
         );
         router.back();
         return;
