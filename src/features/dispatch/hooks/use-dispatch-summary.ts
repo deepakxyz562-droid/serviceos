@@ -34,7 +34,17 @@ const ACTIVE_JOB_STATUSES = new Set([
   'in_progress',
 ]);
 
-export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispatchSummaryResult {
+export interface ActiveSosAlertSummary {
+  employeeId: string;
+  employeeName: string;
+  address?: string | null;
+}
+
+export function useDispatchSummary(
+  employees: Employee[],
+  jobs: Job[],
+  activeSosAlerts: ActiveSosAlertSummary[] = []
+): UseDispatchSummaryResult {
   // 1. Group active jobs by employee
   const activeJobsByEmployee = useMemo(() => {
     const map = new Map<string, Job[]>();
@@ -81,6 +91,18 @@ export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispa
   // 3. Compute Attention Items
   const attentionItems = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
+
+    // 0. Active SOS Distress signals (Immediate Top Priority)
+    for (const sos of activeSosAlerts) {
+      items.push({
+        id: `sos-${sos.employeeId}`,
+        severity: 'red',
+        icon: 'sos',
+        title: `🚨 EMERGENCY SOS: ${sos.employeeName}`,
+        detail: sos.address ? `At ${sos.address}` : 'Distress beacon broadcasted',
+        action: { label: 'Respond', employeeId: sos.employeeId },
+      });
+    }
 
     // Late jobs
     for (const j of jobs) {
@@ -160,7 +182,7 @@ export function useDispatchSummary(employees: Employee[], jobs: Job[]): UseDispa
     }
 
     return items;
-  }, [employees, jobs, pendingJobs, activeJobsByEmployee]);
+  }, [employees, jobs, pendingJobs, activeJobsByEmployee, activeSosAlerts]);
 
   // 4. Derive Canonical DispatchSummary
   const summary = useMemo<DispatchSummary>(() => {

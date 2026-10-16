@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { captureGps } from '@/lib/gps';
 import { api } from '@/lib/api';
 import { useToast } from '@/components/ui/Toast';
+import { resolveEmergencyInfo, EmergencyInfo } from '@/lib/emergency-directory';
 
 interface SosModalProps {
   visible: boolean;
@@ -41,6 +42,7 @@ export function SosModal({
   const [sosState, setSosState] = useState<SosState>('countdown');
   const [countdown, setCountdown] = useState(3);
   const [companyPhone, setCompanyPhone] = useState<string | null>(null);
+  const [emergencyInfo, setEmergencyInfo] = useState<EmergencyInfo>(() => resolveEmergencyInfo());
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -66,11 +68,18 @@ export function SosModal({
     }
   }, [visible, sosState, pulseAnim]);
 
-  // Reset & start countdown when modal becomes visible
+  // Reset & start countdown when modal becomes visible + pre-resolve location emergency number
   useEffect(() => {
     if (visible) {
       setSosState('countdown');
       setCountdown(3);
+
+      // Attempt fast GPS resolve for emergency directory
+      captureGps().then((gps) => {
+        if (gps?.latitude && gps?.longitude) {
+          setEmergencyInfo(resolveEmergencyInfo(null, gps));
+        }
+      }).catch(() => {});
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
 
@@ -104,10 +113,16 @@ export function SosModal({
 
     try {
       const gps = await captureGps();
+      if (gps?.latitude && gps?.longitude) {
+        setEmergencyInfo(resolveEmergencyInfo(null, gps));
+      }
 
       const res = await api.post<{
         success?: boolean;
         companyPhone?: string;
+        emergencyNumber?: string;
+        emergencyLabel?: string;
+        emergencyCountry?: string;
         error?: string;
       }>('/api/employee/sos', {
         latitude: gps?.latitude ?? null,
@@ -116,8 +131,17 @@ export function SosModal({
         jobId: activeJobId ?? null,
       });
 
-      if (res && res.companyPhone) {
-        setCompanyPhone(res.companyPhone);
+      if (res) {
+        if (res.companyPhone) {
+          setCompanyPhone(res.companyPhone);
+        }
+        if (res.emergencyNumber && res.emergencyLabel) {
+          setEmergencyInfo({
+            number: res.emergencyNumber,
+            label: res.emergencyLabel,
+            countryCode: res.emergencyCountry || 'RESOLVED',
+          });
+        }
       }
 
       setSosState('sent');
@@ -137,10 +161,10 @@ export function SosModal({
     onClose();
   };
 
-  const handleCall911 = () => {
+  const handleCallEmergency = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-    Linking.openURL('tel:911').catch(() => {
-      show('Unable to open phone app to dial 911.', 'error');
+    Linking.openURL(`tel:${emergencyInfo.number}`).catch(() => {
+      show(`Unable to open phone app to dial ${emergencyInfo.number}.`, 'error');
     });
   };
 
@@ -238,12 +262,12 @@ export function SosModal({
             {/* Quick Call Actions */}
             <View className="w-full gap-2.5 mb-4">
               <Pressable
-                onPress={handleCall911}
+                onPress={handleCallEmergency}
                 className="w-full py-3.5 px-4 rounded-xl bg-red-600 active:bg-red-700 flex-row items-center justify-center shadow-md"
               >
                 <PhoneCall size={20} color="#ffffff" />
-                <Text className="ml-2 text-base font-black text-white">
-                  CALL 911 (POLICE / EMS)
+                <Text className="ml-2 text-base font-black text-white uppercase">
+                  {emergencyInfo.label}
                 </Text>
               </Pressable>
 

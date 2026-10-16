@@ -3,6 +3,8 @@ import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveEmployee } from '../shift/route';
 import { sendSms } from '@/lib/sms-send';
+import { getEmergencyInfo } from '@/lib/emergency-directory';
+import { EventBus } from '@/lib/event-bus';
 
 /**
  * POST /api/employee/sos
@@ -64,11 +66,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get tenant info
+    // Get tenant info (including country for emergency services resolution)
     const tenant = await db.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { name: true, phone: true },
+      select: { name: true, phone: true, country: true },
     });
+
+    const emergency = getEmergencyInfo(
+      tenant?.country,
+      latitude != null && longitude != null ? { lat: latitude, lng: longitude } : null
+    );
 
     // Find owners & dispatchers for this tenant
     const managers = await db.user.findMany({
@@ -168,6 +175,36 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const alertId = `sos_${Date.now()}`;
+
+    // Emit realtime WebSocket event to owner dashboard and dispatch console
+    try {
+      await EventBus.emit(
+        'employee.sos',
+        {
+          alertId,
+          employeeId: employee.id,
+          employeeName: employee.name,
+          employeePhone: employee.phone,
+          latitude,
+          longitude,
+          mapsLink,
+          address,
+          jobId: job?.id ?? null,
+          jobTitle: job?.title ?? null,
+          customerName: job?.customer?.name ?? null,
+          batteryLevel,
+          emergencyNumber: emergency.number,
+          emergencyLabel: emergency.label,
+          notes,
+          timestamp: now.toISOString(),
+        },
+        { tenantId: user.tenantId }
+      );
+    } catch (err) {
+      console.warn('[api/employee/sos] failed to emit employee.sos via EventBus:', err);
+    }
+
     // Audit log
     try {
       await db.activityLog.create({
@@ -181,6 +218,7 @@ export async function POST(request: NextRequest) {
           entityName: employee.name,
           description: `Emergency SOS signal triggered by ${employee.name}. Dispatched to ${phoneRecipients.size} managers.`,
           metadataJson: JSON.stringify({
+            alertId,
             latitude,
             longitude,
             address,
@@ -188,6 +226,7 @@ export async function POST(request: NextRequest) {
             batteryLevel,
             notes,
             smsDispatchedCount,
+            emergencyNumber: emergency.number,
           }),
         },
       });
@@ -197,12 +236,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      alertId: `sos_${Date.now()}`,
+      alertId,
       employeeName: employee.name,
       timestamp: now.toISOString(),
       smsDispatchedCount,
       managersNotified: managers.length,
       companyPhone: tenant?.phone || null,
+      emergencyNumber: emergency.number,
+      emergencyLabel: emergency.label,
+      emergencyCountry: emergency.countryCode,
     });
   } catch (error) {
     console.error('[POST /api/employee/sos] error:', error);

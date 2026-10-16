@@ -28,6 +28,8 @@ import { Button } from '@/components/ui/button';
 import { useTrialStatus, TrialPaywallOverlay, PastDueBanner } from '@/components/billing/trial-paywall';
 import { TenantPushManager } from '@/components/pwa/tenant-push-manager';
 import { CreateFormOrAgentModal } from '@/features/forms/components/wizard/create-form-or-agent-modal';
+import { EmergencySosModal, SosDistressAlert } from '@/components/safety/emergency-sos-modal';
+import { useRealtime } from '@/hooks/use-realtime';
 
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
 
@@ -444,6 +446,43 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const trialStatus = useTrialStatus();
   const queryClient = useQueryClient();
 
+  // Active Realtime Technician Emergency Distress Alert
+  const [activeSosAlert, setActiveSosAlert] = useState<SosDistressAlert | null>(null);
+
+  const handleSosReceived = useCallback((payload: any) => {
+    if (payload && payload.employeeName) {
+      setActiveSosAlert({
+        alertId: payload.alertId || `sos_${Date.now()}`,
+        employeeId: payload.employeeId,
+        employeeName: payload.employeeName,
+        employeePhone: payload.employeePhone,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        mapsLink: payload.mapsLink,
+        address: payload.address,
+        jobId: payload.jobId,
+        jobTitle: payload.jobTitle,
+        customerName: payload.customerName,
+        batteryLevel: payload.batteryLevel,
+        emergencyNumber: payload.emergencyNumber,
+        emergencyLabel: payload.emergencyLabel,
+        notes: payload.notes,
+        timestamp: payload.timestamp || new Date().toISOString(),
+      });
+    }
+  }, []);
+
+  useRealtime({
+    enabled: true,
+    tenantId: auth.tenant?.id,
+    onEmployeeSos: handleSosReceived,
+  });
+
+  const handleViewSosDispatch = useCallback((alert: SosDistressAlert) => {
+    setActiveSosAlert(null);
+    setCurrentView('dispatch');
+  }, [setCurrentView]);
+
   // PERF-P2: ViewCache invalidation key-prefix fix.
   // The ViewCache's DEFAULT invalidation uses `queryKey: [currentView]`,
   // but canonical query keys use ENTITY names (e.g. ['jobs','calendar',...],
@@ -631,6 +670,12 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         </ViewErrorBoundary>
         {/* Trial paywall still applies — superadmin can be locked out too. */}
         <TrialPaywallOverlay trialStatus={trialStatus} />
+        {/* Realtime Emergency SOS Distress Modal */}
+        <EmergencySosModal
+          alert={activeSosAlert}
+          onDismiss={() => setActiveSosAlert(null)}
+          onViewDispatch={handleViewSosDispatch}
+        />
       </div>
     );
   }
@@ -738,6 +783,13 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           }
           setCurrentView('formBuilder');
         }}
+      />
+
+      {/* Realtime Emergency SOS Distress Modal */}
+      <EmergencySosModal
+        alert={activeSosAlert}
+        onDismiss={() => setActiveSosAlert(null)}
+        onViewDispatch={handleViewSosDispatch}
       />
     </div>
   );

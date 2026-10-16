@@ -106,7 +106,7 @@ export interface CandidateScore {
 export interface AttentionItem {
   id: string;
   severity: 'red' | 'amber' | 'yellow';
-  icon: 'alert' | 'gps' | 'unassigned' | 'idle';
+  icon: 'alert' | 'gps' | 'unassigned' | 'idle' | 'sos';
   title: string;
   detail: string;
   action?: { label: string; jobId?: string; employeeId?: string };

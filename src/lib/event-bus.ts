@@ -44,7 +44,7 @@ export type ServiceEvent =
   | 'invoice.created' | 'invoice.sent' | 'invoice.paid' | 'invoice.overdue'
   | 'quote.created' | 'quote.sent' | 'quote.accepted' | 'quote.rejected'
   | 'payment.received' | 'payment.failed'
-  | 'employee.status_changed' | 'employee.heartbeat'
+  | 'employee.status_changed' | 'employee.heartbeat' | 'employee.sos'
   | 'conversation.message_received' | 'conversation.message_sent'
   | 'conversation.state_changed'
   | 'customer.journey_stage_changed'
@@ -108,6 +108,7 @@ export const SERVICE_EVENT_LABELS: Record<ServiceEvent, { label: string; descrip
   'payment.failed':    { label: 'Payment Failed',     description: 'A payment attempt failed',                  category: 'payment' },
   'employee.status_changed': { label: 'Employee Status Changed', description: 'An employee status was updated',  category: 'employee' },
   'employee.heartbeat':      { label: 'Employee Heartbeat',     description: 'Employee heartbeat ping received', category: 'employee' },
+  'employee.sos':            { label: 'Employee Emergency SOS', description: 'Technician triggered emergency distress signal', category: 'employee' },
   'conversation.message_received': { label: 'Message Received', description: 'A conversation message was received', category: 'conversation' },
   'conversation.message_sent':     { label: 'Message Sent',     description: 'A conversation message was sent',     category: 'conversation' },
   'conversation.state_changed':        { label: 'Conversation State Changed', description: 'WhatsApp conversation state was updated',        category: 'conversation' },
@@ -169,10 +170,11 @@ const REALTIME_BRIDGED_EVENTS: Set<string> = new Set([
   'job.completed',
   'job.cancelled',
   'job.rejected',
-  // Employee presence / location
+  // Employee presence / location / emergency
   'employee.status_changed',
   'employee.heartbeat',
   'employee.location_updated',
+  'employee.sos',
   // GPS pings (emitted by /api/gps/track if wired up)
   'gps.ping',
   // Shift events (shift.* / schedule.*)

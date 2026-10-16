@@ -17,7 +17,7 @@
 
 import {
   AlertTriangle, MapPin, Briefcase, Clock,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, ShieldAlert,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AttentionItem } from '@/features/dispatch/types';
@@ -40,6 +40,7 @@ const ICON_MAP: Record<AttentionItem['icon'], LucideIcon> = {
   gps: MapPin,
   unassigned: Briefcase,
   idle: Clock,
+  sos: ShieldAlert,
 };
 
 export function AttentionPanel({

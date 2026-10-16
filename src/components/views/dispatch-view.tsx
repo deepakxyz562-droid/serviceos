@@ -46,7 +46,7 @@ import {
 } from '@/features/dispatch/utils/dispatch-helpers';
 import type { Team, Employee, Job, CandidateScore } from '@/features/dispatch/types';
 
-import { useDispatchSummary } from '@/features/dispatch/hooks/use-dispatch-summary';
+import { useDispatchSummary, type ActiveSosAlertSummary } from '@/features/dispatch/hooks/use-dispatch-summary';
 import { useDispatchConnection } from '@/features/dispatch/hooks/use-dispatch-connection';
 import { DispatchHeader } from '@/features/dispatch/components/dispatch-header';
 import { DispatchKpiStrip } from '@/features/dispatch/components/dispatch-kpi-strip';
@@ -111,6 +111,7 @@ export function DispatchView() {
     affectedJobs?: any[];
   } | null>(null);
   const [showAttention, setShowAttention] = useState(false);
+  const [activeSosAlerts, setActiveSosAlerts] = useState<ActiveSosAlertSummary[]>([]);
 
   // Smart match candidates for the currently inspected job
   const [smartMatchCandidates, setSmartMatchCandidates] = useState<CandidateScore[]>([]);
@@ -234,6 +235,28 @@ export function DispatchView() {
     onJobUpdate: () => {
       fetchJobs();
     },
+    onEmployeeSos: (payload) => {
+      if (payload?.employeeId) {
+        toast.error(`🚨 EMERGENCY SOS: ${payload.employeeName || 'Technician'}! Immediate attention required!`, {
+          duration: 12000,
+        });
+        setActiveSosAlerts((prev) => {
+          if (prev.some((a) => a.employeeId === payload.employeeId)) return prev;
+          return [
+            {
+              employeeId: payload.employeeId,
+              employeeName: payload.employeeName,
+              address: payload.address,
+            },
+            ...prev,
+          ];
+        });
+        setSelectedTechnicianId(payload.employeeId);
+        setTrackingHudOpen(true);
+        setShowAttention(true);
+        mapControllerRef.current?.recenterOnTech(payload.employeeId);
+      }
+    },
   });
 
   const connection = useDispatchConnection(realtimeConnected);
@@ -290,7 +313,7 @@ export function DispatchView() {
     pendingJobs,
     assignedJobs,
     inProgressJobs,
-  } = useDispatchSummary(employees, jobs);
+  } = useDispatchSummary(employees, jobs, activeSosAlerts);
 
   // ─── Map Data ─────────────────────────────────────────────────────
   const mapTechnicians = useMemo(() => {
@@ -482,6 +505,12 @@ export function DispatchView() {
 
   // Attention item click
   const handleAttentionClick = useCallback((item: (typeof summary.attentionItems)[0]) => {
+    if (item.id.startsWith('sos-') && item.action?.employeeId) {
+      handleInspectTechnician(item.action.employeeId);
+      mapControllerRef.current?.recenterOnTech(item.action.employeeId);
+      setShowAttention(false);
+      return;
+    }
     if (item.id.startsWith('leave-')) {
       const emp = employees.find((e) => e.id === item.action?.employeeId);
       if (emp) {

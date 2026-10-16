@@ -122,6 +122,11 @@ interface UseRealtimeOptions {
    * technician marker's position in-place — no full refetch needed.
    */
   onGpsPing?: (data: any) => void;
+  /**
+   * Fires when a technician triggers an emergency SOS distress signal.
+   * Payload: { alertId, employeeId, employeeName, employeePhone, latitude, longitude, mapsLink, address, jobId, ... }
+   */
+  onEmployeeSos?: (data: any) => void;
   enabled?: boolean;
 }
 
@@ -142,6 +147,7 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     onPresenceUpdate,
     onChatTyping,
     onGpsPing,
+    onEmployeeSos,
     enabled = true,
   } = options;
 
@@ -157,6 +163,7 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   const onPresenceUpdateRef = useRef(onPresenceUpdate);
   const onChatTypingRef = useRef(onChatTyping);
   const onGpsPingRef = useRef(onGpsPing);
+  const onEmployeeSosRef = useRef(onEmployeeSos);
 
   useEffect(() => {
     onEmployeeStatusRef.current = onEmployeeStatus;
@@ -164,6 +171,7 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     onPresenceUpdateRef.current = onPresenceUpdate;
     onChatTypingRef.current = onChatTyping;
     onGpsPingRef.current = onGpsPing;
+    onEmployeeSosRef.current = onEmployeeSos;
   });
 
   // Initialize socket connection with graceful error handling
@@ -356,6 +364,13 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
       if (typeof empId !== 'string') return;
       if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
       onGpsPingRef.current?.(payload);
+    });
+
+    // Listen for employee emergency SOS distress signals
+    socket.on('employee.sos', (data: any) => {
+      const payload = data?.data ?? data;
+      if (!payload || typeof payload !== 'object') return;
+      onEmployeeSosRef.current?.(payload);
     });
 
     // Handle initial online employees list from server
