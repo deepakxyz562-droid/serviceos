@@ -93,6 +93,7 @@ function buildHeaders(
 ): Record<string, string> {
   const finalHeaders: Record<string, string> = {
     Accept: 'application/json',
+    'Accept-Encoding': 'gzip, deflate',
     ...headers,
   };
   if (token) finalHeaders['Authorization'] = `Bearer ${token}`;
@@ -139,9 +140,18 @@ export async function apiRequest<T = unknown>(
 
     clearTimeout(timeoutId);
 
-    const contentType = response.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
-    const responseBody = isJson ? await response.json() : await response.text();
+    // Safely parse response body (handles HTML error pages, empty responses, and stream glitches)
+    let responseBody: unknown;
+    try {
+      const text = await response.text();
+      try {
+        responseBody = text && text.trim().length > 0 ? JSON.parse(text) : {};
+      } catch {
+        responseBody = text;
+      }
+    } catch {
+      responseBody = {};
+    }
 
     // ── 401: attempt one silent refresh + retry ──────────────────────
     if (response.status === 401 && !skipAuth && !_retried) {
@@ -160,7 +170,9 @@ export async function apiRequest<T = unknown>(
     }
 
     if (!response.ok) {
-      const errorBody = (isJson ? responseBody : { message: String(responseBody) }) as ApiError;
+      const errorBody = (typeof responseBody === 'object' && responseBody !== null
+        ? responseBody
+        : { message: String(responseBody) }) as ApiError;
       throw new ApiRequestError(
         errorBody?.message || errorBody?.error || `Request failed with ${response.status}`,
         response.status,

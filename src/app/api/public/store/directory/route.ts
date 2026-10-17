@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { formatStoreAddress } from '@/lib/format-utils';
 
 export const runtime = 'nodejs';
 
@@ -158,7 +159,7 @@ export async function GET(req: NextRequest) {
         category: cat,
         description: `${cat} store with instant WhatsApp ordering and live tracking`,
         bannerUrl: t.logo || '',
-        address: [t.address, t.city].filter(Boolean).join(', ') || 'Local Store',
+        address: formatStoreAddress(t.address, t.city) || 'Local Store',
         city: t.city || '',
         phone: t.phone || '',
         rating: ratingMap.get(t.id) ?? 0,

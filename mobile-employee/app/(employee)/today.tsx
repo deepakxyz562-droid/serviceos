@@ -22,6 +22,7 @@ import {
   RefreshControl,
   Alert,
   Linking,
+  ScrollView,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -55,8 +56,9 @@ import { SkeletonList } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
 import { SosModal } from '@/components/safety/SosModal';
+import { OnMyWayModal } from '@/components/job/OnMyWayModal';
 import { OfflineStatusBar } from '@/components/ui/OfflineStatusBar';
-import { useEmployeeJobs } from '@/hooks/use-jobs';
+import { useEmployeeJobs, useJobLifecycle } from '@/hooks/use-jobs';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   useTodayShift,
@@ -164,12 +166,67 @@ export default function TodayScreen() {
   const [ownerScope, setOwnerScope] = useState<'my' | 'all'>('my');
   const [showCopilot, setShowCopilot] = useState(false);
   const [showSosModal, setShowSosModal] = useState(false);
+  const [onMyWayJob, setOnMyWayJob] = useState<Job | null>(null);
+
+  const lifecycle = useJobLifecycle();
+
+  // 7-day horizontal date strip around today (Mon, Tue, Today, Thu, Fri...)
+  const todayDate = useMemo(() => new Date(), []);
+  const todayDateKey = useMemo(() => {
+    return `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
+  }, [todayDate]);
+
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(todayDateKey);
+
+  const dateStrip = useMemo(() => {
+    const days: { dateKey: string; dayAbbr: string; dayNum: number; isToday: boolean }[] = [];
+    const base = new Date();
+    for (let i = -2; i <= 4; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      days.push({
+        dateKey: k,
+        dayAbbr: i === 0 ? 'Today' : d.toLocaleDateString([], { weekday: 'short' }),
+        dayNum: d.getDate(),
+        isToday: i === 0,
+      });
+    }
+    return days;
+  }, []);
+
+  const jobCountsByDate = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const list = allJobs.data ?? [];
+    for (const j of list) {
+      if (j.scheduledAt) {
+        const k = j.scheduledAt.slice(0, 10);
+        counts[k] = (counts[k] || 0) + 1;
+      }
+    }
+    return counts;
+  }, [allJobs.data]);
 
   const todaysJobs = useMemo<Job[]>(() => {
     const list = todayJobs.data ?? [];
     const filtered = list.filter((j) => isToday(j.scheduledAt));
     return filtered.length > 0 ? filtered : list; // trust the API if it returned something
   }, [todayJobs.data]);
+
+  const selectedDateJobs = useMemo<Job[]>(() => {
+    const list = allJobs.data ?? [];
+    return list.filter((j) => {
+      if (!j.scheduledAt) return false;
+      return j.scheduledAt.slice(0, 10) === selectedDateKey;
+    });
+  }, [allJobs.data, selectedDateKey]);
+
+  const displayJobs = useMemo<Job[]>(() => {
+    if (selectedDateKey === todayDateKey) {
+      return todaysJobs;
+    }
+    return selectedDateJobs;
+  }, [selectedDateKey, todayDateKey, todaysJobs, selectedDateJobs]);
 
   const completedJobs = useMemo<Job[]>(() => {
     const list = allJobs.data ?? [];
@@ -198,6 +255,36 @@ export default function TodayScreen() {
     );
   }, [todaysJobs]);
 
+  const refreshAll = useCallback(async () => {
+    downloadAndCacheTodayJobPack().catch(() => {});
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['shift'] }),
+      queryClient.invalidateQueries({ queryKey: ['jobs'] }),
+      queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    ]);
+  }, [queryClient]);
+
+  const handleConfirmTravel = useCallback(
+    async (etaMinutes: number) => {
+      if (!onMyWayJob) return;
+      try {
+        await lifecycle.mutateAsync({
+          id: onMyWayJob.id,
+          action: 'start_travel',
+          etaMinutes,
+        });
+        show(`En route to ${onMyWayJob.customer?.name || 'customer'}!`, 'success');
+        refreshAll();
+      } catch (err) {
+        show(
+          err instanceof Error ? err.message : 'Failed to update travel status',
+          'error'
+        );
+      }
+    },
+    [onMyWayJob, lifecycle, show, refreshAll]
+  );
+
   // Active or Next Up Job (Jobber / Housecall Pro Hero Card)
   const activeJob = useMemo<Job | null>(() => {
     const list = allJobs.data ?? [];
@@ -224,15 +311,6 @@ export default function TodayScreen() {
     () => computeWeekHours(weekShifts.data),
     [weekShifts.data, now]
   );
-
-  const refreshAll = useCallback(async () => {
-    downloadAndCacheTodayJobPack().catch(() => {});
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['shift'] }),
-      queryClient.invalidateQueries({ queryKey: ['jobs'] }),
-      queryClient.invalidateQueries({ queryKey: ['notifications'] }),
-    ]);
-  }, [queryClient]);
 
   const handleClockIn = useCallback(async () => {
     try {
@@ -363,7 +441,7 @@ export default function TodayScreen() {
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-background">
       <FlatList
-        data={todaysJobs}
+        data={displayJobs}
         keyExtractor={(item) => item.id}
         renderItem={renderJob}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
@@ -469,6 +547,58 @@ export default function TodayScreen() {
                   ) : null}
                 </Pressable>
               </View>
+            </View>
+
+            {/* 7-Day Date Scroller Ribbon (Housecall Pro / Calendar Navigator) */}
+            <View className="mb-3.5">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 2, gap: 8 }}
+              >
+                {dateStrip.map((item) => {
+                  const isSelected = selectedDateKey === item.dateKey;
+                  const count = jobCountsByDate[item.dateKey] || 0;
+                  return (
+                    <Pressable
+                      key={item.dateKey}
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                        setSelectedDateKey(item.dateKey);
+                      }}
+                      className={`min-w-[54px] items-center justify-center rounded-2xl py-2 px-1.5 border transition-all ${
+                        isSelected
+                          ? 'bg-emerald-600 border-emerald-600 shadow-sm'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <Text
+                        className={`text-[10px] font-bold uppercase tracking-wider ${
+                          isSelected ? 'text-emerald-100' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {item.dayAbbr}
+                      </Text>
+                      <Text
+                        className={`text-base font-extrabold mt-0.5 ${
+                          isSelected ? 'text-white' : 'text-slate-900'
+                        }`}
+                      >
+                        {item.dayNum}
+                      </Text>
+                      {count > 0 ? (
+                        <View
+                          className={`mt-1 size-1.5 rounded-full ${
+                            isSelected ? 'bg-white' : 'bg-emerald-600'
+                          }`}
+                        />
+                      ) : (
+                        <View className="mt-1 size-1.5" />
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* Owner / Admin Workspace Scope Toggle */}
@@ -667,27 +797,74 @@ export default function TodayScreen() {
                   </View>
                 ) : null}
 
-                {/* Hero Action Buttons */}
+                {/* Hero Action Buttons (Housecall Pro style 1-tap On My Way) */}
                 <View className="mt-3.5 flex-row gap-2">
-                  <Button
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                      router.push({
-                        pathname: '/(employee)/jobs/[id]',
-                        params: { id: activeJob.id },
-                      });
-                    }}
-                    className="flex-1"
-                    size="md"
-                    variant="primary"
-                  >
-                    <View className="flex-row items-center justify-center">
-                      <Briefcase size={15} color="#fff" />
-                      <Text className="ml-1.5 font-bold text-white">
-                        {activeJob.lifecycleState === 'working' ? 'Open Active Job' : 'View Job Details'}
-                      </Text>
-                    </View>
-                  </Button>
+                  {activeJob.lifecycleState === 'working' ? (
+                    <Button
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        router.push({
+                          pathname: '/(employee)/jobs/[id]',
+                          params: { id: activeJob.id },
+                        });
+                      }}
+                      className="flex-1 bg-emerald-600 active:bg-emerald-700"
+                      size="md"
+                    >
+                      <View className="flex-row items-center justify-center">
+                        <Briefcase size={15} color="#fff" />
+                        <Text className="ml-1.5 font-bold text-white">Open Active Job</Text>
+                      </View>
+                    </Button>
+                  ) : activeJob.lifecycleState === 'travelling' ? (
+                    <Button
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        router.push({
+                          pathname: '/(employee)/jobs/[id]',
+                          params: { id: activeJob.id },
+                        });
+                      }}
+                      className="flex-1 bg-blue-600 active:bg-blue-700"
+                      size="md"
+                    >
+                      <View className="flex-row items-center justify-center">
+                        <Navigation size={15} color="#fff" />
+                        <Text className="ml-1.5 font-bold text-white">En Route · Open Job</Text>
+                      </View>
+                    </Button>
+                  ) : activeJob.lifecycleState === 'arrived' ? (
+                    <Button
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        router.push({
+                          pathname: '/(employee)/jobs/[id]',
+                          params: { id: activeJob.id },
+                        });
+                      }}
+                      className="flex-1 bg-emerald-600 active:bg-emerald-700"
+                      size="md"
+                    >
+                      <View className="flex-row items-center justify-center">
+                        <Briefcase size={15} color="#fff" />
+                        <Text className="ml-1.5 font-bold text-white">Arrived · Start Work</Text>
+                      </View>
+                    </Button>
+                  ) : (
+                    <Button
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                        setOnMyWayJob(activeJob);
+                      }}
+                      className="flex-1 bg-emerald-600 active:bg-emerald-700"
+                      size="md"
+                    >
+                      <View className="flex-row items-center justify-center">
+                        <Navigation size={15} color="#fff" />
+                        <Text className="ml-1.5 font-bold text-white">On My Way</Text>
+                      </View>
+                    </Button>
+                  )}
 
                   {activeJob.address ? (
                     <Button
@@ -698,8 +875,9 @@ export default function TodayScreen() {
                       }}
                       variant="outline"
                       size="md"
+                      className="border-slate-300"
                     >
-                      <Navigation size={15} color={COLORS.primary} />
+                      <MapPin size={16} color="#059669" />
                     </Button>
                   ) : null}
 
@@ -711,8 +889,9 @@ export default function TodayScreen() {
                       }}
                       variant="outline"
                       size="md"
+                      className="border-slate-300"
                     >
-                      <Phone size={15} color={COLORS.primary} />
+                      <Phone size={16} color="#059669" />
                     </Button>
                   ) : null}
                 </View>
@@ -844,6 +1023,15 @@ export default function TodayScreen() {
         activeJobId={activeJob?.id}
         activeJobAddress={activeJob?.address}
       />
+
+      {onMyWayJob ? (
+        <OnMyWayModal
+          visible={!!onMyWayJob}
+          onClose={() => setOnMyWayJob(null)}
+          job={onMyWayJob}
+          onConfirmTravel={handleConfirmTravel}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

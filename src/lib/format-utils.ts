@@ -204,3 +204,90 @@ export function getInitials(name?: string | null): string {
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
+
+// ── Address formatting ────────────────────────────────────────────────────────
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Format a store or business address into a clean, human-readable single-line string.
+ *
+ * Handles:
+ * 1. JSON string format stored by company settings:
+ *    {"street":"1/7 Macbarry pl, Rocklea QLD, 4106","city":"Rocklea","state":"","pincode":"","country":"AU"}
+ * 2. Unparsed JSON concatenated with trailing text:
+ *    {"street":"..."}, Rocklea
+ * 3. Plain text addresses with optional fallback city without repeating city.
+ */
+export function formatStoreAddress(rawAddress?: string | null, cityFallback?: string | null): string {
+  if (!rawAddress && !cityFallback) return '';
+  const trimmed = (rawAddress || '').trim();
+
+  // Check if rawAddress contains a JSON object
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      const jsonStr = trimmed.substring(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(jsonStr) as {
+        street?: string | null;
+        city?: string | null;
+        state?: string | null;
+        pincode?: string | null;
+        postalCode?: string | null;
+        country?: string | null;
+      };
+
+      const street = (parsed.street || '').trim();
+      const city = (parsed.city || cityFallback || '').trim();
+      const state = (parsed.state || '').trim();
+      const pincode = (parsed.pincode || parsed.postalCode || '').trim();
+      const country = (parsed.country || '').trim();
+
+      const components: string[] = [];
+
+      if (street) {
+        components.push(street);
+      }
+
+      // Add city if not already included in street
+      if (city && (!street || !new RegExp(`\\b${escapeRegExp(city)}\\b`, 'i').test(street))) {
+        components.push(city);
+      }
+
+      // Add state if not already included in street
+      if (state && (!street || !new RegExp(`\\b${escapeRegExp(state)}\\b`, 'i').test(street))) {
+        components.push(state);
+      }
+
+      // Add pincode/postal code if not already included in street
+      if (pincode && (!street || !street.includes(pincode))) {
+        components.push(pincode);
+      }
+
+      // Add country if not already included in street
+      if (country && (!street || !new RegExp(`\\b${escapeRegExp(country)}\\b`, 'i').test(street))) {
+        components.push(country);
+      }
+
+      const formatted = components.join(', ');
+      if (formatted) return formatted;
+    } catch {
+      // Fall through to plain text handling
+    }
+  }
+
+  // Plain text form:
+  let result = trimmed;
+  const city = (cityFallback || '').trim();
+  if (city && result && !new RegExp(`\\b${escapeRegExp(city)}\\b`, 'i').test(result)) {
+    result = `${result}, ${city}`;
+  } else if (!result && city) {
+    result = city;
+  }
+
+  return result;
+}

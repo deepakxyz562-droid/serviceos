@@ -4,6 +4,7 @@ dist/
 web-build/
 *.log
 .env
+.env*.local
 .DS_Store
 !assets/
 !assets/*.png

@@ -70,6 +70,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { CollectPaymentModal } from '@/components/payment/CollectPaymentModal';
 import { FieldCopilotModal } from '@/components/ai/FieldCopilotModal';
+import { OnMyWayModal } from '@/components/job/OnMyWayModal';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { useToast } from '@/components/ui/Toast';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -358,6 +359,7 @@ export default function JobDetailScreen() {
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCopilotModal, setShowCopilotModal] = useState(false);
+  const [showOnMyWayModal, setShowOnMyWayModal] = useState(false);
 
   const handleSmartEta = useCallback(() => {
     if (!job?.customer?.phone) return;
@@ -429,7 +431,8 @@ export default function JobDetailScreen() {
       action: string,
       label: string,
       pinValue?: string,
-      coords?: { latitude: number; longitude: number } | null
+      coords?: { latitude: number; longitude: number } | null,
+      etaMinutes?: number
     ) => {
       if (!job) return;
       try {
@@ -438,6 +441,7 @@ export default function JobDetailScreen() {
           action,
           ...(pinValue !== undefined ? { pin: pinValue } : {}),
           ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : {}),
+          ...(etaMinutes !== undefined ? { etaMinutes } : {}),
         });
 
         // Lifecycle transition succeeded — update trackingManager immediately
@@ -468,6 +472,48 @@ export default function JobDetailScreen() {
     [job, employeeId, lifecycle, show, pendingAction]
   );
 
+  const handleConfirmTravelOnDetail = useCallback(
+    async (etaMinutes: number, _sendSms: boolean) => {
+      setShowOnMyWayModal(false);
+      const proceedWithStartTravel = async () => {
+        let granted = liveTracking.hasForegroundPermission;
+        try {
+          if (!granted) {
+            granted = await liveTracking.requestLocationPermissions();
+          }
+        } catch (err) {
+          console.warn('[job-detail] location permission request failed:', err);
+        }
+        if (granted) {
+          try {
+            await AsyncStorage.setItem('fieseros_location_disclosure_accepted', 'true');
+          } catch {}
+        }
+        const coords = await captureGps();
+        await runLifecycle('start_travel', 'En Route', undefined, coords, etaMinutes);
+        await refetch();
+      };
+
+      if (liveTracking.hasForegroundPermission) {
+        await proceedWithStartTravel();
+        return;
+      }
+
+      try {
+        const accepted = await AsyncStorage.getItem('fieseros_location_disclosure_accepted');
+        if (accepted === 'true') {
+          await proceedWithStartTravel();
+        } else {
+          setDisclosureContinue(() => proceedWithStartTravel);
+          setShowLocationDisclosure(true);
+        }
+      } catch {
+        await proceedWithStartTravel();
+      }
+    },
+    [liveTracking, captureGps, runLifecycle, refetch]
+  );
+
   const handleActionPress = useCallback(
     async (action: string, label: string) => {
       // Footgun guard: 'complete' is special-cased. The bare "Complete Job"
@@ -476,9 +522,6 @@ export default function JobDetailScreen() {
       // photos, no signatures). We now route to the /completion sub-route
       // which collects checklist + photos + signature + notes + customer
       // name confirmation before calling complete-proof + lifecycle complete.
-      // Only 'complete' is intercepted; every other transition (accept,
-      // start_travel, arrive, start_work, pause, resume) still calls the
-      // API directly.
       if (action === 'complete' && job) {
         router.push({
           pathname: '/(employee)/jobs/[id]/completion',
@@ -486,51 +529,11 @@ export default function JobDetailScreen() {
         });
         return;
       }
-      // Seamless travel start (Ola/Uber UX): If location permission is already
-      // granted or disclosure was already accepted, start travel immediately
-      // without interrupting the technician with a modal on every job.
+
+      // Housecall Pro / Fieseros "On My Way" Modal with quick ETA selection
+      // and live tracking SMS link
       if (action === 'start_travel') {
-        const proceedWithStartTravel = async () => {
-          let granted = liveTracking.hasForegroundPermission;
-          try {
-            if (!granted) {
-              granted = await liveTracking.requestLocationPermissions();
-            }
-          } catch (err) {
-            console.warn('[job-detail] location permission request failed:', err);
-          }
-          // Persist disclosure acceptance only if permission was actually granted
-          if (granted) {
-            try {
-              await AsyncStorage.setItem('fieseros_location_disclosure_accepted', 'true');
-            } catch {}
-          }
-          // V1.5 GPS capture: attach best-effort lat/long to the lifecycle
-          // POST for start_travel. GPS is best-effort — failure doesn't
-          // block the action.
-          const coords = await captureGps();
-          runLifecycle(action, label, undefined, coords);
-        };
-
-        // If permission is already granted, proceed immediately with zero friction
-        if (liveTracking.hasForegroundPermission) {
-          proceedWithStartTravel();
-          return;
-        }
-
-        // Otherwise check if disclosure was already acknowledged on a previous job
-        AsyncStorage.getItem('fieseros_location_disclosure_accepted')
-          .then((accepted) => {
-            if (accepted === 'true') {
-              proceedWithStartTravel();
-            } else {
-              setDisclosureContinue(() => proceedWithStartTravel);
-              setShowLocationDisclosure(true);
-            }
-          })
-          .catch(() => {
-            proceedWithStartTravel();
-          });
+        setShowOnMyWayModal(true);
         return;
       }
       // start_work requires a PIN when the job has a verificationPin
@@ -1469,6 +1472,15 @@ export default function JobDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {job ? (
+        <OnMyWayModal
+          visible={showOnMyWayModal}
+          onClose={() => setShowOnMyWayModal(false)}
+          job={job}
+          onConfirmTravel={handleConfirmTravelOnDetail}
+        />
+      ) : null}
 
       <CollectPaymentModal
         visible={showPaymentModal}

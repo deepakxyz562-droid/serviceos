@@ -22,6 +22,7 @@ import { computeProfileTier, isIndexableByTier, type ProfileTier } from '@/lib/m
 import { isTemplatedDescription } from '@/lib/marketplace/industry-content'
 import { sharedCacheWrap, sharedCacheDeleteByPrefix } from '@/lib/shared-cache'
 import { rethrowIfCircuitOpen } from '@/lib/circuit-breaker'
+import { formatStoreAddress } from '@/lib/format-utils'
 
 /**
  * Explicit column selection for the public-business tenant lookup.
@@ -1420,32 +1421,7 @@ function parseAddressParts(address: string | null): {
  * Exported so the public Hub landing page can use it directly.
  */
 export function formatAddressForDisplay(address: string | null | undefined): string {
-  if (!address) return ''
-  const trimmed = address.trim()
-  if (!trimmed) return ''
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-    try {
-      const obj = JSON.parse(trimmed) as {
-        street?: string | null
-        city?: string | null
-        state?: string | null
-        pincode?: string | null
-        postalCode?: string | null
-        country?: string | null
-      }
-      const parts = [
-        obj.street?.trim(),
-        obj.city?.trim(),
-        obj.state?.trim(),
-        (obj.postalCode || obj.pincode || '').trim(),
-        obj.country?.trim(),
-      ].filter((p) => p && p.length > 0)
-      return parts.join(', ')
-    } catch {
-      // malformed JSON — fall through to return raw string
-    }
-  }
-  return trimmed
+  return formatStoreAddress(address);
 }
 
 /** Title-case an industry string for human display ("plumbing" → "Plumbing"). */

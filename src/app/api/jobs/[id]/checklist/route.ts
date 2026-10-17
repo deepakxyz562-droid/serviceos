@@ -155,10 +155,29 @@ export async function GET(
         },
       });
 
-      return NextResponse.json({ jobChecklist, autoCreated: true });
+      return NextResponse.json({
+        jobChecklist,
+        checklist: jobChecklist,
+        items,
+        autoCreated: true,
+      });
     }
 
-    return NextResponse.json({ jobChecklist, autoCreated: false });
+    const parsedItems = (() => {
+      try {
+        const p = JSON.parse(jobChecklist.itemsJson || '[]');
+        return Array.isArray(p) ? p : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    return NextResponse.json({
+      jobChecklist,
+      checklist: jobChecklist,
+      items: parsedItems,
+      autoCreated: false,
+    });
   } catch (error) {
     console.error('Error fetching job checklist:', error);
     return NextResponse.json({ error: 'Failed to fetch job checklist' }, { status: 500 });
@@ -166,8 +185,8 @@ export async function GET(
 }
 
 // ─── POST /api/jobs/[id]/checklist ─────────────────────────────────────────
-// Create a JobChecklist for the job from a template (body: { templateId }) or
-// from scratch (body: { name, itemsJson }). If one already exists, returns it.
+// Create or upsert a JobChecklist for the job from a template (body: { templateId })
+// or direct items (body: { items } or { itemsJson }).
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -188,9 +207,102 @@ export async function POST(
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
+    // Extract items from body.items, body.itemsJson, or body.sectionsJson
+    let itemsFromBody: Array<Record<string, unknown>> | null = null;
+    const itemsCandidate = body.items !== undefined ? body.items : body.itemsJson;
+    if (itemsCandidate !== undefined) {
+      if (Array.isArray(itemsCandidate)) {
+        itemsFromBody = itemsCandidate;
+      } else if (typeof itemsCandidate === 'string') {
+        try {
+          const p = JSON.parse(itemsCandidate);
+          if (Array.isArray(p)) itemsFromBody = p;
+        } catch {
+          itemsFromBody = [];
+        }
+      }
+    }
+
     const existing = await db.jobChecklist.findFirst({ where: { jobId: id } });
     if (existing) {
-      return NextResponse.json({ jobChecklist: existing, created: false });
+      // Upsert: update existing checklist items, status, and name
+      const updateData: Record<string, unknown> = {};
+      if (itemsFromBody !== null) {
+        updateData.itemsJson = JSON.stringify(itemsFromBody);
+      } else if (body.templateId) {
+        const template = await db.checklist.findUnique({ where: { id: body.templateId } });
+        if (template) {
+          updateData.templateId = template.id;
+          updateData.name = template.title || existing.name;
+          updateData.itemsJson = JSON.stringify(flattenTemplateToItems(template.sectionsJson));
+        }
+      }
+
+      if (typeof body.name === 'string' && body.name.trim()) {
+        updateData.name = body.name.trim().slice(0, 200);
+      }
+
+      if (body.status === 'completed') {
+        updateData.status = 'completed';
+        updateData.completedAt = new Date();
+        updateData.completedBy = user.id;
+        updateData.completedByName = user.name || null;
+      } else if (typeof body.status === 'string') {
+        updateData.status = body.status;
+      }
+
+      const updated = Object.keys(updateData).length > 0
+        ? await db.jobChecklist.update({
+            where: { id: existing.id },
+            data: updateData,
+          })
+        : existing;
+
+      if (body.status === 'completed') {
+        const tenantId = await resolveTenantIdForJob(job.workspaceId, user.tenantId);
+        if (tenantId && job.customerId) {
+          try {
+            await db.customerTimelineEntry.create({
+              data: {
+                tenantId,
+                customerId: job.customerId,
+                entryType: 'job',
+                title: `Checklist completed: ${updated.name}`,
+                description: `Checklist marked as completed for job #${id.slice(-6)}.`,
+                sourceType: 'Job',
+                sourceId: id,
+                metadataJson: JSON.stringify({
+                  jobChecklistId: updated.id,
+                  checklistName: updated.name,
+                }),
+                actorId: user.id,
+                actorName: user.name || null,
+                actorType: 'user',
+                eventDate: new Date(),
+              },
+            });
+          } catch (e) {
+            console.error('Error creating checklist-completion timeline entry:', e);
+          }
+        }
+      }
+
+      const parsedItems = (() => {
+        try {
+          const p = JSON.parse(updated.itemsJson || '[]');
+          return Array.isArray(p) ? p : [];
+        } catch {
+          return [];
+        }
+      })();
+
+      return NextResponse.json({
+        jobChecklist: updated,
+        checklist: updated,
+        items: parsedItems,
+        created: false,
+        updated: true,
+      });
     }
 
     const tenantId = await resolveTenantIdForJob(job.workspaceId, user.tenantId);
@@ -198,7 +310,7 @@ export async function POST(
       return NextResponse.json({ error: 'Tenant not resolved for job' }, { status: 400 });
     }
 
-    let name = 'Checklist';
+    let name = (body.name || 'Checklist').toString().slice(0, 200);
     let templateId: string | null = null;
     let items: Array<Record<string, unknown>> = [];
 
@@ -210,19 +322,12 @@ export async function POST(
       name = template.title || 'Checklist';
       templateId = template.id;
       items = flattenTemplateToItems(template.sectionsJson);
-    } else {
-      name = (body.name || 'Checklist').toString().slice(0, 200);
-      if (Array.isArray(body.itemsJson)) {
-        items = body.itemsJson;
-      } else if (typeof body.itemsJson === 'string') {
-        try {
-          const p = JSON.parse(body.itemsJson);
-          if (Array.isArray(p)) items = p;
-        } catch {
-          items = [];
-        }
-      }
+    } else if (itemsFromBody !== null) {
+      items = itemsFromBody;
     }
+
+    const isCompleted = body.status === 'completed';
+    const status = isCompleted ? 'completed' : (body.status || 'in_progress');
 
     const jobChecklist = await db.jobChecklist.create({
       data: {
@@ -232,11 +337,52 @@ export async function POST(
         templateId,
         name,
         itemsJson: JSON.stringify(items),
-        status: 'in_progress',
+        status,
+        ...(isCompleted
+          ? {
+              completedAt: new Date(),
+              completedBy: user.id,
+              completedByName: user.name || null,
+            }
+          : {}),
       },
     });
 
-    return NextResponse.json({ jobChecklist, created: true }, { status: 201 });
+    if (isCompleted && job.customerId) {
+      try {
+        await db.customerTimelineEntry.create({
+          data: {
+            tenantId,
+            customerId: job.customerId,
+            entryType: 'job',
+            title: `Checklist completed: ${name}`,
+            description: `Checklist marked as completed for job #${id.slice(-6)}.`,
+            sourceType: 'Job',
+            sourceId: id,
+            metadataJson: JSON.stringify({
+              jobChecklistId: jobChecklist.id,
+              checklistName: name,
+            }),
+            actorId: user.id,
+            actorName: user.name || null,
+            actorType: 'user',
+            eventDate: new Date(),
+          },
+        });
+      } catch (e) {
+        console.error('Error creating checklist-completion timeline entry:', e);
+      }
+    }
+
+    return NextResponse.json(
+      {
+        jobChecklist,
+        checklist: jobChecklist,
+        items,
+        created: true,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error('Error creating job checklist:', error);
     return NextResponse.json({ error: 'Failed to create job checklist' }, { status: 500 });
@@ -245,7 +391,7 @@ export async function POST(
 
 // ─── PATCH /api/jobs/[id]/checklist ────────────────────────────────────────
 // Update itemsJson or mark the checklist completed.
-// Body: { itemsJson: [...] } | { status: 'completed' | 'in_progress' | 'skipped' }
+// Body: { items: [...] } | { itemsJson: [...] } | { status: 'completed' | 'in_progress' | 'skipped' }
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -273,11 +419,12 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {};
 
-    if (body.itemsJson !== undefined) {
+    const itemsCandidate = body.items !== undefined ? body.items : body.itemsJson;
+    if (itemsCandidate !== undefined) {
       updateData.itemsJson =
-        typeof body.itemsJson === 'string'
-          ? body.itemsJson
-          : JSON.stringify(body.itemsJson ?? []);
+        typeof itemsCandidate === 'string'
+          ? itemsCandidate
+          : JSON.stringify(itemsCandidate ?? []);
     }
 
     if (body.status === 'completed') {
@@ -321,7 +468,20 @@ export async function PATCH(
       data: updateData,
     });
 
-    return NextResponse.json({ jobChecklist });
+    const parsedItems = (() => {
+      try {
+        const p = JSON.parse(jobChecklist.itemsJson || '[]');
+        return Array.isArray(p) ? p : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    return NextResponse.json({
+      jobChecklist,
+      checklist: jobChecklist,
+      items: parsedItems,
+    });
   } catch (error) {
     console.error('Error updating job checklist:', error);
     return NextResponse.json({ error: 'Failed to update job checklist' }, { status: 500 });

@@ -25,6 +25,7 @@ import {
   getCartoMapTileUrl,
   getOpenStreetMapEmbedUrl,
   reverseGeocodeCoords,
+  formatStoreAddress,
 } from '../../bos-customer-mobile/src/lib/location';
 import {
   LEGACY_MOCK_SLUGS,
@@ -260,6 +261,32 @@ describe('BOS Customer Mobile Geolocation, Maps & Data Sanity', () => {
 
       // All 3 legacy sample stores must be stripped, leaving 0 recent stores
       expect(useAffinityStore.getState().recentStores.length).toBe(0);
+    });
+  });
+
+  describe('Store Address Formatting in Mobile Client', () => {
+    it('normalizes the unparsed concatenated JSON address from user report', () => {
+      const raw = '{"street":"1/7 Macbarry pl, Rocklea QLD, 4106","city":"Rocklea","state":"","pincode":"","country":"AU"}, Rocklea';
+      const formatted = formatStoreAddress(raw, 'Rocklea');
+      expect(formatted).toBe('1/7 Macbarry pl, Rocklea QLD, 4106, AU');
+      expect(formatted).not.toContain('{');
+      expect(formatted).not.toContain('}');
+    });
+
+    it('formats clean JSON address object without duplicate city', () => {
+      const raw = JSON.stringify({
+        street: 'Shop 12, Main Market',
+        city: 'Patna',
+        state: 'Bihar',
+        pincode: '800001',
+        country: 'IN',
+      });
+      expect(formatStoreAddress(raw, 'Patna')).toBe('Shop 12, Main Market, Patna, Bihar, 800001, IN');
+    });
+
+    it('handles plain string address cleanly', () => {
+      expect(formatStoreAddress('Station Road, Kankarbagh', 'Patna')).toBe('Station Road, Kankarbagh, Patna');
+      expect(formatStoreAddress('Station Road, Patna', 'Patna')).toBe('Station Road, Patna');
     });
   });
 });

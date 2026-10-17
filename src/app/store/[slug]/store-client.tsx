@@ -2,6 +2,7 @@
 import { RequestTracker } from '../../../../shared/money';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
 import { getBosText, detectRegionalDefaultLanguage, type BosLanguage } from '@/components/bos/i18n/bos-translations';
+import { formatStoreAddress } from '@/lib/format-utils';
 
 import React, { useState, useMemo, useRef } from 'react';
 import {
@@ -119,6 +120,8 @@ export function StoreClient({
   const [language, setLanguage] = useState<BosLanguage>(() => {
     return detectRegionalDefaultLanguage(businessAddress, storeLanguage);
   });
+
+  const cleanBusinessAddress = useMemo(() => formatStoreAddress(businessAddress), [businessAddress]);
 
   const handleSetLanguage = (lang: BosLanguage) => {
     setLanguage(lang);
@@ -868,7 +871,7 @@ export function StoreClient({
                 </span>
               </h1>
               <p className="text-[11px] sm:text-xs text-slate-500 truncate font-medium">
-                {greeting || businessAddress || 'Direct Online Store'}
+                {greeting || cleanBusinessAddress || 'Direct Online Store'}
               </p>
             </div>
           </div>
@@ -1106,7 +1109,7 @@ export function StoreClient({
             <div className="hidden lg:block mt-6 pt-4 border-t border-slate-100 text-xs text-slate-500 space-y-2 px-2">
               <div className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-                <span className="leading-relaxed font-medium">{businessAddress || 'Patna, Bihar'}</span>
+                <span className="leading-relaxed font-medium">{cleanBusinessAddress || 'Patna, Bihar'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-emerald-600 shrink-0" />

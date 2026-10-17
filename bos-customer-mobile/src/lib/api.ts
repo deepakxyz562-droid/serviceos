@@ -1,5 +1,6 @@
 import { Store, Product } from '../types';
 import { API_BASE_URL } from './constants';
+import { formatStoreAddress } from './location';
 
 /** Fetch real store directory from the ServiceOS backend */
 export async function getStoreDirectory(category?: string, query?: string, city?: string): Promise<Store[]> {
@@ -30,7 +31,7 @@ export async function getStoreDirectory(category?: string, query?: string, city?
             category: s.category || 'General',
             description: s.description || 'Verified local shop with fast home delivery',
             bannerUrl: s.bannerUrl || '',
-            address: s.address || 'Local Area',
+            address: formatStoreAddress(s.address, s.city) || 'Local Area',
             city: s.city || '',
             phone: s.phone || '',
             rating: typeof s.rating === 'number' ? s.rating : 0,
@@ -120,7 +121,7 @@ export async function getStoreBySlug(slug: string): Promise<{ store: Store; prod
           category: b.category || 'General',
           description: b.tagline || 'Local store with fast delivery',
           bannerUrl: b.coverImageUrl || '',
-          address: b.address || 'Local Area',
+          address: formatStoreAddress(b.address, b.city) || 'Local Area',
           city: b.city || '',
           rating: typeof data.rating === 'number' ? data.rating : (typeof b.rating === 'number' ? b.rating : 0),
           reviewCount: typeof data.reviewCount === 'number' ? data.reviewCount : 0,

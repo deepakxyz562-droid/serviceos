@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Store } from '../types';
 import { COLORS } from '../lib/constants';
+import { formatStoreAddress } from '../lib/location';
 import { useAffinityStore } from '../stores/affinity-store';
 import { useMobileTranslation } from '../stores/language-store';
 import { haptic } from '../lib/haptics';
@@ -81,7 +82,7 @@ export function StoreCard({ store, onPress, showFavoriteButton = true }: StoreCa
             <Text style={styles.distance}>{store.distanceKm} km</Text>
           ) : (
             <Text style={styles.distance} numberOfLines={1}>
-              {store.city || store.address || 'Local'}
+              {store.city || formatStoreAddress(store.address) || 'Local'}
             </Text>
           )}
         </View>

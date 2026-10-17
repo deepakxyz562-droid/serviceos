@@ -173,3 +173,76 @@ export async function reverseGeocodeCoords(latitude: number, longitude: number):
     formattedAddress: `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`,
   };
 }
+
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Format a store or business address into a clean, human-readable single-line string.
+ * Strips raw JSON objects and prevents repeating city/state/country.
+ */
+export function formatStoreAddress(rawAddress?: string | null, cityFallback?: string | null): string {
+  if (!rawAddress && !cityFallback) return '';
+  const trimmed = (rawAddress || '').trim();
+
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      const jsonStr = trimmed.substring(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(jsonStr) as {
+        street?: string | null;
+        city?: string | null;
+        state?: string | null;
+        pincode?: string | null;
+        postalCode?: string | null;
+        country?: string | null;
+      };
+
+      const street = (parsed.street || '').trim();
+      const city = (parsed.city || cityFallback || '').trim();
+      const state = (parsed.state || '').trim();
+      const pincode = (parsed.pincode || parsed.postalCode || '').trim();
+      const country = (parsed.country || '').trim();
+
+      const components: string[] = [];
+
+      if (street) {
+        components.push(street);
+      }
+
+      if (city && (!street || !new RegExp(`\\b${escapeRegExp(city)}\\b`, 'i').test(street))) {
+        components.push(city);
+      }
+
+      if (state && (!street || !new RegExp(`\\b${escapeRegExp(state)}\\b`, 'i').test(street))) {
+        components.push(state);
+      }
+
+      if (pincode && (!street || !street.includes(pincode))) {
+        components.push(pincode);
+      }
+
+      if (country && (!street || !new RegExp(`\\b${escapeRegExp(country)}\\b`, 'i').test(street))) {
+        components.push(country);
+      }
+
+      const formatted = components.join(', ');
+      if (formatted) return formatted;
+    } catch {
+      // Fall through to plain text
+    }
+  }
+
+  let result = trimmed;
+  const city = (cityFallback || '').trim();
+  if (city && result && !new RegExp(`\\b${escapeRegExp(city)}\\b`, 'i').test(result)) {
+    result = `${result}, ${city}`;
+  } else if (!result && city) {
+    result = city;
+  }
+
+  return result;
+}

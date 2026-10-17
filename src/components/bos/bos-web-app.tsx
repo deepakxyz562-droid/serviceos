@@ -56,6 +56,7 @@ import type {
 import { newRequestKey } from '../../../shared/money';
 import { BosBrand } from '@/components/bos/brand';
 import { useBosDocumentBrand } from '@/components/bos/document-brand';
+import { formatStoreAddress } from '@/lib/format-utils';
 import '@/components/bos/workspace.css';
 import {
   type BosAppointment,
@@ -1239,7 +1240,7 @@ function BosWebAppInner({
                 if (biz.name && !/default|workspace|demo/i.test(biz.name)) next.businessName = biz.name;
                 if (biz.phone) next.phone = biz.phone;
                 if (biz.email) next.email = biz.email;
-                if (biz.address) next.address = biz.address;
+                if (biz.address) next.address = formatStoreAddress(biz.address);
                 if (biz.logoUrl) next.logoUrl = biz.logoUrl;
               }
               return next;

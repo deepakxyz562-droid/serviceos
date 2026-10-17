@@ -139,6 +139,7 @@ export function useJobLifecycle() {
       pin,
       latitude,
       longitude,
+      etaMinutes,
     }: {
       id: string;
       action: string;
@@ -149,6 +150,7 @@ export function useJobLifecycle() {
       // them for any action; callers decide what to attach.
       latitude?: number;
       longitude?: number;
+      etaMinutes?: number;
     }) =>
       api.post<{ job?: Job; id?: string; status?: string; lifecycleState?: string }>(
         `/api/employee/jobs/${id}/lifecycle`,
@@ -157,6 +159,7 @@ export function useJobLifecycle() {
           ...(pin !== undefined ? { pin } : {}),
           ...(latitude !== undefined ? { latitude } : {}),
           ...(longitude !== undefined ? { longitude } : {}),
+          ...(etaMinutes !== undefined ? { etaMinutes } : {}),
         }
       ),
     onSuccess: (data, vars) => {

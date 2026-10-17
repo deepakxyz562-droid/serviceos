@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { computeStoreAvailabilityFromConfig } from '@/lib/commerce/store-availability';
+import { formatStoreAddress } from '@/lib/format-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -42,7 +43,9 @@ export async function GET(
     let businessId = tenant?.id || slug;
     let businessName = tenant?.name || (slug === 'sharma-kirana' ? 'Sharma Kirana Store' : (slug === 'my-store' ? 'My Store' : 'Local Store'));
     let businessPhone = tenant?.phone || (slug === 'sharma-kirana' ? '+91 98765 43210' : '');
-    let businessAddress = [tenant?.address, tenant?.city].filter(Boolean).join(', ') || (slug === 'sharma-kirana' ? 'Station Road, Kankarbagh, Patna, Bihar' : 'Local Area');
+    let businessAddress =
+      formatStoreAddress(tenant?.address, tenant?.city) ||
+      (slug === 'sharma-kirana' ? 'Station Road, Kankarbagh, Patna, Bihar' : 'Local Area');
 
     try {
       if (tenant?.id) {
@@ -51,7 +54,10 @@ export async function GET(
           businessId = ownerBusiness.id;
           if (ownerBusiness.name) businessName = ownerBusiness.name;
           if (ownerBusiness.phone) businessPhone = ownerBusiness.phone;
-          if (ownerBusiness.address) businessAddress = ownerBusiness.address;
+          if (ownerBusiness.address) {
+            businessAddress =
+              formatStoreAddress(ownerBusiness.address, tenant?.city) || businessAddress;
+          }
         }
       }
     } catch {}

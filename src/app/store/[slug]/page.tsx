@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { StoreClient } from './store-client';
 import { computeStoreAvailabilityFromConfig } from '@/lib/commerce/store-availability';
+import { formatStoreAddress } from '@/lib/format-utils';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -235,6 +236,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
         billFooterText: `Thank you for shopping local with ${storeName}!`,
       };
 
+      const demoAvailability = computeStoreAvailabilityFromConfig(demoConfig, storeName);
+
       let demoStoreLanguage: 'en' | 'hi' | 'both' = 'en';
       if (demoConfig?.fieldsJson) {
         try {
@@ -365,9 +368,8 @@ export default async function StorePage({ params, searchParams }: StorePageProps
 
   const availability = computeStoreAvailabilityFromConfig(config, businessName);
 
-  const businessAddress = tenant?.address
-    ? [tenant.address, tenant.city].filter(Boolean).join(', ')
-    : 'Local Neighborhood';
+  const businessAddress =
+    formatStoreAddress(tenant?.address, tenant?.city) || 'Local Neighborhood';
 
   return (
     <StoreClient

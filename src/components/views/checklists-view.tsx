@@ -21,7 +21,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Plus, Trash2, MoreVertical, GripVertical, RefreshCw,
   Type, AlignLeft, ChevronDown, CheckSquare, Hash, Pencil, Eye,
-  Monitor, Smartphone, Save, X,
+  Monitor, Smartphone, Save, X, ShieldCheck, Sparkles,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { TRADE_SAFETY_PRESETS, type TradeSafetyPreset } from '@/lib/checklists/trade-safety-presets';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -121,14 +122,14 @@ export function parseChecklistSections(json: string | null | undefined): Checkli
 // ─── Builder component ────────────────────────────────────────────────────
 
 export function ChecklistBuilder({
-  initial,
-  onCancel,
-  onSaved,
+  initial = null,
+  onCancel = () => {},
+  onSaved = () => {},
 }: {
-  initial: ChecklistData | null;
-  onCancel: () => void;
-  onSaved: (saved: ChecklistData) => void;
-}) {
+  initial?: ChecklistData | null;
+  onCancel?: () => void;
+  onSaved?: (saved: ChecklistData) => void;
+} = {}) {
   const [title, setTitle] = useState(initial?.title || 'New checklist');
   const [category, setCategory] = useState(initial?.category || 'General');
   const [autoAttachJobs, setAutoAttachJobs] = useState(initial?.autoAttachJobs ?? false);
@@ -139,6 +140,25 @@ export function ChecklistBuilder({
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [saving, setSaving] = useState(false);
+
+  const loadPreset = (preset: TradeSafetyPreset) => {
+    setTitle(preset.title);
+    setCategory(preset.category);
+    setAutoAttachJobs(preset.autoAttachJobs);
+    const hydrated: ChecklistSection[] = preset.sections.map((sec) => ({
+      id: newId(),
+      title: sec.title,
+      questions: sec.questions.map((q) => ({
+        id: newId(),
+        type: q.type,
+        label: q.label,
+        required: q.required,
+        options: [...q.options],
+      })),
+    }));
+    setSections(hydrated);
+    toast.success(`Loaded "${preset.title}" template`);
+  };
 
   // ── Section / question mutations ─────────────────────────────────────
   const addSection = () => {
@@ -557,6 +577,49 @@ export function ChecklistBuilder({
             <CardContent className="p-5 space-y-4">
               <h3 className="font-semibold">Manage checklist</h3>
               <Separator />
+
+              {/* ── Trade Safety (SWMS) Presets 1-Click Loader ── */}
+              <div className="space-y-1.5 p-3 rounded-lg border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                    <ShieldCheck className="size-3.5 text-emerald-600" /> Trade Safety (SWMS)
+                  </span>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium">1-Click Templates</span>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-between text-xs h-8 bg-background border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100/50"
+                    >
+                      <span className="flex items-center gap-1.5 truncate">
+                        <Sparkles className="size-3 text-emerald-600 shrink-0" />
+                        Load Safety Template...
+                      </span>
+                      <ChevronDown className="size-3 opacity-60 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80">
+                    {TRADE_SAFETY_PRESETS.map((p) => (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => loadPreset(p)}
+                        className="flex flex-col items-start py-2 cursor-pointer gap-0.5"
+                      >
+                        <div className="font-medium text-xs text-foreground flex items-center gap-1.5">
+                          <ShieldCheck className="size-3 text-emerald-600 shrink-0" />
+                          {p.title}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground line-clamp-1">
+                          {p.description}
+                        </p>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
               <div className="grid gap-2">
                 <Label htmlFor="cl-title">Form title</Label>
                 <Input

@@ -13,6 +13,7 @@ import {
   formatFileSize,
   todayISO,
   getInitials,
+  formatStoreAddress,
 } from '@/lib/format-utils'
 
 describe('format-utils', () => {
@@ -229,6 +230,56 @@ describe('format-utils', () => {
 
     it('handles multiple middle names', () => {
       expect(getInitials('John Michael Doe')).toBe('JD')
+    })
+  })
+
+  describe('formatStoreAddress', () => {
+    it('correctly formats the unparsed concatenated JSON address from user report', () => {
+      const raw = '{"street":"1/7 Macbarry pl, Rocklea QLD, 4106","city":"Rocklea","state":"","pincode":"","country":"AU"}, Rocklea'
+      const formatted = formatStoreAddress(raw, 'Rocklea')
+      expect(formatted).toBe('1/7 Macbarry pl, Rocklea QLD, 4106, AU')
+      expect(formatted).not.toContain('{')
+      expect(formatted).not.toContain('}')
+      expect(formatted).not.toContain('"street"')
+    })
+
+    it('formats a clean JSON address object without duplicates', () => {
+      const raw = JSON.stringify({
+        street: 'Shop 12, Main Market',
+        city: 'Patna',
+        state: 'Bihar',
+        pincode: '800001',
+        country: 'IN',
+      })
+      expect(formatStoreAddress(raw, 'Patna')).toBe('Shop 12, Main Market, Patna, Bihar, 800001, IN')
+    })
+
+    it('does not duplicate city if street already includes it', () => {
+      const raw = JSON.stringify({
+        street: '12 MG Road, Bangalore',
+        city: 'Bangalore',
+      })
+      expect(formatStoreAddress(raw, 'Bangalore')).toBe('12 MG Road, Bangalore')
+    })
+
+    it('preserves plain text address without repeating city', () => {
+      const raw = 'Station Road, Kankarbagh, Patna, Bihar'
+      expect(formatStoreAddress(raw, 'Patna')).toBe('Station Road, Kankarbagh, Patna, Bihar')
+    })
+
+    it('appends city to plain text address if missing', () => {
+      const raw = 'Station Road, Kankarbagh'
+      expect(formatStoreAddress(raw, 'Patna')).toBe('Station Road, Kankarbagh, Patna')
+    })
+
+    it('returns city if raw address is empty', () => {
+      expect(formatStoreAddress('', 'Rocklea')).toBe('Rocklea')
+      expect(formatStoreAddress(null, 'Patna')).toBe('Patna')
+    })
+
+    it('returns empty string if both address and city are missing', () => {
+      expect(formatStoreAddress('', '')).toBe('')
+      expect(formatStoreAddress(null, null)).toBe('')
     })
   })
 })

@@ -61,9 +61,14 @@ export function ChecklistDialog({
         const res = await authFetch(`/api/jobs/${jobId}/checklist`);
         if (res.ok) {
           const data = await res.json();
-          if (data.checklist && data.checklist.itemsJson) {
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            setItems(data.items);
+            return;
+          }
+          const checklistObj = data.jobChecklist || data.checklist;
+          if (checklistObj && checklistObj.itemsJson) {
             try {
-              const parsed = JSON.parse(data.checklist.itemsJson);
+              const parsed = JSON.parse(checklistObj.itemsJson);
               if (Array.isArray(parsed) && parsed.length > 0) {
                 setItems(parsed);
                 return;
@@ -93,11 +98,11 @@ export function ChecklistDialog({
     setSavingAction(markCompleted ? 'complete' : 'save');
     try {
       const allChecked = items.every((it) => it.checked);
-      const status = markCompleted ? (allChecked ? 'completed' : 'completed') : 'in_progress';
+      const status = markCompleted ? 'completed' : 'in_progress';
       const res = await authFetch(`/api/jobs/${jobId}/checklist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, status }),
+        body: JSON.stringify({ items, itemsJson: items, status }),
       });
       if (res.ok) {
         toast.success(markCompleted ? 'Checklist completed' : 'Checklist saved');
@@ -105,7 +110,7 @@ export function ChecklistDialog({
         onClose();
       } else {
         const err = await res.json().catch(() => ({ error: 'Failed to save checklist' }));
-        toast.error(err.error);
+        toast.error(err.error || 'Failed to save checklist');
       }
     } catch {
       toast.error('Network error');
