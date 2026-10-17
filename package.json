@@ -166,6 +166,9 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@babel/plugin-transform-react-display-name": "^7.24.7",
+    "@babel/plugin-transform-react-jsx": "^7.28.6",
+    "@babel/plugin-transform-react-jsx-development": "^7.27.1",
     "@electric-sql/pglite": "^0.5.4",
     "@next/bundle-analyzer": "^16.3.3",
     "@playwright/test": "^1.62.1",
