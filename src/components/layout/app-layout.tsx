@@ -5,7 +5,7 @@ import type { ViewType } from '@/types/workflow';
 import { bgosView } from '../../../shared/bgos-navigation';
 import { isGptFormWorkspace, isChatbotlyWorkspace, isBosWorkspace, getAppProduct } from '../../../shared/product-context';
 
-import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo } from 'react';
+import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
