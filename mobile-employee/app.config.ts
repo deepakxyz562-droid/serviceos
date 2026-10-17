@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): any => ({
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'com.fieseros.employee',
+    bundleIdentifier: process.env.IOS_BUNDLE_IDENTIFIER || 'com.fieseros.app',
     infoPlist: {
       NSCameraUsageDescription: 'Fieseros Staff needs camera access to photograph job issues, capture before/after proof of work, and record customer signatures.',
       NSLocationWhenInUseUsageDescription: 'Fieseros Staff uses your location to discover assigned jobs and calculate travel route times.',
@@ -32,7 +32,7 @@ export default ({ config }: ConfigContext): any => ({
     },
   },
   android: {
-    package: 'com.fieseros.employee',
+    package: process.env.ANDROID_PACKAGE || 'com.fieseros.app',
     googleServicesFile: './google-services.json',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
