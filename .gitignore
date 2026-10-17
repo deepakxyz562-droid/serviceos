@@ -79,6 +79,8 @@ db/*.db-journal
 !mobile-app/assets/**
 !mobile-customer/assets/
 !mobile-customer/assets/**
+!mobile-employee/assets/
+!mobile-employee/assets/**
 !mobile-pro/assets/
 !mobile-pro/assets/**
 !quote-flow-mobile/assets/
