@@ -86,6 +86,7 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 // ── Upload helper for multipart bodies (photos) ──────────────────────
+// ── Upload helper for multipart bodies (photos) ──────────────────────
 function buildHeaders(
   token: string | null,
   headers: Record<string, string>,
@@ -93,7 +94,6 @@ function buildHeaders(
 ): Record<string, string> {
   const finalHeaders: Record<string, string> = {
     Accept: 'application/json',
-    'Accept-Encoding': 'gzip, deflate',
     ...headers,
   };
   if (token) finalHeaders['Authorization'] = `Bearer ${token}`;
@@ -124,6 +124,11 @@ export async function apiRequest<T = unknown>(
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const startTime = Date.now();
+
+  if (__DEV__) {
+    console.log(`[api] 🚀 ${method} ${url}`);
+  }
 
   try {
     const response = await fetch(url, {
@@ -139,6 +144,11 @@ export async function apiRequest<T = unknown>(
     });
 
     clearTimeout(timeoutId);
+
+    const elapsed = Date.now() - startTime;
+    if (__DEV__) {
+      console.log(`[api] ✅ ${method} ${url} (${response.status}) in ${elapsed}ms`);
+    }
 
     // Safely parse response body (handles HTML error pages, empty responses, and stream glitches)
     let responseBody: unknown;
@@ -183,6 +193,14 @@ export async function apiRequest<T = unknown>(
     return responseBody as T;
   } catch (error) {
     clearTimeout(timeoutId);
+    const elapsed = Date.now() - startTime;
+
+    if (__DEV__) {
+      console.warn(
+        `[api] ❌ ${method} ${url} failed after ${elapsed}ms:`,
+        error instanceof Error ? error.message : error
+      );
+    }
 
     if (error instanceof ApiRequestError) {
       throw error;
