@@ -6,7 +6,7 @@ const SCHEME = 'fieserosemployee';
 export default ({ config }: ConfigContext): any => ({
   ...config,
   name: APP_NAME,
-  slug: 'fieseros-employee',
+  slug: 'fieseros',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
