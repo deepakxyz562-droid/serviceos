@@ -49,7 +49,7 @@ import {
   setLastCompanyData,
   clearLastCompany,
 } from '@/lib/auth';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
 import { emitter } from '@/lib/event-emitter';
 import { clearPushToken } from '@/lib/notifications';
@@ -678,21 +678,32 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return;
     }
 
+    // ── Instant optimistic boot from stored session (<50ms) ──
+    const storedUser = (await getStoredUserData()) as User | null;
+    const persistedRole = await getActiveRole();
+    if (storedUser) {
+      const role: UserRole =
+        storedUser.role === 'CUSTOMER'
+          ? 'customer'
+          : persistedRole || (storedUser.role === 'CUSTOMER' ? 'customer' : 'employee');
+
+      set({
+        user: storedUser,
+        role,
+        isAuthenticated: true,
+        isLoading: false,
+        isBooted: true,
+      });
+    }
+
+    // ── Background / concurrent session verification ──
     try {
-      // `/api/auth/me` returns an ENVELOPE: { user, tenant, authenticated }
-      // (see src/app/api/auth/me/route.ts). The previous implementation stored
-      // the whole envelope as `state.user`, which made `user.role` undefined
-      // and crashed the Profile screen (formatRole → role.toLowerCase()).
-      // We unwrap here so `state.user` is the real User object and
-      // `state.tenant` carries the tenant (including `currency`).
       const res = await api.get<{
         user?: User;
         tenant?: unknown;
         authenticated?: boolean;
       }>(API_PATHS.authMe);
 
-      // Defensive: support both envelope and bare-user shapes in case the
-      // backend ever changes (or an interceptor unwraps).
       const user: User | null =
         (res && res.user) || (res as unknown as User) || null;
       const tenant: Tenant | null =
@@ -702,12 +713,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         throw new Error('No user in /api/auth/me response');
       }
 
-      const stored = (await getStoredUserData()) as User | null;
-      const persistedRole = await getActiveRole();
       const role: UserRole =
         user.role === 'CUSTOMER'
           ? 'customer'
-          : persistedRole || (stored?.role === 'CUSTOMER' ? 'customer' : 'employee');
+          : persistedRole || (user.role === 'CUSTOMER' ? 'customer' : 'employee');
 
       await setStoredUserData(user);
       set({
@@ -718,10 +727,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
         isBooted: true,
       });
-    } catch {
-      await clearTokens();
-      clearPushToken();
-      set({ isAuthenticated: false, isLoading: false, isBooted: true });
+    } catch (error) {
+      // Only clear session if server explicitly returned 401 (expired/revoked).
+      // Transient network timeouts / socket stalls must NOT log out offline workers.
+      if (error instanceof ApiRequestError && error.statusCode === 401) {
+        await clearTokens();
+        clearPushToken();
+        set({ isAuthenticated: false, isLoading: false, isBooted: true, user: null, role: null });
+      } else if (!storedUser) {
+        set({ isAuthenticated: false, isLoading: false, isBooted: true });
+      }
     }
 
     // Preload last company in the background (used by login screen).

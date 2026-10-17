@@ -206,10 +206,25 @@ export async function apiRequest<T = unknown>(
       throw error;
     }
 
-    if (
+    const isAbort =
       (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
-      (error instanceof Error && error.name === 'AbortError')
-    ) {
+      (error instanceof Error && error.name === 'AbortError');
+    const isNetworkGlitch =
+      error instanceof Error &&
+      (error.message.includes('Network request failed') ||
+        error.message.includes('network') ||
+        error.message.includes('Failed to fetch'));
+
+    // Quick-failover retry: If native socket stalled on IPv6 and aborted or dropped,
+    // re-issue 1 retry. The native socket cache will route over the working IPv4 route.
+    if ((isAbort || isNetworkGlitch) && !_retried && !formData) {
+      if (__DEV__) {
+        console.log(`[api] 🔄 Auto-retrying ${method} ${url} over active route...`);
+      }
+      return apiRequest<T>(path, { ...options, _retried: true });
+    }
+
+    if (isAbort) {
       throw new ApiRequestError('Request timed out. Please check your connection.', 408);
     }
 

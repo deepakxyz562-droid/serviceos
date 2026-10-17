@@ -85,6 +85,7 @@ export function useEmployeeJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
       });
       return asArray<Job>(r);
     },
+    staleTime: 1000 * 60, // 1 minute cache
   });
 }
 
@@ -114,6 +115,7 @@ export function useLoadMoreJobs(filter: 'all' | 'today' | 'scheduled' = 'all') {
 }
 
 export function useJob(id: string | undefined) {
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['job', id],
     queryFn: async () => {
@@ -121,6 +123,16 @@ export function useJob(id: string | undefined) {
       return unwrap<Job>(r, 'job');
     },
     enabled: !!id,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+    // Instant UI rendering: populate initial view immediately from already-loaded job list
+    placeholderData: () => {
+      if (!id) return undefined;
+      const allCached = qc.getQueryData<Job[]>(['jobs', 'employee', 'all']);
+      const foundAll = allCached?.find((j) => j.id === id);
+      if (foundAll) return foundAll;
+      const todayCached = qc.getQueryData<Job[]>(['jobs', 'employee', 'today']);
+      return todayCached?.find((j) => j.id === id);
+    },
   });
 }
 

@@ -61,6 +61,7 @@ export default function EmployeeLoginScreen() {
   const [contactForOtp, setContactForOtp] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handle Google OAuth deep-link callback: fieserosemployee://auth-callback?token=...
   const handleDeepLink = useCallback(
@@ -123,6 +124,8 @@ export default function EmployeeLoginScreen() {
 
   // ── Google OAuth Sign-In for Employees ────────────────────────────
   const handleGoogleSignIn = async () => {
+    if (isSubmitting || isLoading) return;
+    setIsSubmitting(true);
     try {
       clearError();
       const callbackUrl =
@@ -142,31 +145,39 @@ export default function EmployeeLoginScreen() {
         'Google Sign-In',
         'Unable to launch Google Sign-In browser. Please sign in with your work email and password.'
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // ── Staff Email + Password Sign-In ────────────────────────────────
   const handlePasswordLogin = async () => {
+    if (isSubmitting || isLoading) return;
     if (!email.trim() || !password) {
       show('Please enter your work email and password', 'warning');
       return;
     }
+    setIsSubmitting(true);
     try {
       await loginStaff(email.trim(), password);
       show('Welcome back!', 'success');
       router.replace('/(employee)/today');
     } catch {
       // error surfaced via store
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // ── Staff Instant OTP Sign-In ─────────────────────────────────────
   const handleSendOtp = async () => {
+    if (isSubmitting || isLoading) return;
     const trimmed = contactForOtp.trim();
     if (!trimmed) {
       show('Please enter your work email or phone number', 'warning');
       return;
     }
+    setIsSubmitting(true);
     try {
       if (otpLooksLikePhone) {
         await requestCustomerOtp(trimmed);
@@ -184,15 +195,19 @@ export default function EmployeeLoginScreen() {
       }
     } catch {
       // error surfaced via store
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleVerifyOtp = async () => {
+    if (isSubmitting || isLoading) return;
     if (!otp.trim()) {
       show('Please enter the 6-digit verification code', 'warning');
       return;
     }
     const trimmed = contactForOtp.trim();
+    setIsSubmitting(true);
     try {
       if (otpLooksLikePhone) {
         await loginCustomerOtp(trimmed, otp.trim());
@@ -203,6 +218,8 @@ export default function EmployeeLoginScreen() {
       router.replace('/(employee)/today');
     } catch {
       // error surfaced via store
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

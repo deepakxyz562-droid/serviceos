@@ -18,7 +18,7 @@ export const BRAND = {
 export const API_BASE_URL =
   (process.env.EXPO_PUBLIC_API_BASE_URL as string) || 'https://fieseros.com';
 
-export const API_TIMEOUT_MS = 30000;
+export const API_TIMEOUT_MS = 12000;
 
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'fieseros_pro_auth_token',

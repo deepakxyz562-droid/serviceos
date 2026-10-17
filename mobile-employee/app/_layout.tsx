@@ -27,8 +27,8 @@ export { AppErrorBoundary as ErrorBoundary } from '@/components/app-error-bounda
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 2,
-      staleTime: 1000 * 30,
+      retry: 1,
+      staleTime: 1000 * 60,
       refetchOnWindowFocus: false,
     },
   },

@@ -235,6 +235,7 @@ export function useShiftToday() {
       const res = await api.get<unknown>('/api/employee/shift/today');
       return normaliseToday(res);
     },
+    staleTime: 1000 * 60 * 2, // 2 minutes cache
   });
 }
 
@@ -245,6 +246,7 @@ export function useShiftWeek() {
       const res = await api.get<unknown>('/api/employee/shift/week');
       return normaliseWeek(res);
     },
+    staleTime: 1000 * 60 * 2, // 2 minutes cache
   });
 }
 

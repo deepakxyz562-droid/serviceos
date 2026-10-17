@@ -61,6 +61,7 @@ import {
   MessageSquare,
   Share2,
   Sparkles,
+  Users,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Card } from '@/components/ui/Card';
@@ -74,8 +75,10 @@ import { OnMyWayModal } from '@/components/job/OnMyWayModal';
 import { LoadingOverlay } from '@/components/ui/LoadingOverlay';
 import { useToast } from '@/components/ui/Toast';
 import { SkeletonList } from '@/components/ui/Skeleton';
-import { useJob, useJobLifecycle } from '@/hooks/use-jobs';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { useJob, useJobLifecycle, useJobChecklist } from '@/hooks/use-jobs';
 import { useLiveTracking } from '@/hooks/use-live-tracking';
+import { JobTeamChatModal } from '@/components/chat/JobTeamChatModal';
 import { COLORS, API_BASE_URL } from '@/lib/constants';
 import { formatCurrency } from '@/lib/currency';
 import { captureGps } from '@/lib/gps';
@@ -301,14 +304,15 @@ export default function JobDetailScreen() {
   // the user opens it multiple times. Set whenever the disclosure is
   // shown; cleared on dismiss.
   const [disclosureContinue, setDisclosureContinue] = useState<() => void>(() => () => {});
+  const [activeJobTab, setActiveJobTab] = useState<'overview' | 'work' | 'financials'>('overview');
 
   useFocusEffect(
     useCallback(() => {
-      if (id) {
-        // refetch on focus
+      // Revalidate in background only if not yet cached; pull-to-refresh handles manual refresh
+      if (id && !job) {
         refetch();
       }
-    }, [id, refetch])
+    }, [id, job, refetch])
   );
 
   // V1.5: derive the effective lifecycle stage (lifecycleState preferred,
@@ -357,9 +361,12 @@ export default function JobDetailScreen() {
     apiBaseUrl: API_BASE_URL,
   });
 
+  const checklistQuery = useJobChecklist(id);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showCopilotModal, setShowCopilotModal] = useState(false);
   const [showOnMyWayModal, setShowOnMyWayModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showTeamChatModal, setShowTeamChatModal] = useState(false);
 
   const handleSmartEta = useCallback(() => {
     if (!job?.customer?.phone) return;
@@ -618,7 +625,7 @@ export default function JobDetailScreen() {
   // embed the photos array.
   const photoCount =
     job._counts?.photos ?? job.photos?.length ?? 0;
-  const checklistItems = job.checklist ?? [];
+  const checklistItems = checklistQuery.data ?? job.checklist ?? [];
   const checklistDone = checklistItems.filter((c) => c.checked).length;
   const signatureCount = job.signatures?.length ?? 0;
   const timeEntryCount = job.timeEntries?.length ?? 0;
@@ -763,527 +770,576 @@ export default function JobDetailScreen() {
             </View>
           </View>
 
-          {/* Quick Action Dock (Jobber / Housecall Pro Style) */}
-          <View className="mt-3.5 flex-row items-center justify-between border-t border-border pt-3">
+          {/* Quick Action Dock — Streamlined 3-Action Field Hub */}
+          <View className="mt-3.5 flex-row items-center gap-2 border-t border-border pt-3">
             {job.customer.phone ? (
-              <>
-                <Pressable
-                  onPress={handleCall}
-                  className="flex-1 items-center justify-center py-1 active:opacity-70"
-                >
-                  <View className="h-9 w-9 items-center justify-center rounded-full bg-primary-100">
-                    <Phone size={16} color={COLORS.primary} />
-                  </View>
-                  <Text className="mt-1 text-[11px] font-semibold text-foreground">Call</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={handleSms}
-                  className="flex-1 items-center justify-center py-1 active:opacity-70"
-                >
-                  <View className="h-9 w-9 items-center justify-center rounded-full bg-sky-100">
-                    <MessageSquare size={16} color="#0284C7" />
-                  </View>
-                  <Text className="mt-1 text-[11px] font-semibold text-foreground">SMS</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={handleWhatsApp}
-                  className="flex-1 items-center justify-center py-1 active:opacity-70"
-                >
-                  <View className="h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
-                    <MessageSquare size={16} color="#059669" />
-                  </View>
-                  <Text className="mt-1 text-[11px] font-semibold text-foreground">WhatsApp</Text>
-                </Pressable>
-              </>
-            ) : null}
-
-            {job.address ? (
               <Pressable
-                onPress={handleDirections}
-                className="flex-1 items-center justify-center py-1 active:opacity-70"
+                onPress={handleCall}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-emerald-50 py-2.5 border border-emerald-200 active:bg-emerald-100"
               >
-                <View className="h-9 w-9 items-center justify-center rounded-full bg-indigo-100">
-                  <Navigation size={16} color="#4F46E5" />
-                </View>
-                <Text className="mt-1 text-[11px] font-semibold text-foreground">Map</Text>
+                <Phone size={15} color="#059669" />
+                <Text className="text-xs font-bold text-emerald-800">Call</Text>
               </Pressable>
             ) : null}
 
             <Pressable
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-                setShowPaymentModal(true);
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                setShowMessageModal(true);
               }}
-              className="flex-1 items-center justify-center py-1 active:opacity-70"
+              className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-sky-50 py-2.5 border border-sky-200 active:bg-sky-100"
             >
-              <View className="h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
-                <Banknote size={16} color={COLORS.success} />
-              </View>
-              <Text className="mt-1 text-[11px] font-semibold text-foreground">Collect</Text>
+              <MessageSquare size={15} color="#0284C7" />
+              <Text className="text-xs font-bold text-sky-800">Message</Text>
             </Pressable>
 
+            {job.address ? (
+              <Pressable
+                onPress={handleDirections}
+                className="flex-1 flex-row items-center justify-center gap-2 rounded-xl bg-indigo-50 py-2.5 border border-indigo-200 active:bg-indigo-100"
+              >
+                <Navigation size={15} color="#4F46E5" />
+                <Text className="text-xs font-bold text-indigo-800">Map</Text>
+              </Pressable>
+            ) : null}
+
+            {/* Smart AI Copilot */}
             <Pressable
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                 setShowCopilotModal(true);
               }}
-              className="flex-1 items-center justify-center py-1 active:opacity-70"
+              className="size-10 items-center justify-center rounded-xl bg-amber-50 border border-amber-200 active:bg-amber-100"
+              accessibilityLabel="Open AI Field Copilot"
             >
-              <View className="h-9 w-9 items-center justify-center rounded-full bg-amber-100">
-                <Sparkles size={16} color="#D97706" />
-              </View>
-              <Text className="mt-1 text-[11px] font-semibold text-foreground">AI Copilot</Text>
+              <Sparkles size={16} color="#D97706" />
             </Pressable>
           </View>
         </Card>
 
-        {/* Dedicated Universal AI Field Copilot Card (All Trades) */}
-        <Pressable
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            setShowCopilotModal(true);
-          }}
-          className="mb-3 overflow-hidden rounded-2xl border border-emerald-200 p-4 shadow-xs active:opacity-90"
-          style={{ backgroundColor: '#ECFDF5' }}
-        >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-3 flex-1">
-              <View className="h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 shadow-xs">
-                <Sparkles size={20} color="#ffffff" />
-              </View>
-              <View className="flex-1">
-                <View className="flex-row items-center gap-1.5">
-                  <Text className="text-sm font-bold text-emerald-950">
-                    AI Field Copilot
-                  </Text>
-                  <View className="rounded bg-emerald-200/80 px-1.5 py-0.5">
-                    <Text className="text-[10px] font-extrabold uppercase tracking-wide text-emerald-900">
-                      All Trades
-                    </Text>
-                  </View>
-                </View>
-                <Text className="mt-0.5 text-xs text-emerald-700 font-medium">
-                  Instant recap, diagnostic steps & upsell advice
-                </Text>
-              </View>
-            </View>
-            <View className="h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
-              <ChevronRight size={18} color="#059669" />
-            </View>
-          </View>
-
-          <View className="mt-3 flex-row items-center gap-2 pt-2.5 border-t border-emerald-200/70">
-            <View className="rounded-full bg-white px-2.5 py-1 border border-emerald-200">
-              <Text className="text-[11px] font-semibold text-emerald-800">👤 Customer Recap</Text>
-            </View>
-            <View className="rounded-full bg-white px-2.5 py-1 border border-emerald-200">
-              <Text className="text-[11px] font-semibold text-emerald-800">🔧 Troubleshoot</Text>
-            </View>
-            <View className="rounded-full bg-white px-2.5 py-1 border border-emerald-200">
-              <Text className="text-[11px] font-semibold text-emerald-800">💡 Upsell</Text>
-            </View>
-          </View>
-        </Pressable>
-
-        {/* V1.5 Lifecycle Progress — 7-stage pill row + timestamp grid.
-            Mirrors the PWA's LifecycleProgress component. Placed above the
-            Schedule/Address card per Phase-4 task spec. */}
-        <LifecycleProgress job={job} stage={currentState} />
-
-        {/* Schedule & Address */}
-        <Card className="mb-3">
-          <DetailRow
-            icon={<Calendar size={16} color={COLORS.mutedForeground} />}
-            label="Scheduled"
-            value={formatDateTime(job.scheduledAt)}
-          />
-          <View style={{ height: 12 }} />
-          <DetailRow
-            icon={<Clock size={16} color={COLORS.mutedForeground} />}
-            label="Status"
-            value={LIFECYCLE_LABELS[currentState] ?? currentState}
-          />
-          {job.address ? (
-            <>
-              <View style={{ height: 12 }} />
-              <View className="flex-row items-start">
-                <View className="mr-2 mt-0.5">
-                  <MapPin size={16} color={COLORS.mutedForeground} />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Address
-                  </Text>
-                  <Text className="mt-0.5 text-sm text-foreground">
-                    {job.address}
-                  </Text>
-                  <Pressable
-                    onPress={handleDirections}
-                    className="mt-2 flex-row items-center self-start rounded-lg bg-primary-50 px-3 py-1.5"
-                    accessibilityRole="button"
-                    accessibilityLabel="Get directions to job"
-                  >
-                    <Navigation size={14} color={COLORS.primary} />
-                    <Text className="ml-1.5 text-xs font-semibold text-primary-700">
-                      Get Directions
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </>
-          ) : null}
-        </Card>
-
-        {/* Job Details Grid — Quoted Amount / Estimated Duration / Job Type /
-            Priority. Mirrors the PWA's JobDetailSheet details grid. Only
-            renders rows whose value is present (don't show empty rows). */}
-        {(job.quotedAmount != null ||
-          job.estimatedDuration != null ||
-          job.type ||
-          job.priority) ? (
-          <Card className="mb-3">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Job Details
-            </Text>
-            {job.quotedAmount != null && job.quotedAmount > 0 ? (
-              <DetailRow
-                icon={<DollarSign size={16} color={COLORS.mutedForeground} />}
-                label="Quoted Amount"
-                value={formatCurrency(job.quotedAmount, tenantCurrency)}
-              />
-            ) : null}
-            {job.estimatedDuration != null ? (
-              <>
-                {job.quotedAmount != null && job.quotedAmount > 0 ? (
-                  <View style={{ height: 12 }} />
-                ) : null}
-                <DetailRow
-                  icon={<Clock size={16} color={COLORS.mutedForeground} />}
-                  label="Estimated Duration"
-                  value={formatDuration(Number(job.estimatedDuration))}
-                />
-              </>
-            ) : null}
-            {job.type ? (
-              <>
-                {job.quotedAmount != null || job.estimatedDuration != null ? (
-                  <View style={{ height: 12 }} />
-                ) : null}
-                <DetailRow
-                  icon={<Briefcase size={16} color={COLORS.mutedForeground} />}
-                  label="Job Type"
-                  value={
-                    job.type.charAt(0).toUpperCase() + job.type.slice(1)
-                  }
-                />
-              </>
-            ) : null}
-            {job.priority ? (
-              <>
-                {job.quotedAmount != null ||
-                job.estimatedDuration != null ||
-                job.type ? (
-                  <View style={{ height: 12 }} />
-                ) : null}
-                <View className="flex-row items-center">
-                  <View className="mr-2">
-                    <View
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: 4,
-                        backgroundColor: getPriorityColors(job.priority).dot,
-                      }}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Priority
-                    </Text>
-                    <View
-                      style={{
-                        marginTop: 4,
-                        alignSelf: 'flex-start',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        borderRadius: 999,
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                        backgroundColor: getPriorityColors(job.priority).bg,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: '600',
-                          color: getPriorityColors(job.priority).text,
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {job.priority}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {/* Live Time Elapsed card — only visible when work is in progress
-            (working / paused). Auto-updates every 60s via setInterval so
-            the elapsed minutes count up while the screen is open. Mirrors
-            the PWA's elapsed-time row in the JobDetailSheet details grid. */}
-        <TimeElapsedCard
-          workStartedTs={getWorkStartedTimestamp(job)}
-          active={currentState === 'working' || currentState === 'paused'}
-          paused={currentState === 'paused'}
-        />
-
-        {/* Notes */}
-        {(job.notes || job.internalNotes) ? (
-          <Card className="mb-3">
-            <View className="flex-row items-center justify-between">
-              <View className="flex-row items-center">
-                <StickyNote size={16} color={COLORS.mutedForeground} />
-                <Text className="ml-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Notes
-                </Text>
-              </View>
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: '/(employee)/jobs/[id]/notes',
-                    params: { id: job.id },
-                  })
-                }
-                hitSlop={8}
-              >
-                <Text className="text-xs font-semibold text-primary-700">Edit</Text>
-              </Pressable>
-            </View>
-            {job.notes ? (
-              <View className="mt-2">
-                <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  Customer Notes
-                </Text>
-                <Text className="mt-1 text-sm text-foreground">{job.notes}</Text>
-              </View>
-            ) : null}
-            {job.internalNotes ? (
-              <View className="mt-3 rounded-lg bg-amber-50 p-2.5">
-                <Text className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
-                  Internal Notes
-                </Text>
-                <Text className="mt-1 text-sm text-foreground">
-                  {job.internalNotes}
-                </Text>
-              </View>
-            ) : null}
-          </Card>
-        ) : (
-          <Card className="mb-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-sm text-muted-foreground">No notes yet</Text>
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: '/(employee)/jobs/[id]/notes',
-                    params: { id: job.id },
-                  })
-                }
-                hitSlop={8}
-              >
-                <Text className="text-xs font-semibold text-primary-700">
-                  Add Notes
-                </Text>
-              </Pressable>
-            </View>
-          </Card>
-        )}
-
-        {/* Quick action grid */}
-        <Text className="mb-2 mt-1 text-base font-bold text-foreground">
-          Job Tools
-        </Text>
-        <View className="flex-row flex-wrap justify-between">
-          <QuickAction
-            icon={<Camera size={20} color={COLORS.primary} />}
-            label="Photos"
-            count={photoCount}
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/photos',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<SquareCheck size={20} color={COLORS.primary} />}
-            label="Checklist"
-            countLabel={
-              checklistItems.length > 0
-                ? `${checklistDone}/${checklistItems.length}`
-                : undefined
-            }
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/checklist',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<PenLine size={20} color={COLORS.primary} />}
-            label="Signature"
-            count={signatureCount}
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/signature',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<Receipt size={20} color={COLORS.primary} />}
-            label="Expenses"
-            count={expenseCount}
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/expenses',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<CalendarClock size={20} color={COLORS.primary} />}
-            label="Visits"
-            count={visitCount}
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/visits',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<Timer size={20} color={COLORS.primary} />}
-            label="Time Entries"
-            count={timeEntryCount}
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/time-entries',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<ClipboardCheck size={20} color={COLORS.primary} />}
-            label="Complete Proof"
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/completion',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<StickyNote size={20} color={COLORS.primary} />}
-            label="Notes"
-            onPress={() =>
-              router.push({
-                pathname: '/(employee)/jobs/[id]/notes',
-                params: { id: job.id },
-              })
-            }
-          />
-          <QuickAction
-            icon={<Banknote size={20} color={COLORS.success} />}
-            label="Collect Payment"
-            countLabel={
-              job.quotedAmount
-                ? formatCurrency(job.quotedAmount, tenantCurrency)
-                : 'Collect'
-            }
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-              setShowPaymentModal(true);
+        {/* Job Workflow Navigation Tabs */}
+        <View className="mb-3">
+          <SegmentedControl
+            options={[
+              { value: 'overview', label: 'Overview' },
+              { value: 'work', label: `Tasks (${checklistDone}/${checklistItems.length || 0})` },
+              { value: 'financials', label: 'Financials' },
+            ]}
+            value={activeJobTab}
+            onChange={(val) => {
+              Haptics.selectionAsync().catch(() => {});
+              setActiveJobTab(val);
             }}
+            activeColor="#059669"
           />
         </View>
 
-        {/* Line items preview */}
-        {lineItems.length > 0 ? (
-          <Card className="mt-4">
-            <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Line Items ({lineItems.length})
-            </Text>
-            {lineItems.map((li, idx) => (
-              <View
-                key={li.id ?? idx}
-                className="flex-row items-center justify-between py-1.5"
-              >
-                <View className="flex-1 pr-3">
-                  <Text className="text-sm font-medium text-foreground">
-                    {li.description}
-                  </Text>
-                  <Text className="text-xs text-muted-foreground">
-                    {li.quantity} × {formatCurrency(li.unitPrice, tenantCurrency)}
-                  </Text>
-                </View>
-                <Text className="text-sm font-bold text-foreground">
-                  {formatCurrency(li.total, tenantCurrency)}
-                </Text>
-              </View>
-            ))}
-          </Card>
-        ) : null}
+        {/* ─── TAB 1: OVERVIEW ─────────────────────────────────────────── */}
+        {activeJobTab === 'overview' && (
+          <View className="gap-3">
+            {/* V1.5 Lifecycle Progress — 7-stage pill row */}
+            <LifecycleProgress job={job} stage={currentState} />
 
-        {/* Lifecycle timestamps timeline */}
-        {timestampEntries.length > 0 ? (
-          <Card className="mt-4">
-            <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Lifecycle Timeline
-            </Text>
-            {timestampEntries.map(([key, value], idx) => {
-              const isLast = idx === timestampEntries.length - 1;
-              const label = LIFECYCLE_LABELS[key] ?? key.replace(/_/g, ' ');
-              let formatted = '';
-              try {
-                formatted = format(parseISO(value), "MMM d, h:mm a");
-              } catch {
-                formatted = new Date(value).toLocaleString();
-              }
-              return (
-                <View key={key} className="flex-row">
-                  <View className="mr-3 items-center">
-                    <View
-                      className={`mt-1 h-4 w-4 items-center justify-center rounded-full ${
-                        isLast ? 'bg-primary-500' : 'bg-primary-200'
-                      }`}
-                    >
-                      <CircleCheck
-                        size={10}
-                        color={isLast ? '#fff' : COLORS.primary}
-                      />
+            {/* Schedule & Address Card */}
+            <Card className="mb-1">
+              <DetailRow
+                icon={<Calendar size={16} color={COLORS.mutedForeground} />}
+                label="Scheduled"
+                value={formatDateTime(job.scheduledAt)}
+              />
+              <View style={{ height: 12 }} />
+              <DetailRow
+                icon={<Clock size={16} color={COLORS.mutedForeground} />}
+                label="Status"
+                value={LIFECYCLE_LABELS[currentState] ?? currentState}
+              />
+              {job.address ? (
+                <>
+                  <View style={{ height: 12 }} />
+                  <View className="flex-row items-start">
+                    <View className="mr-2 mt-0.5">
+                      <MapPin size={16} color={COLORS.mutedForeground} />
                     </View>
-                    {!isLast ? (
-                      <View style={{ width: 2, flex: 1, backgroundColor: COLORS.border, marginTop: 2 }} />
-                    ) : null}
+                    <View className="flex-1">
+                      <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Address
+                      </Text>
+                      <Text className="mt-0.5 text-sm text-foreground">
+                        {job.address}
+                      </Text>
+                      <Pressable
+                        onPress={handleDirections}
+                        className="mt-2 flex-row items-center self-start rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-1.5 active:bg-emerald-100"
+                        accessibilityRole="button"
+                        accessibilityLabel="Get directions to job"
+                      >
+                        <Navigation size={14} color="#059669" />
+                        <Text className="ml-1.5 text-xs font-semibold text-emerald-800">
+                          Get Directions
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
-                  <View className="pb-3 flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {label}
+                </>
+              ) : null}
+            </Card>
+
+            {/* Job Details Grid */}
+            {(job.quotedAmount != null ||
+              job.estimatedDuration != null ||
+              job.type ||
+              job.priority) ? (
+              <Card className="mb-1">
+                <Text className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Job Details
+                </Text>
+                {job.quotedAmount != null && job.quotedAmount > 0 ? (
+                  <DetailRow
+                    icon={<DollarSign size={16} color={COLORS.mutedForeground} />}
+                    label="Quoted Amount"
+                    value={formatCurrency(job.quotedAmount, tenantCurrency)}
+                  />
+                ) : null}
+                {job.estimatedDuration != null ? (
+                  <>
+                    {job.quotedAmount != null && job.quotedAmount > 0 ? (
+                      <View style={{ height: 12 }} />
+                    ) : null}
+                    <DetailRow
+                      icon={<Clock size={16} color={COLORS.mutedForeground} />}
+                      label="Estimated Duration"
+                      value={formatDuration(Number(job.estimatedDuration))}
+                    />
+                  </>
+                ) : null}
+                {job.type ? (
+                  <>
+                    {job.quotedAmount != null || job.estimatedDuration != null ? (
+                      <View style={{ height: 12 }} />
+                    ) : null}
+                    <DetailRow
+                      icon={<Briefcase size={16} color={COLORS.mutedForeground} />}
+                      label="Job Type"
+                      value={
+                        job.type.charAt(0).toUpperCase() + job.type.slice(1)
+                      }
+                    />
+                  </>
+                ) : null}
+                {job.priority ? (
+                  <>
+                    {job.quotedAmount != null ||
+                    job.estimatedDuration != null ||
+                    job.type ? (
+                      <View style={{ height: 12 }} />
+                    ) : null}
+                    <View className="flex-row items-center">
+                      <View className="mr-2">
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: getPriorityColors(job.priority).dot,
+                          }}
+                        />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Priority
+                        </Text>
+                        <View
+                          style={{
+                            marginTop: 4,
+                            alignSelf: 'flex-start',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            borderRadius: 999,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            backgroundColor: getPriorityColors(job.priority).bg,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '600',
+                              color: getPriorityColors(job.priority).text,
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {job.priority}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </>
+                ) : null}
+              </Card>
+            ) : null}
+
+            {/* Live Time Elapsed card */}
+            <TimeElapsedCard
+              workStartedTs={getWorkStartedTimestamp(job)}
+              active={currentState === 'working' || currentState === 'paused'}
+              paused={currentState === 'paused'}
+            />
+
+            {/* Notes Card */}
+            {(job.notes || job.internalNotes) ? (
+              <Card className="mb-1">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center">
+                    <StickyNote size={16} color={COLORS.mutedForeground} />
+                    <Text className="ml-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Notes
                     </Text>
-                    <Text className="text-xs text-muted-foreground">{formatted}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(employee)/jobs/[id]/notes',
+                        params: { id: job.id },
+                      })
+                    }
+                    hitSlop={8}
+                  >
+                    <Text className="text-xs font-semibold text-primary-700">Edit</Text>
+                  </Pressable>
+                </View>
+                {job.notes ? (
+                  <View className="mt-2">
+                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Customer Notes
+                    </Text>
+                    <Text className="mt-1 text-sm text-foreground">{job.notes}</Text>
+                  </View>
+                ) : null}
+                {job.internalNotes ? (
+                  <View className="mt-3 rounded-lg bg-amber-50 p-2.5">
+                    <Text className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
+                      Internal Notes
+                    </Text>
+                    <Text className="mt-1 text-sm text-foreground">
+                      {job.internalNotes}
+                    </Text>
+                  </View>
+                ) : null}
+              </Card>
+            ) : (
+              <Card className="mb-1">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-sm text-muted-foreground">No notes yet</Text>
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(employee)/jobs/[id]/notes',
+                        params: { id: job.id },
+                      })
+                    }
+                    hitSlop={8}
+                  >
+                    <Text className="text-xs font-semibold text-primary-700">
+                      Add Notes
+                    </Text>
+                  </Pressable>
+                </View>
+              </Card>
+            )}
+          </View>
+        )}
+
+        {/* ─── TAB 2: WORK & TASKS ────────────────────────────────────────── */}
+        {activeJobTab === 'work' && (
+          <View className="gap-3">
+            {/* Checklist Task Card */}
+            <Card className="p-4">
+              <View className="flex-row items-center justify-between mb-2.5">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="size-9 rounded-xl bg-emerald-100 items-center justify-center">
+                    <SquareCheck size={18} color="#059669" />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-bold text-slate-900">Job Checklist</Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {checklistItems.length > 0
+                        ? `${checklistDone} of ${checklistItems.length} items completed`
+                        : 'No checklist items'}
+                    </Text>
                   </View>
                 </View>
-              );
-            })}
-          </Card>
-        ) : null}
+
+                <View className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5">
+                  <Text className="text-xs font-bold text-emerald-700">
+                    {checklistItems.length > 0
+                      ? `${Math.round((checklistDone / checklistItems.length) * 100)}%`
+                      : '0%'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Progress bar */}
+              <View className="h-2 w-full rounded-full bg-slate-100 overflow-hidden mb-3">
+                <View
+                  className="h-full rounded-full bg-emerald-600 transition-all"
+                  style={{
+                    width: checklistItems.length > 0
+                      ? `${(checklistDone / checklistItems.length) * 100}%`
+                      : '0%',
+                  }}
+                />
+              </View>
+
+              <Button
+                onPress={() =>
+                  router.push({
+                    pathname: '/(employee)/jobs/[id]/checklist',
+                    params: { id: job.id },
+                  })
+                }
+                variant="outline"
+                size="sm"
+                fullWidth
+                className="border-emerald-300 bg-emerald-50/50"
+              >
+                <View className="flex-row items-center justify-center gap-1.5">
+                  <SquareCheck size={14} color="#059669" />
+                  <Text className="text-xs font-bold text-emerald-800">
+                    {checklistItems.length > 0 ? 'Open Checklist' : 'Manage Checklist'}
+                  </Text>
+                </View>
+              </Button>
+            </Card>
+
+            {/* Photos & Visual Proof Card */}
+            <Card className="p-4">
+              <View className="flex-row items-center justify-between mb-2">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="size-9 rounded-xl bg-emerald-100 items-center justify-center">
+                    <Camera size={18} color="#059669" />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-bold text-slate-900">Photos & Proof</Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {photoCount > 0 ? `${photoCount} photos captured` : 'Before & after job documentation'}
+                    </Text>
+                  </View>
+                </View>
+
+                {photoCount > 0 && (
+                  <View className="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5">
+                    <Text className="text-xs font-bold text-emerald-700">{photoCount} 📸</Text>
+                  </View>
+                )}
+              </View>
+
+              <Button
+                onPress={() =>
+                  router.push({
+                    pathname: '/(employee)/jobs/[id]/photos',
+                    params: { id: job.id },
+                  })
+                }
+                variant="outline"
+                size="sm"
+                fullWidth
+                className="border-emerald-300 bg-emerald-50/50 mt-1"
+              >
+                <View className="flex-row items-center justify-center gap-1.5">
+                  <Camera size={14} color="#059669" />
+                  <Text className="text-xs font-bold text-emerald-800">
+                    {photoCount > 0 ? 'View & Add Photos' : 'Take First Photo'}
+                  </Text>
+                </View>
+              </Button>
+            </Card>
+
+            {/* Customer Signature Card */}
+            <Card className="p-4">
+              <View className="flex-row items-center justify-between mb-2">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="size-9 rounded-xl bg-emerald-100 items-center justify-center">
+                    <PenLine size={18} color="#059669" />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-bold text-slate-900">Customer Signature</Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {signatureCount > 0 ? 'Signed by customer' : 'Customer sign-off on completion'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View
+                  className={`rounded-full px-2.5 py-0.5 border ${
+                    signatureCount > 0
+                      ? 'bg-emerald-50 border-emerald-200'
+                      : 'bg-amber-50 border-amber-200'
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${
+                      signatureCount > 0 ? 'text-emerald-700' : 'text-amber-700'
+                    }`}
+                  >
+                    {signatureCount > 0 ? 'Signed ✓' : 'Pending'}
+                  </Text>
+                </View>
+              </View>
+
+              <Button
+                onPress={() =>
+                  router.push({
+                    pathname: '/(employee)/jobs/[id]/signature',
+                    params: { id: job.id },
+                  })
+                }
+                variant="outline"
+                size="sm"
+                fullWidth
+                className="border-emerald-300 bg-emerald-50/50 mt-1"
+              >
+                <View className="flex-row items-center justify-center gap-1.5">
+                  <PenLine size={14} color="#059669" />
+                  <Text className="text-xs font-bold text-emerald-800">
+                    {signatureCount > 0 ? 'View Signature' : 'Collect Signature'}
+                  </Text>
+                </View>
+              </Button>
+            </Card>
+
+            {/* Time Entries & Past Visits */}
+            <View className="flex-row gap-2.5">
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/(employee)/jobs/[id]/time-entries',
+                    params: { id: job.id },
+                  })
+                }
+                className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs active:bg-slate-50"
+              >
+                <View className="flex-row items-center justify-between">
+                  <Timer size={16} color="#059669" />
+                  <ChevronRight size={14} color="#94A3B8" />
+                </View>
+                <Text className="mt-2 text-sm font-bold text-slate-900">Time Entries</Text>
+                <Text className="text-xs text-muted-foreground">{timeEntryCount} logged</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: '/(employee)/jobs/[id]/visits',
+                    params: { id: job.id },
+                  })
+                }
+                className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs active:bg-slate-50"
+              >
+                <View className="flex-row items-center justify-between">
+                  <CalendarClock size={16} color="#059669" />
+                  <ChevronRight size={14} color="#94A3B8" />
+                </View>
+                <Text className="mt-2 text-sm font-bold text-slate-900">Visits</Text>
+                <Text className="text-xs text-muted-foreground">{visitCount} visits</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* ─── TAB 3: FINANCIALS ─────────────────────────────────────────── */}
+        {activeJobTab === 'financials' && (
+          <View className="gap-3">
+            {/* Payment Collection Card */}
+            <Card className="p-4 border-2 border-emerald-200 bg-emerald-50/20 shadow-xs">
+              <View className="flex-row items-center justify-between mb-3">
+                <View>
+                  <Text className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Total Quoted
+                  </Text>
+                  <Text className="text-2xl font-black text-slate-900 mt-0.5">
+                    {job.quotedAmount
+                      ? formatCurrency(job.quotedAmount, tenantCurrency)
+                      : '$0.00'}
+                  </Text>
+                </View>
+                <View className="size-11 rounded-2xl bg-emerald-100 items-center justify-center">
+                  <Banknote size={22} color="#059669" />
+                </View>
+              </View>
+
+              <Button
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+                  setShowPaymentModal(true);
+                }}
+                className="bg-emerald-600 active:bg-emerald-700 h-11"
+                fullWidth
+              >
+                <View className="flex-row items-center justify-center gap-1.5">
+                  <Banknote size={16} color="#fff" />
+                  <Text className="text-sm font-bold text-white">
+                    {currentState === 'invoice_generated' || currentState === 'completed'
+                      ? 'Process Card / Cash Payment'
+                      : 'Collect Payment Now'}
+                  </Text>
+                </View>
+              </Button>
+            </Card>
+
+            {/* Line Items Card */}
+            {lineItems.length > 0 ? (
+              <Card className="p-4">
+                <Text className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Line Items ({lineItems.length})
+                </Text>
+                {lineItems.map((li, idx) => (
+                  <View
+                    key={li.id ?? idx}
+                    className="flex-row items-center justify-between py-2 border-b border-slate-100 last:border-b-0"
+                  >
+                    <View className="flex-1 pr-3">
+                      <Text className="text-sm font-semibold text-foreground">
+                        {li.description}
+                      </Text>
+                      <Text className="text-xs text-muted-foreground mt-0.5">
+                        {li.quantity} × {formatCurrency(li.unitPrice, tenantCurrency)}
+                      </Text>
+                    </View>
+                    <Text className="text-sm font-bold text-foreground">
+                      {formatCurrency(li.total, tenantCurrency)}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+
+            {/* Job Expenses Card */}
+            <Pressable
+              onPress={() =>
+                router.push({
+                  pathname: '/(employee)/jobs/[id]/expenses',
+                  params: { id: job.id },
+                })
+              }
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs active:bg-slate-50"
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="size-8 rounded-lg bg-slate-100 items-center justify-center">
+                    <Receipt size={17} color="#64748B" />
+                  </View>
+                  <View>
+                    <Text className="text-sm font-bold text-slate-900">Job Expenses</Text>
+                    <Text className="text-xs text-muted-foreground">
+                      {expenseCount} receipts / materials logged
+                    </Text>
+                  </View>
+                </View>
+                <ChevronRight size={16} color="#94A3B8" />
+              </View>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
 
       {/* Sticky lifecycle footer — stage-aware action buttons.
@@ -1507,6 +1563,100 @@ export default function JobDetailScreen() {
           router.push(`/(employee)/jobs/${job.id}/notes` as any);
         }}
       />
+
+      {/* Communication Channel Options Modal (WhatsApp / SMS / Internal Team Chat) */}
+      <Modal
+        visible={showMessageModal}
+        onClose={() => setShowMessageModal(false)}
+        position="bottom"
+      >
+        <View className="p-4">
+          <View className="mb-3 flex-row items-center justify-between">
+            <View>
+              <Text className="text-base font-bold text-slate-900">Message & Team Chat</Text>
+              <Text className="text-xs text-muted-foreground">
+                Select contact channel for Job #{job.jobNumber || ''}
+              </Text>
+            </View>
+            <Pressable onPress={() => setShowMessageModal(false)} hitSlop={10} className="p-1">
+              <X size={18} color="#64748B" />
+            </Pressable>
+          </View>
+
+          <View className="gap-2.5">
+            {job.customer?.phone ? (
+              <>
+                <Pressable
+                  onPress={() => {
+                    setShowMessageModal(false);
+                    handleWhatsApp();
+                  }}
+                  className="flex-row items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 active:bg-emerald-100"
+                >
+                  <View className="size-10 items-center justify-center rounded-xl bg-emerald-600 shadow-xs">
+                    <MessageSquare size={18} color="#ffffff" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-bold text-slate-900">WhatsApp Customer</Text>
+                    <Text className="text-xs text-muted-foreground">{job.customer.phone}</Text>
+                  </View>
+                  <ChevronRight size={16} color="#059669" />
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    setShowMessageModal(false);
+                    handleSms();
+                  }}
+                  className="flex-row items-center gap-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-3.5 active:bg-sky-100"
+                >
+                  <View className="size-10 items-center justify-center rounded-xl bg-sky-600 shadow-xs">
+                    <MessageSquare size={18} color="#ffffff" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-sm font-bold text-slate-900">SMS / Text Message</Text>
+                    <Text className="text-xs text-muted-foreground">Cellular text message to customer</Text>
+                  </View>
+                  <ChevronRight size={16} color="#0284C7" />
+                </Pressable>
+              </>
+            ) : null}
+
+            <Pressable
+              onPress={() => {
+                setShowMessageModal(false);
+                setShowTeamChatModal(true);
+              }}
+              className="flex-row items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-3.5 active:bg-indigo-100"
+            >
+              <View className="size-10 items-center justify-center rounded-xl bg-indigo-600 shadow-xs">
+                <Users size={18} color="#ffffff" />
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-center gap-1.5">
+                  <Text className="text-sm font-bold text-slate-900">Team & Dispatch Chat</Text>
+                  <View className="rounded bg-indigo-100 px-1.5 py-0.5">
+                    <Text className="text-[9px] font-black uppercase text-indigo-700">INTERNAL</Text>
+                  </View>
+                </View>
+                <Text className="text-xs text-muted-foreground">
+                  Direct message with Owner & Dispatch
+                </Text>
+              </View>
+              <ChevronRight size={16} color="#4F46E5" />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Internal Team Chat Modal */}
+      <JobTeamChatModal
+        visible={showTeamChatModal}
+        onClose={() => setShowTeamChatModal(false)}
+        jobId={job.id}
+        jobNumber={job.jobNumber ? String(job.jobNumber) : undefined}
+        customerName={job.customer?.name || undefined}
+      />
     </SafeAreaView>
   );
 }
@@ -1549,40 +1699,7 @@ function DetailRow({
   );
 }
 
-function QuickAction({
-  icon,
-  label,
-  count,
-  countLabel,
-  onPress,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count?: number;
-  countLabel?: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className="mb-2.5 w-[48%] active:opacity-70"
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Card className="items-center">
-        <View className="mb-2 h-10 w-10 items-center justify-center rounded-full bg-primary-50">
-          {icon}
-        </View>
-        <Text className="text-sm font-semibold text-foreground">{label}</Text>
-        {typeof count === 'number' && count > 0 ? (
-          <Text className="mt-0.5 text-xs text-muted-foreground">
-            {countLabel ?? count}
-          </Text>
-        ) : null}
-      </Card>
-    </Pressable>
-  );
-}
+
 
 function PinKey({
   label,

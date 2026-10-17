@@ -28,18 +28,21 @@ import {
   Mail,
   ChevronRight,
   Inbox as InboxIcon,
+  Users,
 } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { JobTeamChatModal } from '@/components/chat/JobTeamChatModal';
 import { api } from '@/lib/api';
 import { COLORS } from '@/lib/constants';
 import { cn } from '@/lib/cn';
 import type { Conversation } from '@/types';
 
-type FilterKey = 'all' | 'unread';
+type FilterKey = 'all' | 'unread' | 'team';
 
 /** Pick list out of a raw API response that may be a bare array or wrapped. */
 function pickList<T>(res: T[] | { data: T[] } | { items: T[] }): T[] {
@@ -112,6 +115,7 @@ const formatLastRelative = (iso: string): string => {
 export default function InboxScreen() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [showTeamChatModal, setShowTeamChatModal] = useState(false);
 
   const { data, isLoading, isRefetching, refetch, error } = useConversations(filter);
 
@@ -271,24 +275,58 @@ export default function InboxScreen() {
               options={[
                 { value: 'all', label: 'All' },
                 { value: 'unread', label: 'Unread' },
+                { value: 'team', label: 'Team Chat' },
               ]}
               value={filter}
               onChange={setFilter}
             />
+            {filter === 'team' && (
+              <Card className="mt-3 border-indigo-200 bg-indigo-50/40 p-4">
+                <View className="flex-row items-center gap-3">
+                  <View className="size-11 items-center justify-center rounded-2xl bg-indigo-600 shadow-xs">
+                    <Users size={22} color="#ffffff" />
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-1.5">
+                      <Text className="text-base font-bold text-slate-900">Owner & Dispatch Chat</Text>
+                      <View className="rounded bg-indigo-100 px-1.5 py-0.5">
+                        <Text className="text-[9px] font-black uppercase text-indigo-700">INTERNAL</Text>
+                      </View>
+                    </View>
+                    <Text className="mt-0.5 text-xs text-muted-foreground">
+                      Direct in-app channel with your office dispatcher and business owner
+                    </Text>
+                  </View>
+                </View>
+                <Button
+                  onPress={() => setShowTeamChatModal(true)}
+                  size="sm"
+                  fullWidth
+                  className="mt-3.5 bg-indigo-600 active:bg-indigo-700"
+                >
+                  <View className="flex-row items-center justify-center gap-1.5">
+                    <Users size={14} color="#ffffff" />
+                    <Text className="text-xs font-bold text-white">Open Team & Dispatch Chat</Text>
+                  </View>
+                </Button>
+              </Card>
+            )}
           </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            icon={<InboxIcon size={48} color={COLORS.mutedForeground} />}
-            title="No messages"
-            description={
-              filter === 'unread'
-                ? "You're all caught up — no unread messages."
-                : 'Customer messages will appear here.'
-            }
-            actionLabel={filter === 'unread' ? 'View all' : undefined}
-            onAction={filter === 'unread' ? () => setFilter('all') : undefined}
-          />
+          filter === 'team' ? null : (
+            <EmptyState
+              icon={<InboxIcon size={48} color={COLORS.mutedForeground} />}
+              title="No messages"
+              description={
+                filter === 'unread'
+                  ? "You're all caught up — no unread messages."
+                  : 'Customer messages will appear here.'
+              }
+              actionLabel={filter === 'unread' ? 'View all' : undefined}
+              onAction={filter === 'unread' ? () => setFilter('all') : undefined}
+            />
+          )
         }
         refreshControl={
           <RefreshControl
@@ -298,6 +336,14 @@ export default function InboxScreen() {
             tintColor={COLORS.primary}
           />
         }
+      />
+
+      {/* Team Chat Modal */}
+      <JobTeamChatModal
+        visible={showTeamChatModal}
+        onClose={() => setShowTeamChatModal(false)}
+        jobId="workspace_team"
+        customerName="Office Dispatch & Owner"
       />
     </SafeAreaView>
   );
