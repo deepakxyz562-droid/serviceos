@@ -1148,9 +1148,13 @@ export async function sendJobNotification(
   let reached = false
   for (const ch of filteredChannels) {
     if (reached && priority === 'urgent') {
-      // For customer notifications where an email is provided, always deliver the email receipt even if SMS was sent
-      const isCustomerEmailReceipt = payload.recipientRole === 'customer' && ch.name === 'email' && !!payload.emailTo
-      if (!isCustomerEmailReceipt) {
+      // For customer notifications (e.g. job assigned / verification PIN),
+      // allow WhatsApp and Email to deliver even if SMS was already sent,
+      // ensuring the customer receives the confirmation and PIN on both channels.
+      const isCustomerMultiChannel =
+        payload.recipientRole === 'customer' &&
+        (ch.name === 'whatsapp' || (ch.name === 'email' && !!payload.emailTo))
+      if (!isCustomerMultiChannel) {
         // Skip remaining channels — recipient already reached for an urgent alert.
         results.push({
           channel: ch.name,
@@ -1463,34 +1467,57 @@ export async function notifyCustomerJobAssigned(
 
 export async function notifyCustomerJobStarted(
   job: Record<string, unknown>,
-  employee: Record<string, unknown>
+  employee: Record<string, unknown>,
+  opts?: { channel?: 'whatsapp' | 'sms' | 'email' | string }
 ): Promise<void> {
-  const customerPhone = (job.customerPhone as string) || ''
+  let customerPhone = (job.customerPhone as string) || ''
+  let customerName = (job.customerName as string) || ''
+
+  // Fallback to customer table if missing on job
+  if ((!customerPhone || !customerName) && job.customerId) {
+    try {
+      const cust = await db.customer.findUnique({
+        where: { id: job.customerId as string },
+        select: { phone: true, name: true },
+      })
+      if (!customerPhone && cust?.phone) customerPhone = cust.phone
+      if (!customerName && cust?.name) customerName = cust.name
+    } catch {
+      // Non-fatal
+    }
+  }
+
   if (!customerPhone) return
 
   const scheduledTime = (job.scheduledTime as string) || formatTime(job.scheduledAt as string | null)
+  const trackingUrl = `${getAppUrl()}/portal/${job.id as string}`
+  const jobNumber = getJobNumber(job)
 
   const message = [
-    '🚀 Technician On The Way',
+    '🚗 *Technician On The Way*',
     '',
-    `${employee.name || 'Your technician'} is on the way!`,
-    `Service: ${job.title || 'N/A'}`,
-    `Address: ${job.address || 'N/A'}`,
-    `ETA: ${scheduledTime}`,
-  ].join('\n')
+    `Hi ${customerName || 'there'}, your technician ${employee.name || 'your technician'} has started traveling and is on the way to your location.`,
+    '',
+    `*Job:* #${jobNumber}${job.title ? ` • ${job.title}` : ''}`,
+    job.address ? `*Destination:* ${job.address}` : '',
+    scheduledTime ? `*ETA:* ${scheduledTime}` : '',
+    '',
+    `📍 *Track Live:* ${trackingUrl}`,
+  ].filter(Boolean).join('\n')
 
   await sendJobNotification({
     to: customerPhone,
     message,
-    recipientName: (job.customerName as string) || undefined,
+    type: 'text',
+    recipientName: customerName || undefined,
     recipientRole: 'customer',
-    subject: `Technician On The Way`,
+    subject: `Technician On The Way • ${employee.name || 'Technician'}`,
     jobId: job.id as string,
     employeeId: (employee.id as string) || undefined,
     customerId: (job.customerId as string) || undefined,
-    tenantId: (job.tenantId as string) || undefined,
+    tenantId: (job.tenantId as string) || (job.workspaceId as string) || undefined,
     eventType: 'technician.on_route',
-    smsMessage: `${employee.name || 'Your technician'} is on the way! Service: ${job.title || 'N/A'}. ETA: ${scheduledTime}.`,
+    channels: opts?.channel ? [opts.channel] : ['whatsapp'],
   })
 }
 

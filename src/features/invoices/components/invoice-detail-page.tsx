@@ -35,14 +35,14 @@ import type { ReactNode } from 'react';
 import {
   Receipt, Pencil, Send, ShieldCheck, CheckCircle2, RotateCcw,
   Bell, MoreHorizontal, Loader2, User, FileText, Briefcase,
-  Phone, Mail, ScrollText, StickyNote, Eye, Plus, AlertTriangle, Clock, CreditCard, Copy,
+  Phone, Mail, ScrollText, StickyNote, Eye, Plus, AlertTriangle, Clock, CreditCard, Copy, MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { FormSectionCard } from '@/components/shared/form-section-card';
-import { formatShortDate } from '@/features/invoices/utils/invoice-helpers';
+import { formatShortDate, buildInvoiceWhatsAppShareUrl } from '@/features/invoices/utils/invoice-helpers';
 import { renderStatusBadge } from '@/features/invoices/components/invoice-shared';
 import type {
   Customer,
@@ -104,6 +104,20 @@ export function InvoiceDetailPage({
   const billingAddress = linkedCustomer?.address || '';
   const customerPhone = inv.customerPhone || linkedCustomer?.phone || '';
   const customerEmail = inv.customerEmail || linkedCustomer?.email || '';
+  const customerName = linkedCustomer?.name || inv.customer || 'Customer';
+
+  const handleShareWhatsApp = () => {
+    const payUrl = typeof window !== 'undefined' ? `${window.location.origin}/invoices/${inv.id}` : '';
+    const waUrl = buildInvoiceWhatsAppShareUrl({
+      phone: customerPhone,
+      invoiceNumber: inv.number,
+      total: format(inv.total),
+      customerName,
+      dueDate: inv.dueDate ? formatShortDate(inv.dueDate) : null,
+      payUrl,
+    });
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
 
   // Status-aware flag for the primary lifecycle action in the sticky header.
   const canSend =
@@ -220,6 +234,15 @@ export function InvoiceDetailPage({
                 Send
               </button>
             )}
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 transition-colors shadow-xs"
+              title="Share invoice directly via WhatsApp (wa.me)"
+            >
+              <MessageCircle className="size-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+              Share WhatsApp
+            </button>
             {inv.status === 'pending_approval' && (
               <button
                 type="button"
@@ -326,6 +349,14 @@ export function InvoiceDetailPage({
             </button>
             <button
               type="button"
+              onClick={handleShareWhatsApp}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 transition-colors"
+              title="Share invoice directly via WhatsApp (wa.me)"
+            >
+              <MessageCircle className="size-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400" /> Share WhatsApp
+            </button>
+            <button
+              type="button"
               onClick={() => onInvoiceAction(inv.id, 'mark_paid')}
               disabled={!!actionLoading[`${inv.id}-mark_paid`]}
               className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 transition-colors"
@@ -374,6 +405,14 @@ export function InvoiceDetailPage({
               className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-xs"
             >
               <CheckCircle2 className="size-3.5 mr-1.5" /> Record Payment
+            </button>
+            <button
+              type="button"
+              onClick={handleShareWhatsApp}
+              className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 transition-colors"
+              title="Share invoice directly via WhatsApp (wa.me)"
+            >
+              <MessageCircle className="size-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400" /> Share WhatsApp
             </button>
             <button
               type="button"

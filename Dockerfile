@@ -70,6 +70,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/cache-handler.js ./cache-handler.js
 COPY --from=builder /app/outreach_sent_history.json ./outreach_sent_history.json
 
 EXPOSE 3000

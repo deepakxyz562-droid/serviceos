@@ -6,6 +6,7 @@ import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 import { EventBus } from '@/lib/event-bus';
 import { setLifecycleTimestamp } from '@/lib/job-lifecycle';
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
+import { notifyCustomerJobStarted } from '@/lib/whatsapp-notifications';
 
 /**
  * fireAndForget — runs a promise in the background, logging any rejection.
@@ -197,7 +198,13 @@ export async function POST(
           },
         });
 
-        // Notify customer that the technician is on the way
+        // Notify customer that the technician is on the way (WhatsApp only)
+        fireAndForget(
+          'customer start_travel WhatsApp notification',
+          notifyCustomerJobStarted(updatedJob, employee, { channel: 'whatsapp' })
+        );
+
+        // Notify tenant admins that the technician is on the way
         await notifyTenantAdmins(user.tenantId || 'default', {
           type: 'technician_on_route',
           category: 'job',

@@ -15,6 +15,10 @@ const withBundleAnalyzer = bundleAnalyzer({
 // Fieseros demo - trigger dev server restart
 const nextConfig: NextConfig = {
   output: "standalone",
+  // In-Memory LRU Cache Handler: prevents Next.js 16 from writing unbounded gigabytes
+  // of route-cache and RSC payloads into .next/server/route-cache/APP_PAGE/ on disk.
+  cacheHandler: process.env.CACHE_HANDLER_PATH || (process.env.NODE_ENV === "production" ? require.resolve("./cache-handler.js") : undefined),
+  cacheMaxMemorySize: 50 * 1024 * 1024, // 50 MB max in-memory cache limit
   compress: true, // Enable gzip compression — critical for sitemaps (Google prefers compressed responses)
   typescript: {
     // Next.js build runs typechecking in the same worker process which causes

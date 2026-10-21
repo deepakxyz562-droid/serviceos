@@ -95,6 +95,7 @@ import {
   formatShortDate,
   getStatusConfig,
   parseApiInvoice,
+  buildInvoiceWhatsAppShareUrl,
 } from '@/features/invoices/utils/invoice-helpers';
 import { renderStatusBadge } from '@/features/invoices/components/invoice-shared';
 import { InvoiceDetailPage } from '@/features/invoices/components/invoice-detail-page';
@@ -1359,6 +1360,25 @@ export function InvoicesView() {
                   <MessageCircle className="size-3.5 mr-2" />
                 )}
                 Send WhatsApp Only
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  const matchedCust = customers.find((c) => c.id === inv.customerId);
+                  const phone = inv.customerPhone || matchedCust?.phone || '';
+                  const payUrl = typeof window !== 'undefined' ? `${window.location.origin}/invoices/${inv.id}` : '';
+                  const waUrl = buildInvoiceWhatsAppShareUrl({
+                    phone,
+                    invoiceNumber: inv.number,
+                    total: format(inv.total),
+                    customerName: inv.customer || matchedCust?.name,
+                    dueDate: inv.dueDate ? formatShortDate(inv.dueDate) : null,
+                    payUrl,
+                  });
+                  window.open(waUrl, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                <MessageCircle className="size-3.5 mr-2 text-emerald-600" />
+                Share via WhatsApp
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!!actionLoading[`${inv.id}-reminder`]}

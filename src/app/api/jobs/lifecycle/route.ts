@@ -456,9 +456,9 @@ export async function POST(request: NextRequest) {
           include: { assignee: true, customer: true, resource: true },
         })
 
-        // Notify customer that technician is on the way (background)
+        // Notify customer that technician is on the way (WhatsApp only)
         if (job.customerPhone) {
-          fireAndForget('customer start notification', notifyCustomerJobStarted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }))
+          fireAndForget('customer start notification', notifyCustomerJobStarted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }, { channel: 'whatsapp' }))
         }
 
         // ─── Emit event via EventBus (background) ────────────────

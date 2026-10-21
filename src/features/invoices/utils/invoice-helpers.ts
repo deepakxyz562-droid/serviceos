@@ -307,3 +307,41 @@ export function parseApiInvoice(raw: Record<string, unknown>): Invoice {
     bookingId: (raw.bookingId as string | null) || null,
   };
 }
+
+/**
+ * Builds a direct WhatsApp Web / App share URL (wa.me) for an invoice.
+ * Opens WhatsApp with the customer's phone pre-filled and a complete,
+ * beautifully formatted invoice summary with direct payment link.
+ */
+export function buildInvoiceWhatsAppShareUrl(params: {
+  phone?: string | null;
+  invoiceNumber: string;
+  total: string;
+  customerName?: string;
+  businessName?: string;
+  dueDate?: string | null;
+  payUrl?: string;
+}): string {
+  const rawPhone = (params.phone || '').replace(/\D/g, '');
+  // Default to India country code 91 if standard 10-digit number without country code
+  const formattedPhone = /^\d{10}$/.test(rawPhone) ? `91${rawPhone}` : rawPhone;
+
+  const lines = [
+    `🧾 *Invoice #${params.invoiceNumber}*`,
+    params.customerName ? `Hi ${params.customerName},` : 'Hi,',
+    params.businessName
+      ? `Here are your invoice details from *${params.businessName}*:`
+      : 'Here are your invoice details:',
+    '',
+    `*Total Due:* ${params.total}`,
+    params.dueDate ? `*Due Date:* ${params.dueDate}` : '',
+    params.payUrl ? `*View & Pay Online:* ${params.payUrl}` : '',
+    '',
+    'Thank you for your business! 🙏',
+  ].filter(Boolean);
+
+  const text = encodeURIComponent(lines.join('\n'));
+  return formattedPhone
+    ? `https://wa.me/${formattedPhone}?text=${text}`
+    : `https://wa.me/?text=${text}`;
+}

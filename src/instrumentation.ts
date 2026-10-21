@@ -19,7 +19,14 @@ export async function register() {
       const { startOutreachBackgroundWorker } = await import('@/lib/outreach/worker-daemon');
       startOutreachBackgroundWorker();
     } catch (err) {
-      console.warn('[Instrumentation] Failed to start background worker:', err);
+      console.warn('[Instrumentation] Failed to start outreach background worker:', err);
+    }
+
+    try {
+      const { startDiskJanitorWorker } = await import('@/lib/server/disk-janitor');
+      startDiskJanitorWorker();
+    } catch (err) {
+      console.warn('[Instrumentation] Failed to start disk janitor worker:', err);
     }
   }
 }

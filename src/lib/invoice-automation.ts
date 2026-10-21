@@ -963,6 +963,34 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     try {
       const r = await sendWhatsAppMessage({ to: recipientPhone, message: waMessage, tenantId: invoice.tenantId || undefined })
       result.whatsapp = { success: !!r.success, error: r.error, simulated: r.simulated }
+      // NotificationLog for WhatsApp
+      try {
+        await db.notificationLog.create({
+          data: {
+            type: 'whatsapp',
+            recipient: recipientPhone,
+            recipientName: customerName,
+            recipientRole: 'customer',
+            subject: `Invoice ${invoice.number}`,
+            message: waMessage,
+            status: r.success ? 'sent' : 'failed',
+            externalId: r.messageId,
+            customerId: invoice.customerId || undefined,
+            tenantId: invoice.tenantId || undefined,
+            metadataJson: JSON.stringify({
+              channel: 'whatsapp',
+              eventType: 'invoice.sent',
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.number,
+              simulated: !!r.simulated,
+              credentialUsed: r.credentialUsed,
+              error: r.error,
+            }),
+          },
+        })
+      } catch (logErr) {
+        console.error(`[InvoiceAutomation] sendInvoice(${invoice.number}): WhatsApp NotificationLog create failed:`, logErr)
+      }
     } catch (err) {
       result.whatsapp = { success: false, error: String(err) }
     }
