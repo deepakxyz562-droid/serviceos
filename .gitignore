@@ -85,6 +85,8 @@ db/*.db-journal
 !mobile-pro/assets/**
 !quote-flow-mobile/assets/
 !quote-flow-mobile/assets/**
+!bosmobile/assets/
+!bosmobile/assets/**
 .expo/
 
 # Agent context files

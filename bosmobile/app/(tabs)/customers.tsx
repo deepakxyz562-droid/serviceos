@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -404,14 +406,119 @@ export default function CustomersScreen() {
           )}
         </ScrollView>
       )}
-      <Modal visible={adding} transparent animationType="slide" onRequestClose={() => { if (!saving) setAdding(false); }}><View style={{ flex: 1, backgroundColor: '#0006', justifyContent: 'flex-end' }}><View style={{ backgroundColor: 'white', padding: 20, gap: 16, borderTopLeftRadius: 20, borderTopRightRadius: 20 }}>
-        <Text style={styles.title}>{t('Add customer', 'ग्राहक जोड़ें')}</Text>
-        <TextInput accessibilityLabel={t('Customer name', 'ग्राहक का नाम')} placeholder={t('Customer name', 'ग्राहक का नाम')} value={newName} onChangeText={setNewName} maxLength={200} editable={!saving} style={[styles.searchBox, { marginHorizontal: 0, minHeight: 48 }]} />
-        <TextInput accessibilityLabel={t('Phone with country code', 'देश कोड सहित फ़ोन')} placeholder={t('Phone with country code', 'देश कोड सहित फ़ोन')} value={newPhone} onChangeText={setNewPhone} keyboardType="phone-pad" maxLength={24} editable={!saving} style={[styles.searchBox, { marginHorizontal: 0, minHeight: 48 }]} />
-        {saveError && <Text style={{ color: '#b91c1c' }}>{t('Customer was not saved. Check the details and retry.', 'ग्राहक सेव नहीं हुआ। जानकारी जाँचें और फिर कोशिश करें।')}</Text>}
-        <TouchableOpacity accessibilityRole="button" disabled={saving || !newName.trim() || !newPhone.trim()} onPress={() => void saveCustomer()} style={styles.retryBtn}>{saving ? <ActivityIndicator color="white" /> : <Text style={styles.retryBtnText}>{t('Save customer', 'ग्राहक सेव करें')}</Text>}</TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" disabled={saving} onPress={() => setAdding(false)} style={{ padding: 12 }}><Text>{t('Cancel', 'रद्द करें')}</Text></TouchableOpacity>
-      </View></View></Modal>
+      <Modal
+        visible={adding}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!saving) setAdding(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.customerModalOverlay}
+        >
+          <View style={styles.customerModalSheet}>
+            <View style={styles.customerModalHandle} />
+            <View style={styles.customerModalHeader}>
+              <View>
+                <Text style={styles.customerModalTitle}>{t('Add New Customer', 'नया ग्राहक जोड़ें')}</Text>
+                <Text style={styles.customerModalSub}>
+                  {t('Save to POS, khata ledger & WhatsApp directory', 'POS, खाता और WhatsApp में ग्राहक सहेजें')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => !saving && setAdding(false)}
+                disabled={saving}
+                style={styles.customerModalCloseBtn}
+              >
+                <MaterialIcons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.customerModalBody}
+            >
+              <Text style={styles.customerInputLabel}>{t('Customer Full Name *', 'ग्राहक का पूरा नाम *')}</Text>
+              <View style={styles.customerInputRow}>
+                <MaterialIcons name="person-outline" size={20} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  accessibilityLabel={t('Customer name', 'ग्राहक का नाम')}
+                  placeholder={t('e.g. Ramesh Kumar', 'जैसे रमेश कुमार')}
+                  placeholderTextColor="#94a3b8"
+                  value={newName}
+                  onChangeText={setNewName}
+                  maxLength={200}
+                  editable={!saving}
+                  style={styles.customerTextInput}
+                  autoFocus
+                />
+              </View>
+
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('WhatsApp / Mobile Phone *', 'WhatsApp / मोबाइल फ़ोन *')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <View style={styles.countryCodeBadge}>
+                  <Text style={styles.countryCodeText}>+91</Text>
+                </View>
+                <TextInput
+                  accessibilityLabel={t('Phone with country code', 'देश कोड सहित फ़ोन')}
+                  placeholder={t('10-digit mobile number', '10 अंकों का मोबाइल नंबर')}
+                  placeholderTextColor="#94a3b8"
+                  value={newPhone}
+                  onChangeText={setNewPhone}
+                  keyboardType="phone-pad"
+                  maxLength={24}
+                  editable={!saving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              {saveError && (
+                <View style={styles.customerErrorBanner}>
+                  <MaterialIcons name="error-outline" size={16} color="#b91c1c" />
+                  <Text style={styles.customerErrorText}>
+                    {t('Customer could not be saved. Check details & retry.', 'ग्राहक सेव नहीं हुआ। जानकारी जाँचें और फिर कोशिश करें।')}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.customerModalActionRow}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={saving}
+                  onPress={() => setAdding(false)}
+                  style={styles.customerModalCancelBtn}
+                >
+                  <Text style={styles.customerModalCancelText}>{t('Cancel', 'रद्द करें')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  disabled={saving || !newName.trim() || !newPhone.trim()}
+                  onPress={() => void saveCustomer()}
+                  style={[
+                    styles.customerModalSaveBtn,
+                    (!newName.trim() || !newPhone.trim()) && styles.customerModalSaveBtnDisabled,
+                  ]}
+                >
+                  {saving ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="check" size={18} color="white" />
+                      <Text style={styles.customerModalSaveText}>{t('Save Customer', 'ग्राहक सेव करें')}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -740,5 +847,155 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  customerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'flex-end',
+  },
+  customerModalSheet: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '88%',
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  customerModalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#cbd5e1',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  customerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  customerModalTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  customerModalSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  customerModalCloseBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+  },
+  customerModalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+  },
+  customerInputLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  customerInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    minHeight: 48,
+  },
+  customerTextInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0f172a',
+    paddingVertical: 10,
+  },
+  countryCodeBadge: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  countryCodeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  customerErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 14,
+  },
+  customerErrorText: {
+    color: '#b91c1c',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  customerModalActionRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 22,
+  },
+  customerModalCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#f1f5f9',
+  },
+  customerModalCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  customerModalSaveBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#10b981',
+    shadowColor: '#10b981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  customerModalSaveBtnDisabled: {
+    backgroundColor: '#94a3b8',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  customerModalSaveText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });

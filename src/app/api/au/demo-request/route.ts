@@ -64,12 +64,7 @@ export async function POST(request: NextRequest) {
     // 1. Try to record in db.lead if the demo or default tenant exists
     try {
       const demoTenant = await db.tenant.findFirst({
-        where: {
-          OR: [
-            { slug: 'abc-plumbing-demo' },
-            { isPlatformDefault: true },
-          ],
-        },
+        where: { slug: 'abc-plumbing-demo' },
       });
 
       if (demoTenant) {

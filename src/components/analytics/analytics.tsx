@@ -38,10 +38,12 @@ import Script from "next/script";
  */
 const GA_ID =
   process.env.NEXT_PUBLIC_GA_ID || "G-8BVRFDEXCS";
+const GOOGLE_ADS_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || "AW-18483108780";
 
 export function Analytics() {
   // Empty string => disabled. Render nothing, emit no scripts.
-  if (!GA_ID) return null;
+  if (!GA_ID && !GOOGLE_ADS_ID) return null;
 
   return (
     <>
@@ -59,8 +61,7 @@ export function Analytics() {
              functionality/security storage (which are strictly necessary
              for the site to function and don't need consent under GDPR).
           c) Read localStorage for a prior decision; if the user already
-             granted analytics, immediately update consent to "granted"
-             before gtag.js loads (so the first GA4 ping carries cookies).
+             granted analytics or advertising, immediately update consent.
       */}
       <script
         dangerouslySetInnerHTML={{
@@ -81,8 +82,15 @@ export function Analytics() {
               var raw = localStorage.getItem('fieseros_consent');
               if (raw) {
                 var c = JSON.parse(raw);
-                if (c && typeof c === 'object' && c.analytics === true) {
-                  gtag('consent', 'update', { 'analytics_storage': 'granted' });
+                if (c && typeof c === 'object') {
+                  var updates = {};
+                  if (c.analytics === true) updates['analytics_storage'] = 'granted';
+                  if (c.advertising === true) {
+                    updates['ad_storage'] = 'granted';
+                    updates['ad_user_data'] = 'granted';
+                    updates['ad_personalization'] = 'granted';
+                  }
+                  if (Object.keys(updates).length > 0) gtag('consent', 'update', updates);
                 }
               }
             } catch (e) {}
@@ -91,30 +99,26 @@ export function Analytics() {
       />
 
       {/*
-        (2) Load the GA4 library (gtag.js) from Google's CDN.
-        -----------------------------------------------------
+        (2) Load the GA4 / Google Tag library (gtag.js) from Google's CDN.
+        -----------------------------------------------------------------
         strategy="afterInteractive" defers loading until the page is
-        interactive, so it never blocks first contentful paint. The CSP in
-        next.config.ts already whitelists www.googletagmanager.com.
+        interactive, so it never blocks first contentful paint.
       */}
       <Script
-        src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+        src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID || GOOGLE_ADS_ID}`}
         strategy="afterInteractive"
       />
 
       {/*
-        (3) Initialize the GA4 config for this measurement ID.
-        -----------------------------------------------------
-        anonymize_ip is on by default for GA4, but we set it explicitly for
-        clarity and in case Google ever changes the default. This is the
-        exact init snippet the user requested.
+        (3) Initialize the GA4 + Google Ads config for this measurement ID.
       */}
-      <Script id="ga4-init" strategy="afterInteractive">
+      <Script id="google-tags-init" strategy="afterInteractive">
         {`
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
           gtag('js', new Date());
-          gtag('config', '${GA_ID}', { 'anonymize_ip': true });
+          ${GA_ID ? `gtag('config', '${GA_ID}', { 'anonymize_ip': true });` : ''}
+          ${GOOGLE_ADS_ID ? `gtag('config', '${GOOGLE_ADS_ID}');` : ''}
         `}
       </Script>
     </>

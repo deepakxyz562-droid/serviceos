@@ -14,7 +14,7 @@ import {
 import { Feather, FontAwesome, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBlueprintStore } from '@/stores/blueprint-store';
-import { NuvoraMark } from '@/components/brand/nuvora-mark';
+import { BosMark } from '@/components/brand/bos-mark';
 import { BUSINESS_TYPE_LABELS } from '@/lib/blueprint/presets';
 import { COUNTRY_PACKS } from '@/lib/blueprint/country-packs';
 import type { BusinessType, CountryCode } from '@/lib/blueprint/types';
@@ -93,9 +93,9 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Nuvora Brand Header */}
+        {/* BOS Brand Header */}
         <View style={styles.header}>
-          <NuvoraMark size={84} showText subtitle="Business Management OS" variant="dark" />
+          <BosMark size={84} showText subtitle="Business Operating System" variant="dark" />
           <View style={styles.taglineChip}>
             <Text style={styles.taglineChipText}>
               🛍️ Retail · 🍽️ Restaurant · 🔧 Services · 💇 Salon

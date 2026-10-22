@@ -14,6 +14,7 @@ import {
   Share,
   Platform,
   Image,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Paths, File as ExpoFile } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -1126,88 +1127,168 @@ export default function BillingScreen() {
         animationType="slide"
         onRequestClose={() => setFormModalOpen(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalCard}>
+            <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {formType === 'INVOICE' ? 'Create New GST Invoice' : 'Create Quotation / Estimate'}
-              </Text>
-              <TouchableOpacity onPress={() => setFormModalOpen(false)}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {formType === 'INVOICE' ? 'Create New GST Invoice' : 'Create Quotation / Estimate'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  {formType === 'INVOICE' ? 'BOS Vyapar Tax Invoice with digital QR & WhatsApp delivery' : 'Formal price quotation with line items & GST'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setFormModalOpen(false)}
+                style={{ padding: 6, borderRadius: 16, backgroundColor: '#f1f5f9' }}
+              >
                 <MaterialIcons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Customer info */}
-              <Text style={styles.inputLabel}>Customer / Client Name</Text>
-              <TextInput
-                value={customerName}
-                onChangeText={setCustomerName}
-                style={styles.modalInput}
-                placeholder="e.g. Rahul Sharma"
-              />
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 50 }}
+            >
+              {/* Customer info card */}
+              <View style={styles.invoiceCustomerCard}>
+                <Text style={styles.inputLabel}>Customer / Client Name *</Text>
+                <View style={styles.invoiceInputRow}>
+                  <MaterialIcons name="person-outline" size={18} color="#64748b" style={{ marginRight: 6 }} />
+                  <TextInput
+                    value={customerName}
+                    onChangeText={setCustomerName}
+                    style={styles.invoiceCardInput}
+                    placeholder="e.g. Rahul Sharma"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
 
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Customer WhatsApp / Mobile</Text>
-              <TextInput
-                keyboardType="phone-pad"
-                value={customerPhone}
-                onChangeText={setCustomerPhone}
-                style={styles.modalInput}
-                placeholder="10-digit mobile number"
-              />
+                <Text style={[styles.inputLabel, { marginTop: 10 }]}>Customer WhatsApp / Mobile *</Text>
+                <View style={styles.invoiceInputRow}>
+                  <View style={styles.invoiceCountryBadge}>
+                    <Text style={styles.invoiceCountryText}>+91</Text>
+                  </View>
+                  <TextInput
+                    keyboardType="phone-pad"
+                    value={customerPhone}
+                    onChangeText={setCustomerPhone}
+                    style={styles.invoiceCardInput}
+                    placeholder="10-digit mobile number"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+              </View>
 
               {/* Items List */}
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionHeaderTitle}>Line Items</Text>
+                <Text style={styles.sectionHeaderTitle}>Line Items ({items.length})</Text>
                 <TouchableOpacity onPress={addItemRow} style={styles.addMiniRowBtn}>
                   <MaterialIcons name="add" size={14} color="#059669" />
                   <Text style={styles.addMiniRowText}>Add Item</Text>
                 </TouchableOpacity>
               </View>
 
-              {items.map((it, idx) => (
-                <View key={idx} style={styles.itemRowCard}>
-                  <View style={{ flexDirection: 'row', gap: 6, flex: 1 }}>
+              {items.map((it, idx) => {
+                const rowTotal = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+                return (
+                  <View key={idx} style={styles.invoiceItemCard}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b' }}>Item #{idx + 1}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#059669' }}>
+                          ₹{rowTotal.toFixed(2)}
+                        </Text>
+                        {items.length > 1 && (
+                          <TouchableOpacity
+                            onPress={() => removeItemRow(idx)}
+                            style={{ padding: 4, borderRadius: 6, backgroundColor: '#fee2e2' }}
+                          >
+                            <MaterialIcons name="delete-outline" size={16} color="#ef4444" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
                     <TextInput
                       value={it.description}
                       onChangeText={(val) => updateItem(idx, 'description', val)}
-                      placeholder="Item description / Service"
+                      placeholder="Item description / Service name"
                       placeholderTextColor="#94a3b8"
-                      style={[styles.modalInput, { flex: 2 }]}
+                      style={styles.invoiceItemDescInput}
                     />
-                    <TextInput
-                      keyboardType="numeric"
-                      value={it.qty.toString()}
-                      onChangeText={(val) => updateItem(idx, 'qty', parseFloat(val) || 1)}
-                      placeholder="Qty"
-                      style={[styles.modalInput, { width: 50, textAlign: 'center' }]}
-                    />
-                    <TextInput
-                      keyboardType="numeric"
-                      value={it.unitPrice ? it.unitPrice.toString() : ''}
-                      onChangeText={(val) => updateItem(idx, 'unitPrice', parseFloat(val) || 0)}
-                      placeholder="₹ Rate"
-                      style={[styles.modalInput, { width: 80, textAlign: 'right' }]}
-                    />
+
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, alignItems: 'center' }}>
+                      {/* Qty Stepper */}
+                      <View style={styles.invoiceQtyRow}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            hapticFeedback.light();
+                            const newQ = Math.max(1, (Number(it.qty) || 1) - 1);
+                            updateItem(idx, 'qty', newQ);
+                          }}
+                          style={styles.invoiceQtyBtn}
+                        >
+                          <MaterialIcons name="remove" size={14} color="#334155" />
+                        </TouchableOpacity>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={it.qty.toString()}
+                          onChangeText={(val) => updateItem(idx, 'qty', parseFloat(val) || 1)}
+                          style={styles.invoiceQtyInput}
+                        />
+                        <TouchableOpacity
+                          onPress={() => {
+                            hapticFeedback.light();
+                            const newQ = (Number(it.qty) || 0) + 1;
+                            updateItem(idx, 'qty', newQ);
+                          }}
+                          style={styles.invoiceQtyBtn}
+                        >
+                          <MaterialIcons name="add" size={14} color="#334155" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Unit Price Rate Input */}
+                      <View style={styles.invoiceRateRow}>
+                        <Text style={styles.invoiceRateSymbol}>₹</Text>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={it.unitPrice ? it.unitPrice.toString() : ''}
+                          onChangeText={(val) => updateItem(idx, 'unitPrice', parseFloat(val) || 0)}
+                          placeholder="Rate"
+                          placeholderTextColor="#94a3b8"
+                          style={styles.invoiceRateInput}
+                        />
+                      </View>
+                    </View>
                   </View>
-                  {items.length > 1 && (
-                    <TouchableOpacity
-                      onPress={() => removeItemRow(idx)}
-                      style={{ padding: 4 }}
-                    >
-                      <MaterialIcons name="delete-outline" size={18} color="#ef4444" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
+                );
+              })}
+
+              {/* Add item dashed button */}
+              <TouchableOpacity onPress={addItemRow} style={styles.invoiceAddDashedBtn}>
+                <MaterialIcons name="add-circle-outline" size={18} color="#059669" />
+                <Text style={styles.invoiceAddDashedText}>Add Another Item</Text>
+              </TouchableOpacity>
 
               {/* Tax Rate & Discount */}
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>GST Tax Rate (%)</Text>
+              <Text style={[styles.inputLabel, { marginTop: 14 }]}>GST Tax Rate</Text>
               <View style={styles.taxRateRow}>
                 {[0, 5, 12, 18, 28].map((rate) => (
                   <TouchableOpacity
                     key={rate}
-                    onPress={() => setTaxRate(rate)}
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setTaxRate(rate);
+                    }}
                     style={[
                       styles.taxBtn,
                       taxRate === rate && styles.taxBtnActive,
@@ -1225,14 +1306,18 @@ export default function BillingScreen() {
                 ))}
               </View>
 
-              <Text style={[styles.inputLabel, { marginTop: 10 }]}>Discount (₹)</Text>
-              <TextInput
-                keyboardType="numeric"
-                value={discountValue}
-                onChangeText={setDiscountValue}
-                style={styles.modalInput}
-                placeholder="₹ 0.00"
-              />
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Discount (₹)</Text>
+              <View style={styles.invoiceDiscountRow}>
+                <Text style={styles.invoiceRateSymbol}>₹</Text>
+                <TextInput
+                  keyboardType="numeric"
+                  value={discountValue}
+                  onChangeText={setDiscountValue}
+                  style={styles.invoiceDiscountInput}
+                  placeholder="0.00"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
 
               {/* Live Computed Summary */}
               <View style={styles.liveCalculationBox}>
@@ -1276,7 +1361,7 @@ export default function BillingScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 1. Vyapar-Grade Full A4 GST Invoice Preview Modal */}
@@ -1757,8 +1842,13 @@ export default function BillingScreen() {
         animationType="slide"
         onRequestClose={() => setBrandModalOpen(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
           <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+            <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>GST Store Branding</Text>
               <TouchableOpacity onPress={() => setBrandModalOpen(false)}>
@@ -1766,7 +1856,12 @@ export default function BillingScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ paddingVertical: 12 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               <Text style={styles.inputLabel}>Business / Store Name</Text>
               <TextInput
                 value={storeInfo.businessName}
@@ -1873,7 +1968,7 @@ export default function BillingScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -2364,6 +2459,14 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     maxHeight: '88%',
   },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#cbd5e1',
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2423,6 +2526,144 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 6,
+  },
+  invoiceCustomerCard: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  invoiceInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    minHeight: 44,
+  },
+  invoiceCardInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0f172a',
+    paddingVertical: 8,
+  },
+  invoiceCountryBadge: {
+    backgroundColor: '#e2e8f0',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginRight: 6,
+  },
+  invoiceCountryText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  invoiceItemCard: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  invoiceItemDescInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '500',
+  },
+  invoiceQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  invoiceQtyBtn: {
+    padding: 8,
+  },
+  invoiceQtyInput: {
+    width: 38,
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+    paddingVertical: 6,
+  },
+  invoiceRateRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+  },
+  invoiceRateSymbol: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748b',
+    marginRight: 4,
+  },
+  invoiceRateInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    paddingVertical: 6,
+  },
+  invoiceAddDashedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#a7f3d0',
+    backgroundColor: '#ecfdf5',
+    marginVertical: 10,
+  },
+  invoiceAddDashedText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  invoiceDiscountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    minHeight: 44,
+  },
+  invoiceDiscountInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    paddingVertical: 8,
   },
   taxRateRow: {
     flexDirection: 'row',

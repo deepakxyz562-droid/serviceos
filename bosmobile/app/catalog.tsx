@@ -35,6 +35,17 @@ export interface ProductItem {
   source?: 'manual' | 'shopify' | 'woocommerce' | 'csv';
 }
 
+const DEFAULT_CATEGORY_PILLS = [
+  'Grocery',
+  'Dairy & Eggs',
+  'Beverages',
+  'Snacks',
+  'Bakery',
+  'Fruits & Veg',
+  'Personal Care',
+  'Services',
+];
+
 export default function MobileCatalogScreen() {
   const router = useRouter();
   const { create, filter } = useLocalSearchParams<{ create?: string; filter?: string }>();
@@ -586,113 +597,204 @@ export default function MobileCatalogScreen() {
         onRequestClose={() => setModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalSheet}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>
-                {editingItem ? t('Edit product','सामान बदलें') : t('Add product','सामान जोड़ें')}
-              </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialIcons name="close" size={24} color="#64748b" />
+              <View>
+                <Text style={styles.sheetTitle}>
+                  {editingItem ? t('Edit Product', 'सामान बदलें') : t('Add New Product', 'नया सामान जोड़ें')}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  {editingItem ? t('Update item in POS & store catalog', 'POS और कैटलॉग में अपडेट करें') : t('List item on POS & online storefront', 'POS और ऑनलाइन स्टोर पर जोड़ें')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={{ padding: 6, borderRadius: 16, backgroundColor: '#f1f5f9' }}
+              >
+                <MaterialIcons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>{t('Product name *','सामान का नाम *')}</Text>
+            <ScrollView
+              style={styles.modalForm}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
+              <Text style={styles.inputLabel}>{t('Product Name *', 'सामान का नाम *')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t('e.g. Basmati rice 1 kg','जैसे बासमती चावल 1 किलो')}
+                placeholder={t('e.g. Basmati Rice 1 kg / Cold Brew Coffee', 'जैसे बासमती चावल 1 किलो')}
+                placeholderTextColor="#94a3b8"
                 value={formName}
                 onChangeText={setFormName}
+                autoFocus={!editingItem}
               />
 
+              {/* Price and Category */}
               <View style={styles.formRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>{t('Price','कीमत')} ({countryPack.currency.symbol}) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="180"
-                    keyboardType="numeric"
-                    value={formPrice}
-                    onChangeText={setFormPrice}
-                  />
+                  <Text style={styles.inputLabel}>{t('Price *', 'कीमत *')}</Text>
+                  <View style={styles.currencyInputRow}>
+                    <View style={styles.currencyBadge}>
+                      <Text style={styles.currencyBadgeText}>{countryPack.currency.symbol || '₹'}</Text>
+                    </View>
+                    <TextInput
+                      style={styles.currencyTextInput}
+                      placeholder="0.00"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numeric"
+                      value={formPrice}
+                      onChangeText={setFormPrice}
+                    />
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>{t('Category','श्रेणी')}</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t('e.g. Grocery','जैसे किराना')}
-                    value={formCategory}
-                    onChangeText={setFormCategory}
-                  />
-                </View>
-              </View>
 
-              <View style={styles.formRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>SKU Code</Text>
+                  <Text style={styles.inputLabel}>{t('SKU Code', 'SKU कोड')}</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. BRD-001"
+                    placeholderTextColor="#94a3b8"
                     value={formSku}
                     onChangeText={setFormSku}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>{t('Available for sale','बिक्री के लिए उपलब्ध')}</Text>
-                  <View style={styles.switchRow}>
-                    <Text style={styles.switchLabel}>
-                      {formIsActive ? t('Available','उपलब्ध') : t('Hidden','छिपा हुआ')}
-                    </Text>
-                    <Switch
-                      value={formIsActive}
-                      onValueChange={setFormIsActive}
-                      trackColor={{ false: '#cbd5e1', true: '#10b981' }}
-                    />
-                  </View>
-                </View>
               </View>
 
-              <Text style={styles.inputLabel}>{t('Image URL (optional)','तस्वीर का लिंक (वैकल्पिक)')}</Text>
+              {/* Category Input & Quick Pills */}
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                {t('Category', 'श्रेणी')}
+              </Text>
               <TextInput
                 style={styles.input}
-                placeholder="https://images.unsplash.com/..."
-                value={formImageUrl}
-                onChangeText={setFormImageUrl}
-                autoCapitalize="none"
+                placeholder={t('e.g. Grocery, Beverages, Snacks', 'जैसे किराना, पेय, स्नैक्स')}
+                placeholderTextColor="#94a3b8"
+                value={formCategory}
+                onChangeText={setFormCategory}
               />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: 8, marginBottom: 4 }}
+                contentContainerStyle={{ gap: 6 }}
+              >
+                {DEFAULT_CATEGORY_PILLS.map((pill) => {
+                  const isSelected = formCategory.trim().toLowerCase() === pill.toLowerCase();
+                  return (
+                    <TouchableOpacity
+                      key={pill}
+                      onPress={() => {
+                        hapticFeedback.light();
+                        setFormCategory(pill);
+                      }}
+                      style={[
+                        styles.quickCatPill,
+                        isSelected && styles.quickCatPillActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.quickCatPillText,
+                          isSelected && styles.quickCatPillTextActive,
+                        ]}
+                      >
+                        {pill}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
 
-              <Text style={styles.inputLabel}>{t('Description (optional)','विवरण (वैकल्पिक)')}</Text>
+              {/* Availability Switch */}
+              <View style={[styles.switchCard, { marginTop: 12 }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+                    {t('Available for sale', 'बिक्री के लिए उपलब्ध')}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                    {formIsActive ? t('Shown on POS register & online store', 'POS और ऑनलाइन स्टोर पर दिखेगा') : t('Hidden from customer catalog', 'ग्राहकों से छिपा हुआ')}
+                  </Text>
+                </View>
+                <Switch
+                  value={formIsActive}
+                  onValueChange={setFormIsActive}
+                  trackColor={{ false: '#cbd5e1', true: '#10b981' }}
+                />
+              </View>
+
+              {/* Image URL & Thumbnail preview */}
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                {t('Image URL (optional)', 'तस्वीर का लिंक (वैकल्पिक)')}
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="https://images.unsplash.com/..."
+                  placeholderTextColor="#94a3b8"
+                  value={formImageUrl}
+                  onChangeText={setFormImageUrl}
+                  autoCapitalize="none"
+                />
+                {!!formImageUrl.trim() && (
+                  <View style={styles.imagePreviewThumb}>
+                    <Image
+                      source={{ uri: formImageUrl }}
+                      style={{ width: 42, height: 42, borderRadius: 8 }}
+                      resizeMode="cover"
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Description */}
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                {t('Description (optional)', 'विवरण (वैकल्पिक)')}
+              </Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Details, ingredients, allergens..."
+                placeholder={t('Item details, ingredients, net weight...', 'सामान की जानकारी, सामग्री, वज़न...')}
+                placeholderTextColor="#94a3b8"
                 multiline
                 numberOfLines={3}
                 value={formDescription}
                 onChangeText={setFormDescription}
               />
 
-              {saveError&&<Text accessibilityRole="alert" style={{color:'#b91c1c',marginVertical:12}}>{saveError}</Text>}
+              {saveError && (
+                <View style={styles.errorAlertCard}>
+                  <MaterialIcons name="error-outline" size={16} color="#b91c1c" />
+                  <Text style={{ color: '#b91c1c', fontSize: 12, fontWeight: '600', flex: 1 }}>{saveError}</Text>
+                </View>
+              )}
+
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
                   onPress={() => setModalVisible(false)}
                 >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
+                  <Text style={styles.modalCancelText}>{t('Cancel', 'रद्द करें')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.modalSaveBtn}
-                  accessibilityRole="button" onPress={handleSaveModal}
-                  disabled={saving||loading||!!error}
+                  accessibilityRole="button"
+                  onPress={handleSaveModal}
+                  disabled={saving || loading || !!error}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.modalSaveText}>
-                    {saving?t('Saving…','सेव हो रहा है…'):editingItem?t('Save changes','बदलाव सेव करें'):t('Add product','सामान जोड़ें')}
-                  </Text>
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.modalSaveText}>
+                      {editingItem ? t('Save Changes', 'बदलाव सेव करें') : t('Add to Catalog', 'कैटलॉग में जोड़ें')}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -708,7 +810,8 @@ export default function MobileCatalogScreen() {
         onRequestClose={() => setSyncModalVisible(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
           style={styles.modalBackdrop}
         >
           <View style={styles.modalSheet}>
@@ -720,7 +823,12 @@ export default function MobileCatalogScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.modalForm}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               {/* Platform Selector */}
               <View style={styles.providerSelector}>
                 <TouchableOpacity
@@ -1350,5 +1458,85 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  currencyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  currencyBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  currencyBadgeText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  currencyTextInput: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  quickCatPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickCatPillActive: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+  },
+  quickCatPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  quickCatPillTextActive: {
+    color: '#059669',
+    fontWeight: '800',
+  },
+  switchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  imagePreviewThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    backgroundColor: '#f1f5f9',
+  },
+  errorAlertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 12,
   },
 });

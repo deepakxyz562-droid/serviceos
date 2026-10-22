@@ -548,7 +548,8 @@ export default function MobilePosScreen() {
         onRequestClose={() => setShowCartModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
           style={styles.sheetOverlay}
         >
           <View style={styles.sheetContainer}>
@@ -582,7 +583,12 @@ export default function MobilePosScreen() {
               </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.sheetScroll}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.sheetScroll}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 40 }}
+            >
               {/* Customer Details Inputs */}
               <View style={styles.sectionBox}>
                 <Text style={styles.sectionHeaderLabel}>Customer & Order Info</Text>

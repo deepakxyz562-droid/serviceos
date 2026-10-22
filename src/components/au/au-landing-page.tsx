@@ -39,6 +39,9 @@ import {
 } from 'lucide-react';
 import { trackEvent } from '@/lib/analytics/consent';
 
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || 'AW-18483108780';
+const GOOGLE_ADS_CONVERSION_LABEL = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_LABEL || '';
+
 // Helper to push conversion to Google Ads and GA4
 function triggerConversionEvents(trade: string, email: string) {
   // 1. GA4 custom lead event
@@ -54,9 +57,12 @@ function triggerConversionEvents(trade: string, email: string) {
   if (typeof window !== 'undefined') {
     const w = window as unknown as { gtag?: (...args: unknown[]) => void; dataLayer?: unknown[] };
     if (typeof w.gtag === 'function') {
-      // Configured for Google Ads conversion tracking
+      const sendTo = GOOGLE_ADS_CONVERSION_LABEL
+        ? `${GOOGLE_ADS_ID}/${GOOGLE_ADS_CONVERSION_LABEL}`
+        : GOOGLE_ADS_ID;
+
       w.gtag('event', 'conversion', {
-        send_to: 'AW-CONVERSION_ID/LABEL', // Placeholder replaced dynamically or via Google Ads tag config
+        send_to: sendTo,
         value: 150.0,
         currency: 'AUD',
       });
@@ -64,7 +70,7 @@ function triggerConversionEvents(trade: string, email: string) {
   }
 }
 
-export default function AustralianLandingPage() {
+export default function AustralianLandingPage({ activeCategory }: { activeCategory?: string } = {}) {
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -88,6 +94,22 @@ export default function AustralianLandingPage() {
 
   // FAQ Accordion open states
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+
+  React.useEffect(() => {
+    if (!activeCategory) return;
+    if (activeCategory === 'ai-receptionist' || activeCategory === 'tradie-ai') {
+      const el = document.getElementById('ai-section');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    } else if (
+      activeCategory === 'repeat-jobs' ||
+      activeCategory === 'recurring-jobs' ||
+      activeCategory === 'field-service' ||
+      activeCategory === 'tradie-software'
+    ) {
+      const el = document.getElementById('features');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [activeCategory]);
 
   const toggleFaq = (index: number) => {
     setOpenFaq(openFaq === index ? null : index);

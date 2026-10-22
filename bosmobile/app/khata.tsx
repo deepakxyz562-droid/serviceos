@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -383,7 +385,11 @@ export default function KhataScreen() {
         animationType="fade"
         onRequestClose={() => setPaymentModalCustomer(null)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('Record Payment Received', 'मिला भुगतान दर्ज करें')}</Text>
@@ -393,7 +399,12 @@ export default function KhataScreen() {
             </View>
 
             {paymentModalCustomer && (
-              <View style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
                 <Text style={styles.modalCustomerName}>{paymentModalCustomer.name}</Text>
                 <Text style={styles.modalCustomerSub}>
                   {t('Total pending:', 'कुल बकाया:')} {money(paymentModalCustomer.balance)}
@@ -461,10 +472,10 @@ export default function KhataScreen() {
                     <Text style={styles.modalSubmitText}>{t('Confirm & Credit Balance', 'भुगतान दर्ज करें')}</Text>
                   )}
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Give Udhaar Modal */}
@@ -474,7 +485,11 @@ export default function KhataScreen() {
         animationType="slide"
         onRequestClose={() => setUdhaarModalOpen(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{t('Record New Udhaar (Credit)', 'नया उधार दर्ज करें')}</Text>
@@ -483,7 +498,12 @@ export default function KhataScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 32 }}
+            >
               <Text style={styles.inputLabel}>{t('Customer Phone Number *', 'ग्राहक का फ़ोन नंबर *')}</Text>
               <TextInput
                 keyboardType="phone-pad"
@@ -530,9 +550,9 @@ export default function KhataScreen() {
                   <Text style={styles.modalSubmitText}>{t('Save to Khata', 'खाते में सेव करें')}</Text>
                 )}
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

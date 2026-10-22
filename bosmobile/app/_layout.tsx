@@ -7,7 +7,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { registerForPushNotifications, setupNotificationListeners } from '@/lib/notifications';
 
-import { NuvoraSplash } from '@/components/brand/nuvora-splash';
+import { BosSplash } from '@/components/brand/bos-splash';
 
 export { AppErrorBoundary as ErrorBoundary } from '@/components/app-error-boundary';
 
@@ -82,7 +82,7 @@ export default function RootLayout() {
   }, []);
 
   if (!isBooted) {
-    return <NuvoraSplash statusMessage="Loading Nuvora..." />;
+    return <BosSplash statusMessage="Loading BOS..." />;
   }
 
   return (
