@@ -36,8 +36,11 @@ interface ItemEntry {
   description: string;
   qty: number;
   unitPrice: number;
+  unit?: string;
   hsnCode?: string;
 }
+
+const STANDARD_UNITS = ['Pcs', 'Kg', 'Box', 'Ltr', 'Mtr', 'Bags', 'Nos'];
 
 interface InvoiceCustomer {
   id: string;
@@ -119,12 +122,28 @@ export default function BillingScreen() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [items, setItems] = useState<ItemEntry[]>([
-    { description: '', qty: 1, unitPrice: 0, hsnCode: '' },
+    { description: '', qty: 1, unitPrice: 0, unit: 'Pcs', hsnCode: '' },
   ]);
   const [taxRate, setTaxRate] = useState<number>(18);
   const [discountValue, setDiscountValue] = useState<string>('0');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Vyapar-Grade Customer & Catalog Pickers & Terms State
+  const [customersList, setCustomersList] = useState<any[]>([]);
+  const [catalogList, setCatalogList] = useState<any[]>([]);
+  const [selectedParty, setSelectedParty] = useState<any | null>(null);
+  const [showCustomerPickerModal, setShowCustomerPickerModal] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [showCatalogPickerModal, setShowCatalogPickerModal] = useState(false);
+  const [catalogSearchQuery, setCatalogSearchQuery] = useState('');
+  const [catalogTargetIdx, setCatalogTargetIdx] = useState<number | null>(null);
+  const [customerGstin, setCustomerGstin] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [paymentStatus, setPaymentStatus] = useState<'PAID' | 'UNPAID' | 'PARTIAL'>('UNPAID');
+  const [amountPaidInput, setAmountPaidInput] = useState('');
+  const [dueDateDays, setDueDateDays] = useState<number>(15);
+  const [taxType, setTaxType] = useState<'INTRA' | 'INTER'>('INTRA');
 
   const fetchBillingData = useCallback(async () => {
     try {
@@ -171,6 +190,25 @@ export default function BillingScreen() {
         // Fallback to default
       }
     })();
+
+    // Load customers directory and catalog for Vyapar-grade invoicing
+    (async () => {
+      try {
+        const [cRes, cfgRes] = await Promise.all([
+          apiRequest<{ customers?: any[] }>(API_PATHS.commerceCustomers).catch(() => ({ customers: [] })),
+          apiRequest<{ config?: any }>(API_PATHS.commerceConfig).catch(() => ({ config: null })),
+        ]);
+        if (Array.isArray(cRes?.customers)) {
+          setCustomersList(cRes.customers);
+        }
+        if (cfgRes?.config?.catalogJson) {
+          try {
+            const parsed = JSON.parse(cfgRes.config.catalogJson);
+            if (Array.isArray(parsed)) setCatalogList(parsed);
+          } catch {}
+        }
+      } catch {}
+    })();
   }, [fetchBillingData]);
 
   const onRefresh = async () => {
@@ -179,15 +217,93 @@ export default function BillingScreen() {
     await fetchBillingData();
   };
 
+  const handleSelectParty = (c: any) => {
+    hapticFeedback.light();
+    setSelectedParty(c);
+    setCustomerName(c.name || '');
+    setCustomerPhone(c.phone || '');
+    setCustomerAddress(c.address || '');
+    setCustomerGstin(c.gstin || '');
+    setShowCustomerPickerModal(false);
+  };
+
+  const handleClearParty = () => {
+    hapticFeedback.light();
+    setSelectedParty(null);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerAddress('');
+    setCustomerGstin('');
+  };
+
+  const handleOpenCatalogPicker = (targetIdx: number | null = null) => {
+    hapticFeedback.light();
+    setCatalogTargetIdx(targetIdx);
+    setCatalogSearchQuery('');
+    setShowCatalogPickerModal(true);
+  };
+
+  const handleSelectCatalogItem = (prod: any) => {
+    hapticFeedback.light();
+    const newItem: ItemEntry = {
+      description: prod.name || 'Product',
+      qty: 1,
+      unitPrice: Number(prod.price) || 0,
+      unit: prod.unit || 'Pcs',
+      hsnCode: prod.sku || prod.hsn || '',
+    };
+    if (catalogTargetIdx !== null && catalogTargetIdx >= 0 && catalogTargetIdx < items.length) {
+      const updated = [...items];
+      updated[catalogTargetIdx] = {
+        ...updated[catalogTargetIdx],
+        description: newItem.description,
+        unitPrice: newItem.unitPrice,
+        unit: newItem.unit,
+        hsnCode: newItem.hsnCode,
+      };
+      setItems(updated);
+    } else {
+      setItems((prev) => [...prev, newItem]);
+    }
+    setShowCatalogPickerModal(false);
+  };
+
+  const handleShareWhatsAppPdf = async (inv: InvoiceRecord) => {
+    try {
+      await hapticFeedback.medium();
+      const html = generateGstInvoiceHtml(inv, storeInfo, '₹');
+      const { uri } = await Print.printToFileAsync({ html });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Tax Invoice ${inv.number}`,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        handleShareWhatsApp(inv, true);
+      }
+    } catch (err: any) {
+      handleShareWhatsApp(inv, true);
+    }
+  };
+
   const handleOpenCreateModal = (type: 'INVOICE' | 'QUOTE') => {
     hapticFeedback.light();
     setEditingInvoice(null);
     setFormType(type);
+    setSelectedParty(null);
     setCustomerName('');
     setCustomerPhone('');
-    setItems([{ description: '', qty: 1, unitPrice: 0, hsnCode: '' }]);
+    setCustomerAddress('');
+    setCustomerGstin('');
+    setItems([{ description: '', qty: 1, unitPrice: 0, unit: 'Pcs', hsnCode: '' }]);
     setTaxRate(18);
+    setTaxType('INTRA');
     setDiscountValue('0');
+    setPaymentStatus('UNPAID');
+    setAmountPaidInput('');
+    setDueDateDays(15);
     setNotes('');
     setFormModalOpen(true);
   };
@@ -218,7 +334,7 @@ export default function BillingScreen() {
 
   const addItemRow = () => {
     hapticFeedback.light();
-    setItems([...items, { description: '', qty: 1, unitPrice: 0, hsnCode: '' }]);
+    setItems([...items, { description: '', qty: 1, unitPrice: 0, unit: 'Pcs', hsnCode: '' }]);
   };
 
   const removeItemRow = (index: number) => {
@@ -242,6 +358,8 @@ export default function BillingScreen() {
   const taxable = Math.max(0, formSubtotal - discountAmt);
   const taxAmt = (taxable * taxRate) / 100;
   const formGrandTotal = taxable + taxAmt;
+  const computedPaid = paymentStatus === 'PAID' ? formGrandTotal : paymentStatus === 'PARTIAL' ? Math.min(formGrandTotal, parseFloat(amountPaidInput) || 0) : 0;
+  const computedBalance = Math.max(0, formGrandTotal - computedPaid);
 
   const handleSubmitForm = async () => {
     if (!items.some((i) => i.description.trim() && i.unitPrice > 0)) {
@@ -258,6 +376,7 @@ export default function BillingScreen() {
           description: i.description.trim(),
           qty: Number(i.qty) || 1,
           unitPrice: Number(i.unitPrice) || 0,
+          unit: i.unit || 'Pcs',
           hsnCode: i.hsnCode?.trim() || undefined,
         }));
 
@@ -282,20 +401,30 @@ export default function BillingScreen() {
         }
         setEditingInvoice(null);
       } else if (formType === 'INVOICE') {
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + (dueDateDays || 0));
+
         await apiRequest(API_PATHS.commerceInvoices, {
           method: 'POST',
           body: {
+            customerId: selectedParty?.id,
             customerName: customerName.trim() || 'Client',
             customerPhone: customerPhone.trim(),
+            customerAddress: customerAddress.trim() || undefined,
+            customerGstin: customerGstin.trim() || undefined,
             taxRate,
             discountValue: discountAmt,
             discountType: 'AMOUNT',
             notes: notes.trim(),
             items: lineItems,
-            status: 'UNPAID',
+            status: computedBalance <= 0 ? 'PAID' : computedPaid > 0 ? 'PARTIAL' : 'UNPAID',
+            paidAmount: computedPaid,
+            balance: computedBalance,
+            dueDate: dueDate.toISOString(),
+            paymentMethod: selectedPaymentMode,
           },
         });
-        Alert.alert('Invoice Created ✓', `GST Tax Invoice generated successfully.`);
+        Alert.alert('Invoice Created ✓', `Vyapar-grade GST Tax Invoice generated successfully.`);
       } else {
         await apiRequest(API_PATHS.commerceQuotes, {
           method: 'POST',
@@ -1004,12 +1133,12 @@ export default function BillingScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        onPress={() => handleShareWhatsApp(inv, true)}
-                        style={[styles.actionIconBtn, { backgroundColor: '#ecfdf5' }]}
+                        onPress={() => handleShareWhatsAppPdf(inv)}
+                        style={[styles.actionIconBtn, { backgroundColor: '#25D366' }]}
                         accessibilityLabel="Share on WhatsApp"
                       >
-                        <MaterialIcons name="send" size={15} color="#059669" />
-                        <Text style={[styles.actionIconText, { color: '#059669' }]}>Share</Text>
+                        <Ionicons name="logo-whatsapp" size={14} color="#ffffff" />
+                        <Text style={[styles.actionIconText, { color: '#ffffff', fontWeight: '800' }]}>WhatsApp</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -1155,45 +1284,128 @@ export default function BillingScreen() {
               style={styles.modalBody}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 50 }}
+              contentContainerStyle={{ paddingBottom: 60 }}
             >
-              {/* Customer info card */}
+              {/* 1. Customer / Party Section */}
               <View style={styles.invoiceCustomerCard}>
-                <Text style={styles.inputLabel}>Customer / Client Name *</Text>
-                <View style={styles.invoiceInputRow}>
-                  <MaterialIcons name="person-outline" size={18} color="#64748b" style={{ marginRight: 6 }} />
-                  <TextInput
-                    value={customerName}
-                    onChangeText={setCustomerName}
-                    style={styles.invoiceCardInput}
-                    placeholder="e.g. Rahul Sharma"
-                    placeholderTextColor="#94a3b8"
-                  />
+                <View style={styles.sectionHeaderBetween}>
+                  <Text style={styles.inputLabel}>Party / Customer *</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setCustomerSearchQuery('');
+                      setShowCustomerPickerModal(true);
+                    }}
+                    style={styles.partyPickerBtn}
+                  >
+                    <MaterialIcons name="person-search" size={15} color="#059669" />
+                    <Text style={styles.partyPickerBtnText}>Select Saved Party ({customersList.length})</Text>
+                  </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.inputLabel, { marginTop: 10 }]}>Customer WhatsApp / Mobile *</Text>
-                <View style={styles.invoiceInputRow}>
-                  <View style={styles.invoiceCountryBadge}>
-                    <Text style={styles.invoiceCountryText}>+91</Text>
+                {selectedParty ? (
+                  <View style={styles.selectedPartyCard}>
+                    <View style={styles.selectedPartyLeft}>
+                      <View style={styles.selectedPartyAvatar}>
+                        <MaterialIcons name="person" size={20} color="#059669" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.selectedPartyName} numberOfLines={1}>
+                          {selectedParty.name}
+                        </Text>
+                        <Text style={styles.selectedPartyPhone}>
+                          {selectedParty.phone ? `+91 ${selectedParty.phone}` : 'No phone linked'}
+                        </Text>
+                        {customerAddress ? (
+                          <Text style={styles.selectedPartyDetail} numberOfLines={1}>
+                            📍 {customerAddress}
+                          </Text>
+                        ) : null}
+                        {customerGstin ? (
+                          <Text style={styles.selectedPartyGstin}>
+                            GSTIN: {customerGstin}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      onPress={handleClearParty}
+                      style={styles.changePartyBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.changePartyText}>Change</Text>
+                    </TouchableOpacity>
                   </View>
-                  <TextInput
-                    keyboardType="phone-pad"
-                    value={customerPhone}
-                    onChangeText={setCustomerPhone}
-                    style={styles.invoiceCardInput}
-                    placeholder="10-digit mobile number"
-                    placeholderTextColor="#94a3b8"
-                  />
-                </View>
+                ) : (
+                  <View>
+                    <View style={styles.invoiceInputRow}>
+                      <MaterialIcons name="person-outline" size={18} color="#64748b" style={{ marginRight: 6 }} />
+                      <TextInput
+                        value={customerName}
+                        onChangeText={setCustomerName}
+                        style={styles.invoiceCardInput}
+                        placeholder="Party / Customer Name *"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+
+                    <View style={[styles.invoiceInputRow, { marginTop: 8 }]}>
+                      <View style={styles.invoiceCountryBadge}>
+                        <Text style={styles.invoiceCountryText}>+91</Text>
+                      </View>
+                      <TextInput
+                        keyboardType="phone-pad"
+                        value={customerPhone}
+                        onChangeText={setCustomerPhone}
+                        style={styles.invoiceCardInput}
+                        placeholder="10-digit WhatsApp number *"
+                        placeholderTextColor="#94a3b8"
+                        maxLength={10}
+                      />
+                    </View>
+
+                    <View style={[styles.invoiceInputRow, { marginTop: 8 }]}>
+                      <MaterialIcons name="location-on" size={18} color="#64748b" style={{ marginRight: 6 }} />
+                      <TextInput
+                        value={customerAddress}
+                        onChangeText={setCustomerAddress}
+                        style={styles.invoiceCardInput}
+                        placeholder="Billing Address (City, State, Pincode)"
+                        placeholderTextColor="#94a3b8"
+                      />
+                    </View>
+
+                    <View style={[styles.invoiceInputRow, { marginTop: 8 }]}>
+                      <MaterialIcons name="badge" size={18} color="#64748b" style={{ marginRight: 6 }} />
+                      <TextInput
+                        value={customerGstin}
+                        onChangeText={(v) => setCustomerGstin(v.toUpperCase())}
+                        style={styles.invoiceCardInput}
+                        placeholder="Customer GSTIN (Optional, e.g. 29AAAAA0000A1Z5)"
+                        placeholderTextColor="#94a3b8"
+                        autoCapitalize="characters"
+                      />
+                    </View>
+                  </View>
+                )}
               </View>
 
-              {/* Items List */}
-              <View style={styles.sectionHeaderRow}>
+              {/* 2. Items Section */}
+              <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
                 <Text style={styles.sectionHeaderTitle}>Line Items ({items.length})</Text>
-                <TouchableOpacity onPress={addItemRow} style={styles.addMiniRowBtn}>
-                  <MaterialIcons name="add" size={14} color="#059669" />
-                  <Text style={styles.addMiniRowText}>Add Item</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <TouchableOpacity
+                    onPress={() => handleOpenCatalogPicker(null)}
+                    style={styles.addFromCatalogBtn}
+                  >
+                    <MaterialIcons name="inventory-2" size={14} color="#0284c7" />
+                    <Text style={styles.addFromCatalogText}>Catalog</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={addItemRow} style={styles.addMiniRowBtn}>
+                    <MaterialIcons name="add" size={14} color="#059669" />
+                    <Text style={styles.addMiniRowText}>Add Item</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {items.map((it, idx) => {
@@ -1220,10 +1432,55 @@ export default function BillingScreen() {
                     <TextInput
                       value={it.description}
                       onChangeText={(val) => updateItem(idx, 'description', val)}
-                      placeholder="Item description / Service name"
+                      placeholder="Item name / Service description *"
                       placeholderTextColor="#94a3b8"
                       style={styles.invoiceItemDescInput}
                     />
+
+                    {/* Unit of Measurement & HSN Code Row */}
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                        Unit of Measurement
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 6 }}>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {STANDARD_UNITS.map((u) => {
+                            const isSelected = (it.unit || 'Pcs') === u;
+                            return (
+                              <TouchableOpacity
+                                key={u}
+                                onPress={() => {
+                                  hapticFeedback.light();
+                                  updateItem(idx, 'unit', u);
+                                }}
+                                style={[styles.unitChip, isSelected && styles.unitChipActive]}
+                              >
+                                <Text style={[styles.unitChipText, isSelected && styles.unitChipTextActive]}>
+                                  {u}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </ScrollView>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4, alignItems: 'center' }}>
+                      <TextInput
+                        value={it.hsnCode}
+                        onChangeText={(val) => updateItem(idx, 'hsnCode', val)}
+                        placeholder="HSN/SAC Code (Optional)"
+                        placeholderTextColor="#94a3b8"
+                        style={[styles.invoiceItemDescInput, { flex: 1, marginBottom: 0, paddingVertical: 6, fontSize: 11 }]}
+                      />
+                      <TouchableOpacity
+                        onPress={() => handleOpenCatalogPicker(idx)}
+                        style={styles.pickCatalogRowBtn}
+                      >
+                        <MaterialIcons name="inventory-2" size={13} color="#0284c7" />
+                        <Text style={styles.pickCatalogRowText}>From Catalog</Text>
+                      </TouchableOpacity>
+                    </View>
 
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 8, alignItems: 'center' }}>
                       {/* Qty Stepper */}
@@ -1276,53 +1533,143 @@ export default function BillingScreen() {
               {/* Add item dashed button */}
               <TouchableOpacity onPress={addItemRow} style={styles.invoiceAddDashedBtn}>
                 <MaterialIcons name="add-circle-outline" size={18} color="#059669" />
-                <Text style={styles.invoiceAddDashedText}>Add Another Item</Text>
+                <Text style={styles.invoiceAddDashedText}>Add Another Line Item</Text>
               </TouchableOpacity>
 
-              {/* Tax Rate & Discount */}
-              <Text style={[styles.inputLabel, { marginTop: 14 }]}>GST Tax Rate</Text>
-              <View style={styles.taxRateRow}>
-                {[0, 5, 12, 18, 28].map((rate) => (
+              {/* 3. Tax & State of Supply */}
+              <View style={styles.vyaparBox}>
+                <Text style={styles.inputLabel}>State of Supply & Tax Mode</Text>
+                <View style={styles.taxTypeRow}>
                   <TouchableOpacity
-                    key={rate}
                     onPress={() => {
                       hapticFeedback.light();
-                      setTaxRate(rate);
+                      setTaxType('INTRA');
                     }}
-                    style={[
-                      styles.taxBtn,
-                      taxRate === rate && styles.taxBtnActive,
-                    ]}
+                    style={[styles.taxTypeBtn, taxType === 'INTRA' && styles.taxTypeBtnActive]}
                   >
-                    <Text
-                      style={[
-                        styles.taxBtnText,
-                        taxRate === rate && styles.taxBtnTextActive,
-                      ]}
-                    >
-                      {rate}%
+                    <Text style={[styles.taxTypeText, taxType === 'INTRA' && styles.taxTypeTextActive]}>
+                      Intra-State (CGST + SGST)
                     </Text>
                   </TouchableOpacity>
-                ))}
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setTaxType('INTER');
+                    }}
+                    style={[styles.taxTypeBtn, taxType === 'INTER' && styles.taxTypeBtnActive]}
+                  >
+                    <Text style={[styles.taxTypeText, taxType === 'INTER' && styles.taxTypeTextActive]}>
+                      Inter-State (IGST)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={[styles.inputLabel, { marginTop: 12 }]}>GST Tax Rate</Text>
+                <View style={styles.taxRateRow}>
+                  {[0, 5, 12, 18, 28].map((rate) => (
+                    <TouchableOpacity
+                      key={rate}
+                      onPress={() => {
+                        hapticFeedback.light();
+                        setTaxRate(rate);
+                      }}
+                      style={[styles.taxBtn, taxRate === rate && styles.taxBtnActive]}
+                    >
+                      <Text style={[styles.taxBtnText, taxRate === rate && styles.taxBtnTextActive]}>
+                        {rate}%
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.inputLabel, { marginTop: 12 }]}>Discount (₹)</Text>
+                <View style={styles.invoiceDiscountRow}>
+                  <Text style={styles.invoiceRateSymbol}>₹</Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    value={discountValue}
+                    onChangeText={setDiscountValue}
+                    style={styles.invoiceDiscountInput}
+                    placeholder="0.00"
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
               </View>
 
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Discount (₹)</Text>
-              <View style={styles.invoiceDiscountRow}>
-                <Text style={styles.invoiceRateSymbol}>₹</Text>
-                <TextInput
-                  keyboardType="numeric"
-                  value={discountValue}
-                  onChangeText={setDiscountValue}
-                  style={styles.invoiceDiscountInput}
-                  placeholder="0.00"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
+              {/* 4. Payment Terms & Due Date (for Invoices) */}
+              {formType === 'INVOICE' && (
+                <View style={styles.vyaparBox}>
+                  <Text style={styles.inputLabel}>Payment Terms & Due Status</Text>
+                  <View style={styles.paymentStatusRow}>
+                    {(['PAID', 'PARTIAL', 'UNPAID'] as const).map((st) => {
+                      const isSelected = paymentStatus === st;
+                      return (
+                        <TouchableOpacity
+                          key={st}
+                          onPress={() => {
+                            hapticFeedback.light();
+                            setPaymentStatus(st);
+                          }}
+                          style={[styles.paymentStatusBtn, isSelected && styles.paymentStatusBtnActive]}
+                        >
+                          <Text style={[styles.paymentStatusText, isSelected && styles.paymentStatusTextActive]}>
+                            {st === 'PAID' ? 'Fully Paid' : st === 'PARTIAL' ? 'Partially Paid' : 'Unpaid / Due'}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
-              {/* Live Computed Summary */}
+                  {paymentStatus === 'PARTIAL' && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={styles.inputLabel}>Amount Received Now (₹)</Text>
+                      <View style={styles.invoiceDiscountRow}>
+                        <Text style={styles.invoiceRateSymbol}>₹</Text>
+                        <TextInput
+                          keyboardType="numeric"
+                          value={amountPaidInput}
+                          onChangeText={setAmountPaidInput}
+                          style={styles.invoiceDiscountInput}
+                          placeholder={`Enter amount (max ₹${formGrandTotal.toFixed(2)})`}
+                          placeholderTextColor="#94a3b8"
+                        />
+                      </View>
+                      <View style={styles.balanceDueNotice}>
+                        <Text style={styles.balanceDueLabel}>Remaining Balance Due:</Text>
+                        <Text style={styles.balanceDueVal}>₹{computedBalance.toFixed(2)}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>Due Date Terms</Text>
+                  <View style={styles.dueDatePresetRow}>
+                    {[
+                      { label: 'Due Today', days: 0 },
+                      { label: '7 Days', days: 7 },
+                      { label: '15 Days', days: 15 },
+                      { label: '30 Days', days: 30 },
+                    ].map((d) => (
+                      <TouchableOpacity
+                        key={d.days}
+                        onPress={() => {
+                          hapticFeedback.light();
+                          setDueDateDays(d.days);
+                        }}
+                        style={[styles.dueDateChip, dueDateDays === d.days && styles.dueDateChipActive]}
+                      >
+                        <Text style={[styles.dueDateChipText, dueDateDays === d.days && styles.dueDateChipTextActive]}>
+                          {d.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* 5. Live Computed Summary */}
               <View style={styles.liveCalculationBox}>
                 <View style={styles.calcRow}>
-                  <Text style={styles.calcLabel}>Subtotal</Text>
+                  <Text style={styles.calcLabel}>Taxable Subtotal</Text>
                   <Text style={styles.calcVal}>₹{formSubtotal.toFixed(2)}</Text>
                 </View>
                 {discountAmt > 0 && (
@@ -1335,7 +1682,11 @@ export default function BillingScreen() {
                 )}
                 {taxRate > 0 && (
                   <View style={styles.calcRow}>
-                    <Text style={styles.calcLabel}>GST ({taxRate}%)</Text>
+                    <Text style={styles.calcLabel}>
+                      {taxType === 'INTRA'
+                        ? `CGST (${(taxRate / 2).toFixed(1)}%) + SGST (${(taxRate / 2).toFixed(1)}%)`
+                        : `IGST (${taxRate}%)`}
+                    </Text>
                     <Text style={styles.calcVal}>+₹{taxAmt.toFixed(2)}</Text>
                   </View>
                 )}
@@ -1343,6 +1694,14 @@ export default function BillingScreen() {
                   <Text style={styles.calcTotalLabel}>Grand Total</Text>
                   <Text style={styles.calcTotalVal}>₹{formGrandTotal.toFixed(2)}</Text>
                 </View>
+                {formType === 'INVOICE' && paymentStatus !== 'PAID' && (
+                  <View style={[styles.calcRow, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#e2e8f0' }]}>
+                    <Text style={[styles.calcLabel, { color: '#d97706', fontWeight: '700' }]}>Balance Due</Text>
+                    <Text style={[styles.calcVal, { color: '#d97706', fontWeight: '900' }]}>
+                      ₹{computedBalance.toFixed(2)}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <TouchableOpacity
@@ -1355,10 +1714,213 @@ export default function BillingScreen() {
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <Text style={styles.modalSubmitText}>
-                    {formType === 'INVOICE' ? 'Generate GST Invoice' : 'Save & Share Quotation'}
+                    {formType === 'INVOICE' ? 'Generate Vyapar GST Invoice' : 'Save & Share Quotation'}
                   </Text>
                 )}
               </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Party / Customer Picker Modal */}
+      <Modal
+        visible={showCustomerPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCustomerPickerModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select Party / Customer</Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  Pick from your customer directory or add party
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowCustomerPickerModal(false)}
+                style={{ padding: 6, borderRadius: 16, backgroundColor: '#f1f5f9' }}
+              >
+                <MaterialIcons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerSearchWrap}>
+              <MaterialIcons name="search" size={18} color="#64748b" />
+              <TextInput
+                value={customerSearchQuery}
+                onChangeText={setCustomerSearchQuery}
+                placeholder="Search party by name, phone, or GSTIN..."
+                placeholderTextColor="#94a3b8"
+                style={styles.pickerSearchInput}
+              />
+              {customerSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setCustomerSearchQuery('')}>
+                  <MaterialIcons name="clear" size={16} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {customersList
+                .filter((c) => {
+                  if (!customerSearchQuery) return true;
+                  const q = customerSearchQuery.toLowerCase();
+                  return (
+                    (c.name && c.name.toLowerCase().includes(q)) ||
+                    (c.phone && c.phone.includes(q)) ||
+                    (c.gstin && c.gstin.toLowerCase().includes(q))
+                  );
+                })
+                .map((c) => (
+                  <TouchableOpacity
+                    key={c.id || c.phone || c.name}
+                    onPress={() => handleSelectParty(c)}
+                    style={styles.partyPickerItem}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.partyPickerItemAvatar}>
+                      <Text style={styles.partyPickerInitial}>
+                        {(c.name || 'C').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.partyPickerItemName} numberOfLines={1}>
+                        {c.name}
+                      </Text>
+                      <Text style={styles.partyPickerItemSub}>
+                        {c.phone ? `+91 ${c.phone}` : 'No mobile'}
+                        {c.city ? ` · ${c.city}` : ''}
+                      </Text>
+                      {c.gstin ? (
+                        <Text style={styles.partyPickerGstin}>GSTIN: {c.gstin}</Text>
+                      ) : null}
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+                  </TouchableOpacity>
+                ))}
+
+              {customersList.length === 0 && (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: '#64748b', fontWeight: '600' }}>
+                    No customers found in directory.
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                    Type the customer details manually in the invoice form.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              onPress={() => {
+                setShowCustomerPickerModal(false);
+                handleClearParty();
+              }}
+              style={styles.pickerCloseBtn}
+            >
+              <Text style={styles.pickerCloseBtnText}>+ Enter New Party Manually</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Catalog Product Picker Modal */}
+      <Modal
+        visible={showCatalogPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCatalogPickerModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.pickerModalCard}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select Item from Catalog</Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                  Auto-fills description, price, unit, and HSN code
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowCatalogPickerModal(false)}
+                style={{ padding: 6, borderRadius: 16, backgroundColor: '#f1f5f9' }}
+              >
+                <MaterialIcons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.pickerSearchWrap}>
+              <MaterialIcons name="search" size={18} color="#64748b" />
+              <TextInput
+                value={catalogSearchQuery}
+                onChangeText={setCatalogSearchQuery}
+                placeholder="Search products in catalog..."
+                placeholderTextColor="#94a3b8"
+                style={styles.pickerSearchInput}
+              />
+              {catalogSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setCatalogSearchQuery('')}>
+                  <MaterialIcons name="clear" size={16} color="#94a3b8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {catalogList
+                .filter((p) => {
+                  if (!catalogSearchQuery) return true;
+                  const q = catalogSearchQuery.toLowerCase();
+                  return (
+                    (p.name && p.name.toLowerCase().includes(q)) ||
+                    (p.category && p.category.toLowerCase().includes(q)) ||
+                    (p.sku && p.sku.toLowerCase().includes(q))
+                  );
+                })
+                .map((prod) => (
+                  <TouchableOpacity
+                    key={prod.id || prod.sku || prod.name}
+                    onPress={() => handleSelectCatalogItem(prod)}
+                    style={styles.catalogPickerItem}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.catalogPickerItemLeft}>
+                      <Text style={styles.catalogPickerItemName} numberOfLines={1}>
+                        {prod.name}
+                      </Text>
+                      <Text style={styles.catalogPickerItemCategory}>
+                        {prod.category || 'General'}
+                        {prod.sku ? ` · SKU: ${prod.sku}` : ''}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.catalogPickerItemPrice}>
+                        ₹{Number(prod.price || 0).toFixed(2)}
+                      </Text>
+                      <Text style={styles.catalogPickerItemUnit}>
+                        per {prod.unit || 'Pcs'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+
+              {catalogList.length === 0 && (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: '#64748b', fontWeight: '600' }}>
+                    No items in store catalog yet.
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                    Add products in the Catalog tab to quickly pick them here.
+                  </Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -3198,5 +3760,346 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'contain',
+  },
+  sectionHeaderBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  partyPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  partyPickerBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  selectedPartyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  selectedPartyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  selectedPartyAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedPartyName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  selectedPartyPhone: {
+    fontSize: 11,
+    color: '#059669',
+    marginTop: 1,
+  },
+  selectedPartyDetail: {
+    fontSize: 10,
+    color: '#047857',
+    marginTop: 2,
+  },
+  selectedPartyGstin: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#065f46',
+    marginTop: 2,
+  },
+  changePartyBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  changePartyText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  addFromCatalogBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+  },
+  addFromCatalogText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  unitChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  unitChipActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  unitChipText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  unitChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  pickCatalogRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  pickCatalogRowText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284c7',
+  },
+  vyaparBox: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  taxTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  taxTypeBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+  },
+  taxTypeBtnActive: {
+    backgroundColor: '#0f172a',
+    borderColor: '#0f172a',
+  },
+  taxTypeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  taxTypeTextActive: {
+    color: '#ffffff',
+  },
+  paymentStatusRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  paymentStatusBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+  },
+  paymentStatusBtnActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  paymentStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  paymentStatusTextActive: {
+    color: '#ffffff',
+  },
+  balanceDueNotice: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    padding: 8,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  balanceDueLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  balanceDueVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#b45309',
+  },
+  dueDatePresetRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  dueDateChip: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+  },
+  dueDateChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  dueDateChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  dueDateChipTextActive: {
+    color: '#ffffff',
+  },
+  pickerModalCard: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  pickerSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginVertical: 12,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0f172a',
+    padding: 0,
+  },
+  partyPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  partyPickerItemAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  partyPickerInitial: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0284c7',
+  },
+  partyPickerItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  partyPickerItemSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  partyPickerGstin: {
+    fontSize: 10,
+    color: '#059669',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  pickerCloseBtn: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  pickerCloseBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  catalogPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  catalogPickerItemLeft: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  catalogPickerItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  catalogPickerItemCategory: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  catalogPickerItemPrice: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  catalogPickerItemUnit: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 1,
   },
 });

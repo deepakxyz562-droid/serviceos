@@ -51,6 +51,7 @@ export const API_PATHS = {
   commerceQuotes: '/api/quote-flow/quotes',
   commerceTemplates: '/api/commerce/templates',
   commercePromotions: '/api/commerce/promotions',
+  commerceWhatsAppSend: '/api/commerce/whatsapp/send',
   commerceCustomDomain: '/api/commerce/domain',
   commerceDomainVerify: '/api/commerce/domain/verify',
   storeDirectory: '/api/public/store/directory',

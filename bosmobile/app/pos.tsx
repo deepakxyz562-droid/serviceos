@@ -23,6 +23,9 @@ import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { RequestTracker } from '../../shared/money';
 import { API_PATHS } from '@/lib/constants';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { generateGstInvoiceHtml, GstStoreInfo } from '@/lib/gst-invoice-helper';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 
 interface CartItem {
@@ -61,7 +64,16 @@ export default function MobilePosScreen() {
   const [tableNo, setTableNo] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [whatsappConsent, setWhatsappConsent] = useState(false);
+  const [whatsappConsent, setWhatsappConsent] = useState(true);
+  const [customersList, setCustomersList] = useState<any[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [customerMode, setCustomerMode] = useState<'WALKIN' | 'SEARCH' | 'NEW'>('WALKIN');
+  const [generatedPdfUri, setGeneratedPdfUri] = useState<string | null>(null);
+  const [whatsappSent, setWhatsappSent] = useState(false);
+  const [cfgPhone, setCfgPhone] = useState('');
+  const [cfgGstin, setCfgGstin] = useState('');
+  const [cfgAddress, setCfgAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'CARD'>('CASH');
   const [upiId, setUpiId] = useState('');
   const [businessName, setBusinessName] = useState('My Store');
@@ -83,6 +95,9 @@ export default function MobilePosScreen() {
       if (cfg) {
         if (cfg.billing) setBilling({ taxRate: Number(cfg.billing.taxRate ?? 5), taxType: cfg.billing.taxType || 'exclusive', serviceChargeRate: Number(cfg.billing.serviceChargeRate ?? 0) });
         if (cfg.upiId) setUpiId(cfg.upiId);
+        if (cfg.phone) setCfgPhone(cfg.phone);
+        if (cfg.gstin) setCfgGstin(cfg.gstin);
+        if (cfg.address) setCfgAddress(cfg.address);
         if (cfg.businessName) setBusinessName(cfg.businessName);
         if (cfg.catalogJson) {
           try {
@@ -113,6 +128,32 @@ export default function MobilePosScreen() {
     } finally {
       setLoadingMenu(false);
     }
+  };
+
+  const loadCustomers = async () => {
+    try {
+      const d = await apiRequest<{ customers?: any[] }>(API_PATHS.commerceCustomers);
+      if (Array.isArray(d?.customers)) {
+        setCustomersList(d.customers);
+      }
+    } catch {}
+  };
+
+  const handleSelectCustomer = (c: any) => {
+    hapticFeedback.light();
+    setSelectedCustomer(c);
+    setCustomerName(c.name || '');
+    setCustomerPhone(c.phone || '');
+    setWhatsappConsent(true);
+    setCustomerSearchQuery('');
+  };
+
+  const handleClearCustomer = () => {
+    hapticFeedback.light();
+    setSelectedCustomer(null);
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerSearchQuery('');
   };
 
   const handleOpenScanner = async () => {
@@ -176,6 +217,7 @@ export default function MobilePosScreen() {
 
   useEffect(() => {
     loadMenu();
+    loadCustomers();
   }, []);
 
   const categories = ['ALL', ...Array.from(new Set(menu.map((m) => m.category || 'General')))];
@@ -274,6 +316,72 @@ export default function MobilePosScreen() {
       if (!d.order?.id) throw new Error('The server did not confirm this order. Please retry.');
       requestTracker.current.clear();
       setCompletedOrder(d.order);
+      setGeneratedPdfUri(null);
+      setWhatsappSent(false);
+
+      // Automatic PDF invoice generation & WhatsApp delivery pipeline
+      const invNumber = `POS-${(d.order?.id || Date.now().toString()).slice(-6).toUpperCase()}`;
+      const subtotalVal = subtotalMinor / 100;
+      const taxVal = billing.taxType === 'inclusive' ? 0 : (subtotalMinor * billing.taxRate / 100) / 100;
+      const invoiceData = {
+        number: invNumber,
+        date: new Date().toLocaleDateString('en-IN'),
+        customer: {
+          name: customerName.trim() || 'Walk-in Guest',
+          phone: customerPhone.trim(),
+          address: tableNo ? `Table #${tableNo}` : undefined,
+        },
+        items: cart.map((i) => ({
+          description: i.name,
+          qty: i.qty,
+          unitPrice: i.price,
+          amount: i.price * i.qty,
+        })),
+        subtotal: subtotalVal,
+        tax: taxVal,
+        total,
+        balance: 0,
+        status: 'PAID',
+        paymentMethod: method,
+      };
+
+      const storeInfo: GstStoreInfo = {
+        businessName,
+        phone: cfgPhone || undefined,
+        gstin: cfgGstin || undefined,
+        address: cfgAddress || undefined,
+        upiId: upiId || undefined,
+        billFooter: 'Thank you for your visit! Goods once sold are backed by BOS warranty.',
+      };
+
+      try {
+        const html = generateGstInvoiceHtml(invoiceData, storeInfo, currencySymbol);
+        const { uri } = await Print.printToFileAsync({ html });
+        setGeneratedPdfUri(uri);
+
+        const cleanPhone = customerPhone.replace(/\D/g, '');
+        if (cleanPhone && whatsappConsent) {
+          apiRequest(API_PATHS.commerceWhatsAppSend, {
+            method: 'POST',
+            body: {
+              phone: cleanPhone,
+              message: `🧾 *TAX INVOICE: ${invNumber}*\nThank you for shopping at *${businessName}*!\nTotal Paid: *${currencySymbol}${total.toFixed(2)}* (${method})\nYour invoice PDF is ready.`,
+            },
+          }).catch(() => {});
+
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: `Tax Invoice ${invNumber} - ${businessName}`,
+              UTI: 'com.adobe.pdf',
+            });
+            setWhatsappSent(true);
+          }
+        }
+      } catch (pdfErr) {
+        console.warn('POS PDF Invoice generation failed:', pdfErr);
+      }
     } catch (err: any) {
       setSavingOrder(false);
       setShowQrModal(false);
@@ -284,8 +392,67 @@ export default function MobilePosScreen() {
     setSavingOrder(false);
     setShowQrModal(false);
     setShowCartModal(false);
+  };
 
+  const sendWhatsAppPdfBill = async (order: any) => {
+    try {
+      hapticFeedback.light();
+      if (generatedPdfUri) {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(generatedPdfUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Tax Invoice #${(order?.id || '').slice(-6).toUpperCase()}`,
+            UTI: 'com.adobe.pdf',
+          });
+          setWhatsappSent(true);
+          return;
+        }
+      }
+      sendWhatsAppBill(order);
+    } catch {
+      sendWhatsAppBill(order);
+    }
+  };
 
+  const handlePrintOrderInvoice = async () => {
+    try {
+      hapticFeedback.light();
+      if (!completedOrder) return;
+      const invNumber = `POS-${(completedOrder.id || '').slice(-6).toUpperCase()}`;
+      const invoiceData = {
+        number: invNumber,
+        date: new Date().toLocaleDateString('en-IN'),
+        customer: {
+          name: completedOrder.customerName || 'Walk-in Guest',
+          phone: completedOrder.customerPhone || '',
+          address: completedOrder.deliveryAddress || undefined,
+        },
+        items: (completedOrder.items || []).map((i: any) => ({
+          description: i.name,
+          qty: i.qty,
+          unitPrice: i.price,
+          amount: i.amount || i.price * i.qty,
+        })),
+        subtotal: subtotalMinor / 100,
+        tax: total - subtotalMinor / 100,
+        total: completedOrder.total,
+        balance: 0,
+        status: completedOrder.paymentStatus || 'PAID',
+        paymentMethod: completedOrder.paymentMethod || 'CASH',
+      };
+      const storeInfo: GstStoreInfo = {
+        businessName,
+        phone: cfgPhone || undefined,
+        gstin: cfgGstin || undefined,
+        address: cfgAddress || undefined,
+        upiId: upiId || undefined,
+      };
+      const html = generateGstInvoiceHtml(invoiceData, storeInfo, currencySymbol);
+      await Print.printAsync({ html });
+    } catch (e: any) {
+      Alert.alert('Print Error', e?.message || 'Unable to print invoice.');
+    }
   };
 
   const sendWhatsAppBill = (order: any) => {
@@ -303,11 +470,11 @@ export default function MobilePosScreen() {
   const handleResetForNextCustomer = () => {
     hapticFeedback.light();
     setCart([]);
-    setCustomerName('');
-    setCustomerPhone('');
-    setWhatsappConsent(false);
+    handleClearCustomer();
     setTableNo('');
     setCompletedOrder(null);
+    setGeneratedPdfUri(null);
+    setWhatsappSent(false);
   };
 
   return (
@@ -589,36 +756,254 @@ export default function MobilePosScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 40 }}
             >
-              {/* Customer Details Inputs */}
+              {/* Customer Selection & Order Info */}
               <View style={styles.sectionBox}>
-                <Text style={styles.sectionHeaderLabel}>Customer & Order Info</Text>
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                  <TextInput
-                    placeholder="Table / Token #"
-                    placeholderTextColor="#94a3b8"
-                    value={tableNo}
-                    onChangeText={setTableNo}
-                    style={[styles.sheetInput, { flex: 1 }]}
-                  />
-                  <TextInput
-                    placeholder="Customer Name"
-                    placeholderTextColor="#94a3b8"
-                    value={customerName}
-                    onChangeText={setCustomerName}
-                    style={[styles.sheetInput, { flex: 2 }]}
-                  />
+                <View style={styles.sectionHeaderBetween}>
+                  <Text style={styles.sectionHeaderLabel}>Customer & Invoice</Text>
+                  <Text style={styles.sectionHeaderHint}>
+                    {customerMode === 'WALKIN' ? 'Walk-in' : customerMode === 'SEARCH' ? 'Directory' : 'New Contact'}
+                  </Text>
                 </View>
-                <TextInput
-                  placeholder="WhatsApp Mobile (for digital receipt)"
-                  placeholderTextColor="#94a3b8"
-                  value={customerPhone}
-                  onChangeText={setCustomerPhone}
-                  keyboardType="phone-pad"
-                  style={styles.sheetInput}
-                />
-                <View style={{flexDirection:'row',alignItems:'center',gap:12,marginTop:12}}>
-                  <Text style={{flex:1,color:'#334155'}}>{blueprint.language==='hi'?'ग्राहक WhatsApp पर ऑर्डर की जानकारी पाना चाहता है':'Customer agrees to receive order updates on WhatsApp'}</Text>
-                  <Switch accessibilityLabel={blueprint.language==='hi'?'WhatsApp पर ऑर्डर की जानकारी':'WhatsApp order updates'} value={whatsappConsent} onValueChange={setWhatsappConsent} disabled={!customerPhone.trim()}/>
+
+                {/* Customer Mode Segmented Pills */}
+                <View style={styles.customerSegmentRow}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setCustomerMode('WALKIN');
+                      handleClearCustomer();
+                    }}
+                    style={[styles.customerSegmentBtn, customerMode === 'WALKIN' && styles.customerSegmentBtnActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.customerSegmentText, customerMode === 'WALKIN' && styles.customerSegmentTextActive]}>
+                      ⚡ Walk-in
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setCustomerMode('SEARCH');
+                    }}
+                    style={[styles.customerSegmentBtn, customerMode === 'SEARCH' && styles.customerSegmentBtnActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.customerSegmentText, customerMode === 'SEARCH' && styles.customerSegmentTextActive]}>
+                      👥 Existing ({customersList.length})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setCustomerMode('NEW');
+                      setSelectedCustomer(null);
+                    }}
+                    style={[styles.customerSegmentBtn, customerMode === 'NEW' && styles.customerSegmentBtnActive]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.customerSegmentText, customerMode === 'NEW' && styles.customerSegmentTextActive]}>
+                      ➕ New
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Mode 1: Walk-in Quick Inputs */}
+                {customerMode === 'WALKIN' && (
+                  <View style={styles.customerModeContainer}>
+                    <View style={styles.inputRow}>
+                      <TextInput
+                        placeholder="Table / Token # (Optional)"
+                        placeholderTextColor="#94a3b8"
+                        value={tableNo}
+                        onChangeText={setTableNo}
+                        style={[styles.sheetInput, { flex: 1 }]}
+                      />
+                      <TextInput
+                        placeholder="Guest Name (Optional)"
+                        placeholderTextColor="#94a3b8"
+                        value={customerName}
+                        onChangeText={setCustomerName}
+                        style={[styles.sheetInput, { flex: 1.5 }]}
+                      />
+                    </View>
+                    <View style={[styles.phoneInputWrap, { marginTop: 8 }]}>
+                      <View style={styles.phoneCountryBadge}>
+                        <Text style={styles.phoneCountryCode}>+91</Text>
+                      </View>
+                      <TextInput
+                        placeholder="WhatsApp Mobile (for PDF receipt)"
+                        placeholderTextColor="#94a3b8"
+                        value={customerPhone}
+                        onChangeText={setCustomerPhone}
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                        style={styles.phoneInputField}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {/* Mode 2: Existing Customer Search & Picker */}
+                {customerMode === 'SEARCH' && (
+                  <View style={styles.customerModeContainer}>
+                    {selectedCustomer ? (
+                      <View style={styles.selectedCustomerCard}>
+                        <View style={styles.selectedCustomerLeft}>
+                          <View style={styles.selectedCustomerAvatar}>
+                            <Feather name="user-check" size={18} color="#059669" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.selectedCustomerName} numberOfLines={1}>
+                              {selectedCustomer.name}
+                            </Text>
+                            <Text style={styles.selectedCustomerPhone}>
+                              {selectedCustomer.phone ? `+91 ${selectedCustomer.phone}` : 'No phone linked'}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          onPress={handleClearCustomer}
+                          style={styles.changeCustomerBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.changeCustomerText}>Change</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View>
+                        <View style={styles.customerSearchInputWrap}>
+                          <Feather name="search" size={16} color="#64748b" />
+                          <TextInput
+                            placeholder="Search customer by name or phone..."
+                            placeholderTextColor="#94a3b8"
+                            value={customerSearchQuery}
+                            onChangeText={setCustomerSearchQuery}
+                            style={styles.customerSearchInputField}
+                            autoCorrect={false}
+                          />
+                          {customerSearchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setCustomerSearchQuery('')}>
+                              <Feather name="x" size={16} color="#94a3b8" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* Filtered suggestions list */}
+                        <View style={styles.customerSuggestionsContainer}>
+                          {customersList
+                            .filter((c) => {
+                              if (!customerSearchQuery) return true;
+                              const q = customerSearchQuery.toLowerCase();
+                              return (
+                                (c.name && c.name.toLowerCase().includes(q)) ||
+                                (c.phone && c.phone.includes(q))
+                              );
+                            })
+                            .slice(0, 5)
+                            .map((c) => (
+                              <TouchableOpacity
+                                key={c.id || c.phone || c.name}
+                                onPress={() => handleSelectCustomer(c)}
+                                style={styles.customerSuggestionItem}
+                                activeOpacity={0.7}
+                              >
+                                <View style={styles.customerSuggestionAvatar}>
+                                  <Text style={styles.customerSuggestionInitial}>
+                                    {(c.name || 'C').charAt(0).toUpperCase()}
+                                  </Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.customerSuggestionName} numberOfLines={1}>
+                                    {c.name}
+                                  </Text>
+                                  <Text style={styles.customerSuggestionPhone}>
+                                    {c.phone ? `+91 ${c.phone}` : 'No phone'}
+                                  </Text>
+                                </View>
+                                <Feather name="plus-circle" size={18} color="#059669" />
+                              </TouchableOpacity>
+                            ))}
+
+                          {customersList.length === 0 && (
+                            <View style={styles.customerEmptyNotice}>
+                              <Text style={styles.customerEmptyNoticeText}>
+                                No customers saved yet. Switch to "New" to add one.
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    <View style={[styles.inputRow, { marginTop: 8 }]}>
+                      <TextInput
+                        placeholder="Table / Token # (Optional)"
+                        placeholderTextColor="#94a3b8"
+                        value={tableNo}
+                        onChangeText={setTableNo}
+                        style={[styles.sheetInput, { flex: 1 }]}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {/* Mode 3: Add New Customer */}
+                {customerMode === 'NEW' && (
+                  <View style={styles.customerModeContainer}>
+                    <TextInput
+                      placeholder="Customer Full Name *"
+                      placeholderTextColor="#94a3b8"
+                      value={customerName}
+                      onChangeText={setCustomerName}
+                      style={[styles.sheetInput, { marginBottom: 8 }]}
+                    />
+                    <View style={styles.phoneInputWrap}>
+                      <View style={styles.phoneCountryBadge}>
+                        <Text style={styles.phoneCountryCode}>+91</Text>
+                      </View>
+                      <TextInput
+                        placeholder="10-digit WhatsApp Number *"
+                        placeholderTextColor="#94a3b8"
+                        value={customerPhone}
+                        onChangeText={setCustomerPhone}
+                        keyboardType="phone-pad"
+                        maxLength={10}
+                        style={styles.phoneInputField}
+                      />
+                    </View>
+                    <TextInput
+                      placeholder="Table / Token # (Optional)"
+                      placeholderTextColor="#94a3b8"
+                      value={tableNo}
+                      onChangeText={setTableNo}
+                      style={[styles.sheetInput, { marginTop: 8 }]}
+                    />
+                  </View>
+                )}
+
+                {/* WhatsApp Automated Delivery Trust Shield */}
+                <View style={styles.whatsappTrustBanner}>
+                  <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.whatsappTrustTitle}>
+                      Automatic WhatsApp PDF Invoice
+                    </Text>
+                    <Text style={styles.whatsappTrustSub}>
+                      {customerPhone.trim()
+                        ? `A GST Tax Invoice PDF will be sent to +91 ${customerPhone.trim()}`
+                        : 'Enter WhatsApp mobile above to auto-deliver PDF invoice'}
+                    </Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel="WhatsApp Invoice Delivery"
+                    value={whatsappConsent}
+                    onValueChange={setWhatsappConsent}
+                    disabled={!customerPhone.trim()}
+                    trackColor={{ false: '#cbd5e1', true: '#a7f3d0' }}
+                    thumbColor={whatsappConsent && customerPhone.trim() ? '#059669' : '#f8fafc'}
+                  />
                 </View>
               </View>
 
@@ -800,7 +1185,7 @@ export default function MobilePosScreen() {
         </View>
       </Modal>
 
-      {/* Order Confirmed Receipt Modal */}
+      {/* Order Confirmed Receipt & PDF Modal */}
       <Modal visible={!!completedOrder} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={styles.confirmedCard}>
@@ -810,9 +1195,29 @@ export default function MobilePosScreen() {
 
             <Text style={styles.confirmedTitle}>Order Confirmed!</Text>
             <Text style={styles.confirmedSub}>
-              Order #{completedOrder?.id?.slice(-6).toUpperCase()} · {currencySymbol}
+              Invoice #{completedOrder?.id?.slice(-6).toUpperCase()} · {currencySymbol}
               {completedOrder?.total?.toFixed(2)}
             </Text>
+
+            {/* Tax Invoice PDF Status Banner */}
+            <View style={styles.invoicePdfBanner}>
+              <MaterialIcons name="picture-as-pdf" size={18} color="#b91c1c" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.invoicePdfBannerTitle}>
+                  {whatsappSent ? 'PDF Invoice Sent to WhatsApp' : 'Tax Invoice PDF Generated'}
+                </Text>
+                <Text style={styles.invoicePdfBannerSub}>
+                  {completedOrder?.customerPhone
+                    ? `Destination: +91 ${completedOrder.customerPhone}`
+                    : 'Ready for print or direct customer sharing'}
+                </Text>
+              </View>
+              {whatsappSent && (
+                <View style={styles.pdfDeliveredBadge}>
+                  <Text style={styles.pdfDeliveredBadgeText}>SENT ✓</Text>
+                </View>
+              )}
+            </View>
 
             <View style={styles.confirmedInfoBox}>
               <View style={styles.confirmedRow}>
@@ -833,9 +1238,15 @@ export default function MobilePosScreen() {
                   {completedOrder?.paymentStatus === 'PAID' ? 'PAID ✅' : 'PENDING ⏳'}
                 </Text>
               </View>
+              {completedOrder?.customerName ? (
+                <View style={styles.confirmedRow}>
+                  <Text style={styles.confirmedRowLabel}>Customer</Text>
+                  <Text style={styles.confirmedRowVal}>{completedOrder.customerName}</Text>
+                </View>
+              ) : null}
               {completedOrder?.deliveryAddress && (
                 <View style={styles.confirmedRow}>
-                  <Text style={styles.confirmedRowLabel}>Location</Text>
+                  <Text style={styles.confirmedRowLabel}>Table / Token</Text>
                   <Text style={styles.confirmedRowVal}>{completedOrder.deliveryAddress}</Text>
                 </View>
               )}
@@ -843,12 +1254,23 @@ export default function MobilePosScreen() {
 
             <View style={styles.confirmedActions}>
               <TouchableOpacity
-                onPress={() => sendWhatsAppBill(completedOrder)}
+                onPress={() => sendWhatsAppPdfBill(completedOrder)}
                 style={styles.whatsappReceiptBtn}
                 activeOpacity={0.8}
               >
-                <Ionicons name="logo-whatsapp" size={18} color="#ffffff" />
-                <Text style={styles.whatsappReceiptText}>Send WhatsApp Bill</Text>
+                <Ionicons name="logo-whatsapp" size={20} color="#ffffff" />
+                <Text style={styles.whatsappReceiptText}>
+                  {whatsappSent ? 'Resend WhatsApp PDF' : 'Share WhatsApp PDF'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handlePrintOrderInvoice}
+                style={styles.printInvoiceBtn}
+                activeOpacity={0.8}
+              >
+                <Feather name="printer" size={17} color="#0f172a" />
+                <Text style={styles.printInvoiceBtnText}>Print / View PDF Receipt</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1802,6 +2224,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  printInvoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  printInvoiceBtnText: {
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   nextSaleBtn: {
     alignItems: 'center',
     paddingVertical: 10,
@@ -1812,6 +2250,240 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 13,
     fontWeight: '700',
+  },
+  sectionHeaderBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionHeaderHint: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  customerSegmentRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  customerSegmentBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerSegmentBtnActive: {
+    backgroundColor: '#0f172a',
+  },
+  customerSegmentText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  customerSegmentTextActive: {
+    color: '#ffffff',
+  },
+  customerModeContainer: {
+    marginBottom: 8,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  phoneInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  phoneCountryBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0',
+  },
+  phoneCountryCode: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  phoneInputField: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#0f172a',
+  },
+  selectedCustomerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 12,
+    padding: 10,
+  },
+  selectedCustomerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  selectedCustomerAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#d1fae5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectedCustomerName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  selectedCustomerPhone: {
+    fontSize: 11,
+    color: '#059669',
+    marginTop: 1,
+  },
+  changeCustomerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  changeCustomerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  customerSearchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  customerSearchInputField: {
+    flex: 1,
+    fontSize: 12,
+    color: '#0f172a',
+    padding: 0,
+  },
+  customerSuggestionsContainer: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  customerSuggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+  },
+  customerSuggestionAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#e0f2fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customerSuggestionInitial: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284c7',
+  },
+  customerSuggestionName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  customerSuggestionPhone: {
+    fontSize: 10,
+    color: '#64748b',
+  },
+  customerEmptyNotice: {
+    padding: 10,
+    alignItems: 'center',
+  },
+  customerEmptyNoticeText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    textAlign: 'center',
+  },
+  whatsappTrustBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+  },
+  whatsappTrustTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  whatsappTrustSub: {
+    fontSize: 10,
+    color: '#166534',
+    marginTop: 1,
+  },
+  invoicePdfBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    padding: 10,
+    width: '100%',
+    marginTop: 12,
+  },
+  invoicePdfBannerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#991b1b',
+  },
+  invoicePdfBannerSub: {
+    fontSize: 10,
+    color: '#7f1d1d',
+    marginTop: 1,
+  },
+  pdfDeliveredBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  pdfDeliveredBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#ffffff',
   },
   scannerModalSafe: {
     flex: 1,

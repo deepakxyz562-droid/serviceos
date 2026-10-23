@@ -99,7 +99,7 @@ export function generateGstInvoiceHtml(
             <strong>${item.description || 'Item'}</strong>
           </td>
           <td style="text-align: center;">${item.hsnCode || '—'}</td>
-          <td style="text-align: center;">${itemQty}</td>
+          <td style="text-align: center;">${itemQty}${item.unit ? ` <span style="font-size: 10px; color: #64748b;">${item.unit}</span>` : ''}</td>
           <td style="text-align: right;">${currencySymbol}${itemRate.toFixed(2)}</td>
           <td style="text-align: right;">${currencySymbol}${itemAmount.toFixed(2)}</td>
           <td style="text-align: right;">${halfRate}% (${currencySymbol}${itemCgst.toFixed(2)})</td>
