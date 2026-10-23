@@ -46,6 +46,30 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
   })
 
   if (!subscription) {
+    // Check if tenant has an active WhatsApp provider
+    const ownProvider = await db.communicationProvider.findFirst({
+      where: {
+        tenantId,
+        type: 'whatsapp',
+        status: 'active',
+        sendingEnabled: true,
+        isPlatform: false,
+      },
+    })
+    if (ownProvider) {
+      return {
+        allowed: true,
+        remainingCredits: -1,
+        usedCredits: 0,
+        totalCredits: -1,
+        isTrial: false,
+        ownWhatsappConnected: true,
+        platformWhatsappEnabled: false,
+        planStatus: 'active',
+        plan: 'enterprise',
+      }
+    }
+
     // Check if platform has an active WhatsApp provider (SuperAdmin configured or env)
     const platformProvider = await db.communicationProvider.findFirst({
       where: {

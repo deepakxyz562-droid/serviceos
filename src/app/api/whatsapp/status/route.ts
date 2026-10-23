@@ -64,14 +64,30 @@ export async function GET() {
       }
     }
 
-    // WhatsApp is enabled ONLY when paid AND own provider connected.
-    const enabled = isPaid && ownConnected;
+    // Check for a platform-managed WhatsApp provider fallback
+    const platformProvider = !ownConnected ? await db.communicationProvider.findFirst({
+      where: {
+        type: 'whatsapp',
+        status: 'active',
+        sendingEnabled: true,
+        isPlatform: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true, provider: true, configJson: true },
+    }) : null;
+
+    const hasPlatform = !!platformProvider || !!(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+
+    // WhatsApp is enabled when tenant has own provider OR platform provider is configured.
+    const enabled = (isPaid && ownConnected) || hasPlatform;
 
     let reason = 'enabled';
-    if (!isPaid) {
-      reason = 'not_paid'; // trial or other non-active status
-    } else if (!ownConnected) {
-      reason = 'own_not_connected';
+    if (!enabled) {
+      if (!isPaid) {
+        reason = 'not_paid';
+      } else if (!ownConnected) {
+        reason = 'own_not_connected';
+      }
     }
 
     return NextResponse.json({

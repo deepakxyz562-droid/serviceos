@@ -217,9 +217,8 @@ export function CommunicationComposer(props: ComposerProps) {
           setWhatsappReady(false);
           return;
         }
-        // Only show WhatsApp if the tenant has their OWN config (not the
-        // platform-shared one). source: 'tenant-own' = user-added credentials.
-        const ready = !!(data.isConfigured && data.source === 'tenant-own');
+        // Enable WhatsApp if configured (whether platform-shared, tenant-own, or env).
+        const ready = !!data.isConfigured;
         setWhatsappReady(ready);
       })
       .catch(() => {

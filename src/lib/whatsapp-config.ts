@@ -91,22 +91,17 @@ export async function resolveWhatsAppConfig(tenantId?: string): Promise<WhatsApp
       })
     }
     if (!platformProvider) {
-      // Only fall back to an unscoped platform provider (one attached to
-      // any tenant) if the caller has NO tenantId at all (e.g., a system-
-      // level send). This is the cross-tenant guard — previously this query
-      // was unscoped and could leak credentials across tenants.
-      if (!tenantId) {
-        platformProvider = await db.communicationProvider.findFirst({
-          where: {
-            type: 'whatsapp',
-            status: 'active',
-            sendingEnabled: true,
-            isPlatform: true,
-          },
-          orderBy: { updatedAt: 'desc' },
-          include: { credential: true },
-        })
-      }
+      // Find the shared platform-managed provider (isPlatform: true)
+      platformProvider = await db.communicationProvider.findFirst({
+        where: {
+          type: 'whatsapp',
+          status: 'active',
+          sendingEnabled: true,
+          isPlatform: true,
+        },
+        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+        include: { credential: true },
+      })
     }
     if (platformProvider) {
       const resolved = resolveWACredsFromProvider(platformProvider)
