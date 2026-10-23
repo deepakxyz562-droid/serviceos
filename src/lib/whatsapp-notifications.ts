@@ -24,7 +24,10 @@ import { getAppUrl } from '@/lib/brand'
 interface NotificationPayload {
   to: string
   message: string
-  type?: 'text' | 'interactive'
+  type?: 'text' | 'interactive' | 'template'
+  templateName?: string
+  templateLanguage?: string
+  templateComponents?: Array<Record<string, unknown>>
   interactive?: Record<string, unknown>
   recipientName?: string
   recipientRole?: 'employee' | 'customer'
@@ -95,8 +98,30 @@ async function sendNotificationWhatsAppMessage(
   message: string,
   type?: string,
   interactive?: Record<string, unknown>,
-  tenantId?: string
+  tenantId?: string,
+  templateName?: string,
+  templateComponents?: Array<Record<string, unknown>>,
+  templateLanguage?: string
 ): Promise<SendResult> {
+  // If template is specified, send Meta approved template directly
+  if (type === 'template' && templateName) {
+    const templateRes = await sendWhatsAppMessage({
+      to,
+      message,
+      type: 'template',
+      templateName,
+      templateLanguage: templateLanguage || 'en_US',
+      templateComponents,
+      tenantId,
+    })
+    return {
+      success: templateRes.success,
+      error: templateRes.error,
+      externalId: templateRes.messageId,
+      simulated: templateRes.simulated,
+    }
+  }
+
   // For text messages, use the unified sendWhatsAppMessage (tenant own → platform fallback)
   if (type !== 'interactive' || !interactive) {
     const result = await sendWhatsAppMessage({ to, message, tenantId })
@@ -438,7 +463,14 @@ async function sendWhatsAppChannel(payload: NotificationPayload): Promise<SendRe
 
   try {
     sendResult = await sendNotificationWhatsAppMessage(
-      payload.to, payload.message, payload.type, payload.interactive, payload.tenantId,
+      payload.to,
+      payload.message,
+      payload.type,
+      payload.interactive,
+      payload.tenantId,
+      payload.templateName,
+      payload.templateComponents,
+      payload.templateLanguage,
     )
   } catch (e) {
     console.error('WhatsApp send error:', e)
@@ -1508,7 +1540,20 @@ export async function notifyCustomerJobStarted(
   await sendJobNotification({
     to: customerPhone,
     message,
-    type: 'text',
+    type: 'template',
+    templateName: 'job_travel_update',
+    templateLanguage: 'en_US',
+    templateComponents: [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: customerName || 'Customer' },
+          { type: 'text', text: (employee.name as string) || 'Technician' },
+          { type: 'text', text: scheduledTime || 'Shortly' },
+          { type: 'text', text: trackingUrl },
+        ],
+      },
+    ],
     recipientName: customerName || undefined,
     recipientRole: 'customer',
     subject: `Technician On The Way • ${employee.name || 'Technician'}`,
@@ -1904,7 +1949,21 @@ export async function notifyCustomerVerificationPin(
     const result = await sendJobNotification({
       to: customerPhone,
       message,
-      type: 'text',
+      type: 'template',
+      templateName: 'fieseros_job_assignment',
+      templateLanguage: 'en_US',
+      templateComponents: [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: customerName || (job.customerName as string) || 'Customer' },
+            { type: 'text', text: 'Service Visit' },
+            { type: 'text', text: (job.title as string) || 'Service Visit' },
+            { type: 'text', text: `Technician ${assigneeName} on ${scheduledDate} at ${scheduledTime}. PIN: ${pin}` },
+            { type: 'text', text: `Track: ${trackingUrl}` },
+          ],
+        },
+      ],
       recipientName: customerName || (job.customerName as string) || undefined,
       recipientRole: 'customer',
       // SECURITY: the PIN value is intentionally NOT included in the subject

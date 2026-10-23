@@ -960,8 +960,45 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       waMagicUrl ? `Track your invoice: ${waMagicUrl}` : '',
       'Thank you for your business!',
     ].filter(Boolean).join('\n')
+
     try {
-      const r = await sendWhatsAppMessage({ to: recipientPhone, message: waMessage, tenantId: invoice.tenantId || undefined })
+      const payLink = waMagicUrl || `${getAppUrl()}/portal/invoices/${invoice.id}`
+      const dueStr = invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'Due on receipt'
+      const bizName = invoice.tenant?.name || 'FieserOS'
+
+      // First attempt: Approved Meta Template (guarantees delivery outside 24h customer window)
+      let r = await sendWhatsAppMessage({
+        to: recipientPhone,
+        message: waMessage,
+        type: 'template',
+        templateName: 'invoice_payment_link',
+        templateLanguage: 'en_US',
+        templateComponents: [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: customerName || 'Customer' },
+              { type: 'text', text: invoice.number || 'Invoice' },
+              { type: 'text', text: bizName },
+              { type: 'text', text: invoiceTotal || '0' },
+              { type: 'text', text: dueStr },
+              { type: 'text', text: payLink },
+            ],
+          },
+        ],
+        tenantId: invoice.tenantId || undefined,
+      })
+
+      // Fallback to text message if template delivery failed
+      if (!r.success) {
+        r = await sendWhatsAppMessage({
+          to: recipientPhone,
+          message: waMessage,
+          type: 'text',
+          tenantId: invoice.tenantId || undefined,
+        })
+      }
+
       result.whatsapp = { success: !!r.success, error: r.error, simulated: r.simulated }
       // NotificationLog for WhatsApp
       try {
