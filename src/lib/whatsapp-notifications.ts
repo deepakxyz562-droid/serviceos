@@ -1950,17 +1950,19 @@ export async function notifyCustomerVerificationPin(
       to: customerPhone,
       message,
       type: 'template',
-      templateName: 'fieseros_job_assignment',
+      templateName: 'utility_visit_scheduled',
       templateLanguage: 'en_US',
       templateComponents: [
         {
           type: 'body',
           parameters: [
             { type: 'text', text: customerName || (job.customerName as string) || 'Customer' },
-            { type: 'text', text: 'Service Visit' },
             { type: 'text', text: (job.title as string) || 'Service Visit' },
-            { type: 'text', text: `Technician ${assigneeName} on ${scheduledDate} at ${scheduledTime}. PIN: ${pin}` },
-            { type: 'text', text: `Track: ${trackingUrl}` },
+            { type: 'text', text: scheduledDate || 'Scheduled date' },
+            { type: 'text', text: scheduledTime || 'Scheduled time' },
+            { type: 'text', text: assigneeName || 'Technician' },
+            { type: 'text', text: pin || '000000' },
+            { type: 'text', text: trackingUrl },
           ],
         },
       ],
