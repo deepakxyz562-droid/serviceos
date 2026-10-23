@@ -651,10 +651,8 @@ export function BosMarketingAiIntegrationsSettings({
   const [settingsWhatsapp, setSettingsWhatsapp] = useState(() => storeSettings.whatsappNumber || storeSettings.phone || '');
   const [settingsBanner, setSettingsBanner] = useState(() => storeSettings.announcementBanner || '');
   const [settingsThemeColor, setSettingsThemeColor] = useState(() => storeSettings.themeColor || '#0A6847');
-  const [staffList, setStaffList] = useState<Array<{ name: string; role: string; email?: string }>>([
-    { name: storeSettings.ownerName || storeSettings.businessName || 'Owner', role: 'Owner' },
-  ]);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
+
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
