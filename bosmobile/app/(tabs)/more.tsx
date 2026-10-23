@@ -39,6 +39,7 @@ export default function MoreScreen() {
         ...(c.customerCredit ? [{ label: t('Khata', 'खाता'), icon: 'account-balance-wallet' as Icon, path: '/khata' }] : []),
         ...(c.expenses ? [{ label: t('Expenses', 'खर्च'), icon: 'receipt-long' as Icon, path: '/expenses' }] : []),
         ...(c.invoicing ? [{ label: t('Invoices & estimates', 'बिल और अनुमान'), icon: 'description' as Icon, path: '/billing' }] : []),
+        { label: t('Reports & analytics', 'व्यापार रिपोर्ट और बिक्री'), icon: 'assessment' as Icon, path: '/reports' },
         ...(c.tables ? [{ label: t('Tables & QR menu', 'टेबल और QR मेन्यू'), icon: 'table-restaurant' as Icon, path: '/dine-in-qr' }] : []),
         ...(c.onlineStore ? [{ label: t('Online store', 'ऑनलाइन दुकान'), icon: 'language' as Icon, path: '/custom-domain' }] : []),
     ];
@@ -55,8 +56,12 @@ export default function MoreScreen() {
     return <SafeAreaView style={styles.safe} edges={['top']}><ScrollView contentContainerStyle={styles.content}>
   <Text style={styles.title}>{t('Settings', 'सेटिंग')}</Text><View style={styles.profile}><View style={styles.avatar}><Text style={styles.initial}>{(user?.name || user?.email || '?')[0].toUpperCase()}</Text></View><View style={{ flex: 1 }}><Text style={styles.name}>{user?.name || t('Your account', 'आपका खाता')}</Text><Text style={styles.email}>{user?.email}</Text></View></View>
   {section(t('Your business', 'आपका व्यवसाय'), business)}{section(t('Enabled tools', 'चालू टूल'), tools)}{section(t('Preferences', 'पसंद'), preferences)}
-  {section(t('Business setup', 'व्यवसाय की सेटिंग'), [{ label: t('Business details', 'व्यवसाय की जानकारी'), icon: 'storefront', path: '/blueprint-setup', detail: homeText(blueprint.businessType, language) }])}
+  {section(t('Business setup', 'व्यवसाय की सेटिंग'), [
+    { label: t('Staff & team roles', 'स्टाफ़ और भूमिकाएँ'), icon: 'badge' as Icon, path: '/staff', detail: t('Multi-user', 'मल्टी-यूज़र') },
+    { label: t('Business details', 'व्यवसाय की जानकारी'), icon: 'storefront', path: '/blueprint-setup', detail: homeText(blueprint.businessType, language) },
+  ])}
   {section(t('Help & account', 'सहायता और खाता'), [{ label: t('Support requests', 'सहायता अनुरोध'), icon: 'support-agent', path: '/tickets' }])}
+
   <TouchableOpacity accessibilityRole="button" style={styles.logout} onPress={() => Alert.alert(t('Log out?', 'लॉग आउट करें?'), '', [{ text: t('Cancel', 'रद्द करें'), style: 'cancel' }, { text: t('Log out', 'लॉग आउट'), style: 'destructive', onPress: () => void logout() }])}><MaterialIcons name="logout" size={20} color="#b91c1c"/><Text style={{ color: '#b91c1c', fontWeight: '600' }}>{t('Log out', 'लॉग आउट')}</Text></TouchableOpacity>
  </ScrollView></SafeAreaView>;
 }

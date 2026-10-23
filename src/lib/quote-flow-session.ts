@@ -64,10 +64,16 @@ export async function requireQuoteFlowUser(req?: Request): Promise<QuoteFlowUser
 }
 
 export async function getBusinessForUser(userId: string) {
-  return db.aiBusiness.findUnique({
+  const direct = await db.aiBusiness.findUnique({
     where: { ownerId: userId },
   });
+  if (direct) return direct;
+
+  const { resolveStaffSession } = await import('@/lib/commerce/staff-helper');
+  const staff = await resolveStaffSession({ id: userId });
+  return staff?.business || null;
 }
+
 
 const DEFAULT_SYSTEM_TEMPLATES = [
   {
@@ -128,6 +134,12 @@ export async function getOrCreateBusinessForUser(userId: string, tenantId?: stri
   });
 
   if (!business) {
+    const { resolveStaffSession } = await import('@/lib/commerce/staff-helper');
+    const staff = await resolveStaffSession({ id: userId });
+    if (staff?.business) {
+      return staff.business;
+    }
+
     business = await db.aiBusiness.create({
       data: {
         ownerId: userId,
@@ -145,6 +157,7 @@ export async function getOrCreateBusinessForUser(userId: string, tenantId?: stri
 
   return business;
 }
+
 
 export async function requireQuoteFlowBusiness(req?: Request) {
   const user = await requireQuoteFlowUser(req);

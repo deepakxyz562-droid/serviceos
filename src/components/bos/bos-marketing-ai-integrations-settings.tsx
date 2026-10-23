@@ -347,13 +347,251 @@ export function BosMarketingAiIntegrationsSettings({
     | 'documents'
     | 'payments'
     | 'language'
+    | 'staff'
   >('businessInfo');
+
+  /* Staff & Multi-User state */
+  const [staffList, setStaffList] = useState<any[]>(() =>
+    demoMode
+      ? [
+          {
+            id: 'owner-1',
+            name: storeSettings.ownerName || 'Ravi Kumar',
+            phone: storeSettings.phone || '+91 98765 43210',
+            email: 'ravi@store.in',
+            role: 'owner',
+            isActive: true,
+            permissions: {
+              canCreateInvoices: true,
+              canPosBilling: true,
+              canManageProducts: true,
+              canViewReports: true,
+              canManageKhata: true,
+              canManageSettings: true,
+              canManageStaff: true,
+            },
+          },
+          {
+            id: 'staff-demo-admin',
+            name: 'Sunil Verma',
+            phone: '+91 98111 22334',
+            email: 'sunil@store.in',
+            role: 'admin',
+            isActive: true,
+            permissions: {
+              canCreateInvoices: true,
+              canPosBilling: true,
+              canManageProducts: true,
+              canViewReports: true,
+              canManageKhata: true,
+              canManageSettings: true,
+              canManageStaff: true,
+            },
+          },
+          {
+            id: 'staff-demo-biller',
+            name: 'Kavita Sharma',
+            phone: '+91 98222 33445',
+            email: 'kavita@store.in',
+            role: 'biller',
+            isActive: true,
+            permissions: {
+              canCreateInvoices: true,
+              canPosBilling: true,
+              canManageProducts: false,
+              canViewReports: false,
+              canManageKhata: true,
+              canManageSettings: false,
+              canManageStaff: false,
+            },
+          },
+          {
+            id: 'staff-demo-cashier',
+            name: 'Rohit Yadav',
+            phone: '+91 98333 44556',
+            role: 'cashier',
+            isActive: true,
+            permissions: {
+              canCreateInvoices: false,
+              canPosBilling: true,
+              canManageProducts: false,
+              canViewReports: false,
+              canManageKhata: false,
+              canManageSettings: false,
+              canManageStaff: false,
+            },
+          },
+        ]
+      : []
+  );
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [staffForm, setStaffForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    role: 'biller' as 'admin' | 'biller' | 'cashier' | 'stock_manager' | 'accountant',
+    permissions: {
+      canCreateInvoices: true,
+      canPosBilling: true,
+      canManageProducts: false,
+      canViewReports: false,
+      canManageKhata: true,
+      canManageSettings: false,
+      canManageStaff: false,
+    },
+  });
+
+  const fetchStaffMembers = async () => {
+    try {
+      setLoadingStaff(true);
+      const res = await authFetch('/api/commerce/staff');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.staff)) {
+          setStaffList(data.staff);
+        }
+      }
+    } catch {
+      // Keep demo or current state if fetch fails
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleOpenAddStaff = () => {
+    setEditingStaffId(null);
+    setStaffForm({
+      name: '',
+      phone: '',
+      email: '',
+      role: 'biller',
+      permissions: {
+        canCreateInvoices: true,
+        canPosBilling: true,
+        canManageProducts: false,
+        canViewReports: false,
+        canManageKhata: true,
+        canManageSettings: false,
+        canManageStaff: false,
+      },
+    });
+    setStaffModalOpen(true);
+  };
+
+  const handleOpenEditStaff = (member: any) => {
+    setEditingStaffId(member.id);
+    setStaffForm({
+      name: member.name || '',
+      phone: member.phone || '',
+      email: member.email || '',
+      role: member.role || 'biller',
+      permissions: {
+        canCreateInvoices: Boolean(member.permissions?.canCreateInvoices),
+        canPosBilling: Boolean(member.permissions?.canPosBilling),
+        canManageProducts: Boolean(member.permissions?.canManageProducts),
+        canViewReports: Boolean(member.permissions?.canViewReports),
+        canManageKhata: Boolean(member.permissions?.canManageKhata),
+        canManageSettings: Boolean(member.permissions?.canManageSettings),
+        canManageStaff: Boolean(member.permissions?.canManageStaff),
+      },
+    });
+    setStaffModalOpen(true);
+  };
+
+  const handleSaveStaff = async () => {
+    if (!staffForm.name.trim()) {
+      showToast('Staff member name is required');
+      return;
+    }
+    if (!staffForm.phone.trim()) {
+      showToast('Phone number is required');
+      return;
+    }
+
+    try {
+      if (editingStaffId) {
+        const res = await authFetch('/api/commerce/staff', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: editingStaffId,
+            ...staffForm,
+          }),
+        });
+        if (res.ok) {
+          showToast(`Updated staff details for ${staffForm.name}`);
+          setStaffModalOpen(false);
+          void fetchStaffMembers();
+        } else {
+          const err = await res.json();
+          showToast(err.error || 'Failed to update staff member');
+        }
+      } else {
+        const res = await authFetch('/api/commerce/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(staffForm),
+        });
+        if (res.ok) {
+          showToast(`Added ${staffForm.name} as ${staffForm.role}`);
+          setStaffModalOpen(false);
+          void fetchStaffMembers();
+        } else {
+          const err = await res.json();
+          showToast(err.error || 'Failed to add staff member');
+        }
+      }
+    } catch {
+      showToast('Failed to save staff member. Please check connection.');
+    }
+  };
+
+  const handleToggleStaffActive = async (member: any) => {
+    try {
+      const res = await authFetch('/api/commerce/staff', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: member.id,
+          isActive: !member.isActive,
+        }),
+      });
+      if (res.ok) {
+        showToast(`Staff member marked as ${!member.isActive ? 'active' : 'inactive'}`);
+        void fetchStaffMembers();
+      }
+    } catch {
+      showToast('Failed to update staff status');
+    }
+  };
+
+  const handleDeleteStaff = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to remove ${name} from your store team?`)) return;
+    try {
+      const res = await authFetch(`/api/commerce/staff?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        showToast(`Removed ${name} from store staff`);
+        void fetchStaffMembers();
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to remove staff member');
+      }
+    } catch {
+      showToast('Failed to remove staff member');
+    }
+  };
+
   const [settingsBusinessName, setSettingsBusinessName] = useState(() =>
     demoMode ? (storeSettings.businessName || 'Ravi Store') : (storeSettings.businessName || '')
   );
   const [settingsBusinessType, setSettingsBusinessType] = useState(() =>
     demoMode ? (storeSettings.businessType || 'Grocery Store') : (storeSettings.businessType || 'Retail Store')
   );
+
   const [settingsOwnerName, setSettingsOwnerName] = useState(() =>
     demoMode ? 'Ravi Kumar' : ''
   );
@@ -2587,7 +2825,14 @@ export function BosMarketingAiIntegrationsSettings({
       sub: 'English, हिंदी & Bilingual (Both)',
       icon: Globe,
     },
+    {
+      id: 'staff' as const,
+      title: 'Staff & Multi-User Roles',
+      sub: 'Manage Admins, Billers, Cashiers & Permissions',
+      icon: Users,
+    },
   ];
+
 
   const daysOfWeek = [
     'Monday',
@@ -4071,9 +4316,357 @@ export function BosMarketingAiIntegrationsSettings({
               </div>
             </div>
           )}
+
+          {/* STAFF & MULTI-USER ROLES SECTION */}
+          {settingsSection === 'staff' && (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#EDF4F0] pb-3.5">
+                <div className="max-w-lg">
+                  <h2 className="text-[16px] font-extrabold text-[#111827]">
+                    Staff &amp; Multi-User Management
+                  </h2>
+                  <p className="mt-0.5 text-[12px] text-[#64748B] leading-relaxed">
+                    Add operators, billers, and managers. Assign dedicated roles and permissions so your staff can bill, add products, or manage inventory securely.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenAddStaff}
+                  className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-bold cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Team Member</span>
+                </button>
+              </div>
+
+              {/* Roles explanation cards */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 text-left">
+                {[
+                  { role: 'Admin', icon: ShieldCheck, color: 'text-emerald-700 bg-emerald-50 border-emerald-200', desc: 'Full store operations & staff management' },
+                  { role: 'Biller', icon: FileText, color: 'text-blue-700 bg-blue-50 border-blue-200', desc: 'Creates invoices, quotes & manages customers' },
+                  { role: 'Cashier', icon: ShoppingCart, color: 'text-amber-700 bg-amber-50 border-amber-200', desc: 'POS billing counter & receipt printing' },
+                  { role: 'Stock Manager', icon: Package, color: 'text-orange-700 bg-orange-50 border-orange-200', desc: 'Adds/edits products & stock counts' },
+                  { role: 'Accountant', icon: BarChart3, color: 'text-purple-700 bg-purple-50 border-purple-200', desc: 'View-only invoices, GST & tax reports' },
+                ].map((r) => {
+                  const Icon = r.icon;
+                  return (
+                    <div key={r.role} className={`rounded-xl border p-2.5 ${r.color}`}>
+                      <div className="flex items-center gap-1.5">
+                        <Icon className="h-3.5 w-3.5" />
+                        <span className="text-[11.5px] font-bold">{r.role}</span>
+                      </div>
+                      <p className="mt-1 text-[10px] leading-tight opacity-80">{r.desc}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Staff Directory Table */}
+              <div className="rounded-2xl border border-[#E4EFEA] bg-white overflow-hidden shadow-2xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                        <th className="py-2.5 px-3.5">Staff Member</th>
+                        <th className="py-2.5 px-3">Role</th>
+                        <th className="py-2.5 px-3">Permissions</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                        <th className="py-2.5 px-3 text-center">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                      {staffList.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-xs text-[#94A3B8]">
+                            No staff members added yet. Click &quot;Add Team Member&quot; to invite your first operator.
+                          </td>
+                        </tr>
+                      ) : (
+                        staffList.map((member) => {
+                          const isOwner = member.role === 'owner';
+                          const roleBadgeStyle =
+                            member.role === 'owner'
+                              ? 'bg-purple-100 text-purple-800 border-purple-200'
+                              : member.role === 'admin'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              : member.role === 'biller'
+                              ? 'bg-blue-100 text-blue-800 border-blue-200'
+                              : member.role === 'cashier'
+                              ? 'bg-amber-100 text-amber-800 border-amber-200'
+                              : member.role === 'stock_manager'
+                              ? 'bg-orange-100 text-orange-800 border-orange-200'
+                              : 'bg-indigo-100 text-indigo-800 border-indigo-200';
+
+                          const activePerms: string[] = [];
+                          if (member.permissions?.canCreateInvoices) activePerms.push('Invoicing');
+                          if (member.permissions?.canPosBilling) activePerms.push('POS');
+                          if (member.permissions?.canManageProducts) activePerms.push('Products');
+                          if (member.permissions?.canViewReports) activePerms.push('Reports');
+                          if (member.permissions?.canManageKhata) activePerms.push('Khata');
+                          if (member.permissions?.canManageStaff) activePerms.push('Staff');
+
+                          return (
+                            <tr key={member.id} className="hover:bg-[#F9FCFA]">
+                              <td className="py-3 px-3.5">
+                                <div className="flex items-center gap-3">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E6F6F0] text-[12px] font-extrabold text-[#0A6847]">
+                                    {(member.name || 'S').slice(0, 2).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-[#111827]">{member.name}</p>
+                                    <p className="text-[11px] text-[#64748B]">
+                                      {member.phone} {member.email ? `• ${member.email}` : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-extrabold uppercase ${roleBadgeStyle}`}>
+                                  {member.role.replace('_', ' ')}
+                                </span>
+                              </td>
+
+                              <td className="py-3 px-3">
+                                <div className="flex flex-wrap gap-1 max-w-xs">
+                                  {isOwner ? (
+                                    <span className="text-[11px] font-bold text-purple-700">Full Access (All Permissions)</span>
+                                  ) : activePerms.length > 0 ? (
+                                    activePerms.map((p) => (
+                                      <span key={p} className="rounded-md bg-[#F1F6F3] px-1.5 py-0.5 text-[10.5px] font-medium text-[#334155]">
+                                        {p}
+                                      </span>
+                                    ))
+                                  ) : (
+                                    <span className="text-[11px] text-[#94A3B8]">No permissions</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-3 text-center">
+                                {isOwner ? (
+                                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
+                                    Primary Owner
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleToggleStaffActive(member)}
+                                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10.5px] font-bold cursor-pointer transition ${
+                                      member.isActive
+                                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                                  >
+                                    <span className={`h-1.5 w-1.5 rounded-full ${member.isActive ? 'bg-emerald-600' : 'bg-gray-400'}`} />
+                                    <span>{member.isActive ? 'Active' : 'Inactive'}</span>
+                                  </button>
+                                )}
+                              </td>
+
+                              <td className="py-3 px-3 text-center">
+                                {isOwner ? (
+                                  <span className="text-[11px] text-[#94A3B8]">—</span>
+                                ) : (
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditStaff(member)}
+                                      className="rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteStaff(member.id, member.name)}
+                                      className="rounded-lg border border-red-200 bg-red-50/50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 cursor-pointer"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Add / Edit Staff Modal */}
+              {staffModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+                  <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-[#DCE9E3] space-y-4 max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+                      <div>
+                        <h3 className="text-[15px] font-bold text-[#111827]">
+                          {editingStaffId ? 'Edit Team Member' : 'Add New Team Member'}
+                        </h3>
+                        <p className="text-[11.5px] text-[#64748B]">
+                          Configure store access, operator role, and permissions
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setStaffModalOpen(false)}
+                        className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F6F3]"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-3.5">
+                      <div>
+                        <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
+                          Full Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={staffForm.name}
+                          onChange={(e) => setStaffForm({ ...staffForm, name: e.target.value })}
+                          placeholder="e.g. Ramesh Kumar"
+                          className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12.5px] text-[#1E293B] focus:border-[#0A6847] focus:outline-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
+                            Mobile Phone *
+                          </label>
+                          <input
+                            type="tel"
+                            value={staffForm.phone}
+                            onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })}
+                            placeholder="e.g. 9876543210"
+                            className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12.5px] text-[#1E293B] focus:border-[#0A6847] focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
+                            Email Address (Optional)
+                          </label>
+                          <input
+                            type="email"
+                            value={staffForm.email}
+                            onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })}
+                            placeholder="e.g. ramesh@store.in"
+                            className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12.5px] text-[#1E293B] focus:border-[#0A6847] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11.5px] font-bold text-[#334155] mb-1">
+                          Select Role Preset
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {[
+                            { id: 'admin', label: '🛡️ Admin / Store Manager', desc: 'Full store operations & staff control' },
+                            { id: 'biller', label: '🧾 Biller / Invoicing', desc: 'Creates invoices, quotes & khata' },
+                            { id: 'cashier', label: '🛒 Cashier / POS', desc: 'POS billing & cash register counter' },
+                            { id: 'stock_manager', label: '📦 Stock Manager', desc: 'Products, stock updates & purchases' },
+                            { id: 'accountant', label: '📊 Accountant / CA', desc: 'Invoices & GST tax reports (read only)' },
+                          ].map((r) => {
+                            const selected = staffForm.role === r.id;
+                            return (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => {
+                                  let perms = { ...staffForm.permissions };
+                                  if (r.id === 'admin') {
+                                    perms = { canCreateInvoices: true, canPosBilling: true, canManageProducts: true, canViewReports: true, canManageKhata: true, canManageSettings: true, canManageStaff: true };
+                                  } else if (r.id === 'biller') {
+                                    perms = { canCreateInvoices: true, canPosBilling: true, canManageProducts: false, canViewReports: false, canManageKhata: true, canManageSettings: false, canManageStaff: false };
+                                  } else if (r.id === 'cashier') {
+                                    perms = { canCreateInvoices: false, canPosBilling: true, canManageProducts: false, canViewReports: false, canManageKhata: false, canManageSettings: false, canManageStaff: false };
+                                  } else if (r.id === 'stock_manager') {
+                                    perms = { canCreateInvoices: false, canPosBilling: false, canManageProducts: true, canViewReports: false, canManageKhata: false, canManageSettings: false, canManageStaff: false };
+                                  } else if (r.id === 'accountant') {
+                                    perms = { canCreateInvoices: false, canPosBilling: false, canManageProducts: false, canViewReports: true, canManageKhata: true, canManageSettings: false, canManageStaff: false };
+                                  }
+                                  setStaffForm({ ...staffForm, role: r.id as any, permissions: perms });
+                                }}
+                                className={`rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                                  selected
+                                    ? 'border-[#0A6847] bg-[#E6F6F0] text-[#0A6847]'
+                                    : 'border-[#E4EFEA] bg-white text-[#334155] hover:bg-[#F4F8F6]'
+                                }`}
+                              >
+                                <p className="text-[12px] font-bold">{r.label}</p>
+                                <p className="text-[10.5px] text-[#64748B] mt-0.5">{r.desc}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Granular Permission Toggles */}
+                      <div className="rounded-xl border border-[#E4EFEA] bg-[#FAFDFB] p-3 space-y-2">
+                        <p className="text-[11.5px] font-bold text-[#111827]">Granular Permissions</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11.5px]">
+                          {[
+                            { key: 'canCreateInvoices', label: 'Create & Edit Invoices' },
+                            { key: 'canPosBilling', label: 'POS Billing Counter' },
+                            { key: 'canManageProducts', label: 'Add / Edit Products & Stock' },
+                            { key: 'canViewReports', label: 'View Sales & Financial Reports' },
+                            { key: 'canManageKhata', label: 'Manage Customer Credit (Khata)' },
+                            { key: 'canManageSettings', label: 'Configure Store Settings' },
+                            { key: 'canManageStaff', label: 'Manage Other Staff Members' },
+                          ].map((p) => {
+                            const checked = Boolean((staffForm.permissions as any)[p.key]);
+                            return (
+                              <label key={p.key} className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(e) =>
+                                    setStaffForm({
+                                      ...staffForm,
+                                      permissions: {
+                                        ...staffForm.permissions,
+                                        [p.key]: e.target.checked,
+                                      },
+                                    })
+                                  }
+                                  className="h-4 w-4 rounded border-gray-300 text-[#0A6847] focus:ring-[#0A6847]"
+                                />
+                                <span className="text-[#334155]">{p.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 border-t border-[#EBF2EE] pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setStaffModalOpen(false)}
+                        className="rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[12px] font-semibold text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveStaff}
+                        className="bos-btn-primary rounded-xl px-4 py-2 text-[12px] font-bold cursor-pointer"
+                      >
+                        {editingStaffId ? 'Update Member' : 'Save & Invite'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right Stacked Preview Cards (3 cols): Store Preview + Business Hours */}
+
         <div className="lg:col-span-3 space-y-4">
           {/* Card 1: Store Preview */}
           <div className="bos-card p-4 space-y-3.5">

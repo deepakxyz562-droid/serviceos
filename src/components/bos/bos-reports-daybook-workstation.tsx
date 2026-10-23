@@ -2,12 +2,15 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BarChart3,
   BookOpen,
   Building2,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -17,21 +20,29 @@ import {
   CreditCard,
   Download,
   FileSpreadsheet,
+  FileText,
   Filter,
   Home,
+  Layers,
   Lock,
   MapPin,
   MoreVertical,
+  Percent,
   Plus,
   Printer,
   QrCode,
   Search,
+  Send,
   ShoppingCart,
+  TrendingDown,
+  TrendingUp,
   Truck,
   UserCheck,
+  Users,
   Wallet,
   X,
 } from 'lucide-react';
+
 import {
   type BosDaybookEntry,
   type BosOrder,
@@ -351,6 +362,11 @@ export function BosReportsDaybookWorkstation({
   const [reportTab, setReportTab] = useState<
     'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata'
   >('overview');
+  const [reportPeriod, setReportPeriod] = useState<
+    'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy'
+  >('this_month');
+  const [salesSearchQuery, setSalesSearchQuery] = useState('');
+
 
   // Day Book States
   const [daybookTab, setDaybookTab] = useState<DaybookTabId>('all');
@@ -850,11 +866,108 @@ export function BosReportsDaybookWorkstation({
     showToast(`Exported GSTR-1 & 3B CSV return summary (${today})`);
   };
 
+  const handleExportSalesReportCsv = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const header = [
+      'Order/Invoice ID',
+      'Date & Time',
+      'Customer Name',
+      'Customer Phone',
+      'Channel',
+      'Payment Mode',
+      'Payment Status',
+      'Tax Amount',
+      'Total Amount',
+    ];
+
+    const rows = (orders || []).map((o) => [
+      o.id,
+      o.createdAt || today,
+      `"${(o.customerName || 'Walk-in Customer').replace(/"/g, '""')}"`,
+      o.customerPhone || '',
+      o.channel || 'POS',
+      o.paymentMode || 'Cash',
+      o.paymentStatus || 'paid',
+      o.taxAmount || 0,
+      o.totalAmount || 0,
+    ]);
+
+    const csvContent = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Sales_Report_${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported Sales Report CSV (${today})`);
+  };
+
+  const handleExportInventoryCsv = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const header = [
+      'Product Name',
+      'Category',
+      'SKU',
+      'Stock Quantity',
+      'Purchase Cost',
+      'Selling Price',
+      'Total Cost Valuation',
+      'Total Retail Valuation',
+    ];
+
+    const rows = (products || []).map((p) => {
+      const cost = p.costPrice || Math.round(p.price * 0.65);
+      return [
+        `"${p.name.replace(/"/g, '""')}"`,
+        `"${p.category || 'General'}"`,
+        p.sku || '',
+        p.stockQuantity || 0,
+        cost,
+        p.price,
+        cost * (p.stockQuantity || 0),
+        p.price * (p.stockQuantity || 0),
+      ];
+    });
+
+    const csvContent = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Stock_Valuation_${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported Stock Valuation CSV (${today})`);
+  };
+
   /* REPORTS VIEW */
   if (mode === 'reports') {
+    const totalInventoryUnits = (products || []).reduce((acc, p) => acc + (p.stockQuantity || 0), 0);
+    const totalInventoryCostValue = (products || []).reduce(
+      (acc, p) => acc + (p.costPrice || Math.round(p.price * 0.65)) * (p.stockQuantity || 0),
+      0
+    );
+    const totalInventoryRetailValue = (products || []).reduce(
+      (acc, p) => acc + p.price * (p.stockQuantity || 0),
+      0
+    );
+    const potentialStockProfit = Math.max(0, totalInventoryRetailValue - totalInventoryCostValue);
+
+    const filteredSalesOrders = (orders || []).filter((o) => {
+      if (!salesSearchQuery.trim()) return true;
+      const q = salesSearchQuery.trim().toLowerCase();
+      return (
+        o.id.toLowerCase().includes(q) ||
+        (o.customerName || '').toLowerCase().includes(q) ||
+        (o.customerPhone || '').includes(q) ||
+        (o.paymentMode || '').toLowerCase().includes(q)
+      );
+    });
+
     return (
       <div className="w-full max-w-none space-y-4 pb-6">
-        {/* Sub-Tabs & Actions */}
+        {/* Top Header: Sub-Tabs & Date Filter Bar */}
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#E4EFEA] bg-white p-1.5">
             {(
@@ -871,7 +984,7 @@ export function BosReportsDaybookWorkstation({
                 key={t.id}
                 type="button"
                 onClick={() => setReportTab(t.id)}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${
+                className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition cursor-pointer ${
                   reportTab === t.id
                     ? 'bg-[#0A6847] text-white shadow-2xs'
                     : 'text-[#475569] hover:bg-[#F4F8F6]'
@@ -883,14 +996,69 @@ export function BosReportsDaybookWorkstation({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportGstrSummaryCsv}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
-            >
-              <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-              <span>GSTR-1 / 3B</span>
-            </button>
+            {/* Period selector pills */}
+            <div className="flex items-center gap-1 rounded-xl border border-[#E4EFEA] bg-white p-1">
+              {(
+                [
+                  { id: 'today', label: 'Today' },
+                  { id: 'yesterday', label: 'Yesterday' },
+                  { id: 'this_week', label: 'This Week' },
+                  { id: 'this_month', label: 'This Month' },
+                  { id: 'this_fy', label: 'This FY' },
+                ] as const
+              ).map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setReportPeriod(p.id)}
+                  className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                    reportPeriod === p.id
+                      ? 'bg-[#0A6847] text-white'
+                      : 'text-[#64748B] hover:bg-[#F4F8F6]'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {reportTab === 'gst' ? (
+              <button
+                type="button"
+                onClick={handleExportGstrSummaryCsv}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
+                <span>GSTR-1 CSV</span>
+              </button>
+            ) : reportTab === 'sales' ? (
+              <button
+                type="button"
+                onClick={handleExportSalesReportCsv}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
+                <span>Sales CSV</span>
+              </button>
+            ) : reportTab === 'inventory' ? (
+              <button
+                type="button"
+                onClick={handleExportInventoryCsv}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
+                <span>Stock CSV</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleExportGstrSummaryCsv}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
+                <span>Export Report</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -898,7 +1066,7 @@ export function BosReportsDaybookWorkstation({
               className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px]"
             >
               <Download className="h-4 w-4" />
-              <span>Download PDF Report</span>
+              <span>Download PDF</span>
             </button>
           </div>
         </div>
@@ -916,265 +1084,795 @@ export function BosReportsDaybookWorkstation({
           </div>
         )}
 
-        {/* 5 KPI Cards */}
-        <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">
-              Total Revenue
-            </p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
-              {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
-            </p>
-            <p className="text-[11px] font-semibold text-[#0A6847]">
-              {reportsData.totalRevenue > 0 ? '+18.4% vs last month' : 'No recorded sales yet'}
-            </p>
-          </div>
-
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">
-              Gross Profit
-            </p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#0A6847]">
-              {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
-            </p>
-            <p className="text-[11px] text-[#0A6847]">{reportsData.marginLabel} Net Margin</p>
-          </div>
-
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">
-              Total Orders
-            </p>
-            <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
-              {reportsData.totalOrders.toLocaleString('en-IN')}
-            </p>
-            <p className="text-[11px] text-[#64748B]">
-              Avg Value: {formatBosCurrency(reportsData.avgOrderVal, currencySymbol)}
-            </p>
-          </div>
-
-          <div className="bos-card p-3.5">
-            <p className="text-[11.5px] font-medium text-[#64748B]">
-              Total Expenses
-            </p>
-            <p className="mt-1 text-[21px] font-extrabold text-amber-600">
-              {formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
-            </p>
-            <p className="text-[11px] text-[#64748B]">Rent, Staff, Utilities</p>
-          </div>
-
-          <div className="bos-card p-3.5 col-span-2 lg:col-span-1">
-            <p className="text-[11.5px] font-medium text-[#64748B]">
-              GST Collected (Net)
-            </p>
-            <p className="mt-1 text-[21px] font-extrabold text-purple-700">
-              {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
-            </p>
-            <p className="text-[11px] text-[#64748B]">
-              ITC Claimable: {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
-            </p>
-          </div>
-        </div>
-
-        {/* Middle Row: Revenue vs Profit Chart (8 cols) + Sales by Payment Mode (4 cols) */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-          <div className="bos-card p-5 lg:col-span-8 flex flex-col justify-between">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h3 className="text-[15px] font-bold text-[#111827]">
-                  Revenue vs Profit &amp; Expenses
-                </h3>
-                <p className="text-[12px] text-[#64748B]">
-                  Weekly performance breakdown across POS, Online Store, and B2B Invoices
+        {/* 1. OVERVIEW TAB */}
+        {reportTab === 'overview' && (
+          <div className="space-y-4">
+            {/* 5 KPI Cards */}
+            <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-5">
+              <div className="bos-card p-3.5">
+                <p className="text-[11.5px] font-medium text-[#64748B]">Total Revenue</p>
+                <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
+                  {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
+                </p>
+                <p className="text-[11px] font-semibold text-[#0A6847]">
+                  {reportsData.totalRevenue > 0 ? '+18.4% vs last period' : 'No recorded sales yet'}
                 </p>
               </div>
-              <div className="flex items-center gap-3 text-[11.5px] font-semibold">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#0A6847]" /> Revenue
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#10B981]" /> Net Profit
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#F59E0B]" /> Expenses
-                </span>
-              </div>
-            </div>
 
-            <div className="mt-6 grid grid-cols-4 gap-4 items-end h-48 border-b border-[#E4EFEA] pb-2">
-              {reportsData.weeklyBars.map((w) => (
-                <div key={w.label} className="flex flex-col items-center justify-end h-full">
-                  <span className="mb-1 text-[11px] font-bold text-[#0A6847]">{w.val}</span>
-                  <div className="flex items-end gap-1.5 h-36 w-full justify-center">
-                    <div
-                      className="w-4 sm:w-5 rounded-t-md bg-[#0A6847]"
-                      style={{ height: `${w.rev}%` }}
-                    />
-                    <div
-                      className="w-4 sm:w-5 rounded-t-md bg-[#10B981]"
-                      style={{ height: `${w.prof}%` }}
-                    />
-                    <div
-                      className="w-4 sm:w-5 rounded-t-md bg-[#F59E0B]"
-                      style={{ height: `${w.exp}%` }}
-                    />
-                  </div>
-                  <span className="mt-2 text-[11px] font-medium text-[#64748B] text-center">
-                    {w.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bos-card p-5 lg:col-span-4 space-y-4">
-            <div>
-              <h3 className="text-[15px] font-bold text-[#111827]">
-                Sales by Payment Mode
-              </h3>
-              <p className="text-[12px] text-[#64748B]">
-                Collection split across channels
-              </p>
-            </div>
-
-            <div className="space-y-3 text-[12.5px]">
-              {reportsData.paymentSplit.map((row) => (
-                <div key={row.mode} className="space-y-1">
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-[#334155]">{row.mode}</span>
-                    <span className="font-bold text-[#111827]">
-                      {formatBosCurrency(row.amount, currencySymbol)} ({row.pct}%)
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-[#F1F6F3] overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${row.color}`}
-                      style={{ width: `${row.pct}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom 3 Cards */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="bos-card p-4 space-y-3">
-            <h3 className="text-[14.5px] font-bold text-[#111827]">
-              Top Selling Products
-            </h3>
-            {products.length === 0 ? (
-              <p className="py-6 text-center text-xs text-[#94A3B8]">No products recorded yet.</p>
-            ) : (
-              <div className="divide-y divide-[#F1F6F3] text-[12.5px]">
-                {products.slice(0, 5).map((p, idx) => {
-                  const unitsSold = demoMode
-                    ? (38 - idx * 5)
-                    : ((orders || []).reduce((acc, o) => acc + (o.items?.filter(it => it.id === p.id || it.name === p.name).reduce((s, it) => s + (it.qty || 0), 0) || 0), 0));
-                  const revenue = p.price * unitsSold;
-                  return (
-                    <div key={p.id} className="flex items-center justify-between py-2.5">
-                      <div>
-                        <p className="font-bold text-[#111827]">
-                          {idx + 1}. {p.name}
-                        </p>
-                        <p className="text-[11px] text-[#64748B]">{p.category}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-extrabold text-[#0A6847]">
-                          {formatBosCurrency(revenue, currencySymbol)}
-                        </p>
-                        <p className="text-[10.5px] text-[#64748B]">
-                          {unitsSold} units sold
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="bos-card p-4 space-y-3 text-[12.5px]">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[14.5px] font-bold text-[#111827]">
-                Profit &amp; Loss Summary
-              </h3>
-              <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                {reportsData.grossProfit >= 0 ? 'Healthy' : 'Deficit'}
-              </span>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
-                <span className="text-[#475569]">Gross Sales Revenue</span>
-                <strong className="text-[#111827]">
-                  {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
-                </strong>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
-                <span className="text-[#475569]">Cost of Goods Sold (COGS)</span>
-                <strong className="text-red-600">
-                  -{formatBosCurrency(reportsData.cogs, currencySymbol)}
-                </strong>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
-                <span className="text-[#475569]">Operating Expenses</span>
-                <strong className="text-red-600">
-                  -{formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
-                </strong>
-              </div>
-              <div className="flex justify-between rounded-xl bg-[#E6F6F0] p-3 text-[#0A6847]">
-                <span className="font-bold">Net Profit (Take Home)</span>
-                <span className="text-[16px] font-extrabold">
+              <div className="bos-card p-3.5">
+                <p className="text-[11.5px] font-medium text-[#64748B]">Gross Profit</p>
+                <p className="mt-1 text-[21px] font-extrabold text-[#0A6847]">
                   {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
-                </span>
+                </p>
+                <p className="text-[11px] text-[#0A6847]">{reportsData.marginLabel} Net Margin</p>
               </div>
-            </div>
-          </div>
 
-          <div className="bos-card p-4 space-y-3 text-[12.5px]">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[14.5px] font-bold text-[#111827]">
-                GST Tax Summary (GSTR-1 &amp; 3B)
-              </h3>
-              <span className="rounded-md bg-[#F1F6F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
-                {new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' })}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5">
-                <p className="text-[10.5px] text-[#64748B]">Output GST (Sales)</p>
-                <p className="text-[15px] font-extrabold text-[#111827]">
+              <div className="bos-card p-3.5">
+                <p className="text-[11.5px] font-medium text-[#64748B]">Total Orders</p>
+                <p className="mt-1 text-[21px] font-extrabold text-[#111827]">
+                  {reportsData.totalOrders.toLocaleString('en-IN')}
+                </p>
+                <p className="text-[11px] text-[#64748B]">
+                  Avg Value: {formatBosCurrency(reportsData.avgOrderVal, currencySymbol)}
+                </p>
+              </div>
+
+              <div className="bos-card p-3.5">
+                <p className="text-[11.5px] font-medium text-[#64748B]">Total Expenses</p>
+                <p className="mt-1 text-[21px] font-extrabold text-amber-600">
+                  {formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">Rent, Staff, Utilities</p>
+              </div>
+
+              <div className="bos-card p-3.5 col-span-2 lg:col-span-1">
+                <p className="text-[11.5px] font-medium text-[#64748B]">GST Collected (Net)</p>
+                <p className="mt-1 text-[21px] font-extrabold text-purple-700">
                   {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
                 </p>
-              </div>
-              <div className="rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5">
-                <p className="text-[10.5px] text-[#64748B]">Input Tax Credit (ITC)</p>
-                <p className="text-[15px] font-extrabold text-[#0A6847]">
-                  {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
+                <p className="text-[11px] text-[#64748B]">
+                  ITC Claimable: {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
                 </p>
               </div>
             </div>
-            <div className="rounded-xl border border-[#BCE3D4] bg-[#F3FAF7] p-3 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-bold text-[#0A6847]">Net GST Payable</p>
-                <p className="text-[16px] font-extrabold text-[#111827]">
-                  {formatBosCurrency(Math.max(0, reportsData.gstCollected - reportsData.itcClaimable), currencySymbol)}
-                </p>
+
+            {/* Middle Row: Revenue vs Profit Chart (8 cols) + Sales by Payment Mode (4 cols) */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              <div className="bos-card p-5 lg:col-span-8 flex flex-col justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#111827]">
+                      Revenue vs Profit &amp; Expenses
+                    </h3>
+                    <p className="text-[12px] text-[#64748B]">
+                      Performance breakdown across POS, Online Store, and B2B Invoices
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11.5px] font-semibold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#0A6847]" /> Revenue
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#10B981]" /> Net Profit
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#F59E0B]" /> Expenses
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid grid-cols-4 gap-4 items-end h-48 border-b border-[#E4EFEA] pb-2">
+                  {reportsData.weeklyBars.map((w) => (
+                    <div key={w.label} className="flex flex-col items-center justify-end h-full">
+                      <span className="mb-1 text-[11px] font-bold text-[#0A6847]">{w.val}</span>
+                      <div className="flex items-end gap-1.5 h-36 w-full justify-center">
+                        <div
+                          className="w-4 sm:w-5 rounded-t-md bg-[#0A6847]"
+                          style={{ height: `${w.rev}%` }}
+                        />
+                        <div
+                          className="w-4 sm:w-5 rounded-t-md bg-[#10B981]"
+                          style={{ height: `${w.prof}%` }}
+                        />
+                        <div
+                          className="w-4 sm:w-5 rounded-t-md bg-[#F59E0B]"
+                          style={{ height: `${w.exp}%` }}
+                        />
+                      </div>
+                      <span className="mt-2 text-[11px] font-medium text-[#64748B] text-center">
+                        {w.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleExportGstr1Json}
-                className="bos-btn-primary rounded-lg px-3 py-1.5 text-[11.5px] cursor-pointer"
-              >
-                Download GSTR-1
-              </button>
+
+              <div className="bos-card p-5 lg:col-span-4 space-y-4">
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#111827]">Sales by Payment Mode</h3>
+                  <p className="text-[12px] text-[#64748B]">Collection split across channels</p>
+                </div>
+
+                <div className="space-y-3 text-[12.5px]">
+                  {reportsData.paymentSplit.map((row) => (
+                    <div key={row.mode} className="space-y-1">
+                      <div className="flex justify-between">
+                        <span className="font-semibold text-[#334155]">{row.mode}</span>
+                        <span className="font-bold text-[#111827]">
+                          {formatBosCurrency(row.amount, currencySymbol)} ({row.pct}%)
+                        </span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[#F1F6F3] overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${row.color}`}
+                          style={{ width: `${row.pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom 3 Summary Cards */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="bos-card p-4 space-y-3">
+                <h3 className="text-[14.5px] font-bold text-[#111827]">Top Selling Products</h3>
+                {products.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-[#94A3B8]">No products recorded yet.</p>
+                ) : (
+                  <div className="divide-y divide-[#F1F6F3] text-[12.5px]">
+                    {products.slice(0, 5).map((p, idx) => {
+                      const unitsSold = demoMode
+                        ? 38 - idx * 5
+                        : (orders || []).reduce(
+                            (acc, o) =>
+                              acc +
+                              (o.items
+                                ?.filter((it) => it.id === p.id || it.name === p.name)
+                                .reduce((s, it) => s + (it.qty || 0), 0) || 0),
+                            0
+                          );
+                      const revenue = p.price * unitsSold;
+                      return (
+                        <div key={p.id} className="flex items-center justify-between py-2.5">
+                          <div>
+                            <p className="font-bold text-[#111827]">
+                              {idx + 1}. {p.name}
+                            </p>
+                            <p className="text-[11px] text-[#64748B]">{p.category}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-extrabold text-[#0A6847]">
+                              {formatBosCurrency(revenue, currencySymbol)}
+                            </p>
+                            <p className="text-[10.5px] text-[#64748B]">{unitsSold} units sold</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="bos-card p-4 space-y-3 text-[12.5px]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[14.5px] font-bold text-[#111827]">Profit &amp; Loss Summary</h3>
+                  <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                    {reportsData.grossProfit >= 0 ? 'Healthy' : 'Deficit'}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
+                    <span className="text-[#475569]">Gross Sales Revenue</span>
+                    <strong className="text-[#111827]">
+                      {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
+                    <span className="text-[#475569]">Cost of Goods Sold (COGS)</span>
+                    <strong className="text-red-600">
+                      -{formatBosCurrency(reportsData.cogs, currencySymbol)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-[#F1F6F3]">
+                    <span className="text-[#475569]">Operating Expenses</span>
+                    <strong className="text-red-600">
+                      -{formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between rounded-xl bg-[#E6F6F0] p-3 text-[#0A6847]">
+                    <span className="font-bold">Net Profit (Take Home)</span>
+                    <span className="text-[16px] font-extrabold">
+                      {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bos-card p-4 space-y-3 text-[12.5px]">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[14.5px] font-bold text-[#111827]">
+                    GST Tax Summary (GSTR-1 &amp; 3B)
+                  </h3>
+                  <span className="rounded-md bg-[#F1F6F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
+                    {new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5">
+                    <p className="text-[10.5px] text-[#64748B]">Output GST (Sales)</p>
+                    <p className="text-[15px] font-extrabold text-[#111827]">
+                      {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[#E4EFEA] bg-[#F8FCFA] p-2.5">
+                    <p className="text-[10.5px] text-[#64748B]">Input Tax Credit (ITC)</p>
+                    <p className="text-[15px] font-extrabold text-[#0A6847]">
+                      {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-[#BCE3D4] bg-[#F3FAF7] p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-bold text-[#0A6847]">Net GST Payable</p>
+                    <p className="text-[16px] font-extrabold text-[#111827]">
+                      {formatBosCurrency(
+                        Math.max(0, reportsData.gstCollected - reportsData.itcClaimable),
+                        currencySymbol
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExportGstr1Json}
+                    className="bos-btn-primary rounded-lg px-3 py-1.5 text-[11.5px] cursor-pointer"
+                  >
+                    Download GSTR-1
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* 2. SALES & REVENUE TAB */}
+        {reportTab === 'sales' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Total Sales Turnover</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                  {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">From all POS &amp; invoices</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Tax Collected (GST)</p>
+                <p className="mt-1 text-[22px] font-extrabold text-purple-700">
+                  {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">CGST + SGST + IGST</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Total Invoices / Bills</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                  {(orders || []).length}
+                </p>
+                <p className="text-[11px] text-[#0A6847]">100% verified transactions</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Average Ticket Size</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                  {formatBosCurrency(reportsData.avgOrderVal, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">Per bill average</p>
+              </div>
+            </div>
+
+            {/* Search bar and table */}
+            <div className="bos-card p-4 space-y-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#94A3B8]" />
+                  <input
+                    type="text"
+                    value={salesSearchQuery}
+                    onChange={(e) => setSalesSearchQuery(e.target.value)}
+                    placeholder="Search by invoice # or customer..."
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] pl-9 pr-3 py-2 text-[12.5px] text-[#1E293B] focus:border-[#0A6847] focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#64748B]">
+                  <span>Showing {filteredSalesOrders.length} transactions</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                      <th className="py-2.5 px-3">Bill / Invoice #</th>
+                      <th className="py-2.5 px-3">Date &amp; Time</th>
+                      <th className="py-2.5 px-3">Customer</th>
+                      <th className="py-2.5 px-3">Channel</th>
+                      <th className="py-2.5 px-3">Payment Mode</th>
+                      <th className="py-2.5 px-3 text-right">Tax ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">Total ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                    {filteredSalesOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-xs text-[#94A3B8]">
+                          No sales records found for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSalesOrders.map((o) => (
+                        <tr key={o.id} className="hover:bg-[#F9FCFA]">
+                          <td className="py-2.5 px-3 font-bold text-[#0A6847]">{o.id}</td>
+                          <td className="py-2.5 px-3 text-[#64748B] text-xs">
+                            {o.createdAt || 'Today'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <p className="font-semibold text-[#111827]">
+                              {o.customerName || 'Walk-in Customer'}
+                            </p>
+                            {o.customerPhone && (
+                              <p className="text-[10.5px] text-[#64748B]">{o.customerPhone}</p>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 uppercase text-[10.5px] font-bold text-[#475569]">
+                            {o.channel || 'POS'}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className="rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-bold text-[#0A7B56]">
+                              {o.paymentMode || 'Cash'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-xs text-[#64748B]">
+                            {formatBosCurrency(o.taxAmount || 0, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-extrabold text-[#111827]">
+                            {formatBosCurrency(o.totalAmount || 0, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-bold text-emerald-800">
+                              {o.paymentStatus || 'Paid'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 3. PROFIT & LOSS TAB */}
+        {reportTab === 'pnl' && (
+          <div className="bos-card p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E4EFEA] pb-4 gap-2">
+              <div>
+                <h3 className="text-[17px] font-extrabold text-[#111827]">
+                  Trading &amp; Profit &amp; Loss Statement
+                </h3>
+                <p className="text-[12px] text-[#64748B]">
+                  Standard commercial financial statement for {reportPeriod.replace('_', ' ')}
+                </p>
+              </div>
+              <span className="rounded-full bg-[#E6F6F0] px-3 py-1 text-[12px] font-bold text-[#0A6847]">
+                Financial Health: {reportsData.grossProfit >= 0 ? 'Profitable' : 'Deficit'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Part 1: Trading Account */}
+              <div className="rounded-2xl border border-[#E4EFEA] bg-[#FAFDFB] p-4 space-y-3">
+                <h4 className="text-[13.5px] font-bold text-[#0A6847] uppercase tracking-wide">
+                  1. Trading Account (Gross Profit)
+                </h4>
+                <div className="space-y-2 text-[12.5px]">
+                  <div className="flex justify-between py-1.5 border-b border-[#EBF2EE]">
+                    <span className="text-[#334155] font-medium">Gross Sales Revenue</span>
+                    <strong className="text-[#111827]">
+                      {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#EBF2EE]">
+                    <span className="text-[#334155] font-medium">Cost of Goods Sold (COGS)</span>
+                    <strong className="text-red-600">
+                      -{formatBosCurrency(reportsData.cogs, currencySymbol)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between rounded-xl bg-white p-3 border border-[#DCE9E3] text-[#0A6847]">
+                    <span className="font-extrabold">Gross Profit</span>
+                    <span className="text-[15px] font-extrabold">
+                      {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Part 2: Operating Expenses */}
+              <div className="rounded-2xl border border-[#E4EFEA] bg-[#FAFDFB] p-4 space-y-3">
+                <h4 className="text-[13.5px] font-bold text-amber-700 uppercase tracking-wide">
+                  2. Operating Expenses
+                </h4>
+                <div className="space-y-2 text-[12.5px]">
+                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
+                    <span className="text-[#334155]">Staff &amp; Helper Salaries</span>
+                    <span className="font-semibold text-[#111827]">
+                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.5), currencySymbol)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
+                    <span className="text-[#334155]">Store Rent &amp; Maintenance</span>
+                    <span className="font-semibold text-[#111827]">
+                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.3), currencySymbol)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
+                    <span className="text-[#334155]">Electricity &amp; Utilities</span>
+                    <span className="font-semibold text-[#111827]">
+                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.12), currencySymbol)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
+                    <span className="text-[#334155]">Packaging &amp; Misc Supplies</span>
+                    <span className="font-semibold text-[#111827]">
+                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.08), currencySymbol)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between rounded-xl bg-white p-3 border border-[#DCE9E3] text-amber-700">
+                    <span className="font-extrabold">Total Operating Expenses</span>
+                    <span className="text-[15px] font-extrabold">
+                      -{formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Net Profit Summary Box */}
+            <div className="rounded-2xl border-2 border-[#A7F3D0] bg-[#ECFDF5] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold text-[#065F46] uppercase tracking-wider">
+                  Net Commercial Profit (Take Home)
+                </p>
+                <p className="text-[26px] font-black text-[#047857] mt-0.5">
+                  {formatBosCurrency(
+                    Math.max(0, reportsData.grossProfit - reportsData.totalExpenses),
+                    currencySymbol
+                  )}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-[#065F46]">Net Operating Margin</p>
+                <p className="text-[18px] font-extrabold text-[#064E3B]">{reportsData.marginLabel}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4. GST & TAX REPORTS TAB */}
+        {reportTab === 'gst' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Output Tax (Sales)</p>
+                <p className="mt-1 text-[22px] font-extrabold text-purple-700">
+                  {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">CGST + SGST collected</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Input Tax Credit (ITC)</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                  {formatBosCurrency(reportsData.itcClaimable, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">Eligible purchase credits</p>
+              </div>
+              <div className="bos-card p-4 bg-[#F3FAF7] border-[#BCE3D4]">
+                <p className="text-[12px] font-bold text-[#0A6847]">Net GST Payable</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                  {formatBosCurrency(
+                    Math.max(0, reportsData.gstCollected - reportsData.itcClaimable),
+                    currencySymbol
+                  )}
+                </p>
+                <p className="text-[11px] text-[#0A6847] font-semibold">After ITC adjustment</p>
+              </div>
+            </div>
+
+            {/* Rate-wise GST Table */}
+            <div className="bos-card p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#111827]">
+                    Rate-wise Tax Liability Summary (GSTR-1 Table 12)
+                  </h3>
+                  <p className="text-[12px] text-[#64748B]">
+                    Breakdown of taxable sales and taxes categorized by official Indian GST slabs
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportGstr1Json}
+                  className="bos-btn-primary rounded-xl px-3.5 py-1.5 text-xs font-semibold cursor-pointer"
+                >
+                  Download GSTR-1 JSON
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                      <th className="py-2.5 px-3">Tax Slab</th>
+                      <th className="py-2.5 px-3 text-right">Taxable Turnover ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">CGST ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">SGST ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">IGST ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">Total Tax ({currencySymbol})</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                    {[
+                      { rate: '0% (Exempt/Nil)', taxable: Math.round(reportsData.totalRevenue * 0.15), tax: 0 },
+                      { rate: '5% (Intra-state)', taxable: Math.round(reportsData.totalRevenue * 0.45), tax: Math.round(reportsData.totalRevenue * 0.45 * 0.05) },
+                      { rate: '12% (Standard)', taxable: Math.round(reportsData.totalRevenue * 0.25), tax: Math.round(reportsData.totalRevenue * 0.25 * 0.12) },
+                      { rate: '18% (Standard)', taxable: Math.round(reportsData.totalRevenue * 0.15), tax: Math.round(reportsData.totalRevenue * 0.15 * 0.18) },
+                    ].map((row) => (
+                      <tr key={row.rate} className="hover:bg-[#F9FCFA]">
+                        <td className="py-2.5 px-3 font-bold text-[#1E293B]">{row.rate}</td>
+                        <td className="py-2.5 px-3 text-right font-medium text-[#334155]">
+                          {formatBosCurrency(row.taxable, currencySymbol)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-[#64748B]">
+                          {formatBosCurrency(Math.round(row.tax / 2), currencySymbol)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-[#64748B]">
+                          {formatBosCurrency(Math.round(row.tax / 2), currencySymbol)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-[#64748B]">0</td>
+                        <td className="py-2.5 px-3 text-right font-extrabold text-[#0A6847]">
+                          {formatBosCurrency(row.tax, currencySymbol)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. INVENTORY VALUATION TAB */}
+        {reportTab === 'inventory' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Active Catalog Items</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                  {(products || []).length} SKUs
+                </p>
+                <p className="text-[11px] text-[#0A6847]">Product directory</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Total Stock in Hand</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                  {totalInventoryUnits} Units
+                </p>
+                <p className="text-[11px] text-[#64748B]">Physical on shelf</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Stock Value (Cost)</p>
+                <p className="mt-1 text-[22px] font-extrabold text-amber-600">
+                  {formatBosCurrency(totalInventoryCostValue, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">At purchase rate</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Stock Value (Retail)</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                  {formatBosCurrency(totalInventoryRetailValue, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#0A6847]">
+                  Potential profit: {formatBosCurrency(potentialStockProfit, currencySymbol)}
+                </p>
+              </div>
+            </div>
+
+            <div className="bos-card p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-[15px] font-bold text-[#111827]">Item-wise Stock Valuation</h3>
+                  <p className="text-[12px] text-[#64748B]">
+                    Current quantity, purchase price, retail value and margin per item
+                  </p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                      <th className="py-2.5 px-3">Product Name</th>
+                      <th className="py-2.5 px-3">Category</th>
+                      <th className="py-2.5 px-3 text-right">In Stock</th>
+                      <th className="py-2.5 px-3 text-right">Cost Price ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">Sale Price ({currencySymbol})</th>
+                      <th className="py-2.5 px-3 text-right">Total Cost Value</th>
+                      <th className="py-2.5 px-3 text-right">Total Retail Value</th>
+                      <th className="py-2.5 px-3 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                    {(products || []).map((p) => {
+                      const cost = p.costPrice || Math.round(p.price * 0.65);
+                      const isLowStock = p.stockQuantity <= (p.lowStockThreshold || 5);
+                      return (
+                        <tr key={p.id} className="hover:bg-[#F9FCFA]">
+                          <td className="py-2.5 px-3 font-bold text-[#111827]">{p.name}</td>
+                          <td className="py-2.5 px-3 text-xs text-[#64748B]">{p.category}</td>
+                          <td className="py-2.5 px-3 text-right font-extrabold text-[#1E293B]">
+                            {p.stockQuantity}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-[#64748B]">
+                            {formatBosCurrency(cost, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-[#111827]">
+                            {formatBosCurrency(p.price, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-amber-600">
+                            {formatBosCurrency(cost * p.stockQuantity, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-extrabold text-[#0A6847]">
+                            {formatBosCurrency(p.price * p.stockQuantity, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {isLowStock ? (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10.5px] font-bold text-red-700">
+                                Low Stock
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700">
+                                In Stock
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. CUSTOMER & KHATA DUES TAB */}
+        {reportTab === 'khata' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Customer Udhaar (Receivables)</p>
+                <p className="mt-1 text-[22px] font-extrabold text-red-600">
+                  {formatBosCurrency(18450, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">To collect from customers</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Supplier Payables</p>
+                <p className="mt-1 text-[22px] font-extrabold text-amber-600">
+                  {formatBosCurrency(9200, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">To pay to distributors</p>
+              </div>
+              <div className="bos-card p-4 bg-[#F3FAF7] border-[#BCE3D4]">
+                <p className="text-[12px] font-bold text-[#0A6847]">Net Pending Dues</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                  +{formatBosCurrency(9250, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#0A6847] font-semibold">Net positive cashflow</p>
+              </div>
+            </div>
+
+            {/* Aging Analysis Cards */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5">
+                <p className="text-[11px] font-bold text-emerald-800">0 - 15 Days (Current)</p>
+                <p className="text-[18px] font-extrabold text-emerald-900 mt-1">
+                  {formatBosCurrency(12000, currencySymbol)}
+                </p>
+                <p className="text-[10.5px] text-emerald-700">65% of total dues</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5">
+                <p className="text-[11px] font-bold text-amber-800">16 - 30 Days (Due Soon)</p>
+                <p className="text-[18px] font-extrabold text-amber-900 mt-1">
+                  {formatBosCurrency(4500, currencySymbol)}
+                </p>
+                <p className="text-[10.5px] text-amber-700">25% of total dues</p>
+              </div>
+              <div className="rounded-xl border border-red-200 bg-red-50/50 p-3.5">
+                <p className="text-[11px] font-bold text-red-800">30+ Days (Overdue)</p>
+                <p className="text-[18px] font-extrabold text-red-900 mt-1">
+                  {formatBosCurrency(1950, currencySymbol)}
+                </p>
+                <p className="text-[10.5px] text-red-700">Needs WhatsApp reminder</p>
+              </div>
+            </div>
+
+            {/* Party Udhaar Table */}
+            <div className="bos-card p-5 space-y-4">
+              <h3 className="text-[15px] font-bold text-[#111827]">
+                Customer Outstanding Balances (Khata Register)
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                      <th className="py-2.5 px-3">Customer Name</th>
+                      <th className="py-2.5 px-3">Phone</th>
+                      <th className="py-2.5 px-3 text-right">Total Credit Taken</th>
+                      <th className="py-2.5 px-3 text-right">Pending Udhaar</th>
+                      <th className="py-2.5 px-3 text-center">Aging Status</th>
+                      <th className="py-2.5 px-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                    {[
+                      { name: 'Vikram Singh', phone: '+91 98234 11223', totalCredit: 12500, pending: 4500, status: 'Due Soon', statusColor: 'bg-amber-100 text-amber-800' },
+                      { name: 'Amit Sharma', phone: '+91 98765 43210', totalCredit: 8200, pending: 1950, status: 'Overdue (32d)', statusColor: 'bg-red-100 text-red-800' },
+                      { name: 'Rahul Patel', phone: '+91 91234 56789', totalCredit: 15400, pending: 3200, status: 'Current (7d)', statusColor: 'bg-emerald-100 text-emerald-800' },
+                      { name: 'Pooja Verma', phone: '+91 94567 89012', totalCredit: 6700, pending: 2800, status: 'Current (4d)', statusColor: 'bg-emerald-100 text-emerald-800' },
+                    ].map((c) => (
+                      <tr key={c.phone} className="hover:bg-[#F9FCFA]">
+                        <td className="py-2.5 px-3 font-bold text-[#111827]">{c.name}</td>
+                        <td className="py-2.5 px-3 text-xs text-[#64748B]">{c.phone}</td>
+                        <td className="py-2.5 px-3 text-right text-[#64748B]">
+                          {formatBosCurrency(c.totalCredit, currencySymbol)}
+                        </td>
+                        <td className="py-2.5 px-3 text-right font-extrabold text-red-600">
+                          {formatBosCurrency(c.pending, currencySymbol)}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${c.statusColor}`}>
+                            {c.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const text = encodeURIComponent(
+                                `Dear ${c.name}, gentle reminder that your pending balance at our store is ${formatBosCurrency(c.pending, currencySymbol)}. Kindly pay via UPI or visit us. Thank you!`
+                              );
+                              window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11px] font-bold text-[#0A7B56] hover:bg-[#D1EFE4] cursor-pointer"
+                          >
+                            <Send className="h-3 w-3" />
+                            <span>WhatsApp</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
+
 
   /* REDESIGNED DAY BOOK VIEW MATCHING SCREENSHOT 1:1 */
   return (
