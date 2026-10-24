@@ -271,6 +271,27 @@ export default function BillingScreen() {
   const handleShareWhatsAppPdf = async (inv: InvoiceRecord) => {
     try {
       await hapticFeedback.medium();
+      const cleanPhone = (inv.customer?.phone || '').replace(/\D/g, '');
+      if (cleanPhone) {
+        apiRequest(API_PATHS.commerceWhatsAppSend, {
+          method: 'POST',
+          body: {
+            phone: cleanPhone,
+            templateType: 'bos_tax_invoice',
+            templateData: {
+              customerName: inv.customer?.name || 'Valued Customer',
+              invoiceNumber: inv.number,
+              businessName: storeInfo?.businessName || 'Our Store',
+              total: inv.total,
+              currency: 'INR',
+              paymentStatus: inv.status || 'PAID',
+              paymentMethod: 'Cash / Online',
+              invoiceUrl: `${process.env.EXPO_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${inv.number}`,
+            },
+          },
+        }).catch(() => {});
+      }
+
       const html = generateGstInvoiceHtml(inv, storeInfo, '₹');
       const { uri } = await Print.printToFileAsync({ html });
       const canShare = await Sharing.isAvailableAsync();
@@ -674,10 +695,32 @@ export default function BillingScreen() {
     hapticFeedback.light();
     const docName = isInvoice ? 'GST Invoice' : 'Quotation Estimate';
     const clientName = item.customer?.name || 'Customer';
-    const text = `Hello ${clientName},\n\nPlease find your ${docName} #${item.number} for the amount of ₹${item.total.toFixed(2)}.\n\nThank you for your business!`;
     const cleanPhone = item.customer?.phone?.replace(/\D/g, '') || '';
-    if (cleanPhone) {
-      Linking.openURL(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`);
+
+    if (isInvoice && cleanPhone) {
+      apiRequest(API_PATHS.commerceWhatsAppSend, {
+        method: 'POST',
+        body: {
+          phone: cleanPhone,
+          templateType: 'bos_tax_invoice',
+          templateData: {
+            customerName: clientName,
+            invoiceNumber: item.number,
+            businessName: storeInfo?.businessName || 'Our Store',
+            total: item.total,
+            currency: 'INR',
+            paymentStatus: item.status || 'PAID',
+            paymentMethod: 'Cash / Online',
+            invoiceUrl: `${process.env.EXPO_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${item.number}`,
+          },
+        },
+      }).catch(() => {});
+    }
+
+    const text = `Hello ${clientName},\n\nPlease find your ${docName} #${item.number} for the amount of ₹${item.total.toFixed(2)}.\n\nThank you for your business!`;
+    const formattedPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    if (formattedPhone) {
+      Linking.openURL(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(text)}`);
     } else {
       Linking.openURL(`https://wa.me/?text=${encodeURIComponent(text)}`);
     }

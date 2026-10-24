@@ -7,7 +7,10 @@ import {
   formatCustomerOrderConfirmation,
   formatCustomerStatusUpdate,
   formatVendorNewOrderAlert,
+  buildBosOrderConfirmedTemplate,
+  buildBosOrderStatusTemplate,
   type TransactionalOrderPayload,
+  type OrderMessageTemplate,
 } from '@/lib/whatsapp-transactional';
 
 /**
@@ -99,9 +102,9 @@ export async function triggerImmediateOrderNotifications(
       };
 
       if (event === 'CREATED') {
-        // Customer confirmation
-        const custFormatted = formatCustomerOrderConfirmation(payload);
-        const custTemplate = provider.customerTemplate
+        // Customer confirmation via approved BOS Meta template
+        const custBuilt = buildBosOrderConfirmedTemplate(payload, provider.language || 'en_US');
+        const custTemplate: OrderMessageTemplate = provider.customerTemplate
           ? {
               name: provider.customerTemplate,
               language: provider.language,
@@ -113,10 +116,11 @@ export async function triggerImmediateOrderNotifications(
                 payload.trackingUrl!,
               ],
             }
-          : undefined;
+          : custBuilt.template;
+
         void dispatchTransactionalWhatsApp(
           order.customerPhone,
-          custFormatted.messageText,
+          custBuilt.fallbackText,
           custTemplate,
           provider
         ).catch(() => null);
@@ -146,8 +150,8 @@ export async function triggerImmediateOrderNotifications(
           ).catch(() => null);
         }
       } else if (event === 'STATUS_CHANGE') {
-        const statusFormatted = formatCustomerStatusUpdate(payload, newStatus || order.status);
-        const statusTemplate = provider.customerTemplate
+        const statusBuilt = buildBosOrderStatusTemplate(payload, newStatus || order.status, provider.language || 'en_US');
+        const statusTemplate: OrderMessageTemplate = provider.customerTemplate
           ? {
               name: provider.customerTemplate,
               language: provider.language,
@@ -159,10 +163,11 @@ export async function triggerImmediateOrderNotifications(
                 payload.trackingUrl!,
               ],
             }
-          : undefined;
+          : statusBuilt.template;
+
         void dispatchTransactionalWhatsApp(
           order.customerPhone,
-          statusFormatted.messageText,
+          statusBuilt.fallbackText,
           statusTemplate,
           provider
         ).catch(() => null);

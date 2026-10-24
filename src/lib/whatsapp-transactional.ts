@@ -15,7 +15,55 @@
 import { db } from '@/lib/db';
 import { WHATSAPP_API_VERSION } from '@/lib/whatsapp-config';
 
-export interface OrderMessageTemplate { name: string; language: string; parameters: string[]; }
+export interface OrderMessageTemplate {
+  name: string;
+  language: string;
+  parameters?: string[];
+  components?: Array<Record<string, unknown>>;
+  buttonUrlParam?: string;
+}
+
+/**
+ * Standard BOS Meta WhatsApp Templates (Utility Category)
+ * Approved for 24/7 delivery outside conversation window.
+ */
+export const BOS_META_TEMPLATES = {
+  ORDER_CONFIRMED: {
+    name: 'bos_order_confirmed',
+    category: 'UTILITY',
+    language: 'en_US',
+    bodyText: '🎉 *Order Confirmed!* #{{2}}\nHi {{1}}, your order at *{{3}}* has been confirmed.\n\n💰 Total Amount: {{4}}\n💳 Payment: {{5}}\n\nThank you for shopping with us!',
+    buttonText: 'View Bill & Tracking',
+  },
+  ORDER_STATUS_UPDATE: {
+    name: 'bos_order_status_update',
+    category: 'UTILITY',
+    language: 'en_US',
+    bodyText: '📦 *Order Update* #{{2}}\nHi {{1}}, your order at *{{4}}* is now *{{3}}*.\n📍 Details: {{5}}\n\nTrack live progress using the link below:',
+    buttonText: 'Track Live Order',
+  },
+  TAX_INVOICE: {
+    name: 'bos_tax_invoice',
+    category: 'UTILITY',
+    language: 'en_US',
+    bodyText: '🧾 *Tax Invoice* {{2}}\nDear {{1}}, thank you for your business with *{{3}}*.\n\n💰 Invoice Total: {{4}}\nStatus: {{5}}\n\nYour GST invoice PDF is ready to view & download.',
+    buttonText: 'Download PDF Invoice',
+  },
+  PAYMENT_RECEIVED: {
+    name: 'bos_payment_received',
+    category: 'UTILITY',
+    language: 'en_US',
+    bodyText: '✅ *Payment Received*\nHi {{1}}, we received {{4}} for *{{3}}*.\nRef: #{{2}}\nPayment Mode: {{5}}\nRemaining Balance: {{6}}',
+    buttonText: 'View Digital Receipt',
+  },
+  KHATA_REMINDER: {
+    name: 'bos_khata_reminder',
+    category: 'UTILITY',
+    language: 'en_US',
+    bodyText: '🔔 *Payment Reminder*\nDear {{1}}, this is a gentle reminder that an amount of {{3}} is pending with *{{2}}* (Due: {{4}}).\n\nKindly clear via UPI or click below to view bill.',
+    buttonText: 'Pay Now / View Bill',
+  },
+} as const;
 
 export interface TransactionalOrderPayload {
   currency?: string;
@@ -154,6 +202,333 @@ export function formatCustomerStatusUpdate(
 }
 
 /**
+ * Builders for BOS Standard Meta Templates
+ */
+export function buildBosOrderConfirmedTemplate(order: TransactionalOrderPayload, language = 'en_US'): {
+  template: OrderMessageTemplate;
+  fallbackText: string;
+} {
+  const formatted = formatCustomerOrderConfirmation(order);
+  const totalStr = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: order.currency || 'INR',
+  }).format(order.total);
+  const payStr = order.paymentStatus === 'PAID'
+    ? `PAID (${order.paymentMethod || 'Online'})`
+    : order.paymentMethod === 'UPI' ? 'UPI Pending' : 'Pay on Delivery / Counter';
+
+  const parameters = [
+    order.customerName || 'Customer',
+    order.orderNumber,
+    order.businessName,
+    totalStr,
+    payStr,
+    formatted.trackingUrl,
+  ];
+
+  return {
+    template: {
+      name: BOS_META_TEMPLATES.ORDER_CONFIRMED.name,
+      language,
+      parameters,
+      buttonUrlParam: formatted.trackingUrl,
+    },
+    fallbackText: formatted.messageText,
+  };
+}
+
+export function buildBosOrderStatusTemplate(order: TransactionalOrderPayload, newStatus: string, language = 'en_US'): {
+  template: OrderMessageTemplate;
+  fallbackText: string;
+} {
+  const formatted = formatCustomerStatusUpdate(order, newStatus);
+  const statusDisplay = newStatus.replace(/_/g, ' ').toUpperCase();
+  const locationOrEta = order.deliveryAddress || order.deliveryType || 'Counter Pickup';
+
+  const parameters = [
+    order.customerName || 'Customer',
+    order.orderNumber,
+    statusDisplay,
+    order.businessName,
+    locationOrEta,
+    order.trackingUrl || formatted.trackingUrl,
+  ];
+
+  return {
+    template: {
+      name: BOS_META_TEMPLATES.ORDER_STATUS_UPDATE.name,
+      language,
+      parameters,
+      buttonUrlParam: order.trackingUrl || formatted.trackingUrl,
+    },
+    fallbackText: formatted.messageText,
+  };
+}
+
+export function buildBosTaxInvoiceTemplate(payload: {
+  customerName: string;
+  invoiceNumber: string;
+  businessName: string;
+  total: number;
+  currency?: string;
+  paymentStatus: string;
+  paymentMethod?: string;
+  invoiceUrl: string;
+}, language = 'en_US'): {
+  template: OrderMessageTemplate;
+  fallbackText: string;
+} {
+  const totalStr = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: payload.currency || 'INR',
+  }).format(payload.total);
+
+  const statusStr = payload.paymentStatus === 'PAID'
+    ? `PAID (${payload.paymentMethod || 'Online'})`
+    : 'PENDING / DUE';
+
+  const fallbackText =
+    `🧾 *Tax Invoice* ${payload.invoiceNumber}\n` +
+    `Dear ${payload.customerName || 'Customer'}, thank you for your business with *${payload.businessName}*.\n\n` +
+    `💰 Invoice Total: ${totalStr}\n` +
+    `Status: ${statusStr}\n\n` +
+    `👉 View / Download PDF Invoice:\n${payload.invoiceUrl}`;
+
+  const parameters = [
+    payload.customerName || 'Customer',
+    payload.invoiceNumber,
+    payload.businessName,
+    totalStr,
+    statusStr,
+    payload.invoiceUrl,
+  ];
+
+  return {
+    template: {
+      name: BOS_META_TEMPLATES.TAX_INVOICE.name,
+      language,
+      parameters,
+      buttonUrlParam: payload.invoiceUrl,
+    },
+    fallbackText,
+  };
+}
+
+export function buildBosPaymentReceivedTemplate(payload: {
+  customerName: string;
+  receiptNumber: string;
+  businessName: string;
+  amountReceived: number;
+  currency?: string;
+  paymentMode: string;
+  remainingBalance?: number;
+  receiptUrl?: string;
+}, language = 'en_US'): {
+  template: OrderMessageTemplate;
+  fallbackText: string;
+} {
+  const curr = payload.currency || 'INR';
+  const amtStr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: curr }).format(payload.amountReceived);
+  const balStr = payload.remainingBalance !== undefined
+    ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: curr }).format(payload.remainingBalance)
+    : '₹0.00';
+
+  const fallbackText =
+    `✅ *Payment Received*\n` +
+    `Hi ${payload.customerName || 'Customer'}, we received ${amtStr} for *${payload.businessName}*.\n` +
+    `Ref: #${payload.receiptNumber}\n` +
+    `Payment Mode: ${payload.paymentMode}\n` +
+    `Remaining Balance: ${balStr}` +
+    (payload.receiptUrl ? `\n\n👉 View Receipt: ${payload.receiptUrl}` : '');
+
+  const parameters = [
+    payload.customerName || 'Customer',
+    payload.receiptNumber,
+    payload.businessName,
+    amtStr,
+    payload.paymentMode,
+    balStr,
+    payload.receiptUrl || '',
+  ];
+
+  return {
+    template: {
+      name: BOS_META_TEMPLATES.PAYMENT_RECEIVED.name,
+      language,
+      parameters,
+      ...(payload.receiptUrl ? { buttonUrlParam: payload.receiptUrl } : {}),
+    },
+    fallbackText,
+  };
+}
+
+export function buildBosKhataReminderTemplate(payload: {
+  customerName: string;
+  businessName: string;
+  dueAmount: number;
+  currency?: string;
+  dueDateOrDays?: string;
+  paymentUrl: string;
+}, language = 'en_US'): {
+  template: OrderMessageTemplate;
+  fallbackText: string;
+} {
+  const curr = payload.currency || 'INR';
+  const amtStr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: curr }).format(payload.dueAmount);
+  const dueInfo = payload.dueDateOrDays || 'Due Today';
+
+  const fallbackText =
+    `🔔 *Payment Reminder*\n` +
+    `Dear ${payload.customerName || 'Customer'}, this is a gentle reminder that an amount of ${amtStr} is pending with *${payload.businessName}* (Due: ${dueInfo}).\n\n` +
+    `Kindly clear via UPI or click below to view bill:\n👉 ${payload.paymentUrl}`;
+
+  const parameters = [
+    payload.customerName || 'Customer',
+    payload.businessName,
+    amtStr,
+    dueInfo,
+    payload.paymentUrl,
+  ];
+
+  return {
+    template: {
+      name: BOS_META_TEMPLATES.KHATA_REMINDER.name,
+      language,
+      parameters,
+      buttonUrlParam: payload.paymentUrl,
+    },
+    fallbackText,
+  };
+}
+
+/**
+ * Returns Meta Cloud API template registration definitions for BOS.
+ * These can be uploaded or verified via Meta Graph API / Meta Business Suite.
+ */
+export function getBosMetaTemplateRegistrationSpecs() {
+  return [
+    {
+      name: BOS_META_TEMPLATES.ORDER_CONFIRMED.name,
+      category: BOS_META_TEMPLATES.ORDER_CONFIRMED.category,
+      allow_category_change: true,
+      language: 'en_US',
+      components: [
+        {
+          type: 'BODY',
+          text: BOS_META_TEMPLATES.ORDER_CONFIRMED.bodyText,
+          example: {
+            body_text: [
+              ['Rahul Sharma', 'ORD-10492', 'Apex Store', '₹1,450.00', 'PAID (UPI)', 'https://serviceos.com/store/apex/order/123'],
+            ],
+          },
+        },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            {
+              type: 'URL',
+              text: BOS_META_TEMPLATES.ORDER_CONFIRMED.buttonText,
+              url: 'https://serviceos.com/order/{{1}}',
+              example: ['123'],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: BOS_META_TEMPLATES.ORDER_STATUS_UPDATE.name,
+      category: BOS_META_TEMPLATES.ORDER_STATUS_UPDATE.category,
+      allow_category_change: true,
+      language: 'en_US',
+      components: [
+        {
+          type: 'BODY',
+          text: BOS_META_TEMPLATES.ORDER_STATUS_UPDATE.bodyText,
+          example: {
+            body_text: [
+              ['Rahul Sharma', 'ORD-10492', 'Ready for Pickup', 'Apex Store', 'Main Counter #1', 'https://serviceos.com/store/apex/order/123'],
+            ],
+          },
+        },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            {
+              type: 'URL',
+              text: BOS_META_TEMPLATES.ORDER_STATUS_UPDATE.buttonText,
+              url: 'https://serviceos.com/order/{{1}}',
+              example: ['123'],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: BOS_META_TEMPLATES.TAX_INVOICE.name,
+      category: BOS_META_TEMPLATES.TAX_INVOICE.category,
+      allow_category_change: true,
+      language: 'en_US',
+      components: [
+        {
+          type: 'BODY',
+          text: BOS_META_TEMPLATES.TAX_INVOICE.bodyText,
+          example: {
+            body_text: [
+              ['Apex Traders', 'INV-2026-0042', 'Sharma Wholesale', '₹8,490.00', 'PAID', 'https://serviceos.com/invoice/view/123'],
+            ],
+          },
+        },
+        {
+          type: 'BUTTONS',
+          buttons: [
+            {
+              type: 'URL',
+              text: BOS_META_TEMPLATES.TAX_INVOICE.buttonText,
+              url: 'https://serviceos.com/invoice/{{1}}',
+              example: ['view/123'],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: BOS_META_TEMPLATES.PAYMENT_RECEIVED.name,
+      category: BOS_META_TEMPLATES.PAYMENT_RECEIVED.category,
+      allow_category_change: true,
+      language: 'en_US',
+      components: [
+        {
+          type: 'BODY',
+          text: BOS_META_TEMPLATES.PAYMENT_RECEIVED.bodyText,
+          example: {
+            body_text: [
+              ['Rahul', 'REC-789', 'Apex Store', '₹2,500.00', 'UPI', '₹0.00', 'https://serviceos.com/receipt/789'],
+            ],
+          },
+        },
+      ],
+    },
+    {
+      name: BOS_META_TEMPLATES.KHATA_REMINDER.name,
+      category: BOS_META_TEMPLATES.KHATA_REMINDER.category,
+      allow_category_change: true,
+      language: 'en_US',
+      components: [
+        {
+          type: 'BODY',
+          text: BOS_META_TEMPLATES.KHATA_REMINDER.bodyText,
+          example: {
+            body_text: [
+              ['Rahul', 'Apex Store', '₹3,400.00', 'Due in 3 days', 'https://serviceos.com/pay/khata/123'],
+            ],
+          },
+        },
+      ],
+    },
+  ];
+}
+
+/**
  * Build a collision-resistant synthetic WhatsApp message id for cases where
  * WABA didn't return one (failure paths) or the response body wasn't JSON.
  *
@@ -273,6 +648,47 @@ export async function dispatchTransactionalWhatsApp(
   }
 
   try {
+    let messagePayload: Record<string, unknown>;
+    if (template) {
+      const components: Array<Record<string, unknown>> = [];
+      if (template.components && template.components.length > 0) {
+        components.push(...template.components);
+      } else if (template.parameters && template.parameters.length > 0) {
+        components.push({
+          type: 'body',
+          parameters: template.parameters.map((text) => ({ type: 'text', text: String(text ?? '') })),
+        });
+        if (template.buttonUrlParam) {
+          components.push({
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: [{ type: 'text', text: template.buttonUrlParam }],
+          });
+        }
+      }
+
+      messagePayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone,
+        type: 'template',
+        template: {
+          name: template.name,
+          language: { code: template.language || 'en_US' },
+          ...(components.length > 0 ? { components } : {}),
+        },
+      };
+    } else {
+      messagePayload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone,
+        type: 'text',
+        text: { preview_url: true, body: message },
+      };
+    }
+
     const res = await fetch(
       `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`,
       {
@@ -282,12 +698,7 @@ export async function dispatchTransactionalWhatsApp(
           'Content-Type': 'application/json',
         },
         signal: AbortSignal.timeout(15000),
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone,
-          ...(template ? {type:'template',template:{name:template.name,language:{code:template.language},components:[{type:'body',parameters:template.parameters.map(text=>({type:'text',text}))}]}} : {type:'text',text:{preview_url:true,body:message}}),
-        }),
+        body: JSON.stringify(messagePayload),
       }
     );
 

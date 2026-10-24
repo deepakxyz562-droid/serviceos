@@ -365,19 +365,26 @@ export default function MobilePosScreen() {
             method: 'POST',
             body: {
               phone: cleanPhone,
+              templateType: 'bos_tax_invoice',
+              templateData: {
+                customerName: customerName.trim() || 'Valued Customer',
+                invoiceNumber: invNumber,
+                businessName: businessName,
+                total: total,
+                currency: 'INR',
+                paymentStatus: 'PAID',
+                paymentMethod: method,
+                invoiceUrl: `${process.env.EXPO_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${invNumber}`,
+              },
               message: `🧾 *TAX INVOICE: ${invNumber}*\nThank you for shopping at *${businessName}*!\nTotal Paid: *${currencySymbol}${total.toFixed(2)}* (${method})\nYour invoice PDF is ready.`,
             },
-          }).catch(() => {});
-
-          const canShare = await Sharing.isAvailableAsync();
-          if (canShare) {
-            await Sharing.shareAsync(uri, {
-              mimeType: 'application/pdf',
-              dialogTitle: `Tax Invoice ${invNumber} - ${businessName}`,
-              UTI: 'com.adobe.pdf',
-            });
-            setWhatsappSent(true);
-          }
+          })
+            .then((res: any) => {
+              if (res?.success) {
+                setWhatsappSent(true);
+              }
+            })
+            .catch(() => {});
         }
       } catch (pdfErr) {
         console.warn('POS PDF Invoice generation failed:', pdfErr);
@@ -397,6 +404,30 @@ export default function MobilePosScreen() {
   const sendWhatsAppPdfBill = async (order: any) => {
     try {
       hapticFeedback.light();
+      const cleanPhone = (order?.customerPhone || '').replace(/\D/g, '');
+      if (cleanPhone) {
+        apiRequest(API_PATHS.commerceWhatsAppSend, {
+          method: 'POST',
+          body: {
+            phone: cleanPhone,
+            templateType: 'bos_tax_invoice',
+            templateData: {
+              customerName: order?.customerName || 'Valued Customer',
+              invoiceNumber: `POS-${(order?.id || '').slice(-6).toUpperCase()}`,
+              businessName: businessName,
+              total: order?.total || 0,
+              currency: 'INR',
+              paymentStatus: order?.paymentStatus || 'PAID',
+              paymentMethod: order?.paymentMethod || 'Counter',
+            },
+          },
+        })
+          .then((res: any) => {
+            if (res?.success) setWhatsappSent(true);
+          })
+          .catch(() => {});
+      }
+
       if (generatedPdfUri) {
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
