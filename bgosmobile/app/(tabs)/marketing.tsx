@@ -58,14 +58,7 @@ export default function MarketingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
 
-  const defaultAccounts: Account[] = [
-    { id: 'acc-google', platform: 'googlebusiness', accountName: 'Google Business Profile', isActive: true },
-    { id: 'acc-facebook', platform: 'facebook', accountName: 'Facebook Page', isActive: true },
-    { id: 'acc-instagram', platform: 'instagram', accountName: 'Instagram Profile', isActive: true },
-    { id: 'acc-whatsapp', platform: 'whatsapp', accountName: 'WhatsApp Catalog', isActive: true },
-  ];
-
-  const available = accounts.data?.data?.length ? accounts.data.data : defaultAccounts;
+  const available = accounts.data?.data || [];
   const targets = available.filter((a) => selected.includes(a.id)).map((a) => ({ platform: a.platform, socialAccountId: a.id }));
   const mediaUrls = media.split('\n').map((s) => s.trim()).filter(Boolean);
 
@@ -83,8 +76,11 @@ export default function MarketingScreen() {
       });
       setContent(data.caption);
     } catch {
+      const bizName = workspace.data?.name || 'Our Business';
       setContent(
-        `Diwali Special Offer! 🎉 Get 20% OFF on all signature services and treats. Visit our store or book online today!`
+        topic.trim()
+          ? `Exciting updates from ${bizName}! ${topic}. Contact our team today or book online.`
+          : `Looking for top-tier service? ${bizName} is ready to help you achieve the best results. Contact us today or visit our website!`
       );
     } finally {
       setBusy(false);
@@ -135,7 +131,7 @@ export default function MarketingScreen() {
       setStep(0);
       setNotice(
         status === 'published'
-          ? 'Post published to selected channels!'
+          ? 'Post queued for publishing — broadcasting to selected channels...'
           : status === 'scheduled'
           ? 'Post scheduled successfully.'
           : 'Draft saved.'

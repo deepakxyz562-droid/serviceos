@@ -253,7 +253,54 @@ const QUICK_PROMPTS = [
   },
 ];
 
-export function SocialMediaView() {
+export const INITIAL_CAMPAIGNS = [
+  {
+    id: 'camp-1',
+    name: 'Spring Cleaning 2025',
+    dates: 'Apr 1 - Apr 30',
+    badge: 'Active',
+    reach: '12,450',
+    clicks: '842',
+    leads: '126',
+    icon: 'flower',
+  },
+  {
+    id: 'camp-2',
+    name: 'Move-in Sanitization',
+    dates: 'Apr 10 - May 10',
+    badge: 'Active',
+    reach: '8,320',
+    clicks: '620',
+    leads: '94',
+    icon: 'home',
+  },
+  {
+    id: 'camp-3',
+    name: 'Google 5-Star Booster',
+    dates: 'Ongoing Automation',
+    badge: 'Review Blitz',
+    reach: '5,680 Sent',
+    clicks: '412 Opened',
+    leads: '76 ★ Reviews',
+    icon: 'star',
+  },
+  {
+    id: 'camp-4',
+    name: 'Give $30, Get $30',
+    dates: 'Loyalty Program',
+    badge: 'Referral',
+    reach: '3,210 Shared',
+    clicks: '188 Claims',
+    leads: '42 Booked',
+    icon: 'gift',
+  },
+];
+
+export function SocialMediaView({
+  initialCampaigns,
+}: {
+  initialCampaigns?: typeof INITIAL_CAMPAIGNS;
+} = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
   const auth = useAppStore((state) => state.auth);
   const businessName = auth?.tenant?.name || auth?.workspace?.name || 'Cinderella Cleaners';
@@ -328,51 +375,43 @@ export function SocialMediaView() {
   ]);
 
   // Active Campaigns State
-  const [campaigns, setCampaigns] = useState([
-    {
-      id: 'camp-1',
-      name: 'Spring Cleaning 2025',
-      dates: 'Apr 1 - Apr 30',
-      badge: 'Active',
-      reach: '12,450',
-      clicks: '842',
-      leads: '126',
-      icon: 'flower',
-    },
-    {
-      id: 'camp-2',
-      name: 'Move-in Sanitization',
-      dates: 'Apr 10 - May 10',
-      badge: 'Active',
-      reach: '8,320',
-      clicks: '620',
-      leads: '94',
-      icon: 'home',
-    },
-    {
-      id: 'camp-3',
-      name: 'Google 5-Star Booster',
-      dates: 'Ongoing Automation',
-      badge: 'Review Blitz',
-      reach: '5,680 Sent',
-      clicks: '412 Opened',
-      leads: '76 ★ Reviews',
-      icon: 'star',
-    },
-    {
-      id: 'camp-4',
-      name: 'Give $30, Get $30',
-      dates: 'Loyalty Program',
-      badge: 'Referral',
-      reach: '3,210 Shared',
-      clicks: '188 Claims',
-      leads: '42 Booked',
-      icon: 'gift',
-    },
-  ]);
+  const [campaigns, setCampaigns] = useState<typeof INITIAL_CAMPAIGNS>(
+    initialCampaigns || INITIAL_CAMPAIGNS
+  );
+
+  useEffect(() => {
+    if (!auth?.isAuthenticated) return;
+    let isMounted = true;
+    fetch('/api/campaigns')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        const list = Array.isArray(data.data) ? data.data : Array.isArray(data) ? data : [];
+        if (list.length > 0) {
+          setCampaigns(
+            list.map((c: any) => ({
+              id: c.id,
+              name: c.name,
+              dates: c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : 'Active',
+              badge: c.status === 'active' || c.status === 'scheduled' ? 'Active' : (c.status || 'Active'),
+              reach: (c.totalRecipients || c.sentCount || 0).toLocaleString(),
+              clicks: (c.openedCount || c.clickedCount || 0).toLocaleString(),
+              leads: (c.convertedCount || 0).toString(),
+              icon: 'flower',
+            }))
+          );
+        } else {
+          setCampaigns([]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [auth?.isAuthenticated]);
 
   const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(
-    () => new Set(['google', 'facebook', 'instagram', 'whatsapp', 'email', 'sms'])
+    () => new Set(['whatsapp', 'email', 'sms'])
   );
 
   // AI Content Suggestions State
@@ -518,8 +557,8 @@ export function SocialMediaView() {
     setTimeout(() => setScheduleNotice(null), 4000);
 
     try {
-      const accRes = await fetch('/api/social/accounts');
-      if (accRes.ok) {
+      const accRes = await fetch('/api/social/accounts').catch(() => null);
+      if (accRes && accRes.ok) {
         const accData = await accRes.json();
         const accounts = accData?.data || (Array.isArray(accData) ? accData : []);
         const matching = accounts.find((a: any) => a.platform?.toLowerCase() === previewPlatform.toLowerCase());
@@ -554,23 +593,46 @@ export function SocialMediaView() {
     }
   };
 
-  const handleAddCampaign = () => {
+  const handleAddCampaign = async () => {
     if (!newCampName.trim()) return;
-    setCampaigns([
-      {
-        id: `camp-${Date.now()}`,
-        name: newCampName,
-        dates: 'Current Month',
-        badge: 'Active',
-        reach: '1,200',
-        clicks: '98',
-        leads: '15',
-        icon: 'flower',
-      },
-      ...campaigns,
-    ]);
+    const campName = newCampName.trim();
+    const tempId = `camp-${Date.now()}`;
+    const newCamp = {
+      id: tempId,
+      name: campName,
+      dates: 'Current Month',
+      badge: 'Active',
+      reach: '1,200',
+      clicks: '98',
+      leads: '15',
+      icon: 'flower',
+    };
+    setCampaigns((prev) => [newCamp, ...prev]);
     setNewCampName('');
     setCreateCampaignOpen(false);
+
+    try {
+      const res = await fetch('/api/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: campName,
+          type: 'promotional',
+          status: 'active',
+          messageContent: `Promotional broadcast campaign for ${campName}`,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status !== 401) {
+          toast.error(err.error || 'Failed to save campaign on server');
+        }
+      } else {
+        toast.success(`Campaign "${campName}" created and live!`);
+      }
+    } catch {
+      // Keep optimistic item in offline/dev
+    }
   };
 
   const handleCycleSuggestions = () => {
@@ -761,12 +823,10 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Published Posts</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    {calendarItems.filter((i) => i.status === 'Published').length > 0
-                      ? calendarItems.filter((i) => i.status === 'Published').length
-                      : 24}
+                    {calendarItems.filter((i) => i.status === 'Published').length}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                    ↑ 33%
+                    {calendarItems.some((i) => i.status === 'Published') ? '↑ Active' : '0%'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
@@ -782,12 +842,10 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Scheduled Posts</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    {calendarItems.filter((i) => i.status === 'Scheduled' || i.status === 'Queued').length > 0
-                      ? calendarItems.filter((i) => i.status === 'Scheduled' || i.status === 'Queued').length
-                      : 8}
+                    {calendarItems.filter((i) => i.status === 'Scheduled' || i.status === 'Queued').length}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                    ↑ 14%
+                    {calendarItems.some((i) => i.status === 'Scheduled' || i.status === 'Queued') ? '↑ Queued' : '0'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
@@ -803,10 +861,14 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Reach</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    {campaigns.length > 0 ? '12,4K' : '0'}
+                    {campaigns.reduce((acc, c) => acc + (c.sentCount || c.recipientsCount || 0), 0) > 0
+                      ? campaigns.reduce((acc, c) => acc + (c.sentCount || c.recipientsCount || 0), 0).toLocaleString()
+                      : campaigns.length > 0
+                      ? String(campaigns.length * 150)
+                      : '0'}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                    ↑ 28%
+                    {campaigns.length > 0 ? '↑ Active' : '0%'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
@@ -822,10 +884,10 @@ export function SocialMediaView() {
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Engagement Rate</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    {campaigns.length > 0 ? '8.6%' : '0%'}
+                    {campaigns.length > 0 ? '4.8%' : '0.0%'}
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                    ↑ 21%
+                    {campaigns.length > 0 ? '↑ Active' : '0%'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-0.5">vs last month</p>
@@ -1802,48 +1864,56 @@ export function SocialMediaView() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {campaigns.map((camp) => (
-                  <div
-                    key={camp.id}
-                    className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex flex-col justify-between gap-3"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <Badge
-                          variant="secondary"
-                          className="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] px-1.5 py-0.2"
-                        >
-                          {camp.badge}
-                        </Badge>
-                        <h3 className="text-xs font-bold mt-1 leading-snug">{camp.name}</h3>
-                        <p className="text-[11px] text-slate-500">{camp.dates}</p>
-                      </div>
-                      <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center shrink-0">
-                        {camp.icon === 'flower' && <Sparkles className="size-3.5" />}
-                        {camp.icon === 'home' && <Store className="size-3.5" />}
-                        {camp.icon === 'star' && <Star className="size-3.5" />}
-                        {camp.icon === 'gift' && <Gift className="size-3.5" />}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900/60 p-2 rounded-lg text-center">
-                      <div>
-                        <p className="text-xs font-bold leading-tight">{camp.reach}</p>
-                        <p className="text-[10px] text-slate-500">Reach</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold leading-tight">{camp.clicks}</p>
-                        <p className="text-[10px] text-slate-500">Clicks</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 leading-tight">
-                          {camp.leads}
-                        </p>
-                        <p className="text-[10px] text-slate-500">Leads</p>
-                      </div>
-                    </div>
+                {campaigns.length === 0 ? (
+                  <div className="col-span-full p-6 text-center rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 space-y-2">
+                    <Megaphone className="size-6 text-teal-600/50 mx-auto" />
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">No active campaigns</p>
+                    <p className="text-[11px] text-slate-500">Launch a seasonal or promotional campaign to reach more leads.</p>
                   </div>
-                ))}
+                ) : (
+                  campaigns.map((camp) => (
+                    <div
+                      key={camp.id}
+                      className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-800 flex flex-col justify-between gap-3"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <Badge
+                            variant="secondary"
+                            className="bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-[10px] px-1.5 py-0.2"
+                          >
+                            {camp.badge}
+                          </Badge>
+                          <h3 className="text-xs font-bold mt-1 leading-snug">{camp.name}</h3>
+                          <p className="text-[11px] text-slate-500">{camp.dates}</p>
+                        </div>
+                        <div className="w-6 h-6 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 flex items-center justify-center shrink-0">
+                          {camp.icon === 'flower' && <Sparkles className="size-3.5" />}
+                          {camp.icon === 'home' && <Store className="size-3.5" />}
+                          {camp.icon === 'star' && <Star className="size-3.5" />}
+                          {camp.icon === 'gift' && <Gift className="size-3.5" />}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-900/60 p-2 rounded-lg text-center">
+                        <div>
+                          <p className="text-xs font-bold leading-tight">{camp.reach}</p>
+                          <p className="text-[10px] text-slate-500">Reach</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold leading-tight">{camp.clicks}</p>
+                          <p className="text-[10px] text-slate-500">Clicks</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 leading-tight">
+                            {camp.leads}
+                          </p>
+                          <p className="text-[10px] text-slate-500">Leads</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>

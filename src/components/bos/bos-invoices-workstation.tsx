@@ -718,7 +718,7 @@ export function BosInvoicesWorkstation({
     }
   };
 
-  const handleShareInvoice = () => {
+  const handleShareInvoice = async () => {
     const cleanPhone = selectedCustomerPhone.replace(/\D/g, '');
     if (!cleanPhone || cleanPhone.length < 7) {
       showToast('Please enter customer phone number to share invoice on WhatsApp.');
@@ -726,7 +726,35 @@ export function BosInvoicesWorkstation({
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
     const payLink = `${origin}/pay/${encodeURIComponent(invoiceNumber)}`;
-    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *${storeSettings.businessName || 'Ravi Store'}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks ? `${remarks}\n` : ''}👉 *View & Pay Online via UPI:* ${payLink}`;
+    const businessTitle = storeSettings.businessName || 'BOS Store';
+    const text = `Hello *${selectedCustomerName}*,\nHere is your Tax Invoice *${invoiceNumber}* from *${businessTitle}*.\n• *Taxable Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.taxableAmount)}\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}\n${remarks ? `${remarks}\n` : ''}👉 *View & Pay Online via UPI:* ${payLink}`;
+
+    try {
+      const res = await authFetch('/api/commerce/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanPhone,
+          message: text,
+          templateType: 'bos_tax_invoice',
+          templateData: {
+            customerName: selectedCustomerName,
+            invoiceNumber,
+            amount: `${currencySymbol} ${formatTwoDecimals(calculations.totalAmount)}`,
+            pdfUrl: payLink,
+            businessName: businessTitle,
+          },
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.success) {
+        showToast(`Tax invoice sent to ${selectedCustomerName} via WhatsApp Meta Cloud API!`);
+        return;
+      }
+    } catch {
+      // Fallback to wa.me below
+    }
+
     if (typeof window !== 'undefined') {
       window.open(
         `https://wa.me/${cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`}?text=${encodeURIComponent(text)}`,

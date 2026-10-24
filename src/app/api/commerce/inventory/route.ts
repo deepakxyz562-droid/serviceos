@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
  */
 export async function PATCH(req: NextRequest) {
   try {
-    const business=await ownerBusiness(req);
+    const business = await ownerBusiness(req, 'canManageProducts');
     const body=await req.json().catch(()=>null);
     const key=req.headers.get('Idempotency-Key')||body?.requestKey;
     if(!body||typeof body.productId!=='string'||!body.productId||body.productId.length>200||typeof key!=='string')return NextResponse.json({error:'Invalid stock change'},{status:400});
@@ -90,7 +90,9 @@ export async function PATCH(req: NextRequest) {
     const payload={productId:body.productId,...(body.deltaStock!==undefined?{deltaStock:body.deltaStock}:{}),...(body.newStock!==undefined?{newStock:body.newStock}:{}),...(body.minStock!==undefined?{minStock:body.minStock}:{})};
     return NextResponse.json(await atomicCommerce('stock',[business.id,key,payload]));
   }catch(error){
-    if(error instanceof Error&&['UNAUTHORIZED','FORBIDDEN'].includes(error.message))return NextResponse.json({error:'Access denied'},{status:error.message==='UNAUTHORIZED'?401:403});
+    if(error instanceof Error&&['UNAUTHORIZED','FORBIDDEN','FORBIDDEN_INSUFFICIENT_ROLE'].includes(error.message)) {
+      return NextResponse.json({error:'Access denied: Insufficient role permissions'},{status:error.message==='UNAUTHORIZED'?401:403});
+    }
     const failure=commerceError(error);return NextResponse.json({error:failure.message},{status:failure.status});
   }
 }

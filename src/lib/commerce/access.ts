@@ -30,7 +30,24 @@ export async function resolveStaffSessionFromRequest(req: Request): Promise<Reso
   return resolved;
 }
 
-export async function ownerBusiness(req: Request) {
+export async function ownerBusiness(
+  req: Request,
+  requiredPermission?: keyof ResolvedStaffSession['permissions']
+) {
   const session = await resolveStaffSessionFromRequest(req);
+  if (requiredPermission && !session.permissions[requiredPermission]) {
+    throw new Error('FORBIDDEN_INSUFFICIENT_ROLE');
+  }
   return session.business;
+}
+
+export async function requireStaffPermission(
+  req: Request,
+  requiredPermission: keyof ResolvedStaffSession['permissions']
+): Promise<ResolvedStaffSession> {
+  const session = await resolveStaffSessionFromRequest(req);
+  if (!session.permissions[requiredPermission]) {
+    throw new Error('FORBIDDEN_INSUFFICIENT_ROLE');
+  }
+  return session;
 }

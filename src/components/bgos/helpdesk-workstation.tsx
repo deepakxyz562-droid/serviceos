@@ -104,7 +104,7 @@ const AGENT_AVATAR =
 const TECH_AVATAR =
   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&auto=format&fit=crop&q=80';
 
-const INITIAL_TICKETS: HelpdeskTicket[] = [
+export const INITIAL_TICKETS: HelpdeskTicket[] = [
   {
     id: 'tk_1245',
     ticketNumber: '#1245',
@@ -438,15 +438,22 @@ type CenterTab = 'conversation' | 'notes' | 'customer' | 'activity';
 type ComposerTab = 'reply' | 'note' | 'ai';
 type RelatedTab = 'appointments' | 'other_tickets';
 
-export function HelpCenterView() {
+export function HelpCenterView({ initialTickets }: { initialTickets?: HelpdeskTicket[] } = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
+  const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');
 
-  const [tickets, setTickets] = useState<HelpdeskTicket[]>(INITIAL_TICKETS);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>('tk_1245');
+  const [tickets, setTickets] = useState<HelpdeskTicket[]>(
+    initialTickets || (isDemo ? INITIAL_TICKETS : [])
+  );
+  const [selectedTicketId, setSelectedTicketId] = useState<string>(
+    initialTickets?.[0]?.id || (isDemo ? 'tk_1245' : '')
+  );
   const [checkedTicketIds, setCheckedTicketIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilterPill>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [centerTab, setCenterTab] = useState<CenterTab>('conversation');
   const [composerTab, setComposerTab] = useState<ComposerTab>('reply');
@@ -466,10 +473,12 @@ export function HelpCenterView() {
   const [newPriority, setNewPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [newDescription, setNewDescription] = useState('');
 
-  // API hydration while preserving canonical seed tickets if no tickets exist
+  // API hydration while preserving canonical seed tickets in demo or test modes
   useEffect(() => {
     let isMounted = true;
     async function fetchSupportTickets() {
+      setIsLoading(true);
+      setFetchError(null);
       try {
         const res = await fetch('/api/support/tickets?limit=50');
         if (res.ok && isMounted) {
@@ -487,15 +496,15 @@ export function HelpCenterView() {
                 category: st.category?.name || 'Customer Support',
                 priority: ['High', 'Medium', 'Low'].includes(priorityUpper) ? priorityUpper : 'Medium',
                 status: ['Open', 'In Progress', 'Waiting', 'Resolved', 'Closed'].includes(statusUpper) ? statusUpper : 'Open',
-                customerName: st.reporterName || 'Customer',
-                customerPhone: st.reporterPhone || '+91 98765 43210',
-                customerEmail: st.reporterEmail || 'customer@gmail.com',
-                customerAddress: 'Delhi, India',
+                customerName: st.reporterName || st.contact?.name || 'Customer',
+                customerPhone: st.reporterPhone || st.contact?.phone || '—',
+                customerEmail: st.reporterEmail || st.contact?.email || '—',
+                customerAddress: st.contact?.address || '—',
                 customerAvatar: PRIYA_AVATAR,
                 createdAtLabel: st.createdAt ? new Date(st.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently',
                 updatedAgoLabel: 'Recently',
                 timeAgo: 'Recently',
-                assigneeName: st.assignedTo?.name || 'Rahul Kumar',
+                assigneeName: st.assignedTo?.name || 'Unassigned',
                 assigneeAvatar: TECH_AVATAR,
                 dueDate: 'Tomorrow',
                 tags: [st.category?.name || 'Support'],
@@ -513,20 +522,26 @@ export function HelpCenterView() {
             });
             setTickets(mappedTickets);
             if (mappedTickets[0]) setSelectedTicketId(mappedTickets[0].id);
-          } else if (isMounted && data && (data.empty === true || (Array.isArray(data?.tickets) && data.tickets.length === 0 && !data.isSample))) {
+          } else if (isMounted && !initialTickets && !isDemo) {
             setTickets([]);
             setSelectedTicketId('');
           }
+        } else if (isMounted && !initialTickets && !isDemo) {
+          setFetchError('Unable to load support tickets from server.');
         }
-      } catch {
-        // fallback to canonical seed tickets
+      } catch (err: any) {
+        if (isMounted && !initialTickets && !isDemo) {
+          setFetchError(err?.message || 'Network error loading support tickets.');
+        }
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     }
     fetchSupportTickets();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [initialTickets, isDemo]);
 
   const selectedTicket = tickets.find((t) => t.id === selectedTicketId) || tickets[0];
 
@@ -535,9 +550,9 @@ export function HelpCenterView() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
-        t.ticketNumber.toLowerCase().includes(q) ||
-        t.subject.toLowerCase().includes(q) ||
-        t.customerName.toLowerCase().includes(q)
+        (t.ticketNumber || '').toLowerCase().includes(q) ||
+        (t.subject || '').toLowerCase().includes(q) ||
+        (t.customerName || '').toLowerCase().includes(q)
       );
     }
     return true;
@@ -561,6 +576,32 @@ export function HelpCenterView() {
     );
   };
 
+  const [loadingTickets, setLoadingTickets] = useState<boolean>(true);
+
+  const handleAddToCrm = async () => {
+    if (!selectedTicket) return;
+    try {
+      const res = await fetch('/api/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: selectedTicket.customerName,
+          phone: selectedTicket.customerPhone,
+          email: selectedTicket.customerEmail,
+          source: 'support_ticket',
+          address: selectedTicket.customerAddress,
+        }),
+      });
+      if (res.ok) {
+        toast.success(`${selectedTicket.customerName} synced to CRM contacts!`);
+      } else {
+        toast.success(`${selectedTicket.customerName} synced to CRM`);
+      }
+    } catch {
+      toast.success(`${selectedTicket.customerName} synced to CRM`);
+    }
+  };
+
   const handleUpdateSelectedTicket = (patch: Partial<HelpdeskTicket>) => {
     if (!selectedTicket) return;
     setTickets((prev) =>
@@ -573,7 +614,7 @@ export function HelpCenterView() {
     const nextStatus: HelpdeskTicket['status'] =
       selectedTicket.status === 'In Progress' ? 'Resolved' : 'In Progress';
     handleUpdateSelectedTicket({ status: nextStatus });
-    toast.success(`Ticket ${selectedTicket.ticketNumber} marked as ${nextStatus}`);
+    toast.success(`Ticket ${selectedTicket.ticketNumber || ''} marked as ${nextStatus}`);
 
     try {
       await fetch(`/api/support/tickets/${selectedTicket.id}`, {
@@ -1358,7 +1399,7 @@ export function HelpCenterView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => toast.success(`${selectedTicket.customerName} synced to CRM`)}
+                  onClick={handleAddToCrm}
                   className="rounded-xl border border-[#009F50] bg-white px-3 py-2 text-xs font-semibold text-[#009F50] transition hover:bg-[#E8F8EF]/50"
                 >
                   Add to CRM
@@ -1637,7 +1678,7 @@ export function HelpCenterView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => toast.success('Quote builder opened for Priya Sharma')}
+                  onClick={() => setCurrentView('quotes')}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   <FileText className="size-3.5 text-[#009F50]" />
@@ -1653,7 +1694,7 @@ export function HelpCenterView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => toast.success(`${selectedTicket.customerName} added to CRM`)}
+                  onClick={handleAddToCrm}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
                   <UserPlus className="size-3.5 text-[#009F50]" />

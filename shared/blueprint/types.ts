@@ -95,6 +95,9 @@ export interface CountryPack {
   code: CountryCode;
   name: string;
   flag: string;
+  phone?: {
+    countryCode: string;
+  };
   currency: CurrencyConfig;
   tax: TaxConfig;
   payments: PaymentConfig;

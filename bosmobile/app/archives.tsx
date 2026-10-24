@@ -82,7 +82,7 @@ export default function ArchivesScreen() {
           <MaterialIcons name="chat-bubble-outline" size={54} color="#94a3b8" />
         </View>
         <Text style={styles.emptyTitle}>No archived chats</Text>
-        <Text style={styles.emptySub}>Closed chats will show up here.</Text>
+        <Text style={styles.emptySub}>Archived chats will be synchronized here when chat history is closed.</Text>
       </View>
     </SafeAreaView>
   );

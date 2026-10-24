@@ -51,9 +51,9 @@ type AppointmentsTab =
 
 type CalendarScale = 'Day' | 'Week' | 'Month';
 
-interface CalendarBlock {
+export interface CalendarBlock {
   id: string;
-  dayIndex: number; // 0 = Mon 6 .. 5 = Sat 11
+  dayIndex: number; // 0 = Mon .. 6 = Sun
   startHour: number; // 8 .. 17
   durationHours: number;
   timeLabel: string;
@@ -63,7 +63,7 @@ interface CalendarBlock {
   tone: 'green' | 'amber' | 'blue' | 'rose' | 'purple';
 }
 
-interface DailyAppointmentRow {
+export interface DailyAppointmentRow {
   id: string;
   time: string;
   initials: string;
@@ -86,7 +86,7 @@ const AVATAR_3 =
 const AVATAR_4 =
   'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80';
 
-const INITIAL_CALENDAR_BLOCKS: CalendarBlock[] = [
+export const INITIAL_CALENDAR_BLOCKS: CalendarBlock[] = [
   {
     id: 'cb_1',
     dayIndex: 0,
@@ -210,7 +210,7 @@ const INITIAL_CALENDAR_BLOCKS: CalendarBlock[] = [
   },
 ];
 
-const INITIAL_DAILY_ROWS: DailyAppointmentRow[] = [
+export const INITIAL_DAILY_ROWS: DailyAppointmentRow[] = [
   {
     id: 'row_1',
     time: '9:30 AM',
@@ -265,23 +265,24 @@ const INITIAL_DAILY_ROWS: DailyAppointmentRow[] = [
   },
 ];
 
-const WEEK_DAYS = [
+export const WEEK_DAYS = [
   { short: 'Mon', num: 6 },
   { short: 'Tue', num: 7 },
   { short: 'Wed', num: 8, isToday: true },
   { short: 'Thu', num: 9 },
   { short: 'Fri', num: 10 },
   { short: 'Sat', num: 11 },
+  { short: 'Sun', num: 12 },
 ];
 
-function getDynamicWeekDays(): { short: string; num: number; isToday: boolean }[] {
+export function getDynamicWeekDays(): { short: string; num: number; isToday: boolean }[] {
   const now = new Date();
   const currentDay = now.getDay();
   const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
   const monday = new Date(now);
   monday.setDate(now.getDate() + mondayOffset);
 
-  const shorts = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const shorts = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   return shorts.map((short, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
@@ -354,7 +355,15 @@ const MINI_CALENDAR_WEEKS: { num: number; muted?: boolean }[][] = [
   ],
 ];
 
-export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}) {
+export function SchedulingView({
+  embedded = false,
+  initialBlocks,
+  initialRows,
+}: {
+  embedded?: boolean;
+  initialBlocks?: CalendarBlock[];
+  initialRows?: DailyAppointmentRow[];
+} = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
 
   const [activeTab, setActiveTab] = useState<AppointmentsTab>('calendar');
@@ -362,8 +371,15 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
   const [teamFilter, setTeamFilter] = useState<string>('All Team Members');
   const [selectedMiniDate, setSelectedMiniDate] = useState<number>(8);
 
-  const [calendarBlocks, setCalendarBlocks] = useState<CalendarBlock[]>(INITIAL_CALENDAR_BLOCKS);
-  const [dailyRows, setDailyRows] = useState<DailyAppointmentRow[]>(INITIAL_DAILY_ROWS);
+  const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');
+  const [calendarBlocks, setCalendarBlocks] = useState<CalendarBlock[]>(
+    initialBlocks || (isDemo ? INITIAL_CALENDAR_BLOCKS : [])
+  );
+  const [dailyRows, setDailyRows] = useState<DailyAppointmentRow[]>(
+    initialRows || (isDemo ? INITIAL_DAILY_ROWS : [])
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeWeekDays, setActiveWeekDays] = useState<{ short: string; num: number; isToday: boolean }[]>(WEEK_DAYS);
 
   useEffect(() => {
@@ -384,6 +400,8 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
 
   // Real-time synchronization with scheduling APIs
   const fetchBookings = useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
     try {
       const res = await authFetch('/api/bookings?limit=50');
       if (res.ok) {
@@ -396,7 +414,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
 
         if (bookingsList.length > 0) {
           const mappedRows: DailyAppointmentRow[] = bookingsList.map((b: any, index: number) => {
-            const customer = b.customerName || b.title || 'Client';
+            const customer = b.customerName || b.title || b.customer?.name || 'Client';
             const initials = customer
               .split(' ')
               .map((p: string) => p[0])
@@ -413,45 +431,63 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
               initials,
               initialsBg: 'bg-emerald-50 text-emerald-700',
               customerName: customer,
-              customerPhone: b.customerPhone || '+91 98765 43210',
-              serviceName: b.service?.name || b.title || 'Home Cleaning',
-              location: b.address || 'Delhi, India',
-              teamMember: b.employee?.name || 'Rakesh Kumar',
+              customerPhone: b.customerPhone || b.phone || b.customer?.phone || '—',
+              serviceName: b.service?.name || b.title || 'Service Appointment',
+              location: b.address || b.location || b.customer?.address || 'Location not specified',
+              teamMember: b.employee?.name || b.assignedStaffName || 'Unassigned',
               teamAvatar: b.employee?.avatar || AVATAR_1,
-              status: b.status === 'confirmed' || b.status === 'Confirmed' ? 'Confirmed' : 'Pending',
+              status: String(b.status).toLowerCase() === 'confirmed' ? 'Confirmed' : 'Pending',
             };
           });
 
           const mappedBlocks: CalendarBlock[] = bookingsList.map((b: any, index: number) => {
-            const customer = b.customerName || b.title || 'Client';
-            const timeStr = b.scheduledAt
-              ? new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : '10:00 AM';
+            const customer = b.customerName || b.title || b.customer?.name || 'Client';
             const dateObj = b.scheduledAt ? new Date(b.scheduledAt) : new Date();
+            const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            // Monday = 0, Tuesday = 1, ..., Sunday = 6
             const dayIdx = (dateObj.getDay() + 6) % 7;
             const tones: CalendarBlock['tone'][] = ['green', 'amber', 'blue', 'rose', 'purple'];
 
+            const rawHour = dateObj.getHours() + dateObj.getMinutes() / 60;
+            const startHour = Math.max(8, Math.min(17.5, rawHour));
+            let durationHours = 1.0;
+            if (b.endAt && b.scheduledAt) {
+              const diff = (new Date(b.endAt).getTime() - dateObj.getTime()) / 3600000;
+              if (diff > 0.25 && diff <= 8) durationHours = diff;
+            } else if (b.service?.durationMinutes) {
+              durationHours = b.service.durationMinutes / 60;
+            }
+
             return {
               id: `cb_${b.id || index}`,
-              dayIndex: Math.min(Math.max(dayIdx, 0), 5),
-              startHour: 9 + (index % 6) * 1.5,
-              durationHours: 1.4,
+              dayIndex: Math.min(Math.max(dayIdx, 0), 6),
+              startHour,
+              durationHours,
               timeLabel: timeStr,
               customerName: customer,
-              serviceName: b.service?.name || b.title || 'Home Cleaning',
-              teamMember: b.employee?.name || 'Rakesh Kumar',
+              serviceName: b.service?.name || b.title || 'Service Appointment',
+              teamMember: b.employee?.name || b.assignedStaffName || 'Unassigned',
               tone: tones[index % tones.length],
             };
           });
 
           setDailyRows(mappedRows);
           setCalendarBlocks(mappedBlocks);
+        } else if (!initialRows && !initialBlocks && !isDemo) {
+          setDailyRows([]);
+          setCalendarBlocks([]);
         }
+      } else if (!initialRows && !initialBlocks && !isDemo) {
+        setFetchError('Unable to load appointments from server.');
       }
     } catch {
-      // keep canonical seed state
+      if (!initialRows && !initialBlocks && !isDemo) {
+        setFetchError('Network error loading appointments.');
+      }
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [initialRows, initialBlocks, isDemo]);
 
   useEffect(() => {
     fetchBookings();
@@ -812,7 +848,10 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                 <div className="mt-3 overflow-x-auto">
                   <div className="min-w-[720px]">
                     {/* Day Column Headers */}
-                    <div className="grid grid-cols-[64px_repeat(6,1fr)] border-b border-slate-100 pb-2">
+                    <div
+                      className="grid border-b border-slate-100 pb-2"
+                      style={{ gridTemplateColumns: `64px repeat(${activeWeekDays.length}, 1fr)` }}
+                    >
                       <div />
                       {activeWeekDays.map((d) => (
                         <div key={d.short} className="text-center">
@@ -821,7 +860,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                             <span
                               className={`flex size-6 items-center justify-center rounded-full text-xs font-bold ${
                                 d.isToday
-                                  ? 'bg-[#009F50] text-white'
+                                   ? 'bg-[#009F50] text-white'
                                   : 'text-slate-700'
                               }`}
                             >
@@ -833,7 +872,10 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                     </div>
 
                     {/* Grid Body (8:00 AM to 5:00 PM = 9 hours height = 432px) */}
-                    <div className="relative grid grid-cols-[64px_repeat(6,1fr)]">
+                    <div
+                      className="relative grid"
+                      style={{ gridTemplateColumns: `64px repeat(${activeWeekDays.length}, 1fr)` }}
+                    >
                       {/* Left Time Axis */}
                       <div className="divide-y divide-transparent">
                         {TIME_SLOTS.map((slot) => (
@@ -948,8 +990,23 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredDailyRows.map((row) => (
-                      <tr key={row.id} className="group hover:bg-slate-50/60">
+                    {filteredDailyRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <CalendarPlus className="size-6 text-slate-300" />
+                            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                              No appointments scheduled for this date
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              Click &quot;New Appointment&quot; above to book a new client.
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredDailyRows.map((row) => (
+                        <tr key={row.id} className="group hover:bg-slate-50/60">
                         <td className="py-3 font-medium text-slate-600">{row.time}</td>
                         <td className="py-3">
                           <div className="flex items-center gap-2.5">
@@ -1011,7 +1068,7 @@ export function SchedulingView({ embedded = false }: { embedded?: boolean } = {}
                           </div>
                         </td>
                       </tr>
-                    ))}
+                    )))}
                   </tbody>
                 </table>
               </div>

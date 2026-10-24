@@ -112,6 +112,7 @@ async function ensureValidSession(): Promise<boolean> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ refreshToken }),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (res.ok) {
@@ -428,6 +429,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken }),
+          signal: AbortSignal.timeout(4000),
         });
       }
     } catch {

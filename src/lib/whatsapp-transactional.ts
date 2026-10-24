@@ -348,7 +348,6 @@ export function buildBosPaymentReceivedTemplate(payload: {
     amtStr,
     payload.paymentMode,
     balStr,
-    payload.receiptUrl || '',
   ];
 
   return {

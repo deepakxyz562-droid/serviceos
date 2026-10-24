@@ -22,7 +22,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { RequestTracker } from '../../shared/money';
-import { API_PATHS } from '@/lib/constants';
+import { API_PATHS, WEB_URL } from '@/lib/constants';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { generateGstInvoiceHtml, GstStoreInfo } from '@/lib/gst-invoice-helper';
@@ -371,10 +371,10 @@ export default function MobilePosScreen() {
                 invoiceNumber: invNumber,
                 businessName: businessName,
                 total: total,
-                currency: 'INR',
+                currency: countryPack?.currency?.code || 'INR',
                 paymentStatus: 'PAID',
                 paymentMethod: method,
-                invoiceUrl: `${process.env.EXPO_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${invNumber}`,
+                invoiceUrl: `${WEB_URL}/invoice/${invNumber}`,
               },
               message: `🧾 *TAX INVOICE: ${invNumber}*\nThank you for shopping at *${businessName}*!\nTotal Paid: *${currencySymbol}${total.toFixed(2)}* (${method})\nYour invoice PDF is ready.`,
             },
@@ -861,7 +861,7 @@ export default function MobilePosScreen() {
                     </View>
                     <View style={[styles.phoneInputWrap, { marginTop: 8 }]}>
                       <View style={styles.phoneCountryBadge}>
-                        <Text style={styles.phoneCountryCode}>+91</Text>
+                        <Text style={styles.phoneCountryCode}>{countryPack?.phone?.countryCode || '+91'}</Text>
                       </View>
                       <TextInput
                         placeholder="WhatsApp Mobile (for PDF receipt)"
@@ -992,7 +992,7 @@ export default function MobilePosScreen() {
                     />
                     <View style={styles.phoneInputWrap}>
                       <View style={styles.phoneCountryBadge}>
-                        <Text style={styles.phoneCountryCode}>+91</Text>
+                        <Text style={styles.phoneCountryCode}>{countryPack?.phone?.countryCode || '+91'}</Text>
                       </View>
                       <TextInput
                         placeholder="10-digit WhatsApp Number *"

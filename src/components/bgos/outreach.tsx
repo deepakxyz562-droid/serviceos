@@ -113,7 +113,7 @@ type Batch = {
 };
 
 // Canonical mock seed matching the reference design
-const INITIAL_PROSPECTS: BusinessProspect[] = [
+export const INITIAL_PROSPECTS: BusinessProspect[] = [
   {
     id: 'prosp-1',
     name: 'Desert Sky Offices',
@@ -341,16 +341,17 @@ async function apiRequest(url: string, method = 'GET', body?: unknown) {
   return data;
 }
 
-export function BgosOutreach() {
-  const setCurrentView = useAppStore((s) => s.setCurrentView);
+export function BgosOutreach({ initialProspects }: { initialProspects?: BusinessProspect[] } = {}) {
+  const { auth, setCurrentView } = useAppStore();
   const cache = useQueryClient();
 
   // Navigation Sub-Tabs
   const [activeTab, setActiveTab] = useState<'find-prospects' | 'overview' | 'campaigns' | 'sequences' | 'audience' | 'reports' | 'settings'>('find-prospects');
 
   // Search Filter State
+  const defaultLocation = (auth?.tenant as any)?.address || (auth?.tenant as any)?.city || 'Tucson, Arizona';
   const [keyword, setKeyword] = useState('office cleaning');
-  const [location, setLocation] = useState('Tucson, Arizona');
+  const [location, setLocation] = useState(defaultLocation);
   const [radius, setRadius] = useState('25 miles');
   const [industryFilter, setIndustryFilter] = useState('All Industries');
   const [companySize, setCompanySize] = useState('1-50 employees');
@@ -358,8 +359,8 @@ export function BgosOutreach() {
   const [isSearching, setIsSearching] = useState(false);
 
   // Results State
-  const [prospects, setProspects] = useState<BusinessProspect[]>(INITIAL_PROSPECTS);
-  const [selectedProspectId, setSelectedProspectId] = useState<string>('prosp-1');
+  const [prospects, setProspects] = useState<BusinessProspect[]>(initialProspects || []);
+  const [selectedProspectId, setSelectedProspectId] = useState<string>(initialProspects?.[0]?.id || '');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dossierTab, setDossierTab] = useState<'overview' | 'contact' | 'insights' | 'activity'>('overview');
   const [savedCrmIds, setSavedCrmIds] = useState<Set<string>>(new Set());
@@ -390,24 +391,38 @@ export function BgosOutreach() {
         query: keyword || 'cleaning',
       });
       if (res && res.prospects && res.prospects.length > 0) {
-        const mapped: BusinessProspect[] = res.prospects.map((p: any, idx: number) => ({
-          id: p.id || `prosp-${idx}`,
-          name: p.company || p.name || 'Enterprise Prospect',
-          industry: industryFilter !== 'All Industries' ? industryFilter : (p.industry || 'Professional Services'),
-          location: p.location || location || 'Tucson, Arizona',
-          employees: p.employees || companySize,
-          revenue: p.revenue || '$1M - $5M',
-          ownerName: p.ownerName || p.name || 'Decision Maker',
-          phone: p.phone || p.phoneNumber || '—',
-          email: p.email || `contact@${(p.company || 'biz').toLowerCase().replace(/\s+/g, '')}.com`,
-          verified: true,
-          relevance: p.relevance || '95% Match',
-          opportunityScore: p.opportunityScore || 92,
-          techGaps: p.techGaps || ['No 24/7 AI Receptionist', 'Manual Form Follow-ups'],
-          recentSignals: p.recentSignals || ['Active Hiring', 'Growing Team'],
-          recommendedPitch: p.recommendedPitch || `Hi ${p.name || 'there'}, noticed your growing presence in ${location}. Businesses in your sector are automating incoming client inquiries with BGOS AI Receptionist and instant form booking.`,
-          status: 'discovered',
-        }));
+        const mapped: BusinessProspect[] = res.prospects.map((p: any, idx: number) => {
+          const rawRel = p.relevance ?? p.opportunityScore ?? 75;
+          const numRel = typeof rawRel === 'number' ? rawRel : parseInt(String(rawRel), 10) || 75;
+          const domain = p.domain || (p.website ? p.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '—');
+          return {
+            id: p.id || `prosp-${idx}`,
+            name: p.company || p.name || 'Enterprise Prospect',
+            domain,
+            industry: industryFilter !== 'All Industries' ? industryFilter : (p.industry || 'Professional Services'),
+            industryColor: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
+            location: p.location || location || 'Local Area',
+            address: p.address || p.location || location || 'Address on file',
+            employees: p.employees || companySize || '—',
+            relevance: numRel,
+            revenueEst: p.revenueEst || p.revenue || 'Not disclosed',
+            founded: p.founded || '—',
+            description: p.description || `${p.company || p.name || 'Local business'} operating in ${p.location || location}.`,
+            hasWeb: Boolean(p.website || p.domain || p.hasWeb),
+            hasPhone: Boolean(p.phone || p.phoneNumber || p.hasPhone),
+            hasEmail: Boolean(p.email || p.hasEmail),
+            hasLinkedin: Boolean(p.linkedin || p.hasLinkedin),
+            insights: Array.isArray(p.insights) && p.insights.length > 0
+              ? p.insights
+              : [
+                  p.industry ? `Operates within ${p.industry} sector` : 'Direct business lead',
+                  p.phone ? 'Direct telephone channel available' : 'Inbound outreach recommended',
+                ],
+            decisionMaker: p.decisionMaker || p.ownerName || p.name || 'Key Contact',
+            recommendedPitch: p.recommendedPitch || `Hi ${p.name || 'there'}, noticed your growing presence in ${location}. Let us know if we can assist your team with our automated service operations.`,
+            imageUrl: p.imageUrl,
+          };
+        });
         setProspects(mapped);
         setSelectedProspectId(mapped[0]?.id || 'prosp-1');
         toast.success(`Found ${mapped.length} prospects from directory!`);
@@ -768,11 +783,12 @@ export function BgosOutreach() {
             <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold">Businesses Found (1,248)</h3>
+                  <h3 className="text-sm font-bold">Businesses Found ({prospects.length})</h3>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => toast.success('AI evaluated 1,248 leads: 342 High Intent!')}
+                    disabled={prospects.length === 0}
+                    onClick={() => toast.success(`AI evaluated ${prospects.length} leads: ${Math.round(prospects.length * 0.4)} High Intent!`)}
                     className="h-7 text-[11px] gap-1 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20"
                   >
                     <Sparkles className="size-3" />
@@ -790,7 +806,8 @@ export function BgosOutreach() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => toast.success('Exported 1,248 prospects to CSV!')}
+                    disabled={prospects.length === 0}
+                    onClick={() => toast.success(`Exported ${prospects.length} prospects to CSV!`)}
                     className="h-7 text-xs gap-1"
                   >
                     <Download className="size-3" />
@@ -807,7 +824,7 @@ export function BgosOutreach() {
                       <th className="py-2 px-1 w-6">
                         <input
                           type="checkbox"
-                          checked={selectedIds.length === prospects.length}
+                          checked={prospects.length > 0 && selectedIds.length === prospects.length}
                           onChange={(e) => handleSelectAll(e.target.checked)}
                           className="rounded text-teal-600"
                         />
@@ -822,7 +839,20 @@ export function BgosOutreach() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {prospects.map((item) => {
+                    {prospects.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <div className="size-10 rounded-2xl bg-teal-50 dark:bg-teal-950 flex items-center justify-center text-teal-600">
+                              <Search className="size-5" />
+                            </div>
+                            <div className="text-xs font-bold text-slate-700 dark:text-slate-300">No prospects loaded</div>
+                            <div className="text-[11px] text-slate-400 max-w-sm">Enter keywords and location above and click Search to discover local business leads.</div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      prospects.map((item) => {
                       const isSelected = selectedProspectId === item.id;
                       const isChecked = selectedIds.includes(item.id);
 
@@ -890,7 +920,7 @@ export function BgosOutreach() {
                           </td>
                         </tr>
                       );
-                    })}
+                    }))}
                   </tbody>
                 </table>
               </div>
@@ -899,11 +929,23 @@ export function BgosOutreach() {
 
           {/* ── Right Pane (5/12 cols): Business Details Dossier ────────── */}
           <div className="xl:col-span-5 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-4">
-            {/* Dossier Top Bar */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Business Details
-              </span>
+            {!selectedProspect ? (
+              <div className="py-24 text-center text-slate-400 space-y-3">
+                <div className="size-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mx-auto">
+                  <Building2 className="size-6" />
+                </div>
+                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">No Business Selected</div>
+                <div className="text-xs text-slate-400 max-w-xs mx-auto">
+                  Search or click a business row from the table to view AI insights, contact details, and personalized pitch copy.
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Dossier Top Bar */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Business Details
+                  </span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -1124,9 +1166,11 @@ export function BgosOutreach() {
                 <span>Find More Like This</span>
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
+    </div>
+  )}
 
       {/* ─── 5. Batches / Campaigns Dispatch Mode ───────────────────────── */}
       {(activeTab === 'campaigns' || activeTab === 'overview' || activeTab === 'sequences') && (

@@ -1672,7 +1672,7 @@ export function BosMarketingAiIntegrationsSettings({
                       if (res.ok) {
                         launchSuccess = true;
                         setToast(
-                          `Launched "${campaignTitle}" to ${targetAudienceCount} recipients (${campaignAudience}) via ${campaignType}!`,
+                          `Campaign "${campaignTitle || 'Special Store Promotion'}" created and scheduled for ${campaignAudience} via ${campaignType}.`,
                         );
                       } else {
                         const err = await res.json().catch(() => null);
@@ -1681,7 +1681,7 @@ export function BosMarketingAiIntegrationsSettings({
                       }
                     } catch (netErr: any) {
                       failureReason = netErr?.message || 'Network unreachable';
-                      setToast(`⚠️ Network error: Campaign saved as Draft. Could not dispatch to recipients.`);
+                      setToast(`⚠️ Network error: Campaign saved as Draft. Could not connect to server.`);
                     }
 
                     const nextId = recentCampaigns.length + 1;
@@ -1692,10 +1692,10 @@ export function BosMarketingAiIntegrationsSettings({
                         bannerTheme: 'fresh',
                         type: campaignType,
                         audience: campaignAudience,
-                        sent: launchSuccess ? String(targetAudienceCount) : '0',
+                        sent: '0',
                         orders: 0,
                         revenue: 0,
-                        status: launchSuccess ? 'Active' : 'Draft',
+                        status: launchSuccess ? 'Scheduled' : 'Draft',
                         discountHeadline: campaignDiscountText,
                         messageBody: campaignText,
                         validTill: campaignValidTill,
@@ -1708,7 +1708,7 @@ export function BosMarketingAiIntegrationsSettings({
                   }}
                   className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white cursor-pointer"
                 >
-                  Launch Campaign
+                  Save & Schedule Campaign
                 </button>
               </div>
             </div>

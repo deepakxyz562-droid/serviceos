@@ -87,7 +87,7 @@ export default function BlueprintSetupScreen() {
     if (success) {
       Alert.alert(
         'Workspace Configured',
-        `Nuvora is now tailored for ${BUSINESS_TYPE_LABELS[selectedType].label} in ${countryPack.name}.`,
+        `BOS is now tailored for ${BUSINESS_TYPE_LABELS[selectedType].label} in ${countryPack.name}.`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } else {
@@ -110,7 +110,7 @@ export default function BlueprintSetupScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Business Profile &amp; Modules</Text>
-          <Text style={styles.headerSubtitle}>Customize Nuvora for your business</Text>
+          <Text style={styles.headerSubtitle}>Customize BOS for your business</Text>
         </View>
         <TouchableOpacity
           onPress={handleSave}

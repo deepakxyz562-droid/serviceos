@@ -7236,7 +7236,7 @@ export function CommerceView() {
                 <Input
                   value={webStoreInfo.businessName}
                   onChange={(e) => setWebStoreInfo((p) => ({ ...p, businessName: e.target.value }))}
-                  placeholder="e.g. Nuvora Technologies Pvt Ltd"
+                  placeholder="e.g. Acme Enterprises Pvt Ltd"
                   className="mt-1 text-xs"
                 />
               </div>

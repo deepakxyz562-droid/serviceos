@@ -26,6 +26,7 @@ import {
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { WEB_URL } from '../../src/lib/constants';
+import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 
 type Call = {
   id: string;
@@ -272,7 +273,7 @@ export default function PhoneScreen() {
           secondary
           label="Configure Voice Model · Web"
           icon="settings"
-          onPress={() => Linking.openURL(`${WEB_URL}/app?view=aiReceptionist`).catch(() => {})}
+          onPress={() => Linking.openURL(getBgosWebUrl('aiReceptionist')).catch(() => {})}
         />
       </Card>
 

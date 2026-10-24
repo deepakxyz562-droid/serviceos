@@ -170,7 +170,7 @@ export function BusinessBlueprintWizard({
               Step {step} of 3
             </Badge>
             <span className="text-xs text-muted-foreground font-semibold">
-              Nuvora Business Architecture
+              BOS Business Architecture
             </span>
           </div>
 
@@ -182,7 +182,7 @@ export function BusinessBlueprintWizard({
 
           <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
             {step === 1 &&
-              'Choose your industry. Nuvora will tailor the vocabulary and default tools.'}
+              'Choose your industry. BOS will tailor the vocabulary and default tools.'}
             {step === 2 &&
               'Select all the channels you use to sell. This configures your POS, catalog, and ordering.'}
             {step === 3 &&

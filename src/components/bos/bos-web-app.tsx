@@ -891,10 +891,15 @@ function BosWebAppInner({
     };
   });
 
-  const [branches] = useState([
-    { id: 'br-1', name: 'Sharma General Store', location: 'MG Road Main Branch' },
-    { id: 'br-2', name: 'Sharma Express Mart', location: 'Kothrud Branch' },
-  ]);
+  const [activeBranchId, setActiveBranchId] = useState('br-1');
+  const branches = demoMode
+    ? [
+        { id: 'br-1', name: storeSettings.businessName || 'Sharma General Store', location: 'MG Road Main Branch' },
+        { id: 'br-2', name: `${storeSettings.businessName || 'Sharma'} Express Mart`, location: 'Kothrud Branch' },
+      ]
+    : [
+        { id: 'br-1', name: storeSettings.businessName || 'Main Store', location: storeSettings.address || 'Primary Branch' },
+      ];
   const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -1255,37 +1260,39 @@ function BosWebAppInner({
             const mappedProducts: BosProductItem[] = invItems.map(
               (item: Record<string, unknown>, idx: number) => {
                 const itemName = String(item.name || 'Product Item');
-                const defaultMatch = DEFAULT_PRODUCTS.find(
-                  (dp) =>
-                    dp.id === String(item.id || item.productId || '') ||
-                    dp.name.toLowerCase() === itemName.toLowerCase(),
-                );
+                const defaultMatch = demoMode
+                  ? DEFAULT_PRODUCTS.find(
+                      (dp) =>
+                        dp.id === String(item.id || item.productId || '') ||
+                        dp.name.toLowerCase() === itemName.toLowerCase(),
+                    )
+                  : undefined;
                 return {
                   id: String(item.id || item.productId || defaultMatch?.id || `prod-api-${idx}`),
                   name: itemName,
-                  category: String(item.category || defaultMatch?.category || 'Groceries'),
-                  price: Number(item.price) || defaultMatch?.price || 100,
-                  mrp: Number(item.mrp || item.price) || defaultMatch?.mrp || 110,
+                  category: String(item.category || defaultMatch?.category || 'General'),
+                  price: typeof item.price === 'number' ? item.price : Number(item.price) || (demoMode ? (defaultMatch?.price || 100) : 0),
+                  mrp: typeof item.mrp === 'number' ? item.mrp : Number(item.mrp || item.price) || (demoMode ? (defaultMatch?.mrp || 110) : (Number(item.price) || 0)),
                   costPrice:
-                    Number(item.costPrice) ||
-                    defaultMatch?.costPrice ||
-                    Math.round((Number(item.price) || 100) * 0.8),
+                    typeof item.costPrice === 'number'
+                      ? item.costPrice
+                      : Number(item.costPrice) ||
+                        (demoMode ? (defaultMatch?.costPrice || Math.round((Number(item.price) || 100) * 0.8)) : undefined),
                   stockQuantity:
                     typeof item.stock === 'number'
                       ? item.stock
                       : typeof item.stockQuantity === 'number'
                         ? item.stockQuantity
-                        : (defaultMatch?.stockQuantity ?? 25),
+                        : (demoMode ? (defaultMatch?.stockQuantity ?? 25) : 0),
                   lowStockThreshold:
                     Number(item.minStock ?? item.lowStockThreshold) ||
-                    defaultMatch?.lowStockThreshold ||
-                    5,
-                  sku: String(item.sku || defaultMatch?.sku || `SKU-${100 + idx}`),
-                  barcode: String(item.barcode || defaultMatch?.barcode || `89010308452${idx}`),
+                    (demoMode ? (defaultMatch?.lowStockThreshold || 5) : 0),
+                  sku: String(item.sku || (demoMode ? (defaultMatch?.sku || `SKU-${100 + idx}`) : '')),
+                  barcode: String(item.barcode || (demoMode ? (defaultMatch?.barcode || `89010308452${idx}`) : '')),
                   unit: String(item.unit || defaultMatch?.unit || '1 Unit'),
-                  gstRate: Number(item.gstRate ?? defaultMatch?.gstRate ?? 5),
-                  hsnCode: String(item.hsnCode || defaultMatch?.hsnCode || '1006'),
-                  imageUrl: item.imageUrl ? String(item.imageUrl) : defaultMatch?.imageUrl,
+                  gstRate: Number(item.gstRate ?? (demoMode ? (defaultMatch?.gstRate ?? 5) : 0)),
+                  hsnCode: String(item.hsnCode || (demoMode ? (defaultMatch?.hsnCode || '1006') : '')),
+                  imageUrl: item.imageUrl ? String(item.imageUrl) : (demoMode ? defaultMatch?.imageUrl : undefined),
                   onlineVisible: item.isActive !== false && item.onlineVisible !== false,
                 };
               },
@@ -1360,7 +1367,7 @@ function BosWebAppInner({
                 return {
                   id: String(o.id || `#ORD-${1050 + idx}`),
                   customerName: String(o.customerName || 'Walk-in Customer'),
-                  customerPhone: String(o.customerPhone || '+91 98765 43210'),
+                  customerPhone: String(o.customerPhone || ''),
                   customerAddress: o.deliveryAddress ? String(o.deliveryAddress) : undefined,
                   channel:
                     o.channel === 'online' || o.channel === 'whatsapp'
@@ -1415,14 +1422,14 @@ function BosWebAppInner({
                   merged.push({
                     id: String(kc.id || kc.phone || `cust-${Date.now()}`),
                     name,
-                    phone: String(kc.phone || '+91 98765 00000'),
+                    phone: String(kc.phone || ''),
                     address: 'Local Customer',
                     segment: 'Regular',
-                    ordersCount: 5,
-                    totalSpent: Number(kc.totalCredit) || 4500,
+                    ordersCount: Number(kc.ordersCount) || 0,
+                    totalSpent: Number(kc.totalCredit ?? kc.totalSpent) || 0,
                     khataBalance: bal,
-                    loyaltyPoints: 120,
-                    lastVisit: 'Recently',
+                    loyaltyPoints: Number(kc.loyaltyPoints) || 0,
+                    lastVisit: kc.lastVisit ? String(kc.lastVisit) : 'Recently',
                   });
                 }
               }
@@ -1522,7 +1529,7 @@ function BosWebAppInner({
                 extras.push({
                   id: String(raw.id || `db-cust-${extras.length}`),
                   name,
-                  phone: String(raw.phone || '+91 98765 12345'),
+                  phone: String(raw.phone || ''),
                   email: raw.email ? String(raw.email) : undefined,
                   address: String(raw.deliveryAddress || raw.address || 'Local Customer'),
                   segment,
@@ -1553,12 +1560,12 @@ function BosWebAppInner({
               id: String(b.id || `appt-db-${idx}`),
               bookingCode: `#APT-${2084 + idx}`,
               customerName: String(b.customerName || b.clientName || 'Customer'),
-              customerPhone: String(b.customerPhone || '+91 98765 43210'),
+              customerPhone: String(b.customerPhone || ''),
               serviceName: String(b.serviceType || b.serviceName || 'Store Appointment'),
-              staffName: String(b.assignedPro || b.staffName || 'Neha'),
-              scheduledAt: String(b.timeSlot || '11:30 AM'),
-              durationMinutes: 45,
-              amount: Number(b.amount) || 650,
+              staffName: String(b.assignedPro || b.staffName || ''),
+              scheduledAt: String(b.timeSlot || '10:00 AM'),
+              durationMinutes: Number(b.durationMinutes) || 30,
+              amount: Number(b.amount) || 0,
               paymentStatus: 'pending',
               status: b.status === 'completed' ? 'completed' : 'confirmed',
             }));
@@ -2819,7 +2826,7 @@ function BosWebAppInner({
                         key={br.id}
                         type="button"
                         onClick={() => {
-                          void handleUpdateStoreSettings({ businessName: br.name });
+                          setActiveBranchId(br.id);
                           setStoreMenuOpen(false);
                         }}
                         className="flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-[12.5px] hover:bg-[#F4F8F6]"
@@ -2828,7 +2835,7 @@ function BosWebAppInner({
                           <p className="font-bold text-[#111827]">{br.name}</p>
                           <p className="text-[11px] text-[#64748B]">{br.location}</p>
                         </div>
-                        {storeSettings.businessName === br.name && (
+                        {activeBranchId === br.id && (
                           <span className="h-2 w-2 rounded-full bg-[#0A6847]" />
                         )}
                       </button>

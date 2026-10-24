@@ -59,7 +59,7 @@ import {
 const API_BASE = '/api/omnichannel';
 
 // Canonical fallback conversations matching reference screenshots
-const INITIAL_CONVERSATIONS: Conversation[] = [
+export const INITIAL_CONVERSATIONS: Conversation[] = [
   {
     id: 'conv_priya_sharma',
     customerName: 'Priya Sharma',
@@ -587,12 +587,22 @@ export const LIVE_VISITORS_DATA: LiveVisitorTelemetry[] = [
   },
 ];
 
-export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' | 'visitors' | 'tickets' } = {}) {
+export function OmnichannelView({
+  initialTab,
+  initialConversations,
+  initialVisitors,
+}: {
+  initialTab?: 'conversations' | 'visitors' | 'tickets';
+  initialConversations?: Conversation[];
+  initialVisitors?: LiveVisitorTelemetry[];
+} = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
   const auth = useAppStore((state) => state.auth);
   const businessName = auth.tenant?.name || auth.workspace?.name || 'our team';
 
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
+  const [conversations, setConversations] = useState<Conversation[]>(
+    initialConversations || INITIAL_CONVERSATIONS
+  );
   const [selectedConversationId, setSelectedConversationId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = new URLSearchParams(window.location.search);
@@ -634,36 +644,116 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
   const [contextLoading, setContextLoading] = useState(false);
 
   // Live Visitor Radar state
+  const [liveVisitors, setLiveVisitors] = useState<LiveVisitorTelemetry[]>(
+    initialVisitors || LIVE_VISITORS_DATA
+  );
   const [selectedVisitorId, setSelectedVisitorId] = useState<string>('vis_8487');
   const [visitorSubTab, setVisitorSubTab] = useState<'all' | 'high_intent' | 'chatting' | 'idle'>('all');
   const [visitorDeviceFilter, setVisitorDeviceFilter] = useState<'all' | 'desktop' | 'mobile'>('all');
   const [visitorReferralFilter, setVisitorReferralFilter] = useState<'all' | 'organic' | 'maps' | 'instagram' | 'direct'>('all');
   const [nudgeSent, setNudgeSent] = useState<Record<string, boolean>>({});
 
+  // File & Media Attachment state
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    url: string;
+    name: string;
+    isImage: boolean;
+    size: number;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'inbox');
+      const res = await fetch('/api/omnichannel/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+      const isImg = file.type.startsWith('image/');
+      setPendingAttachment({
+        url: data.url,
+        name: file.name,
+        isImage: isImg,
+        size: file.size,
+      });
+      toast.success(`${file.name} uploaded successfully!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to upload attachment');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDispatchNudge = async (visitor: LiveVisitorTelemetry) => {
+    setNudgeSent((prev) => ({ ...prev, [visitor.id]: true }));
+    toast.success(`AI Nudge dispatched to ${visitor.name}!`);
+    try {
+      await fetch('/api/omnichannel/visitors/nudge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visitorId: visitor.id,
+          message: visitor.aiNudge.message,
+          rule: visitor.aiNudge.rule,
+        }),
+      });
+    } catch (err) {
+      console.error('Visitor nudge audit error:', err);
+    }
+  };
+
   const messageEndRef = useRef<HTMLDivElement>(null);
 
-  // Load real API data defensively, merging with initial records
+  // Load real API data defensively
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/conversations`);
-      if (res.ok) {
-        const data = await res.json();
+      const [convRes, visRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/conversations`),
+        fetch(`${API_BASE}/visitors`),
+      ]);
+
+      if (convRes.status === 'fulfilled' && convRes.value.ok) {
+        const data = await convRes.value.json();
         const rawList = Array.isArray(data) ? data : (Array.isArray(data?.conversations) ? data.conversations : []);
         if (rawList.length > 0) {
           setConversations(rawList);
           if (!selectedConversationId || !rawList.some((c: any) => c.id === selectedConversationId)) {
             setSelectedConversationId(rawList[0].id);
           }
-        } else if (auth.isAuthenticated && (Array.isArray(data) || Array.isArray(data?.conversations))) {
-          // Explicit empty conversation set from authenticated backend
+        } else if (auth.isAuthenticated) {
           setConversations([]);
           setSelectedConversationId('');
+        }
+      }
+
+      if (visRes.status === 'fulfilled' && visRes.value.ok) {
+        const visData = await visRes.value.json();
+        if (Array.isArray(visData?.visitors)) {
+          if (visData.visitors.length > 0) {
+            setLiveVisitors(visData.visitors);
+            if (!selectedVisitorId || !visData.visitors.some((v: any) => v.id === selectedVisitorId)) {
+              setSelectedVisitorId(visData.visitors[0].id);
+            }
+          } else if (auth.isAuthenticated) {
+            setLiveVisitors([]);
+            setSelectedVisitorId('');
+          }
         }
       }
     } catch {
       // Keep rich fallback dataset
     }
-  }, [selectedConversationId, auth.isAuthenticated]);
+  }, [selectedConversationId, selectedVisitorId, auth.isAuthenticated]);
 
   useEffect(() => {
     loadData();
@@ -682,7 +772,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
   // Selected live visitor
   const selectedVisitor =
-    LIVE_VISITORS_DATA.find((v) => v.id === selectedVisitorId) || LIVE_VISITORS_DATA[0];
+    liveVisitors.find((v) => v.id === selectedVisitorId) || liveVisitors[0] || null;
 
   // Dynamic channel & filter counts
   const totalConversationsCount = conversations.length;
@@ -734,11 +824,32 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
     return true;
   });
 
+  const filteredVisitors = useMemo(() => {
+    return liveVisitors.filter((vis) => {
+      if (visitorSubTab === 'high_intent' && vis.status !== 'high_intent' && vis.status !== 'stalled') return false;
+      if (visitorSubTab === 'chatting' && vis.status !== 'chatting') return false;
+      if (visitorSubTab === 'idle' && vis.status !== 'idle' && vis.status !== 'browsing') return false;
+      if (visitorDeviceFilter !== 'all' && vis.deviceCategory !== visitorDeviceFilter) return false;
+      if (visitorReferralFilter !== 'all' && vis.referralCategory !== visitorReferralFilter) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          vis.name.toLowerCase().includes(q) ||
+          vis.location.toLowerCase().includes(q) ||
+          vis.page.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [liveVisitors, visitorSubTab, visitorDeviceFilter, visitorReferralFilter, searchQuery]);
+
   const handleSendMessage = async () => {
-    if (!messageInput.trim() || !selectedConversation) return;
+    if ((!messageInput.trim() && !pendingAttachment) || !selectedConversation) return;
     const content = messageInput.trim();
+    const attachment = pendingAttachment;
     const isInternal = composerMode === 'internal';
     setMessageInput('');
+    setPendingAttachment(null);
 
     const newMsg: ConversationMessage = {
       id: `msg_${Date.now()}`,
@@ -749,6 +860,15 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       channel: selectedConversation.channel,
       readReceipt: true,
+      mediaUrl: attachment?.url,
+      mediaCaption: content || attachment?.name,
+      imageAttachment: attachment?.isImage
+        ? { url: attachment.url, caption: content, label: attachment.name }
+        : undefined,
+      fileAttachment:
+        attachment && !attachment.isImage
+          ? { name: attachment.name, url: attachment.url, size: attachment.size }
+          : undefined,
     };
 
     setConversations((prev) =>
@@ -757,7 +877,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
           ? {
               ...c,
               messages: [...c.messages, newMsg],
-              lastMessage: isInternal ? `[Note] ${content}` : content,
+              lastMessage: isInternal ? `[Note] ${content}` : (content || `[Attachment: ${attachment?.name}]`),
               lastMessageTime: new Date().toISOString(),
               unreadCount: 0,
             }
@@ -783,11 +903,20 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
         const res = await fetch(`${API_BASE}/conversations/${selectedConversation.id}/messages`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify({
+            content,
+            mediaUrl: attachment?.url,
+            mediaCaption: content || attachment?.name,
+          }),
         });
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           toast.error(errData.error || 'Failed to deliver message to customer.');
+        } else {
+          const data = await res.json().catch(() => ({}));
+          if (data?.delivery?.status === 'skipped') {
+            toast.info(`Message saved. Outbound direct delivery to ${selectedConversation.channel} is not wired; use WhatsApp or SMS to deliver immediately.`);
+          }
         }
       }
     } catch {
@@ -1604,8 +1733,44 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                 : 'bg-[#DCFCE7] dark:bg-emerald-950/60 text-slate-900 dark:text-slate-100 border border-[#009F50]/15 rounded-tr-xs'
                             )}
                           >
-                            {/* Rich Photo Attachment Card (Screenshot Parity: Split AC Unit Photo) */}
-                            {msg.imageAttachment && (
+                            {/* Real Media or Image Attachment */}
+                            {msg.mediaUrl && (msg.mediaUrl.match(/\.(jpeg|jpg|gif|png|webp)($|\?)/i) || msg.imageAttachment?.url) ? (
+                              <div className="mb-2 rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 max-w-sm">
+                                <a href={msg.mediaUrl || msg.imageAttachment?.url} target="_blank" rel="noopener noreferrer" className="block relative group">
+                                  <img
+                                    src={msg.mediaUrl || msg.imageAttachment?.url}
+                                    alt={msg.mediaCaption || 'Media attachment'}
+                                    className="w-full max-h-60 object-cover rounded-lg transition-transform group-hover:scale-102"
+                                  />
+                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-semibold">
+                                    <Eye className="size-4 mr-1" /> View Full Image
+                                  </div>
+                                </a>
+                                {msg.mediaCaption && msg.mediaCaption !== msg.content && (
+                                  <div className="p-2 text-[11px] text-slate-600 dark:text-slate-300">
+                                    {msg.mediaCaption}
+                                  </div>
+                                )}
+                              </div>
+                            ) : msg.mediaUrl ? (
+                              <div className="mb-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 flex items-center justify-between gap-3 text-xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <FileText className="size-4 text-[#009F50] shrink-0" />
+                                  <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                    {msg.fileAttachment?.name || msg.mediaCaption || 'Attached Document'}
+                                  </span>
+                                </div>
+                                <a
+                                  href={msg.mediaUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  download
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#009F50] text-[11px] font-bold shrink-0 hover:bg-emerald-100 transition-colors"
+                                >
+                                  Download
+                                </a>
+                              </div>
+                            ) : msg.imageAttachment ? (
                               <div className="mb-2 rounded-xl overflow-hidden border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900">
                                 <div className="h-28 w-56 sm:w-64 bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex flex-col items-center justify-center p-3 relative">
                                   {/* Stylized Split AC Unit Illustration */}
@@ -1625,7 +1790,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                                   </span>
                                 </div>
                               </div>
-                            )}
+                            ) : null}
 
                             <p>{msg.content}</p>
 
@@ -1969,6 +2134,54 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
                   {/* Message Input + Bottom Action Row */}
                   <div className="space-y-2">
+                    {/* Hidden Attachment File Inputs */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={imageInputRef}
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
+
+                    {/* Pending Attachment Preview Banner */}
+                    {pendingAttachment && (
+                      <div className="flex items-center justify-between p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs">
+                        <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-medium truncate">
+                          {pendingAttachment.isImage ? (
+                            <ImageIcon className="size-3.5 shrink-0 text-[#009F50]" />
+                          ) : (
+                            <Paperclip className="size-3.5 shrink-0 text-[#009F50]" />
+                          )}
+                          <span className="truncate">{pendingAttachment.name}</span>
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 shrink-0">
+                            ({(pendingAttachment.size / 1024).toFixed(0)} KB)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPendingAttachment(null)}
+                          className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-700 transition-colors"
+                          title="Remove attachment"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                    )}
+
                     <textarea
                       rows={2}
                       value={messageInput}
@@ -1999,16 +2212,22 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                         </button>
                         <button
                           type="button"
-                          onClick={() => toast.info('Attachment picker opened')}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          disabled={isUploading}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50"
                           title="Attach file"
                         >
-                          <Paperclip className="size-4" />
+                          {isUploading ? (
+                            <Loader2 className="size-4 animate-spin text-[#009F50]" />
+                          ) : (
+                            <Paperclip className="size-4" />
+                          )}
                         </button>
                         <button
                           type="button"
-                          onClick={() => toast.info('Image gallery opened')}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                          disabled={isUploading}
+                          onClick={() => imageInputRef.current?.click()}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 hover:text-slate-600 transition-colors disabled:opacity-50"
                           title="Attach image"
                         >
                           <ImageIcon className="size-4" />
@@ -2213,20 +2432,22 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
 
               {/* Visitor Stream Feed Cards */}
               <div className="space-y-2.5">
-                {LIVE_VISITORS_DATA.filter((vis) => {
-                  if (visitorSubTab === 'high_intent' && vis.status !== 'high_intent' && vis.status !== 'stalled') return false;
-                  if (visitorSubTab === 'chatting' && vis.status !== 'chatting') return false;
-                  if (visitorSubTab === 'idle' && vis.status !== 'idle' && vis.status !== 'browsing') return false;
-                  if (visitorDeviceFilter !== 'all' && vis.deviceCategory !== visitorDeviceFilter) return false;
-                  if (visitorReferralFilter !== 'all' && vis.referralCategory !== visitorReferralFilter) return false;
-                  if (searchQuery) {
-                    const q = searchQuery.toLowerCase();
-                    return vis.name.toLowerCase().includes(q) || vis.location.toLowerCase().includes(q) || vis.page.toLowerCase().includes(q);
-                  }
-                  return true;
-                }).map((vis) => {
-                  const isSelected = selectedVisitorId === vis.id;
-                  return (
+                {filteredVisitors.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3">
+                    <div className="size-12 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-[#009F50] flex items-center justify-center mx-auto">
+                      <Radio className="size-6 animate-pulse" />
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                      Live Radar Active — No Visitors Browsing Right Now
+                    </h4>
+                    <p className="text-xs text-slate-500 max-w-md mx-auto">
+                      Your real-time tracking beacon is listening for incoming site traffic. When prospects land on your website, pricing pages, or booking forms, they will appear here instantly.
+                    </p>
+                  </div>
+                ) : (
+                  filteredVisitors.map((vis) => {
+                    const isSelected = selectedVisitorId === vis.id;
+                    return (
                     <div
                       key={vis.id}
                       onClick={() => setSelectedVisitorId(vis.id)}
@@ -2291,7 +2512,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       </Button>
                     </div>
                   );
-                })}
+                }))}
               </div>
 
               {/* Real-Time Keystroke Telemetry Preview */}
@@ -2424,6 +2645,12 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
         <div className="hidden lg:flex lg:col-span-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex-col min-h-0 overflow-hidden">
           {inboxTab === 'visitors' ? (
             /* ── VISITOR DOSSIER & PROACTIVE CO-PILOT TAKEOVER PANEL ── */
+            !selectedVisitor ? (
+              <div className="h-full flex flex-col items-center justify-center p-6 text-center text-xs text-slate-400">
+                <Radio className="size-8 text-emerald-500/40 mb-2 animate-pulse" />
+                <span>Waiting for active visitors to inspect live dossier &amp; keystrokes</span>
+              </div>
+            ) : (
             <div className="h-full flex flex-col bg-white dark:bg-slate-900 overflow-y-auto p-4 space-y-4">
               {/* Profile Header */}
               <div className="flex items-start justify-between">
@@ -2508,10 +2735,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 <div className="flex items-center gap-2 pt-0.5">
                   <Button
                     size="sm"
-                    onClick={() => {
-                      setNudgeSent((prev) => ({ ...prev, [selectedVisitor.id]: true }));
-                      toast.success(`AI Nudge dispatched to ${selectedVisitor.name}!`);
-                    }}
+                    onClick={() => handleDispatchNudge(selectedVisitor)}
                     className="flex-1 h-8 text-xs font-bold rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white"
                   >
                     {nudgeSent[selectedVisitor.id] ? 'Nudge Dispatched ✓' : 'Dispatch AI Nudge'}
@@ -2539,6 +2763,7 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                 <Radio className="size-4 animate-pulse" /> Instant Human Takeover (Join As Agent)
               </Button>
             </div>
+            )
           ) : !selectedConversation ? (
             <div className="h-full flex flex-col items-center justify-center p-6 text-center text-xs text-slate-400">
               Select a conversation to inspect customer dossier and history

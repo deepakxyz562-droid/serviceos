@@ -17,7 +17,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
-import { API_PATHS } from '@/lib/constants';
+import { API_PATHS, WEB_URL } from '@/lib/constants';
 
 interface ListedStore {
   id: string;
@@ -74,7 +74,7 @@ export default function MarketplaceScreen() {
 
   const handleOpenStore = (store: ListedStore) => {
     hapticFeedback.light();
-    const url = `https://serviceos.com/store/${store.slug}`;
+    const url = `${WEB_URL}/store/${store.slug}`;
     Linking.openURL(url);
   };
 
@@ -83,7 +83,7 @@ export default function MarketplaceScreen() {
     try {
       await Share.share({
         title: store.name,
-        message: `Order online from *${store.name}* with instant WhatsApp updates & delivery!\n👉 https://serviceos.com/store/${store.slug}`,
+        message: `Order online from *${store.name}* with instant WhatsApp updates & delivery!\n👉 ${WEB_URL}/store/${store.slug}`,
       });
     } catch {}
   };

@@ -70,7 +70,7 @@ import { useAppStore } from '@/store/app-store';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
-interface ReviewItem {
+export interface ReviewItem {
   id: string;
   name: string;
   initials: string;
@@ -79,16 +79,16 @@ interface ReviewItem {
   rating: number;
   timeAgo: string;
   text: string;
-  keywords: string[];
+  keywords?: string[];
   replied: boolean;
   replyText?: string;
   replyEdited?: string;
-  location: string;
+  location?: string;
   reviewCount: number;
   photos?: string[];
 }
 
-const INITIAL_REVIEWS: ReviewItem[] = [
+export const INITIAL_REVIEWS: ReviewItem[] = [
   {
     id: 'rev-1',
     name: 'Priya Singh',
@@ -268,7 +268,7 @@ const CUSTOMER_PHOTOS_INITIAL = [
   'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&auto=format&fit=crop&q=80',
 ];
 
-export function ReviewsView() {
+export function ReviewsView({ initialReviews }: { initialReviews?: ReviewItem[] } = {}) {
   const auth = useAppStore((s) => s.auth);
   const businessName = auth?.tenant?.name || auth?.workspace?.name || 'BGOS Home Cleaning';
   const businessSlug =
@@ -325,8 +325,15 @@ export function ReviewsView() {
   const [includeDirectLink, setIncludeDirectLink] = useState(true);
 
   // Reviews State
-  const [reviewsList, setReviewsList] = useState<ReviewItem[]>(INITIAL_REVIEWS);
-  const [selectedReviewId, setSelectedReviewId] = useState<string>('rev-1');
+  const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');
+  const [reviewsList, setReviewsList] = useState<ReviewItem[]>(
+    initialReviews || (isDemo ? INITIAL_REVIEWS : [])
+  );
+  const [selectedReviewId, setSelectedReviewId] = useState<string>(
+    initialReviews?.[0]?.id || (isDemo ? 'rev-1' : '')
+  );
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [filterRating, setFilterRating] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState('newest');
@@ -352,13 +359,27 @@ export function ReviewsView() {
   // Fetch real reviews from backend API on mount
   useEffect(() => {
     let mounted = true;
+    setIsLoading(true);
+    setFetchError(null);
     authFetch('/api/reviews?limit=50')
-      .then((res) => (res.ok ? res.json() : null))
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error('Failed to load reviews from server.');
+        }
+        return res.json();
+      })
       .then((data) => {
-        if (!mounted || !data || !data.reviews || data.reviews.length === 0) return;
+        if (!mounted) return;
+        if (!data || !Array.isArray(data.reviews) || data.reviews.length === 0) {
+          if (!initialReviews && !isDemo) {
+            setReviewsList([]);
+            setSelectedReviewId('');
+          }
+          return;
+        }
         const avatarBgs = ['bg-[#009F50]', 'bg-emerald-600', 'bg-blue-600', 'bg-rose-600', 'bg-amber-600', 'bg-pink-600'];
         const mapped: ReviewItem[] = data.reviews.map((r: any, idx: number) => {
-          const authorName = r.authorName || 'Verified Client';
+          const authorName = r.authorName || r.reviewerName || 'Customer';
           const initials =
             authorName
               .split(' ')
@@ -366,32 +387,49 @@ export function ReviewsView() {
               .map((w: string) => w[0])
               .slice(0, 2)
               .join('')
-              .toUpperCase() || 'VC';
+              .toUpperCase() || 'CU';
           const parsedResp = safeJsonParse(r.responseJson);
+          const rawRating = Number(r.rating);
+          const validRating = Number.isFinite(rawRating) && rawRating >= 1 && rawRating <= 5 ? rawRating : 5;
+          const comment = r.comment || r.text || '';
+          const words = comment.toLowerCase().match(/\b[a-z]{5,}\b/g) || [];
+          const extractedKeywords = Array.from(new Set(words)).slice(0, 4);
+
           return {
             id: r.id,
             name: authorName,
             initials,
             avatarBg: avatarBgs[idx % avatarBgs.length],
-            rating: Number(r.rating) || 5,
+            rating: validRating,
             timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
-            text: r.comment || 'Outstanding service and quality execution.',
-            keywords: ['professional', 'quality', 'recommend'],
+            text: comment || '(No written comment provided)',
+            keywords: r.keywords || (extractedKeywords.length > 0 ? extractedKeywords : undefined),
             replied: !!(parsedResp && parsedResp.text),
             replyText: parsedResp?.text || undefined,
             replyEdited: parsedResp?.repliedAt ? 'Published' : undefined,
-            location: 'Verified Customer',
-            reviewCount: 1,
+            location: r.location || r.city || undefined,
+            reviewCount: r.reviewCount || 1,
           };
         });
         setReviewsList(mapped);
         if (mapped[0]) setSelectedReviewId(mapped[0].id);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!mounted) return;
+        if (!initialReviews && !isDemo) {
+          setFetchError(err?.message || 'Failed to load reviews.');
+          setReviewsList([]);
+          setSelectedReviewId('');
+        }
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [initialReviews, isDemo]);
 
   function safeJsonParse(val: any) {
     try {
@@ -1656,9 +1694,7 @@ export function ReviewsView() {
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold tracking-tight">
                   {reviewsList.length > 0
-                    ? reviewsList.length === INITIAL_REVIEWS.length
-                      ? '4.8'
-                      : (reviewsList.reduce((acc, r) => acc + r.rating, 0) / reviewsList.length).toFixed(1)
+                    ? (reviewsList.reduce((acc, r) => acc + r.rating, 0) / reviewsList.length).toFixed(1)
                     : '0.0'}
                 </span>
                 <div className="flex text-amber-400">
@@ -1668,7 +1704,7 @@ export function ReviewsView() {
                 </div>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                ({reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length} reviews)
+                ({reviewsList.length} reviews)
               </p>
             </div>
           </div>
@@ -1684,9 +1720,11 @@ export function ReviewsView() {
             <div>
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-bold tracking-tight">
-                  {reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length}
+                  {reviewsList.length}
                 </span>
-                <span className="flex items-center text-[#009F50] text-xs font-semibold">↑ 12%</span>
+                <span className="flex items-center text-[#009F50] text-xs font-semibold">
+                  {reviewsList.length > 0 ? '↑ Active' : '0%'}
+                </span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">vs last 30 days</p>
             </div>
@@ -1702,7 +1740,9 @@ export function ReviewsView() {
             </div>
             <div>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold tracking-tight">24</span>
+                <span className="text-2xl font-bold tracking-tight">
+                  {reviewsList.filter((r) => !r.replied).length}
+                </span>
                 <span className="flex items-center text-[#009F50] text-xs font-semibold">↑ 50%</span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">vs last 30 days</p>
@@ -1854,21 +1894,21 @@ export function ReviewsView() {
           <div className="lg:col-span-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-2xs flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold">
-                Reviews ({reviewsList.length > 0 ? (reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length) : '0'})
+                Reviews ({reviewsList.length})
               </h2>
             </div>
 
             {/* Filter Pills */}
             <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none">
               {[
-                { id: 'all', label: `All (${reviewsList.length > 0 ? (reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.length) : '0'})` },
-                { id: 'replied', label: `Replied (${reviewsList.length === INITIAL_REVIEWS.length ? '326' : reviewsList.filter((r) => r.replied).length})` },
-                { id: 'unreplied', label: `Unreplied (${reviewsList.length === INITIAL_REVIEWS.length ? '0' : reviewsList.filter((r) => !r.replied).length})` },
-                { id: '5', label: `5 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '235' : reviewsList.filter((r) => r.rating === 5).length})` },
-                { id: '4', label: `4 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '59' : reviewsList.filter((r) => r.rating === 4).length})` },
-                { id: '3', label: `3 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '20' : reviewsList.filter((r) => r.rating === 3).length})` },
-                { id: '2', label: `2 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '8' : reviewsList.filter((r) => r.rating === 2).length})` },
-                { id: '1', label: `1 ★ (${reviewsList.length === INITIAL_REVIEWS.length ? '4' : reviewsList.filter((r) => r.rating === 1).length})` },
+                { id: 'all', label: `All (${reviewsList.length})` },
+                { id: 'replied', label: `Replied (${reviewsList.filter((r) => r.replied).length})` },
+                { id: 'unreplied', label: `Unreplied (${reviewsList.filter((r) => !r.replied).length})` },
+                { id: '5', label: `5 ★ (${reviewsList.filter((r) => r.rating === 5).length})` },
+                { id: '4', label: `4 ★ (${reviewsList.filter((r) => r.rating === 4).length})` },
+                { id: '3', label: `3 ★ (${reviewsList.filter((r) => r.rating === 3).length})` },
+                { id: '2', label: `2 ★ (${reviewsList.filter((r) => r.rating === 2).length})` },
+                { id: '1', label: `1 ★ (${reviewsList.filter((r) => r.rating === 1).length})` },
               ].map((pill) => (
                 <button
                   key={pill.id}

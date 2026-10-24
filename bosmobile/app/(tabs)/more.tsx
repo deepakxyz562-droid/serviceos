@@ -43,7 +43,7 @@ export default function MoreScreen() {
         ...(c.tables ? [{ label: t('Tables & QR menu', 'टेबल और QR मेन्यू'), icon: 'table-restaurant' as Icon, path: '/dine-in-qr' }] : []),
         ...(c.onlineStore ? [{ label: t('Online store', 'ऑनलाइन दुकान'), icon: 'language' as Icon, path: '/custom-domain' }] : []),
     ];
-    business.push({ label: t('Open web dashboard', 'वेब डैशबोर्ड खोलें'), icon: 'open-in-new', onPress: () => { void Linking.openURL(`${WEB_URL}/?view=formsDashboard`).catch(() => Alert.alert(t('Unable to open browser', 'ब्राउज़र नहीं खुला'))); } });
+    business.push({ label: t('Open web dashboard', 'वेब डैशबोर्ड खोलें'), icon: 'open-in-new', onPress: () => { void Linking.openURL(`${WEB_URL}/?view=commerce`).catch(() => Alert.alert(t('Unable to open browser', 'ब्राउज़र नहीं खुला'))); } });
     if (c.onlineStore || (c.catalog && c.orders)) business.unshift({ label: t('Share store & QR', 'दुकान और QR शेयर करें'), icon: 'qr-code', path: '/store-share' });
     const tools: Row[] = [
         ...(c.forms ? [{ label: t('Forms', 'फ़ॉर्म'), icon: 'dynamic-form' as Icon, path: '/forms' }] : []),

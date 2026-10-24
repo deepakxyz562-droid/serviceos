@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
-import { API_PATHS } from '@/lib/constants';
+import { API_PATHS, WEB_URL } from '@/lib/constants';
 
 interface DiningTable {
   id: string;
@@ -111,7 +111,7 @@ export default function MobileDineInQrScreen() {
     }
   };
 
-  const qrUrl = `https://fieseros.com/store/${storeSlug}?table=${encodeURIComponent(selectedTable)}`;
+  const qrUrl = `${WEB_URL}/store/${storeSlug}?table=${encodeURIComponent(selectedTable)}`;
   const qrImageUri = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
     qrUrl
   )}`;

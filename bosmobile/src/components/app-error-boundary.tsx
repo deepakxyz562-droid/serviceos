@@ -2,11 +2,11 @@ import type { ErrorBoundaryProps } from 'expo-router';
 import { Button, StyleSheet, Text, View } from 'react-native';
 
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
-  console.error('[nuvora] Unhandled render error', error);
+  console.error('[bos] Unhandled render error', error);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Nuvora could not open this screen</Text>
+      <Text style={styles.title}>BOS could not open this screen</Text>
       <Text style={styles.message}>Your data is safe. Try loading the screen again.</Text>
       <Button title="Try again" onPress={retry} color="#0f766e" />
     </View>

@@ -17,6 +17,7 @@ import {
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
+import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 
 type Agent = { id: string; name: string; roleTitle?: string; welcomeGreeting?: string; voiceTone?: string };
 
@@ -133,7 +134,7 @@ export default function AgentsScreen() {
             secondary
             label="Configure Knowledge Base · Web"
             icon="open-in-new"
-            onPress={() => Linking.openURL(`${WEB_URL}/app?view=agentStudio`).catch(() => {})}
+            onPress={() => Linking.openURL(getBgosWebUrl('agentStudio')).catch(() => {})}
           />
         </View>
       )}
@@ -242,7 +243,7 @@ export default function AgentsScreen() {
         <Card>
           <Text style={ui.heading}>Assistant analytics</Text>
           <Text style={ui.body}>Review conversation performance and activity in BGOS web.</Text>
-          <Action label="Open AI Studio · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=agentStudio`).catch(() => setError('Could not open the browser.'))} />
+          <Action label="Open AI Studio · Web" onPress={() => Linking.openURL(getBgosWebUrl('agentStudio')).catch(() => setError('Could not open the browser.'))} />
         </Card>
       )}
 
@@ -287,7 +288,7 @@ export default function AgentsScreen() {
               icon="open-in-new"
               onPress={() => {
                 setBuilderModal(false);
-                Linking.openURL(`${WEB_URL}/app?view=agentStudio`).catch(() => {});
+                Linking.openURL(getBgosWebUrl('agentStudio')).catch(() => {});
               }}
             />
             <Action secondary label="Close" onPress={() => setBuilderModal(false)} />

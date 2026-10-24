@@ -17,6 +17,7 @@ export default function HomeScreen() {
   const bookings = useResource<{ bookings: Booking[] }>('/api/bookings?limit=100');
   const leads = useResource<{ leads: unknown[]; pagination?: { total: number } }>('/api/leads?limit=1');
   const calls = useResource<{ stats: { todayCount: number; total: number } | null }>('/api/vapi/calls?limit=1&stats=true');
+  const reviews = useResource<{ reviews: Array<{ rating: number }> }>('/api/reviews?limit=50');
 
   const today = new Date().toDateString();
   const appointments = bookings.data?.bookings.filter(
@@ -31,12 +32,19 @@ export default function HomeScreen() {
       bookings.refresh(),
       leads.refresh(),
       calls.refresh(),
+      reviews.refresh(),
     ]);
   };
 
   const unreadCount = inbox.data ? inbox.data.reduce((s, c) => s + c.unreadCount, 0) : '—';
   const leadTotal = leads.data?.pagination?.total ?? '—';
   const callCount = calls.data?.stats?.todayCount ?? '—';
+  const avgRating = reviews.data?.reviews?.length
+    ? (reviews.data.reviews.reduce((acc, r) => acc + (Number(r.rating) || 5), 0) / reviews.data.reviews.length).toFixed(1)
+    : null;
+  const reviewDetail = avgRating
+    ? `${avgRating} ★ rating · Ask customers via WhatsApp`
+    : 'Ask customers for Google reviews via WhatsApp';
 
   return (
     <Screen
@@ -231,7 +239,7 @@ export default function HomeScreen() {
         />
         <MenuRow
           title="Google Business & Reviews"
-          detail="4.1 ★ rating · Ask customers via WhatsApp"
+          detail={reviewDetail}
           icon="star-outline"
           onPress={() => router.push('/(tabs)/growth')}
         />

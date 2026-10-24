@@ -137,7 +137,7 @@ export default function CustomDomainScreen() {
   const handleCopyDns = () => {
     hapticFeedback.light();
     const cname = data?.domainConfig?.cnameRecord;
-    const text = `Type: CNAME\nHost/Name: ${cname?.host || 'shop'}\nPoints To: ${cname?.pointsTo || 'cname.serviceos.com'}\nTTL: 3600`;
+    const text = `Type: CNAME\nHost/Name: ${cname?.host || 'shop'}\nPoints To: ${cname?.pointsTo || 'cname.fieseros.com'}\nTTL: 3600`;
     Clipboard.setString(text);
     Alert.alert('Copied to Clipboard ✓', 'DNS record instructions copied.');
   };

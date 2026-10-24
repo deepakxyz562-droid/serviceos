@@ -9,7 +9,9 @@ import { MONEY_KINDS, moneyMinor, type MoneySnapshot } from '../../../../../shar
 
 
 function failure(error: unknown) {
-  if (error instanceof Error && ['UNAUTHORIZED','FORBIDDEN'].includes(error.message)) return NextResponse.json({ error: 'Access denied' }, { status: error.message === 'UNAUTHORIZED' ? 401 : 403 });
+  if (error instanceof Error && ['UNAUTHORIZED','FORBIDDEN','FORBIDDEN_INSUFFICIENT_ROLE'].includes(error.message)) {
+    return NextResponse.json({ error: 'Access denied: Insufficient permissions for this action' }, { status: error.message === 'UNAUTHORIZED' ? 401 : 403 });
+  }
   const { message, status } = commerceError(error);
   return NextResponse.json({ error: message }, { status });
 }
@@ -26,8 +28,13 @@ export async function GET(req: Request) {
 }
 export async function POST(req: Request) {
   try {
-    const business = await ownerBusiness(req);
     const body = await req.json().catch(() => null);
+    const requiredPerm = (body?.kind === 'CREDIT_SALE' || body?.kind === 'COLLECTION')
+      ? 'canManageKhata'
+      : (body?.kind === 'EXPENSE' || body?.kind === 'OPENING')
+      ? 'canManageSettings'
+      : undefined;
+    const business = await ownerBusiness(req, requiredPerm);
     const key = req.headers.get('Idempotency-Key') || body?.requestKey;
     if (!body || !MONEY_KINDS.includes(body.kind) || typeof key !== 'string' || key.length < 8 || key.length > 128) return NextResponse.json({ error: 'Invalid money entry' }, { status: 400 });
     if(body.kind==='SUPPLIER_REVIEW'&&body.supplierReviewComplete!==true)return NextResponse.json({error:'Confirm all outstanding supplier bills have been entered.'},{status:400});

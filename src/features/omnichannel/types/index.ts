@@ -52,6 +52,14 @@ export interface ConversationMessage {
     caption?: string;
     label?: string;
   };
+  mediaUrl?: string;
+  mediaCaption?: string;
+  fileAttachment?: {
+    name?: string;
+    url?: string;
+    size?: number;
+    mimeType?: string;
+  };
   packageCards?: InteractivePackageCard[];
   confirmationCard?: {
     scheduledDate: string;

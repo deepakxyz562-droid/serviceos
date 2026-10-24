@@ -58,6 +58,7 @@ export default function CustomersScreen() {
   const router = useRouter();
   const language = useBlueprintStore(s => s.blueprint.language);
   const creditEnabled = useBlueprintStore(s => s.blueprint.capabilities.customerCredit);
+  const countryPack = useBlueprintStore(s => s.countryPack);
   const t = (en: string, hi: string) => language === 'hi' ? hi : en;
   const requestTracker = useRef(new RequestTracker());
   const [adding, setAdding] = useState(false);
@@ -462,7 +463,7 @@ export default function CustomersScreen() {
               </Text>
               <View style={styles.customerInputRow}>
                 <View style={styles.countryCodeBadge}>
-                  <Text style={styles.countryCodeText}>+91</Text>
+                  <Text style={styles.countryCodeText}>{countryPack?.phone?.countryCode || '+91'}</Text>
                 </View>
                 <TextInput
                   accessibilityLabel={t('Phone with country code', 'देश कोड सहित फ़ोन')}

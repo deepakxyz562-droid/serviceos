@@ -96,9 +96,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const remaining = Math.max(0, total - alreadyPaid);
 
       if (remaining > 0) {
-        // Record payment record
-        await db.aiInvoicePayment.create({
+        // Record payment record on AiPayment
+        await db.aiPayment.create({
           data: {
+            businessId: business.id,
             invoiceId: existing.id,
             amount: remaining,
             method: parsed.data.paymentMethod || 'CASH',
@@ -106,17 +107,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           },
         });
 
-        // Record in atomic money ledger (Daybook / Cash)
-        await atomicCommerce('payment_collected', [
+        // Record in atomic money ledger (Daybook / Cash) via finance command
+        const key = `pay_inv_${existing.id}_${Date.now()}`;
+        await atomicCommerce('finance', [
           business.id,
-          Math.round(remaining * 100),
-          parsed.data.paymentMethod || 'CASH',
-          undefined,
-          existing.customer?.name || 'Walk-in Customer',
-          existing.id,
-          undefined,
-          undefined,
-          `Invoice ${existing.number} Paid`,
+          key,
+          {
+            kind: 'COLLECTION',
+            amount: remaining,
+            account: parsed.data.paymentMethod === 'BANK' ? 'BANK' : 'CASH',
+            invoiceId: existing.id,
+            reference: `Invoice ${existing.number} Paid`,
+          },
         ]).catch(() => {});
       }
 
@@ -135,7 +137,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         ...(parsed.data.status ? { status: parsed.data.status } : {}),
         ...(parsed.data.dueDate ? { dueDate: new Date(parsed.data.dueDate) } : {}),
         ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
-        ...(parsed.data.paymentMethod ? { paymentMethod: parsed.data.paymentMethod } : {}),
       },
       include: { customer: true, items: true, payments: true },
     });

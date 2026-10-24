@@ -5,6 +5,9 @@ export const COUNTRY_PACKS: Record<CountryCode, CountryPack> = {
     code: 'US',
     name: 'United States',
     flag: '🇺🇸',
+    phone: {
+      countryCode: '+1',
+    },
     currency: {
       code: 'USD',
       symbol: '$',
@@ -40,6 +43,9 @@ export const COUNTRY_PACKS: Record<CountryCode, CountryPack> = {
     code: 'CA',
     name: 'Canada',
     flag: '🇨🇦',
+    phone: {
+      countryCode: '+1',
+    },
     currency: {
       code: 'CAD',
       symbol: '$',
@@ -75,6 +81,9 @@ export const COUNTRY_PACKS: Record<CountryCode, CountryPack> = {
     code: 'AU',
     name: 'Australia',
     flag: '🇦🇺',
+    phone: {
+      countryCode: '+61',
+    },
     currency: {
       code: 'AUD',
       symbol: '$',
@@ -110,6 +119,9 @@ export const COUNTRY_PACKS: Record<CountryCode, CountryPack> = {
     code: 'IN',
     name: 'India',
     flag: '🇮🇳',
+    phone: {
+      countryCode: '+91',
+    },
     currency: {
       code: 'INR',
       symbol: '₹',
@@ -145,6 +157,9 @@ export const COUNTRY_PACKS: Record<CountryCode, CountryPack> = {
     code: 'GB',
     name: 'United Kingdom',
     flag: '🇬🇧',
+    phone: {
+      countryCode: '+44',
+    },
     currency: {
       code: 'GBP',
       symbol: '£',
@@ -180,6 +195,9 @@ export const COUNTRY_PACKS: Record<CountryCode, CountryPack> = {
     code: 'GLOBAL',
     name: 'International',
     flag: '🌐',
+    phone: {
+      countryCode: '+1',
+    },
     currency: {
       code: 'USD',
       symbol: '$',

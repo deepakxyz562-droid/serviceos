@@ -55,18 +55,149 @@ function MiniBarChart({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-export function BgosDashboard() {
+export interface DashboardTask {
+  id: string;
+  title: string;
+  subtitle: string;
+  due: string;
+  isUrgent: boolean;
+  completed: boolean;
+}
+
+export interface DashboardActivity {
+  id: string;
+  type: 'leads' | 'appointments' | 'calls' | 'messages' | 'forms';
+  title: string;
+  subtitle: string;
+  time: string;
+  badge: string;
+  badgeColor: string;
+  icon: any;
+  iconColor: string;
+}
+
+export const INITIAL_TASKS: DashboardTask[] = [
+  {
+    id: 'task_1',
+    title: 'Call back Priya Singh',
+    subtitle: 'Discuss deep cleaning quote',
+    due: 'Today, 11:00 AM',
+    isUrgent: true,
+    completed: false,
+  },
+  {
+    id: 'task_2',
+    title: 'Follow up with Rahul Kumar',
+    subtitle: 'Send service details',
+    due: 'Today, 2:00 PM',
+    isUrgent: true,
+    completed: false,
+  },
+  {
+    id: 'task_3',
+    title: 'Send proposal to Sneha Patel',
+    subtitle: 'Office cleaning',
+    due: 'Tomorrow',
+    isUrgent: false,
+    completed: false,
+  },
+  {
+    id: 'task_4',
+    title: 'Review Google reviews',
+    subtitle: '3 new reviews to respond',
+    due: 'Tomorrow',
+    isUrgent: false,
+    completed: false,
+  },
+  {
+    id: 'task_5',
+    title: 'Check campaign performance',
+    subtitle: 'Diwali Offer',
+    due: 'Tomorrow',
+    isUrgent: false,
+    completed: false,
+  },
+];
+
+export const INITIAL_ACTIVITIES: DashboardActivity[] = [
+  {
+    id: 'act_1',
+    type: 'leads',
+    title: 'New lead from Website',
+    subtitle: 'Anita Desai',
+    time: '2 min ago',
+    badge: 'Lead',
+    badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+    icon: Target,
+    iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
+  },
+  {
+    id: 'act_2',
+    type: 'appointments',
+    title: 'Appointment booked',
+    subtitle: 'Rahul Kumar',
+    time: '12 min ago',
+    badge: 'Booking',
+    badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+    icon: Calendar,
+    iconColor: 'bg-blue-100 text-blue-600 dark:bg-blue-950/80',
+  },
+  {
+    id: 'act_3',
+    type: 'calls',
+    title: 'New call received',
+    subtitle: '+1 520 555 0187',
+    time: '18 min ago',
+    badge: 'Call',
+    badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+    icon: Phone,
+    iconColor: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/80',
+  },
+  {
+    id: 'act_4',
+    type: 'forms',
+    title: 'New form submission',
+    subtitle: 'Service Request Form',
+    time: '25 min ago',
+    badge: 'Form',
+    badgeColor: 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
+    icon: FileText,
+    iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
+  },
+  {
+    id: 'act_5',
+    type: 'messages',
+    title: 'Google review received',
+    subtitle: '"Great service and very professional!"',
+    time: '1 hour ago',
+    badge: 'Review',
+    badgeColor: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+    icon: Star,
+    iconColor: 'bg-amber-100 text-amber-600 dark:bg-amber-950/80',
+  },
+];
+
+export interface BgosDashboardProps {
+  initialTasks?: DashboardTask[];
+  initialActivities?: DashboardActivity[];
+}
+
+export function BgosDashboard({ initialTasks, initialActivities }: BgosDashboardProps = {}) {
   const { setCurrentView, auth } = useAppStore();
 
   // Dynamic user name and business identity
   const firstName = useMemo(() => {
-    const raw = auth?.user?.name || auth?.user?.firstName || 'Deepak';
-    return raw.trim().split(' ')[0];
+    const raw = auth?.user?.name || auth?.user?.firstName || 'Business Owner';
+    return raw.trim().split(' ')[0] || 'Partner';
   }, [auth?.user?.name, auth?.user?.firstName]);
 
   const businessName = useMemo(() => {
-    return auth?.tenant?.name || auth?.workspace?.name || 'Cinderella Cleaners';
+    return auth?.tenant?.name || auth?.workspace?.name || 'Service Enterprise';
   }, [auth?.tenant?.name, auth?.workspace?.name]);
+
+  const businessLocation = useMemo(() => {
+    return (auth?.tenant as any)?.address || (auth?.tenant as any)?.city || 'Headquarters';
+  }, [auth?.tenant]);
 
   const businessInitials = useMemo(() => {
     return businessName
@@ -75,36 +206,83 @@ export function BgosDashboard() {
       .map((w: string) => w[0])
       .slice(0, 2)
       .join('')
-      .toUpperCase() || 'CC';
+      .toUpperCase() || 'SE';
   }, [businessName]);
 
-  const [leadCount, setLeadCount] = useState<number>(124);
-  const [appointmentCount, setAppointmentCount] = useState<number>(86);
+  const [leadCount, setLeadCount] = useState<number>(0);
+  const [appointmentCount, setAppointmentCount] = useState<number>(0);
+  const [callCount, setCallCount] = useState<number>(0);
+  const [messageCount, setMessageCount] = useState<number>(0);
   const [reviewStats, setReviewStats] = useState<{ rating: string; count: number }>({
-    rating: '4.8',
-    count: 326,
+    rating: '0.0',
+    count: 0,
   });
+  const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
+  const [sourceBreakdown, setSourceBreakdown] = useState<Array<{ name: string; pct: string; color: string; count: number }>>([]);
 
   React.useEffect(() => {
     let mounted = true;
-    fetch('/api/leads?limit=10')
+    fetch('/api/leads?limit=50')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!mounted || !data) return;
-        const total = data.pagination?.total ?? (Array.isArray(data.leads) ? data.leads.length : undefined);
-        if (typeof total === 'number') {
-          setLeadCount(total);
+        const total = data.pagination?.total ?? (Array.isArray(data.leads) ? data.leads.length : 0);
+        setLeadCount(total);
+
+        if (Array.isArray(data.leads) && data.leads.length > 0) {
+          const counts: Record<string, number> = {};
+          data.leads.forEach((l: any) => {
+            const src = l.source ? String(l.source).replace(/_/g, ' ') : 'Website';
+            const cap = src.charAt(0).toUpperCase() + src.slice(1);
+            counts[cap] = (counts[cap] || 0) + 1;
+          });
+          const colorsList = ['bg-chart-3', 'bg-chart-1', 'bg-[#F97316]', 'bg-[#10B981]', 'bg-[#EC4899]', 'bg-[#64748B]'];
+          const breakdown = Object.entries(counts).map(([name, count], idx) => ({
+            name,
+            count,
+            pct: `${Math.round((count / data.leads.length) * 100)}%`,
+            color: colorsList[idx % colorsList.length],
+          }));
+          setSourceBreakdown(breakdown);
+
+          if (!initialActivities) {
+            const liveActivities: DashboardActivity[] = data.leads.slice(0, 5).map((l: any, idx: number) => ({
+              id: `act_lead_${l.id || idx}`,
+              type: 'leads',
+              title: `New lead from ${l.source ? String(l.source).replace(/_/g, ' ') : 'Website'}`,
+              subtitle: l.name || l.email || l.phone || 'Anonymous Prospect',
+              time: l.createdAt ? new Date(l.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+              badge: 'Lead',
+              badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+              icon: Target,
+              iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
+            }));
+            setActivities(liveActivities);
+          }
+
+          if (!initialTasks) {
+            const liveTasks: DashboardTask[] = data.leads.slice(0, 4).map((l: any, idx: number) => ({
+              id: `task_lead_${l.id || idx}`,
+              title: `Follow up with ${l.name || 'new lead'}`,
+              subtitle: l.requirements || l.service || `Inquiry via ${l.source || 'Website'}`,
+              due: idx === 0 ? 'Today, urgent' : 'Today',
+              isUrgent: idx === 0,
+              completed: false,
+            }));
+            setTasks(liveTasks);
+          }
         }
       })
       .catch(() => {});
 
-    fetch('/api/bookings?limit=10')
+    fetch('/api/bookings?limit=20')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!mounted || !data) return;
-        const total = data.pagination?.total ?? (Array.isArray(data.bookings) ? data.bookings.length : undefined);
-        if (typeof total === 'number') {
-          setAppointmentCount(total);
+        const total = data.pagination?.total ?? (Array.isArray(data.bookings) ? data.bookings.length : 0);
+        setAppointmentCount(total);
+        if (Array.isArray(data.bookings)) {
+          setUpcomingAppointments(data.bookings.slice(0, 4));
         }
       })
       .catch(() => {});
@@ -113,16 +291,33 @@ export function BgosDashboard() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!mounted || !data) return;
-        const total = data.pagination?.total ?? (Array.isArray(data.reviews) ? data.reviews.length : undefined);
-        if (typeof total === 'number') {
-          if (total === 0) {
-            setReviewStats({ rating: '0.0', count: 0 });
-          } else if (data.reviews?.length) {
-            const avg =
-              data.reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) /
-              data.reviews.length;
-            setReviewStats({ rating: avg.toFixed(1), count: total });
-          }
+        const total = data.pagination?.total ?? (Array.isArray(data.reviews) ? data.reviews.length : 0);
+        if (total === 0) {
+          setReviewStats({ rating: '0.0', count: 0 });
+        } else if (data.reviews?.length) {
+          const avg =
+            data.reviews.reduce((acc: number, r: any) => acc + (Number(r.rating) || 5), 0) /
+            data.reviews.length;
+          setReviewStats({ rating: avg.toFixed(1), count: total });
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/vapi/calls?limit=50')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        const count = Array.isArray(data.calls) ? data.calls.length : (data.stats?.todayCount ?? data.stats?.total ?? 0);
+        setCallCount(count);
+      })
+      .catch(() => {});
+
+    fetch('/api/omnichannel/conversations')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        if (Array.isArray(data)) {
+          setMessageCount(data.length);
         }
       })
       .catch(() => {});
@@ -139,120 +334,20 @@ export function BgosDashboard() {
     return 'Good evening';
   }, []);
 
-  // Growth timeframe state
   const [growthTimeframe, setGrowthTimeframe] = useState<'30d' | '7d' | '90d'>('30d');
 
   // Recent Activity Filter
   const [activityFilter, setActivityFilter] = useState<'all' | 'leads' | 'appointments' | 'calls' | 'messages' | 'forms'>('all');
 
   // Tasks & Follow-ups state
-  const [tasks, setTasks] = useState([
-    {
-      id: 'task_1',
-      title: 'Call back Priya Singh',
-      subtitle: 'Discuss deep cleaning quote',
-      due: 'Today, 11:00 AM',
-      isUrgent: true,
-      completed: false,
-    },
-    {
-      id: 'task_2',
-      title: 'Follow up with Rahul Kumar',
-      subtitle: 'Send service details',
-      due: 'Today, 2:00 PM',
-      isUrgent: true,
-      completed: false,
-    },
-    {
-      id: 'task_3',
-      title: 'Send proposal to Sneha Patel',
-      subtitle: 'Office cleaning',
-      due: 'Tomorrow',
-      isUrgent: false,
-      completed: false,
-    },
-    {
-      id: 'task_4',
-      title: 'Review Google reviews',
-      subtitle: '3 new reviews to respond',
-      due: 'Tomorrow',
-      isUrgent: false,
-      completed: false,
-    },
-    {
-      id: 'task_5',
-      title: 'Check campaign performance',
-      subtitle: 'Diwali Offer',
-      due: 'Tomorrow',
-      isUrgent: false,
-      completed: false,
-    },
-  ]);
+  const [tasks, setTasks] = useState<DashboardTask[]>(initialTasks ?? INITIAL_TASKS);
+  const [activities, setActivities] = useState<DashboardActivity[]>(initialActivities ?? INITIAL_ACTIVITIES);
 
   const toggleTask = (id: string) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
     );
   };
-
-  // Recent Activity items
-  const activities = [
-    {
-      id: 'act_1',
-      type: 'leads',
-      title: 'New lead from Website',
-      subtitle: 'Anita Desai',
-      time: '2 min ago',
-      badge: 'Lead',
-      badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
-      icon: Target,
-      iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
-    },
-    {
-      id: 'act_2',
-      type: 'appointments',
-      title: 'Appointment booked',
-      subtitle: 'Rahul Kumar',
-      time: '12 min ago',
-      badge: 'Booking',
-      badgeColor: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-      icon: Calendar,
-      iconColor: 'bg-blue-100 text-blue-600 dark:bg-blue-950/80',
-    },
-    {
-      id: 'act_3',
-      type: 'calls',
-      title: 'New call received',
-      subtitle: '+1 520 555 0187',
-      time: '18 min ago',
-      badge: 'Call',
-      badgeColor: 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
-      icon: Phone,
-      iconColor: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/80',
-    },
-    {
-      id: 'act_4',
-      type: 'forms',
-      title: 'New form submission',
-      subtitle: 'Service Request Form',
-      time: '25 min ago',
-      badge: 'Form',
-      badgeColor: 'bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
-      icon: FileText,
-      iconColor: 'bg-teal-50 text-teal-600 dark:bg-teal-950/80',
-    },
-    {
-      id: 'act_5',
-      type: 'messages',
-      title: 'Google review received',
-      subtitle: '"Great service and very professional!"',
-      time: '1 hour ago',
-      badge: 'Review',
-      badgeColor: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
-      icon: Star,
-      iconColor: 'bg-amber-100 text-amber-600 dark:bg-amber-950/80',
-    },
-  ];
 
   const filteredActivities = activities.filter((act) => {
     if (activityFilter === 'all') return true;
@@ -294,7 +389,7 @@ export function BgosDashboard() {
               <div className="text-xs font-bold text-slate-900 dark:text-slate-100 leading-tight">
                 {businessName}
               </div>
-              <div className="text-[10px] text-slate-500 leading-tight">Tucson, Arizona</div>
+              <div className="text-[10px] text-slate-500 leading-tight">{businessLocation}</div>
             </div>
             <ChevronDown className="size-4 text-slate-400 ml-1" />
           </button>
@@ -320,11 +415,11 @@ export function BgosDashboard() {
           </div>
           <div className="flex flex-col items-end">
             <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-              <TrendingUp className="size-3" /> +28%
+              <TrendingUp className="size-3" /> {leadCount > 0 ? '+28%' : 'Active'}
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
-              <MiniBarChart values={[3, 5, 4, 7, 6, 8, 9, 11]} color="var(--chart-1)" />
+              <MiniBarChart values={[3, 5, 4, 7, 6, 8, 9, Math.max(1, leadCount)]} color="var(--chart-1)" />
             </div>
           </div>
         </div>
@@ -344,11 +439,11 @@ export function BgosDashboard() {
           </div>
           <div className="flex flex-col items-end">
             <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-              <TrendingUp className="size-3" /> +18%
+              <TrendingUp className="size-3" /> {appointmentCount > 0 ? '+18%' : 'Active'}
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
-              <MiniBarChart values={[2, 4, 3, 5, 6, 5, 7, 8]} color="var(--chart-3)" />
+              <MiniBarChart values={[2, 4, 3, 5, 6, 5, 7, Math.max(1, appointmentCount)]} color="var(--chart-3)" />
             </div>
           </div>
         </div>
@@ -361,18 +456,18 @@ export function BgosDashboard() {
             </div>
             <div>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
-                312
+                {callCount}
               </div>
               <div className="text-xs text-slate-500 font-medium mt-1">Phone Calls</div>
             </div>
           </div>
           <div className="flex flex-col items-end">
             <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-              <TrendingUp className="size-3" /> +32%
+              <TrendingUp className="size-3" /> {callCount > 0 ? '+32%' : 'Active'}
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
-              <MiniBarChart values={[5, 7, 6, 8, 9, 10, 8, 12]} color="#10B981" />
+              <MiniBarChart values={[5, 7, 6, 8, 9, 10, 8, Math.max(1, callCount)]} color="#10B981" />
             </div>
           </div>
         </div>
@@ -385,14 +480,14 @@ export function BgosDashboard() {
             </div>
             <div>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 leading-none">
-                1,248
+                {messageCount}
               </div>
               <div className="text-xs text-slate-500 font-medium mt-1">Messages</div>
             </div>
           </div>
           <div className="flex flex-col items-end">
             <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-              <TrendingUp className="size-3" /> +24%
+              <TrendingUp className="size-3" /> {messageCount > 0 ? '+24%' : 'Active'}
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
@@ -628,7 +723,7 @@ export function BgosDashboard() {
               {/* Donut Center Counter */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                 <span className="text-lg font-black text-slate-900 dark:text-slate-100 leading-none">
-                  428
+                  {leadCount}
                 </span>
                 <span className="text-[9px] text-slate-400 font-medium">Total Leads</span>
               </div>
@@ -636,14 +731,17 @@ export function BgosDashboard() {
 
             {/* Source Legend List */}
             <div className="space-y-1.5 text-xs flex-1">
-              {[
-                { name: 'Website', pct: '32%', color: 'bg-chart-3' },
-                { name: 'Google Business', pct: '24%', color: 'bg-chart-1' },
-                { name: 'Social Media', pct: '18%', color: 'bg-[#F97316]' },
-                { name: 'WhatsApp', pct: '14%', color: 'bg-[#10B981]' },
-                { name: 'Referral', pct: '8%', color: 'bg-[#EC4899]' },
-                { name: 'Other', pct: '4%', color: 'bg-[#64748B]' },
-              ].map((s) => (
+              {(sourceBreakdown.length > 0
+                ? sourceBreakdown
+                : [
+                    { name: 'Website', pct: '32%', color: 'bg-chart-3' },
+                    { name: 'Google Business', pct: '24%', color: 'bg-chart-1' },
+                    { name: 'WhatsApp', pct: '18%', color: 'bg-[#10B981]' },
+                    { name: 'Social Media', pct: '14%', color: 'bg-[#F97316]' },
+                    { name: 'Referral', pct: '8%', color: 'bg-[#EC4899]' },
+                    { name: 'Other', pct: '4%', color: 'bg-[#64748B]' },
+                  ]
+              ).map((s) => (
                 <div key={s.name} className="flex items-center justify-between text-slate-600 dark:text-slate-400">
                   <div className="flex items-center gap-1.5 truncate">
                     <span className={cn('size-2 rounded-full flex-shrink-0', s.color)} />
@@ -675,62 +773,57 @@ export function BgosDashboard() {
           </div>
 
           <div className="space-y-2.5">
-            {[
-              {
-                time: '10:00 AM',
-                service: 'Home Cleaning',
-                client: 'Priya Singh',
-                status: 'Confirmed',
-                badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-              },
-              {
-                time: '12:30 PM',
-                service: 'Office Deep Clean',
-                client: 'Rahul Kumar',
-                status: 'Confirmed',
-                badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-              },
-              {
-                time: '2:00 PM',
-                service: 'Move In/Out Cleaning',
-                client: 'Sneha Patel',
-                status: 'Pending',
-                badgeStyle: 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
-              },
-              {
-                time: '4:30 PM',
-                service: 'Regular Home Cleaning',
-                client: 'Amit Sharma',
-                status: 'Confirmed',
-                badgeStyle: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
-              },
-            ].map((apt, idx) => (
-              <div
-                key={idx}
-                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 w-16 flex-shrink-0">
-                    {apt.time}
-                  </span>
-                  <Avatar className="size-7 border border-slate-200 dark:border-slate-700">
-                    <AvatarFallback className="text-[10px] font-bold bg-teal-100 text-teal-700">
-                      {apt.client.split(' ').map((n) => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                      {apt.service}
-                    </div>
-                    <div className="text-[10px] text-slate-400 truncate">{apt.client}</div>
-                  </div>
-                </div>
-
-                <Badge className={cn('text-[10px] font-bold border-none px-2 py-0.5', apt.badgeStyle)}>
-                  {apt.status}
-                </Badge>
+            {upcomingAppointments.length === 0 ? (
+              <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 text-center space-y-1.5">
+                <Calendar className="size-6 text-slate-300 dark:text-slate-700 mx-auto" />
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">No upcoming appointments</div>
+                <div className="text-[10px] text-slate-400">Customer bookings scheduled via Web & WhatsApp appear here.</div>
               </div>
-            ))}
+            ) : (
+              upcomingAppointments.map((apt, idx) => {
+                const clientName = apt.customer?.name || apt.customerName || apt.clientName || 'Client';
+                const serviceName = apt.service?.name || apt.title || apt.serviceName || 'Service Appointment';
+                const timeStr = apt.scheduledAt
+                  ? new Date(apt.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  : 'Scheduled';
+                const isConfirmed = String(apt.status).toLowerCase() === 'confirmed';
+
+                return (
+                  <div
+                    key={apt.id || idx}
+                    className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-400 w-16 flex-shrink-0">
+                        {timeStr}
+                      </span>
+                      <Avatar className="size-7 border border-slate-200 dark:border-slate-700">
+                        <AvatarFallback className="text-[10px] font-bold bg-teal-100 text-teal-700">
+                          {clientName.split(' ').map((n: string) => n[0]).slice(0, 2).join('') || 'CL'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {serviceName}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">{clientName}</div>
+                      </div>
+                    </div>
+
+                    <Badge
+                      className={cn(
+                        'text-[10px] font-bold border-none px-2 py-0.5',
+                        isConfirmed
+                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                      )}
+                    >
+                      {apt.status || 'Confirmed'}
+                    </Badge>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -775,37 +868,45 @@ export function BgosDashboard() {
 
           {/* Activity Rows */}
           <div className="space-y-2.5">
-            {filteredActivities.map((act) => {
-              const IconComp = act.icon;
-              return (
-                <div
-                  key={act.id}
-                  className="p-2.5 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={cn('size-8 rounded-xl flex items-center justify-center flex-shrink-0', act.iconColor)}>
-                      <IconComp className="size-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
-                        {act.title}
+            {filteredActivities.length === 0 ? (
+              <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-950 border border-dashed border-slate-200 dark:border-slate-800 space-y-1.5">
+                <Clock className="size-5 text-slate-400 mx-auto" />
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">No activity in this view</div>
+                <div className="text-[11px] text-slate-400">Inbound leads, calls, reviews, and bookings will appear here in real time.</div>
+              </div>
+            ) : (
+              filteredActivities.map((act) => {
+                const IconComp = act.icon;
+                return (
+                  <div
+                    key={act.id}
+                    className="p-2.5 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={cn('size-8 rounded-xl flex items-center justify-center flex-shrink-0', act.iconColor)}>
+                        <IconComp className="size-4" />
                       </div>
-                      <div className="text-[11px] text-slate-500 truncate">{act.subtitle}</div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                          {act.title}
+                        </div>
+                        <div className="text-[11px] text-slate-500 truncate">{act.subtitle}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] text-slate-400">{act.time}</span>
+                      <Badge className={cn('text-[10px] font-bold border-none px-2 py-0.5', act.badgeColor)}>
+                        {act.badge}
+                      </Badge>
+                      <button type="button" className="text-slate-400 hover:text-slate-600">
+                        <MoreVertical className="size-3.5" />
+                      </button>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-slate-400">{act.time}</span>
-                    <Badge className={cn('text-[10px] font-bold border-none px-2 py-0.5', act.badgeColor)}>
-                      {act.badge}
-                    </Badge>
-                    <button type="button" className="text-slate-400 hover:text-slate-600">
-                      <MoreVertical className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -846,15 +947,15 @@ export function BgosDashboard() {
           {/* 3 AI Performance Stats */}
           <div className="grid grid-cols-3 gap-2 text-center py-1">
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
-              <div className="text-base font-black text-slate-900 dark:text-slate-100">1,248</div>
+              <div className="text-base font-black text-slate-900 dark:text-slate-100">{messageCount}</div>
               <div className="text-[10px] text-slate-400 font-medium leading-tight">Messages handled</div>
             </div>
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
-              <div className="text-base font-black text-slate-900 dark:text-slate-100">86</div>
+              <div className="text-base font-black text-slate-900 dark:text-slate-100">{appointmentCount}</div>
               <div className="text-[10px] text-slate-400 font-medium leading-tight">Appointments booked</div>
             </div>
             <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
-              <div className="text-base font-black text-slate-900 dark:text-slate-100">124</div>
+              <div className="text-base font-black text-slate-900 dark:text-slate-100">{leadCount}</div>
               <div className="text-[10px] text-slate-400 font-medium leading-tight">Leads captured</div>
             </div>
           </div>
@@ -914,49 +1015,57 @@ export function BgosDashboard() {
 
           {/* Task Checklist */}
           <div className="space-y-2">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                onClick={() => toggleTask(task.id)}
-                className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-100 transition-colors"
-              >
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <div
-                    className={cn(
-                      'size-4 rounded-md mt-0.5 flex items-center justify-center border transition-colors flex-shrink-0',
-                      task.completed
-                        ? 'bg-teal-600 border-teal-600 text-white'
-                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
-                    )}
-                  >
-                    {task.completed && <Check className="size-3" />}
-                  </div>
-                  <div className="min-w-0">
+            {tasks.length === 0 ? (
+              <div className="p-6 text-center rounded-2xl bg-slate-50 dark:bg-slate-950 border border-dashed border-slate-200 dark:border-slate-800 space-y-1.5">
+                <Check className="size-5 text-teal-500 mx-auto" />
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">All caught up!</div>
+                <div className="text-[10px] text-slate-400">No pending follow-ups or urgent tasks.</div>
+              </div>
+            ) : (
+              tasks.map((task) => (
+                <div
+                  key={task.id}
+                  onClick={() => toggleTask(task.id)}
+                  className="p-2.5 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3 cursor-pointer hover:bg-slate-100 transition-colors"
+                >
+                  <div className="flex items-start gap-2.5 min-w-0">
                     <div
                       className={cn(
-                        'text-xs font-bold truncate transition-all',
+                        'size-4 rounded-md mt-0.5 flex items-center justify-center border transition-colors flex-shrink-0',
                         task.completed
-                          ? 'line-through text-slate-400'
-                          : 'text-slate-900 dark:text-slate-100'
+                          ? 'bg-teal-600 border-teal-600 text-white'
+                          : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900'
                       )}
                     >
-                      {task.title}
+                      {task.completed && <Check className="size-3" />}
                     </div>
-                    <div className="text-[10px] text-slate-500 truncate">{task.subtitle}</div>
+                    <div className="min-w-0">
+                      <div
+                        className={cn(
+                          'text-xs font-bold truncate transition-all',
+                          task.completed
+                            ? 'line-through text-slate-400'
+                            : 'text-slate-900 dark:text-slate-100'
+                        )}
+                      >
+                        {task.title}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate">{task.subtitle}</div>
+                    </div>
+                  </div>
+
+                  <div
+                    className={cn(
+                      'text-[10px] font-bold flex items-center gap-1 flex-shrink-0',
+                      task.isUrgent ? 'text-rose-600' : 'text-slate-400'
+                    )}
+                  >
+                    {task.isUrgent && <Clock className="size-3" />}
+                    {task.due}
                   </div>
                 </div>
-
-                <div
-                  className={cn(
-                    'text-[10px] font-bold flex items-center gap-1 flex-shrink-0',
-                    task.isUrgent ? 'text-rose-600' : 'text-slate-400'
-                  )}
-                >
-                  {task.isUrgent && <Clock className="size-3" />}
-                  {task.due}
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

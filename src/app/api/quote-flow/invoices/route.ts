@@ -112,13 +112,37 @@ export async function POST(req: Request) {
     });
     const number = `INV-${updatedBiz.invoiceSeq}`;
 
+    const rawItems = Array.isArray(body.items) && body.items.length > 0
+      ? body.items
+      : [{ description: 'Custom Service', qty: 1, unitPrice: 0 }];
+
+    const totals = computeTotals(
+      rawItems.map((i: any) => ({ qty: Number(i.qty) || 1, unitPrice: Number(i.unitPrice) || 0 })),
+      Number(body.discountValue) || 0,
+      body.discountType || 'AMOUNT',
+      Number(body.taxRate) || 0,
+      business.currency
+    );
+
+    let initialStatus = body.status === 'PARTIAL' ? 'PARTIALLY_PAID' : (body.status || 'DRAFT');
+    const requestedPaid = Number(body.paidAmount) || 0;
+    const effectivePaid = initialStatus === 'PAID'
+      ? totals.total
+      : Math.min(requestedPaid, totals.total);
+
+    if (effectivePaid >= totals.total && totals.total > 0) {
+      initialStatus = 'PAID';
+    } else if (effectivePaid > 0) {
+      initialStatus = 'PARTIALLY_PAID';
+    }
+
     const invoice = await db.$transaction(async (tx) => {
       const inv = await tx.aiInvoice.create({
         data: {
           businessId: business.id,
           customerId: targetCustomerId,
           number,
-          status: body.status || 'DRAFT',
+          status: initialStatus,
           dueDate: body.dueDate ? new Date(body.dueDate) : null,
           notes: body.notes || null,
           discountValue: Number(body.discountValue) || 0,
@@ -129,10 +153,6 @@ export async function POST(req: Request) {
         },
       });
 
-      const rawItems = Array.isArray(body.items) && body.items.length > 0
-        ? body.items
-        : [{ description: 'Custom Service', qty: 1, unitPrice: 0 }];
-
       for (const it of rawItems) {
         await tx.aiInvoiceItem.create({
           data: {
@@ -141,6 +161,18 @@ export async function POST(req: Request) {
             qty: Number(it.qty) || 1,
             unitPrice: Number(it.unitPrice) || 0,
             hsnCode: it.hsnCode || null,
+          },
+        });
+      }
+
+      if (effectivePaid > 0) {
+        await tx.aiPayment.create({
+          data: {
+            businessId: business.id,
+            invoiceId: inv.id,
+            amount: effectivePaid,
+            method: body.paymentMethod || 'CASH',
+            notes: 'Initial payment recorded at creation',
           },
         });
       }

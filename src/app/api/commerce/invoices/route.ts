@@ -272,7 +272,6 @@ export async function POST(req: Request) {
         discountValue: data.discountValue,
         discountType: data.discountType,
         taxRate: data.taxRate,
-        paymentMethod: data.paymentMethod || null,
         items: {
           create: computedItems.map((it) => ({
             description: it.description,
@@ -285,8 +284,21 @@ export async function POST(req: Request) {
       include: {
         customer: true,
         items: true,
+        payments: true,
       },
     });
+
+    if (data.status === 'PAID') {
+      await db.aiPayment.create({
+        data: {
+          businessId: business.id,
+          invoiceId: createdInvoice.id,
+          amount: grandTotal,
+          method: data.paymentMethod || 'CASH',
+          notes: 'Recorded at invoice creation',
+        },
+      });
+    }
 
     // 5. Generate compliant E-Way Bill & E-Invoice payloads if requested or applicable
     const storeMeta = {

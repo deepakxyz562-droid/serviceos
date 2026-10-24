@@ -9,15 +9,10 @@ import { getAuthUser } from '@/lib/auth';
 export async function GET(req: NextRequest) {
   try {
     const auth = await getAuthUser();
-    let tenantId = auth?.tenantId;
+    const tenantId = auth?.tenantId;
 
     if (!tenantId) {
-      const defaultTenant = await db.tenant.findFirst({ select: { id: true } });
-      tenantId = defaultTenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
     }
 
     const [dbProducts, commerceConfig] = await Promise.all([
@@ -52,16 +47,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const auth = await getAuthUser();
-    let tenantId = auth?.tenantId;
-    let workspaceId = auth?.workspaceId;
+    const tenantId = auth?.tenantId;
+    const workspaceId = auth?.workspaceId;
 
     if (!tenantId) {
-      const defaultTenant = await db.tenant.findFirst({ select: { id: true } });
-      tenantId = defaultTenant?.id;
-    }
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
     }
 
     const body = await req.json().catch(() => ({}));

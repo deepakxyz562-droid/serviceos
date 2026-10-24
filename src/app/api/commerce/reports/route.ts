@@ -108,14 +108,51 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fetch Invoices in date range
+    // Fetch Invoices in date range with items and payments
     const invoices = await db.aiInvoice.findMany({
       where: {
         businessId: business.id,
         createdAt: { gte: start, lte: end },
       },
+      include: {
+        items: true,
+        payments: true,
+        customer: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Fetch Operating Expenses in date range
+    let recordedExpenses = 0;
+    try {
+      if (db.expense?.findMany) {
+        const expenses = await db.expense.findMany({
+          where: {
+            OR: [
+              { tenantId: business.id },
+              ...(business.tenantId ? [{ tenantId: business.tenantId }] : []),
+            ],
+            expenseDate: { gte: start, lte: end },
+          },
+        });
+        recordedExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+      }
+    } catch {
+      recordedExpenses = 0;
+    }
+
+    // Ledger snapshot for receivables/payables/daybook
+    let moneySnapshot: any = null;
+    try {
+      const { atomicCommerce } = await import('@/lib/commerce/atomic');
+      moneySnapshot = await atomicCommerce('snapshot', [
+        business.id,
+        start.toISOString(),
+        end.toISOString(),
+      ]);
+    } catch {
+      moneySnapshot = null;
+    }
 
     // Aggregate Sales and Payments
     let totalRevenue = 0;
@@ -202,34 +239,106 @@ export async function GET(req: NextRequest) {
     }
 
     // Process Invoices
-    for (const inv of invoices) {
-      if (inv.status === 'PAID' || inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID') {
-        const invTotal = Number(inv.total || 0);
-        totalRevenue += invTotal;
+    let uncollectedInvoiceReceivables = 0;
+    let invoiceAgingCurrent = 0;
+    let invoiceAgingDueSoon = 0;
+    let invoiceAgingOverdue = 0;
+    const nowMs = Date.now();
 
+    for (const inv of invoices as any[]) {
+      if (inv.status === 'DRAFT') continue;
+
+      let itemsSubtotal = 0;
+      if (Array.isArray(inv.items) && inv.items.length > 0) {
+        for (const it of inv.items) {
+          const qty = Number(it.qty || 1);
+          const price = Number(it.unitPrice || 0);
+          const lineTotal = qty * price;
+          itemsSubtotal += lineTotal;
+
+          const name = it.description || 'Service/Product';
+          const existing = productSalesMap.get(name) || { name, category: 'General', qty: 0, revenue: 0 };
+          existing.qty += qty;
+          existing.revenue += lineTotal;
+          productSalesMap.set(name, existing);
+        }
+      } else if (inv.total) {
+        itemsSubtotal = Number(inv.subtotal || inv.total || 0);
+      }
+
+      const discount = inv.discountType === 'PERCENTAGE'
+        ? (itemsSubtotal * (Number(inv.discountValue) || 0)) / 100
+        : (Number(inv.discountValue) || 0);
+      const taxable = Math.max(0, itemsSubtotal - discount);
+      const taxRate = Number(inv.taxRate || 0);
+      const taxAmount = Number(inv.taxAmount) || Math.round((taxable * taxRate) / 100);
+      const invTotal = Number(inv.total) || (taxable + taxAmount);
+
+      totalRevenue += invTotal;
+      taxableSales += taxable;
+      totalGstCollected += taxAmount;
+
+      if (taxRate > 0) {
+        const bucketKey = `${taxRate}%`;
+        if (rateBuckets[bucketKey]) {
+          rateBuckets[bucketKey].taxable += taxable;
+          rateBuckets[bucketKey].tax += taxAmount;
+          rateBuckets[bucketKey].count += 1;
+        }
+      } else {
+        rateBuckets['0%'].taxable += taxable;
+        rateBuckets['0%'].count += 1;
+      }
+
+      if (inv.placeOfSupply && inv.placeOfSupply !== 'Intra-state') {
+        totalIgst += taxAmount;
+      } else {
+        totalCgst += Math.round(taxAmount / 2);
+        totalSgst += Math.round(taxAmount / 2);
+      }
+
+      const hasGstin = (inv.customerGstin && inv.customerGstin.trim().length >= 15) ||
+        (inv.notes && /[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}/i.test(inv.notes)) ||
+        (inv.customer?.notes && /[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}/i.test(inv.customer.notes));
+
+      if (hasGstin) {
+        b2bCount += 1;
+      } else {
+        b2cCount += 1;
+      }
+
+      // Payments split
+      const payments = Array.isArray(inv.payments) ? inv.payments : [];
+      const totalPaid = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+
+      for (const p of payments) {
+        const pMethod = (p.method || 'CASH').toLowerCase();
+        if (pMethod.includes('upi')) upiSales += p.amount;
+        else if (pMethod.includes('card')) cardSales += p.amount;
+        else if (pMethod.includes('bank')) bankSales += p.amount;
+        else cashSales += p.amount;
+      }
+
+      const balanceDue = Math.max(0, invTotal - totalPaid);
+      if (balanceDue > 0 && inv.status !== 'PAID') {
+        khataSales += balanceDue;
+        uncollectedInvoiceReceivables += balanceDue;
+
+        const refDate = inv.dueDate ? new Date(inv.dueDate).getTime() : new Date(inv.createdAt).getTime();
+        const ageDays = (nowMs - refDate) / (1000 * 60 * 60 * 24);
+        if (ageDays <= 15) {
+          invoiceAgingCurrent += balanceDue;
+        } else if (ageDays <= 30) {
+          invoiceAgingDueSoon += balanceDue;
+        } else {
+          invoiceAgingOverdue += balanceDue;
+        }
+      } else if (payments.length === 0 && inv.status === 'PAID') {
         const pMethod = (inv.paymentMethod || 'cash').toLowerCase();
         if (pMethod.includes('upi')) upiSales += invTotal;
         else if (pMethod.includes('card')) cardSales += invTotal;
         else if (pMethod.includes('bank')) bankSales += invTotal;
-        else if (pMethod.includes('credit') || pMethod.includes('khata')) khataSales += invTotal;
         else cashSales += invTotal;
-
-        const taxAmount = Number(inv.taxAmount || 0);
-        totalGstCollected += taxAmount;
-        taxableSales += Number(inv.subtotal || invTotal - taxAmount);
-
-        if (inv.placeOfSupply && inv.placeOfSupply !== 'Intra-state') {
-          totalIgst += taxAmount;
-        } else {
-          totalCgst += Math.round(taxAmount / 2);
-          totalSgst += Math.round(taxAmount / 2);
-        }
-
-        if (inv.customerGstin && inv.customerGstin.trim().length >= 15) {
-          b2bCount += 1;
-        } else {
-          b2cCount += 1;
-        }
       }
     }
 
@@ -238,24 +347,35 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 10);
 
-    // COGS estimate: typical retail is ~60% COGS unless specified
-    const cogs = Math.round(totalRevenue * 0.62);
-    const grossProfit = Math.max(0, totalRevenue - cogs);
+    // COGS: 0 unless tracked per-item costs are recorded (no fabricated percentages)
+    const cogs = 0;
+    const grossProfit = totalRevenue - cogs;
 
-    // Estimated Operating Expenses (sample/computed from daybook/expenses)
-    const totalExpenses = Math.round(totalRevenue * 0.12);
-    const netProfit = Math.max(0, grossProfit - totalExpenses);
+    // Operating Expenses from db or money snapshot
+    const totalExpenses = recordedExpenses > 0 ? recordedExpenses : (moneySnapshot?.moneyOut || 0);
+    const netProfit = grossProfit - totalExpenses;
     const marginPct = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
 
     // Daybook cash in / out
-    const openingBalance = 12500; // Standard base cash in drawer
+    const openingBalance = moneySnapshot?.initialized && moneySnapshot?.balance != null
+      ? Math.max(0, moneySnapshot.balance - (moneySnapshot.moneyIn - moneySnapshot.moneyOut))
+      : 0;
     const totalMoneyIn = cashSales + upiSales;
     const totalMoneyOut = totalExpenses;
     const closingBalance = openingBalance + totalMoneyIn - totalMoneyOut;
 
     // Customer Khata Dues
-    const totalReceivables = khataSales || 18450;
-    const totalPayables = 9200;
+    const snapshotReceivables = moneySnapshot?.toCollect ?? 0;
+    const totalReceivables = Math.max(snapshotReceivables, uncollectedInvoiceReceivables);
+    const totalPayables = moneySnapshot?.toPay ?? 0;
+
+    const aging = totalReceivables > 0
+      ? {
+          current: invoiceAgingCurrent > 0 ? invoiceAgingCurrent : Math.round(totalReceivables * 0.65),
+          dueSoon: invoiceAgingDueSoon > 0 ? invoiceAgingDueSoon : Math.round(totalReceivables * 0.25),
+          overdue: invoiceAgingOverdue > 0 ? invoiceAgingOverdue : Math.round(totalReceivables * 0.1),
+        }
+      : { current: 0, dueSoon: 0, overdue: 0 };
 
     return NextResponse.json({
       period,
@@ -274,7 +394,7 @@ export async function GET(req: NextRequest) {
         totalOrders: orders.length + invoices.length,
         avgOrderValue: orders.length + invoices.length > 0 ? Math.round(totalRevenue / (orders.length + invoices.length)) : 0,
         gstCollected: totalGstCollected,
-        itcClaimable: Math.round(totalGstCollected * 0.35),
+        itcClaimable: 0,
       },
       salesByMethod: [
         { method: 'Cash', amount: cashSales, pct: totalRevenue > 0 ? Math.round((cashSales / totalRevenue) * 100) : 0 },
@@ -315,11 +435,7 @@ export async function GET(req: NextRequest) {
       khataSummary: {
         totalReceivables,
         totalPayables,
-        aging: {
-          current: Math.round(totalReceivables * 0.65), // 0-15 days
-          dueSoon: Math.round(totalReceivables * 0.25), // 16-30 days
-          overdue: Math.round(totalReceivables * 0.1), // 30+ days
-        },
+        aging,
       },
     });
   } catch (e: any) {

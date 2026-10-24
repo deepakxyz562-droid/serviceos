@@ -191,7 +191,7 @@ export default function LoginScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={styles.inputLabel}>Password</Text>
                   <TouchableOpacity
-                    onPress={() => Alert.alert('Reset Password', 'Please check your email to reset your Nuvora password.')}
+                    onPress={() => Alert.alert('Reset Password', 'Please check your email to reset your BOS password.')}
                   >
                     <Text style={styles.forgotText}>Forgot password?</Text>
                   </TouchableOpacity>
@@ -236,7 +236,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.submitBtnText}>Sign In to Nuvora</Text>
+                    <Text style={styles.submitBtnText}>Sign In to BOS</Text>
                     <Feather name="arrow-right" size={16} color="#FFFFFF" />
                   </>
                 )}
@@ -398,7 +398,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.submitBtnText}>Start Free with Nuvora</Text>
+                    <Text style={styles.submitBtnText}>Start Free with BOS</Text>
                     <Feather name="arrow-right" size={16} color="#FFFFFF" />
                   </>
                 )}
@@ -416,7 +416,7 @@ export default function LoginScreen() {
             </Text>
           </View>
           <Text style={styles.legalNotice}>
-            By continuing, you agree to Nuvora's Terms of Service and Privacy Policy.
+            By continuing, you agree to BOS's Terms of Service and Privacy Policy.
           </Text>
         </View>
       </ScrollView>

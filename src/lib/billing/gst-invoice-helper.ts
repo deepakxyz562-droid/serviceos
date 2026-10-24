@@ -815,8 +815,8 @@ export function generateEInvoicePayload(params: {
         TotItemVal: totItem,
       };
     }),
-    Irn: irn,
-    SignedQRCode: `GSTIN:${params.store.gstin || ''};INV:${params.invoiceNumber};DATE:${formattedDate};VAL:${params.totals.totalAmount};IRN:${irn}`,
+    Irn: `DRAFT-PREVIEW-${irn.slice(0, 32)}`,
+    SignedQRCode: `PREVIEW-ONLY:NOT-GOVT-SIGNED;GSTIN:${params.store.gstin || ''};INV:${params.invoiceNumber};DATE:${formattedDate};VAL:${params.totals.totalAmount};LOCAL_REF:${irn.slice(0, 16)}`,
   };
 }
 

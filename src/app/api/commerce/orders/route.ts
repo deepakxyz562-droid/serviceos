@@ -54,13 +54,15 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const business = await ownerBusiness(req);
+    const business = await ownerBusiness(req, 'canPosBilling');
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid order' }, { status: 400 });
     const result = await createCommerceOrder(business, body, req.headers.get('Idempotency-Key') || body.requestKey || '', false);
     return NextResponse.json(result, { status: result.replayed ? 200 : 201 });
   } catch (error) {
-    if (error instanceof Error && ['UNAUTHORIZED','FORBIDDEN'].includes(error.message)) return NextResponse.json({ error: 'Unauthorized' }, { status: error instanceof Error && error.message==='FORBIDDEN'?403:401 });
+    if (error instanceof Error && ['UNAUTHORIZED','FORBIDDEN','FORBIDDEN_INSUFFICIENT_ROLE'].includes(error.message)) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions for POS billing' }, { status: error.message === 'UNAUTHORIZED' ? 401 : 403 });
+    }
     const failure = commerceError(error);
     return NextResponse.json({ error: failure.message }, { status: failure.status });
   }

@@ -16,6 +16,7 @@ import {
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
+import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 import { useAuthStore } from '../../src/stores/auth-store';
 import { enablePush } from '../../src/lib/push';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
@@ -47,7 +48,12 @@ export default function ToolsScreen() {
   }
 
   function absolute(path: string) {
-    return path.startsWith('https://') ? path : `${WEB_URL}${path}`;
+    if (path.startsWith('https://')) return path;
+    if (path.startsWith('/app')) {
+      const match = path.match(/[?&]view=([^&]+)/);
+      return getBgosWebUrl(match ? match[1] : undefined);
+    }
+    return `${WEB_URL}${path}`;
   }
 
   function confirmDeleteAccount() {
@@ -119,7 +125,7 @@ export default function ToolsScreen() {
               secondary
               label="Manage Plan"
               icon="credit-card"
-              onPress={() => run(() => Linking.openURL(`${WEB_URL}/app?view=billing`))}
+              onPress={() => run(() => Linking.openURL(getBgosWebUrl('billing')))}
             />
           </View>
           <View style={{ flex: 1 }}>
@@ -127,7 +133,7 @@ export default function ToolsScreen() {
               secondary
               label="Billing History"
               icon="receipt"
-              onPress={() => run(() => Linking.openURL(`${WEB_URL}/app?view=billing`))}
+              onPress={() => run(() => Linking.openURL(getBgosWebUrl('billing')))}
             />
           </View>
         </View>
@@ -135,7 +141,7 @@ export default function ToolsScreen() {
 
       <Card>
         <Text style={ui.heading}>Team & Assistants</Text>
-        <MenuRow title="Team permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(`${WEB_URL}/app?view=settings`))} />
+        <MenuRow title="Team permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(getBgosWebUrl('settings')))} />
         <MenuRow title="AI Assistants" detail="View configured business assistants" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
       </Card>
 

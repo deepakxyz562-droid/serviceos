@@ -98,6 +98,10 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
+    const mediaUrl = body.mediaUrl || (Array.isArray(body.mediaUrls) ? body.mediaUrls[0] : null) || null;
+    const mediaCaption = body.mediaCaption || null;
+    const messageType = mediaUrl ? (/\.(png|jpe?g|webp|gif)$/i.test(mediaUrl) ? 'image' : 'document') : 'text';
+
     // Create the outbound InboxMessage
     const message = await db.inboxMessage.create({
       data: {
@@ -106,10 +110,12 @@ export async function POST(
         senderId: authUser?.id || null,
         senderName: authUser?.name || 'Agent',
         content: content.trim(),
-        messageType: 'text',
+        messageType,
+        mediaUrl,
+        mediaCaption,
         direction: 'outbound',
         status: 'sent',
-        metadataJson: JSON.stringify({ sentBy: 'agent', agentId: authUser?.id }),
+        metadataJson: JSON.stringify({ sentBy: 'agent', agentId: authUser?.id, mediaUrl }),
         tenantId,
         workspaceId,
       },
@@ -320,6 +326,8 @@ export async function POST(
       senderName: message.senderName || undefined,
       timestamp: toISOString(message.createdAt as Date | string),
       channel: conversation.channel,
+      messageType: message.messageType,
+      mediaUrl: message.mediaUrl || undefined,
       delivery: dispatchMeta.dispatch,
     }, { status: 201 })
   } catch (error) {

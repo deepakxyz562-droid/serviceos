@@ -28,11 +28,13 @@ import {
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import { WEB_URL } from '../../src/lib/constants';
+import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 import type { BgosConversation, BgosMessage, BgosWorkspace } from '../../../shared/bgos-contracts';
 
 export default function InboxScreen() {
   const inbox = useResource<BgosConversation[]>('/api/omnichannel/conversations', 10000);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
+  const tickets = useResource<{ tickets: any[] }>('/api/support/tickets?limit=20');
   const [activeTab, setActiveTab] = useState<'inbox' | 'engage' | 'tickets'>('inbox');
   const [selected, setSelected] = useState<BgosConversation | null>(null);
   const [channelFilter, setChannelFilter] = useState('all');
@@ -252,14 +254,63 @@ export default function InboxScreen() {
           <Text style={ui.heading}>Customer chat & live visitors</Text>
           <Text style={ui.body}>Share your configured assistant chat. Live visitor monitoring is available in the web inbox.</Text>
           <Action label="Share Chat Link" disabled={!chatLink} onPress={shareChatLink} />
-          <Action secondary label="Open Live Engage · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=liveChat`).catch(() => Alert.alert('Unable to open browser'))} />
+          <Action secondary label="Open Live Engage · Web" onPress={() => Linking.openURL(getBgosWebUrl('liveChat')).catch(() => Alert.alert('Unable to open browser'))} />
         </Card>
       )}
       {activeTab === 'tickets' && (
         <Card>
-          <Text style={ui.heading}>Tickets & Support</Text>
-          <Text style={ui.body}>Manage support tickets and their resolution status in BGOS web.</Text>
-          <Action label="Open Tickets · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=helpCenter`).catch(() => Alert.alert('Unable to open browser'))} />
+          <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 8 }]}>
+            <Text style={ui.heading}>Tickets & Support</Text>
+            <Badge label={`${tickets.data?.tickets?.length || 0} tickets`} accent />
+          </View>
+          {tickets.loading ? (
+            <Loading />
+          ) : tickets.data?.tickets?.length ? (
+            tickets.data.tickets.map((t: any) => (
+              <View
+                key={t.id}
+                style={[
+                  ui.row,
+                  {
+                    justifyContent: 'space-between',
+                    paddingVertical: 10,
+                    borderBottomWidth: 1,
+                    borderBottomColor: colors.line,
+                  },
+                ]}
+              >
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={ui.heading} numberOfLines={1}>
+                    {t.subject || 'Support Ticket'}
+                  </Text>
+                  <Text style={ui.caption}>
+                    {t.ticketNumber ? `#${t.ticketNumber} · ` : ''}
+                    {t.customer?.name || 'Customer'} ·{' '}
+                    {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'Recent'}
+                  </Text>
+                </View>
+                <Badge
+                  label={t.status || 'open'}
+                  success={t.status === 'resolved' || t.status === 'closed'}
+                  danger={t.priority === 'urgent' || t.priority === 'high'}
+                />
+              </View>
+            ))
+          ) : (
+            <Empty
+              title="No open support tickets"
+              detail="Customer support tickets and resolution history will appear here."
+            />
+          )}
+          <Action
+            secondary
+            label="Open Helpdesk · Web"
+            onPress={() =>
+              Linking.openURL(getBgosWebUrl('helpCenter')).catch(() =>
+                Alert.alert('Unable to open browser')
+              )
+            }
+          />
         </Card>
       )}
 

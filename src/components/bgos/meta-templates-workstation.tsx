@@ -95,15 +95,32 @@ export function BgosMetaTemplatesWorkstation() {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data?.templates) && data.templates.length > 0) {
-          toast.success(`Synced ${data.templates.length} templates from Meta Cloud API`);
+          const remoteTemplates: BgosMetaTemplate[] = data.templates.map((t: any) => ({
+            name: t.name,
+            displayName: t.displayName || t.name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+            category: (t.category?.toUpperCase() || 'UTILITY') as any,
+            language: t.language || 'en_US',
+            status: (t.status?.toUpperCase() || 'APPROVED') as any,
+            bodyText: t.bodyText || t.components?.find((c: any) => c.type === 'BODY')?.text || '',
+            footerText: t.footerText || t.components?.find((c: any) => c.type === 'FOOTER')?.text,
+            variableDescriptions: t.variableDescriptions || [],
+            defaultExampleValues: t.defaultExampleValues || [],
+            serviceTouchpoint: t.serviceTouchpoint || 'marketing',
+          }));
+          setTemplates(remoteTemplates);
+          if (remoteTemplates.length > 0 && !remoteTemplates.find((r) => r.name === selectedTemplate?.name)) {
+            setSelectedTemplate(remoteTemplates[0]);
+          }
+          toast.success(`Synced ${remoteTemplates.length} templates from Meta Cloud API`);
         } else {
           toast.success('Templates synchronized with Meta Cloud API');
         }
       } else {
-        toast.info('Synchronized with Meta WABA');
+        const err = await res.json().catch(() => ({}));
+        toast.error(err?.error || 'Failed to sync templates from Meta Cloud API');
       }
     } catch {
-      toast.info('Synchronized with Meta WABA');
+      toast.error('Unable to reach Meta Cloud API. Check network connectivity.');
     } finally {
       setSyncing(false);
     }
@@ -159,12 +176,10 @@ export function BgosMetaTemplatesWorkstation() {
         setTestSendOpen(false);
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.info(err?.error || `Template dispatch logged for ${testRecipientPhone}`);
-        setTestSendOpen(false);
+        toast.error(err?.error || `Failed to dispatch test template to ${testRecipientPhone}`);
       }
     } catch {
-      toast.info(`Test template previewed for ${testRecipientPhone}`);
-      setTestSendOpen(false);
+      toast.error(`Network error dispatching test template to ${testRecipientPhone}`);
     } finally {
       setSendingTest(false);
     }

@@ -26,6 +26,7 @@ import { MaterialIcons, Feather, Ionicons } from '@expo/vector-icons';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
+import { useBlueprintStore } from '@/stores/blueprint-store';
 import {
   numberToWords,
   generateGstInvoiceHtml,
@@ -86,6 +87,7 @@ interface QuoteRecord {
 
 export default function BillingScreen() {
   const router = useRouter();
+  const countryPack = useBlueprintStore((s) => s.countryPack);
   const [tab, setTab] = useState<'INVOICES' | 'QUOTES'>('INVOICES');
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
@@ -438,7 +440,7 @@ export default function BillingScreen() {
             discountType: 'AMOUNT',
             notes: notes.trim(),
             items: lineItems,
-            status: computedBalance <= 0 ? 'PAID' : computedPaid > 0 ? 'PARTIAL' : 'UNPAID',
+            status: computedBalance <= 0 ? 'PAID' : computedPaid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
             paidAmount: computedPaid,
             balance: computedBalance,
             dueDate: dueDate.toISOString(),
@@ -1394,7 +1396,7 @@ export default function BillingScreen() {
 
                     <View style={[styles.invoiceInputRow, { marginTop: 8 }]}>
                       <View style={styles.invoiceCountryBadge}>
-                        <Text style={styles.invoiceCountryText}>+91</Text>
+                        <Text style={styles.invoiceCountryText}>{countryPack?.phone?.countryCode || '+91'}</Text>
                       </View>
                       <TextInput
                         keyboardType="phone-pad"
@@ -2472,7 +2474,7 @@ export default function BillingScreen() {
                 value={storeInfo.businessName}
                 onChangeText={(v) => setStoreInfo((p) => ({ ...p, businessName: v }))}
                 style={styles.modalInput}
-                placeholder="e.g. Nuvora Technologies Pvt Ltd"
+                placeholder="e.g. Acme Enterprises Pvt Ltd"
               />
 
               <Text style={[styles.inputLabel, { marginTop: 10 }]}>GSTIN (Tax ID)</Text>

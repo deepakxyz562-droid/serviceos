@@ -62,22 +62,26 @@ export default function MobileStaffScreen() {
     canManageSettings: false,
     canManageStaff: false,
   });
+  const [hasError, setHasError] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const fetchStaff = useCallback(async () => {
     try {
       setLoading(true);
+      setHasError(false);
       const res = await apiRequest<{ staff: StaffMember[] }>('/api/commerce/staff');
       if (Array.isArray(res.staff)) {
         setStaff(res.staff);
       }
     } catch {
-      // Offline fallback mock data
+      setHasError(true);
+      // Offline fallback: display authenticated owner only, never fake demo employees
       setStaff([
         {
           id: 'owner-main',
           name: user?.name || blueprint.businessName || 'Store Owner',
-          phone: user?.phone || '+91 98765 43210',
+          phone: user?.phone || '',
+          email: user?.email || '',
           role: 'owner',
           isActive: true,
           permissions: {
@@ -90,45 +94,11 @@ export default function MobileStaffScreen() {
             canManageStaff: true,
           },
         },
-        {
-          id: 'staff-demo-admin',
-          name: 'Sunil Verma',
-          phone: '+91 98111 22334',
-          email: 'sunil@store.in',
-          role: 'admin',
-          isActive: true,
-          permissions: {
-            canCreateInvoices: true,
-            canPosBilling: true,
-            canManageProducts: true,
-            canViewReports: true,
-            canManageKhata: true,
-            canManageSettings: true,
-            canManageStaff: true,
-          },
-        },
-        {
-          id: 'staff-demo-biller',
-          name: 'Kavita Sharma',
-          phone: '+91 98222 33445',
-          email: 'kavita@store.in',
-          role: 'biller',
-          isActive: true,
-          permissions: {
-            canCreateInvoices: true,
-            canPosBilling: true,
-            canManageProducts: false,
-            canViewReports: false,
-            canManageKhata: true,
-            canManageSettings: false,
-            canManageStaff: false,
-          },
-        },
       ]);
     } finally {
       setLoading(false);
     }
-  }, [user?.name, user?.phone, blueprint.businessName]);
+  }, [user?.name, user?.phone, user?.email, blueprint.businessName]);
 
 
   useFocusEffect(
@@ -353,6 +323,22 @@ export default function MobileStaffScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
+          {hasError && (
+            <View style={styles.errorBanner}>
+              <MaterialIcons name="cloud-off" size={18} color="#991B1B" />
+              <Text style={styles.errorBannerText}>
+                {t('Network or server error loading team. Showing owner profile.', 'नेटवर्क समस्या। स्टाफ़ लोड नहीं हो सका।')}
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => void fetchStaff()}
+                style={styles.retryBtn}
+              >
+                <Text style={styles.retryBtnText}>{t('Retry', 'रीट्राई')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* Summary Banner */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryMetric}>
@@ -730,4 +716,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   saveBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+    gap: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#991B1B',
+    fontWeight: '500',
+  },
+  retryBtn: {
+    backgroundColor: '#991B1B',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
 });

@@ -202,6 +202,19 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           if (data?.gstNumber) setGstNumber(data.gstNumber);
           if (data?.invoicePrefix) setInvoicePrefix(data.invoicePrefix);
           if (data?.defaultTaxRate) setDefaultTaxRate(data.defaultTaxRate);
+          if (data?.notifications) {
+            if (typeof data.notifications.emailNotifications === 'boolean') setEmailNotifications(data.notifications.emailNotifications);
+            if (typeof data.notifications.whatsappAlerts === 'boolean') setWhatsappAlerts(data.notifications.whatsappAlerts);
+            if (typeof data.notifications.dailyDigest === 'boolean') setDailyDigest(data.notifications.dailyDigest);
+          }
+          if (data?.automation) {
+            if (typeof data.automation.autoAssignLeads === 'boolean') setAutoAssignLeads(data.automation.autoAssignLeads);
+            if (typeof data.automation.instantReviewDrafts === 'boolean') setInstantReviewDrafts(data.automation.instantReviewDrafts);
+          }
+          if (data?.preferences) {
+            if (data.preferences.timezone) setTimezone(data.preferences.timezone);
+            if (data.preferences.currency) setCurrency(data.preferences.currency);
+          }
         }
       } catch {
         // preserve standard defaults
@@ -228,7 +241,6 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
-    setSavedToast(true);
     try {
       const res = await fetch('/api/brand-profile', {
         method: 'PUT',
@@ -249,18 +261,30 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           gstNumber,
           invoicePrefix,
           defaultTaxRate,
+          notifications: {
+            emailNotifications,
+            whatsappAlerts,
+            dailyDigest,
+          },
+          automation: {
+            autoAssignLeads,
+            instantReviewDrafts,
+          },
+          preferences: {
+            timezone,
+            currency,
+          },
           skipAiSummary: true,
         }),
       });
       if (res.ok) {
+        setSavedToast(true);
         toast.success('Business settings saved to database!');
       } else {
-        setSavedToast(false);
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to save settings to server. Please try again.');
       }
     } catch {
-      setSavedToast(false);
       toast.error('Network error saving settings. Please try again.');
     } finally {
       setIsSaving(false);

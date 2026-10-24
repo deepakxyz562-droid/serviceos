@@ -52,6 +52,19 @@ interface BrandProfileInput {
   gstNumber?: string | null;
   invoicePrefix?: string | null;
   defaultTaxRate?: string | null;
+  notifications?: {
+    emailNotifications?: boolean;
+    whatsappAlerts?: boolean;
+    dailyDigest?: boolean;
+  };
+  automation?: {
+    autoAssignLeads?: boolean;
+    instantReviewDrafts?: boolean;
+  };
+  preferences?: {
+    timezone?: string;
+    currency?: string;
+  };
   // Allow caller to skip the (slow) AI summary regeneration.
   skipAiSummary?: boolean;
 }
@@ -170,13 +183,14 @@ export async function GET() {
       } catch {}
     }
 
-    // Parse the tax/compliance fields out of settingsJson (if present).
-    // settingsJson is a generic JSON blob on Tenant — see prisma/schema.prisma
-    // line ~61. We store gstNumber/invoicePrefix/defaultTaxRate under a
-    // `taxCompliance` sub-key so future settings don't collide.
+    // Parse the tax/compliance and operational settings out of settingsJson (if present).
     let gstNumber: string | null = null;
     let invoicePrefix: string | null = null;
     let defaultTaxRate: string | null = null;
+    let notifications: any = null;
+    let automation: any = null;
+    let preferences: any = null;
+
     if (tenant?.settingsJson) {
       try {
         const parsed = JSON.parse(tenant.settingsJson) as Record<string, unknown>;
@@ -184,15 +198,15 @@ export async function GET() {
         if (typeof taxCompliance.gstNumber === 'string') gstNumber = taxCompliance.gstNumber;
         if (typeof taxCompliance.invoicePrefix === 'string') invoicePrefix = taxCompliance.invoicePrefix;
         if (typeof taxCompliance.defaultTaxRate === 'string') defaultTaxRate = taxCompliance.defaultTaxRate;
+        if (parsed.notifications && typeof parsed.notifications === 'object') notifications = parsed.notifications;
+        if (parsed.automation && typeof parsed.automation === 'object') automation = parsed.automation;
+        if (parsed.preferences && typeof parsed.preferences === 'object') preferences = parsed.preferences;
       } catch {}
     }
 
     return NextResponse.json({
       profile,
       hours,
-      // Tenant-scoped operational metadata (contact + tax/compliance).
-      // Returned here so the Settings page can hydrate its form fields in
-      // one round-trip alongside the brand-profile data.
       phoneNumber: tenant?.phone ?? null,
       emailAddress: tenant?.email ?? null,
       whatsappNumber: tenant?.whatsappPhone ?? null,
@@ -202,6 +216,9 @@ export async function GET() {
       gstNumber,
       invoicePrefix,
       defaultTaxRate,
+      notifications,
+      automation,
+      preferences,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -300,17 +317,22 @@ export async function PUT(request: NextRequest) {
       body.gstNumber !== undefined ||
       body.invoicePrefix !== undefined ||
       body.defaultTaxRate !== undefined ||
-      body.location !== undefined
+      body.location !== undefined ||
+      body.notifications !== undefined ||
+      body.automation !== undefined ||
+      body.preferences !== undefined
     ) {
-      const hasTaxComplianceUpdate =
+      const hasSettingsUpdate =
         body.gstNumber !== undefined ||
         body.invoicePrefix !== undefined ||
-        body.defaultTaxRate !== undefined;
+        body.defaultTaxRate !== undefined ||
+        body.notifications !== undefined ||
+        body.automation !== undefined ||
+        body.preferences !== undefined;
 
       let settingsJson: string | undefined = undefined;
-      if (hasTaxComplianceUpdate) {
-        // Read the existing settingsJson so we can MERGE the tax/compliance
-        // sub-key rather than overwrite the whole blob.
+      if (hasSettingsUpdate) {
+        // Read existing settingsJson and merge sub-keys
         const existingTenant = await db.tenant.findUnique({
           where: { id: tenantId },
           select: { settingsJson: true },
@@ -331,9 +353,13 @@ export async function PUT(request: NextRequest) {
         if (body.gstNumber !== undefined) mergedTaxCompliance.gstNumber = (body.gstNumber || '').trim() || null;
         if (body.invoicePrefix !== undefined) mergedTaxCompliance.invoicePrefix = (body.invoicePrefix || '').trim() || null;
         if (body.defaultTaxRate !== undefined) mergedTaxCompliance.defaultTaxRate = (body.defaultTaxRate || '').trim() || null;
+
         settingsJson = JSON.stringify({
           ...existingSettings,
           taxCompliance: mergedTaxCompliance,
+          ...(body.notifications !== undefined ? { notifications: body.notifications } : {}),
+          ...(body.automation !== undefined ? { automation: body.automation } : {}),
+          ...(body.preferences !== undefined ? { preferences: body.preferences } : {}),
         });
       }
 

@@ -18,6 +18,7 @@ import {
 import { useResource } from '../../src/hooks/use-resource';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
 import { WEB_URL } from '../../src/lib/constants';
+import { getBgosWebUrl } from '../../src/lib/bgos-urls';
 import { useRouter } from 'expo-router';
 
 type Review = {
@@ -146,7 +147,7 @@ export default function GrowthScreen() {
           <Card>
             <Text style={ui.heading}>Google Business performance</Text>
             <Text style={ui.body}>View account connection status and available Google metrics on BGOS web.</Text>
-            <Action secondary label="Open Google Business · Web" onPress={() => Linking.openURL(`${WEB_URL}/app?view=reviews`).catch(() => setError('Could not open the browser.'))} />
+            <Action secondary label="Open Google Business · Web" onPress={() => Linking.openURL(getBgosWebUrl('reviews')).catch(() => setError('Could not open the browser.'))} />
           </Card>
 
           <Action

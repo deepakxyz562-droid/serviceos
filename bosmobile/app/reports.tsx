@@ -30,64 +30,52 @@ export default function MobileReportsScreen() {
   const [period, setPeriod] = useState<Period>('today');
   const [tab, setTab] = useState<ReportTab>('sales');
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [data, setData] = useState<any>(null);
 
   const fetchReports = useCallback(async (p: Period) => {
     try {
       setLoading(true);
+      setHasError(false);
       const res = await apiRequest<any>(`/api/commerce/reports?period=${p}`);
       setData(res);
     } catch {
-      // Fallback mock structure so the screen displays even offline
+      // Offline fallback: zeroed data with error state banner
+      setHasError(true);
       setData({
         summary: {
-          totalRevenue: p === 'today' ? 4250 : 84200,
-          grossProfit: p === 'today' ? 1650 : 31200,
-          totalExpenses: p === 'today' ? 450 : 8500,
-          netProfit: p === 'today' ? 1200 : 22700,
-          marginPct: 28,
-          totalOrders: p === 'today' ? 14 : 185,
-          avgOrderValue: p === 'today' ? 304 : 455,
-          gstCollected: p === 'today' ? 380 : 7560,
-          itcClaimable: p === 'today' ? 120 : 2650,
+          totalRevenue: 0,
+          grossProfit: 0,
+          totalExpenses: 0,
+          netProfit: 0,
+          marginPct: 0,
+          totalOrders: 0,
+          avgOrderValue: 0,
+          gstCollected: 0,
+          itcClaimable: 0,
         },
-        salesByMethod: [
-          { method: 'Cash', amount: p === 'today' ? 2450 : 42000, pct: 50 },
-          { method: 'UPI', amount: p === 'today' ? 1500 : 31500, pct: 37 },
-          { method: 'Card', amount: p === 'today' ? 300 : 6700, pct: 8 },
-          { method: 'Khata Credit', amount: 0, pct: 5 },
-        ],
-        topProducts: [
-          { name: 'Fortune Sunlite Oil 1L', qty: 18, revenue: 2520, category: 'Grocery' },
-          { name: 'Aashirvaad Atta 5kg', qty: 12, revenue: 3120, category: 'Grocery' },
-          { name: 'Amul Butter 500g', qty: 10, revenue: 2750, category: 'Dairy' },
-          { name: 'Tata Salt 1kg', qty: 24, revenue: 672, category: 'Grocery' },
-        ],
+        salesByMethod: [],
+        topProducts: [],
         gstSummary: {
-          taxableSales: p === 'today' ? 3870 : 76640,
-          totalGstCollected: p === 'today' ? 380 : 7560,
-          cgst: p === 'today' ? 190 : 3780,
-          sgst: p === 'today' ? 190 : 3780,
-          rateBuckets: [
-            { rate: '0%', taxable: 1200, tax: 0 },
-            { rate: '5%', taxable: 1850, tax: 92 },
-            { rate: '12%', taxable: 820, tax: 98 },
-            { rate: '18%', taxable: 1050, tax: 189 },
-          ],
+          taxableSales: 0,
+          totalGstCollected: 0,
+          cgst: 0,
+          sgst: 0,
+          rateBuckets: [],
         },
         daybookSummary: {
-          openingBalance: 12500,
-          moneyIn: p === 'today' ? 3950 : 73500,
-          moneyOut: p === 'today' ? 450 : 8500,
-          closingBalance: p === 'today' ? 16000 : 77500,
+          openingBalance: 0,
+          moneyIn: 0,
+          moneyOut: 0,
+          closingBalance: 0,
         },
         khataSummary: {
-          totalReceivables: 18450,
-          totalPayables: 9200,
+          totalReceivables: 0,
+          totalPayables: 0,
           aging: {
-            current: 12000,
-            dueSoon: 4500,
-            overdue: 1950,
+            current: 0,
+            dueSoon: 0,
+            overdue: 0,
           },
         },
       });
@@ -215,6 +203,22 @@ export default function MobileReportsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll}>
+          {hasError && (
+            <View style={styles.errorBanner}>
+              <MaterialIcons name="cloud-off" size={18} color="#991B1B" />
+              <Text style={styles.errorBannerText}>
+                {t('Network or server error. Showing zeroed values.', 'नेटवर्क समस्या। डेटा लोड नहीं हो सका।')}
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => void fetchReports(period)}
+                style={styles.retryBtn}
+              >
+                <Text style={styles.retryBtnText}>{t('Retry', 'रीट्राई')}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {/* 4 Summary Cards Grid */}
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
@@ -295,35 +299,41 @@ export default function MobileReportsScreen() {
               <Text style={styles.sectionTitle}>
                 {t('Sales by Payment Mode', 'पेमेंट माध्यम अनुसार बिक्री')}
               </Text>
-              <View style={styles.divideList}>
-                {(data?.salesByMethod || []).map((m: any) => (
-                  <View key={m.method} style={styles.listItem}>
-                    <View style={styles.methodPill}>
-                      <MaterialIcons
-                        name={
-                          m.method === 'Cash'
-                            ? 'payments'
-                            : m.method === 'UPI'
-                            ? 'qr-code-2'
-                            : m.method === 'Card'
-                            ? 'credit-card'
-                            : 'account-balance-wallet'
-                        }
-                        size={18}
-                        color="#0A6847"
-                      />
-                      <Text style={styles.methodName}>{m.method}</Text>
+              {(!data?.salesByMethod || data.salesByMethod.length === 0) ? (
+                <Text style={styles.emptyListText}>
+                  {t('No payment records for this period', 'इस अवधि के लिए कोई बिक्री दर्ज नहीं है')}
+                </Text>
+              ) : (
+                <View style={styles.divideList}>
+                  {data.salesByMethod.map((m: any) => (
+                    <View key={m.method} style={styles.listItem}>
+                      <View style={styles.methodPill}>
+                        <MaterialIcons
+                          name={
+                            m.method === 'Cash'
+                              ? 'payments'
+                              : m.method === 'UPI'
+                              ? 'qr-code-2'
+                              : m.method === 'Card'
+                              ? 'credit-card'
+                              : 'account-balance-wallet'
+                          }
+                          size={18}
+                          color="#0A6847"
+                        />
+                        <Text style={styles.methodName}>{m.method}</Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.methodAmount}>
+                          {currencySymbol}
+                          {m.amount.toLocaleString('en-IN')}
+                        </Text>
+                        <Text style={styles.methodPct}>{m.pct}%</Text>
+                      </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.methodAmount}>
-                        {currencySymbol}
-                        {m.amount.toLocaleString('en-IN')}
-                      </Text>
-                      <Text style={styles.methodPct}>{m.pct}%</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              )}
 
               <View style={styles.infoBox}>
                 <MaterialIcons name="receipt-long" size={20} color="#0A6847" />
@@ -347,32 +357,38 @@ export default function MobileReportsScreen() {
               <Text style={styles.sectionTitle}>
                 {t('Fastest Selling Products', 'सबसे ज़्यादा बिकने वाला सामान')}
               </Text>
-              <View style={styles.divideList}>
-                {(data?.topProducts || []).map((item: any, idx: number) => (
-                  <View key={item.name} style={styles.listItem}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={styles.rankBadge}>
-                        <Text style={styles.rankText}>#{idx + 1}</Text>
+              {(!data?.topProducts || data.topProducts.length === 0) ? (
+                <Text style={styles.emptyListText}>
+                  {t('No product sales recorded yet', 'अभी तक कोई सामान बिक्री नहीं हुई है')}
+                </Text>
+              ) : (
+                <View style={styles.divideList}>
+                  {data.topProducts.map((item: any, idx: number) => (
+                    <View key={item.name} style={styles.listItem}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                        <View style={styles.rankBadge}>
+                          <Text style={styles.rankText}>#{idx + 1}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.itemName} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.itemCategory}>{item.category || 'General'}</Text>
+                        </View>
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.itemName} numberOfLines={1}>
-                          {item.name}
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.itemRevenue}>
+                          {currencySymbol}
+                          {item.revenue.toLocaleString('en-IN')}
                         </Text>
-                        <Text style={styles.itemCategory}>{item.category || 'General'}</Text>
+                        <Text style={styles.itemUnits}>
+                          {item.qty} {t('units sold', 'बिक्री')}
+                        </Text>
                       </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.itemRevenue}>
-                        {currencySymbol}
-                        {item.revenue.toLocaleString('en-IN')}
-                      </Text>
-                      <Text style={styles.itemUnits}>
-                        {item.qty} {t('units sold', 'बिक्री')}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -399,26 +415,32 @@ export default function MobileReportsScreen() {
                 </View>
               </View>
 
-              <View style={styles.divideList}>
-                {(data?.gstSummary?.rateBuckets || []).map((rb: any) => (
-                  <View key={rb.rate} style={styles.listItem}>
-                    <View>
-                      <Text style={styles.slabTitle}>
-                        {rb.rate} {t('GST Slab', 'जीएसटी दर')}
-                      </Text>
-                      <Text style={styles.slabTurnover}>
-                        {t('Turnover: ', 'टर्नओवर: ')}
+              {(!data?.gstSummary?.rateBuckets || data.gstSummary.rateBuckets.length === 0) ? (
+                <Text style={styles.emptyListText}>
+                  {t('No GST tax slab data for this period', 'इस अवधि के लिए कोई जीएसटी स्लैब डेटा नहीं है')}
+                </Text>
+              ) : (
+                <View style={styles.divideList}>
+                  {data.gstSummary.rateBuckets.map((rb: any) => (
+                    <View key={rb.rate} style={styles.listItem}>
+                      <View>
+                        <Text style={styles.slabTitle}>
+                          {rb.rate} {t('GST Slab', 'जीएसटी दर')}
+                        </Text>
+                        <Text style={styles.slabTurnover}>
+                          {t('Turnover: ', 'टर्नओवर: ')}
+                          {currencySymbol}
+                          {rb.taxable.toLocaleString('en-IN')}
+                        </Text>
+                      </View>
+                      <Text style={styles.slabTax}>
                         {currencySymbol}
-                        {rb.taxable.toLocaleString('en-IN')}
+                        {rb.tax.toLocaleString('en-IN')}
                       </Text>
                     </View>
-                    <Text style={styles.slabTax}>
-                      {currencySymbol}
-                      {rb.tax.toLocaleString('en-IN')}
-                    </Text>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -707,4 +729,40 @@ const styles = StyleSheet.create({
   },
   agingTitle: { fontSize: 10.5, fontWeight: '700', color: '#475569' },
   agingVal: { fontSize: 13, fontWeight: '800', color: '#111827', marginTop: 2 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+    gap: 8,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#991B1B',
+    fontWeight: '500',
+  },
+  retryBtn: {
+    backgroundColor: '#991B1B',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  emptyListText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    paddingVertical: 14,
+    textAlign: 'center',
+  },
 });
