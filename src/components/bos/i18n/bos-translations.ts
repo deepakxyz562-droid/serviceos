@@ -278,6 +278,7 @@ export const BOS_TRANSLATIONS: Record<string, TranslationItem> = {
   'store.offers': { en: 'Offers', hi: 'ऑफ़र्स' },
   'store.cart': { en: 'Cart', hi: 'कार्ट' },
   'store.yourCart': { en: 'Your Cart', hi: 'आपकी कार्ट' },
+  'store.viewCart': { en: 'View Cart', hi: 'कार्ट देखें' },
   'store.clearCart': { en: 'Clear Cart', hi: 'खाली करें' },
   'store.signIn': { en: 'Sign In', hi: 'लॉग इन' },
   'store.signInOrders': { en: 'Sign In / Orders', hi: 'लॉग इन / ऑर्डर्स' },

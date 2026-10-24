@@ -88,6 +88,7 @@ const PostsListView = lazy(() =>
 const SocialAnalyticsView = lazy(() =>
   import('@/components/views/tenant/social-analytics-view').then((m) => ({ default: m.SocialAnalyticsView }))
 );
+import { BgosMetaTemplatesWorkstation } from './meta-templates-workstation';
 
 type SocialTab =
   | 'overview'
@@ -687,7 +688,7 @@ export function SocialMediaView() {
           { id: 'overview' as SocialTab, label: 'Overview', Icon: Layers },
           { id: 'content' as SocialTab, label: 'Content', Icon: Send },
           { id: 'calendar' as SocialTab, label: 'Calendar', Icon: Calendar },
-          { id: 'templates' as SocialTab, label: 'Templates', Icon: Sparkles },
+          { id: 'templates' as SocialTab, label: 'Meta Templates', Icon: MessageSquare },
           { id: 'analytics' as SocialTab, label: 'Analytics', Icon: BarChart3 },
           { id: 'ai-generator' as SocialTab, label: 'AI Post Generator', Icon: Sparkles },
           { id: 'accounts' as SocialTab, label: 'Social Media Accounts', Icon: Share2 },
@@ -740,11 +741,14 @@ export function SocialMediaView() {
         </Suspense>
       )}
 
+      {activeTab === 'templates' && (
+        <BgosMetaTemplatesWorkstation />
+      )}
+
       {/* ─── Overview & AI Generator Command Center ───────────────────── */}
       {(activeTab === 'overview' ||
         activeTab === 'ai-generator' ||
-        activeTab === 'calendar' ||
-        activeTab === 'templates') && (
+        activeTab === 'calendar') && (
         <div className="space-y-5">
           {/* ─── Row 1: 4 Screenshot KPI Summary Cards ─── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

@@ -26,7 +26,24 @@ export async function resolveOrderMessagingConfig(tenantId: string | null): Prom
     orderBy:[{isDefault:'desc'},{updatedAt:'desc'}],include:{credential:true},
   });
   const provider = providers.find(p=>p.status==='active'&&p.sendingEnabled);
-  if (!provider) throw new Error('ORDER_WHATSAPP_PROVIDER_UNAVAILABLE');
+  if (!provider) {
+    if (own.length === 0 && process.env.NODE_ENV !== 'test') {
+      const envToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_API_TOKEN;
+      const envPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+      if (envToken && envPhoneId) {
+        return {
+          accessToken: envToken,
+          phoneNumberId: envPhoneId,
+          wabaId: process.env.WHATSAPP_WABA_ID || process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+          customerTemplate: process.env.WHATSAPP_ORDER_CUSTOMER_TEMPLATE || 'bos_order_confirmed',
+          vendorTemplate: process.env.WHATSAPP_ORDER_VENDOR_TEMPLATE,
+          language: process.env.WHATSAPP_ORDER_TEMPLATE_LANGUAGE || 'en_US',
+          source: 'platform',
+        };
+      }
+    }
+    throw new Error('ORDER_WHATSAPP_PROVIDER_UNAVAILABLE');
+  }
   if (provider.provider !== 'meta_cloud_api') throw new Error('ORDER_WHATSAPP_PROVIDER_UNSUPPORTED');
   const config=parse(provider.configJson);
   const credential=parse(provider.credential?.encryptedData);
@@ -37,6 +54,6 @@ export async function resolveOrderMessagingConfig(tenantId: string | null): Prom
     accessToken,phoneNumberId,wabaId:config.wabaId||config.businessAccountId||credential.wabaId||credential.businessAccountId,
     customerTemplate:config.orderCustomerTemplate,
     vendorTemplate:config.orderVendorTemplate,
-    language:config.orderTemplateLanguage||'en',source:own.length?'tenant':'platform',
+    language:config.orderTemplateLanguage||'en_US',source:own.length?'tenant':'platform',
   };
 }

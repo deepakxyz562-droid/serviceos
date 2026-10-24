@@ -120,6 +120,10 @@ export function BosMarketingAiIntegrationsSettings({
   const { t, language, setLanguage } = useBosTranslation();
   const currencySymbol = storeSettings.currencySymbol || '₹';
   const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string, durationMs = 3000) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), durationMs);
+  };
 
   /* Marketing state (Matches Marketing & Promotions screenshot 1:1) */
   const [previewChannel, setPreviewChannel] = useState<'WhatsApp' | 'SMS' | 'Email'>('WhatsApp');

@@ -50,6 +50,11 @@ import type {
   InteractivePackageCard,
 } from '@/features/omnichannel/types';
 import { ConversationDetailPanel } from '@/features/omnichannel/components/conversation-detail-panel';
+import {
+  BGOS_CANONICAL_META_TEMPLATES,
+  isInsideMeta24HourWindow,
+  formatBgosMetaTemplateBody,
+} from '@/lib/bgos-meta-templates';
 
 const API_BASE = '/api/omnichannel';
 
@@ -1880,35 +1885,85 @@ export function OmnichannelView({ initialTab }: { initialTab?: 'conversations' |
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowTemplates((prev) => !prev)}
-                      className="pb-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 flex items-center gap-1"
-                    >
-                      <FileText className="size-3.5" /> Templates
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {selectedConversation?.channel === 'whatsapp' && (
+                        <div className="pb-1.5 hidden sm:flex items-center">
+                          {isInsideMeta24HourWindow(selectedConversation.lastMessageTime).isInside ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Meta 24h Active ({isInsideMeta24HourWindow(selectedConversation.lastMessageTime).formattedRemaining})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                              <Clock className="size-2.5" />
+                              Meta 24h Expired • Use Template
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setShowTemplates((prev) => !prev)}
+                        className="pb-1.5 text-xs font-semibold text-slate-500 hover:text-[#009F50] flex items-center gap-1 transition-colors"
+                      >
+                        <FileText className="size-3.5" /> Meta Templates
+                      </button>
+                    </div>
                   </div>
 
                   {showTemplates && (
-                    <div className="flex items-center gap-1.5 flex-wrap pb-1">
-                      {[
-                        { label: 'Booking Confirmed', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Your appointment with ${businessName} is confirmed for tomorrow at 10:00 AM.` },
-                        { label: 'Share Quote', text: `Hi ${selectedConversation.customerName.split(' ')[0]}! Here is your customized AC service estimate from ${businessName}.` },
-                        { label: 'Reschedule Options', text: `No problem! We have open slots tomorrow at 10:00 AM or 2:00 PM. Which time works best for you?` },
-                        { label: 'Review Request', text: `Thank you for choosing ${businessName}! If you loved your service today, we'd really appreciate a quick Google review.` },
-                      ].map((tpl) => (
-                        <button
-                          key={tpl.label}
-                          type="button"
-                          onClick={() => {
-                            setMessageInput(tpl.text);
-                            setShowTemplates(false);
-                          }}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-[#E8F8EF] text-[#009F50] hover:bg-[#009F50] hover:text-white transition-colors"
-                        >
-                          + {tpl.label}
-                        </button>
-                      ))}
+                    <div className="rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 p-2.5 mb-2 space-y-2">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                          <MessageSquare className="size-3 text-[#009F50]" />
+                          Meta Approved WhatsApp Templates
+                        </span>
+                        <span className="text-[10px] text-slate-400">Guaranteed 24/7 delivery</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                        {BGOS_CANONICAL_META_TEMPLATES.map((tpl) => {
+                          const firstName = selectedConversation?.customerName
+                            ? selectedConversation.customerName.split(' ')[0]
+                            : 'there';
+                          const dynamicValues = [
+                            firstName,
+                            businessName,
+                            'tomorrow',
+                            '10:00 AM',
+                            'AC Service & Repair',
+                            'https://fieseros.com/portal',
+                            '8421',
+                          ];
+                          const interpolated = formatBgosMetaTemplateBody(tpl, dynamicValues);
+
+                          return (
+                            <button
+                              key={tpl.name}
+                              type="button"
+                              onClick={() => {
+                                setMessageInput(interpolated);
+                                setShowTemplates(false);
+                                toast.success(`Meta template "${tpl.displayName}" applied`);
+                              }}
+                              className="text-left p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 hover:border-[#009F50] hover:shadow-2xs transition group"
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-[#009F50] truncate">
+                                  {tpl.displayName}
+                                </span>
+                                <Badge className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold py-0 h-4 px-1 shrink-0">
+                                  {tpl.category}
+                                </Badge>
+                              </div>
+                              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                                {interpolated}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 

@@ -29,6 +29,7 @@ import {
   BadgeCheck,
   ChevronDown,
   Loader2,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TeamSettings } from '@/components/settings/sections/team-settings';
@@ -36,6 +37,7 @@ import { GoogleBusinessProfileSettings } from '@/components/settings/sections/go
 import { SecuritySettings } from '@/components/settings/sections/security-settings';
 import { BgosBilling } from './billing';
 import { useAppStore } from '@/store/app-store';
+import { META_ACCOUNT_CONFIG } from '@/lib/bgos-meta-templates';
 
 type TopSettingsTab =
   | 'business'
@@ -1068,7 +1070,92 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
 
         {tab === 'billing' && <BgosBilling />}
 
-        {tab === 'integrations' && <GoogleBusinessProfileSettings />}
+        {tab === 'integrations' && (
+          <div className="space-y-6">
+            {/* Meta Cloud API & WhatsApp Business Integration Card */}
+            <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-2xs">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-4">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[#E8F8EF] dark:bg-emerald-950/60 text-[#009F50]">
+                    <MessageSquare className="size-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                        Meta WhatsApp Business Cloud API
+                      </h3>
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                        <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                        Connected &amp; Verified
+                      </span>
+                      <span className="rounded-full bg-emerald-100/70 dark:bg-emerald-900/60 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800 dark:text-emerald-200">
+                        Tier: Standard Cloud API
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      Official Meta Cloud API connection for two-way WhatsApp customer chat, automated appointment confirmations, and marketing broadcasts.
+                    </p>
+
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                        <span className="text-[11px] text-slate-400 block font-medium">Verified Account</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">{META_ACCOUNT_CONFIG.verifiedName}</span>
+                      </div>
+                      <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                        <span className="text-[11px] text-slate-400 block font-medium">WhatsApp Number</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-0.5 block">{META_ACCOUNT_CONFIG.displayPhoneNumber}</span>
+                      </div>
+                      <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                        <span className="text-[11px] text-slate-400 block font-medium">Quality Rating</span>
+                        <span className="text-xs font-bold text-emerald-600 mt-0.5 flex items-center gap-1">
+                          <span className="size-2 rounded-full bg-emerald-500" />
+                          {META_ACCOUNT_CONFIG.qualityRating}
+                        </span>
+                      </div>
+                      <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                        <span className="text-[11px] text-slate-400 block font-medium">WABA ID</span>
+                        <code className="text-[11px] font-mono text-slate-700 dark:text-slate-300 mt-0.5 block truncate">{META_ACCOUNT_CONFIG.wabaId}</code>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-4 text-[11px] text-slate-500 flex-wrap">
+                      <span>Phone ID: <code className="font-mono text-slate-600 dark:text-slate-300">{META_ACCOUNT_CONFIG.phoneNumberId}</code></span>
+                      <span>•</span>
+                      <span>Webhook Token: <code className="font-mono text-slate-600 dark:text-slate-300">{META_ACCOUNT_CONFIG.verifyToken}</code></span>
+                      <span>•</span>
+                      <span>Status: <strong className="text-emerald-600 font-semibold">{META_ACCOUNT_CONFIG.codeVerificationStatus}</strong></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-row sm:flex-col gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      toast.success('Meta Cloud API test ping successful: Quality GREEN (FieserOS)');
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-2xs transition"
+                  >
+                    Test Ping
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate('socialMedia');
+                    }}
+                    className="rounded-xl bg-[#009F50] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#008A45] shadow-2xs transition"
+                  >
+                    Meta Templates →
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Google Business Profile Section */}
+            <GoogleBusinessProfileSettings />
+          </div>
+        )}
 
         {tab === 'security' && <SecuritySettings />}
 

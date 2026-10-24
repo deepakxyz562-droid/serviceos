@@ -1353,7 +1353,7 @@ export function StoreClient({
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-xs font-black">
                   {totalItems}
                 </span>
-                <span className="text-sm">{t('store.cart', 'View Cart', 'कार्ट देखें')}</span>
+                <span className="text-sm">{t('store.viewCart', 'View Cart', 'कार्ट देखें')}</span>
               </div>
               <div className="flex items-center gap-1.5 text-base font-black">
                 <span>{currencySymbol}{grandTotal.toFixed(2)}</span>

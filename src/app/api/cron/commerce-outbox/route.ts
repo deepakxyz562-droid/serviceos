@@ -38,6 +38,7 @@ export async function POST(req: NextRequest){
       // Scheduled updates cannot assume an open WhatsApp customer-service window.
       const provider=await resolveOrderMessagingConfig(business.tenantId);
       const templateName=job.audience==='vendor'?provider.vendorTemplate:provider.customerTemplate;
+      if(!templateName) throw new Error('Approved order notification template not configured');
       const template=templateName ? {
         name: templateName,
         language: provider.language,

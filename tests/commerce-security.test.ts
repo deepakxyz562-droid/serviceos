@@ -18,7 +18,7 @@ describe('guest order access',()=>{
  });
 });
 describe('server checkout pricing',()=>{
- const config={catalogJson:JSON.stringify([{id:'rice',name:'Rice',price:99.95},{id:'hidden',name:'Hidden',price:1,isActive:false}]),fieldsJson:JSON.stringify({billing:{taxRate:5,serviceChargeRate:2}})};
+const config={catalogJson:JSON.stringify([{id:'rice',name:'Rice',price:99.95},{id:'hidden',name:'Hidden',price:1,isActive:false}]),fieldsJson:JSON.stringify({billing:{enableGst:true,taxRate:5,serviceChargeRate:2}})};
  it('uses configured prices and rounds taxes in minor units',()=>{
   const quote=priceOrder(config,[{productId:'rice',qty:2,price:0.01,amount:0.02}],true);
   expect(quote).toMatchObject({subtotalMinor:19990,taxMinor:1000,serviceMinor:400,totalMinor:21390});

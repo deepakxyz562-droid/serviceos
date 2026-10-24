@@ -145,12 +145,46 @@ export async function POST(req: NextRequest) {
     // Resolve active Meta Cloud API provider from Superadmin / tenant
     const provider = await resolveOrderMessagingConfig(business.tenantId || null);
 
-    const result = await dispatchTransactionalWhatsApp(
+    let result = await dispatchTransactionalWhatsApp(
       phone,
       fallbackMessage,
       finalTemplate,
       provider
     );
+
+    // If template send failed because new template is still in Meta review,
+    // retry immediately with the user's approved 'invoice_payment_link' template!
+    if (
+      !result.success &&
+      finalTemplate &&
+      (finalTemplate.name === 'bos_tax_invoice' || templateType === 'bos_tax_invoice' || templateType === 'tax_invoice')
+    ) {
+      const approvedFallbackTemplate: OrderMessageTemplate = {
+        name: 'invoice_payment_link',
+        language: 'en_US',
+        parameters: [
+          templateData?.customerName || 'Customer',
+          templateData?.invoiceNumber || 'INV-1001',
+          templateData?.businessName || business.name,
+          new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: templateData?.currency || business.currency || 'INR',
+          }).format(Number(templateData?.total || 0)),
+          templateData?.paymentStatus === 'PAID' ? 'PAID' : (templateData?.dueDate || 'Immediate'),
+          templateData?.invoiceUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.com'}/invoice/${templateData?.invoiceNumber}`,
+        ],
+      };
+      const retryResult = await dispatchTransactionalWhatsApp(
+        phone,
+        fallbackMessage,
+        approvedFallbackTemplate,
+        provider
+      );
+      if (retryResult.success) {
+        result = retryResult;
+        finalTemplate = approvedFallbackTemplate;
+      }
+    }
 
     if (!result.success) {
       const waDeepLink = `https://wa.me/${cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone}?text=${encodeURIComponent(fallbackMessage)}`;

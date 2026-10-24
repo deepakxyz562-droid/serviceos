@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { StoreClient } from '@/app/store/[slug]/store-client';
+
+afterEach(cleanup);
 
 describe('Storefront Online Payment & UPI Checkout', () => {
   const mockCatalog = [
@@ -37,6 +39,9 @@ describe('Storefront Online Payment & UPI Checkout', () => {
       }
       return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
     });
+    localStorage.clear();
+    localStorage.setItem('store_language', 'en');
+    window.location.hash = '';
   });
 
   it('renders payment method selector with UPI / QR code and Pay at Counter when upiId is provided', () => {
@@ -69,6 +74,10 @@ describe('Storefront Online Payment & UPI Checkout', () => {
     expect(screen.getByText('Pay Online')).toBeTruthy();
     expect(screen.getByText('Pay at Counter')).toBeTruthy();
 
+    // Confirm trust shield if present to unlock UPI QR
+    const unlockBtn = screen.queryByRole('button', { name: /Unlock UPI Payment/i });
+    if (unlockBtn) fireEvent.click(unlockBtn);
+
     // Verify Merchant UPI ID and custom QR code
     expect(screen.getByText('merchant@okhdfcbank')).toBeTruthy();
     const qrImg = screen.getByAltText('Shop UPI QR Code') as HTMLImageElement;
@@ -82,7 +91,7 @@ describe('Storefront Online Payment & UPI Checkout', () => {
     expect(screen.getByPlaceholderText(/e\.g\. 4289xxxxxxxx/i)).toBeTruthy();
 
     // Verify online submit button
-    expect(screen.getByText(/Place Order & Pay via UPI/i)).toBeTruthy();
+    expect(screen.getByText(/Place Order & Pay/i)).toBeTruthy();
   });
 
   it('switches to Pay at Counter mode when the Pay at Counter option is clicked', () => {
@@ -110,7 +119,7 @@ describe('Storefront Online Payment & UPI Checkout', () => {
     fireEvent.click(counterOption);
 
     // Verify Pay at Counter action button is rendered
-    expect(screen.getByText(/Place Order • Pay at Counter/i)).toBeTruthy();
+    expect(screen.getByText(/Place Order • Cash/i)).toBeTruthy();
   });
 
   it('generates dynamic UPI QR code when merchant has upiId but no custom QR image', () => {
@@ -133,6 +142,10 @@ describe('Storefront Online Payment & UPI Checkout', () => {
     const addButtons = screen.getAllByRole('button', { name: /Add/i });
     fireEvent.click(addButtons[0]);
     fireEvent.click(screen.getByText(/View Cart/i));
+
+    // Confirm trust shield if present to unlock dynamic QR
+    const unlockBtn = screen.queryByRole('button', { name: /Unlock UPI Payment/i });
+    if (unlockBtn) fireEvent.click(unlockBtn);
 
     // Dynamic QR URL generated via qrserver API
     const qrImg = screen.getByAltText('Shop UPI QR Code') as HTMLImageElement;

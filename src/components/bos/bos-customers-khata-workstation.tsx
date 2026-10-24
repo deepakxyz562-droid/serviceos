@@ -45,7 +45,7 @@ type BosCustomersKhataWorkstationProps = {
   khataTransactions: BosKhataTransaction[];
   initialOpenAddCustomer?: boolean;
   demoMode?: boolean;
-  onAddCustomer: (customer: Omit<BosCustomer, 'id'>) => Promise<void>;
+  onAddCustomer: (customer: Omit<BosCustomer, 'id'>) => Promise<unknown> | void;
   onRecordKhataEntry: (entry: {
     customerId: string;
     customerName: string;

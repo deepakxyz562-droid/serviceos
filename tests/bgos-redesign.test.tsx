@@ -317,7 +317,7 @@ it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview c
   expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Content$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Calendar$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Templates$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^(Meta )?Templates$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /AI Post Generator/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /Social Media Accounts/i })).toBeDefined();
