@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
-import { canUseInbox } from '@/lib/omnichannel/access';
+import { canUseInbox } from '@/lib/conversation-access';
 import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {

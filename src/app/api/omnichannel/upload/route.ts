@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { uploadFile, STORAGE_BUCKETS } from '@/lib/supabase-storage';
-import { canUseInbox } from '@/lib/omnichannel/access';
+import { canUseInbox } from '@/lib/conversation-access';
 
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',
