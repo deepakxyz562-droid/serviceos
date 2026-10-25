@@ -70,6 +70,7 @@ import {
 import {
   BUSINESS_TYPE_LABELS,
   DEFAULT_CHANNELS_FOR_BUSINESS_TYPE,
+  SALES_CHANNEL_INFO,
   resolveBlueprintCapabilities,
 } from '../../../shared/blueprint/presets';
 import {
@@ -84,7 +85,46 @@ import type {
 import { authFetch } from '@/lib/client-auth';
 import { isValidUpiId, sanitizeUpiId } from '@/lib/upi-qr';
 import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
-import type { BosLanguage } from '@/components/bos/i18n/bos-translations';
+const APPLICABLE_CHANNELS_BY_TYPE: Record<BusinessType, SalesChannel[]> = {
+  services: ['at_location', 'whatsapp', 'b2b', 'in_store'],
+  manufacturing: ['b2b', 'at_location', 'whatsapp', 'in_store'],
+  restaurant: ['dine_in', 'delivery', 'online', 'whatsapp'],
+  salon: ['in_store', 'online', 'whatsapp'],
+  retail: ['in_store', 'online', 'whatsapp', 'delivery'],
+  grocery: ['in_store', 'delivery', 'whatsapp', 'online'],
+  creative: ['online', 'at_location', 'whatsapp'],
+  freelancer: ['online', 'at_location', 'whatsapp', 'b2b'],
+  online_store: ['online', 'delivery', 'whatsapp'],
+  wholesale: ['b2b', 'whatsapp', 'in_store', 'online'],
+  other: ['in_store', 'online', 'whatsapp', 'at_location', 'b2b'],
+};
+
+function getCapabilitiesSummary(bp: BusinessType): string[] {
+  switch (bp) {
+    case 'services':
+      return ['Quotes & Estimates', 'Tax Invoicing', 'Jobs & Bookings', 'Khata / Credit', 'Expense Tracking'];
+    case 'salon':
+      return ['Appointments & Bookings', 'POS Counter', 'Services Catalog', 'Loyalty', 'Invoicing'];
+    case 'restaurant':
+      return ['Dine-In Tables', 'Kitchen KOT', 'Online Food Ordering', 'POS Register', 'Expenses'];
+    case 'grocery':
+      return ['Counter POS', 'Stock & Inventory', 'Customer Khata', 'Online Store', 'Tax Invoicing'];
+    case 'retail':
+      return ['Counter POS', 'Inventory Management', 'Online Store', 'Customer Khata', 'Tax Invoicing'];
+    case 'creative':
+      return ['Portfolio & Showreel', 'Project Quotes', 'Bookings & Shoots', 'Tax Invoicing', 'WhatsApp Inquiries'];
+    case 'manufacturing':
+      return ['B2B Orders', 'Stock & Materials', 'Quotes & Estimates', 'Khata', 'Tax Invoicing'];
+    case 'wholesale':
+      return ['B2B Accounts', 'Bulk Inventory', 'Price Quotes', 'Customer Khata', 'Tax Invoicing'];
+    case 'freelancer':
+      return ['Proposals & Quotes', 'Client Invoices', 'Consultation Bookings', 'Expense Tracking'];
+    case 'online_store':
+      return ['Online Storefront', 'Catalog Management', 'Order Processing', 'Marketing'];
+    default:
+      return ['POS Register', 'Catalog & Stock', 'Invoicing', 'Customer Management'];
+  }
+}
 
 type BosMarketingAiIntegrationsSettingsProps = {
   mode: 'marketing' | 'aiAssistant' | 'integrations' | 'settings';
@@ -353,6 +393,7 @@ export function BosMarketingAiIntegrationsSettings({
     | 'language'
     | 'staff'
   >('businessInfo');
+  const [showChangeIndustry, setShowChangeIndustry] = useState(false);
 
   /* Staff & Multi-User state */
   const [staffList, setStaffList] = useState<any[]>(() =>
@@ -3748,176 +3789,268 @@ export function BosMarketingAiIntegrationsSettings({
           )}
 
           {/* TAB 6: Business Type & Blueprint */}
-          {settingsSection === 'businessType' && (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EDF4F0] pb-3.5">
-                <div>
-                  <h3 className="text-[16px] font-extrabold text-[#111827]">
-                    Business Blueprint, Channels &amp; Country Pack
-                  </h3>
-                  <p className="text-[12px] text-[#64748B]">
-                    Adapt POS, Dining, Appointments, Tax Rules &amp; Refund Policies to your industry and market.
-                  </p>
-                </div>
-                <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                  {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.flag}{' '}
-                  {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.name} •{' '}
-                  {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.tax.label}
-                </span>
-              </div>
+          {settingsSection === 'businessType' && (() => {
+            const currentBp = (storeSettings.blueprintType || 'grocery') as BusinessType;
+            const currentMeta = BUSINESS_TYPE_LABELS[currentBp] || BUSINESS_TYPE_LABELS.other;
+            const isAppointmentBased = ['services', 'salon', 'creative', 'freelancer'].includes(currentBp);
+            const activeCapsSummary = getCapabilitiesSummary(currentBp);
+            const activeChannels = (storeSettings.salesChannels && storeSettings.salesChannels.length > 0)
+              ? storeSettings.salesChannels
+              : (DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[currentBp] || ['in_store']);
+            const applicableChannels = APPLICABLE_CHANNELS_BY_TYPE[currentBp] || APPLICABLE_CHANNELS_BY_TYPE.other;
 
-              {/* Blueprint Industry Presets */}
-              <div>
-                <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                  Industry Blueprint Preset
-                </label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {(
-                    ['grocery', 'retail', 'restaurant', 'salon', 'services', 'wholesale'] as BusinessType[]
-                  ).map((bp) => {
-                    const meta = BUSINESS_TYPE_LABELS[bp];
-                    const active = (storeSettings.blueprintType || 'grocery') === bp;
-                    return (
+            return (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EDF4F0] pb-3.5">
+                  <div>
+                    <h3 className="text-[16px] font-extrabold text-[#111827]">
+                      Business Profile &amp; Operating Model
+                    </h3>
+                    <p className="text-[12px] text-[#64748B]">
+                      Active industry blueprint, tailored sales channels and market rules for your business.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.flag}{' '}
+                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.name} •{' '}
+                    {COUNTRY_PACKS[storeSettings.countryCode || 'IN']?.tax.label}
+                  </span>
+                </div>
+
+                {/* Active Business Profile Card */}
+                <div className="rounded-2xl border border-[#DCE9E3] bg-gradient-to-br from-white via-[#F8FCFA] to-[#EBF5F0] p-4.5 sm:p-5 shadow-2xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-3.5">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white border border-[#DCE9E3] text-2xl shadow-2xs">
+                        {currentMeta.icon}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-[15px] font-black text-[#111827]">
+                            {currentMeta.label}
+                          </h4>
+                          <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
+                            Active Profile
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[12px] text-[#475569]">
+                          {currentMeta.subtitle}
+                        </p>
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {activeCapsSummary.map((cap) => (
+                            <span
+                              key={cap}
+                              className="inline-flex items-center gap-1 rounded-lg bg-white border border-[#DCE9E3] px-2 py-0.5 text-[10.5px] font-semibold text-[#334155]"
+                            >
+                              <Check className="h-3 w-3 text-[#0A6847]" />
+                              {cap}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="sm:shrink-0 flex items-center gap-2">
                       <button
-                        key={bp}
                         type="button"
-                        onClick={() => {
-                          const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bp];
-                          const resolved = resolveBlueprintCapabilities(bp, channels);
-                          setSettingsBusinessType(meta.label);
-                          void onUpdateStoreSettings({
-                            businessType: meta.label,
-                            blueprintType: bp,
-                            salesChannels: channels,
-                            capabilities: resolved as unknown as Record<string, boolean>,
-                          });
-                          setToast(`Applied ${meta.label} Blueprint & Capabilities`);
-                          setTimeout(() => setToast(null), 2500);
-                        }}
-                        className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-[12px] transition cursor-pointer ${
-                          active
-                            ? 'border-[#0A6847] bg-[#E6F6F0] font-bold text-[#064E3B]'
-                            : 'border-[#DCE9E3] bg-white font-semibold text-[#334155] hover:border-[#0A6847]'
-                        }`}
+                        onClick={() => setShowChangeIndustry(!showChangeIndustry)}
+                        className="rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-bold text-[#0A6847] hover:border-[#0A6847] hover:bg-[#E6F6F0] transition shadow-2xs cursor-pointer"
                       >
-                        <span className="text-[15px]">{meta.icon}</span>
-                        <span className="truncate">{meta.label}</span>
+                        {showChangeIndustry ? 'Close Selector' : 'Change Industry'}
                       </button>
-                    );
-                  })}
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Country & Tax Pack Selector */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {/* Expandable Switcher (Shown only on explicit user request) */}
+                {showChangeIndustry && (
+                  <div className="rounded-2xl border border-[#A7D7BF] bg-[#F4FBF7] p-4.5 space-y-3 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-[13px] font-bold text-[#064E3B]">Select New Business Blueprint</h4>
+                        <p className="text-[11px] text-[#475569]">
+                          Switching your industry preset will automatically reconfigure your sidebar tabs, active capabilities, and sales channels.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowChangeIndustry(false)}
+                        className="rounded-lg p-1 text-[#64748B] hover:bg-white transition"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {(
+                        [
+                          'services',
+                          'manufacturing',
+                          'retail',
+                          'grocery',
+                          'restaurant',
+                          'salon',
+                          'creative',
+                          'freelancer',
+                          'wholesale',
+                          'online_store',
+                          'other',
+                        ] as BusinessType[]
+                      ).map((bp) => {
+                        const meta = BUSINESS_TYPE_LABELS[bp];
+                        const isCurrent = currentBp === bp;
+                        return (
+                          <button
+                            key={bp}
+                            type="button"
+                            onClick={() => {
+                              const channels = DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[bp] || ['in_store'];
+                              const resolved = resolveBlueprintCapabilities(bp, channels);
+                              setSettingsBusinessType(meta.label);
+                              void onUpdateStoreSettings({
+                                businessType: meta.label,
+                                blueprintType: bp,
+                                salesChannels: channels,
+                                capabilities: resolved as unknown as Record<string, boolean>,
+                              });
+                              setShowChangeIndustry(false);
+                              setToast(`Switched to ${meta.label} Blueprint`);
+                              setTimeout(() => setToast(null), 2500);
+                            }}
+                            className={`flex items-start gap-2.5 rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                              isCurrent
+                                ? 'border-[#0A6847] bg-[#E6F6F0] text-[#064E3B] font-bold ring-2 ring-[#0A6847]/20'
+                                : 'border-[#DCE9E3] bg-white text-[#334155] hover:border-[#0A6847] hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className="text-[20px] shrink-0 mt-0.5">{meta.icon}</span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[12px] font-bold truncate">{meta.label}</p>
+                              <p className="text-[10.5px] text-[#64748B] line-clamp-1">{meta.subtitle}</p>
+                            </div>
+                            {isCurrent && <CheckCircle2 className="h-4 w-4 text-[#0A6847] shrink-0 mt-0.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Country & Tax Pack Selector + Contextual Cancellation & Refund Policy */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Country &amp; Tax Pack
+                    </label>
+                    <select
+                      value={storeSettings.countryCode || 'IN'}
+                      onChange={(e) => {
+                        const code = e.target.value as CountryCode;
+                        const pack = getCountryPack(code);
+                        void onUpdateStoreSettings({
+                          countryCode: code,
+                          currencySymbol: pack.currency.symbol,
+                        });
+                        setToast(
+                          `Switched to ${pack.flag} ${pack.name} (${pack.currency.code} • ${pack.tax.label} ${pack.tax.defaultRate}%)`,
+                        );
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                    >
+                      {(['IN', 'US', 'CA', 'AU', 'GB', 'GLOBAL'] as CountryCode[]).map((c) => {
+                        const pk = COUNTRY_PACKS[c];
+                        return (
+                          <option key={c} value={c}>
+                            {pk.flag} {pk.name} ({pk.currency.symbol} {pk.currency.code} • {pk.tax.label})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Cancellation &amp; Refund Policy
+                    </label>
+                    <select
+                      value={
+                        storeSettings.cancellationPolicy ||
+                        (isAppointmentBased ? '24h_before_appointment' : 'before_preparation')
+                      }
+                      onChange={(e) => {
+                        const policy = e.target.value as NonNullable<
+                          BosStoreSettings['cancellationPolicy']
+                        >;
+                        void onUpdateStoreSettings({ cancellationPolicy: policy });
+                        setToast(`Updated order cancellation policy`);
+                        setTimeout(() => setToast(null), 2500);
+                      }}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
+                    >
+                      {isAppointmentBased ? (
+                        <>
+                          <option value="24h_before_appointment">Allow cancel 24h before appointment / visit</option>
+                          <option value="30m_before_appointment">Allow cancel 30m before appointment / visit</option>
+                          <option value="before_confirmation">Allow cancel before appointment confirmed</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="before_preparation">Allow cancel before preparing / packed</option>
+                          <option value="before_confirmation">Allow cancel before order accepted</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Active Sales Channels Toggles (Contextual to Industry) */}
                 <div>
-                  <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                    Country &amp; Tax Pack
-                  </label>
-                  <select
-                    value={storeSettings.countryCode || 'IN'}
-                    onChange={(e) => {
-                      const code = e.target.value as CountryCode;
-                      const pack = getCountryPack(code);
-                      void onUpdateStoreSettings({
-                        countryCode: code,
-                        currencySymbol: pack.currency.symbol,
-                      });
-                      setToast(
-                        `Switched to ${pack.flag} ${pack.name} (${pack.currency.code} • ${pack.tax.label} ${pack.tax.defaultRate}%)`,
-                      );
-                      setTimeout(() => setToast(null), 2500);
-                    }}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
-                  >
-                    {(['IN', 'US', 'CA', 'AU', 'GB', 'GLOBAL'] as CountryCode[]).map((c) => {
-                      const pk = COUNTRY_PACKS[c];
+                  <div className="mb-1.5">
+                    <label className="block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
+                      Active Sales Channels
+                    </label>
+                    <p className="text-[11px] text-[#64748B]">
+                      Channels relevant to {currentMeta.label}. Toggle channels through which you accept orders, bookings and inquiries.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {applicableChannels.map((chKey) => {
+                      const info = SALES_CHANNEL_INFO[chKey];
+                      const isEnabled = activeChannels.includes(chKey);
                       return (
-                        <option key={c} value={c}>
-                          {pk.flag} {pk.name} ({pk.currency.symbol} {pk.currency.code} • {pk.tax.label})
-                        </option>
+                        <button
+                          key={chKey}
+                          type="button"
+                          onClick={() => {
+                            const nextChannels = isEnabled
+                              ? activeChannels.filter((x) => x !== chKey)
+                              : [...activeChannels, chKey];
+                            if (!nextChannels.length) return;
+                            const resolved = resolveBlueprintCapabilities(currentBp, nextChannels);
+                            void onUpdateStoreSettings({
+                              salesChannels: nextChannels,
+                              capabilities: resolved as unknown as Record<string, boolean>,
+                            });
+                            setToast(`${isEnabled ? 'Disabled' : 'Enabled'} ${info.label}`);
+                            setTimeout(() => setToast(null), 2000);
+                          }}
+                          className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[12px] font-semibold transition cursor-pointer shadow-2xs ${
+                            isEnabled
+                              ? 'border-[#0A6847] bg-[#0A6847] text-white shadow-xs'
+                              : 'border-[#DCE9E3] bg-white text-[#475569] hover:border-[#0A6847]'
+                          }`}
+                          title={info.description}
+                        >
+                          <span>{info.icon}</span>
+                          <span>{isEnabled ? '✓ ' : '+ '}</span>
+                          <span>{info.label}</span>
+                        </button>
                       );
                     })}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                    Cancellation &amp; Refund Policy
-                  </label>
-                  <select
-                    value={storeSettings.cancellationPolicy || 'before_preparation'}
-                    onChange={(e) => {
-                      const policy = e.target.value as NonNullable<
-                        BosStoreSettings['cancellationPolicy']
-                      >;
-                      void onUpdateStoreSettings({ cancellationPolicy: policy });
-                      setToast(`Updated order cancellation policy`);
-                      setTimeout(() => setToast(null), 2500);
-                    }}
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827]"
-                  >
-                    <option value="before_confirmation">Allow cancel before order accepted</option>
-                    <option value="before_preparation">Allow cancel before preparing / packed</option>
-                    <option value="30m_before_appointment">Allow cancel 30m before appointment</option>
-                    <option value="24h_before_appointment">Allow cancel 24h before appointment</option>
-                  </select>
+                  </div>
                 </div>
               </div>
-
-              {/* Active Sales Channels Toggles */}
-              <div>
-                <label className="mb-1.5 block text-[11.5px] font-bold uppercase tracking-wider text-[#64748B]">
-                  Active Sales Channels
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      { id: 'counter_pos', label: 'Counter POS' },
-                      { id: 'online_store', label: 'Online Store' },
-                      { id: 'whatsapp', label: 'WhatsApp Orders' },
-                      { id: 'delivery', label: 'Local Delivery' },
-                      { id: 'pickup', label: 'Click & Collect' },
-                      { id: 'dine_in', label: 'Dine-In / Tables' },
-                      { id: 'appointments', label: 'Appointments' },
-                    ] as Array<{ id: SalesChannel; label: string }>
-                  ).map((ch) => {
-                    const currentChannels =
-                      storeSettings.salesChannels ||
-                      DEFAULT_CHANNELS_FOR_BUSINESS_TYPE[
-                        storeSettings.blueprintType || 'grocery'
-                      ];
-                    const isEnabled = currentChannels.includes(ch.id);
-                    return (
-                      <button
-                        key={ch.id}
-                        type="button"
-                        onClick={() => {
-                          const nextChannels = isEnabled
-                            ? currentChannels.filter((x) => x !== ch.id)
-                            : [...currentChannels, ch.id];
-                          const bp = storeSettings.blueprintType || 'grocery';
-                          const resolved = resolveBlueprintCapabilities(bp, nextChannels);
-                          void onUpdateStoreSettings({
-                            salesChannels: nextChannels,
-                            capabilities: resolved as unknown as Record<string, boolean>,
-                          });
-                        }}
-                        className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition cursor-pointer ${
-                          isEnabled
-                            ? 'border-[#0A6847] bg-[#0A6847] text-white'
-                            : 'border-[#DCE9E3] bg-white text-[#475569]'
-                        }`}
-                      >
-                        {isEnabled ? '✓ ' : '+ '}
-                        {ch.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 7: Documents & Legal */}
           {settingsSection === 'documents' && (
