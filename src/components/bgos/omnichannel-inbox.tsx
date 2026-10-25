@@ -591,17 +591,20 @@ export function OmnichannelView({
   initialTab,
   initialConversations,
   initialVisitors,
+  isDemo: isDemoProp,
 }: {
   initialTab?: 'conversations' | 'visitors' | 'tickets';
   initialConversations?: Conversation[];
   initialVisitors?: LiveVisitorTelemetry[];
+  isDemo?: boolean;
 } = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
   const auth = useAppStore((state) => state.auth);
   const businessName = auth.tenant?.name || auth.workspace?.name || 'our team';
+  const isDemo = Boolean(isDemoProp || (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('demo') === 'true' || window.location.search.includes('isDemo=true'))));
 
   const [conversations, setConversations] = useState<Conversation[]>(
-    initialConversations || INITIAL_CONVERSATIONS
+    initialConversations ?? (isDemo ? INITIAL_CONVERSATIONS : [])
   );
   const [selectedConversationId, setSelectedConversationId] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -611,7 +614,7 @@ export function OmnichannelView({
       const sess = p.get('session');
       if (sess) return `live_chat_${sess}`;
     }
-    return 'conv_priya_sharma';
+    return initialConversations?.[0]?.id || (isDemo ? 'conv_priya_sharma' : '');
   });
   const [activeChannelPill, setActiveChannelPill] = useState<string>(() => {
     if (typeof window !== 'undefined') {
@@ -645,9 +648,11 @@ export function OmnichannelView({
 
   // Live Visitor Radar state
   const [liveVisitors, setLiveVisitors] = useState<LiveVisitorTelemetry[]>(
-    initialVisitors || LIVE_VISITORS_DATA
+    initialVisitors ?? (isDemo ? LIVE_VISITORS_DATA : [])
   );
-  const [selectedVisitorId, setSelectedVisitorId] = useState<string>('vis_8487');
+  const [selectedVisitorId, setSelectedVisitorId] = useState<string>(
+    () => initialVisitors?.[0]?.id || (isDemo ? 'vis_8487' : '')
+  );
   const [visitorSubTab, setVisitorSubTab] = useState<'all' | 'high_intent' | 'chatting' | 'idle'>('all');
   const [visitorDeviceFilter, setVisitorDeviceFilter] = useState<'all' | 'desktop' | 'mobile'>('all');
   const [visitorReferralFilter, setVisitorReferralFilter] = useState<'all' | 'organic' | 'maps' | 'instagram' | 'direct'>('all');
@@ -695,10 +700,13 @@ export function OmnichannelView({
   };
 
   const handleDispatchNudge = async (visitor: LiveVisitorTelemetry) => {
-    setNudgeSent((prev) => ({ ...prev, [visitor.id]: true }));
-    toast.success(`AI Nudge dispatched to ${visitor.name}!`);
+    if (isDemo) {
+      setNudgeSent((prev) => ({ ...prev, [visitor.id]: true }));
+      toast.success(`AI Nudge dispatched to ${visitor.name}!`);
+      return;
+    }
     try {
-      await fetch('/api/omnichannel/visitors/nudge', {
+      const res = await fetch('/api/omnichannel/visitors/nudge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -707,8 +715,15 @@ export function OmnichannelView({
           rule: visitor.aiNudge.rule,
         }),
       });
-    } catch (err) {
-      console.error('Visitor nudge audit error:', err);
+      if (res.ok) {
+        setNudgeSent((prev) => ({ ...prev, [visitor.id]: true }));
+        toast.success(`AI Nudge dispatched to ${visitor.name}!`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || `Failed to dispatch nudge to ${visitor.name}`);
+      }
+    } catch {
+      toast.error(`Network error dispatching nudge to ${visitor.name}`);
     }
   };
 
@@ -978,7 +993,7 @@ export function OmnichannelView({
     }
   };
 
-  const handleToggleCloseConversation = (conv: Conversation) => {
+  const handleToggleCloseConversation = async (conv: Conversation) => {
     const nextStatus = conv.status === 'closed' ? 'active' : 'closed';
     setConversations((prev) =>
       prev.map((c) =>
@@ -987,12 +1002,26 @@ export function OmnichannelView({
           : c
       )
     );
-    fetch(`/api/conversations/${conv.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: nextStatus }),
-    }).catch(() => {});
-    toast.success(nextStatus === 'closed' ? 'Conversation marked as closed' : 'Conversation reopened');
+    try {
+      const res = await fetch(`/api/conversations/${conv.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) {
+        setConversations((prev) =>
+          prev.map((c) => (c.id === conv.id ? { ...c, status: conv.status } : c))
+        );
+        toast.error('Failed to update conversation status on server');
+        return;
+      }
+      toast.success(nextStatus === 'closed' ? 'Conversation marked as closed' : 'Conversation reopened');
+    } catch {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, status: conv.status } : c))
+      );
+      toast.error('Network error updating conversation status');
+    }
   };
 
   const handleGenerateAiReply = async () => {
@@ -1020,9 +1049,9 @@ export function OmnichannelView({
       // Dynamic fallback based on customer inquiry context
       const lastText = lastMsg.toLowerCase();
       if (lastText.includes('tomorrow') || lastText.includes('time') || lastText.includes('slot')) {
-        draft = `Hi ${firstName}! I have reserved tomorrow at 10:00 AM for you. Our specialist will confirm with you 30 minutes before arrival.`;
+        draft = `Hi ${firstName}! I would be happy to check our calendar for tomorrow around 10:00 AM. Would you like me to reserve that time for you?`;
       } else if (lastText.includes('quote') || lastText.includes('pricing') || lastText.includes('cost')) {
-        draft = `Hi ${firstName}! Here is a tailored estimate from ${businessName} based on your requirements. Let me know if you would like to proceed!`;
+        draft = `Hi ${firstName}! I can prepare a personalized estimate from ${businessName}. Could you share a few more details about what you need?`;
       }
     }
 
@@ -1151,7 +1180,21 @@ export function OmnichannelView({
 
     let reply = `Thank you! Your request for "${chip}" has been recorded.`;
     if (chip === 'Yes, confirm') {
-      reply = `🎉 Booking confirmed! Your service appointment is confirmed for **Tomorrow at 10:00 AM**. You will receive an SMS and WhatsApp reminder shortly.`;
+      fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: selectedConversation.customerName || 'Inbound Prospect',
+          customerPhone: selectedConversation.customerPhone || null,
+          title: 'Appointment Request from Omnichannel Chat',
+          serviceName: 'Standard Consultation',
+          scheduledDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+          scheduledTime: '10:00',
+          status: 'confirmed',
+          notes: `Requested via omnichannel conversation (${selectedConversation.channel})`,
+        }),
+      }).catch(() => {});
+      reply = `🎉 Booking request scheduled! Your appointment is recorded for **Tomorrow at 10:00 AM**. Our team will confirm final details shortly.`;
     }
 
     const aiMsg: ConversationMessage = {
@@ -2526,13 +2569,13 @@ export function OmnichannelView({
                   </span>
                 </div>
                 <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1">
-                  <span>"{selectedVisitor.currentKeystroke || 'Listening for live visitor keystrokes on page...'}"</span>
+                  <span>"{selectedVisitor?.currentKeystroke || 'Listening for live visitor keystrokes on page...'}"</span>
                   <span className="w-1.5 h-3.5 bg-teal-600 animate-pulse inline-block" />
                 </div>
                 <div className="space-y-1.5">
                   <span className="text-[11px] font-semibold text-slate-500">Suggested 1-Click Instant Replies:</span>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {(selectedVisitor.suggestedReplies || [
+                    {(selectedVisitor?.suggestedReplies || [
                       'Yes! We bring 100% plant-based Eco-Cert supplies safe for hardwood & pets.',
                       'All equipment and gentle organic solutions are fully included at no extra fee.'
                     ]).map((reply, i) => (

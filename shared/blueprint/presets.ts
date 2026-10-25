@@ -38,6 +38,11 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, { label: string; icon: s
     icon: '🧑‍💻',
     subtitle: 'Consulting, design, legal, marketing, software, photography',
   },
+  creative: {
+    label: 'Creative / Artist / Portfolio',
+    icon: '🎬',
+    subtitle: 'Actors, photographers, videographers, models, performers, creators',
+  },
   online_store: {
     label: 'Online Store / Brand',
     icon: '📱',
@@ -83,6 +88,7 @@ export const BASE_CAPABILITIES: BusinessCapabilities = {
   aiAgent: false,
   forms: false,
   customDomain: false,
+  portfolio: false,
 };
 
 export const BUSINESS_TYPE_PRESETS: Record<BusinessType, BusinessCapabilities> = {
@@ -193,6 +199,22 @@ export const BUSINESS_TYPE_PRESETS: Record<BusinessType, BusinessCapabilities> =
     expenses: true,
     customers: true,
     calendarBooking: true,
+    portfolio: true,
+  },
+
+  creative: {
+    ...BASE_CAPABILITIES,
+    leads: true,
+    calendarBooking: true,
+    invoicing: true,
+    quotes: true,
+    expenses: true,
+    customers: true,
+    portfolio: true,
+    onlineStore: true,
+    customDomain: true,
+    whatsapp: true,
+    aiAgent: true,
   },
 
   online_store: {
@@ -284,6 +306,7 @@ export const DEFAULT_CHANNELS_FOR_BUSINESS_TYPE: Record<BusinessType, SalesChann
   salon: ['in_store', 'online'],
   wholesale: ['b2b', 'whatsapp'],
   freelancer: ['online', 'at_location'],
+  creative: ['online', 'at_location', 'whatsapp'],
   online_store: ['online', 'whatsapp', 'delivery'],
   manufacturing: ['b2b', 'at_location'],
   other: ['in_store', 'online'],
@@ -442,7 +465,7 @@ export function getStandaloneNavSectionsForBlueprint(
       title: 'Operations',
       items: [
         { view: 'formsDashboard', label: 'Today', iconName: 'LayoutDashboard' },
-        { view: type === 'services' ? 'jobs' : type === 'freelancer' ? 'invoices' : 'commerce', label: type === 'freelancer' ? 'Invoices' : coreLabel, iconName: type === 'services' ? 'Briefcase' : 'ShoppingBag' },
+        { view: type === 'services' ? 'jobs' : type === 'creative' || type === 'freelancer' ? 'invoices' : 'commerce', label: type === 'creative' || type === 'freelancer' ? 'Invoices' : coreLabel, iconName: type === 'services' ? 'Briefcase' : 'ShoppingBag' },
         { view: 'customers', label: 'Customers', iconName: 'Users' },
       ],
     },
@@ -464,6 +487,15 @@ export function getStandaloneNavSectionsForBlueprint(
       items: [
         { view: 'booking', label: 'Calendar & Bookings', iconName: 'Calendar' },
         ...(type === 'salon' ? [{ view: 'commerce', label: 'Services Catalog', iconName: 'Store', tab: 'catalog' }] : []),
+      ],
+    });
+  } else if (type === 'creative') {
+    sections.push({
+      title: 'Portfolio & Bookings',
+      items: [
+        { view: 'creatorProfile', label: 'Showreel & Media', iconName: 'Video' },
+        { view: 'booking', label: 'Calendar & Bookings', iconName: 'Calendar' },
+        { view: 'creatorOffers', label: 'Services & Packages', iconName: 'Tag' },
       ],
     });
   } else if (type === 'online_store') {
@@ -554,5 +586,12 @@ export const INDUSTRY_STARTER_CATALOGS: Record<string, StarterCatalogItem[]> = {
   freelancer: [
     { id: 'fl-1', name: 'Design / Creative Hourly Rate', category: 'Design', price: 2000, unit: 'Hour', gstRate: 18, isActive: true },
     { id: 'fl-2', name: 'Full Project Milestone Delivery', category: 'Milestone', price: 25000, unit: 'Project', gstRate: 18, isActive: true },
+  ],
+  creative: [
+    { id: 'cr-1', name: 'Actor Headshot Session (3 Looks & Retouching)', category: 'Photography & Headshots', price: 6500, unit: 'Session', gstRate: 18, isActive: true },
+    { id: 'cr-2', name: 'Cinematic Video Showreel Edit (60 Sec)', category: 'Video Production', price: 12000, unit: 'Project', gstRate: 18, isActive: true },
+    { id: 'cr-3', name: 'Commercial Shoot (Half-Day 4 Hours)', category: 'Shoots & Production', price: 18000, unit: 'Half Day', gstRate: 18, isActive: true },
+    { id: 'cr-4', name: 'Voiceover / Monologue Recording (per script)', category: 'Voiceover & Audio', price: 3500, unit: 'Script', gstRate: 18, isActive: true },
+    { id: 'cr-5', name: 'Brand Collaboration / Sponsored Reel', category: 'Creator Collab', price: 15000, unit: 'Deliverable', gstRate: 18, isActive: true },
   ],
 };

@@ -6,6 +6,7 @@ export type BusinessType =
   | 'salon'
   | 'wholesale'
   | 'freelancer'
+  | 'creative'
   | 'online_store'
   | 'manufacturing'
   | 'other';
@@ -56,6 +57,7 @@ export interface BusinessCapabilities {
   aiAgent: boolean;
   forms: boolean;
   customDomain: boolean;
+  portfolio: boolean;
 }
 
 export type CountryCode = 'US' | 'CA' | 'AU' | 'IN' | 'GB' | 'GLOBAL';

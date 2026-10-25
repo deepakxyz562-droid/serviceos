@@ -160,6 +160,16 @@ export function BgosMetaTemplatesWorkstation() {
     }
     setSendingTest(true);
     try {
+      const templateComponents = currentParamValues.length > 0 ? [
+        {
+          type: 'body',
+          parameters: currentParamValues.map((val) => ({
+            type: 'text',
+            text: val,
+          })),
+        },
+      ] : undefined;
+
       const res = await fetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -169,10 +179,16 @@ export function BgosMetaTemplatesWorkstation() {
           type: 'template',
           templateName: selectedTemplate.name,
           templateLanguage: selectedTemplate.language,
+          templateComponents,
         }),
       });
       if (res.ok) {
-        toast.success(`Test template sent to ${testRecipientPhone}`);
+        const data = await res.json().catch(() => ({}));
+        if (data.simulated) {
+          toast.info(`Template dispatch simulated for ${testRecipientPhone} (WhatsApp credentials not configured)`);
+        } else {
+          toast.success(`Test template sent to ${testRecipientPhone}`);
+        }
         setTestSendOpen(false);
       } else {
         const err = await res.json().catch(() => ({}));

@@ -388,26 +388,30 @@ export function BgosOutreach({ initialProspects }: { initialProspects?: Business
     try {
       const res = await apiRequest('/api/bgos/discovery', 'POST', {
         provider: 'directory',
-        query: keyword || 'cleaning',
+        query: keyword || '',
+        location: location || '',
+        industry: industryFilter !== 'All Industries' ? industryFilter : undefined,
+        companySize: companySize !== 'All Sizes' ? companySize : undefined,
+        radius,
       });
       if (res && res.prospects && res.prospects.length > 0) {
         const mapped: BusinessProspect[] = res.prospects.map((p: any, idx: number) => {
-          const rawRel = p.relevance ?? p.opportunityScore ?? 75;
-          const numRel = typeof rawRel === 'number' ? rawRel : parseInt(String(rawRel), 10) || 75;
+          const rawRel = p.relevance ?? p.opportunityScore;
+          const numRel = typeof rawRel === 'number' ? rawRel : (rawRel ? parseInt(String(rawRel), 10) : null);
           const domain = p.domain || (p.website ? p.website.replace(/^https?:\/\//, '').replace(/\/.*$/, '') : '—');
           return {
             id: p.id || `prosp-${idx}`,
             name: p.company || p.name || 'Enterprise Prospect',
             domain,
-            industry: industryFilter !== 'All Industries' ? industryFilter : (p.industry || 'Professional Services'),
+            industry: p.industry || 'Professional Services',
             industryColor: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-            location: p.location || location || 'Local Area',
-            address: p.address || p.location || location || 'Address on file',
-            employees: p.employees || companySize || '—',
-            relevance: numRel,
+            location: p.location || p.city || 'Local Area',
+            address: p.address || p.location || 'Address on file',
+            employees: p.employees || '—',
+            relevance: numRel ?? 0,
             revenueEst: p.revenueEst || p.revenue || 'Not disclosed',
             founded: p.founded || '—',
-            description: p.description || `${p.company || p.name || 'Local business'} operating in ${p.location || location}.`,
+            description: p.description || `${p.company || p.name || 'Local business'}${p.location ? ` operating in ${p.location}` : ''}.`,
             hasWeb: Boolean(p.website || p.domain || p.hasWeb),
             hasPhone: Boolean(p.phone || p.phoneNumber || p.hasPhone),
             hasEmail: Boolean(p.email || p.hasEmail),
@@ -419,7 +423,7 @@ export function BgosOutreach({ initialProspects }: { initialProspects?: Business
                   p.phone ? 'Direct telephone channel available' : 'Inbound outreach recommended',
                 ],
             decisionMaker: p.decisionMaker || p.ownerName || p.name || 'Key Contact',
-            recommendedPitch: p.recommendedPitch || `Hi ${p.name || 'there'}, noticed your growing presence in ${location}. Let us know if we can assist your team with our automated service operations.`,
+            recommendedPitch: p.recommendedPitch || `Hi ${p.name || 'there'}, noticed your growing presence in ${location || 'the local market'}. Let us know if we can assist your team with our automated service operations.`,
             imageUrl: p.imageUrl,
           };
         });
@@ -427,9 +431,13 @@ export function BgosOutreach({ initialProspects }: { initialProspects?: Business
         setSelectedProspectId(mapped[0]?.id || 'prosp-1');
         toast.success(`Found ${mapped.length} prospects from directory!`);
       } else {
+        setProspects([]);
+        setSelectedProspectId('');
         toast.info(`No directory prospects found for "${keyword}" in ${location}. Try adjusting your search criteria.`);
       }
     } catch {
+      setProspects([]);
+      setSelectedProspectId('');
       toast.error('Directory search failed. Please check your network and try again.');
     } finally {
       setIsSearching(false);

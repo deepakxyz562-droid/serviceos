@@ -6,12 +6,15 @@ import { requireCrmTenant } from '@/lib/require-crm-tenant'
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user || !user.tenantId || user.role === 'customer') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Staff or owner authentication required' },
+        { status: user ? 403 : 401 }
+      );
+    }
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -67,27 +70,37 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user || !user.tenantId || user.role === 'customer') {
+      return NextResponse.json(
+        { error: 'Unauthorized: Staff or owner authentication required' },
+        { status: user ? 403 : 401 }
+      );
+    }
     const crmGuard = await requireCrmTenant(request);
     if (crmGuard) return crmGuard;
-    const body = await request.json()
 
-    // Whitelist + default the fields we accept. Prevents mass-assignment of
-    // unexpected keys. Channel is restricted to 'email' — SMS & WhatsApp
-    // campaign channels are disabled for GDPR/24h-window compliance. The DB
-    // column still accepts the legacy values for backward compatibility with
-    // existing rows, but no NEW campaign can be created with another channel.
-    const channel = 'email'
-
-    // ── Compute live audience count so the list shows a real number, not 0 ──
-    const user = await getAuthUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 })
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
     }
-    const tenantId = user.tenantId || null
-    const workspaceId = user.workspaceId || null
+
+    if (!body.name || typeof body.name !== 'string' || !body.name.trim()) {
+      return NextResponse.json({ error: 'Campaign name is required' }, { status: 400 });
+    }
+
+    // Supported campaign channels
+    const validChannels = ['email', 'whatsapp', 'sms', 'multi'];
+    const channel = typeof body.channel === 'string' && validChannels.includes(body.channel.toLowerCase())
+      ? body.channel.toLowerCase()
+      : 'email';
+
+    // Authoritative tenant/workspace assignment strictly from authenticated session
+    const tenantId = user.tenantId;
+    const workspaceId = user.workspaceId || null;
 
     // ── Compute live audience count so the list shows a real number, not 0 ──
-    let totalRecipients = body.totalRecipients || 0
+    let totalRecipients = body.totalRecipients || 0;
     if (!totalRecipients) {
       try {
         const audience = await resolveBroadcastAudience({
@@ -96,8 +109,8 @@ export async function POST(request: NextRequest) {
           audienceId: body.audienceId || null,
           audienceFiltersJson: body.audienceFiltersJson || '{}',
           channel,
-        })
-        totalRecipients = audience.total
+        });
+        totalRecipients = audience.total;
       } catch {
         // Non-fatal — fall back to 0 if audience resolution fails
       }
@@ -105,16 +118,16 @@ export async function POST(request: NextRequest) {
 
     const campaign = await db.campaign.create({
       data: {
-        name: body.name,
+        name: body.name.trim(),
         description: body.description || null,
-        type: body.type || 'promotional',
+        type: typeof body.type === 'string' && body.type ? body.type : 'promotional',
         status: body.scheduledAt ? 'scheduled' : (body.status || 'draft'),
         channel,
         audienceType: body.audienceType || 'all',
         audienceId: body.audienceId || null,
         audienceFiltersJson: body.audienceFiltersJson || '{}',
         templateId: body.templateId || null,
-        messageContent: body.messageContent,
+        messageContent: body.messageContent || '',
         mediaUrl: body.mediaUrl || null,
         mediaType: body.mediaType || null,
         ctaText: body.ctaText || null,
@@ -128,11 +141,11 @@ export async function POST(request: NextRequest) {
         tenantId,
         workspaceId,
       },
-    })
+    });
 
-    return NextResponse.json({ data: campaign }, { status: 201 })
+    return NextResponse.json({ data: campaign }, { status: 201 });
   } catch (error) {
-    console.error('Error creating campaign:', error)
-    return NextResponse.json({ error: 'Failed to create campaign' }, { status: 500 })
+    console.error('Error creating campaign:', error);
+    return NextResponse.json({ error: 'Failed to create campaign' }, { status: 500 });
   }
 }

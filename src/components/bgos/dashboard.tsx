@@ -180,10 +180,12 @@ export const INITIAL_ACTIVITIES: DashboardActivity[] = [
 export interface BgosDashboardProps {
   initialTasks?: DashboardTask[];
   initialActivities?: DashboardActivity[];
+  isDemo?: boolean;
 }
 
-export function BgosDashboard({ initialTasks, initialActivities }: BgosDashboardProps = {}) {
+export function BgosDashboard({ initialTasks, initialActivities, isDemo: isDemoProp }: BgosDashboardProps = {}) {
   const { setCurrentView, auth } = useAppStore();
+  const isDemo = Boolean(isDemoProp || (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('demo') === 'true' || window.location.search.includes('isDemo=true'))));
 
   // Dynamic user name and business identity
   const firstName = useMemo(() => {
@@ -210,6 +212,8 @@ export function BgosDashboard({ initialTasks, initialActivities }: BgosDashboard
   }, [businessName]);
 
   const [leadCount, setLeadCount] = useState<number>(0);
+  const [leadGrowthRate, setLeadGrowthRate] = useState<number | null>(null);
+  const [leadSparkline, setLeadSparkline] = useState<number[]>(isDemo ? [3, 5, 4, 7, 6, 8, 9, 12] : [0, 0, 0, 0, 0, 0, 0, 0]);
   const [appointmentCount, setAppointmentCount] = useState<number>(0);
   const [callCount, setCallCount] = useState<number>(0);
   const [messageCount, setMessageCount] = useState<number>(0);
@@ -228,6 +232,30 @@ export function BgosDashboard({ initialTasks, initialActivities }: BgosDashboard
         if (!mounted || !data) return;
         const total = data.pagination?.total ?? (Array.isArray(data.leads) ? data.leads.length : 0);
         setLeadCount(total);
+
+        if (Array.isArray(data.leads)) {
+          // Compute real period-over-period growth and sparkline
+          const now = Date.now();
+          const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+          const current30d = data.leads.filter((l: any) => l.createdAt && (now - new Date(l.createdAt).getTime()) <= thirtyDaysMs).length;
+          const prior30d = data.leads.filter((l: any) => l.createdAt && (now - new Date(l.createdAt).getTime()) > thirtyDaysMs && (now - new Date(l.createdAt).getTime()) <= 2 * thirtyDaysMs).length;
+          if (prior30d > 0) {
+            setLeadGrowthRate(Math.round(((current30d - prior30d) / prior30d) * 100));
+          } else {
+            setLeadGrowthRate(null);
+          }
+
+          const buckets = [0, 0, 0, 0, 0, 0, 0, 0];
+          data.leads.forEach((l: any) => {
+            if (l.createdAt) {
+              const daysAgo = Math.floor((now - new Date(l.createdAt).getTime()) / (24 * 60 * 60 * 1000));
+              if (daysAgo >= 0 && daysAgo < 8) {
+                buckets[7 - daysAgo] += 1;
+              }
+            }
+          });
+          setLeadSparkline(buckets);
+        }
 
         if (Array.isArray(data.leads) && data.leads.length > 0) {
           const counts: Record<string, number> = {};
@@ -340,8 +368,8 @@ export function BgosDashboard({ initialTasks, initialActivities }: BgosDashboard
   const [activityFilter, setActivityFilter] = useState<'all' | 'leads' | 'appointments' | 'calls' | 'messages' | 'forms'>('all');
 
   // Tasks & Follow-ups state
-  const [tasks, setTasks] = useState<DashboardTask[]>(initialTasks ?? INITIAL_TASKS);
-  const [activities, setActivities] = useState<DashboardActivity[]>(initialActivities ?? INITIAL_ACTIVITIES);
+  const [tasks, setTasks] = useState<DashboardTask[]>(initialTasks ?? (isDemo ? INITIAL_TASKS : []));
+  const [activities, setActivities] = useState<DashboardActivity[]>(initialActivities ?? (isDemo ? INITIAL_ACTIVITIES : []));
 
   const toggleTask = (id: string) => {
     setTasks((prev) =>
@@ -415,11 +443,16 @@ export function BgosDashboard({ initialTasks, initialActivities }: BgosDashboard
           </div>
           <div className="flex flex-col items-end">
             <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-0.5">
-              <TrendingUp className="size-3" /> {leadCount > 0 ? '+28%' : 'Active'}
+              <TrendingUp className="size-3" />{' '}
+              {leadGrowthRate !== null
+                ? `${leadGrowthRate >= 0 ? `+${leadGrowthRate}%` : `${leadGrowthRate}%`}`
+                : leadCount > 0
+                ? 'Active'
+                : 'No leads yet'}
             </span>
             <span className="text-[9px] text-slate-400">vs last 30 days</span>
             <div className="mt-1">
-              <MiniBarChart values={[3, 5, 4, 7, 6, 8, 9, Math.max(1, leadCount)]} color="var(--chart-1)" />
+              <MiniBarChart values={leadSparkline} color="var(--chart-1)" />
             </div>
           </div>
         </div>

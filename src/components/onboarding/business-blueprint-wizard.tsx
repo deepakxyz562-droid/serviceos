@@ -58,6 +58,7 @@ const BUSINESS_TYPES: BusinessType[] = [
   'salon',
   'wholesale',
   'freelancer',
+  'creative',
   'online_store',
   'manufacturing',
   'other',

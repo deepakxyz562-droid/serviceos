@@ -64,6 +64,7 @@ export default function OutreachScreen() {
         body: {
           name: campaignName.trim(),
           description: `${selectedChannel.toUpperCase()} broadcast`,
+          channel: selectedChannel,
           messageContent: message.trim(),
           type: 'bgos_outreach',
           status: 'draft',

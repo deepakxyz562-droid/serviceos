@@ -59,6 +59,13 @@ import {
   Tag,
   BarChart3,
   CheckCircle,
+  Video,
+  Play,
+  Camera,
+  Film,
+  Youtube,
+  Instagram,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -79,10 +86,13 @@ import {
   CreatorProfileData,
   WebsiteSection,
   HeroConfig,
+  PortfolioMediaItem,
+  CreativeCastingSpecs,
   DEFAULT_WEBSITE_SECTIONS,
   DEFAULT_HERO_CONFIG,
   buildDefaultCreatorProfile,
 } from '@/lib/creator-profile';
+import { parseMediaUrl, getYouTubeEmbedUrl } from '@/lib/media-embed';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 
@@ -130,6 +140,18 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiGenerating, setAiGenerating] = useState(false);
 
+  // Portfolio Media & Creative Casting Specs state
+  const [portfolioMedia, setPortfolioMedia] = useState<PortfolioMediaItem[]>([]);
+  const [creativeSpecs, setCreativeSpecs] = useState<CreativeCastingSpecs>({});
+
+  // Add media form state
+  const [newMediaUrl, setNewMediaUrl] = useState('');
+  const [newMediaTitle, setNewMediaTitle] = useState('');
+  const [newMediaCategory, setNewMediaCategory] = useState('Showreel');
+  const [newMediaCaption, setNewMediaCaption] = useState('');
+  const [newMediaFeatured, setNewMediaFeatured] = useState(false);
+  const [isAddingMedia, setIsAddingMedia] = useState(false);
+
   // Load Profile from API
   const fetchProfile = async () => {
     setLoading(true);
@@ -145,6 +167,8 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
           if (data.profile.publishedStatus) setPublishedStatus(data.profile.publishedStatus);
           if (data.profile.websiteSections?.length) setSections(data.profile.websiteSections);
           if (data.profile.heroConfig) setHeroConfig(data.profile.heroConfig);
+          if (data.profile.portfolioMedia) setPortfolioMedia(data.profile.portfolioMedia);
+          if (data.profile.creativeSpecs) setCreativeSpecs(data.profile.creativeSpecs);
         }
       }
     } catch {
@@ -169,6 +193,52 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Media actions
+  const handleAddMediaItem = () => {
+    if (!newMediaUrl.trim()) {
+      toast.error('Please enter a valid video, reel, or photo link');
+      return;
+    }
+    const parsed = parseMediaUrl(newMediaUrl);
+    const newItem: PortfolioMediaItem = {
+      id: `media_${Date.now()}`,
+      type: parsed.type === 'link' ? 'image' : parsed.type,
+      title: newMediaTitle.trim() || (parsed.type === 'youtube' ? 'Video Showreel' : parsed.type === 'instagram' ? 'Instagram Reel' : 'Portfolio Photo'),
+      caption: newMediaCaption.trim() || undefined,
+      url: parsed.originalUrl || newMediaUrl.trim(),
+      embedId: parsed.embedId,
+      embedUrl: parsed.embedUrl,
+      thumbnailUrl: parsed.thumbnailUrl,
+      category: newMediaCategory || 'Showreel',
+      featured: newMediaFeatured,
+      isShortOrReel: parsed.isShortOrReel,
+      order: portfolioMedia.length + 1,
+    };
+
+    const updated = newMediaFeatured
+      ? [...portfolioMedia.map((m) => ({ ...m, featured: false })), newItem]
+      : [...portfolioMedia, newItem];
+
+    setPortfolioMedia(updated);
+    setNewMediaUrl('');
+    setNewMediaTitle('');
+    setNewMediaCaption('');
+    setNewMediaFeatured(false);
+    setIsAddingMedia(false);
+    toast.success('Media item added to portfolio!');
+  };
+
+  const handleToggleFeaturedMedia = (id: string) => {
+    setPortfolioMedia((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, featured: !m.featured } : m))
+    );
+  };
+
+  const handleDeleteMediaItem = (id: string) => {
+    setPortfolioMedia((prev) => prev.filter((m) => m.id !== id));
+    toast.success('Media item removed');
+  };
+
   // Save changes
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -183,6 +253,8 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
         isEnabled: publishedStatus === 'published',
         websiteSections: sections,
         heroConfig,
+        portfolioMedia,
+        creativeSpecs,
       };
 
       const res = await authFetch('/api/creator/profile', {
@@ -349,6 +421,7 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
       <div className="bg-white dark:bg-slate-900 border-b px-6 overflow-x-auto scrollbar-none flex items-center gap-1">
         {[
           { id: 'design', label: 'Design', icon: LayoutGrid },
+          { id: 'media', label: 'Showreel & Media', icon: Video },
           { id: 'pages', label: 'Pages', icon: FileText },
           { id: 'services', label: 'Services & Products', icon: Tag },
           { id: 'booking', label: 'Booking', icon: Calendar },
@@ -1049,6 +1122,462 @@ export function CreatorProfileView({ initialTab }: { initialTab?: string }) {
                 </CardContent>
               </Card>
             </div>
+          </div>
+        )}
+
+        {/* ── Sub-Tab: Showreel & Media ── */}
+        {activeTab === 'media' && (
+          <div className="w-full space-y-6 max-w-5xl">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b">
+              <div>
+                <h2 className="text-base font-bold flex items-center gap-2">
+                  <Video className="size-4 text-red-600" />
+                  <span>Showreels, Videos &amp; Portfolio Media</span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Embed YouTube showreels, Instagram reels, video links and portfolio photo albums to showcase your talent.
+                </p>
+              </div>
+
+              <Button
+                size="sm"
+                onClick={() => setIsAddingMedia((v) => !v)}
+                className="text-xs font-bold gap-1.5 bg-primary text-white shrink-0 rounded-xl"
+              >
+                <Plus className="size-3.5" />
+                <span>{isAddingMedia ? 'Close Add Form' : 'Add Media Item'}</span>
+              </Button>
+            </div>
+
+            {/* Add Media Item Drawer / Panel */}
+            {isAddingMedia && (
+              <Card className="rounded-2xl border border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/20 p-5 space-y-4 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-foreground">
+                    <Sparkles className="size-4 text-blue-600" />
+                    <span>Add New Video, Reel or Photo</span>
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    Auto-embeds YouTube &amp; Instagram
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs font-bold">Media URL (YouTube Watch/Shorts, Instagram Reel/Post, or Image URL)</Label>
+                    <Input
+                      value={newMediaUrl}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setNewMediaUrl(val);
+                        if (val && !newMediaTitle) {
+                          const p = parseMediaUrl(val);
+                          if (p.type === 'youtube') setNewMediaTitle(p.isShortOrReel ? 'YouTube Short' : 'Video Showreel');
+                          else if (p.type === 'instagram') setNewMediaTitle('Instagram Reel');
+                        }
+                      }}
+                      placeholder="e.g. https://www.youtube.com/watch?v=... or https://www.instagram.com/reel/..."
+                      className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900"
+                    />
+                    {newMediaUrl && (
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-2 pt-1">
+                        <span>Detected:</span>
+                        <Badge variant="secondary" className="capitalize text-[10px] font-bold">
+                          {parseMediaUrl(newMediaUrl).type}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold">Title / Headline</Label>
+                    <Input
+                      value={newMediaTitle}
+                      onChange={(e) => setNewMediaTitle(e.target.value)}
+                      placeholder="e.g. 2026 Commercial Showreel, Monologue Clip"
+                      className="h-9 text-xs rounded-xl bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold">Category</Label>
+                    <select
+                      value={newMediaCategory}
+                      onChange={(e) => setNewMediaCategory(e.target.value)}
+                      className="w-full h-9 px-3 rounded-xl border bg-white dark:bg-slate-900 text-xs text-foreground font-medium"
+                    >
+                      <option value="Showreel">Showreel</option>
+                      <option value="Acting Monologue">Acting Monologue</option>
+                      <option value="Audition Clip">Audition Clip</option>
+                      <option value="Commercial">Commercial</option>
+                      <option value="Fashion & BTS">Fashion &amp; BTS</option>
+                      <option value="Wedding Highlight">Wedding Highlight</option>
+                      <option value="Headshots & Portraits">Headshots &amp; Portraits</option>
+                      <option value="Voiceover Demo">Voiceover Demo</option>
+                      <option value="Music Video">Music Video</option>
+                      <option value="General">General</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <Label className="text-xs font-bold">Caption / Brief Description (Optional)</Label>
+                    <Textarea
+                      value={newMediaCaption}
+                      onChange={(e) => setNewMediaCaption(e.target.value)}
+                      placeholder="Brief note about this scene, client, director, or camera equipment..."
+                      rows={2}
+                      className="text-xs rounded-xl bg-white dark:bg-slate-900"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between md:col-span-2 p-3 rounded-xl bg-white dark:bg-slate-900 border">
+                    <div>
+                      <p className="font-bold text-xs">Pin as Featured Showreel</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Featured showreels are rendered in a prominent cinematic video player at the top of your public profile.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={newMediaFeatured}
+                      onCheckedChange={setNewMediaFeatured}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsAddingMedia(false);
+                      setNewMediaUrl('');
+                    }}
+                    className="text-xs rounded-xl"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAddMediaItem}
+                    className="text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Add to Portfolio
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* Current Media Items Grid */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-foreground">
+                  Active Portfolio Items ({portfolioMedia.length})
+                </h3>
+                <span className="text-xs text-muted-foreground">
+                  Click the star to set as main showreel.
+                </span>
+              </div>
+
+              {portfolioMedia.length === 0 ? (
+                <Card className="p-8 rounded-2xl border border-dashed text-center space-y-3 bg-white dark:bg-slate-900">
+                  <div className="size-12 rounded-2xl bg-red-50 dark:bg-red-950/50 text-red-600 flex items-center justify-center mx-auto">
+                    <Video className="size-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold">No Media Items Yet</h4>
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                      Add your first YouTube showreel, Instagram reel, or headshot photos to make your creative portfolio shine.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setIsAddingMedia(true)}
+                    className="text-xs font-bold gap-1 bg-primary text-white rounded-xl"
+                  >
+                    <Plus className="size-3.5" />
+                    <span>Add Media Now</span>
+                  </Button>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {portfolioMedia.map((item) => (
+                    <Card
+                      key={item.id}
+                      className="overflow-hidden rounded-2xl border bg-white dark:bg-slate-900 flex flex-col justify-between group shadow-2xs"
+                    >
+                      <div className="relative aspect-video w-full bg-slate-950 overflow-hidden">
+                        {item.thumbnailUrl ? (
+                          <img
+                            src={item.thumbnailUrl}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
+                            <Film className="size-8" />
+                          </div>
+                        )}
+
+                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                          <Badge
+                            className={cn(
+                              'text-[9px] font-black uppercase text-white shadow-xs',
+                              item.type === 'youtube'
+                                ? 'bg-red-600'
+                                : item.type === 'instagram'
+                                ? 'bg-pink-600'
+                                : 'bg-emerald-600'
+                            )}
+                          >
+                            {item.type}
+                          </Badge>
+                          {item.featured && (
+                            <Badge className="bg-amber-500 text-slate-900 text-[9px] font-black uppercase">
+                              ★ Featured
+                            </Badge>
+                          )}
+                        </div>
+
+                        {item.category && (
+                          <div className="absolute bottom-2.5 left-2.5">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-white border border-white/10">
+                              {item.category}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <CardHeader className="p-3.5 space-y-1">
+                        <CardTitle className="text-xs font-bold line-clamp-1 text-foreground">
+                          {item.title}
+                        </CardTitle>
+                        {item.caption && (
+                          <CardDescription className="text-[11px] line-clamp-2 text-muted-foreground">
+                            {item.caption}
+                          </CardDescription>
+                        )}
+                      </CardHeader>
+
+                      <CardContent className="p-3.5 pt-0 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleToggleFeaturedMedia(item.id)}
+                          className={cn(
+                            'h-7 px-2 text-[11px] font-bold gap-1 rounded-lg',
+                            item.featured ? 'text-amber-600' : 'text-muted-foreground'
+                          )}
+                          title="Toggle Featured Showreel"
+                        >
+                          <Star className={cn('size-3.5', item.featured ? 'fill-amber-500 text-amber-500' : '')} />
+                          <span>{item.featured ? 'Featured' : 'Set Featured'}</span>
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteMediaItem(item.id)}
+                          className="size-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── PROFESSIONAL CASTING & CREATIVE SPECS CARD ── */}
+            <Card className="rounded-2xl border p-5 space-y-5 bg-white dark:bg-slate-900 shadow-xs">
+              <div className="border-b pb-3">
+                <h3 className="text-sm font-bold flex items-center gap-2 text-foreground">
+                  <Camera className="size-4 text-blue-600" />
+                  <span>Actor, Model &amp; Creative Professional Specs</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure casting physical attributes, languages, union affiliation, and representation details.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Primary Creative Profession</Label>
+                  <select
+                    value={creativeSpecs.profession || 'actor'}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, profession: e.target.value as any }))
+                    }
+                    className="w-full h-9 px-3 rounded-xl border bg-white dark:bg-slate-900 text-xs font-medium"
+                  >
+                    <option value="actor">Actor / Performer</option>
+                    <option value="photographer">Photographer</option>
+                    <option value="videographer">Videographer / Cinematographer</option>
+                    <option value="model">Model</option>
+                    <option value="voice_artist">Voice Artist / Dubbing</option>
+                    <option value="creator">Creator / Influencer</option>
+                    <option value="other">Other Creative</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Playing Age Range</Label>
+                  <Input
+                    value={creativeSpecs.playingAgeRange || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, playingAgeRange: e.target.value }))
+                    }
+                    placeholder="e.g. 24 - 34"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Height</Label>
+                  <Input
+                    value={creativeSpecs.height || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, height: e.target.value }))
+                    }
+                    placeholder="e.g. 5'10&quot; (178 cm)"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Eye Color</Label>
+                  <Input
+                    value={creativeSpecs.eyeColor || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, eyeColor: e.target.value }))
+                    }
+                    placeholder="e.g. Brown, Hazel, Blue"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Hair Color</Label>
+                  <Input
+                    value={creativeSpecs.hairColor || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, hairColor: e.target.value }))
+                    }
+                    placeholder="e.g. Black, Dark Brown, Blonde"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Union / Guild Status</Label>
+                  <Input
+                    value={creativeSpecs.unionStatus || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, unionStatus: e.target.value }))
+                    }
+                    placeholder="e.g. SAG-AFTRA, Equity, Non-Union"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label className="text-xs font-bold">Languages Spoken (Comma Separated)</Label>
+                  <Input
+                    value={(creativeSpecs.languages || []).join(', ')}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({
+                        ...prev,
+                        languages: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      }))
+                    }
+                    placeholder="e.g. English, Hindi, Spanish, French"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">IMDb Profile URL</Label>
+                  <Input
+                    value={creativeSpecs.imdbUrl || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, imdbUrl: e.target.value }))
+                    }
+                    placeholder="https://www.imdb.com/name/nm..."
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Agency / Representation Name</Label>
+                  <Input
+                    value={creativeSpecs.agencyName || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, agencyName: e.target.value }))
+                    }
+                    placeholder="e.g. Elite Artists Agency"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Agent Booking Email</Label>
+                  <Input
+                    value={creativeSpecs.agentEmail || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, agentEmail: e.target.value }))
+                    }
+                    placeholder="bookings@eliteartists.com"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold">Agent Phone Number</Label>
+                  <Input
+                    value={creativeSpecs.agentPhone || ''}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({ ...prev, agentPhone: e.target.value }))
+                    }
+                    placeholder="+1 (555) 234-5678"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-3">
+                  <Label className="text-xs font-bold">
+                    Gear &amp; Equipment (For Photographers / Cinematographers)
+                  </Label>
+                  <Input
+                    value={(creativeSpecs.equipment || []).join(', ')}
+                    onChange={(e) =>
+                      setCreativeSpecs((prev) => ({
+                        ...prev,
+                        equipment: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      }))
+                    }
+                    placeholder="e.g. Sony FX3, Canon EOS R5, 24-70mm f/2.8 GM II, DJI Ronin RS3, Godox AD600 Pro"
+                    className="h-9 text-xs rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={handleSaveProfile}
+                  disabled={saving}
+                  className="text-xs font-bold rounded-xl bg-primary text-white gap-1.5"
+                >
+                  <Sparkles className="size-3.5" />
+                  <span>{saving ? 'Saving...' : 'Save Media & Specs'}</span>
+                </Button>
+              </div>
+            </Card>
           </div>
         )}
 

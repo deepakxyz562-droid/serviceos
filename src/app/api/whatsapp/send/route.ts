@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { to, message, type, credentialId, templateLanguage, templateName } = body;
+    const { to, message, type, credentialId, templateLanguage, templateName, templateComponents } = body;
 
     if (!to || !message) {
       return NextResponse.json({ error: 'to and message are required' }, { status: 400 });
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
       type: type || 'text',
       templateName,
       templateLanguage,
+      templateComponents: Array.isArray(templateComponents) ? templateComponents : undefined,
       tenantId: user.tenantId || undefined,
     });
 

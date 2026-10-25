@@ -298,11 +298,14 @@ export const INITIAL_CAMPAIGNS = [
 
 export function SocialMediaView({
   initialCampaigns,
+  isDemo: isDemoProp,
 }: {
   initialCampaigns?: typeof INITIAL_CAMPAIGNS;
+  isDemo?: boolean;
 } = {}) {
   const setCurrentView = useAppStore((state) => state.setCurrentView);
   const auth = useAppStore((state) => state.auth);
+  const isDemo = Boolean(isDemoProp || (typeof window !== 'undefined' && (new URLSearchParams(window.location.search).get('demo') === 'true' || window.location.search.includes('isDemo=true'))));
   const businessName = auth?.tenant?.name || auth?.workspace?.name || 'Cinderella Cleaners';
   const businessInitial = businessName.trim().charAt(0).toUpperCase() || 'C';
   const businessHandle = `@${businessName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'cinderellacleaners'}`;
@@ -376,7 +379,7 @@ export function SocialMediaView({
 
   // Active Campaigns State
   const [campaigns, setCampaigns] = useState<typeof INITIAL_CAMPAIGNS>(
-    initialCampaigns || INITIAL_CAMPAIGNS
+    initialCampaigns ?? (isDemo ? INITIAL_CAMPAIGNS : [])
   );
 
   useEffect(() => {
@@ -545,51 +548,90 @@ export function SocialMediaView({
   }, []);
 
   const handleSchedulePost = async () => {
-    const newItem = {
-      id: `cal-${Date.now()}`,
-      title: `${currentHeadline} (${previewPlatform})`,
-      time: 'Tomorrow • 3:00 PM',
-      status: 'Scheduled',
-      color: 'bg-teal-600',
+    if (isDemo) {
+      const newItem = {
+        id: `cal-${Date.now()}`,
+        title: `${currentHeadline} (${previewPlatform})`,
+        time: 'Tomorrow • 3:00 PM',
+        status: 'Scheduled',
+        color: 'bg-teal-600',
+      };
+      setCalendarItems((prev) => [newItem, ...prev]);
+      setScheduleNotice(`Successfully scheduled to ${previewPlatform}! Added to Content Calendar.`);
+      setTimeout(() => setScheduleNotice(null), 4000);
+      return;
+    }
+
+    const PLATFORM_MAP: Record<string, string> = {
+      ig: 'instagram',
+      instagram: 'instagram',
+      fb: 'facebook',
+      facebook: 'facebook',
+      google: 'google_business',
+      'google business': 'google_business',
+      gmb: 'google_business',
+      linkedin: 'linkedin',
+      tiktok: 'tiktok',
+      x: 'twitter',
+      twitter: 'twitter',
+      whatsapp: 'whatsapp',
     };
-    setCalendarItems((prev) => [newItem, ...prev]);
-    setScheduleNotice(`Successfully scheduled to ${previewPlatform}! Added to Content Calendar.`);
-    setTimeout(() => setScheduleNotice(null), 4000);
+    const targetPlatform = PLATFORM_MAP[previewPlatform.toLowerCase()] || previewPlatform.toLowerCase();
 
     try {
       const accRes = await fetch('/api/social/accounts').catch(() => null);
-      if (accRes && accRes.ok) {
-        const accData = await accRes.json();
-        const accounts = accData?.data || (Array.isArray(accData) ? accData : []);
-        const matching = accounts.find((a: any) => a.platform?.toLowerCase() === previewPlatform.toLowerCase());
-        if (accounts.length > 0 && !matching) {
-          setCalendarItems((prev) => prev.filter((i) => i.id !== newItem.id));
-          setScheduleNotice(null);
-          toast.error(`No connected ${previewPlatform} account found. Please connect your account in Settings.`);
-          return;
-        }
-        if (matching) {
-          const res = await fetch('/api/social/posts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              content: `${currentHeadline}\n\n${aiPrompt}`,
-              status: 'scheduled',
-              scheduledAt: new Date(Date.now() + 86400000).toISOString(),
-              targets: [{ platform: matching.platform, socialAccountId: matching.id }],
-            }),
-          });
-          if (!res.ok) {
-            setCalendarItems((prev) => prev.filter((i) => i.id !== newItem.id));
-            setScheduleNotice(null);
-            toast.error('Failed to schedule social post on server.');
-          } else {
-            toast.success(`Post scheduled to ${matching.platform}!`);
-          }
-        }
+      if (!accRes || !accRes.ok) {
+        toast.error(`Unable to verify connected ${previewPlatform} accounts. Please check your connections.`);
+        return;
       }
+      const accData = await accRes.json();
+      const accounts = accData?.data || (Array.isArray(accData) ? accData : []);
+      const matching = accounts.find((a: any) => {
+        const p = (a.platform || '').toLowerCase();
+        return p === targetPlatform || p.includes(targetPlatform);
+      });
+      if (!matching) {
+        toast.error(`No connected ${previewPlatform} account found. Please connect your account in Settings.`);
+        return;
+      }
+
+      // Compute tomorrow at 3:00 PM local time
+      const schedDate = new Date();
+      schedDate.setDate(schedDate.getDate() + 1);
+      schedDate.setHours(15, 0, 0, 0);
+
+      const res = await fetch('/api/social/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: `${currentHeadline}\n\n${aiPrompt}`,
+          status: 'scheduled',
+          scheduledAt: schedDate.toISOString(),
+          targets: [{ platform: matching.platform, socialAccountId: matching.id }],
+        }),
+      });
+
+      if (!res.ok) {
+        toast.error('Failed to schedule social post on server.');
+        return;
+      }
+
+      const postData = await res.json().catch(() => ({}));
+      const serverId = postData?.data?.id || postData?.id || `cal-${Date.now()}`;
+      const newItem = {
+        id: serverId,
+        title: `${currentHeadline} (${previewPlatform})`,
+        time: 'Tomorrow • 3:00 PM',
+        status: 'Scheduled',
+        color: 'bg-teal-600',
+      };
+      setCalendarItems((prev) => [newItem, ...prev]);
+      setScheduleNotice(`Successfully scheduled to ${previewPlatform}! Added to Content Calendar.`);
+      setTimeout(() => setScheduleNotice(null), 4000);
+      toast.success(`Post scheduled to ${matching.platform}!`);
     } catch (err) {
       console.warn('[Marketing Studio] Social post scheduling failed', err);
+      toast.error('Network error scheduling social post');
     }
   };
 
@@ -600,11 +642,11 @@ export function SocialMediaView({
     const newCamp = {
       id: tempId,
       name: campName,
-      dates: 'Current Month',
+      dates: 'Active Now',
       badge: 'Active',
-      reach: '1,200',
-      clicks: '98',
-      leads: '15',
+      reach: '0',
+      clicks: '0',
+      leads: '0',
       icon: 'flower',
     };
     setCampaigns((prev) => [newCamp, ...prev]);
@@ -624,14 +666,29 @@ export function SocialMediaView({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (res.status !== 401) {
-          toast.error(err.error || 'Failed to save campaign on server');
-        }
+        setCampaigns((prev) => prev.filter((c) => c.id !== tempId));
+        toast.error(err.error || 'Failed to save campaign on server');
       } else {
-        toast.success(`Campaign "${campName}" created and live!`);
+        const data = await res.json().catch(() => ({}));
+        const serverCamp = data?.data;
+        if (serverCamp?.id) {
+          setCampaigns((prev) =>
+            prev.map((c) =>
+              c.id === tempId
+                ? {
+                    ...c,
+                    id: serverCamp.id,
+                    reach: (serverCamp.totalRecipients || 0).toLocaleString(),
+                  }
+                : c
+            )
+          );
+        }
+        toast.success(`Campaign "${campName}" created successfully!`);
       }
     } catch {
-      // Keep optimistic item in offline/dev
+      setCampaigns((prev) => prev.filter((c) => c.id !== tempId));
+      toast.error('Network error creating campaign');
     }
   };
 

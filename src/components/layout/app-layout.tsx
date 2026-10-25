@@ -657,12 +657,13 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const renderView = (viewId: string) => {
     if (isBgos) {
       if (bgosView(viewId) !== viewId) return null;
-      if (viewId === 'dashboard') return <BgosDashboard />;
+      const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');
+      if (viewId === 'dashboard') return <BgosDashboard isDemo={isDemo} initialTasks={isDemo ? undefined : []} initialActivities={isDemo ? undefined : []} />;
       if (viewId === 'reviews') return <BgosReviewsWorkstation />;
-      if (viewId === 'omnichannel') return <BgosOmnichannelInbox />;
-      if (viewId === 'liveChat') return <BgosOmnichannelInbox initialTab="visitors" />;
+      if (viewId === 'omnichannel') return <BgosOmnichannelInbox isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
+      if (viewId === 'liveChat') return <BgosOmnichannelInbox initialTab="visitors" isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
       if (viewId === 'helpCenter' || viewId === 'helpTicketDetail') return <BgosHelpdeskWorkstation />;
-      if (viewId === 'socialMedia') return <BgosSocialMarketing />;
+      if (viewId === 'socialMedia') return <BgosSocialMarketing isDemo={isDemo} initialCampaigns={isDemo ? undefined : []} />;
       if (viewId === 'campaigns') return <BgosOutreach />;
       if (viewId === 'billing') return <BgosSettings initialTab="billing" />;
       if (viewId === 'settings') return <BgosSettings />;

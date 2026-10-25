@@ -22,16 +22,53 @@ export async function POST(request: NextRequest) {
 
     const tenantId = authUser?.tenantId || null;
 
-    // Log the proactive live nudge activity
-    await db.auditLog?.create({
+    // Verify the visitor session exists and is active for this tenant
+    const session = await db.publicChatSession.findFirst({
+      where: {
+        id: visitorId,
+        ...(tenantId ? { tenantId } : {}),
+      },
+    });
+
+    if (!session) {
+      return NextResponse.json(
+        { error: 'Visitor session not found or disconnected' },
+        { status: 404 }
+      );
+    }
+
+    // Deliver the proactive live nudge message into the visitor's public chat thread
+    const nudgeText = String(message || 'Hello! How can we assist you with our services today?');
+    await db.publicChatMessage.create({
       data: {
-        tenantId,
-        actorId: authUser?.id || 'agent',
-        actorType: 'agent',
+        sessionId: session.id,
+        senderType: 'admin',
+        senderId: authUser?.id || null,
+        senderName: authUser?.name || 'Operator',
+        body: nudgeText,
+      },
+    });
+
+    await db.publicChatSession.update({
+      where: { id: session.id },
+      data: {
+        lastMessageAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    // Record audit log conforming to actual Prisma AuditLog schema
+    await db.auditLog.create({
+      data: {
+        userId: authUser?.id || null,
         action: 'dispatch_live_nudge',
-        entityType: 'live_visitor',
-        entityId: visitorId,
-        description: `Dispatched proactive live nudge (${rule || 'Standard'}): "${String(message || '').slice(0, 100)}"`,
+        resourceType: 'live_visitor',
+        resourceId: visitorId,
+        metadataJson: JSON.stringify({
+          rule: rule || 'Standard',
+          messageSnippet: nudgeText.slice(0, 100),
+          delivered: true,
+        }),
       },
     }).catch(() => {});
 

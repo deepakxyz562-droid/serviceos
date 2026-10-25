@@ -105,7 +105,7 @@ it('renders FormAgentStudio header with AI Studio title, actions, and 8 canonica
 it('renders Unified Inbox with circular channel triage, 3-segment switch, in-chat package cards, and Customer 360 dossier', async () => {
   const { BgosOmnichannelInbox: OmnichannelView } = await import('@/components/bgos/omnichannel-inbox');
 
-  render(<OmnichannelView />);
+  render(<OmnichannelView isDemo={true} />);
 
   // 1. Top Channel Triage Header & Labeled Channel Pills
   expect(screen.getByRole('heading', { level: 1, name: 'Inbox' })).toBeDefined();
@@ -183,7 +183,7 @@ it('renders Unified Inbox with circular channel triage, 3-segment switch, in-cha
 it('supports selecting in-chat package cards and toggling AI automation in detail panel', async () => {
   const { BgosOmnichannelInbox: OmnichannelView } = await import('@/components/bgos/omnichannel-inbox');
 
-  render(<OmnichannelView />);
+  render(<OmnichannelView isDemo={true} />);
 
   // Clicking "Select" on the Deep Clean package triggers instant booking selection message
   const selectBtns = screen.getAllByRole('button', { name: 'Select' });
@@ -266,7 +266,7 @@ it('renders Tickets & Support Helpdesk workstation with status pills, 8-ticket q
 it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview canvas, and campaign velocity', async () => {
   const { BgosSocialMarketing: SocialMediaView } = await import('@/components/bgos/social-marketing');
 
-  render(<SocialMediaView />);
+  render(<SocialMediaView isDemo={true} />);
 
   // 1. Header & Primary Actions (Matches Screenshot)
   expect(screen.getByRole('heading', { level: 1, name: /Marketing Studio/i })).toBeDefined();
@@ -667,7 +667,7 @@ it('renders Forms & Funnels executive dashboard with 4 KPIs, template carousel, 
 it('renders Live Website Visitor Radar workstation inside Inbox with telemetry strip, visitor stream, live keystroke mirror, and dossier', async () => {
   const { BgosOmnichannelInbox: OmnichannelView } = await import('@/components/bgos/omnichannel-inbox');
 
-  render(<OmnichannelView initialTab="visitors" />);
+  render(<OmnichannelView initialTab="visitors" isDemo={true} />);
 
   // 1. Radar Header & Online Badges
   expect(screen.getByText(/Live Website Visitor Radar/i)).toBeDefined();
@@ -719,7 +719,7 @@ it('renders BGOS Executive Command Center Dashboard with 5 KPIs, Business Growth
     workspace: { id: 'w', productType: 'bgos' },
   });
 
-  render(<DashboardView />);
+  render(<DashboardView isDemo={true} />);
 
   // 1. Header greeting & store identity
   expect(screen.getByText(/Here's what's happening with your business today/i)).toBeDefined();

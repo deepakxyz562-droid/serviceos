@@ -6,8 +6,12 @@ import { db } from '@/lib/db';
 
 const querySchema = z.object({
   provider: z.enum(['apollo', 'hunter', 'directory']).default('directory'),
-  query: z.string().trim().min(2).max(150),
+  query: z.string().trim().max(150).default(''),
   page: z.number().int().min(1).max(20).default(1),
+  location: z.string().trim().max(100).optional(),
+  industry: z.string().trim().max(100).optional(),
+  companySize: z.string().trim().max(50).optional(),
+  radius: z.number().optional(),
 });
 
 interface ProspectItem {
@@ -69,16 +73,21 @@ export async function POST(request: NextRequest) {
 
     // 1a. Query tenant's native contacts matching search term
     try {
+      const contactWhere: Record<string, any> = { tenantId: user.tenantId };
+      if (search) {
+        contactWhere.OR = [
+          { name: { contains: search } },
+          { company: { contains: search } },
+          { email: { contains: search } },
+          { city: { contains: search } },
+        ];
+      }
+      if (parsed.data.location) {
+        contactWhere.city = { contains: parsed.data.location };
+      }
+
       const contacts = await db.contact.findMany({
-        where: {
-          tenantId: user.tenantId,
-          OR: [
-            { name: { contains: search } },
-            { company: { contains: search } },
-            { email: { contains: search } },
-            { city: { contains: search } },
-          ],
-        },
+        where: contactWhere,
         take: 20,
         orderBy: { createdAt: 'desc' },
       });
@@ -102,15 +111,17 @@ export async function POST(request: NextRequest) {
 
     // 1b. Query tenant's native leads
     try {
+      const leadWhere: Record<string, any> = { tenantId: user.tenantId };
+      if (search) {
+        leadWhere.OR = [
+          { name: { contains: search } },
+          { email: { contains: search } },
+          { title: { contains: search } },
+        ];
+      }
+
       const leads = await db.lead.findMany({
-        where: {
-          tenantId: user.tenantId,
-          OR: [
-            { name: { contains: search } },
-            { email: { contains: search } },
-            { title: { contains: search } },
-          ],
-        },
+        where: leadWhere,
         take: 10,
         orderBy: { createdAt: 'desc' },
       });

@@ -36,7 +36,7 @@ export type BosOrder = {
   channel: 'pos' | 'online' | 'whatsapp';
   status: 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
   paymentMode: 'cash' | 'upi' | 'card' | 'khata';
-  paymentStatus: 'paid' | 'pending' | 'partial' | 'refund_pending' | 'refunded';
+  paymentStatus: 'paid' | 'pending' | 'partial' | 'unpaid' | 'refund_pending' | 'refunded';
   totalAmount: number;
   subtotalAmount?: number;
   discountAmount?: number;
@@ -96,6 +96,7 @@ export type BosDaybookEntry = {
   id: string;
   time: string;
   partyName: string;
+  particulars?: string;
   subtitle: string;
   category: 'POS Sale' | 'Invoice' | 'Khata In' | 'Supplier' | 'Expense' | 'Online Sale';
   refNumber: string;

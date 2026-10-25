@@ -239,7 +239,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
 
   describe('Omnichannel Inbox Meta 24-Hour Window & Template Drawer', () => {
     it('renders the Meta 24h Customer Care window badge and Meta Templates drawer trigger', () => {
-      render(<BgosOmnichannelInbox />);
+      render(<BgosOmnichannelInbox isDemo={true} />);
 
       // 24h Window Badge
       expect(screen.getByText(/Meta 24h/i)).toBeDefined();
@@ -261,7 +261,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
     });
 
     it('selecting a template from the drawer automatically interpolates customer context', () => {
-      render(<BgosOmnichannelInbox />);
+      render(<BgosOmnichannelInbox isDemo={true} />);
 
       const templatesTrigger = screen.getByRole('button', { name: /Meta Templates/i });
       fireEvent.click(templatesTrigger);

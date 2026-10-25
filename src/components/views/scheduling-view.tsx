@@ -425,6 +425,17 @@ export function SchedulingView({
               ? new Date(b.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : '10:00 AM';
 
+            const rawSt = String(b.status || 'pending').toLowerCase();
+            const status = rawSt === 'confirmed'
+              ? 'Confirmed'
+              : rawSt === 'completed'
+              ? 'Completed'
+              : rawSt === 'in_progress'
+              ? 'In Progress'
+              : rawSt === 'cancelled' || rawSt === 'canceled'
+              ? 'Cancelled'
+              : 'Pending';
+
             return {
               id: b.id || `row_${index}`,
               time: timeStr,
@@ -436,40 +447,58 @@ export function SchedulingView({
               location: b.address || b.location || b.customer?.address || 'Location not specified',
               teamMember: b.employee?.name || b.assignedStaffName || 'Unassigned',
               teamAvatar: b.employee?.avatar || AVATAR_1,
-              status: String(b.status).toLowerCase() === 'confirmed' ? 'Confirmed' : 'Pending',
+              status,
             };
           });
 
-          const mappedBlocks: CalendarBlock[] = bookingsList.map((b: any, index: number) => {
-            const customer = b.customerName || b.title || b.customer?.name || 'Client';
-            const dateObj = b.scheduledAt ? new Date(b.scheduledAt) : new Date();
-            const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            // Monday = 0, Tuesday = 1, ..., Sunday = 6
-            const dayIdx = (dateObj.getDay() + 6) % 7;
-            const tones: CalendarBlock['tone'][] = ['green', 'amber', 'blue', 'rose', 'purple'];
+          // Active week boundary
+          const now = new Date();
+          const currentDay = now.getDay();
+          const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() + mondayOffset);
+          weekStart.setHours(0, 0, 0, 0);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 7);
+          weekEnd.setMilliseconds(-1);
 
-            const rawHour = dateObj.getHours() + dateObj.getMinutes() / 60;
-            const startHour = Math.max(8, Math.min(17.5, rawHour));
-            let durationHours = 1.0;
-            if (b.endAt && b.scheduledAt) {
-              const diff = (new Date(b.endAt).getTime() - dateObj.getTime()) / 3600000;
-              if (diff > 0.25 && diff <= 8) durationHours = diff;
-            } else if (b.service?.durationMinutes) {
-              durationHours = b.service.durationMinutes / 60;
-            }
+          const tones: CalendarBlock['tone'][] = ['green', 'amber', 'blue', 'rose', 'purple'];
+          const mappedBlocks: CalendarBlock[] = bookingsList
+            .filter((b: any) => {
+              if (!b.scheduledAt) return true;
+              const d = new Date(b.scheduledAt);
+              return d >= weekStart && d <= weekEnd;
+            })
+            .map((b: any, index: number) => {
+              const customer = b.customerName || b.title || b.customer?.name || 'Client';
+              const dateObj = b.scheduledAt ? new Date(b.scheduledAt) : new Date();
+              const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              // Monday = 0, Tuesday = 1, ..., Sunday = 6
+              const dayIdx = (dateObj.getDay() + 6) % 7;
 
-            return {
-              id: `cb_${b.id || index}`,
-              dayIndex: Math.min(Math.max(dayIdx, 0), 6),
-              startHour,
-              durationHours,
-              timeLabel: timeStr,
-              customerName: customer,
-              serviceName: b.service?.name || b.title || 'Service Appointment',
-              teamMember: b.employee?.name || b.assignedStaffName || 'Unassigned',
-              tone: tones[index % tones.length],
-            };
-          });
+              const rawHour = dateObj.getHours() + dateObj.getMinutes() / 60;
+              const isOutOfHours = rawHour < 8 || rawHour > 18;
+              const startHour = Math.max(8, Math.min(17.5, rawHour));
+              let durationHours = 1.0;
+              if (b.endAt && b.scheduledAt) {
+                const diff = (new Date(b.endAt).getTime() - dateObj.getTime()) / 3600000;
+                if (diff > 0.25 && diff <= 8) durationHours = diff;
+              } else if (b.service?.durationMinutes) {
+                durationHours = b.service.durationMinutes / 60;
+              }
+
+              return {
+                id: `cb_${b.id || index}`,
+                dayIndex: Math.min(Math.max(dayIdx, 0), 6),
+                startHour,
+                durationHours,
+                timeLabel: isOutOfHours ? `${timeStr} (Out-of-hours)` : timeStr,
+                customerName: customer,
+                serviceName: b.service?.name || b.title || 'Service Appointment',
+                teamMember: b.employee?.name || b.assignedStaffName || 'Unassigned',
+                tone: tones[index % tones.length],
+              };
+            });
 
           setDailyRows(mappedRows);
           setCalendarBlocks(mappedBlocks);

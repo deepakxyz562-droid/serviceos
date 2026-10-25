@@ -29,7 +29,7 @@ const labels: Record<HomeLabel, [string, string]> = {
   quotes: ['Create Quote', 'कोटेशन बनाएं'], invoices: ['Invoices', 'बिल'], store: ['Store', 'स्टोर'],
   retail: ['Retail shop', 'दुकान'], grocery: ['Kirana / Grocery', 'किराना दुकान'], restaurant: ['Restaurant / Café', 'रेस्टोरेंट / कैफ़े'],
   salon: ['Salon / Beauty', 'सैलून'], services: ['Service business', 'सेवा कारोबार'],
-  freelancer: ['Professional services', 'पेशेवर सेवाएँ'], online_store: ['Online store', 'ऑनलाइन स्टोर'],
+  freelancer: ['Professional services', 'पेशेवर सेवाएँ'], creative: ['Creative / Portfolio', 'क्रिएटिव / पोर्टफोलियो'], online_store: ['Online store', 'ऑनलाइन स्टोर'],
   wholesale: ['Wholesale', 'थोक कारोबार'], manufacturing: ['Manufacturing', 'निर्माण कारोबार'], other: ['Your business', 'आपका कारोबार'],
 };
 
@@ -86,6 +86,7 @@ export const HOME_PRESETS: Record<BusinessType, HomePreset> = {
   salon: { metrics: ['appointments', 'sales', 'moneyIn', 'invoiceDue'], actions: ['bookings', 'sale', 'customers', 'invoices'], tabs: ['bookings', 'customers', 'sale'] },
   services: { metrics: ['jobs', 'appointments', 'moneyIn', 'invoiceDue'], actions: ['jobs', 'quotes', 'bookings', 'customers'], tabs: ['jobs', 'bookings', 'customers'] },
   freelancer: { metrics: ['quotesDue', 'invoiceDue', 'moneyIn', 'appointments'], actions: ['quotes', 'invoices', 'customers', 'bookings'], tabs: ['quotes', 'invoices', 'customers'] },
+  creative: { metrics: ['appointments', 'quotesDue', 'invoiceDue', 'moneyIn'], actions: ['bookings', 'quotes', 'invoices', 'customers'], tabs: ['bookings', 'quotes', 'invoices'] },
   online_store: { metrics: ['activeOrders', 'sales', 'invoiceDue', 'lowStock'], actions: ['orders', 'products', 'store'], tabs: ['orders', 'products', 'store'] },
   wholesale: { metrics: ['activeOrders', 'sales', 'toCollect', 'toPay', 'lowStock'], actions: ['orders', 'quotes', 'stock', 'khata'], tabs: ['orders', 'products', 'khata'] },
   manufacturing: { metrics: ['production', 'materials', 'activeOrders', 'lowStock'], actions: ['production', 'stock', 'orders', 'quotes'], tabs: ['products', 'orders', 'quotes'] },

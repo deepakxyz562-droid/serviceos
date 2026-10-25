@@ -18,53 +18,68 @@ export async function GET(request: NextRequest) {
     // Check for recent active visitor chat sessions (e.g. within last 30 minutes)
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
     
-    // Look up any active visitor chat records or telemetry in db
-    const activeChats = await db.chatMessage?.findMany({
+    // Look up real active public chat sessions in db
+    const activeSessions = await db.publicChatSession.findMany({
       where: {
-        createdAt: { gte: thirtyMinutesAgo },
         ...(tenantId ? { tenantId } : {}),
+        status: { in: ['active', 'claimed'] },
+        updatedAt: { gte: thirtyMinutesAgo },
       },
-      orderBy: { createdAt: 'desc' },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
       take: 20,
     }).catch(() => []);
 
     // If there are real active chat sessions, map them to visitor telemetry objects
-    const visitors = (activeChats || []).map((chat: any, idx: number) => ({
-      id: chat.sessionId || `vis_${chat.id}`,
-      name: chat.visitorName || `Visitor #${chat.sessionId?.slice(-4) || (1000 + idx)}`,
-      shortId: (chat.sessionId?.slice(-2) || `${idx + 1}`).toUpperCase(),
-      location: chat.location || 'Website Visitor',
-      page: chat.pageUrl || '/services',
-      duration: 'Active now',
-      intent: 'Chatting with Operator',
-      intentScore: 85,
-      device: chat.device || 'Web Browser',
-      deviceCategory: 'desktop',
-      referral: 'Direct / Website',
-      referralCategory: 'direct',
-      ip: chat.ip || 'Masked',
-      provider: 'Web Provider',
-      status: 'chatting',
-      statusLabel: 'Active in Chat',
-      quoteEstimate: 199,
-      timeline: [
-        {
-          time: new Date(chat.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          title: 'Chat Message Received',
-          desc: String(chat.message || '').slice(0, 80),
-          isCurrent: true,
+    const visitors = activeSessions.map((session, idx) => {
+      let meta: Record<string, any> = {};
+      try {
+        meta = JSON.parse(session.metadataJson || '{}');
+      } catch {}
+
+      const latestMsg = session.messages[0];
+      const minutesAgo = Math.max(1, Math.round((Date.now() - new Date(session.updatedAt).getTime()) / 60000));
+
+      return {
+        id: session.id,
+        name: session.visitorName || `Visitor #${session.id.slice(-4)}`,
+        shortId: (session.id.slice(-2) || `${idx + 1}`).toUpperCase(),
+        location: meta.city || meta.location || 'Website Visitor',
+        page: meta.currentPage || meta.page || '/services',
+        duration: `${minutesAgo}m on site`,
+        intent: session.messages.length > 0 ? 'Live Chat Active' : 'Browsing Services',
+        intentScore: session.messages.length > 2 ? 90 : session.messages.length > 0 ? 75 : 50,
+        device: meta.browser || meta.device || 'Web Browser',
+        deviceCategory: (meta.device || '').toLowerCase().includes('mobile') ? 'mobile' : 'desktop',
+        referral: meta.referrer || 'Direct / Website',
+        referralCategory: (meta.referrer || '').includes('google') ? 'maps' : 'direct',
+        ip: 'Masked',
+        provider: 'Live Chat',
+        status: session.status === 'claimed' ? 'chatting' : 'active',
+        statusLabel: session.status === 'claimed' ? 'Assigned to Agent' : 'Active on Site',
+        quoteEstimate: 0,
+        timeline: session.messages.map((m) => ({
+          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          title: m.senderType === 'admin' ? 'Operator Message' : 'Visitor Message',
+          desc: m.body.slice(0, 80),
+          isCurrent: m.id === latestMsg?.id,
+        })),
+        currentKeystroke: '',
+        suggestedReplies: [
+          'Hello! How can we assist you with our services today?',
+          'Would you like to schedule an appointment or get an estimate?',
+        ],
+        aiNudge: {
+          rule: 'High-Intent-Assistance',
+          message: 'Hello! I noticed you are checking our services. Would you like a quick quote or help booking?',
         },
-      ],
-      currentKeystroke: '',
-      suggestedReplies: [
-        'How can I help you book a service today?',
-        'Would you like a free estimate sent over?',
-      ],
-      aiNudge: {
-        rule: 'Active-Chat-Engaged',
-        message: 'A representative is currently assisting you.',
-      },
-    }));
+      };
+    });
 
     return NextResponse.json({
       visitors,

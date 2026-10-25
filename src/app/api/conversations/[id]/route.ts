@@ -28,7 +28,10 @@ export async function GET(
     const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId }
 
     const conversation = await db.conversation.findFirst({
-      where: { id, ...tenantFilter },
+      where: {
+        OR: [{ id }, { conversationId: id }],
+        ...tenantFilter,
+      },
       include: {
         customer: { select: { id: true, name: true, phone: true, email: true } },
         lead: { select: { id: true, name: true, status: true, serviceType: true } },
@@ -90,7 +93,10 @@ export async function PUT(
     const body = await request.json()
 
     const existing = await db.conversation.findFirst({
-      where: { id, ...tenantFilter },
+      where: {
+        OR: [{ id }, { conversationId: id }],
+        ...tenantFilter,
+      },
     })
     if (!existing) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
@@ -143,7 +149,7 @@ export async function PUT(
     }
 
     const conversation = await db.conversation.update({
-      where: { id },
+      where: { id: existing.id },
       data: updateData,
       include: {
         customer: { select: { id: true, name: true, phone: true } },

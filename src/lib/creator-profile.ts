@@ -11,7 +11,7 @@ export interface CreatorOffer {
   type: 'one_on_one' | 'consultation' | 'ask_question' | 'digital_product' | 'package';
   description: string;
   price: number; // In base units (e.g. 999 for ₹999, 29 for $29)
-  currency: 'INR' | 'USD' | 'EUR';
+  currency: 'INR' | 'USD' | 'EUR' | string;
   durationMinutes?: number; // For 1:1 calls (15, 30, 45, 60)
   eventSlug?: string; // Connected event type slug in slot engine (e.g. '30min')
   downloadUrl?: string; // For digital products
@@ -47,6 +47,38 @@ export interface HeroConfig {
   }>;
 }
 
+export type PortfolioMediaType = 'youtube' | 'instagram' | 'image' | 'vimeo' | 'link';
+
+export interface PortfolioMediaItem {
+  id: string;
+  type: PortfolioMediaType;
+  title: string;
+  caption?: string;
+  url: string;
+  embedId?: string;
+  embedUrl?: string;
+  thumbnailUrl?: string;
+  category?: string;     // e.g. "Acting Showreel", "Monologue", "Fashion Shoot", "Commercial", "Wedding", "Headshot"
+  featured?: boolean;    // Pinned to hero / top showreel player
+  isShortOrReel?: boolean;
+  order: number;
+}
+
+export interface CreativeCastingSpecs {
+  profession?: 'actor' | 'photographer' | 'videographer' | 'model' | 'voice_artist' | 'creator' | 'performer' | 'other';
+  height?: string;         // e.g. "5'10\"" or "178 cm"
+  playingAgeRange?: string; // e.g. "24 - 34"
+  eyeColor?: string;       // e.g. "Brown", "Hazel", "Blue"
+  hairColor?: string;      // e.g. "Black", "Dark Brown"
+  languages?: string[];    // e.g. ["English", "Hindi", "Punjabi"]
+  unionStatus?: string;    // e.g. "SAG-AFTRA", "Non-Union", "Equity"
+  agencyName?: string;     // e.g. "Elite Artists", "Independent"
+  agentEmail?: string;
+  agentPhone?: string;
+  imdbUrl?: string;
+  equipment?: string[];    // e.g. ["Sony FX3", "Canon EOS R5", "DJI Ronin"]
+}
+
 export interface CreatorProfileData {
   isEnabled: boolean; // Strictly opt-in: profile is only publicly published when true
   handle: string; // e.g. "mybusiness"
@@ -72,6 +104,8 @@ export interface CreatorProfileData {
   aiAgentEnabled: boolean;
   aiWelcomeMessage?: string;
   offers: CreatorOffer[];
+  portfolioMedia?: PortfolioMediaItem[];
+  creativeSpecs?: CreativeCastingSpecs;
   pageTitle?: string;
   metaDescription?: string;
   publishedStatus?: 'published' | 'draft' | 'archived';
@@ -181,13 +215,73 @@ export function buildDefaultCreatorProfile(tenant: {
   const businessName = tenant.name || 'Creator';
   const effectiveCurrency = (tenant.currency || 'USD').toUpperCase();
   const isINR = effectiveCurrency === 'INR';
+  const isCreative = /actor|photographer|videographer|creative|model|artist|performer|voice/i.test(tenant.industry || '');
+
+  const defaultMedia: PortfolioMediaItem[] = isCreative
+    ? [
+        {
+          id: 'media_showreel',
+          type: 'youtube',
+          title: 'Official Cinematic Showreel',
+          caption: 'High-definition performance, monologue, and cinematography highlights.',
+          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          embedId: 'dQw4w9WgXcQ',
+          embedUrl: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?rel=0&modestbranding=1',
+          thumbnailUrl: 'https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+          category: 'Showreel',
+          featured: true,
+          order: 1,
+        },
+        {
+          id: 'media_reel_1',
+          type: 'instagram',
+          title: 'On-Set BTS & Commercial Reel',
+          caption: 'Behind-the-scenes look at the commercial shoot and lighting setup.',
+          url: 'https://www.instagram.com/reel/C8qL1234567/',
+          embedId: 'C8qL1234567',
+          embedUrl: 'https://www.instagram.com/p/C8qL1234567/embed/captioned/',
+          category: 'Behind The Scenes',
+          isShortOrReel: true,
+          order: 2,
+        },
+        {
+          id: 'media_photo_1',
+          type: 'image',
+          title: 'Editorial Portrait & Headshot (3 Looks)',
+          caption: 'Natural-light character study and studio headshots.',
+          url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80',
+          thumbnailUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
+          category: 'Headshots & Portraits',
+          order: 3,
+        },
+      ]
+    : [];
+
+  const defaultCreativeSpecs: CreativeCastingSpecs = {
+    profession: /actor/i.test(tenant.industry || '')
+      ? 'actor'
+      : /photographer/i.test(tenant.industry || '')
+      ? 'photographer'
+      : /model/i.test(tenant.industry || '')
+      ? 'model'
+      : isCreative
+      ? 'creator'
+      : undefined,
+    languages: isCreative ? ['English', 'Hindi'] : undefined,
+    playingAgeRange: isCreative ? '22 - 32' : undefined,
+    height: isCreative ? `5'10" (178 cm)` : undefined,
+  };
 
   return {
     isEnabled: false, // Strictly opt-in: not published automatically
     handle: tenant.slug || 'creator',
     displayName: businessName,
-    headline: tenant.industry ? `${tenant.industry} Specialist & Consultant` : 'Professional Services & Consulting',
-    bio: `Welcome to ${businessName}'s public booking and services page. Explore 1:1 sessions, consultations, and digital resources below.`,
+    headline: isCreative
+      ? (tenant.industry ? `${tenant.industry} & Visual Artist` : 'Actor, Photographer & Visual Artist')
+      : (tenant.industry ? `${tenant.industry} Specialist & Consultant` : 'Professional Services & Consulting'),
+    bio: isCreative
+      ? `Welcome to ${businessName}'s official portfolio and booking page. Explore my showreel, photography works, video reels, and shoot packages below.`
+      : `Welcome to ${businessName}'s public booking and services page. Explore 1:1 sessions, consultations, and digital resources below.`,
     location: '',
     avatarUrl: tenant.logo || '',
     themeColor: '#2563EB',
@@ -200,19 +294,23 @@ export function buildDefaultCreatorProfile(tenant: {
     },
     aiAgentEnabled: true,
     aiWelcomeMessage: `Hi! I am ${businessName}’s AI Assistant. Ask me anything about our services, availability, or how we can help you.`,
+    portfolioMedia: defaultMedia,
+    creativeSpecs: defaultCreativeSpecs,
     offers: [
       {
         id: 'off_consult_30',
-        title: '1:1 Strategy & Consultation',
+        title: isCreative ? 'Casting / Project Consultation (30 Min)' : '1:1 Strategy & Consultation',
         slug: 'consultation-30min',
         type: 'one_on_one',
-        description: '30-minute high-impact video consultation. Deep dive into your roadmap, architecture, or growth strategy with direct feedback.',
+        description: isCreative
+          ? '30-minute creative consultation to discuss your script, shoot requirements, character vision, or casting fit.'
+          : '30-minute high-impact video consultation. Deep dive into your roadmap, architecture, or growth strategy with direct feedback.',
         price: isINR ? 999 : 49,
         currency: effectiveCurrency,
         durationMinutes: 30,
         eventSlug: '30min',
         badge: 'MOST POPULAR',
-        features: ['30 Min Google Meet', 'Actionable Roadmap Notes', 'Follow-up Q&A on chat'],
+        features: ['30 Min Google Meet', 'Script & Vision Review', 'Follow-up Notes'],
         isActive: true,
         order: 1,
       },
@@ -233,36 +331,42 @@ export function buildDefaultCreatorProfile(tenant: {
       },
       {
         id: 'off_ask_question',
-        title: 'Ask Me Anything (Priority Response)',
+        title: isCreative ? 'Script / Monologue Video Review' : 'Ask Me Anything (Priority Response)',
         slug: 'ask-a-question',
         type: 'ask_question',
-        description: 'Submit your specific technical or business question and receive a detailed, personalized written and audio response within 24 hours.',
-        price: isINR ? 199 : 19,
+        description: isCreative
+          ? 'Submit your monologue video, audition tape, or photography brief for detailed personalized feedback within 24 hours.'
+          : 'Submit your specific technical or business question and receive a detailed, personalized written and audio response within 24 hours.',
+        price: isINR ? 499 : 29,
         currency: effectiveCurrency,
         turnaroundHours: 24,
         badge: 'FAST RESPONSE',
-        features: ['Guaranteed reply in 24h', 'In-depth review of your problem', 'Actionable references'],
+        features: ['Guaranteed reply in 24h', 'Detailed feedback notes', 'Actionable suggestions'],
         isActive: true,
         order: 3,
       },
       {
         id: 'off_digital_template',
-        title: 'SaaS Launch & Architecture Playbook',
-        slug: 'saas-playbook-template',
-        type: 'digital_product',
-        description: 'Comprehensive Notion templates, architecture checklists, and production deployment guide used to scale SaaS applications.',
-        price: isINR ? 499 : 29,
+        title: isCreative ? 'Half-Day Shoot / Production Session' : 'SaaS Launch & Architecture Playbook',
+        slug: isCreative ? 'half-day-production' : 'saas-playbook-template',
+        type: isCreative ? 'package' : 'digital_product',
+        description: isCreative
+          ? '4 hours on-location or studio production. Includes 3 looks/scenes, color-graded deliverables, and commercial usage rights.'
+          : 'Comprehensive Notion templates, architecture checklists, and production deployment guide used to scale SaaS applications.',
+        price: isINR ? (isCreative ? 15000 : 499) : (isCreative ? 499 : 29),
         currency: effectiveCurrency,
-        downloadUrl: 'https://assets.serviceos.com/templates/saas-launch-playbook.pdf',
-        fileSize: '6.4 MB Guide & Checklist',
-        badge: 'INSTANT DOWNLOAD',
-        features: ['Production Architecture Checklist', 'Tech Stack Selection Matrix', 'Lifetime updates'],
+        downloadUrl: isCreative ? undefined : 'https://assets.serviceos.com/templates/saas-launch-playbook.pdf',
+        fileSize: isCreative ? undefined : '6.4 MB Guide & Checklist',
+        badge: isCreative ? 'PREMIUM PACKAGE' : 'INSTANT DOWNLOAD',
+        features: isCreative
+          ? ['4-Hour On-Location/Studio Shoot', '3 Looks / Scenes Covered', 'High-Res Color Graded Deliverables', 'Full Commercial Rights']
+          : ['Production Architecture Checklist', 'Tech Stack Selection Matrix', 'Lifetime updates'],
         isActive: true,
         order: 4,
       },
     ],
-    pageTitle: `${businessName} | Professional Cleaning & Services`,
-    metaDescription: `Professional home and office cleaning services. Book online, get a free quote and enjoy a cleaner, healthier space.`,
+    pageTitle: `${businessName} | ${isCreative ? 'Creative Portfolio & Showreel' : 'Professional Cleaning & Services'}`,
+    metaDescription: `${businessName}'s official portfolio, showreels, media galleries, and service packages. Book sessions and request quotes online.`,
     publishedStatus: 'published',
     websiteSections: DEFAULT_WEBSITE_SECTIONS,
     heroConfig: DEFAULT_HERO_CONFIG,

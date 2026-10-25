@@ -26,6 +26,16 @@ import {
   FileInput,
   Zap,
   UserCircle,
+  Play,
+  Camera,
+  Film,
+  Youtube,
+  Instagram,
+  Image as ImageIcon,
+  Images,
+  Maximize2,
+  Eye,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,8 +45,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { CreatorOffer, CreatorProfileData, buildDefaultCreatorProfile } from '@/lib/creator-profile';
+import {
+  CreatorOffer,
+  CreatorProfileData,
+  PortfolioMediaItem,
+  CreativeCastingSpecs,
+  buildDefaultCreatorProfile,
+} from '@/lib/creator-profile';
 import { formatCurrency } from '@/lib/currency-resolver';
+import { getYouTubeEmbedUrl, parseMediaUrl } from '@/lib/media-embed';
 
 export default function CreatorPublicProfilePage({
   params,
@@ -50,13 +67,16 @@ export default function CreatorPublicProfilePage({
   const [marketplaceSlug, setMarketplaceSlug] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<'all' | 'calls' | 'questions' | 'products' | 'forms'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'packages' | 'calls' | 'questions' | 'products' | 'forms'>('all');
 
   // Active Modals State
   const [selectedOfferForBooking, setSelectedOfferForBooking] = useState<CreatorOffer | null>(null);
   const [selectedOfferForQuestion, setSelectedOfferForQuestion] = useState<CreatorOffer | null>(null);
   const [selectedOfferForProduct, setSelectedOfferForProduct] = useState<CreatorOffer | null>(null);
   const [showAiChat, setShowAiChat] = useState(false);
+  const [activeMediaFilter, setActiveMediaFilter] = useState<'all' | 'videos' | 'reels' | 'photos'>('all');
+  const [selectedVideoForModal, setSelectedVideoForModal] = useState<PortfolioMediaItem | null>(null);
+  const [selectedPhotoForLightbox, setSelectedPhotoForLightbox] = useState<PortfolioMediaItem | null>(null);
 
   // Booking Flow State
   const [bookingDate, setBookingDate] = useState(() => {
@@ -131,11 +151,42 @@ export default function CreatorPublicProfilePage({
   const filteredOffers = useMemo(() => {
     if (!creator?.offers) return [];
     if (activeCategory === 'all') return creator.offers;
+    if (activeCategory === 'packages') return creator.offers.filter((o) => o.type === 'package');
     if (activeCategory === 'calls') return creator.offers.filter((o) => o.type === 'one_on_one' || o.type === 'consultation');
     if (activeCategory === 'questions') return creator.offers.filter((o) => o.type === 'ask_question');
     if (activeCategory === 'products') return creator.offers.filter((o) => o.type === 'digital_product');
     return creator.offers;
   }, [creator?.offers, activeCategory]);
+
+  // Featured Media / Showreel
+  const featuredMedia = useMemo(() => {
+    if (!creator?.portfolioMedia?.length) return null;
+    return (
+      creator.portfolioMedia.find((m) => m.featured && (m.type === 'youtube' || m.type === 'vimeo')) ||
+      creator.portfolioMedia.find((m) => m.type === 'youtube' || m.type === 'vimeo') ||
+      creator.portfolioMedia.find((m) => m.featured) ||
+      creator.portfolioMedia[0]
+    );
+  }, [creator?.portfolioMedia]);
+
+  const featuredEmbedUrl = useMemo(() => {
+    if (!featuredMedia) return null;
+    if (featuredMedia.embedUrl) return featuredMedia.embedUrl;
+    if (featuredMedia.type === 'youtube') {
+      return getYouTubeEmbedUrl(featuredMedia.url);
+    }
+    return null;
+  }, [featuredMedia]);
+
+  // Filtered Media Showcase
+  const filteredPortfolioMedia = useMemo(() => {
+    if (!creator?.portfolioMedia) return [];
+    if (activeMediaFilter === 'all') return creator.portfolioMedia;
+    if (activeMediaFilter === 'videos') return creator.portfolioMedia.filter((m) => m.type === 'youtube' || m.type === 'vimeo');
+    if (activeMediaFilter === 'reels') return creator.portfolioMedia.filter((m) => m.type === 'instagram' || m.isShortOrReel);
+    if (activeMediaFilter === 'photos') return creator.portfolioMedia.filter((m) => m.type === 'image');
+    return creator.portfolioMedia;
+  }, [creator?.portfolioMedia, activeMediaFilter]);
 
   // Copy Profile Link
   const handleCopyLink = () => {
@@ -411,31 +462,116 @@ export default function CreatorPublicProfilePage({
           )}
 
           {/* Social Links Row */}
-          {creator?.socialLinks && Object.values(creator.socialLinks).some(Boolean) && (
+          {((creator?.socialLinks && Object.values(creator.socialLinks).some(Boolean)) || creator?.creativeSpecs?.imdbUrl) && (
             <div className="flex items-center gap-3 mt-4 pt-3 text-xs font-semibold text-muted-foreground flex-wrap">
-              {creator.socialLinks.twitter && (
+              {creator?.socialLinks?.youtube && (
+                <a href={creator.socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="hover:text-red-600 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400">
+                  <Youtube className="size-3.5 fill-red-600" />
+                  <span>YouTube</span>
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
+              {creator?.socialLinks?.instagram && (
+                <a href={creator.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-pink-600 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400">
+                  <Instagram className="size-3.5" />
+                  <span>Instagram</span>
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
+              {creator?.creativeSpecs?.imdbUrl && (
+                <a href={creator.creativeSpecs.imdbUrl} target="_blank" rel="noopener noreferrer" className="hover:text-amber-600 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                  <Film className="size-3.5" />
+                  <span>IMDb Profile</span>
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
+              {creator?.socialLinks?.twitter && (
                 <a href={creator.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors flex items-center gap-1">
                   <span>Twitter / X</span>
                   <ExternalLink className="size-3" />
                 </a>
               )}
-              {creator.socialLinks.linkedin && (
+              {creator?.socialLinks?.linkedin && (
                 <a href={creator.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors flex items-center gap-1">
                   <span>LinkedIn</span>
                   <ExternalLink className="size-3" />
                 </a>
               )}
-              {creator.socialLinks.github && (
+              {creator?.socialLinks?.github && (
                 <a href={creator.socialLinks.github} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors flex items-center gap-1">
                   <span>GitHub</span>
                   <ExternalLink className="size-3" />
                 </a>
               )}
-              {creator.socialLinks.website && (
+              {creator?.socialLinks?.website && (
                 <a href={creator.socialLinks.website} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors flex items-center gap-1">
                   <Globe className="size-3" />
                   <span>Website</span>
                 </a>
+              )}
+            </div>
+          )}
+
+          {/* ── CASTING & PROFESSIONAL SPECS (FOR ACTORS, PHOTOGRAPHERS, CREATIVES) ── */}
+          {creator?.creativeSpecs && (creator.creativeSpecs.profession || creator.creativeSpecs.height || creator.creativeSpecs.playingAgeRange || creator.creativeSpecs.agencyName || (creator.creativeSpecs.languages && creator.creativeSpecs.languages.length > 0)) && (
+            <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-2.5">
+              <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <Camera className="size-3.5 text-blue-600" />
+                <span>Professional &amp; Casting Specs</span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                {creator.creativeSpecs.profession && (
+                  <Badge variant="secondary" className="font-bold capitalize bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+                    {creator.creativeSpecs.profession.replace('_', ' ')}
+                  </Badge>
+                )}
+                {creator.creativeSpecs.playingAgeRange && (
+                  <Badge variant="outline" className="font-medium text-slate-600 dark:text-slate-300">
+                    Playing Age: {creator.creativeSpecs.playingAgeRange}
+                  </Badge>
+                )}
+                {creator.creativeSpecs.height && (
+                  <Badge variant="outline" className="font-medium text-slate-600 dark:text-slate-300">
+                    Height: {creator.creativeSpecs.height}
+                  </Badge>
+                )}
+                {creator.creativeSpecs.eyeColor && (
+                  <Badge variant="outline" className="font-medium text-slate-600 dark:text-slate-300">
+                    Eyes: {creator.creativeSpecs.eyeColor}
+                  </Badge>
+                )}
+                {creator.creativeSpecs.hairColor && (
+                  <Badge variant="outline" className="font-medium text-slate-600 dark:text-slate-300">
+                    Hair: {creator.creativeSpecs.hairColor}
+                  </Badge>
+                )}
+                {creator.creativeSpecs.languages && creator.creativeSpecs.languages.length > 0 && (
+                  <Badge variant="outline" className="font-medium text-slate-600 dark:text-slate-300">
+                    Languages: {creator.creativeSpecs.languages.join(', ')}
+                  </Badge>
+                )}
+                {creator.creativeSpecs.unionStatus && (
+                  <Badge variant="outline" className="font-bold text-emerald-600 border-emerald-500/30">
+                    {creator.creativeSpecs.unionStatus}
+                  </Badge>
+                )}
+              </div>
+              {creator.creativeSpecs.agencyName && (
+                <div className="text-xs text-muted-foreground pt-0.5">
+                  Represented by <strong className="text-foreground">{creator.creativeSpecs.agencyName}</strong>
+                  {creator.creativeSpecs.agentEmail && (
+                    <span className="ml-1 text-slate-500">• {creator.creativeSpecs.agentEmail}</span>
+                  )}
+                  {creator.creativeSpecs.agentPhone && (
+                    <span className="ml-1 text-slate-500">• {creator.creativeSpecs.agentPhone}</span>
+                  )}
+                </div>
+              )}
+              {creator.creativeSpecs.equipment && creator.creativeSpecs.equipment.length > 0 && (
+                <div className="pt-1 text-[11px] text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  <span className="font-semibold text-foreground">Gear &amp; Equipment:</span>
+                  <span>{creator.creativeSpecs.equipment.join(' • ')}</span>
+                </div>
               )}
             </div>
           )}
@@ -488,6 +624,211 @@ export default function CreatorPublicProfilePage({
           </div>
         )}
 
+        {/* ── FEATURED SHOWREEL / VIDEO SHOWCASE ── */}
+        {featuredMedia && (
+          <div className="rounded-3xl border bg-slate-950 overflow-hidden shadow-lg relative text-white">
+            <div className="p-4 sm:p-5 flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-xl bg-red-600 flex items-center justify-center text-white shadow-sm shrink-0">
+                  <Play className="size-4 fill-white" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold tracking-tight text-white">{featuredMedia.title || 'Official Showreel'}</h3>
+                    {featuredMedia.category && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-white/80 border border-white/10">
+                        {featuredMedia.category}
+                      </span>
+                    )}
+                  </div>
+                  {featuredMedia.caption && (
+                    <p className="text-xs text-white/70 line-clamp-1 mt-0.5">{featuredMedia.caption}</p>
+                  )}
+                </div>
+              </div>
+              <Badge variant="secondary" className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-red-500/20 text-red-300 border border-red-500/30">
+                Featured Reel
+              </Badge>
+            </div>
+
+            <div className="relative aspect-video w-full bg-black">
+              {featuredEmbedUrl ? (
+                <iframe
+                  src={featuredEmbedUrl}
+                  title={featuredMedia.title || 'Featured Showreel'}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              ) : featuredMedia.thumbnailUrl ? (
+                <div
+                  className="w-full h-full relative group cursor-pointer"
+                  onClick={() => setSelectedVideoForModal(featuredMedia)}
+                >
+                  <img
+                    src={featuredMedia.thumbnailUrl}
+                    alt={featuredMedia.title}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/25 transition-all">
+                    <div className="size-16 rounded-full bg-red-600 text-white flex items-center justify-center shadow-2xl group-hover:scale-110 transition-transform">
+                      <Play className="size-8 fill-white ml-1" />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {/* ── PORTFOLIO & MEDIA SHOWCASE (VIDEOS, REELS & PHOTOS) ── */}
+        {creator?.portfolioMedia && creator.portfolioMedia.length > 0 && (
+          <div className="space-y-4 pt-1">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black tracking-tight text-foreground flex items-center gap-2">
+                  <Film className="size-5 text-blue-600" />
+                  <span>Portfolio &amp; Creative Works</span>
+                </h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Watch showreels, audition clips, photography lookbooks &amp; recent productions.
+                </p>
+              </div>
+
+              {/* Media Sub-Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {[
+                  { id: 'all', label: 'All Works', icon: Film },
+                  { id: 'videos', label: 'Videos', icon: Youtube },
+                  { id: 'reels', label: 'Reels', icon: Instagram },
+                  { id: 'photos', label: 'Photos', icon: ImageIcon },
+                ].map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveMediaFilter(tab.id as any)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5',
+                        activeMediaFilter === tab.id
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'bg-white dark:bg-slate-900 text-muted-foreground hover:text-foreground border'
+                      )}
+                    >
+                      <Icon className="size-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredPortfolioMedia.map((item) => {
+                const isYoutube = item.type === 'youtube';
+                const isInsta = item.type === 'instagram';
+                const isImage = item.type === 'image';
+                const isVimeo = item.type === 'vimeo';
+
+                return (
+                  <Card
+                    key={item.id}
+                    className="group overflow-hidden rounded-2xl border bg-white dark:bg-slate-900 hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    {/* Media Thumbnail Container */}
+                    <div className="relative aspect-video w-full bg-slate-950 overflow-hidden">
+                      {item.thumbnailUrl ? (
+                        <img
+                          src={item.thumbnailUrl}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
+                          <Film className="size-8" />
+                        </div>
+                      )}
+
+                      {/* Badge / Type Overlay */}
+                      <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                        <span className={cn(
+                          'text-[10px] font-black uppercase px-2 py-0.5 rounded-md flex items-center gap-1 text-white shadow-sm',
+                          isYoutube ? 'bg-red-600' : isInsta ? 'bg-gradient-to-r from-purple-600 to-pink-600' : isImage ? 'bg-emerald-600' : 'bg-blue-600'
+                        )}>
+                          {isYoutube && <Youtube className="size-3 fill-white" />}
+                          {isInsta && <Instagram className="size-3" />}
+                          {isImage && <ImageIcon className="size-3" />}
+                          <span>{isYoutube ? (item.isShortOrReel ? 'Short' : 'YouTube') : isInsta ? 'Reel' : isImage ? 'Photo' : 'Video'}</span>
+                        </span>
+
+                        {item.category && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white/90 border border-white/10">
+                            {item.category}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Play / Expand Overlay Action */}
+                      <div
+                        onClick={() => {
+                          if (isYoutube || isVimeo) setSelectedVideoForModal(item);
+                          else if (isImage) setSelectedPhotoForLightbox(item);
+                          else if (isInsta && item.url) window.open(item.url, '_blank');
+                        }}
+                        className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                      >
+                        <div className="size-11 rounded-full bg-white/90 text-slate-900 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                          {isImage ? <Maximize2 className="size-5" /> : <Play className="size-5 fill-slate-900 ml-0.5" />}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card Content & Title */}
+                    <CardHeader className="p-3.5 space-y-1">
+                      <CardTitle className="text-sm font-bold text-foreground group-hover:text-blue-600 transition-colors line-clamp-1">
+                        {item.title}
+                      </CardTitle>
+                      {item.caption && (
+                        <CardDescription className="text-xs text-muted-foreground line-clamp-2">
+                          {item.caption}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+
+                    {/* Action Footer */}
+                    <CardContent className="p-3.5 pt-0 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isYoutube || isVimeo) setSelectedVideoForModal(item);
+                          else if (isImage) setSelectedPhotoForLightbox(item);
+                          else if (item.url) window.open(item.url, '_blank');
+                        }}
+                        className="text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 text-[11px]"
+                      >
+                        <span>{isImage ? 'View Photo' : isInsta ? 'Watch on Instagram' : 'Watch Video'}</span>
+                        <ArrowRight className="size-3" />
+                      </button>
+
+                      {item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-foreground p-1 rounded-md"
+                          title="Open original link"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </a>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── PROMINENT "ASK AI" ASSISTANT BANNER ── */}
         <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
@@ -520,10 +861,11 @@ export default function CreatorPublicProfilePage({
         {/* ── CATEGORY FILTER TABS ── */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
           {[
-            { id: 'all', label: 'All Offers', count: creator?.offers?.length || 0 },
-            { id: 'calls', label: '1:1 Video Calls', count: creator?.offers?.filter((o) => o.type === 'one_on_one' || o.type === 'consultation').length || 0 },
-            { id: 'questions', label: 'Ask a Question', count: creator?.offers?.filter((o) => o.type === 'ask_question').length || 0 },
-            { id: 'products', label: 'Digital Products', count: creator?.offers?.filter((o) => o.type === 'digital_product').length || 0 },
+            { id: 'all', label: 'All Services', count: creator?.offers?.length || 0 },
+            { id: 'packages', label: 'Shoot Packages', count: creator?.offers?.filter((o) => o.type === 'package').length || 0 },
+            { id: 'calls', label: '1:1 Consultations', count: creator?.offers?.filter((o) => o.type === 'one_on_one' || o.type === 'consultation').length || 0 },
+            { id: 'questions', label: 'Video Reviews & Q&A', count: creator?.offers?.filter((o) => o.type === 'ask_question').length || 0 },
+            { id: 'products', label: 'Guides & Assets', count: creator?.offers?.filter((o) => o.type === 'digital_product').length || 0 },
           ].map((cat) => (
             <button
               key={cat.id}
@@ -551,6 +893,7 @@ export default function CreatorPublicProfilePage({
             const isCall = offer.type === 'one_on_one' || offer.type === 'consultation';
             const isQuestion = offer.type === 'ask_question';
             const isProduct = offer.type === 'digital_product';
+            const isPackage = offer.type === 'package';
 
             return (
               <Card
@@ -563,13 +906,14 @@ export default function CreatorPublicProfilePage({
                       <div className={cn(
                         'size-8 rounded-xl flex items-center justify-center shrink-0',
                         isCall ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/50' :
+                        isPackage ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/50' :
                         isQuestion ? 'bg-purple-50 text-purple-600 dark:bg-purple-950/50' :
                         'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50'
                       )}>
-                        {isCall ? <Video className="size-4" /> : isQuestion ? <MessageSquare className="size-4" /> : <Download className="size-4" />}
+                        {isCall ? <Video className="size-4" /> : isPackage ? <Camera className="size-4" /> : isQuestion ? <MessageSquare className="size-4" /> : <Download className="size-4" />}
                       </div>
                       <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {isCall ? `${offer.durationMinutes || 30} Min Call` : isQuestion ? 'Priority Query' : 'Resource / Guide'}
+                        {isCall ? `${offer.durationMinutes || 30} Min Call` : isPackage ? 'Shoot / Package' : isQuestion ? 'Priority Query' : 'Resource / Guide'}
                       </span>
                     </div>
 
@@ -612,7 +956,7 @@ export default function CreatorPublicProfilePage({
                   <Button
                     type="button"
                     onClick={() => {
-                      if (isCall) {
+                      if (isCall || isPackage) {
                         setSelectedOfferForBooking(offer);
                       } else if (isQuestion) {
                         setSelectedOfferForQuestion(offer);
@@ -623,11 +967,12 @@ export default function CreatorPublicProfilePage({
                     className={cn(
                       'text-xs font-bold rounded-xl h-9 px-4 gap-1.5 shadow-2xs',
                       isCall ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                      isPackage ? 'bg-amber-600 hover:bg-amber-700 text-white' :
                       isQuestion ? 'bg-purple-600 hover:bg-purple-700 text-white' :
                       'bg-emerald-600 hover:bg-emerald-700 text-white'
                     )}
                   >
-                    <span>{isCall ? 'Book Slot' : isQuestion ? 'Ask Now' : 'Get Template'}</span>
+                    <span>{isCall ? 'Book Slot' : isPackage ? 'Book Shoot' : isQuestion ? 'Ask Now' : 'Get Template'}</span>
                     <ChevronRight className="size-3.5" />
                   </Button>
                 </CardContent>
@@ -1020,6 +1365,67 @@ export default function CreatorPublicProfilePage({
             >
               <Send className="size-4" />
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: PLAY VIDEO EMBED DIALOG ── */}
+      <Dialog open={Boolean(selectedVideoForModal)} onOpenChange={(open) => { if (!open) setSelectedVideoForModal(null); }}>
+        <DialogContent className="sm:max-w-3xl rounded-3xl p-4 sm:p-6 bg-slate-950 text-white border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Film className="size-4 text-blue-400" />
+              <span>{selectedVideoForModal?.title || 'Video Player'}</span>
+            </DialogTitle>
+            {selectedVideoForModal?.caption && (
+              <DialogDescription className="text-xs text-slate-400">
+                {selectedVideoForModal.caption}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black mt-2">
+            {selectedVideoForModal && (
+              <iframe
+                src={
+                  selectedVideoForModal.embedUrl ||
+                  (selectedVideoForModal.type === 'youtube'
+                    ? getYouTubeEmbedUrl(selectedVideoForModal.url, { autoplay: true }) || ''
+                    : selectedVideoForModal.url)
+                }
+                title={selectedVideoForModal.title}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: PHOTO LIGHTBOX DIALOG ── */}
+      <Dialog open={Boolean(selectedPhotoForLightbox)} onOpenChange={(open) => { if (!open) setSelectedPhotoForLightbox(null); }}>
+        <DialogContent className="sm:max-w-2xl rounded-3xl p-4 sm:p-6 bg-slate-950 text-white border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold flex items-center gap-2">
+              <Camera className="size-4 text-emerald-400" />
+              <span>{selectedPhotoForLightbox?.title || 'Photo View'}</span>
+            </DialogTitle>
+            {selectedPhotoForLightbox?.caption && (
+              <DialogDescription className="text-xs text-slate-400">
+                {selectedPhotoForLightbox.caption}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+
+          <div className="relative max-h-[70vh] flex items-center justify-center rounded-2xl overflow-hidden bg-black mt-2">
+            {selectedPhotoForLightbox && (
+              <img
+                src={selectedPhotoForLightbox.url || selectedPhotoForLightbox.thumbnailUrl}
+                alt={selectedPhotoForLightbox.title}
+                className="max-h-[65vh] w-auto object-contain rounded-xl"
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>

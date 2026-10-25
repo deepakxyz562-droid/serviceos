@@ -33,6 +33,7 @@ const BUSINESS_TYPES: BusinessType[] = [
   'salon',
   'wholesale',
   'freelancer',
+  'creative',
   'online_store',
   'manufacturing',
   'other',
@@ -354,6 +355,22 @@ export default function BlueprintSetupScreen() {
                 <Switch
                   value={capabilities.jobs}
                   onValueChange={() => toggleCap('jobs')}
+                  trackColor={{ false: '#cbd5e1', true: '#10b981' }}
+                />
+              </View>
+            </View>
+
+            {/* Showcase & Creative Media */}
+            <View style={styles.groupCard}>
+              <Text style={styles.groupTitle}>Showcase &amp; Portfolio</Text>
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.toggleLabel}>Portfolio &amp; Showreel</Text>
+                  <Text style={styles.toggleSub}>Showreel, YouTube/Instagram embeds &amp; casting specs</Text>
+                </View>
+                <Switch
+                  value={!!capabilities.portfolio}
+                  onValueChange={() => toggleCap('portfolio')}
                   trackColor={{ false: '#cbd5e1', true: '#10b981' }}
                 />
               </View>
