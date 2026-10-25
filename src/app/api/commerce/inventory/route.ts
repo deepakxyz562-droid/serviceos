@@ -28,6 +28,36 @@ export async function GET(req: NextRequest) {
     const { business } = await requireQuoteFlowBusiness(req);
     const tenantId = business.tenantId || business.id;
 
+    // Honor tenant blueprint capabilities: if inventory and catalog are disabled (e.g. services),
+    // return clean zero state instead of exposing unmanaged inventory items.
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, settingsJson: true },
+    });
+    let blueprintCaps: any = null;
+    if (tenant?.settingsJson) {
+      try {
+        const parsedSettings =
+          typeof tenant.settingsJson === 'string'
+            ? JSON.parse(tenant.settingsJson)
+            : tenant.settingsJson;
+        blueprintCaps = parsedSettings?.blueprint?.capabilities;
+      } catch {
+        // ignore parse error
+      }
+    }
+    if (blueprintCaps && blueprintCaps.inventory === false && blueprintCaps.catalog === false) {
+      return NextResponse.json({
+        items: [],
+        lowStockItems: [],
+        totalItemsCount: 0,
+        lowStockCount: 0,
+        totalValuation: 0,
+        isFallback: false,
+        disabledByBlueprint: true,
+      });
+    }
+
     const items = await db.inventoryItem.findMany({
       where: { tenantId },
       orderBy: { name: 'asc' },

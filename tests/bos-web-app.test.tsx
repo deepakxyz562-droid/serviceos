@@ -317,4 +317,75 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     expect(refreshBtn).toBeTruthy();
     fireEvent.click(refreshBtn);
   });
+
+  it('honors service business blueprint: hides retail POS & product inventory for service businesses', async () => {
+    const origFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/tenant/blueprint')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            blueprint: {
+              businessType: 'services',
+              businessName: 'Singh Fabrication',
+              salesChannels: ['at_location', 'whatsapp'],
+              country: 'IN',
+              capabilities: {
+                onlineStore: false,
+                orders: false,
+                posRegister: false,
+                catalog: false,
+                inventory: false,
+                calendarBooking: true,
+                jobs: true,
+                invoicing: true,
+                quotes: true,
+                expenses: true,
+                customerCredit: true,
+                customers: true,
+                whatsapp: true,
+              },
+            },
+            countryPack: { currency: { symbol: '₹' }, vocabulary: { customerCredit: 'Khata' } },
+          }),
+        });
+      }
+      if (url.includes('/api/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            user: { id: 'u1', name: 'Gurpreet Singh', email: 'singh@example.com' },
+            organization: { name: 'Singh Fabrication' },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({ items: [], orders: [] }),
+      });
+    });
+
+    try {
+      render(<BosWebApp demoMode={false} />);
+
+      await vi.waitFor(() => {
+        expect(screen.getByText('Singh Fabrication')).toBeTruthy();
+      });
+
+      const nav = screen.getByRole('navigation', { name: /BOS Primary Navigation/i });
+      // POS and Products & Inventory must be hidden for services business type
+      expect(nav.textContent).not.toContain('Sales / POS');
+      expect(nav.textContent).not.toContain('Products & Inventory');
+
+      // Relevant service modules must be present
+      expect(nav.textContent).toContain('Appointments');
+      expect(nav.textContent).toContain('Invoices');
+      expect(nav.textContent).toContain('Customers');
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
 });

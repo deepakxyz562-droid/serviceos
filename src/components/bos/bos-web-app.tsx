@@ -1063,7 +1063,7 @@ function BosWebAppInner({
   const visibleNavItems = useMemo(() => {
     const rawItems = blueprintFilterEnabled
       ? BOS_PRIMARY_NAV_ITEMS.filter(
-          (item) => isNavItemEnabledByBlueprint(item.id) || item.id === activeView,
+          (item) => isNavItemEnabledByBlueprint(item.id) || (demoMode && item.id === activeView),
         )
       : [...BOS_PRIMARY_NAV_ITEMS];
 
@@ -1089,7 +1089,21 @@ function BosWebAppInner({
       }
       return item;
     });
-  }, [blueprintFilterEnabled, isNavItemEnabledByBlueprint, activeView, storeSettings.blueprintType]);
+  }, [blueprintFilterEnabled, isNavItemEnabledByBlueprint, activeView, storeSettings.blueprintType, demoMode]);
+
+  // Gracefully redirect away from views disabled by the merchant's business blueprint
+  useEffect(() => {
+    if (demoMode || !blueprintFilterEnabled) return;
+    if (!isNavItemEnabledByBlueprint(activeView)) {
+      const fallbackView: BosNavId =
+        storeSettings.blueprintType === 'services' || storeSettings.blueprintType === 'salon'
+          ? 'appointments'
+          : storeSettings.blueprintType === 'creative' || storeSettings.blueprintType === 'freelancer'
+          ? 'invoices'
+          : 'dashboard';
+      setActiveView(fallbackView);
+    }
+  }, [activeView, isNavItemEnabledByBlueprint, blueprintFilterEnabled, demoMode, storeSettings.blueprintType]);
 
   const activeNavMeta = useMemo(
     () => BOS_PRIMARY_NAV_ITEMS.find((i) => i.id === activeView) || BOS_PRIMARY_NAV_ITEMS[0],
@@ -1214,14 +1228,18 @@ function BosWebAppInner({
                 : {}),
             }));
 
+            setBlueprintFilterEnabled(true);
+
             if (
               typeof window !== 'undefined' &&
               !window.location.search.includes('view=') &&
               !window.location.search.includes('tab=') &&
-              !initialView
+              (!initialView || initialView === 'dashboard')
             ) {
               if (bType === 'salon' || bType === 'services') {
-                setActiveView((curr) => (curr === 'dashboard' || curr === 'pos' ? 'appointments' : curr));
+                setActiveView((curr) => (curr === 'dashboard' || curr === 'pos' || curr === 'inventory' ? 'appointments' : curr));
+              } else if (bType === 'creative' || bType === 'freelancer') {
+                setActiveView((curr) => (curr === 'pos' || curr === 'inventory' ? 'invoices' : curr));
               }
             }
           }
@@ -2878,6 +2896,7 @@ function BosWebAppInner({
                       onChange={(e) => {
                         const nextType = e.target.value as BusinessType;
                         const label = BUSINESS_TYPE_LABELS[nextType]?.label || storeSettings.businessType;
+                        setBlueprintFilterEnabled(true);
                         void handleUpdateStoreSettings({
                           blueprintType: nextType,
                           businessType: label,

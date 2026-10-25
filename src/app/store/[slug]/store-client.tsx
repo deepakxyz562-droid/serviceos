@@ -1132,10 +1132,22 @@ export function StoreClient({
                   {t('store.freshGuarantee', '100% Fresh Guarantee', '100% ताज़ा गारंटी')}
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                  {t('store.heroTitle', 'Fresh Groceries Delivered to Your Home', 'ताज़ा राशन और फल-सब्जियां सीधे आपके घर')}
+                  {bannerText?.trim() ||
+                    greeting?.trim() ||
+                    (businessName
+                      ? `Welcome to ${businessName}`
+                      : t('store.heroTitle', 'Fresh Groceries Delivered to Your Home', 'ताज़ा राशन और फल-सब्जियां सीधे आपके घर'))}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 font-medium">
-                  {t('store.heroSubtitle', 'Farm fresh produce, daily essentials, snacks, and dairy delivered in 30–45 minutes.', 'दैनिक जरूरत का सामान, दूध और नाश्ता मात्र 30–45 मिनट में डिलीवरी।')}
+                  {greeting?.trim() && bannerText?.trim()
+                    ? greeting.trim()
+                    : businessName
+                    ? 'Explore our catalog, special offers and order directly.'
+                    : t(
+                        'store.heroSubtitle',
+                        'Farm fresh produce, daily essentials, snacks, and dairy delivered in 30–45 minutes.',
+                        'दैनिक जरूरत का सामान, दूध और नाश्ता मात्र 30–45 मिनट में डिलीवरी।',
+                      )}
                 </p>
                 <div className="pt-2">
                   <button

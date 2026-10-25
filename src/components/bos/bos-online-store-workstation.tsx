@@ -1814,36 +1814,112 @@ export function BosOnlineStoreWorkstation({
               {/* Search Bar */}
               <div className="flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-2.5 py-1.5 text-[10.5px] text-[#94A3B8]">
                 <Search className="h-3.5 w-3.5 text-[#64748B]" />
-                <span>Search products...</span>
+                <span>
+                  {storeSettings.blueprintType === 'services'
+                    ? 'Search services & quotes...'
+                    : storeSettings.blueprintType === 'salon'
+                    ? 'Search services & packages...'
+                    : 'Search products...'}
+                </span>
               </div>
 
               {/* Hero Promotional Card */}
-              <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-[#E3F5EC] to-[#D1FAE5] p-3 flex items-center justify-between gap-2">
-                <div className="space-y-1 z-10 max-w-[62%]">
-                  <p className="text-[13px] font-extrabold leading-tight text-[#06392A]">
-                    Fresh Groceries at Your Doorstep
-                  </p>
-                  <p className="text-[9px] leading-snug text-[#1E293B]">
-                    Daily essentials, great prices and fast delivery
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleOpenStore}
-                    className="mt-1 inline-flex rounded-full bg-[#0A6847] px-3 py-1 text-[9.5px] font-bold text-white cursor-pointer"
-                  >
-                    Shop Now
-                  </button>
-                </div>
+              {(() => {
+                const bpType = storeSettings.blueprintType || (demoMode ? 'grocery' : 'retail');
+                const customTagline = storeSettings.tagline?.trim();
+                const hasCustomTagline = customTagline && !/Fresh Groceries|Daily essentials/i.test(customTagline);
+                const storeName = storeSettings.businessName && !/My Store|Main Store/i.test(storeSettings.businessName)
+                  ? storeSettings.businessName
+                  : 'Our Store';
+                const firstImg = catalogRows.find((p) => p.imageUrl)?.imageUrl;
 
-                {/* Grocery Basket Packshots Collage */}
-                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-white/70 p-1 shadow-2xs">
-                  <img
-                    src="/bos/products/aashirvaad-atta.png"
-                    alt="Groceries"
-                    className="h-16 w-16 object-contain"
-                  />
-                </div>
-              </div>
+                const heroContent = demoMode
+                  ? {
+                      title: 'Fresh Groceries at Your Doorstep',
+                      subtitle: 'Daily essentials, great prices and fast delivery',
+                      cta: 'Shop Now',
+                      image: firstImg || '/bos/products/aashirvaad-atta.png',
+                    }
+                  : bpType === 'services'
+                  ? {
+                      title: hasCustomTagline ? customTagline : `${storeName} • Services & Works`,
+                      subtitle: hasCustomTagline
+                        ? 'Professional service, custom quotes and reliable quality'
+                        : 'Custom fabrication, expert services and fast quote response',
+                      cta: 'Request Quote / Book',
+                      image: firstImg || storeSettings.logoUrl || null,
+                    }
+                  : bpType === 'salon'
+                  ? {
+                      title: hasCustomTagline ? customTagline : `${storeName} • Salon & Spa`,
+                      subtitle: 'Hair styling, treatments, grooming and self-care',
+                      cta: 'Book Appointment',
+                      image: firstImg || storeSettings.logoUrl || null,
+                    }
+                  : bpType === 'restaurant'
+                  ? {
+                      title: hasCustomTagline ? customTagline : `${storeName} • Kitchen`,
+                      subtitle: 'Freshly prepared food, dining and doorstep delivery',
+                      cta: 'Order Food Now',
+                      image: firstImg || storeSettings.logoUrl || null,
+                    }
+                  : bpType === 'creative'
+                  ? {
+                      title: hasCustomTagline ? customTagline : `${storeName} • Portfolio`,
+                      subtitle: 'Showreels, photoshoots and commercial production packages',
+                      cta: 'Explore Works',
+                      image: firstImg || storeSettings.logoUrl || null,
+                    }
+                  : bpType === 'grocery'
+                  ? {
+                      title: hasCustomTagline ? customTagline : 'Fresh Groceries at Your Doorstep',
+                      subtitle: 'Daily essentials, great prices and fast delivery',
+                      cta: 'Shop Now',
+                      image: firstImg || '/bos/products/aashirvaad-atta.png',
+                    }
+                  : {
+                      title: customTagline || `${storeName} Online Store`,
+                      subtitle: 'Quality products, great prices and doorstep delivery',
+                      cta: 'Shop Now',
+                      image: firstImg || storeSettings.logoUrl || '/bos/products/sunflower-oil.png',
+                    };
+
+                return (
+                  <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-[#E3F5EC] to-[#D1FAE5] p-3 flex items-center justify-between gap-2">
+                    <div className="space-y-1 z-10 max-w-[62%]">
+                      <p className="text-[13px] font-extrabold leading-tight text-[#06392A]">
+                        {heroContent.title}
+                      </p>
+                      <p className="text-[9px] leading-snug text-[#1E293B]">
+                        {heroContent.subtitle}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleOpenStore}
+                        className="mt-1 inline-flex rounded-full bg-[#0A6847] px-3 py-1 text-[9.5px] font-bold text-white cursor-pointer"
+                      >
+                        {heroContent.cta}
+                      </button>
+                    </div>
+
+                    {/* Hero Packshot / Brand Image */}
+                    <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-white/70 p-1 shadow-2xs">
+                      {heroContent.image ? (
+                        <img
+                          src={heroContent.image}
+                          alt={heroContent.title}
+                          className="h-16 w-16 object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <ShoppingBag className="h-10 w-10 text-[#0A6847]/60" />
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 5 Circular Category Icons */}
               <div className="grid grid-cols-5 gap-1.5 text-center">

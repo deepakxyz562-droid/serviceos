@@ -3731,7 +3731,15 @@ export function BosMarketingAiIntegrationsSettings({
                     type="text"
                     value={settingsDescription}
                     onChange={(e) => setSettingsDescription(e.target.value)}
-                    placeholder="e.g. Daily essentials, fresh groceries and more."
+                    placeholder={
+                      storeSettings.blueprintType === 'services'
+                        ? 'e.g. Quality fabrication, custom quotes and reliable turnaround.'
+                        : storeSettings.blueprintType === 'salon'
+                        ? 'e.g. Haircuts, styling, spa and beauty wellness.'
+                        : storeSettings.blueprintType === 'restaurant'
+                        ? 'e.g. Freshly prepared meals, dining and fast delivery.'
+                        : 'e.g. Quality products, great prices and fast delivery.'
+                    }
                     className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] text-[#111827]"
                   />
                 </div>
@@ -4711,7 +4719,14 @@ export function BosMarketingAiIntegrationsSettings({
                   {settingsBusinessName}
                 </h4>
                 <p className="text-[11.5px] text-[#64748B] line-clamp-2 leading-snug">
-                  {settingsDescription || 'Daily essentials, fresh groceries and more.'}
+                  {settingsDescription ||
+                    (storeSettings.blueprintType === 'services'
+                      ? 'Quality fabrication, custom quotes and reliable turnaround.'
+                      : storeSettings.blueprintType === 'salon'
+                      ? 'Haircuts, styling, spa and beauty wellness.'
+                      : storeSettings.blueprintType === 'restaurant'
+                      ? 'Freshly prepared meals, dining and fast delivery.'
+                      : 'Quality products, great prices and fast delivery.')}
                 </p>
                 <div className="pt-1 space-y-1 text-[11.5px] text-[#334155]">
                   <p className="flex items-center gap-1.5 font-medium">
