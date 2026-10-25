@@ -230,7 +230,7 @@ export async function PATCH(request: NextRequest) {
       if (commerceConfigs.length > 0) {
         for (const cfg of commerceConfigs) {
           const updateData: Record<string, any> = {};
-          if (country !== undefined) {
+          if (country !== undefined || !cfg.currencySymbol || (cfg.currencySymbol === '$' && countryPack.currency.symbol === '₹')) {
             updateData.currency = countryPack.currency.code;
             updateData.currencySymbol = countryPack.currency.symbol;
           }

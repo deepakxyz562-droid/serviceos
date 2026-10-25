@@ -348,6 +348,51 @@ function computeOrderCogs(o: BosOrder, products: BosProductItem[]): number {
   }, 0);
 }
 
+/**
+ * Resolves the start and end date boundaries for the given report period.
+ */
+function getDateRangeForPeriod(
+  period: 'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy',
+): { start: Date; end: Date } {
+  const now = new Date();
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  switch (period) {
+    case 'today':
+      break;
+    case 'yesterday':
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() - 1);
+      break;
+    case 'this_week': {
+      const day = start.getDay();
+      const diff = start.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      start.setDate(diff);
+      break;
+    }
+    case 'this_month':
+      start.setDate(1);
+      break;
+    case 'this_fy': {
+      // Indian Financial Year: April 1 to March 31
+      const currentMonth = start.getMonth(); // 0-indexed (April is 3)
+      const currentYear = start.getFullYear();
+      if (currentMonth >= 3) {
+        start.setFullYear(currentYear, 3, 1);
+      } else {
+        start.setFullYear(currentYear - 1, 3, 1);
+      }
+      break;
+    }
+  }
+
+  return { start, end };
+}
+
 export function BosReportsDaybookWorkstation({
   mode,
   currencySymbol,
@@ -366,6 +411,40 @@ export function BosReportsDaybookWorkstation({
     'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy'
   >('this_month');
   const [salesSearchQuery, setSalesSearchQuery] = useState('');
+
+  const periodFilteredOrders = useMemo(() => {
+    const { start, end } = getDateRangeForPeriod(reportPeriod);
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+
+    return (orders || []).filter((o) => {
+      if (!o.createdAt || o.createdAt === 'Today') {
+        const nowMs = Date.now();
+        return nowMs >= startMs && nowMs <= endMs;
+      }
+      const d = new Date(o.createdAt);
+      const t = d.getTime();
+      if (Number.isNaN(t)) return true;
+      return t >= startMs && t <= endMs;
+    });
+  }, [orders, reportPeriod]);
+
+  const periodFilteredDaybook = useMemo(() => {
+    const { start, end } = getDateRangeForPeriod(reportPeriod);
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+
+    return (daybookEntries || []).filter((e) => {
+      if (!e.createdAt || e.createdAt === 'Today') {
+        const nowMs = Date.now();
+        return nowMs >= startMs && nowMs <= endMs;
+      }
+      const d = new Date(e.createdAt);
+      const t = d.getTime();
+      if (Number.isNaN(t)) return true;
+      return t >= startMs && t <= endMs;
+    });
+  }, [daybookEntries, reportPeriod]);
 
 
   // Day Book States
@@ -396,6 +475,108 @@ export function BosReportsDaybookWorkstation({
 
   const reportsData = useMemo(() => {
     if (demoMode) {
+      if (reportPeriod === 'today') {
+        return {
+          totalRevenue: 16420,
+          grossProfit: 5120,
+          totalOrders: 42,
+          totalExpenses: 2100,
+          gstCollected: 1240,
+          itcClaimable: 450,
+          cogs: 9200,
+          avgOrderVal: 391,
+          marginLabel: '31.2% Net Margin',
+          paymentSplit: [
+            { mode: 'UPI / QR', amount: 9852, pct: 60, color: 'bg-[#0A6847]' },
+            { mode: 'Cash', amount: 4105, pct: 25, color: 'bg-[#10B981]' },
+            { mode: 'Card / POS', amount: 1642, pct: 10, color: 'bg-blue-500' },
+            { mode: 'Khata / Credit', amount: 821, pct: 5, color: 'bg-amber-500' },
+          ],
+          weeklyBars: [
+            { label: 'Morning (8–12)', rev: 68, prof: 42, exp: 18, val: '₹4,850' },
+            { label: 'Afternoon (12–4)', rev: 54, prof: 32, exp: 15, val: '₹3,620' },
+            { label: 'Evening (4–8)', rev: 92, prof: 58, exp: 22, val: '₹6,150' },
+            { label: 'Night (8–10)', rev: 35, prof: 20, exp: 10, val: '₹1,800' },
+          ],
+        };
+      }
+      if (reportPeriod === 'yesterday') {
+        return {
+          totalRevenue: 15280,
+          grossProfit: 4680,
+          totalOrders: 39,
+          totalExpenses: 1850,
+          gstCollected: 1150,
+          itcClaimable: 410,
+          cogs: 8750,
+          avgOrderVal: 392,
+          marginLabel: '30.6% Net Margin',
+          paymentSplit: [
+            { mode: 'UPI / QR', amount: 8862, pct: 58, color: 'bg-[#0A6847]' },
+            { mode: 'Cash', amount: 4278, pct: 28, color: 'bg-[#10B981]' },
+            { mode: 'Card / POS', amount: 1528, pct: 10, color: 'bg-blue-500' },
+            { mode: 'Khata / Credit', amount: 612, pct: 4, color: 'bg-amber-500' },
+          ],
+          weeklyBars: [
+            { label: 'Morning (8–12)', rev: 60, prof: 38, exp: 16, val: '₹4,200' },
+            { label: 'Afternoon (12–4)', rev: 48, prof: 28, exp: 14, val: '₹3,400' },
+            { label: 'Evening (4–8)', rev: 88, prof: 52, exp: 20, val: '₹5,880' },
+            { label: 'Night (8–10)', rev: 32, prof: 18, exp: 10, val: '₹1,800' },
+          ],
+        };
+      }
+      if (reportPeriod === 'this_week') {
+        return {
+          totalRevenue: 112450,
+          grossProfit: 33400,
+          totalOrders: 298,
+          totalExpenses: 14800,
+          gstCollected: 8920,
+          itcClaimable: 3200,
+          cogs: 64250,
+          avgOrderVal: 377,
+          marginLabel: '29.7% Net Margin',
+          paymentSplit: [
+            { mode: 'UPI / QR', amount: 62972, pct: 56, color: 'bg-[#0A6847]' },
+            { mode: 'Cash', amount: 30361, pct: 27, color: 'bg-[#10B981]' },
+            { mode: 'Card / POS', amount: 12370, pct: 11, color: 'bg-blue-500' },
+            { mode: 'Khata / Credit', amount: 6747, pct: 6, color: 'bg-amber-500' },
+          ],
+          weeklyBars: [
+            { label: 'Mon–Tue', rev: 70, prof: 44, exp: 20, val: '₹28,500' },
+            { label: 'Wed–Thu', rev: 75, prof: 48, exp: 22, val: '₹31,200' },
+            { label: 'Fri–Sat', rev: 95, prof: 62, exp: 26, val: '₹38,900' },
+            { label: 'Sunday', rev: 42, prof: 28, exp: 12, val: '₹13,850' },
+          ],
+        };
+      }
+      if (reportPeriod === 'this_fy') {
+        return {
+          totalRevenue: 5791800,
+          grossProfit: 1713600,
+          totalOrders: 15408,
+          totalExpenses: 770400,
+          gstCollected: 461040,
+          itcClaimable: 170400,
+          cogs: 3307800,
+          avgOrderVal: 376,
+          marginLabel: '29.6% Net Margin',
+          paymentSplit: [
+            { mode: 'UPI / QR', amount: 3127572, pct: 54, color: 'bg-[#0A6847]' },
+            { mode: 'Cash', amount: 1621704, pct: 28, color: 'bg-[#10B981]' },
+            { mode: 'Card / POS', amount: 695016, pct: 12, color: 'bg-blue-500' },
+            { mode: 'Khata / Credit', amount: 347508, pct: 6, color: 'bg-amber-500' },
+          ],
+          weeklyBars: [
+            { label: 'Q1 (Apr–Jun)', rev: 80, prof: 50, exp: 24, val: '₹13,80,000' },
+            { label: 'Q2 (Jul–Sep)', rev: 86, prof: 54, exp: 25, val: '₹14,90,000' },
+            { label: 'Q3 (Oct–Dec)', rev: 98, prof: 65, exp: 28, val: '₹16,80,000' },
+            { label: 'Q4 (Jan–Mar)', rev: 75, prof: 46, exp: 22, val: '₹12,41,800' },
+          ],
+        };
+      }
+
+      // Default: this_month
       return {
         totalRevenue: 482650,
         grossProfit: 142800,
@@ -421,15 +602,15 @@ export function BosReportsDaybookWorkstation({
       };
     }
 
-    const totalRevenue = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-    const totalOrders = orders.length;
+    const totalRevenue = periodFilteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalOrders = periodFilteredOrders.length;
     const avgOrderVal = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
-    const totalExpenses = daybookEntries
+    const totalExpenses = periodFilteredDaybook
       .filter((e) => e.category === 'Expense' || e.moneyOut > 0)
       .reduce((sum, e) => sum + (e.moneyOut || 0), 0);
     // Real COGS: sum of (qty × product.costPrice) across sold line items.
     // If no products carry costPrice, COGS is honestly 0 (no 60% fabrication).
-    const cogs = orders.reduce(
+    const cogs = periodFilteredOrders.reduce(
       (sum, o) => sum + computeOrderCogs(o, products),
       0,
     );
@@ -437,7 +618,7 @@ export function BosReportsDaybookWorkstation({
     const marginLabel = totalRevenue > 0 ? `${((grossProfit / totalRevenue) * 100).toFixed(1)}% Margin` : '0% Margin';
     // Real GST collected: prefer o.taxAmount; else derive from line-item gstRate;
     // else order-level gstRate / taxRate; else 0 (no 5% fabrication).
-    const gstCollected = orders.reduce(
+    const gstCollected = periodFilteredOrders.reduce(
       (sum, o) => sum + computeOrderTaxAmount(o),
       0,
     );
@@ -449,7 +630,7 @@ export function BosReportsDaybookWorkstation({
     let cash = 0;
     let card = 0;
     let khata = 0;
-    for (const o of orders) {
+    for (const o of periodFilteredOrders) {
       const mode = (o.paymentMode || '').toLowerCase();
       const amt = o.totalAmount || 0;
       if (mode === 'upi') upi += amt;
@@ -492,14 +673,14 @@ export function BosReportsDaybookWorkstation({
     const weeklyRevenue = [0, 0, 0, 0];
     const weeklyCogs = [0, 0, 0, 0];
     const weeklyExpenses = [0, 0, 0, 0];
-    for (const o of orders) {
+    for (const o of periodFilteredOrders) {
       const idx = dayBucket(o.createdAt);
       if (idx < 0) continue;
       const displayIdx = 3 - idx; // Week 4 = most recent, Week 1 = oldest
       weeklyRevenue[displayIdx] += o.totalAmount || 0;
       weeklyCogs[displayIdx] += computeOrderCogs(o, products);
     }
-    for (const e of daybookEntries) {
+    for (const e of periodFilteredDaybook) {
       if (e.category !== 'Expense' && !(e.moneyOut > 0)) continue;
       const idx = dayBucket(e.createdAt);
       if (idx < 0) continue;
@@ -529,7 +710,7 @@ export function BosReportsDaybookWorkstation({
       paymentSplit,
       weeklyBars,
     };
-  }, [orders, products, daybookEntries, demoMode, currencySymbol]);
+  }, [periodFilteredOrders, products, periodFilteredDaybook, demoMode, currencySymbol, reportPeriod]);
 
   const expenseBreakdown = useMemo(() => {
     if (demoMode) {
@@ -540,7 +721,7 @@ export function BosReportsDaybookWorkstation({
         { category: 'Packaging & Misc Supplies', amount: Math.round(reportsData.totalExpenses * 0.08) },
       ];
     }
-    const expEntries = daybookEntries.filter(
+    const expEntries = periodFilteredDaybook.filter(
       (e) => e.category === 'Expense' || e.moneyOut > 0,
     );
     if (expEntries.length === 0) {
@@ -552,7 +733,7 @@ export function BosReportsDaybookWorkstation({
       map.set(cat, (map.get(cat) || 0) + (e.moneyOut || 0));
     }
     return Array.from(map.entries()).map(([category, amount]) => ({ category, amount }));
-  }, [daybookEntries, reportsData.totalExpenses, demoMode]);
+  }, [periodFilteredDaybook, reportsData.totalExpenses, demoMode]);
 
   const gstSlabs = useMemo(() => {
     if (demoMode) {
@@ -567,7 +748,7 @@ export function BosReportsDaybookWorkstation({
     let slab0 = 0, slab5 = 0, slab12 = 0, slab18 = 0, slab28 = 0;
     let tax5 = 0, tax12 = 0, tax18 = 0, tax28 = 0;
 
-    for (const o of orders) {
+    for (const o of periodFilteredOrders) {
       if (!o.items || o.items.length === 0) {
         const orderRate = (o as any).gstRate ?? (o as any).taxRate ?? 0;
         const taxAmt = o.taxAmount || 0;
@@ -598,7 +779,7 @@ export function BosReportsDaybookWorkstation({
       { rate: '18% (Standard)', taxable: slab18, tax: tax18 },
       ...(slab28 > 0 ? [{ rate: '28% (Luxury)', taxable: slab28, tax: tax28 }] : []),
     ];
-  }, [orders, reportsData.totalRevenue, demoMode]);
+  }, [periodFilteredOrders, reportsData.totalRevenue, demoMode]);
 
   const khataData = useMemo(() => {
     if (demoMode) {
@@ -1036,7 +1217,8 @@ export function BosReportsDaybookWorkstation({
       'Total Amount',
     ];
 
-    const rows = (orders || []).map((o) => [
+    const sourceOrders = periodFilteredOrders.length > 0 ? periodFilteredOrders : (orders || []);
+    const rows = sourceOrders.map((o) => [
       o.id,
       o.createdAt || today,
       `"${(o.customerName || 'Walk-in Customer').replace(/"/g, '""')}"`,
@@ -1110,7 +1292,7 @@ export function BosReportsDaybookWorkstation({
     );
     const potentialStockProfit = Math.max(0, totalInventoryRetailValue - totalInventoryCostValue);
 
-    const filteredSalesOrders = (orders || []).filter((o) => {
+    const filteredSalesOrders = (periodFilteredOrders || []).filter((o) => {
       if (!salesSearchQuery.trim()) return true;
       const q = salesSearchQuery.trim().toLowerCase();
       return (

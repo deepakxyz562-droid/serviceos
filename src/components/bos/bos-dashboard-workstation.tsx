@@ -78,13 +78,104 @@ export function BosDashboardWorkstation({
     return cleaned.split(/\s+/)[0];
   }, [userName, demoMode]);
 
+  const filteredDashboardOrders = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+
+    if (dateRangeLabel === 'Yesterday') {
+      start.setDate(now.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      end.setDate(now.getDate() - 1);
+      end.setHours(23, 59, 59, 999);
+    } else if (dateRangeLabel === 'Last 7 Days') {
+      start.setDate(now.getDate() - 7);
+      start.setHours(0, 0, 0, 0);
+    } else if (dateRangeLabel === 'This Month') {
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+    } else {
+      // Today (or todayFormatted)
+      start.setHours(0, 0, 0, 0);
+    }
+
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+
+    return orders.filter((o) => {
+      if (!o.createdAt || o.createdAt === 'Today') {
+        const nowMs = Date.now();
+        return nowMs >= startMs && nowMs <= endMs;
+      }
+      const d = new Date(o.createdAt);
+      const t = d.getTime();
+      if (Number.isNaN(t)) return true;
+      return t >= startMs && t <= endMs;
+    });
+  }, [orders, dateRangeLabel]);
+
   const kpiStats = useMemo(() => {
-    const validOrders = orders.filter((o) => o.status !== 'cancelled');
+    if (demoMode) {
+      if (dateRangeLabel === 'Yesterday') {
+        return {
+          totalSales: 15280,
+          totalOrdersCount: 39,
+          completedOrdersCount: 38,
+          pendingOrdersCount: 1,
+          newCustomersCount: 6,
+          totalCustomersCount: customers.length || 148,
+          appointmentsCount: 5,
+          upcomingCount: 0,
+          totalExpenses: 1850,
+        };
+      }
+      if (dateRangeLabel === 'Last 7 Days') {
+        return {
+          totalSales: 112450,
+          totalOrdersCount: 298,
+          completedOrdersCount: 286,
+          pendingOrdersCount: 12,
+          newCustomersCount: 32,
+          totalCustomersCount: customers.length || 148,
+          appointmentsCount: 28,
+          upcomingCount: 4,
+          totalExpenses: 14800,
+        };
+      }
+      if (dateRangeLabel === 'This Month') {
+        return {
+          totalSales: 482650,
+          totalOrdersCount: 1284,
+          completedOrdersCount: 1240,
+          pendingOrdersCount: 44,
+          newCustomersCount: 112,
+          totalCustomersCount: customers.length || 148,
+          appointmentsCount: 104,
+          upcomingCount: 9,
+          totalExpenses: 64200,
+        };
+      }
+      // Today
+      return {
+        totalSales: 16420,
+        totalOrdersCount: 42,
+        completedOrdersCount: 39,
+        pendingOrdersCount: 3,
+        newCustomersCount: 8,
+        totalCustomersCount: customers.length || 148,
+        appointmentsCount: 6,
+        upcomingCount: 2,
+        totalExpenses: 2100,
+      };
+    }
+
+    const validOrders = filteredDashboardOrders.filter((o) => o.status !== 'cancelled');
     const computedSales = validOrders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
     const totalSales = computedSales;
-    const totalOrdersCount = orders.length;
-    const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
-    const pendingOrdersCount = orders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled').length;
+    const totalOrdersCount = filteredDashboardOrders.length;
+    const completedOrdersCount = filteredDashboardOrders.filter((o) => o.status === 'completed').length;
+    const pendingOrdersCount = filteredDashboardOrders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled').length;
     const totalCustomersCount = customers.length;
     const newCustomersCount = customers.filter((c) => c.segment === 'New' || c.ordersCount <= 1).length;
     const appointmentsCount = appointments.length;
@@ -102,7 +193,7 @@ export function BosDashboardWorkstation({
       upcomingCount,
       totalExpenses,
     };
-  }, [orders, customers, appointments, daybookEntries]);
+  }, [demoMode, dateRangeLabel, filteredDashboardOrders, customers, appointments, daybookEntries]);
 
   const weeklyChartBars = useMemo(() => {
     if (demoMode) {
@@ -154,11 +245,35 @@ export function BosDashboardWorkstation({
 
   const dashboardFinancials = useMemo(() => {
     if (demoMode) {
+      if (dateRangeLabel === 'Yesterday') {
+        return {
+          revenue: 15280,
+          profit: 4680,
+          expenses: 1850,
+          growth: '+8.1%',
+        };
+      }
+      if (dateRangeLabel === 'Last 7 Days') {
+        return {
+          revenue: 112450,
+          profit: 33400,
+          expenses: 14800,
+          growth: '+15.2%',
+        };
+      }
+      if (dateRangeLabel === 'This Month') {
+        return {
+          revenue: 482650,
+          profit: 142800,
+          expenses: 64200,
+          growth: '+18.4%',
+        };
+      }
       return {
-        revenue: 184500,
-        profit: 58200,
-        expenses: 32400,
-        growth: '+18.4%',
+        revenue: 16420,
+        profit: 5120,
+        expenses: 2100,
+        growth: '+12.4%',
       };
     }
     const totalRev = weeklyChartBars.reduce((s, b) => s + b.amount, 0) || kpiStats.totalSales;
@@ -173,7 +288,7 @@ export function BosDashboardWorkstation({
       expenses,
       growth,
     };
-  }, [demoMode, weeklyChartBars, kpiStats.totalSales, kpiStats.totalExpenses]);
+  }, [demoMode, dateRangeLabel, weeklyChartBars, kpiStats.totalSales, kpiStats.totalExpenses]);
 
   const categoryBreakdown = useMemo(() => {
     if (products.length === 0) {

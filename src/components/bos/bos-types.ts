@@ -17,6 +17,9 @@ export type BosProductItem = {
   imageUrl?: string;
   description?: string;
   onlineVisible?: boolean;
+  duration?: string;
+  videoUrl?: string;
+  portfolioUrl?: string;
 };
 
 export type BosOrderLineItem = {

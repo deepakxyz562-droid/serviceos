@@ -3482,6 +3482,7 @@ function BosWebAppInner({
                 orders={orders}
                 currencySymbol={storeSettings.currencySymbol}
                 products={products}
+                businessType={storeSettings.blueprintType || storeSettings.businessType}
                 initialOpenAddModal={navContext?.action === 'add-product'}
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}

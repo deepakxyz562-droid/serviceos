@@ -13,6 +13,7 @@ import {
   Download,
   Edit3,
   Globe,
+  Layers,
   MoreVertical,
   Package,
   Plus,
@@ -45,6 +46,7 @@ type BosInventoryWorkstationProps = {
   products: BosProductItem[];
   orders?: BosOrder[];
   demoMode?: boolean;
+  businessType?: string;
   initialOpenAddModal?: boolean;
   onSaveProduct: (product: BosProductItem, isNew: boolean) => Promise<void>;
   onDeleteProduct: (productId: string) => Promise<void>;
@@ -312,12 +314,51 @@ export function BosInventoryWorkstation({
   products,
   orders = [],
   demoMode = false,
+  businessType,
   initialOpenAddModal = false,
   onSaveProduct,
   onDeleteProduct,
   onAdjustStock,
 }: BosInventoryWorkstationProps) {
   const { t, language } = useBosTranslation();
+
+  const isCreativeOrFreelancer = useMemo(() => {
+    if (businessType === 'creative' || businessType === 'freelancer') return true;
+    return (products || []).some((p) => {
+      const u = (p.unit || '').toLowerCase();
+      const c = (p.category || '').toLowerCase();
+      return (
+        u === 'session' ||
+        u === 'deliverable' ||
+        u === 'script' ||
+        c.includes('photograph') ||
+        c.includes('video') ||
+        c.includes('creator') ||
+        c.includes('shoot') ||
+        c.includes('voiceover')
+      );
+    });
+  }, [businessType, products]);
+
+  const isServiceOrTrades = useMemo(() => {
+    if (businessType === 'services' || businessType === 'manufacturing') return true;
+    return (products || []).some((p) => {
+      const u = (p.unit || '').toLowerCase();
+      const c = (p.category || '').toLowerCase();
+      return (
+        u === 'visit' ||
+        u === 'hour' ||
+        u === 'job' ||
+        c.includes('fabrication') ||
+        c.includes('repair') ||
+        c.includes('plumbing') ||
+        c.includes('maintenance')
+      );
+    });
+  }, [businessType, products]);
+
+  const isSalon = businessType === 'salon';
+  const isServiceBusiness = isCreativeOrFreelancer || isServiceOrTrades || isSalon;
   const [subTab, setSubTab] = useState<InventorySubTab>('all');
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('overview');
   const [searchQuery, setSearchQuery] = useState('');
@@ -358,6 +399,10 @@ export function BosInventoryWorkstation({
     gstRate: 5,
     hsnCode: '1006',
     imageUrl: '',
+    description: '',
+    duration: '',
+    videoUrl: '',
+    portfolioUrl: '',
   });
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
@@ -649,19 +694,37 @@ export function BosInventoryWorkstation({
     setModalFetchMessage(null);
     setFormState({
       name: '',
-      category: 'Grocery',
-      brand: '',
-      price: 120,
-      mrp: 135,
-      costPrice: 95,
-      stockQuantity: 40,
-      lowStockThreshold: 10,
-      sku: `PRD-${Math.floor(100 + Math.random() * 899)}`,
+      category: isCreativeOrFreelancer
+        ? 'Photography & Headshots'
+        : isSalon
+        ? 'Hair Services'
+        : isServiceOrTrades
+        ? 'Fabrication & Repair'
+        : 'Grocery',
+      brand: isServiceBusiness ? '' : '',
+      price: isCreativeOrFreelancer ? 6500 : isServiceOrTrades ? 1500 : isSalon ? 450 : 120,
+      mrp: isCreativeOrFreelancer ? 7500 : isServiceOrTrades ? 1800 : isSalon ? 500 : 135,
+      costPrice: isServiceBusiness ? 0 : 95,
+      stockQuantity: isServiceBusiness ? 999 : 40,
+      lowStockThreshold: isServiceBusiness ? 0 : 10,
+      sku: isServiceBusiness
+        ? `SRV-${Math.floor(100 + Math.random() * 899)}`
+        : `PRD-${Math.floor(100 + Math.random() * 899)}`,
       barcode: '',
-      unit: '1kg',
-      gstRate: 5,
-      hsnCode: '1006',
+      unit: isCreativeOrFreelancer
+        ? 'Session'
+        : isServiceOrTrades
+        ? 'Job'
+        : isSalon
+        ? 'Service'
+        : '1kg',
+      gstRate: isServiceBusiness ? 18 : 5,
+      hsnCode: isServiceBusiness ? '9983' : '1006',
       imageUrl: '',
+      description: '',
+      duration: isCreativeOrFreelancer ? '2-3 Days' : isServiceOrTrades ? '1 Day' : '',
+      videoUrl: '',
+      portfolioUrl: '',
     });
     setShowProductModal(true);
   };
@@ -683,8 +746,12 @@ export function BosInventoryWorkstation({
       barcode: meta.barcode,
       unit: meta.unitSubtitle,
       gstRate: meta.gstRate,
-      hsnCode: product.hsnCode || '1006',
+      hsnCode: product.hsnCode || (isServiceBusiness ? '9983' : '1006'),
       imageUrl: product.imageUrl || '',
+      description: product.description || '',
+      duration: product.duration || '',
+      videoUrl: product.videoUrl || '',
+      portfolioUrl: product.portfolioUrl || '',
     });
     setShowProductModal(true);
   };
@@ -734,21 +801,26 @@ export function BosInventoryWorkstation({
     const item: BosProductItem = {
       id: editingProduct?.id || `prod-${Date.now()}`,
       name: formState.name.trim(),
-      category: formState.category.trim() || 'Grocery',
-      brand: formState.brand.trim() || 'Store Brand',
+      category: formState.category.trim() || (isServiceBusiness ? 'Services' : 'General'),
+      brand: formState.brand.trim() || (isServiceBusiness ? 'Professional Service' : 'Store Brand'),
       price: Number(formState.price) || 0,
       mrp: Number(formState.mrp) || Number(formState.price) || 0,
-      costPrice:
-        Number(formState.costPrice) || Math.round((Number(formState.price) || 0) * 0.8),
-      stockQuantity: Math.max(0, Number(formState.stockQuantity) || 0),
-      lowStockThreshold: Math.max(1, Number(formState.lowStockThreshold) || 10),
-      sku: formState.sku.trim() || `SKU-${Date.now().toString().slice(-3)}`,
-      barcode: formState.barcode.trim() || '8901030845210',
-      unit: formState.unit.trim() || '1 Unit',
-      gstRate: Number(formState.gstRate) || 0,
-      hsnCode: formState.hsnCode.trim() || '1006',
+      costPrice: isServiceBusiness
+        ? 0
+        : Number(formState.costPrice) || Math.round((Number(formState.price) || 0) * 0.8),
+      stockQuantity: isServiceBusiness ? 999 : Math.max(0, Number(formState.stockQuantity) || 0),
+      lowStockThreshold: isServiceBusiness ? 0 : Math.max(1, Number(formState.lowStockThreshold) || 10),
+      sku: formState.sku.trim() || `${isServiceBusiness ? 'SRV' : 'SKU'}-${Date.now().toString().slice(-4)}`,
+      barcode: formState.barcode.trim() || undefined,
+      unit: formState.unit.trim() || (isCreativeOrFreelancer ? 'Session' : isServiceOrTrades ? 'Job' : 'Unit'),
+      gstRate: Number(formState.gstRate) || (isServiceBusiness ? 18 : 0),
+      hsnCode: formState.hsnCode.trim() || (isServiceBusiness ? '9983' : '1006'),
       location: 'Main Store',
       imageUrl: formState.imageUrl.trim() || undefined,
+      description: formState.description?.trim() || undefined,
+      duration: formState.duration?.trim() || undefined,
+      videoUrl: formState.videoUrl?.trim() || undefined,
+      portfolioUrl: formState.portfolioUrl?.trim() || undefined,
       onlineVisible: true,
     };
     await onSaveProduct(item, !editingProduct);
@@ -757,8 +829,8 @@ export function BosInventoryWorkstation({
     setShowProductModal(false);
     showToast(
       editingProduct
-        ? `Updated "${item.name}" in inventory.`
-        : `Added "${item.name}" to inventory.`,
+        ? `Updated "${item.name}".`
+        : `Added "${item.name}" successfully.`,
     );
   };
 
@@ -942,31 +1014,61 @@ export function BosInventoryWorkstation({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-[22px] font-bold tracking-tight text-[#111827] leading-tight">
-            {t('inventory.title', 'Products & Inventory')}
+            {isServiceBusiness
+              ? isCreativeOrFreelancer
+                ? 'Services & Portfolio Packages'
+                : 'Services & Rates'
+              : t('inventory.title', 'Products & Inventory')}
           </h1>
           <p className="text-[13px] text-[#64748B] mt-0.5">
-            {t('inventory.subtitle', 'Manage your products, stock, categories and suppliers.')}
+            {isServiceBusiness
+              ? 'Manage your services, rates, deliverables, video showreels and online booking.'
+              : t('inventory.subtitle', 'Manage your products, stock, categories and suppliers.')}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleImportClick}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
-          >
-            <Upload className="h-4 w-4 text-[#475569]" />
-            <span>{t('inventory.importCsv', 'Import')}</span>
-          </button>
+          {isServiceBusiness && products.some((p) => p.id.startsWith('cr-') || p.id.startsWith('srv-') || p.id.startsWith('fl-') || p.id.startsWith('salon-')) && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.confirm('Do you want to clear the starter sample services and start fresh with your own?')) {
+                  for (const p of products) {
+                    if (p.id.startsWith('cr-') || p.id.startsWith('srv-') || p.id.startsWith('fl-') || p.id.startsWith('salon-')) {
+                      await onDeleteProduct(p.id);
+                    }
+                  }
+                  showToast('Sample starter services cleared.');
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-[12.5px] font-semibold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Clear Sample Services</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
-          >
-            <Download className="h-4 w-4 text-[#475569]" />
-            <span>{t('inventory.exportCsv', 'Export')}</span>
-          </button>
+          {!isServiceBusiness && (
+            <>
+              <button
+                type="button"
+                onClick={handleImportClick}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
+              >
+                <Upload className="h-4 w-4 text-[#475569]" />
+                <span>{t('inventory.importCsv', 'Import')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-4 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
+              >
+                <Download className="h-4 w-4 text-[#475569]" />
+                <span>{t('inventory.exportCsv', 'Export')}</span>
+              </button>
+            </>
+          )}
 
           <button
             type="button"
@@ -974,7 +1076,7 @@ export function BosInventoryWorkstation({
             className="inline-flex items-center gap-2 rounded-xl bg-[#0A6847] px-4 py-2 text-[13px] font-semibold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
           >
             <Plus className="h-4 w-4 stroke-[2.5]" />
-            <span>{t('inventory.addProduct', 'Add Product')}</span>
+            <span>{isServiceBusiness ? '+ Add Service' : t('inventory.addProduct', 'Add Product')}</span>
           </button>
         </div>
       </div>
@@ -982,14 +1084,19 @@ export function BosInventoryWorkstation({
       {/* Underline Sub-Navigation Tabs */}
       <div className="flex items-center gap-6 border-b border-[#E2ECE7] overflow-x-auto no-scrollbar">
         {(
-          [
-            { id: 'all', label: t('inventory.allProducts', 'All Products') },
-            { id: 'categories', label: t('inventory.categories', 'Categories') },
-            { id: 'stockInOut', label: t('inventory.stockInOut', 'Stock In/Out') },
-            { id: 'lowStock', label: t('inventory.lowStock', 'Low Stock') },
-            { id: 'suppliers', label: t('inventory.suppliers', 'Suppliers') },
-            { id: 'purchaseOrders', label: t('inventory.purchaseOrders', 'Purchase Orders') },
-          ] as const
+          isServiceBusiness
+            ? [
+                { id: 'all' as const, label: 'All Services & Packages' },
+                { id: 'categories' as const, label: 'Categories' },
+              ]
+            : [
+                { id: 'all' as const, label: t('inventory.allProducts', 'All Products') },
+                { id: 'categories' as const, label: t('inventory.categories', 'Categories') },
+                { id: 'stockInOut' as const, label: t('inventory.stockInOut', 'Stock In/Out') },
+                { id: 'lowStock' as const, label: t('inventory.lowStock', 'Low Stock') },
+                { id: 'suppliers' as const, label: t('inventory.suppliers', 'Suppliers') },
+                { id: 'purchaseOrders' as const, label: t('inventory.purchaseOrders', 'Purchase Orders') },
+              ]
         ).map((tab) => {
           const active = subTab === tab.id;
           return (
@@ -1031,79 +1138,155 @@ export function BosInventoryWorkstation({
 
       {/* 5 Top KPI Summary Cards */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
-        {/* Card 1: Total Products */}
-        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0A7B56] text-white shadow-xs">
-            <Box className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.totalProducts', 'Total Products')}</p>
-            <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              {inventoryStats.totalProducts}
-            </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.totalProductsTrend}</p>
-          </div>
-        </div>
+        {isServiceBusiness ? (
+          <>
+            {/* Card 1: Total Services */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0A7B56] text-white shadow-xs">
+                <Box className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">Total Services</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {products.length}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">Active catalog</p>
+              </div>
+            </div>
 
-        {/* Card 2: In Stock */}
-        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-[#D97706]">
-            <Box className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.inStock', 'In Stock')}</p>
-            <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              {inventoryStats.inStock}
-            </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.inStockTrend}</p>
-          </div>
-        </div>
+            {/* Card 2: Published Online */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                <Globe className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">Online Booking</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {products.filter((p) => p.onlineVisible !== false).length}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#0A6847]">Published</p>
+              </div>
+            </div>
 
-        {/* Card 3: Low Stock */}
-        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
-            <AlertTriangle className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.lowStock', 'Low Stock')}</p>
-            <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              {inventoryStats.lowStock}
-            </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{inventoryStats.lowStockTrend}</p>
-          </div>
-        </div>
+            {/* Card 3: Categories */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-[#D97706]">
+                <Layers className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">Categories</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {new Set(products.map((p) => p.category).filter(Boolean)).size || 1}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#D97706]">Specializations</p>
+              </div>
+            </div>
 
-        {/* Card 4: Out of Stock */}
-        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
-            <X className="h-6 w-6 stroke-[2.5]" />
-          </div>
-          <div>
-            <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.outOfStock', 'Out of Stock')}</p>
-            <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              {inventoryStats.outOfStock}
-            </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{inventoryStats.outOfStockTrend}</p>
-          </div>
-        </div>
+            {/* Card 4: Starting Rate */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EDE9FE] text-[#7C3AED]">
+                <span className="text-[20px] font-bold leading-none">{currencySymbol}</span>
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">Starting Rate</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {currencySymbol} {products.length > 0 ? Math.min(...products.map((p) => p.price || 0)).toLocaleString('en-IN') : '0'}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#7C3AED]">Base package</p>
+              </div>
+            </div>
 
-        {/* Card 5: Total Inventory Value */}
-        <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EDE9FE] text-[#7C3AED]">
-            <span className="text-[22px] font-bold leading-none">
-              {currencySymbol}
-            </span>
-          </div>
-          <div>
-            <p className="text-[12px] font-medium text-[#64748B]">
-              {t('inventory.inventoryValue', 'Total Inventory Value')}
-            </p>
-            <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
-              {currencySymbol} {inventoryStats.totalValuation}
-            </p>
-            <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.totalValuationTrend}</p>
-          </div>
-        </div>
+            {/* Card 5: Top Tier Package */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EFF6FF] text-[#2563EB]">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">Top Tier Package</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {currencySymbol} {products.length > 0 ? Math.max(...products.map((p) => p.price || 0)).toLocaleString('en-IN') : '0'}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#2563EB]">Premium service</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Card 1: Total Products */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#0A7B56] text-white shadow-xs">
+                <Box className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.totalProducts', 'Total Products')}</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {inventoryStats.totalProducts}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.totalProductsTrend}</p>
+              </div>
+            </div>
+
+            {/* Card 2: In Stock */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEF3C7] text-[#D97706]">
+                <Box className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.inStock', 'In Stock')}</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {inventoryStats.inStock}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.inStockTrend}</p>
+              </div>
+            </div>
+
+            {/* Card 3: Low Stock */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.lowStock', 'Low Stock')}</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {inventoryStats.lowStock}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{inventoryStats.lowStockTrend}</p>
+              </div>
+            </div>
+
+            {/* Card 4: Out of Stock */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#FEE2E2] text-[#EF4444]">
+                <X className="h-6 w-6 stroke-[2.5]" />
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">{t('inventory.outOfStock', 'Out of Stock')}</p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {inventoryStats.outOfStock}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#EF4444]">{inventoryStats.outOfStockTrend}</p>
+              </div>
+            </div>
+
+            {/* Card 5: Total Inventory Value */}
+            <div className="rounded-2xl border border-[#DCE9E3] bg-white px-4 py-3.5 shadow-2xs flex items-center gap-3.5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EDE9FE] text-[#7C3AED]">
+                <span className="text-[22px] font-bold leading-none">
+                  {currencySymbol}
+                </span>
+              </div>
+              <div>
+                <p className="text-[12px] font-medium text-[#64748B]">
+                  {t('inventory.inventoryValue', 'Total Inventory Value')}
+                </p>
+                <p className="mt-0.5 text-[22px] font-extrabold text-[#111827] leading-tight">
+                  {currencySymbol} {inventoryStats.totalValuation}
+                </p>
+                <p className="mt-0.5 text-[11.5px] font-bold text-[#0A7B56]">{inventoryStats.totalValuationTrend}</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {subTab === 'purchaseOrders' ? (
@@ -1898,142 +2081,294 @@ export function BosInventoryWorkstation({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Product Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formState.name}
-                    onChange={(e) => {
-                      const nextName = e.target.value;
-                      setModalFetchMessage(null);
-                      setFormState((s) => ({ ...s, name: nextName }));
-                    }}
-                    placeholder="e.g. Loose Basmati Rice"
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Brand
-                  </label>
-                  <input
-                    type="text"
-                    value={formState.brand}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, brand: e.target.value }))
-                    }
-                    placeholder="e.g. Nestle, Amul, Local"
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-              </div>
+              {isServiceBusiness ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Service / Package Title *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formState.name}
+                        onChange={(e) => {
+                          const nextName = e.target.value;
+                          setModalFetchMessage(null);
+                          setFormState((s) => ({ ...s, name: nextName }));
+                        }}
+                        placeholder={
+                          isCreativeOrFreelancer
+                            ? 'e.g. Actor Headshot Session (3 Looks & Retouching)'
+                            : isSalon
+                            ? 'e.g. Deep Conditioning Hair Spa'
+                            : 'e.g. Commercial Fabrication / Repair Visit'
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Service Category *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formState.category}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, category: e.target.value }))
+                        }
+                        placeholder={
+                          isCreativeOrFreelancer
+                            ? 'e.g. Photography & Headshots, Video Production'
+                            : isSalon
+                            ? 'e.g. Hair Services, Skin Care'
+                            : 'e.g. Fabrication, Maintenance, Repair'
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    SKU
-                  </label>
-                  <input
-                    type="text"
-                    value={formState.sku}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, sku: e.target.value }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Barcode (EAN-13)
-                  </label>
-                  <input
-                    type="text"
-                    value={formState.barcode}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, barcode: e.target.value }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    value={formState.category}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, category: e.target.value }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Price / Rate ({currencySymbol}) *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        value={formState.price}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, price: Number(e.target.value) }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Billing Unit
+                      </label>
+                      <select
+                        value={formState.unit}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, unit: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px]"
+                      >
+                        <option value="Session">Per Session</option>
+                        <option value="Hour">Per Hour</option>
+                        <option value="Project">Per Project</option>
+                        <option value="Deliverable">Per Deliverable / Reel</option>
+                        <option value="Half Day">Half Day (4h)</option>
+                        <option value="Full Day">Full Day (8h)</option>
+                        <option value="Script">Per Script</option>
+                        <option value="Visit">Per Visit</option>
+                        <option value="Service">Per Service</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Turnaround / Duration
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.duration || ''}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, duration: e.target.value }))
+                        }
+                        placeholder="e.g. 24-48 hrs, 2 hours"
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-4 gap-2.5">
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Selling ({currencySymbol})
-                  </label>
-                  <input
-                    type="number"
-                    value={formState.price}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, price: Number(e.target.value) }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Purchase ({currencySymbol})
-                  </label>
-                  <input
-                    type="number"
-                    value={formState.costPrice}
-                    onChange={(e) =>
-                      setFormState((s) => ({
-                        ...s,
-                        costPrice: Number(e.target.value),
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Stock Qty
-                  </label>
-                  <input
-                    type="number"
-                    value={formState.stockQuantity}
-                    onChange={(e) =>
-                      setFormState((s) => ({
-                        ...s,
-                        stockQuantity: Number(e.target.value),
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Unit
-                  </label>
-                  <input
-                    type="text"
-                    value={formState.unit}
-                    onChange={(e) =>
-                      setFormState((s) => ({ ...s, unit: e.target.value }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                  />
-                </div>
-              </div>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155]">
+                      Service Description &amp; Deliverables
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={formState.description || ''}
+                      onChange={(e) =>
+                        setFormState((s) => ({ ...s, description: e.target.value }))
+                      }
+                      placeholder="e.g. Includes 3 edited high-res photos, 2 outfit changes, indoor studio lighting"
+                      className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Video Showreel / YouTube Link
+                      </label>
+                      <input
+                        type="url"
+                        value={formState.videoUrl || ''}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, videoUrl: e.target.value }))
+                        }
+                        placeholder="e.g. https://youtube.com/watch?v=..."
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Instagram Reel / Portfolio URL
+                      </label>
+                      <input
+                        type="url"
+                        value={formState.portfolioUrl || ''}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, portfolioUrl: e.target.value }))
+                        }
+                        placeholder="e.g. https://instagram.com/reel/..."
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Product Name *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formState.name}
+                        onChange={(e) => {
+                          const nextName = e.target.value;
+                          setModalFetchMessage(null);
+                          setFormState((s) => ({ ...s, name: nextName }));
+                        }}
+                        placeholder="e.g. Loose Basmati Rice"
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Brand
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.brand}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, brand: e.target.value }))
+                        }
+                        placeholder="e.g. Nestle, Amul, Local"
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        SKU
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.sku}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, sku: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Barcode (EAN-13)
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.barcode}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, barcode: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Category
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.category}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, category: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2.5">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Selling ({currencySymbol})
+                      </label>
+                      <input
+                        type="number"
+                        value={formState.price}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, price: Number(e.target.value) }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Purchase ({currencySymbol})
+                      </label>
+                      <input
+                        type="number"
+                        value={formState.costPrice}
+                        onChange={(e) =>
+                          setFormState((s) => ({
+                            ...s,
+                            costPrice: Number(e.target.value),
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Stock Qty
+                      </label>
+                      <input
+                        type="number"
+                        value={formState.stockQuantity}
+                        onChange={(e) =>
+                          setFormState((s) => ({
+                            ...s,
+                            stockQuantity: Number(e.target.value),
+                          }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155]">
+                        Unit
+                      </label>
+                      <input
+                        type="text"
+                        value={formState.unit}
+                        onChange={(e) =>
+                          setFormState((s) => ({ ...s, unit: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
                 <button
@@ -2047,7 +2382,11 @@ export function BosInventoryWorkstation({
                   type="submit"
                   className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[#085238]"
                 >
-                  {editingProduct ? 'Save Changes' : 'Add Product'}
+                  {editingProduct
+                    ? 'Save Changes'
+                    : isServiceBusiness
+                    ? 'Add Service'
+                    : 'Add Product'}
                 </button>
               </div>
             </form>

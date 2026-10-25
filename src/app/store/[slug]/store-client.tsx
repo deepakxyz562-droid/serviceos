@@ -42,6 +42,7 @@ import {
   Phone,
   RotateCcw,
   LogOut,
+  Wrench,
 } from 'lucide-react';
 
 interface Product {
@@ -78,6 +79,7 @@ interface StoreClientProps {
   businessAddress?: string;
   currency: string;
   currencySymbol: string;
+  businessType?: string;
   upiId: string;
   paymentQrUrl?: string;
   enableOnlinePayment?: boolean;
@@ -100,6 +102,7 @@ export function StoreClient({
   businessAddress,
   currency,
   currencySymbol,
+  businessType,
   upiId,
   paymentQrUrl,
   enableOnlinePayment = true,
@@ -115,6 +118,45 @@ export function StoreClient({
   storeLanguage = 'en',
 }: StoreClientProps) {
   const requestTracker = useRef(new RequestTracker());
+
+  const isCreativeOrFreelancer = useMemo(() => {
+    if (businessType === 'creative' || businessType === 'freelancer') return true;
+    return (catalog || []).some((c) => {
+      const cat = (c.category || '').toLowerCase();
+      const n = (c.name || '').toLowerCase();
+      return (
+        cat.includes('photograph') ||
+        cat.includes('video') ||
+        cat.includes('shoot') ||
+        cat.includes('voiceover') ||
+        cat.includes('creator') ||
+        cat.includes('actor') ||
+        cat.includes('collab') ||
+        cat.includes('design') ||
+        n.includes('headshot') ||
+        n.includes('showreel') ||
+        n.includes('voiceover')
+      );
+    });
+  }, [businessType, catalog]);
+
+  const isServiceOrTrades = useMemo(() => {
+    if (businessType === 'services' || businessType === 'manufacturing') return true;
+    return (catalog || []).some((c) => {
+      const cat = (c.category || '').toLowerCase();
+      return (
+        cat.includes('fabrication') ||
+        cat.includes('repair') ||
+        cat.includes('plumbing') ||
+        cat.includes('installation') ||
+        cat.includes('consulting') ||
+        cat.includes('inspection')
+      );
+    });
+  }, [businessType, catalog]);
+
+  const isSalon = businessType === 'salon';
+  const isRestaurant = businessType === 'restaurant';
 
   // Language state: defaults to regional detection (Hindi for Hindi belt/India, English for Telugu/Tamil/Marathi or outside India), persists to customer localStorage
   const [language, setLanguage] = useState<BosLanguage>(() => {
@@ -136,8 +178,24 @@ export function StoreClient({
     getBosText(key, language, fallbackEn, fallbackHi);
 
   const getCategoryLabel = (cat: string) => {
-    if (cat === 'ALL') return t('store.allProducts', 'All Products', 'सभी सामान');
+    if (cat === 'ALL') {
+      return isCreativeOrFreelancer || isServiceOrTrades
+        ? t('store.allServices', 'All Services', 'सभी सेवाएं')
+        : t('store.allProducts', 'All Products', 'सभी सामान');
+    }
     const catLower = cat.toLowerCase();
+    if (catLower.includes('photograph') || catLower.includes('headshot')) {
+      return language === 'hi' ? 'फोटोग्राफी व हेडशॉट' : language === 'both' ? `${cat} / फोटोग्राफी` : cat;
+    }
+    if (catLower.includes('video') || catLower.includes('shoot') || catLower.includes('production')) {
+      return language === 'hi' ? 'वीडियो व प्रोडक्शन' : language === 'both' ? `${cat} / वीडियो प्रोडक्शन` : cat;
+    }
+    if (catLower.includes('voice') || catLower.includes('audio')) {
+      return language === 'hi' ? 'वॉइसओवर व ऑडियो' : language === 'both' ? `${cat} / ऑडियो` : cat;
+    }
+    if (catLower.includes('creator') || catLower.includes('collab')) {
+      return language === 'hi' ? 'क्रिएटर व कोलैब' : language === 'both' ? `${cat} / कोलैब` : cat;
+    }
     if (catLower.includes('grocer') || catLower.includes('staple') || catLower.includes('kirana')) {
       return language === 'hi' ? 'किराना / राशन' : language === 'both' ? `${cat} / किराना` : cat;
     }
@@ -1111,14 +1169,40 @@ export function StoreClient({
                 <MapPin className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
                 <span className="leading-relaxed font-medium">{cleanBusinessAddress || 'Patna, Bihar'}</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
-                <span className="font-medium">{t('store.deliveryTime', 'Delivery: 30 - 45 mins', 'डिलीवरी: 30 - 45 मिनट')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-emerald-700 font-bold">
-                <Truck className="h-4 w-4 shrink-0" />
-                <span>{t('store.freeDeliveryAbove', 'Free delivery above ₹299', '₹299 से ऊपर मुफ्त डिलीवरी')}</span>
-              </div>
+              {isCreativeOrFreelancer ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="font-medium">{t('store.creativeTurnaround', 'Fast Turnaround & Milestone Delivery', 'समय पर प्रोजेक्ट डिलीवरी')}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{t('store.verifiedCreator', 'Direct Booking & Portfolio Output', 'सत्यापित सीधी बुकिंग')}</span>
+                  </div>
+                </>
+              ) : isServiceOrTrades ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="font-medium">{t('store.serviceVisits', 'Doorstep Visits & On-Site Estimates', 'डोरस्टेप विज़िट व कोटेशन')}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{t('store.serviceWarranty', 'Verified Work & Direct Support', 'सत्यापित काम व सीधी गारंटी')}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="font-medium">{t('store.deliveryTime', 'Delivery: 30 - 45 mins', 'डिलीवरी: 30 - 45 मिनट')}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                    <Truck className="h-4 w-4 shrink-0" />
+                    <span>{t('store.freeDeliveryAbove', 'Free delivery above ₹299', '₹299 से ऊपर मुफ्त डिलीवरी')}</span>
+                  </div>
+                </>
+              )}
             </div>
           </aside>
 
@@ -1128,21 +1212,41 @@ export function StoreClient({
             <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#D8EEDB] via-[#EAF7EE] to-[#FEF3D6] p-6 sm:p-8 border border-emerald-100 shadow-xs">
               <div className="max-w-md relative z-10 space-y-3">
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
-                  <Sparkles className="h-3 w-3" />
-                  {t('store.freshGuarantee', '100% Fresh Guarantee', '100% ताज़ा गारंटी')}
+                  {isServiceOrTrades ? (
+                    <Wrench className="h-3 w-3" />
+                  ) : (
+                    <Sparkles className="h-3 w-3" />
+                  )}
+                  {isCreativeOrFreelancer
+                    ? t('store.verifiedCreative', 'Verified Professional Portfolio', 'सत्यापित पेशेवर पोर्टफोलियो')
+                    : isServiceOrTrades
+                    ? t('store.verifiedServices', 'Professional Quality Guarantee', 'पेशेवर गुणवत्ता गारंटी')
+                    : isSalon
+                    ? t('store.certifiedSalon', 'Certified Stylists & Hygiene', 'प्रमाणित स्टाइलिस्ट और स्वच्छता')
+                    : isRestaurant
+                    ? t('store.freshPrepared', 'Freshly Prepared Food', 'ताज़ा तैयार भोजन')
+                    : t('store.freshGuarantee', '100% Fresh Guarantee', '100% ताज़ा गारंटी')}
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
                   {bannerText?.trim() ||
                     greeting?.trim() ||
                     (businessName
                       ? `Welcome to ${businessName}`
+                      : isCreativeOrFreelancer
+                      ? t('store.creativePortfolio', 'Professional Services & Portfolio', 'व्यावसायिक सेवाएं व पोर्टफोलियो')
+                      : isServiceOrTrades
+                      ? t('store.servicesTitle', 'Quality Services & Workmanship', 'विश्वसनीय सेवाएं व कारीगरी')
                       : t('store.heroTitle', 'Fresh Groceries Delivered to Your Home', 'ताज़ा राशन और फल-सब्जियां सीधे आपके घर'))}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 font-medium">
                   {greeting?.trim() && bannerText?.trim()
                     ? greeting.trim()
                     : businessName
-                    ? 'Explore our catalog, special offers and order directly.'
+                    ? (isCreativeOrFreelancer
+                        ? t('store.creativeSubtitle', 'Explore creative packages, view deliverables and book directly.', 'क्रिएटिव पैकेज देखें, काम के नमूने देखें और सीधे बुक करें।')
+                        : isServiceOrTrades
+                        ? t('store.servicesSubtitle', 'Explore services, request upfront estimates and book visits.', 'सेवाएं देखें, कोटेशन मंगाएं और सीधे अपॉइंटमेंट बुक करें।')
+                        : t('store.heroSubtitleDefault', 'Explore our catalog, special offers and order directly.', 'हमारी कैटलॉग और विशेष ऑफर देखें और सीधे ऑर्डर करें।'))
                     : t(
                         'store.heroSubtitle',
                         'Farm fresh produce, daily essentials, snacks, and dairy delivered in 30–45 minutes.',
@@ -1158,19 +1262,31 @@ export function StoreClient({
                     }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm transition shadow-sm active:scale-95"
                   >
-                    <span>{t('store.shopNow', 'Shop Now', 'अभी खरीदें')}</span>
+                    <span>
+                      {isCreativeOrFreelancer || isServiceOrTrades
+                        ? t('store.viewServices', 'View Services', 'सेवाएं देखें')
+                        : t('store.shopNow', 'Shop Now', 'अभी खरीदें')}
+                    </span>
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Decorative fresh basket badge */}
+              {/* Decorative certified stamp badge */}
               <div className="absolute right-4 bottom-2 sm:right-8 sm:bottom-4 opacity-80 sm:opacity-100 pointer-events-none">
                 <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-emerald-500/10 flex items-center justify-center p-2 border-2 border-dashed border-emerald-400/40">
                   <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-full bg-emerald-600 text-white flex flex-col items-center justify-center font-black text-center shadow-lg">
                     <span className="text-[10px] tracking-widest text-emerald-200">CERTIFIED</span>
                     <span className="text-xs sm:text-sm">100%</span>
-                    <span className="text-[10px]">{t('store.certifiedFresh', 'FRESH', 'ताज़ा')}</span>
+                    <span className="text-[10px]">
+                      {isCreativeOrFreelancer
+                        ? t('store.stampVerified', 'VERIFIED', 'सत्यापित')
+                        : isServiceOrTrades
+                        ? t('store.stampGenuine', 'GENUINE', 'प्रामाणिक')
+                        : isSalon
+                        ? t('store.stampHygiene', 'HYGIENIC', 'स्वच्छ')
+                        : t('store.certifiedFresh', 'FRESH', 'ताज़ा')}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1183,18 +1299,46 @@ export function StoreClient({
                   <ShieldCheck className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">{t('store.qualityProducts', 'Quality Products', 'उत्तम गुणवत्ता')}</h4>
-                  <p className="text-[10px] text-slate-500">{t('store.qualitySub', 'Handpicked items', 'चुनिंदा सामान')}</p>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    {isCreativeOrFreelancer
+                      ? t('store.proQuality', 'Top Quality', 'उत्कृष्ट काम')
+                      : isServiceOrTrades
+                      ? t('store.expertWork', 'Expert Quality', 'कुशल कारीगर')
+                      : t('store.qualityProducts', 'Quality Products', 'उत्तम गुणवत्ता')}
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    {isCreativeOrFreelancer
+                      ? t('store.proQualitySub', 'Portfolio-grade output', 'हाई-क्वालिटी परिणाम')
+                      : isServiceOrTrades
+                      ? t('store.expertWorkSub', 'Verified workmanship', 'सत्यापित काम')
+                      : t('store.qualitySub', 'Handpicked items', 'चुनिंदा सामान')}
+                  </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
                 <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
-                  <Truck className="h-5 w-5" />
+                  {isCreativeOrFreelancer || isServiceOrTrades ? (
+                    <Clock className="h-5 w-5" />
+                  ) : (
+                    <Truck className="h-5 w-5" />
+                  )}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">{t('store.fastDelivery', 'Fast Delivery', 'तेज़ डिलीवरी')}</h4>
-                  <p className="text-[10px] text-slate-500">{t('store.deliveryTime', '30–45 mins local', '30-45 मिनट डिलीवरी')}</p>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    {isCreativeOrFreelancer
+                      ? t('store.fastTurnaround', 'On-Time Delivery', 'समय पर डिलीवरी')
+                      : isServiceOrTrades
+                      ? t('store.onTimeVisit', 'On-Time Service', 'समय पर सेवा')
+                      : t('store.fastDelivery', 'Fast Delivery', 'तेज़ डिलीवरी')}
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    {isCreativeOrFreelancer
+                      ? t('store.fastTurnaroundSub', 'Agreed milestones', 'तय समय पर पूरा')
+                      : isServiceOrTrades
+                      ? t('store.onTimeVisitSub', 'Doorstep visit', 'द्वार पर सेवा')
+                      : t('store.deliveryTime', '30–45 mins local', '30-45 मिनट डिलीवरी')}
+                  </p>
                 </div>
               </div>
 
@@ -1213,8 +1357,20 @@ export function StoreClient({
                   <BadgePercent className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">{t('store.bestPrices', 'Best Prices', 'किफायती दाम')}</h4>
-                  <p className="text-[10px] text-slate-500">{t('store.kiranaRates', 'Direct kirana rates', 'सीधे बाज़ार दर पर')}</p>
+                  <h4 className="text-xs font-bold text-slate-900">
+                    {isCreativeOrFreelancer
+                      ? t('store.transparentRates', 'Clear Pricing', 'पारदर्शी दरें')
+                      : isServiceOrTrades
+                      ? t('store.fairQuotes', 'Fair Quotes', 'उचित कोटेशन')
+                      : t('store.bestPrices', 'Best Prices', 'किफायती दाम')}
+                  </h4>
+                  <p className="text-[10px] text-slate-500">
+                    {isCreativeOrFreelancer
+                      ? t('store.transparentRatesSub', 'Direct creator rates', 'सीधे क्रिएटर रेट')
+                      : isServiceOrTrades
+                      ? t('store.fairQuotesSub', 'Upfront pricing', 'कोई छुपा खर्च नहीं')
+                      : t('store.kiranaRates', 'Direct kirana rates', 'सीधे बाज़ार दर पर')}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1223,10 +1379,17 @@ export function StoreClient({
             <div id="featured-products" className="pt-2 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                  {selectedCategory === 'ALL' ? t('store.featuredProducts', 'Featured Products', 'प्रमुख उत्पाद') : getCategoryLabel(selectedCategory)}
+                  {selectedCategory === 'ALL'
+                    ? isCreativeOrFreelancer || isServiceOrTrades
+                      ? t('store.featuredServices', 'Services & Packages', 'सेवाएं व पैकेज')
+                      : t('store.featuredProducts', 'Featured Products', 'प्रमुख उत्पाद')
+                    : getCategoryLabel(selectedCategory)}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {t('store.showingItems', 'Showing', 'दिखा रहे हैं')} {filteredProducts.length} {t('store.itemsCount', 'items available', 'सामान उपलब्ध')}
+                  {t('store.showingItems', 'Showing', 'दिखा रहे हैं')} {filteredProducts.length}{' '}
+                  {isCreativeOrFreelancer || isServiceOrTrades
+                    ? t('store.servicesCount', 'services available', 'सेवाएं उपलब्ध')
+                    : t('store.itemsCount', 'items available', 'सामान उपलब्ध')}
                 </p>
               </div>
               {selectedCategory !== 'ALL' && (
@@ -1235,7 +1398,9 @@ export function StoreClient({
                   onClick={() => setSelectedCategory('ALL')}
                   className="text-xs font-bold text-emerald-700 hover:underline"
                 >
-                  {t('store.viewAll', 'View All Products', 'सभी उत्पाद देखें')}
+                  {isCreativeOrFreelancer || isServiceOrTrades
+                    ? t('store.viewAllServices', 'View All Services', 'सभी सेवाएं देखें')
+                    : t('store.viewAll', 'View All Products', 'सभी उत्पाद देखें')}
                 </button>
               )}
             </div>
@@ -1274,9 +1439,17 @@ export function StoreClient({
                             loading="lazy"
                           />
                         ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center text-slate-300 bg-slate-50">
-                            <Store className="h-10 w-10 mb-1" />
-                            <span className="text-[10px] font-bold text-slate-400">Grocery</span>
+                          <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-gradient-to-b from-slate-50 to-slate-100 p-2 text-center">
+                            {isCreativeOrFreelancer ? (
+                              <Sparkles className="h-8 w-8 mb-1 text-emerald-600/70" />
+                            ) : isServiceOrTrades ? (
+                              <Wrench className="h-8 w-8 mb-1 text-emerald-600/70" />
+                            ) : (
+                              <Store className="h-8 w-8 mb-1 text-slate-400" />
+                            )}
+                            <span className="text-[10px] font-bold text-slate-600 line-clamp-1 max-w-full">
+                              {p.category || (isCreativeOrFreelancer || isServiceOrTrades ? 'Service' : 'Product')}
+                            </span>
                           </div>
                         )}
                         {p.category && (

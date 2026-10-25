@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { StoreClient } from './store-client';
 import { computeStoreAvailabilityFromConfig } from '@/lib/commerce/store-availability';
 import { formatStoreAddress } from '@/lib/format-utils';
+import { INDUSTRY_STARTER_CATALOGS } from '../../../../shared/blueprint/presets';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -297,6 +298,17 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     });
   } catch {}
 
+  let businessType: string = 'retail';
+  let countryCode: string = 'IN';
+
+  try {
+    const bp = await db.tenantBlueprint.findUnique({
+      where: { tenantId: tenant.id },
+    });
+    if (bp?.businessType) businessType = bp.businessType;
+    if (bp?.countryCode) countryCode = bp.countryCode;
+  } catch {}
+
   let catalog: any[] = [];
   if (config?.catalogJson) {
     try {
@@ -306,9 +318,10 @@ export default async function StorePage({ params, searchParams }: StorePageProps
     }
   }
 
-  // If merchant has no catalog yet, provide standard starter grocery catalog
+  // If merchant has no catalog yet, provide blueprint-appropriate starter catalog
   if (!catalog || catalog.length === 0) {
-    catalog = DEMO_STORE.catalog;
+    const starterItems = (INDUSTRY_STARTER_CATALOGS as Record<string, any[]>)[businessType];
+    catalog = starterItems && starterItems.length > 0 ? starterItems : DEMO_STORE.catalog;
   }
 
   let billingConfig: any = {
@@ -340,6 +353,7 @@ export default async function StorePage({ params, searchParams }: StorePageProps
       if (parsedFields.enableOnlinePayment !== undefined) enableOnlinePayment = Boolean(parsedFields.enableOnlinePayment);
       if (parsedFields.language) storeLanguage = parsedFields.language;
       if (parsedFields.storeSettings?.language) storeLanguage = parsedFields.storeSettings.language;
+      if (parsedFields.storeSettings?.businessType) businessType = parsedFields.storeSettings.businessType;
     } catch {}
   }
 
@@ -371,14 +385,22 @@ export default async function StorePage({ params, searchParams }: StorePageProps
   const businessAddress =
     formatStoreAddress(tenant?.address, tenant?.city) || 'Local Neighborhood';
 
+  const currency = config?.currency || (countryCode === 'IN' ? 'INR' : 'USD');
+  let currencySymbol = config?.currencySymbol;
+  // Guard against '$' default when currency is INR or countryCode is IN
+  if (!currencySymbol || ((currency === 'INR' || countryCode === 'IN') && currencySymbol === '$')) {
+    currencySymbol = countryCode === 'IN' || currency === 'INR' ? '₹' : '$';
+  }
+
   return (
     <StoreClient
       businessId={businessId}
       businessName={businessName}
       businessPhone={businessPhone}
       businessAddress={businessAddress}
-      currency={config?.currency || 'INR'}
-      currencySymbol={config?.currencySymbol || '₹'}
+      currency={currency}
+      currencySymbol={currencySymbol}
+      businessType={businessType}
       upiId={config?.upiId || ''}
       paymentQrUrl={paymentQrUrl}
       enableOnlinePayment={enableOnlinePayment}
