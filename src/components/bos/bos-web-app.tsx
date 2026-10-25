@@ -2964,36 +2964,38 @@ function BosWebAppInner({
             </div>
 
             {/* Master Store Availability Toggle (Zomato / Swiggy Style) */}
-            <div className="hidden sm:flex items-center">
-              <button
-                type="button"
-                onClick={() => {
-                  const nextState = storeSettings.isStoreOpen === false;
-                  void handleUpdateStoreSettings({
-                    isStoreOpen: nextState,
-                    lastActiveDate: new Date().toISOString().slice(0, 10),
-                    manualCloseReason: nextState ? '' : 'Closed manually by merchant',
-                  });
-                }}
-                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-2xs cursor-pointer ${
-                  storeSettings.isStoreOpen !== false
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                    : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
-                }`}
-                title={
-                  storeSettings.isStoreOpen !== false
-                    ? 'Store is Live & accepting orders. Tap to Pause/Close.'
-                    : 'Store is Closed/Offline. Tap to Open & accept orders.'
-                }
-              >
-                <span
-                  className={`size-2.5 rounded-full ${
-                    storeSettings.isStoreOpen !== false ? 'bg-emerald-600 animate-pulse' : 'bg-rose-500'
+            {(activeCapabilities.onlineStore || activeCapabilities.orders) && (
+              <div className="hidden sm:flex items-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextState = storeSettings.isStoreOpen === false;
+                    void handleUpdateStoreSettings({
+                      isStoreOpen: nextState,
+                      lastActiveDate: new Date().toISOString().slice(0, 10),
+                      manualCloseReason: nextState ? '' : 'Closed manually by merchant',
+                    });
+                  }}
+                  className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-2xs cursor-pointer ${
+                    storeSettings.isStoreOpen !== false
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                      : 'border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
                   }`}
-                />
-                <span>{storeSettings.isStoreOpen !== false ? 'Store Open' : 'Store Closed'}</span>
-              </button>
-            </div>
+                  title={
+                    storeSettings.isStoreOpen !== false
+                      ? 'Store is Live & accepting orders. Tap to Pause/Close.'
+                      : 'Store is Closed/Offline. Tap to Open & accept orders.'
+                  }
+                >
+                  <span
+                    className={`size-2.5 rounded-full ${
+                      storeSettings.isStoreOpen !== false ? 'bg-emerald-600 animate-pulse' : 'bg-rose-500'
+                    }`}
+                  />
+                  <span>{storeSettings.isStoreOpen !== false ? 'Store Open' : 'Store Closed'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Center: Global Search & Ask BOS AI Bar */}
@@ -3408,7 +3410,7 @@ function BosWebAppInner({
         <main className="w-full flex-1 overflow-y-auto px-4 py-5 lg:px-6">
           <div className="w-full max-w-none">
             {/* Store Offline / Closed Status Alert */}
-            {storeSettings.isStoreOpen === false && (
+            {(activeCapabilities.onlineStore || activeCapabilities.orders) && storeSettings.isStoreOpen === false && (
               <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-gradient-to-r from-rose-50 via-white to-rose-50/50 p-3.5 shadow-2xs">
                 <div className="flex items-center gap-3">
                   <div className="flex size-9 items-center justify-center rounded-xl bg-rose-100 text-rose-700 shrink-0">

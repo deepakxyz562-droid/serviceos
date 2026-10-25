@@ -81,37 +81,39 @@ export function BusinessHomeScreen() {
   <View style={styles.header}><View style={{ flex: 1 }}><Text style={styles.eyebrow}>{t('YOUR BUSINESS', 'आपका व्यवसाय')}</Text><Text style={styles.title}>{blueprint.businessName || t('Welcome back', 'स्वागत है')}</Text><Text style={styles.subtitle}>{homeText(home.type, home.language)}</Text></View><TouchableOpacity accessibilityRole="button" accessibilityLabel={t('Business settings', 'व्यवसाय की सेटिंग')} onPress={() => router.push('/blueprint-setup')} style={styles.settings}><MaterialIcons name="tune" size={23} color="#334155"/></TouchableOpacity></View>
 
   {/* Store Availability & Daily Heartbeat Card (Zomato/Swiggy Parity) */}
-  <View style={[styles.storeStatusCard, storeOpen ? styles.storeStatusCardOpen : styles.storeStatusCardClosed]}>
-    <View style={styles.storeStatusHeader}>
-      <View style={styles.storeStatusIndicator}>
-        <View style={[styles.storeStatusDot, storeOpen ? styles.storeStatusDotOpen : styles.storeStatusDotClosed]} />
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.storeStatusTitle, storeOpen ? styles.storeStatusTitleOpen : styles.storeStatusTitleClosed]}>
-            {storeOpen ? t('Store is Open • Taking Orders', 'दुकान खुली है • ऑर्डर चालू हैं') : t('Store is Paused / Closed', 'दुकान बंद है • ऑर्डर बंद हैं')}
-          </Text>
-          <Text style={styles.storeStatusSub}>
-            {storeOpen
-              ? t('Online catalog is open for customers. Auto-pauses if app is not opened daily.', 'दुकान ऑनलाइन चालू है। हर रोज़ ऐप न खोलने पर अपने आप बंद हो जाएगी।')
-              : t('Store is offline. Customers cannot order or mistakenly send UPI payments.', 'दुकान बंद है। ग्राहक कोई गलत UPI पेमेंट या ऑर्डर नहीं कर सकते।')}
-          </Text>
+  {(blueprint.capabilities.onlineStore || blueprint.capabilities.orders) && (
+    <View style={[styles.storeStatusCard, storeOpen ? styles.storeStatusCardOpen : styles.storeStatusCardClosed]}>
+      <View style={styles.storeStatusHeader}>
+        <View style={styles.storeStatusIndicator}>
+          <View style={[styles.storeStatusDot, storeOpen ? styles.storeStatusDotOpen : styles.storeStatusDotClosed]} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.storeStatusTitle, storeOpen ? styles.storeStatusTitleOpen : styles.storeStatusTitleClosed]}>
+              {storeOpen ? t('Store is Open • Taking Orders', 'दुकान खुली है • ऑर्डर चालू हैं') : t('Store is Paused / Closed', 'दुकान बंद है • ऑर्डर बंद हैं')}
+            </Text>
+            <Text style={styles.storeStatusSub}>
+              {storeOpen
+                ? t('Online catalog is open for customers. Auto-pauses if app is not opened daily.', 'दुकान ऑनलाइन चालू है। हर रोज़ ऐप न खोलने पर अपने आप बंद हो जाएगी।')
+                : t('Store is offline. Customers cannot order or mistakenly send UPI payments.', 'दुकान बंद है। ग्राहक कोई गलत UPI पेमेंट या ऑर्डर नहीं कर सकते।')}
+            </Text>
+          </View>
         </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          disabled={togglingStore}
+          onPress={handleToggleStore}
+          style={[styles.storeToggleBtn, storeOpen ? styles.storeToggleBtnClose : styles.storeToggleBtnOpen]}
+        >
+          {togglingStore ? (
+            <ActivityIndicator size="small" color={storeOpen ? '#991b1b' : '#047857'} />
+          ) : (
+            <Text style={[styles.storeToggleBtnText, storeOpen ? styles.storeToggleBtnTextClose : styles.storeToggleBtnTextOpen]}>
+              {storeOpen ? t('Pause Store', 'बंद करें') : t('Open Store', 'दुकान खोलें')}
+            </Text>
+          )}
+        </TouchableOpacity>
       </View>
-      <TouchableOpacity
-        accessibilityRole="button"
-        disabled={togglingStore}
-        onPress={handleToggleStore}
-        style={[styles.storeToggleBtn, storeOpen ? styles.storeToggleBtnClose : styles.storeToggleBtnOpen]}
-      >
-        {togglingStore ? (
-          <ActivityIndicator size="small" color={storeOpen ? '#991b1b' : '#047857'} />
-        ) : (
-          <Text style={[styles.storeToggleBtnText, storeOpen ? styles.storeToggleBtnTextClose : styles.storeToggleBtnTextOpen]}>
-            {storeOpen ? t('Pause Store', 'बंद करें') : t('Open Store', 'दुकान खोलें')}
-          </Text>
-        )}
-      </TouchableOpacity>
     </View>
-  </View>
+  )}
 
   {!hydrated || (loading && !snapshot) ? <View style={styles.state}><ActivityIndicator color="#047857"/><Text style={styles.subtitle}>{t('Getting your business ready…', 'आपका व्यवसाय लोड हो रहा है…')}</Text></View> : error && !snapshot ? <View style={styles.state}><View style={styles.stateIcon}><MaterialIcons name={error === 'account' ? 'manage-accounts' : error === 'setup' ? 'storefront' : 'wifi-off'} size={30} color="#475569"/></View><Text style={styles.stateTitle}>{error === 'account' ? t('Check your workspace', 'अपना वर्कस्पेस जाँचें') : error === 'setup' ? t('Let’s set up your business', 'अपना व्यवसाय सेट करें') : t('Unable to connect', 'कनेक्शन नहीं हो पाया')}</Text><Text style={styles.stateText}>{error === 'account' ? t('This account is currently registered for Fieseros CRM. Contact support to review its GPTForm workspace.', 'यह खाता Fieseros CRM में दर्ज है। GPTForm वर्कस्पेस की जाँच के लिए सहायता से संपर्क करें।') : error === 'setup' ? t('Add your business details to get started.', 'शुरू करने के लिए व्यवसाय की जानकारी जोड़ें।') : t('Check your connection, then try again. Your saved data is safe.', 'इंटरनेट जाँचें और फिर कोशिश करें। आपका सेव किया डेटा सुरक्षित है।')}</Text><TouchableOpacity accessibilityRole="button" style={styles.primary} onPress={() => error === 'account' ? router.push('/(tabs)/more') : error === 'setup' ? router.push('/blueprint-setup') : setRevision(v => v + 1)}><Text style={styles.primaryText}>{error === 'account' ? t('Help & account', 'सहायता और खाता') : error === 'setup' ? t('Set up business', 'व्यवसाय सेट करें') : t('Try again', 'फिर कोशिश करें')}</Text></TouchableOpacity></View> : <>
    {error && <TouchableOpacity onPress={() => setRevision(v => v + 1)}><Text style={styles.stateText}>{t('Could not refresh. Showing your last loaded summary. Tap to retry.', 'जानकारी अपडेट नहीं हुई। पिछली जानकारी दिखाई जा रही है। फिर कोशिश करने के लिए टैप करें।')}</Text></TouchableOpacity>}

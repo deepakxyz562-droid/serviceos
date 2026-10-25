@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { BOS_PRIMARY_NAV_ITEMS } from '../shared/bos-navigation';
 import { BosWebApp } from '@/components/bos/bos-web-app';
@@ -31,6 +31,17 @@ describe('BOS Web App (Standalone Business Operating System)', () => {
     if (typeof window !== 'undefined') {
       window.history.replaceState({}, '', '/');
     }
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+      Promise.resolve({
+        ok: false,
+        status: 404,
+        json: async () => ({}),
+      })
+    ));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders the BOS logo PNG, deep forest green sidebar with all 15 menu items, and Upgrade to Pro card', () => {

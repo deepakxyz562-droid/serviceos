@@ -54,7 +54,8 @@ interface KhataResponse {
 
 export default function KhataScreen() {
   const router = useRouter();
-  const language = useBlueprintStore(s => s.blueprint.language);
+  const blueprint = useBlueprintStore(s => s.blueprint);
+  const language = blueprint.language;
   const t = (en: string, hi: string) => language === 'hi' ? hi : en;
   const [currency, setCurrency] = useState('INR');
   const money = (amount: number) => new Intl.NumberFormat(language === 'hi' ? 'hi-IN' : 'en-IN', { style: 'currency', currency }).format(amount);
@@ -535,7 +536,17 @@ export default function KhataScreen() {
                 value={udhaarNote}
                 onChangeText={setUdhaarNote}
                 style={styles.modalInput}
-                placeholder={t('e.g. 5kg Basmati Rice, 2 Tea packets', 'जैसे 5 किलो चावल, 2 चाय पैकेट')}
+                placeholder={
+                  blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+                    ? t('e.g. Iron Gate fabrication advance, welding materials', 'जैसे गेट निर्माण एडवांस, वेल्डिंग का सामान')
+                    : blueprint.businessType === 'salon'
+                    ? t('e.g. Hair color treatment, facial package', 'जैसे हेयर कलर, फेशियल पैकेज')
+                    : blueprint.businessType === 'restaurant'
+                    ? t('e.g. Table 4 dinner catering, party buffet bill', 'जैसे डिनर बिल, कैटरिंग ऑर्डर')
+                    : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
+                    ? t('e.g. Video edit deposit, photoshoot milestone', 'जैसे वीडियो एडिट एडवांस, शूट बिल')
+                    : t('e.g. 5kg Basmati Rice, 2 Tea packets', 'जैसे 5 किलो चावल, 2 चाय पैकेट')
+                }
               />
 
               <TouchableOpacity

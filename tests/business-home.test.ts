@@ -52,7 +52,7 @@ describe('shared business workspace', () => {
     expect(updateTenantBlueprint(current, { language: 'hi' }).capabilities.inventory).toBe(false);
   });
   it('defines every supported family and never formats missing data as zero', () => {
-    expect(Object.keys(HOME_PRESETS)).toHaveLength(10);
+    expect(Object.keys(HOME_PRESETS)).toHaveLength(11);
     expect(formatHomeMetric('balance', null, 'INR', 'en')).toBe('—');
     expect(formatHomeMetric('activeOrders', 0, 'INR', 'en')).toBe('0');
     expect(formatHomeMetric('sales', 10, 'USD', 'en')).toContain('$');

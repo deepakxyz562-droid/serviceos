@@ -35,16 +35,15 @@ export interface ProductItem {
   source?: 'manual' | 'shopify' | 'woocommerce' | 'csv';
 }
 
-const DEFAULT_CATEGORY_PILLS = [
-  'Grocery',
-  'Dairy & Eggs',
-  'Beverages',
-  'Snacks',
-  'Bakery',
-  'Fruits & Veg',
-  'Personal Care',
-  'Services',
-];
+const DEFAULT_CATEGORY_PILLS_BY_TYPE: Record<string, string[]> = {
+  services: ['Fabrication', 'Welding', 'Installation', 'Labor', 'Repair', 'Materials'],
+  salon: ['Hair Care', 'Skin & Facial', 'Grooming', 'Styling', 'Spa', 'Retail Products'],
+  restaurant: ['Starters', 'Main Course', 'Breads & Rice', 'Beverages', 'Desserts'],
+  creative: ['Photography', 'Video Production', 'Shoots', 'Editing', 'Creator Collab'],
+  freelancer: ['Design', 'Development', 'Consulting', 'Milestones', 'Retainer'],
+  grocery: ['Grocery', 'Dairy & Eggs', 'Beverages', 'Snacks', 'Bakery', 'Fruits & Veg'],
+  retail: ['Clothing', 'Footwear', 'Accessories', 'Electronics', 'Home'],
+};
 
 export default function MobileCatalogScreen() {
   const router = useRouter();
@@ -52,6 +51,20 @@ export default function MobileCatalogScreen() {
   const blueprint=useBlueprintStore(s=>s.blueprint);
   const countryPack=useBlueprintStore(s=>s.countryPack);
   const t=(en:string,hi:string)=>blueprint.language==='hi'?hi:en;
+  const isServiceOrCreative = blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing' || blueprint.businessType === 'salon' || blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer';
+  const categoryPills = useMemo(() => {
+    return DEFAULT_CATEGORY_PILLS_BY_TYPE[blueprint.businessType] || DEFAULT_CATEGORY_PILLS_BY_TYPE.retail || DEFAULT_CATEGORY_PILLS_BY_TYPE.grocery;
+  }, [blueprint.businessType]);
+  const pageTitle = blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+    ? t('Services & Materials', 'सेवाएँ और सामग्री')
+    : blueprint.businessType === 'salon'
+    ? t('Salon Services & Products', 'सैलून सेवाएँ और उत्पाद')
+    : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
+    ? t('Services & Packages', 'सेवाएँ और पैकेज')
+    : t('Products', 'सामान');
+  const searchPlaceholder = isServiceOrCreative
+    ? t('Search services, items…', 'सेवाएँ या सामान खोजें…')
+    : t('Search products…', 'सामान खोजें…');
   const [quantities,setQuantities]=useState<Record<string,{id:string;stock:number|null;totalStock?:number|null;minStock:number}>>({});
   const [stockError,setStockError]=useState(false);
   const [saveError,setSaveError]=useState<string|null>(null);
@@ -329,7 +342,7 @@ export default function MobileCatalogScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>{t('Products','सामान')}</Text>
+          <Text style={styles.headerTitle}>{pageTitle}</Text>
           <Text style={styles.headerSubtitle}>
             {catalog.length} items · {activeCount} {t('available for sale','बिक्री के लिए उपलब्ध')}
           </Text>
@@ -350,7 +363,7 @@ export default function MobileCatalogScreen() {
           </TouchableOpacity>}
 
           <TouchableOpacity
-            accessibilityRole="button" accessibilityLabel={t('Add product','सामान जोड़ें')} disabled={loading||!!error||saving} onPress={handleOpenAddModal}
+            accessibilityRole="button" accessibilityLabel={isServiceOrCreative ? t('Add service / item','सेवा या सामान जोड़ें') : t('Add product','सामान जोड़ें')} disabled={loading||!!error||saving} onPress={handleOpenAddModal}
             style={styles.addBtn}
             activeOpacity={0.7}
           >
@@ -367,7 +380,7 @@ export default function MobileCatalogScreen() {
           <MaterialIcons name="search" size={20} color="#94a3b8" />
           <TextInput
             style={styles.searchInput}
-            placeholder={t('Search products…','सामान खोजें…')}
+            placeholder={searchPlaceholder}
             placeholderTextColor="#94a3b8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -471,20 +484,51 @@ export default function MobileCatalogScreen() {
         </View>
       ) : filteredCatalog.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <MaterialIcons name="restaurant-menu" size={56} color="#cbd5e1" />
-          <Text style={styles.emptyTitle}>No products found</Text>
+          <MaterialIcons
+            name={
+              blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+                ? 'handyman'
+                : blueprint.businessType === 'salon'
+                ? 'content-cut'
+                : blueprint.businessType === 'creative'
+                ? 'movie-creation'
+                : blueprint.businessType === 'restaurant'
+                ? 'restaurant-menu'
+                : 'inventory-2'
+            }
+            size={56}
+            color="#cbd5e1"
+          />
+          <Text style={styles.emptyTitle}>
+            {isServiceOrCreative
+              ? t('No services found', 'कोई सेवा नहीं मिली')
+              : t('No products found', 'कोई सामान नहीं मिला')}
+          </Text>
           <Text style={styles.emptySubtitle}>
             {searchQuery
               ? `No results matching "${searchQuery}"`
-              : 'Add your first menu item or sync from your e-commerce store.'}
+              : blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+              ? t('Add your first service or material item to your catalog.', 'कैटलॉग में अपनी पहली सेवा या सामान जोड़ें।')
+              : blueprint.businessType === 'salon'
+              ? t('Add your first salon service or retail product.', 'कैटलॉग में पहली सेवा या सामान जोड़ें।')
+              : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
+              ? t('Add your first service package or shoot offer.', 'कैटलॉग में पहला पैकेज जोड़ें।')
+              : blueprint.businessType === 'restaurant'
+              ? t('Add your first menu item or sync from your e-commerce store.', 'मेन्यू में पहला आइटम जोड़ें।')
+              : t('Add your first item or sync from your e-commerce store.', 'कैटलॉग में पहला सामान जोड़ें।')}
           </Text>
           <TouchableOpacity
             style={styles.emptyAddBtn}
-            accessibilityRole="button" accessibilityLabel={t('Add product','सामान जोड़ें')} disabled={loading||!!error||saving} onPress={handleOpenAddModal}
+            accessibilityRole="button"
+            accessibilityLabel={isServiceOrCreative ? t('Add service', 'सेवा जोड़ें') : t('Add product', 'सामान जोड़ें')}
+            disabled={loading || !!error || saving}
+            onPress={handleOpenAddModal}
             activeOpacity={0.8}
           >
             <MaterialIcons name="add" size={20} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.emptyAddText}>Add First Item</Text>
+            <Text style={styles.emptyAddText}>
+              {isServiceOrCreative ? t('Add First Service', 'पहली सेवा जोड़ें') : t('Add First Item', 'पहला सामान जोड़ें')}
+            </Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -606,7 +650,9 @@ export default function MobileCatalogScreen() {
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>
-                  {editingItem ? t('Edit Product', 'सामान बदलें') : t('Add New Product', 'नया सामान जोड़ें')}
+                  {editingItem
+                    ? (isServiceOrCreative ? t('Edit Service / Item', 'सेवा / सामान बदलें') : t('Edit Product', 'सामान बदलें'))
+                    : (isServiceOrCreative ? t('Add New Service / Item', 'नई सेवा / सामान जोड़ें') : t('Add New Product', 'नया सामान जोड़ें'))}
                 </Text>
                 <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
                   {editingItem ? t('Update item in POS & store catalog', 'POS और कैटलॉग में अपडेट करें') : t('List item on POS & online storefront', 'POS और ऑनलाइन स्टोर पर जोड़ें')}
@@ -626,10 +672,22 @@ export default function MobileCatalogScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 40 }}
             >
-              <Text style={styles.inputLabel}>{t('Product Name *', 'सामान का नाम *')}</Text>
+              <Text style={styles.inputLabel}>
+                {isServiceOrCreative ? t('Service / Item Name *', 'सेवा / सामान का नाम *') : t('Product Name *', 'सामान का नाम *')}
+              </Text>
               <TextInput
                 style={styles.input}
-                placeholder={t('e.g. Basmati Rice 1 kg / Cold Brew Coffee', 'जैसे बासमती चावल 1 किलो')}
+                placeholder={
+                  blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+                    ? t('e.g. MS Grille Fabrication / Gate Repair', 'जैसे ग्रिल फैब्रिकेशन / गेट रिपेयर')
+                    : blueprint.businessType === 'salon'
+                    ? t('e.g. Hair Spa & Styling / Beard Trim', 'जैसे हेयर स्पा / शेविंग')
+                    : blueprint.businessType === 'restaurant'
+                    ? t('e.g. Paneer Butter Masala / Cold Brew Coffee', 'जैसे पनीर बटर मसाला')
+                    : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
+                    ? t('e.g. Actor Headshot Session / Video Edit', 'जैसे हेडशॉट सेशन / वीडियो एडिट')
+                    : t('e.g. Basmati Rice 1 kg / Cold Brew Coffee', 'जैसे बासमती चावल 1 किलो')
+                }
                 placeholderTextColor="#94a3b8"
                 value={formName}
                 onChangeText={setFormName}
@@ -673,7 +731,17 @@ export default function MobileCatalogScreen() {
               </Text>
               <TextInput
                 style={styles.input}
-                placeholder={t('e.g. Grocery, Beverages, Snacks', 'जैसे किराना, पेय, स्नैक्स')}
+                placeholder={
+                  blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+                    ? t('e.g. Fabrication, Repair, Installation', 'जैसे फैब्रिकेशन, रिपेयर')
+                    : blueprint.businessType === 'salon'
+                    ? t('e.g. Hair Care, Facial, Grooming', 'जैसे हेयर केयर, फेशियल')
+                    : blueprint.businessType === 'restaurant'
+                    ? t('e.g. Starters, Main Course, Beverages', 'जैसे स्टार्टर्स, पेय')
+                    : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
+                    ? t('e.g. Photography, Video, Shoots', 'जैसे फोटोग्राफी, वीडियो')
+                    : t('e.g. Grocery, Beverages, Snacks', 'जैसे किराना, पेय, स्नैक्स')
+                }
                 placeholderTextColor="#94a3b8"
                 value={formCategory}
                 onChangeText={setFormCategory}
@@ -684,7 +752,7 @@ export default function MobileCatalogScreen() {
                 style={{ marginTop: 8, marginBottom: 4 }}
                 contentContainerStyle={{ gap: 6 }}
               >
-                {DEFAULT_CATEGORY_PILLS.map((pill) => {
+                {categoryPills.map((pill) => {
                   const isSelected = formCategory.trim().toLowerCase() === pill.toLowerCase();
                   return (
                     <TouchableOpacity
@@ -758,7 +826,13 @@ export default function MobileCatalogScreen() {
               </Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder={t('Item details, ingredients, net weight...', 'सामान की जानकारी, सामग्री, वज़न...')}
+                placeholder={
+                  blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
+                    ? t('Scope of work, specifications, materials used...', 'काम का विवरण, विनिर्देश, सामग्री...')
+                    : blueprint.businessType === 'salon'
+                    ? t('Service steps, duration, products used...', 'सेवा के चरण, समय, उपयोग किए जाने वाले उत्पाद...')
+                    : t('Item details, ingredients, net weight...', 'सामान की जानकारी, सामग्री, वज़न...')
+                }
                 placeholderTextColor="#94a3b8"
                 multiline
                 numberOfLines={3}

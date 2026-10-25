@@ -30,10 +30,12 @@ export async function GET(req: NextRequest) {
 
     // Honor tenant blueprint capabilities: if inventory and catalog are disabled (e.g. services),
     // return clean zero state instead of exposing unmanaged inventory items.
-    const tenant = await db.tenant.findUnique({
-      where: { id: tenantId },
-      select: { id: true, settingsJson: true },
-    });
+    const tenant = db.tenant?.findUnique
+      ? await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { id: true, settingsJson: true },
+        }).catch(() => null)
+      : null;
     let blueprintCaps: any = null;
     if (tenant?.settingsJson) {
       try {

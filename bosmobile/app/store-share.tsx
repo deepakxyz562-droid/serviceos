@@ -12,7 +12,9 @@ import { useBlueprintStore } from '@/stores/blueprint-store';
 
 type StoreShare = { name: string; storeUrl: string; qrDataUrl: string; html: string };
 export default function StoreShareScreen() {
-  const language = useBlueprintStore(s => s.blueprint.language) === 'hi' ? 'hi' : 'en';
+  const blueprint = useBlueprintStore(s => s.blueprint);
+  const language = blueprint.language === 'hi' ? 'hi' : 'en';
+  const isServiceOrSalon = blueprint.businessType === 'services' || blueprint.businessType === 'salon' || blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer';
   const t = (en: string, hi: string) => language === 'hi' ? hi : en;
   const [data, setData] = useState<StoreShare | null>(null);
   const [error, setError] = useState<number | null>(null);
@@ -43,9 +45,9 @@ export default function StoreShareScreen() {
   };
   const button = (label: string, fn: () => Promise<unknown>, primary = false) => <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={() => void perform(fn)} style={[styles.button, primary && styles.primary, busy && { opacity: 0.5 }]}><Text style={[styles.buttonText, primary && { color: 'white' }]}>{label}</Text></TouchableOpacity>;
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.content}>
-    <View style={styles.header}><TouchableOpacity accessibilityLabel={t('Back', 'वापस')} accessibilityRole="button" onPress={() => router.back()} style={styles.back}><MaterialIcons name="arrow-back" size={24} color="#173d2d" /></TouchableOpacity><Text style={styles.title}>{t('Share your store', 'अपनी दुकान शेयर करें')}</Text></View>
+    <View style={styles.header}><TouchableOpacity accessibilityLabel={t('Back', 'वापस')} accessibilityRole="button" onPress={() => router.back()} style={styles.back}><MaterialIcons name="arrow-back" size={24} color="#173d2d" /></TouchableOpacity><Text style={styles.title}>{isServiceOrSalon ? t('Share your services page', 'अपना सेवा पेज शेयर करें') : t('Share your store', 'अपनी दुकान शेयर करें')}</Text></View>
     {loading ? <ActivityIndicator color="#047857" /> : error !== null ? <View style={styles.card}><Text>{error === 409 ? t('Finish setup and publish your store before sharing.', 'शेयर करने से पहले दुकान की सेटिंग पूरी करें और प्रकाशित करें।') : t('Could not load your store. Please try again.', 'दुकान लोड नहीं हुई। फिर कोशिश करें।')}</Text>{error === 409 && button(t('Open store setup on web', 'वेब पर दुकान की सेटिंग खोलें'), () => Linking.openURL(`${WEB_URL}/?view=commerce`))}{button(t('Try again', 'फिर कोशिश करें'), async () => setRevision(v => v + 1))}</View> : data && <>
-      <View style={styles.card}><Text style={styles.title}>{data.name}</Text><Image accessibilityLabel={t('Store QR code', 'दुकान का QR कोड')} source={{ uri: data.qrDataUrl }} style={styles.qr} /><Text style={styles.subtitle}>{t('Scan with your phone camera to order', 'ऑर्डर करने के लिए फ़ोन के कैमरे से स्कैन करें')}</Text><Text selectable style={styles.link}>{data.storeUrl}</Text></View>
+      <View style={styles.card}><Text style={styles.title}>{data.name}</Text><Image accessibilityLabel={t('Store QR code', 'दुकान का QR कोड')} source={{ uri: data.qrDataUrl }} style={styles.qr} /><Text style={styles.subtitle}>{isServiceOrSalon ? t('Scan with your phone camera to view services & book', 'सेवाएँ देखने और बुक करने के लिए फ़ोन के कैमरे से स्कैन करें') : t('Scan with your phone camera to order', 'ऑर्डर करने के लिए फ़ोन के कैमरे से स्कैन करें')}</Text><Text selectable style={styles.link}>{data.storeUrl}</Text></View>
       {button(t('Copy store link', 'दुकान का लिंक कॉपी करें'), async () => { const copied = await Clipboard.setStringAsync(data.storeUrl); if (!copied) throw new Error('COPY_FAILED'); Alert.alert(t('Link copied', 'लिंक कॉपी हुआ')); })}
       {button(t('Share on WhatsApp', 'WhatsApp पर शेयर करें'), () => Linking.openURL(`https://wa.me/?text=${encodeURIComponent(`${data.name}\n${data.storeUrl}`)}`), true)}
       {button(t('Share link', 'लिंक शेयर करें'), () => Share.share({ message: `${data.name}\n${data.storeUrl}` }))}
