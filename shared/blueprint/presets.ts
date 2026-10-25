@@ -516,3 +516,43 @@ export function getStandaloneNavSectionsForBlueprint(
 
   return sections;
 }
+
+export interface StarterCatalogItem {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  costPrice?: number;
+  stock?: number;
+  unit: string;
+  gstRate: number;
+  imageUrl?: string;
+  isActive: boolean;
+}
+
+export const INDUSTRY_STARTER_CATALOGS: Record<string, StarterCatalogItem[]> = {
+  salon: [
+    { id: 'salon-1', name: 'Haircut & Styling', category: 'Hair Services', price: 350, unit: 'Service', gstRate: 18, isActive: true },
+    { id: 'salon-2', name: 'Beard Grooming & Shape', category: 'Grooming', price: 150, unit: 'Service', gstRate: 18, isActive: true },
+    { id: 'salon-3', name: 'Deep Conditioning Hair Spa', category: 'Hair Care', price: 850, unit: 'Service', gstRate: 18, isActive: true },
+    { id: 'salon-4', name: 'Organic Facial & Cleanup', category: 'Skin Care', price: 750, unit: 'Service', gstRate: 18, isActive: true },
+    { id: 'salon-5', name: 'Moroccan Argan Hair Serum (50ml)', category: 'Retail Products', price: 499, costPrice: 320, stock: 24, unit: 'Bottle', gstRate: 18, isActive: true },
+    { id: 'salon-6', name: 'Keratin Care Shampoo (250ml)', category: 'Retail Products', price: 399, costPrice: 250, stock: 18, unit: 'Bottle', gstRate: 18, isActive: true },
+  ],
+  restaurant: [
+    { id: 'rest-1', name: 'Masala Dosa', category: 'South Indian', price: 90, unit: 'Plate', gstRate: 5, isActive: true },
+    { id: 'rest-2', name: 'Paneer Butter Masala', category: 'Main Course', price: 220, unit: 'Portion', gstRate: 5, isActive: true },
+    { id: 'rest-3', name: 'Butter Naan', category: 'Breads', price: 40, unit: 'Piece', gstRate: 5, isActive: true },
+    { id: 'rest-4', name: 'Veg Dum Biryani', category: 'Biryani & Rice', price: 190, unit: 'Portion', gstRate: 5, isActive: true },
+    { id: 'rest-5', name: 'Fresh Lime Soda', category: 'Beverages', price: 60, unit: 'Glass', gstRate: 5, isActive: true },
+  ],
+  services: [
+    { id: 'srv-1', name: 'Standard Consultation (1 Hr)', category: 'Consulting', price: 1500, unit: 'Hour', gstRate: 18, isActive: true },
+    { id: 'srv-2', name: 'Home Service Visit & Inspection', category: 'Inspection', price: 450, unit: 'Visit', gstRate: 18, isActive: true },
+    { id: 'srv-3', name: 'Full Maintenance Service', category: 'Maintenance', price: 2200, unit: 'Job', gstRate: 18, isActive: true },
+  ],
+  freelancer: [
+    { id: 'fl-1', name: 'Design / Creative Hourly Rate', category: 'Design', price: 2000, unit: 'Hour', gstRate: 18, isActive: true },
+    { id: 'fl-2', name: 'Full Project Milestone Delivery', category: 'Milestone', price: 25000, unit: 'Project', gstRate: 18, isActive: true },
+  ],
+};

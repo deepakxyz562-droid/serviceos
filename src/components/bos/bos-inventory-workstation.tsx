@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Barcode,
@@ -564,9 +564,18 @@ export function BosInventoryWorkstation({
     });
   }, [enrichedRows, subTab, categoryFilter, statusFilter, brandFilter, searchQuery]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [currentPage, totalPages]);
+
   const visibleRows = useMemo(() => {
-    return filteredRows.slice(0, pageSize);
-  }, [filteredRows, pageSize]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredRows.slice(startIndex, startIndex + pageSize);
+  }, [filteredRows, currentPage, pageSize]);
 
   const selectedEntry = useMemo(() => {
     return (
@@ -1404,6 +1413,18 @@ export function BosInventoryWorkstation({
                       </tr>
                     );
                   })}
+                  {visibleRows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-[#64748B]">
+                        <p className="text-[14px] font-semibold text-[#111827]">No items found</p>
+                        <p className="mt-1 text-[12.5px] text-[#64748B]">
+                          {searchQuery || categoryFilter !== 'ALL' || statusFilter !== 'all'
+                            ? 'Try adjusting your search or filters.'
+                            : 'Get started by adding your first product or service.'}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1411,44 +1432,63 @@ export function BosInventoryWorkstation({
             {/* Pagination Footer */}
             <div className="flex flex-col gap-2.5 border-t border-[#EBF2EE] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[12.5px] font-medium text-[#64748B]">
-                Showing 1–{Math.min(pageSize, visibleRows.length)} of {visibleRows.length} product{visibleRows.length === 1 ? '' : 's'}
+                Showing {filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredRows.length)} of {filteredRows.length} product{filteredRows.length === 1 ? '' : 's'}
               </p>
 
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
+                    disabled={currentPage <= 1}
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6] ${
+                      currentPage <= 1 ? 'opacity-40 cursor-not-allowed' : ''
+                    }`}
+                    aria-label="Previous page"
                   >
                     <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
-                  {[1, 2, 3, 4, 5].map((pg) => (
-                    <button
-                      key={pg}
-                      type="button"
-                      onClick={() => setCurrentPage(pg)}
-                      className={`flex h-7 w-7 items-center justify-center rounded-lg text-[12px] font-bold transition ${
-                        currentPage === pg
-                          ? 'bg-[#0A6847] text-white'
-                          : 'border border-[#DCE9E3] bg-white text-[#334155] hover:bg-[#F4F8F6]'
-                      }`}
-                    >
-                      {pg}
-                    </button>
-                  ))}
-                  <span className="px-1 text-[12px] text-[#64748B]">...</span>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((pg) => {
+                      if (totalPages <= 7) return true;
+                      if (pg === 1 || pg === totalPages) return true;
+                      return Math.abs(pg - currentPage) <= 1;
+                    })
+                    .reduce<(number | 'ellipsis')[]>((acc, pg, idx, arr) => {
+                      if (idx > 0 && pg - (arr[idx - 1] as number) > 1) {
+                        acc.push('ellipsis');
+                      }
+                      acc.push(pg);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === 'ellipsis' ? (
+                        <span key={`ell-${idx}`} className="px-1 text-[12px] text-[#64748B]">
+                          ...
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setCurrentPage(item)}
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-[12px] font-bold transition ${
+                            currentPage === item
+                              ? 'bg-[#0A6847] text-white'
+                              : 'border border-[#DCE9E3] bg-white text-[#334155] hover:bg-[#F4F8F6]'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ),
+                    )}
                   <button
                     type="button"
-                    onClick={() => setCurrentPage(25)}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[12px] font-bold text-[#334155] hover:bg-[#F4F8F6]`}
-                  >
-                    25
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((p) => Math.min(25, p + 1))}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6]"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg border border-[#DCE9E3] bg-white text-[#64748B] hover:bg-[#F4F8F6] ${
+                      currentPage >= totalPages ? 'opacity-40 cursor-not-allowed' : ''
+                    }`}
+                    aria-label="Next page"
                   >
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>

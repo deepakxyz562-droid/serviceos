@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser, verifyToken } from '@/lib/auth';
-import { resolveTenantBlueprint, getCountryPack, updateTenantBlueprint, BUSINESS_TYPE_PRESETS, SALES_CHANNEL_INFO, BASE_CAPABILITIES, COUNTRY_PACKS } from '@/lib/blueprint';
+import { resolveTenantBlueprint, getCountryPack, updateTenantBlueprint, BUSINESS_TYPE_PRESETS, SALES_CHANNEL_INFO, BASE_CAPABILITIES, COUNTRY_PACKS, INDUSTRY_STARTER_CATALOGS } from '@/lib/blueprint';
 import type { TenantBlueprint, BusinessType, CountryCode, BusinessCapabilities } from '@/lib/blueprint';
 
 async function resolveUserFromRequest(request: NextRequest) {
@@ -170,13 +170,17 @@ export async function PATCH(request: NextRequest) {
     });
 
     settings.blueprint = updatedBlueprint;
+    if (!settings.productOnboarding || typeof settings.productOnboarding !== 'object') {
+      settings.productOnboarding = {};
+    }
+    settings.productOnboarding.bos = true;
 
     // 1. Persist into Tenant
     await db.tenant.update({
       where: { id: tenant.id },
       data: {
         settingsJson: JSON.stringify(settings),
-        ...(changesSetup ? { onboardingCompleted: true } : {}),
+        onboardingCompleted: true,
         ...(businessName ? { name: businessName } : {}),
       },
     });
@@ -221,21 +225,30 @@ export async function PATCH(request: NextRequest) {
         },
       });
 
-      if (commerceConfigs.length > 0 && country !== undefined) {
+      const starterItems = businessType ? INDUSTRY_STARTER_CATALOGS[businessType] : undefined;
+
+      if (commerceConfigs.length > 0) {
         for (const cfg of commerceConfigs) {
-          await db.gptformCommerceConfig.update({
-            where: { id: cfg.id },
-            data: {
-              currency: countryPack.currency.code,
-              currencySymbol: countryPack.currency.symbol,
-            },
-          });
+          const updateData: Record<string, any> = {};
+          if (country !== undefined) {
+            updateData.currency = countryPack.currency.code;
+            updateData.currencySymbol = countryPack.currency.symbol;
+          }
+          if (starterItems && (!cfg.catalogJson || cfg.catalogJson === '[]')) {
+            updateData.catalogJson = JSON.stringify(starterItems);
+          }
+          if (Object.keys(updateData).length > 0) {
+            await db.gptformCommerceConfig.update({
+              where: { id: cfg.id },
+              data: updateData,
+            });
+          }
         }
       } else if (commerceConfigs.length === 0 && aiBiz && changesSetup) {
         await db.gptformCommerceConfig.create({
           data: {
             businessId: aiBiz.id,
-            catalogJson: '[]',
+            catalogJson: starterItems ? JSON.stringify(starterItems) : '[]',
             fieldsJson: '[]',
             currency: countryPack.currency.code,
             currencySymbol: countryPack.currency.symbol,

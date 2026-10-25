@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
     }
 
-    const [dbProducts, commerceConfig] = await Promise.all([
+    const [integrationCount, dbProducts, commerceConfig] = await Promise.all([
+      db.integrationConnection.count({
+        where: { tenantId, status: 'connected' },
+      }),
       db.ecommerceProduct.findMany({
         where: { tenantId, status: 'active' },
         orderBy: { createdAt: 'desc' },
@@ -33,10 +36,13 @@ export async function GET(req: NextRequest) {
       } catch {}
     }
 
+    // Only surface external ecommerce products if the tenant has a connected integration
+    const activeEcommerceProducts = integrationCount > 0 ? dbProducts : [];
+
     return NextResponse.json({
       success: true,
-      count: dbProducts.length + configCatalog.length,
-      dbProducts,
+      count: activeEcommerceProducts.length + configCatalog.length,
+      dbProducts: activeEcommerceProducts,
       catalog: configCatalog,
     });
   } catch (error: any) {
@@ -93,6 +99,14 @@ export async function POST(req: NextRequest) {
       await db.gptformCommerceConfig.update({
         where: { id: config.id },
         data: { catalogJson: JSON.stringify(catalog) },
+      });
+    } else {
+      await db.gptformCommerceConfig.create({
+        data: {
+          businessId: tenantId,
+          catalogJson: JSON.stringify([newItem]),
+          fieldsJson: '[]',
+        },
       });
     }
 

@@ -900,7 +900,7 @@ function BosWebAppInner({
     : [
         { id: 'br-1', name: storeSettings.businessName || 'Main Store', location: storeSettings.address || 'Primary Branch' },
       ];
-  const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(false);
+  const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(true);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<
@@ -1061,11 +1061,35 @@ function BosWebAppInner({
   );
 
   const visibleNavItems = useMemo(() => {
-    if (!blueprintFilterEnabled) return BOS_PRIMARY_NAV_ITEMS;
-    return BOS_PRIMARY_NAV_ITEMS.filter(
-      (item) => isNavItemEnabledByBlueprint(item.id) || item.id === activeView,
-    );
-  }, [blueprintFilterEnabled, isNavItemEnabledByBlueprint, activeView]);
+    const rawItems = blueprintFilterEnabled
+      ? BOS_PRIMARY_NAV_ITEMS.filter(
+          (item) => isNavItemEnabledByBlueprint(item.id) || item.id === activeView,
+        )
+      : [...BOS_PRIMARY_NAV_ITEMS];
+
+    const isSalon = storeSettings.blueprintType === 'salon';
+    const isServices = storeSettings.blueprintType === 'services';
+
+    return rawItems.map((item) => {
+      if (item.id === 'inventory' && (isSalon || isServices)) {
+        return {
+          ...item,
+          label: isSalon ? 'Services & Products' : 'Services & Materials',
+          description: isSalon
+            ? 'Manage haircut, styling, spa treatment services and retail beauty products.'
+            : 'Manage service rate cards, packages, and materials.',
+        };
+      }
+      if (item.id === 'pos' && (isSalon || isServices)) {
+        return {
+          ...item,
+          label: 'Checkout / Billing',
+          description: 'Front-desk register for customer service billing and retail products.',
+        };
+      }
+      return item;
+    });
+  }, [blueprintFilterEnabled, isNavItemEnabledByBlueprint, activeView, storeSettings.blueprintType]);
 
   const activeNavMeta = useMemo(
     () => BOS_PRIMARY_NAV_ITEMS.find((i) => i.id === activeView) || BOS_PRIMARY_NAV_ITEMS[0],
@@ -1189,6 +1213,17 @@ function BosWebAppInner({
                 ? { businessName: String(bp.businessName) }
                 : {}),
             }));
+
+            if (
+              typeof window !== 'undefined' &&
+              !window.location.search.includes('view=') &&
+              !window.location.search.includes('tab=') &&
+              !initialView
+            ) {
+              if (bType === 'salon' || bType === 'services') {
+                setActiveView((curr) => (curr === 'dashboard' || curr === 'pos' ? 'appointments' : curr));
+              }
+            }
           }
         }
 
@@ -1256,66 +1291,70 @@ function BosWebAppInner({
         if (invRes.status === 'fulfilled' && invRes.value.ok) {
           const invData = await invRes.value.json().catch(() => null);
           const invItems = Array.isArray(invData?.items) ? invData.items : configCatalog;
-          if (Array.isArray(invItems) && invItems.length > 0) {
-            const mappedProducts: BosProductItem[] = invItems.map(
-              (item: Record<string, unknown>, idx: number) => {
-                const itemName = String(item.name || 'Product Item');
-                const defaultMatch = demoMode
-                  ? DEFAULT_PRODUCTS.find(
-                      (dp) =>
-                        dp.id === String(item.id || item.productId || '') ||
-                        dp.name.toLowerCase() === itemName.toLowerCase(),
-                    )
-                  : undefined;
-                return {
-                  id: String(item.id || item.productId || defaultMatch?.id || `prod-api-${idx}`),
-                  name: itemName,
-                  category: String(item.category || defaultMatch?.category || 'General'),
-                  price: typeof item.price === 'number' ? item.price : Number(item.price) || (demoMode ? (defaultMatch?.price || 100) : 0),
-                  mrp: typeof item.mrp === 'number' ? item.mrp : Number(item.mrp || item.price) || (demoMode ? (defaultMatch?.mrp || 110) : (Number(item.price) || 0)),
-                  costPrice:
-                    typeof item.costPrice === 'number'
-                      ? item.costPrice
-                      : Number(item.costPrice) ||
-                        (demoMode ? (defaultMatch?.costPrice || Math.round((Number(item.price) || 100) * 0.8)) : undefined),
-                  stockQuantity:
-                    typeof item.stock === 'number'
-                      ? item.stock
-                      : typeof item.stockQuantity === 'number'
-                        ? item.stockQuantity
-                        : (demoMode ? (defaultMatch?.stockQuantity ?? 25) : 0),
-                  lowStockThreshold:
-                    Number(item.minStock ?? item.lowStockThreshold) ||
-                    (demoMode ? (defaultMatch?.lowStockThreshold || 5) : 0),
-                  sku: String(item.sku || (demoMode ? (defaultMatch?.sku || `SKU-${100 + idx}`) : '')),
-                  barcode: String(item.barcode || (demoMode ? (defaultMatch?.barcode || `89010308452${idx}`) : '')),
-                  unit: String(item.unit || defaultMatch?.unit || '1 Unit'),
-                  gstRate: Number(item.gstRate ?? (demoMode ? (defaultMatch?.gstRate ?? 5) : 0)),
-                  hsnCode: String(item.hsnCode || (demoMode ? (defaultMatch?.hsnCode || '1006') : '')),
-                  imageUrl: item.imageUrl ? String(item.imageUrl) : (demoMode ? defaultMatch?.imageUrl : undefined),
-                  onlineVisible: item.isActive !== false && item.onlineVisible !== false,
-                };
-              },
-            );
-            if (demoMode) {
-              const existingNames = new Set(mappedProducts.map((p) => p.name.toLowerCase()));
-              const merged = [
-                ...DEFAULT_PRODUCTS.map((dp) => {
-                  const apiOverride = mappedProducts.find(
-                    (mp) => mp.id === dp.id || mp.name.toLowerCase() === dp.name.toLowerCase(),
-                  );
-                  return apiOverride ? { ...dp, ...apiOverride, imageUrl: dp.imageUrl } : dp;
-                }),
-                ...mappedProducts.filter(
-                  (mp) =>
-                    !DEFAULT_PRODUCTS.some(
-                      (dp) => dp.id === mp.id || dp.name.toLowerCase() === mp.name.toLowerCase(),
-                    ) && existingNames.has(mp.name.toLowerCase()),
-                ),
-              ];
-              setProducts(merged);
+          if (Array.isArray(invItems)) {
+            if (invItems.length === 0) {
+              setProducts(demoMode ? DEFAULT_PRODUCTS : []);
             } else {
-              setProducts(mappedProducts);
+              const mappedProducts: BosProductItem[] = invItems.map(
+                (item: Record<string, unknown>, idx: number) => {
+                  const itemName = String(item.name || 'Product Item');
+                  const defaultMatch = demoMode
+                    ? DEFAULT_PRODUCTS.find(
+                        (dp) =>
+                          dp.id === String(item.id || item.productId || '') ||
+                          dp.name.toLowerCase() === itemName.toLowerCase(),
+                      )
+                    : undefined;
+                  return {
+                    id: String(item.id || item.productId || defaultMatch?.id || `prod-api-${idx}`),
+                    name: itemName,
+                    category: String(item.category || defaultMatch?.category || 'General'),
+                    price: typeof item.price === 'number' ? item.price : Number(item.price) || (demoMode ? (defaultMatch?.price || 100) : 0),
+                    mrp: typeof item.mrp === 'number' ? item.mrp : Number(item.mrp || item.price) || (demoMode ? (defaultMatch?.mrp || 110) : (Number(item.price) || 0)),
+                    costPrice:
+                      typeof item.costPrice === 'number'
+                        ? item.costPrice
+                        : Number(item.costPrice) ||
+                          (demoMode ? (defaultMatch?.costPrice || Math.round((Number(item.price) || 100) * 0.8)) : undefined),
+                    stockQuantity:
+                      typeof item.stock === 'number'
+                        ? item.stock
+                        : typeof item.stockQuantity === 'number'
+                          ? item.stockQuantity
+                          : (demoMode ? (defaultMatch?.stockQuantity ?? 25) : 0),
+                    lowStockThreshold:
+                      Number(item.minStock ?? item.lowStockThreshold) ||
+                      (demoMode ? (defaultMatch?.lowStockThreshold || 5) : 0),
+                    sku: String(item.sku || (demoMode ? (defaultMatch?.sku || `SKU-${100 + idx}`) : '')),
+                    barcode: String(item.barcode || (demoMode ? (defaultMatch?.barcode || `89010308452${idx}`) : '')),
+                    unit: String(item.unit || defaultMatch?.unit || '1 Unit'),
+                    gstRate: Number(item.gstRate ?? (demoMode ? (defaultMatch?.gstRate ?? 5) : 0)),
+                    hsnCode: String(item.hsnCode || (demoMode ? (defaultMatch?.hsnCode || '1006') : '')),
+                    imageUrl: item.imageUrl ? String(item.imageUrl) : (demoMode ? defaultMatch?.imageUrl : undefined),
+                    onlineVisible: item.isActive !== false && item.onlineVisible !== false,
+                  };
+                },
+              );
+              if (demoMode) {
+                const existingNames = new Set(mappedProducts.map((p) => p.name.toLowerCase()));
+                const merged = [
+                  ...DEFAULT_PRODUCTS.map((dp) => {
+                    const apiOverride = mappedProducts.find(
+                      (mp) => mp.id === dp.id || mp.name.toLowerCase() === dp.name.toLowerCase(),
+                    );
+                    return apiOverride ? { ...dp, ...apiOverride, imageUrl: dp.imageUrl } : dp;
+                  }),
+                  ...mappedProducts.filter(
+                    (mp) =>
+                      !DEFAULT_PRODUCTS.some(
+                        (dp) => dp.id === mp.id || dp.name.toLowerCase() === mp.name.toLowerCase(),
+                      ) && existingNames.has(mp.name.toLowerCase()),
+                  ),
+                ];
+                setProducts(merged);
+              } else {
+                setProducts(mappedProducts);
+              }
             }
           }
         }
@@ -1324,78 +1363,82 @@ function BosWebAppInner({
         if (ordersRes.status === 'fulfilled' && ordersRes.value.ok) {
           const ordData = await ordersRes.value.json().catch(() => null);
           const apiOrders = ordData?.orders || ordData?.data?.orders;
-          if (Array.isArray(apiOrders) && apiOrders.length > 0) {
-            const mappedOrders: BosOrder[] = apiOrders.map(
-              (o: Record<string, unknown>, idx: number) => {
-                const rawStatus = String(o.status || 'PENDING').toUpperCase();
-                const status: BosOrder['status'] =
-                  rawStatus === 'COMPLETED'
-                    ? 'completed'
-                    : rawStatus === 'CANCELLED'
-                      ? 'cancelled'
-                      : rawStatus === 'PREPARING'
-                        ? 'preparing'
-                        : rawStatus === 'READY'
-                          ? 'ready'
-                          : rawStatus === 'CONFIRMED'
-                            ? 'accepted'
-                            : 'new';
-                const rawMethod = String(
-                  o.paymentMethod || o.paymentMode || 'UPI',
-                ).toUpperCase();
-                const paymentMode: BosOrder['paymentMode'] =
-                  rawMethod === 'CASH'
-                    ? 'cash'
-                    : rawMethod === 'CARD'
-                      ? 'card'
-                      : rawMethod === 'KHATA'
-                        ? 'khata'
-                        : 'upi';
-                const rawPayStatus = String(o.paymentStatus || 'PAID').toUpperCase();
-                const paymentStatus: BosOrder['paymentStatus'] =
-                  rawPayStatus === 'REFUNDED'
-                    ? 'refunded'
-                    : rawPayStatus === 'REFUND_PENDING'
-                      ? 'refund_pending'
-                      : rawPayStatus === 'PARTIAL'
-                        ? 'partial'
-                        : rawPayStatus === 'UNPAID' || rawPayStatus === 'PENDING'
-                          ? 'pending'
-                          : 'paid';
+          if (Array.isArray(apiOrders)) {
+            if (apiOrders.length === 0) {
+              setOrders(demoMode ? DEFAULT_ORDERS : []);
+            } else {
+              const mappedOrders: BosOrder[] = apiOrders.map(
+                (o: Record<string, unknown>, idx: number) => {
+                  const rawStatus = String(o.status || 'PENDING').toUpperCase();
+                  const status: BosOrder['status'] =
+                    rawStatus === 'COMPLETED'
+                      ? 'completed'
+                      : rawStatus === 'CANCELLED'
+                        ? 'cancelled'
+                        : rawStatus === 'PREPARING'
+                          ? 'preparing'
+                          : rawStatus === 'READY'
+                            ? 'ready'
+                            : rawStatus === 'CONFIRMED'
+                              ? 'accepted'
+                              : 'new';
+                  const rawMethod = String(
+                    o.paymentMethod || o.paymentMode || 'UPI',
+                  ).toUpperCase();
+                  const paymentMode: BosOrder['paymentMode'] =
+                    rawMethod === 'CASH'
+                      ? 'cash'
+                      : rawMethod === 'CARD'
+                        ? 'card'
+                        : rawMethod === 'KHATA'
+                          ? 'khata'
+                          : 'upi';
+                  const rawPayStatus = String(o.paymentStatus || 'PAID').toUpperCase();
+                  const paymentStatus: BosOrder['paymentStatus'] =
+                    rawPayStatus === 'REFUNDED'
+                      ? 'refunded'
+                      : rawPayStatus === 'REFUND_PENDING'
+                        ? 'refund_pending'
+                        : rawPayStatus === 'PARTIAL'
+                          ? 'partial'
+                          : rawPayStatus === 'UNPAID' || rawPayStatus === 'PENDING'
+                            ? 'pending'
+                            : 'paid';
 
-                const totalVal = Number(o.total ?? o.totalAmount) || 0;
-                return {
-                  id: String(o.id || `#ORD-${1050 + idx}`),
-                  customerName: String(o.customerName || 'Walk-in Customer'),
-                  customerPhone: String(o.customerPhone || ''),
-                  customerAddress: o.deliveryAddress ? String(o.deliveryAddress) : undefined,
-                  channel:
-                    o.channel === 'online' || o.channel === 'whatsapp'
-                      ? o.channel
-                      : o.deliveryType === 'delivery'
-                        ? 'online'
-                        : 'pos',
-                  status,
-                  paymentMode,
-                  paymentStatus,
-                  totalAmount: totalVal,
-                  items: Array.isArray(o.items)
-                    ? (o.items as Array<Record<string, unknown>>).map((it) => ({
-                        name: String(it.name || 'Item'),
-                        qty: Number(it.qty) || 1,
-                        price: Number(it.price) || 0,
-                      }))
-                    : [{ name: 'Store Item', qty: 1, price: totalVal }],
-                  createdAt: o.createdAt
-                    ? new Date(String(o.createdAt)).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : 'Today',
-                };
-              },
-            );
-            setOrders(mappedOrders);
+                  const totalVal = Number(o.total ?? o.totalAmount) || 0;
+                  return {
+                    id: String(o.id || `#ORD-${1050 + idx}`),
+                    customerName: String(o.customerName || 'Walk-in Customer'),
+                    customerPhone: String(o.customerPhone || ''),
+                    customerAddress: o.deliveryAddress ? String(o.deliveryAddress) : undefined,
+                    channel:
+                      o.channel === 'online' || o.channel === 'whatsapp'
+                        ? o.channel
+                        : o.deliveryType === 'delivery'
+                          ? 'online'
+                          : 'pos',
+                    status,
+                    paymentMode,
+                    paymentStatus,
+                    totalAmount: totalVal,
+                    items: Array.isArray(o.items)
+                      ? (o.items as Array<Record<string, unknown>>).map((it) => ({
+                          name: String(it.name || 'Item'),
+                          qty: Number(it.qty) || 1,
+                          price: Number(it.price) || 0,
+                        }))
+                      : [{ name: 'Store Item', qty: 1, price: totalVal }],
+                    createdAt: o.createdAt
+                      ? new Date(String(o.createdAt)).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                      : 'Today',
+                  };
+                },
+              );
+              setOrders(mappedOrders);
+            }
           }
         }
 

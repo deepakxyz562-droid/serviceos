@@ -161,9 +161,11 @@ function isProductOnboardingCompleted(data: any, product: string): boolean {
   }
 
   if (product === 'bos') {
+    if (Boolean(settings?.blueprint)) return true;
     if (settings?.productOnboarding?.bos === true) return true;
     if (w?.productType === 'bos' && t.onboardingCompleted) return true;
     if (t.signupMode === 'standalone' && t.onboardingCompleted) return true;
+    if (Boolean(t.onboardingCompleted)) return true;
     return false;
   }
 
