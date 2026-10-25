@@ -149,7 +149,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const business = await ownerBusiness(req);
+    const business = await ownerBusiness(req, 'canCreateInvoices');
     const body = await req.json();
     const parsed = createInvoiceSchema.safeParse(body);
     if (!parsed.success) {
@@ -161,8 +161,16 @@ export async function POST(req: Request) {
 
     const data = parsed.data;
 
-    // 1. Resolve or create customer
+    // 1. Resolve or create customer (with strict tenant/business ownership validation)
     let customerId = data.customerId;
+    if (customerId) {
+      const validCustomer = await db.aiCustomer.findFirst({
+        where: { id: customerId, businessId: business.id },
+      });
+      if (!validCustomer) {
+        customerId = undefined;
+      }
+    }
     if (!customerId && (data.customerName || data.customerPhone)) {
       const cleanPhone = (data.customerPhone || '').replace(/\D/g, '');
       let existing = null;
@@ -291,7 +299,6 @@ export async function POST(req: Request) {
     if (data.status === 'PAID') {
       await db.aiPayment.create({
         data: {
-          businessId: business.id,
           invoiceId: createdInvoice.id,
           amount: grandTotal,
           method: data.paymentMethod || 'CASH',
@@ -387,6 +394,9 @@ export async function POST(req: Request) {
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (e.message === 'FORBIDDEN' || e.message === 'FORBIDDEN_INSUFFICIENT_ROLE') {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions to create invoices' }, { status: 403 });
     }
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

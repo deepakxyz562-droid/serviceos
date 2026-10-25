@@ -1,12 +1,26 @@
-import { ownerBusiness } from '@/lib/commerce/access';
+import { ownerBusiness, resolveStaffSessionFromRequest } from '@/lib/commerce/access';
+import type { ResolvedStaffSession } from '@/lib/commerce/staff-helper';
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { counterCustomerPhone } from '../../../../../shared/walk-in-customer';
 import { resolveTenantBlueprint } from '@/lib/blueprint';
 import { businessDayRange } from '@/lib/business-home-data';
 import { atomicCommerce, commerceError } from '@/lib/commerce/atomic';
-import { MONEY_KINDS, moneyMinor, type MoneySnapshot } from '../../../../../shared/money';
+import { MONEY_KINDS, moneyMinor, type MoneyKind, type MoneySnapshot } from '../../../../../shared/money';
 
+const MONEY_PERMISSION_MAP: Record<MoneyKind, keyof ResolvedStaffSession['permissions']> = {
+  INVOICE_PAYMENT: 'canCreateInvoices',
+  ORDER_PAYMENT: 'canPosBilling',
+  RECONCILE_ORDER: 'canPosBilling',
+  MONEY_IN: 'canPosBilling',
+  COLLECTION: 'canManageKhata',
+  CREDIT_SALE: 'canManageKhata',
+  SUPPLIER_REVIEW: 'canManageKhata',
+  SUPPLIER_BILL: 'canManageKhata',
+  SUPPLIER_PAYMENT: 'canManageKhata',
+  EXPENSE: 'canManageSettings',
+  OPENING: 'canManageSettings',
+};
 
 function failure(error: unknown) {
   if (error instanceof Error && ['UNAUTHORIZED','FORBIDDEN','FORBIDDEN_INSUFFICIENT_ROLE'].includes(error.message)) {
@@ -17,7 +31,11 @@ function failure(error: unknown) {
 }
 export async function GET(req: Request) {
   try {
-    const business = await ownerBusiness(req);
+    const session = await resolveStaffSessionFromRequest(req);
+    if (!session.permissions.canViewReports && !session.permissions.canPosBilling) {
+      throw new Error('FORBIDDEN_INSUFFICIENT_ROLE');
+    }
+    const business = session.business;
     const tenant = business.tenantId ? await db.tenant.findUnique({ where: { id: business.tenantId } }) : null;
     const bp = resolveTenantBlueprint(tenant);
     const timezone = bp.timezone || (bp.country === 'IN' ? 'Asia/Kolkata' : 'UTC');
@@ -29,14 +47,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
-    const requiredPerm = (body?.kind === 'CREDIT_SALE' || body?.kind === 'COLLECTION')
-      ? 'canManageKhata'
-      : (body?.kind === 'EXPENSE' || body?.kind === 'OPENING')
-      ? 'canManageSettings'
-      : undefined;
+    if (!body || !MONEY_KINDS.includes(body.kind)) {
+      return NextResponse.json({ error: 'Invalid money entry' }, { status: 400 });
+    }
+    const requiredPerm = MONEY_PERMISSION_MAP[body.kind as MoneyKind];
     const business = await ownerBusiness(req, requiredPerm);
     const key = req.headers.get('Idempotency-Key') || body?.requestKey;
-    if (!body || !MONEY_KINDS.includes(body.kind) || typeof key !== 'string' || key.length < 8 || key.length > 128) return NextResponse.json({ error: 'Invalid money entry' }, { status: 400 });
+    if (typeof key !== 'string' || key.length < 8 || key.length > 128) return NextResponse.json({ error: 'Invalid money entry' }, { status: 400 });
     if(body.kind==='SUPPLIER_REVIEW'&&body.supplierReviewComplete!==true)return NextResponse.json({error:'Confirm all outstanding supplier bills have been entered.'},{status:400});
     const amountMinor = moneyMinor(body.amount, body.kind === 'OPENING' || body.kind === 'RECONCILE_ORDER' || body.kind==='SUPPLIER_REVIEW');
     if (body.account && !['CASH','BANK'].includes(body.account)) return NextResponse.json({ error: 'Invalid account' }, { status: 400 });

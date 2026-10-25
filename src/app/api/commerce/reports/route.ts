@@ -266,7 +266,7 @@ export async function GET(req: NextRequest) {
         itemsSubtotal = Number(inv.subtotal || inv.total || 0);
       }
 
-      const discount = inv.discountType === 'PERCENTAGE'
+      const discount = (inv.discountType === 'PERCENT' || inv.discountType === 'PERCENTAGE')
         ? (itemsSubtotal * (Number(inv.discountValue) || 0)) / 100
         : (Number(inv.discountValue) || 0);
       const taxable = Math.max(0, itemsSubtotal - discount);
@@ -307,8 +307,13 @@ export async function GET(req: NextRequest) {
         b2cCount += 1;
       }
 
-      // Payments split
-      const payments = Array.isArray(inv.payments) ? inv.payments : [];
+      // Payments split (filtered by payment date within period when available)
+      const rawPayments = Array.isArray(inv.payments) ? inv.payments : [];
+      const payments = rawPayments.filter((p: any) => {
+        if (!p.paidAt && !p.createdAt) return true;
+        const pTime = new Date(p.paidAt || p.createdAt).getTime();
+        return pTime >= start.getTime() && pTime <= end.getTime();
+      });
       const totalPaid = payments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       for (const p of payments) {
@@ -349,6 +354,7 @@ export async function GET(req: NextRequest) {
 
     // COGS: 0 unless tracked per-item costs are recorded (no fabricated percentages)
     const cogs = 0;
+    const cogsTracked = false;
     const grossProfit = totalRevenue - cogs;
 
     // Operating Expenses from db or money snapshot
@@ -369,11 +375,18 @@ export async function GET(req: NextRequest) {
     const totalReceivables = Math.max(snapshotReceivables, uncollectedInvoiceReceivables);
     const totalPayables = moneySnapshot?.toPay ?? 0;
 
-    const aging = totalReceivables > 0
+    const totalInvoiceAging = invoiceAgingCurrent + invoiceAgingDueSoon + invoiceAgingOverdue;
+    const aging = totalInvoiceAging > 0
       ? {
-          current: invoiceAgingCurrent > 0 ? invoiceAgingCurrent : Math.round(totalReceivables * 0.65),
-          dueSoon: invoiceAgingDueSoon > 0 ? invoiceAgingDueSoon : Math.round(totalReceivables * 0.25),
-          overdue: invoiceAgingOverdue > 0 ? invoiceAgingOverdue : Math.round(totalReceivables * 0.1),
+          current: invoiceAgingCurrent,
+          dueSoon: invoiceAgingDueSoon,
+          overdue: invoiceAgingOverdue,
+        }
+      : totalReceivables > 0
+      ? {
+          current: totalReceivables,
+          dueSoon: 0,
+          overdue: 0,
         }
       : { current: 0, dueSoon: 0, overdue: 0 };
 

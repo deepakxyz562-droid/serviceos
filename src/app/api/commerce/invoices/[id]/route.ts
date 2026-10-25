@@ -66,7 +66,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const business = await ownerBusiness(req);
+    const business = await ownerBusiness(req, 'canCreateInvoices');
     const body = await req.json();
     const parsed = patchSchema.safeParse(body);
     if (!parsed.success) {
@@ -96,30 +96,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const remaining = Math.max(0, total - alreadyPaid);
 
       if (remaining > 0) {
-        // Record payment record on AiPayment
+        // Record payment record on AiPayment (nuvora_invoice_receipt trigger logs ledger event)
         await db.aiPayment.create({
           data: {
-            businessId: business.id,
             invoiceId: existing.id,
             amount: remaining,
             method: parsed.data.paymentMethod || 'CASH',
             notes: 'Marked paid from BOS workstation',
           },
         });
-
-        // Record in atomic money ledger (Daybook / Cash) via finance command
-        const key = `pay_inv_${existing.id}_${Date.now()}`;
-        await atomicCommerce('finance', [
-          business.id,
-          key,
-          {
-            kind: 'COLLECTION',
-            amount: remaining,
-            account: parsed.data.paymentMethod === 'BANK' ? 'BANK' : 'CASH',
-            invoiceId: existing.id,
-            reference: `Invoice ${existing.number} Paid`,
-          },
-        ]).catch(() => {});
       }
 
       const updated = await db.aiInvoice.update({
@@ -146,6 +131,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    if (e.message === 'FORBIDDEN' || e.message === 'FORBIDDEN_INSUFFICIENT_ROLE') {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions for invoice operations' }, { status: 403 });
+    }
     const failure = commerceError(e);
     return NextResponse.json({ error: failure.message }, { status: failure.status });
   }
@@ -154,7 +142,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const business = await ownerBusiness(req);
+    const business = await ownerBusiness(req, 'canCreateInvoices');
 
     const existing = await db.aiInvoice.findFirst({
       where: { id, businessId: business.id },
@@ -176,6 +164,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (e.message === 'FORBIDDEN' || e.message === 'FORBIDDEN_INSUFFICIENT_ROLE') {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions for invoice operations' }, { status: 403 });
     }
     const failure = commerceError(e);
     return NextResponse.json({ error: failure.message }, { status: failure.status });

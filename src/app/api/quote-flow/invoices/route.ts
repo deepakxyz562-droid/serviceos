@@ -79,6 +79,14 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     let targetCustomerId = body.customerId;
+    if (targetCustomerId) {
+      const validCustomer = await db.aiCustomer.findFirst({
+        where: { id: targetCustomerId, businessId: business.id },
+      });
+      if (!validCustomer) {
+        targetCustomerId = undefined;
+      }
+    }
     if (!targetCustomerId) {
       const custName = body.customerName || 'Walk-in Customer';
       const custPhone = body.customerPhone ? String(body.customerPhone).replace(/\D/g, '') : null;
@@ -168,7 +176,6 @@ export async function POST(req: Request) {
       if (effectivePaid > 0) {
         await tx.aiPayment.create({
           data: {
-            businessId: business.id,
             invoiceId: inv.id,
             amount: effectivePaid,
             method: body.paymentMethod || 'CASH',

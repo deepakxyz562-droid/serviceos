@@ -531,6 +531,162 @@ export function BosReportsDaybookWorkstation({
     };
   }, [orders, products, daybookEntries, demoMode, currencySymbol]);
 
+  const expenseBreakdown = useMemo(() => {
+    if (demoMode) {
+      return [
+        { category: 'Staff & Helper Salaries', amount: Math.round(reportsData.totalExpenses * 0.5) },
+        { category: 'Store Rent & Maintenance', amount: Math.round(reportsData.totalExpenses * 0.3) },
+        { category: 'Electricity & Utilities', amount: Math.round(reportsData.totalExpenses * 0.12) },
+        { category: 'Packaging & Misc Supplies', amount: Math.round(reportsData.totalExpenses * 0.08) },
+      ];
+    }
+    const expEntries = daybookEntries.filter(
+      (e) => e.category === 'Expense' || e.moneyOut > 0,
+    );
+    if (expEntries.length === 0) {
+      return [{ category: 'Recorded Operating Expenses', amount: reportsData.totalExpenses }];
+    }
+    const map = new Map<string, number>();
+    for (const e of expEntries) {
+      const cat = e.particulars || e.category || 'General Expense';
+      map.set(cat, (map.get(cat) || 0) + (e.moneyOut || 0));
+    }
+    return Array.from(map.entries()).map(([category, amount]) => ({ category, amount }));
+  }, [daybookEntries, reportsData.totalExpenses, demoMode]);
+
+  const gstSlabs = useMemo(() => {
+    if (demoMode) {
+      return [
+        { rate: '0% (Exempt/Nil)', taxable: Math.round(reportsData.totalRevenue * 0.15), tax: 0 },
+        { rate: '5% (Intra-state)', taxable: Math.round(reportsData.totalRevenue * 0.45), tax: Math.round(reportsData.totalRevenue * 0.45 * 0.05) },
+        { rate: '12% (Standard)', taxable: Math.round(reportsData.totalRevenue * 0.25), tax: Math.round(reportsData.totalRevenue * 0.25 * 0.12) },
+        { rate: '18% (Standard)', taxable: Math.round(reportsData.totalRevenue * 0.15), tax: Math.round(reportsData.totalRevenue * 0.15 * 0.18) },
+      ];
+    }
+
+    let slab0 = 0, slab5 = 0, slab12 = 0, slab18 = 0, slab28 = 0;
+    let tax5 = 0, tax12 = 0, tax18 = 0, tax28 = 0;
+
+    for (const o of orders) {
+      if (!o.items || o.items.length === 0) {
+        const orderRate = (o as any).gstRate ?? (o as any).taxRate ?? 0;
+        const taxAmt = o.taxAmount || 0;
+        const taxable = Math.max(0, (o.totalAmount || 0) - taxAmt);
+        if (orderRate === 5) { slab5 += taxable; tax5 += taxAmt; }
+        else if (orderRate === 12) { slab12 += taxable; tax12 += taxAmt; }
+        else if (orderRate === 18) { slab18 += taxable; tax18 += taxAmt; }
+        else if (orderRate === 28) { slab28 += taxable; tax28 += taxAmt; }
+        else { slab0 += taxable; }
+        continue;
+      }
+
+      for (const it of o.items) {
+        const rate = it.gstRate ?? 0;
+        const lineTotal = (it.qty || 1) * (it.price || 0);
+        if (rate === 5) { slab5 += lineTotal; tax5 += Math.round(lineTotal * 0.05); }
+        else if (rate === 12) { slab12 += lineTotal; tax12 += Math.round(lineTotal * 0.12); }
+        else if (rate === 18) { slab18 += lineTotal; tax18 += Math.round(lineTotal * 0.18); }
+        else if (rate === 28) { slab28 += lineTotal; tax28 += Math.round(lineTotal * 0.28); }
+        else { slab0 += lineTotal; }
+      }
+    }
+
+    return [
+      { rate: '0% (Exempt/Nil)', taxable: slab0, tax: 0 },
+      { rate: '5% (Intra-state)', taxable: slab5, tax: tax5 },
+      { rate: '12% (Standard)', taxable: slab12, tax: tax12 },
+      { rate: '18% (Standard)', taxable: slab18, tax: tax18 },
+      ...(slab28 > 0 ? [{ rate: '28% (Luxury)', taxable: slab28, tax: tax28 }] : []),
+    ];
+  }, [orders, reportsData.totalRevenue, demoMode]);
+
+  const khataData = useMemo(() => {
+    if (demoMode) {
+      return {
+        totalReceivables: 18450,
+        totalPayables: 9200,
+        netDues: 9250,
+        aging0to15: 12000,
+        aging16to30: 4500,
+        aging30plus: 1950,
+        customers: [
+          { name: 'Vikram Singh', phone: '+91 98234 11223', totalCredit: 12500, pending: 4500, status: 'Due Soon', statusColor: 'bg-amber-100 text-amber-800' },
+          { name: 'Amit Sharma', phone: '+91 98765 43210', totalCredit: 8200, pending: 1950, status: 'Overdue (32d)', statusColor: 'bg-red-100 text-red-800' },
+          { name: 'Rahul Patel', phone: '+91 91234 56789', totalCredit: 15400, pending: 3200, status: 'Current (7d)', statusColor: 'bg-emerald-100 text-emerald-800' },
+          { name: 'Pooja Verma', phone: '+91 94567 89012', totalCredit: 6700, pending: 2800, status: 'Current (4d)', statusColor: 'bg-emerald-100 text-emerald-800' },
+        ],
+      };
+    }
+
+    const unpaidOrders = orders.filter(
+      (o) => (o.paymentMode === 'khata' || o.paymentStatus === 'pending' || o.paymentStatus === 'unpaid') && o.totalAmount > 0,
+    );
+    const totalReceivables = unpaidOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const totalPayables = 0;
+    const netDues = totalReceivables - totalPayables;
+
+    const custMap = new Map<string, { name: string; phone: string; totalCredit: number; pending: number; latestDate: Date }>();
+    for (const o of orders) {
+      if (o.paymentMode === 'khata' || o.paymentStatus === 'pending' || o.paymentStatus === 'unpaid') {
+        const key = o.customerPhone || o.customerName || 'Walk-in';
+        const existing = custMap.get(key) || {
+          name: o.customerName || 'Walk-in Customer',
+          phone: o.customerPhone || '—',
+          totalCredit: 0,
+          pending: 0,
+          latestDate: new Date(o.createdAt || Date.now()),
+        };
+        existing.totalCredit += o.totalAmount || 0;
+        existing.pending += o.totalAmount || 0;
+        custMap.set(key, existing);
+      }
+    }
+
+    const now = Date.now();
+    let aging0to15 = 0;
+    let aging16to30 = 0;
+    let aging30plus = 0;
+
+    for (const o of unpaidOrders) {
+      const orderDate = new Date(o.createdAt || Date.now()).getTime();
+      const ageDays = Math.max(0, Math.floor((now - orderDate) / (1000 * 60 * 60 * 24)));
+      if (ageDays <= 15) aging0to15 += o.totalAmount || 0;
+      else if (ageDays <= 30) aging16to30 += o.totalAmount || 0;
+      else aging30plus += o.totalAmount || 0;
+    }
+
+    const customerList = Array.from(custMap.values()).map((c) => {
+      const ageDays = Math.max(0, Math.floor((now - c.latestDate.getTime()) / (1000 * 60 * 60 * 24)));
+      let status = 'Current';
+      let statusColor = 'bg-emerald-100 text-emerald-800';
+      if (ageDays > 30) {
+        status = `Overdue (${ageDays}d)`;
+        statusColor = 'bg-red-100 text-red-800';
+      } else if (ageDays > 15) {
+        status = `Due Soon (${ageDays}d)`;
+        statusColor = 'bg-amber-100 text-amber-800';
+      }
+      return {
+        name: c.name,
+        phone: c.phone,
+        totalCredit: c.totalCredit,
+        pending: c.pending,
+        status,
+        statusColor,
+      };
+    });
+
+    return {
+      totalReceivables,
+      totalPayables,
+      netDues,
+      aging0to15,
+      aging16to30,
+      aging30plus,
+      customers: customerList,
+    };
+  }, [orders, demoMode]);
+
   const openingBalance = openingBal;
   const totalMoneyIn = useMemo(
     () => rows.reduce((acc, r) => acc + (r.moneyIn || 0), 0),
@@ -1504,30 +1660,14 @@ export function BosReportsDaybookWorkstation({
                   2. Operating Expenses
                 </h4>
                 <div className="space-y-2 text-[12.5px]">
-                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
-                    <span className="text-[#334155]">Staff &amp; Helper Salaries</span>
-                    <span className="font-semibold text-[#111827]">
-                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.5), currencySymbol)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
-                    <span className="text-[#334155]">Store Rent &amp; Maintenance</span>
-                    <span className="font-semibold text-[#111827]">
-                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.3), currencySymbol)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
-                    <span className="text-[#334155]">Electricity &amp; Utilities</span>
-                    <span className="font-semibold text-[#111827]">
-                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.12), currencySymbol)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-[#EBF2EE]">
-                    <span className="text-[#334155]">Packaging &amp; Misc Supplies</span>
-                    <span className="font-semibold text-[#111827]">
-                      {formatBosCurrency(Math.round(reportsData.totalExpenses * 0.08), currencySymbol)}
-                    </span>
-                  </div>
+                  {expenseBreakdown.map((exp) => (
+                    <div key={exp.category} className="flex justify-between py-1 border-b border-[#EBF2EE]">
+                      <span className="text-[#334155]">{exp.category}</span>
+                      <span className="font-semibold text-[#111827]">
+                        {formatBosCurrency(exp.amount, currencySymbol)}
+                      </span>
+                    </div>
+                  ))}
                   <div className="flex justify-between rounded-xl bg-white p-3 border border-[#DCE9E3] text-amber-700">
                     <span className="font-extrabold">Total Operating Expenses</span>
                     <span className="text-[15px] font-extrabold">
@@ -1622,12 +1762,7 @@ export function BosReportsDaybookWorkstation({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                    {[
-                      { rate: '0% (Exempt/Nil)', taxable: Math.round(reportsData.totalRevenue * 0.15), tax: 0 },
-                      { rate: '5% (Intra-state)', taxable: Math.round(reportsData.totalRevenue * 0.45), tax: Math.round(reportsData.totalRevenue * 0.45 * 0.05) },
-                      { rate: '12% (Standard)', taxable: Math.round(reportsData.totalRevenue * 0.25), tax: Math.round(reportsData.totalRevenue * 0.25 * 0.12) },
-                      { rate: '18% (Standard)', taxable: Math.round(reportsData.totalRevenue * 0.15), tax: Math.round(reportsData.totalRevenue * 0.15 * 0.18) },
-                    ].map((row) => (
+                    {gstSlabs.map((row) => (
                       <tr key={row.rate} className="hover:bg-[#F9FCFA]">
                         <td className="py-2.5 px-3 font-bold text-[#1E293B]">{row.rate}</td>
                         <td className="py-2.5 px-3 text-right font-medium text-[#334155]">
@@ -1763,23 +1898,25 @@ export function BosReportsDaybookWorkstation({
               <div className="bos-card p-4">
                 <p className="text-[12px] font-semibold text-[#64748B]">Customer Udhaar (Receivables)</p>
                 <p className="mt-1 text-[22px] font-extrabold text-red-600">
-                  {formatBosCurrency(18450, currencySymbol)}
+                  {formatBosCurrency(khataData.totalReceivables, currencySymbol)}
                 </p>
                 <p className="text-[11px] text-[#64748B]">To collect from customers</p>
               </div>
               <div className="bos-card p-4">
                 <p className="text-[12px] font-semibold text-[#64748B]">Supplier Payables</p>
                 <p className="mt-1 text-[22px] font-extrabold text-amber-600">
-                  {formatBosCurrency(9200, currencySymbol)}
+                  {formatBosCurrency(khataData.totalPayables, currencySymbol)}
                 </p>
                 <p className="text-[11px] text-[#64748B]">To pay to distributors</p>
               </div>
               <div className="bos-card p-4 bg-[#F3FAF7] border-[#BCE3D4]">
                 <p className="text-[12px] font-bold text-[#0A6847]">Net Pending Dues</p>
                 <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
-                  +{formatBosCurrency(9250, currencySymbol)}
+                  {khataData.netDues >= 0 ? '+' : ''}{formatBosCurrency(khataData.netDues, currencySymbol)}
                 </p>
-                <p className="text-[11px] text-[#0A6847] font-semibold">Net positive cashflow</p>
+                <p className="text-[11px] text-[#0A6847] font-semibold">
+                  {khataData.netDues >= 0 ? 'Net positive cashflow' : 'Net payable position'}
+                </p>
               </div>
             </div>
 
@@ -1788,23 +1925,29 @@ export function BosReportsDaybookWorkstation({
               <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3.5">
                 <p className="text-[11px] font-bold text-emerald-800">0 - 15 Days (Current)</p>
                 <p className="text-[18px] font-extrabold text-emerald-900 mt-1">
-                  {formatBosCurrency(12000, currencySymbol)}
+                  {formatBosCurrency(khataData.aging0to15, currencySymbol)}
                 </p>
-                <p className="text-[10.5px] text-emerald-700">65% of total dues</p>
+                <p className="text-[10.5px] text-emerald-700">
+                  {khataData.totalReceivables > 0 ? `${Math.round((khataData.aging0to15 / khataData.totalReceivables) * 100)}% of total dues` : 'No current dues'}
+                </p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3.5">
                 <p className="text-[11px] font-bold text-amber-800">16 - 30 Days (Due Soon)</p>
                 <p className="text-[18px] font-extrabold text-amber-900 mt-1">
-                  {formatBosCurrency(4500, currencySymbol)}
+                  {formatBosCurrency(khataData.aging16to30, currencySymbol)}
                 </p>
-                <p className="text-[10.5px] text-amber-700">25% of total dues</p>
+                <p className="text-[10.5px] text-amber-700">
+                  {khataData.totalReceivables > 0 ? `${Math.round((khataData.aging16to30 / khataData.totalReceivables) * 100)}% of total dues` : 'No dues in window'}
+                </p>
               </div>
               <div className="rounded-xl border border-red-200 bg-red-50/50 p-3.5">
                 <p className="text-[11px] font-bold text-red-800">30+ Days (Overdue)</p>
                 <p className="text-[18px] font-extrabold text-red-900 mt-1">
-                  {formatBosCurrency(1950, currencySymbol)}
+                  {formatBosCurrency(khataData.aging30plus, currencySymbol)}
                 </p>
-                <p className="text-[10.5px] text-red-700">Needs WhatsApp reminder</p>
+                <p className="text-[10.5px] text-red-700">
+                  {khataData.aging30plus > 0 ? 'Needs WhatsApp reminder' : 'No overdue accounts'}
+                </p>
               </div>
             </div>
 
@@ -1826,43 +1969,46 @@ export function BosReportsDaybookWorkstation({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                    {[
-                      { name: 'Vikram Singh', phone: '+91 98234 11223', totalCredit: 12500, pending: 4500, status: 'Due Soon', statusColor: 'bg-amber-100 text-amber-800' },
-                      { name: 'Amit Sharma', phone: '+91 98765 43210', totalCredit: 8200, pending: 1950, status: 'Overdue (32d)', statusColor: 'bg-red-100 text-red-800' },
-                      { name: 'Rahul Patel', phone: '+91 91234 56789', totalCredit: 15400, pending: 3200, status: 'Current (7d)', statusColor: 'bg-emerald-100 text-emerald-800' },
-                      { name: 'Pooja Verma', phone: '+91 94567 89012', totalCredit: 6700, pending: 2800, status: 'Current (4d)', statusColor: 'bg-emerald-100 text-emerald-800' },
-                    ].map((c) => (
-                      <tr key={c.phone} className="hover:bg-[#F9FCFA]">
-                        <td className="py-2.5 px-3 font-bold text-[#111827]">{c.name}</td>
-                        <td className="py-2.5 px-3 text-xs text-[#64748B]">{c.phone}</td>
-                        <td className="py-2.5 px-3 text-right text-[#64748B]">
-                          {formatBosCurrency(c.totalCredit, currencySymbol)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-extrabold text-red-600">
-                          {formatBosCurrency(c.pending, currencySymbol)}
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${c.statusColor}`}>
-                            {c.status}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const text = encodeURIComponent(
-                                `Dear ${c.name}, gentle reminder that your pending balance at our store is ${formatBosCurrency(c.pending, currencySymbol)}. Kindly pay via UPI or visit us. Thank you!`
-                              );
-                              window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
-                            }}
-                            className="inline-flex items-center gap-1 rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11px] font-bold text-[#0A7B56] hover:bg-[#D1EFE4] cursor-pointer"
-                          >
-                            <Send className="h-3 w-3" />
-                            <span>WhatsApp</span>
-                          </button>
+                    {khataData.customers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-6 text-center text-[#64748B]">
+                          No outstanding customer dues recorded
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      khataData.customers.map((c) => (
+                        <tr key={c.phone || c.name} className="hover:bg-[#F9FCFA]">
+                          <td className="py-2.5 px-3 font-bold text-[#111827]">{c.name}</td>
+                          <td className="py-2.5 px-3 text-xs text-[#64748B]">{c.phone}</td>
+                          <td className="py-2.5 px-3 text-right text-[#64748B]">
+                            {formatBosCurrency(c.totalCredit, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-extrabold text-red-600">
+                            {formatBosCurrency(c.pending, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${c.statusColor}`}>
+                              {c.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const text = encodeURIComponent(
+                                  `Dear ${c.name}, gentle reminder that your pending balance at our store is ${formatBosCurrency(c.pending, currencySymbol)}. Kindly pay via UPI or visit us. Thank you!`
+                                );
+                                window.open(`https://wa.me/${c.phone.replace(/[^0-9]/g, '')}?text=${text}`, '_blank');
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11px] font-bold text-[#0A7B56] hover:bg-[#D1EFE4] cursor-pointer"
+                            >
+                              <Send className="h-3 w-3" />
+                              <span>WhatsApp</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

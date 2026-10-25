@@ -79,12 +79,19 @@ export async function POST(request: NextRequest) {
     const channel = 'email'
 
     // ── Compute live audience count so the list shows a real number, not 0 ──
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 })
+    }
+    const tenantId = user.tenantId || null
+    const workspaceId = user.workspaceId || null
+
+    // ── Compute live audience count so the list shows a real number, not 0 ──
     let totalRecipients = body.totalRecipients || 0
     if (!totalRecipients) {
       try {
-        const user = await getAuthUser()
         const audience = await resolveBroadcastAudience({
-          tenantId: user?.tenantId || null,
+          tenantId,
           audienceType: body.audienceType || 'all',
           audienceId: body.audienceId || null,
           audienceFiltersJson: body.audienceFiltersJson || '{}',
@@ -101,7 +108,7 @@ export async function POST(request: NextRequest) {
         name: body.name,
         description: body.description || null,
         type: body.type || 'promotional',
-        status: body.status || 'draft',
+        status: body.scheduledAt ? 'scheduled' : (body.status || 'draft'),
         channel,
         audienceType: body.audienceType || 'all',
         audienceId: body.audienceId || null,
@@ -117,9 +124,9 @@ export async function POST(request: NextRequest) {
         totalRecipients,
         followUpSequenceJson: body.followUpSequenceJson || '[]',
         cloneFromId: body.cloneFromId || null,
-        createdById: body.createdById || null,
-        tenantId: body.tenantId || null,
-        workspaceId: body.workspaceId || null,
+        createdById: user.id,
+        tenantId,
+        workspaceId,
       },
     })
 

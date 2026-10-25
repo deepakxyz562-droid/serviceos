@@ -180,7 +180,7 @@ export async function PATCH(request: NextRequest) {
       where: { id: tenant.id },
       data: {
         settingsJson: JSON.stringify(settings),
-        onboardingCompleted: true,
+        ...(changesSetup ? { onboardingCompleted: true } : {}),
         ...(businessName ? { name: businessName } : {}),
       },
     });

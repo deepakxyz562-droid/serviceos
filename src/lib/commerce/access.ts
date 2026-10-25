@@ -8,8 +8,11 @@ export async function resolveStaffSessionFromRequest(req: Request): Promise<Reso
 
   const resolved = await resolveStaffSession(user);
   if (!resolved?.business) {
-    // If not found in staff session, check if user is a legacy owner/admin
-    const business = await db.aiBusiness.findUnique({ where: { ownerId: user.id } });
+    // If not found in staff session, check if user is a legacy owner/admin by ownerId or tenantId
+    let business = await db.aiBusiness.findUnique({ where: { ownerId: user.id } });
+    if (!business && user.tenantId) {
+      business = await db.aiBusiness.findFirst({ where: { tenantId: user.tenantId } });
+    }
     if (!business) throw new Error('BUSINESS_NOT_FOUND');
     return {
       business,

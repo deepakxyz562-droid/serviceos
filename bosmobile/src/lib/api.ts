@@ -47,7 +47,9 @@ export async function apiRequest<T = any>(
     ...headers,
   };
 
-  if (!skipAuth) {
+  const isTrustedOrigin = !path.startsWith('http') || path.startsWith(API_BASE_URL);
+
+  if (!skipAuth && isTrustedOrigin) {
     const token = await getToken();
     if (token) {
       reqHeaders['Authorization'] = `Bearer ${token}`;
@@ -143,7 +145,10 @@ export async function apiRequest<T = any>(
   try {
     return (await response.json()) as T;
   } catch {
-    return {} as T;
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return {} as T;
+    }
+    throw new ApiError('Invalid JSON response from server', response.status);
   }
 }
 
@@ -169,13 +174,21 @@ async function attemptTokenRefresh(): Promise<boolean> {
       const refreshToken = await getRefreshToken();
       if (!refreshToken) return false;
 
-      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refreshToken }),
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8_000);
+      let res: Response;
+      try {
+        res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (res.ok) {
         const data = await res.json();

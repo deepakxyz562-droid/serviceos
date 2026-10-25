@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { resolveStaffSessionFromRequest } from '@/lib/commerce/access';
 
 /**
  * POST /api/commerce/products/import
@@ -8,9 +8,26 @@ import { getAuthUser } from '@/lib/auth';
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getAuthUser();
-    let tenantId = auth?.tenantId;
-    let workspaceId = auth?.workspaceId;
+    let session;
+    try {
+      session = await resolveStaffSessionFromRequest(req);
+    } catch (authErr: any) {
+      const isForbidden = authErr?.message === 'FORBIDDEN_INSUFFICIENT_ROLE';
+      return NextResponse.json(
+        { error: isForbidden ? 'Forbidden: Insufficient permissions' : 'Unauthorized: Authentication required' },
+        { status: isForbidden ? 403 : 401 }
+      );
+    }
+
+    if (!session.permissions.canManageProducts) {
+      return NextResponse.json(
+        { error: 'Forbidden: Insufficient permissions to import products' },
+        { status: 403 }
+      );
+    }
+
+    const tenantId = session.business.tenantId || session.business.id;
+    const workspaceId = session.business.id;
 
     const contentType = req.headers.get('content-type') || '';
     let rawItems: any[] = [];
@@ -22,27 +39,14 @@ export async function POST(req: NextRequest) {
       } else if (Array.isArray(body)) {
         rawItems = body;
       }
-      if (!tenantId && body.tenantId) {
-        tenantId = body.tenantId;
-      }
     } else if (contentType.includes('multipart/form-data') || contentType.includes('text/csv')) {
       const formData = await req.formData();
-      const file = formData.get('file') as File | null;
-      if (!file) {
+      const fileEntry = formData.get('file');
+      if (!fileEntry || typeof fileEntry === 'string') {
         return NextResponse.json({ error: 'No file provided in upload' }, { status: 400 });
       }
-      const text = await file.text();
+      const text = await (fileEntry as Blob).text();
       rawItems = parseCSV(text);
-    }
-
-    if (!tenantId) {
-      // Fallback: lookup first tenant
-      const defaultTenant = await db.tenant.findFirst({ select: { id: true } });
-      if (defaultTenant) {
-        tenantId = defaultTenant.id;
-      } else {
-        return NextResponse.json({ error: 'Unauthorized: missing tenant session' }, { status: 401 });
-      }
     }
 
     if (rawItems.length === 0) {

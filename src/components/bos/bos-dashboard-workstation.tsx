@@ -86,7 +86,7 @@ export function BosDashboardWorkstation({
     const completedOrdersCount = orders.filter((o) => o.status === 'completed').length;
     const pendingOrdersCount = orders.filter((o) => o.status !== 'completed' && o.status !== 'cancelled').length;
     const totalCustomersCount = customers.length;
-    const newCustomersCount = Math.min(totalCustomersCount, Math.round(totalCustomersCount * 0.12));
+    const newCustomersCount = customers.filter((c) => c.segment === 'New' || c.ordersCount <= 1).length;
     const appointmentsCount = appointments.length;
     const upcomingCount = appointments.filter((a) => a.status === 'confirmed' || a.status === 'pending').length;
     const totalExpenses = (daybookEntries || []).reduce((sum, e) => sum + (Number(e.moneyOut) || 0), 0);

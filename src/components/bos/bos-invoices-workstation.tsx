@@ -2048,18 +2048,18 @@ export function BosInvoicesWorkstation({
                     GST e-Invoice (IRP Schema v1.03)
                   </h3>
                   <p className="text-[11px] text-[#64748B]">
-                    Compliant with GST Rule 48(4) for B2B e-Invoicing
+                    JSON schema matching GST Rule 48(4) for B2B e-Invoicing
                   </p>
                 </div>
-                <span className="rounded-full bg-[#ECFDF5] border border-[#A7F3D0] px-2.5 py-0.5 text-[10.5px] font-bold text-[#065F46]">
-                  IRP Ready
+                <span className="rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[10.5px] font-bold text-amber-800">
+                  Draft Preview (Unregistered)
                 </span>
               </div>
 
               {/* IRN & Ack Box */}
               <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-2 text-[11px]">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[#64748B]">IRN (Invoice Reference Number):</span>
+                  <span className="font-semibold text-[#64748B]">Reference / Draft IRN:</span>
                   <button
                     type="button"
                     onClick={() => handleCopyJson(eInvoicePayload.Irn, 'IRN')}
@@ -2075,13 +2075,13 @@ export function BosInvoicesWorkstation({
 
                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[#EBF2EE]">
                   <div>
-                    <span className="text-[#64748B]">Ack Number:</span>
-                    <p className="font-mono font-bold text-[#111827]">
-                      1124{String(Date.now()).slice(-10)}
+                    <span className="text-[#64748B]">Portal Ack Number:</span>
+                    <p className="text-[11px] font-medium text-amber-700 italic">
+                      Pending portal upload
                     </p>
                   </div>
                   <div>
-                    <span className="text-[#64748B]">Ack Date:</span>
+                    <span className="text-[#64748B]">Draft Date:</span>
                     <p className="font-bold text-[#111827]">{invoiceDate}</p>
                   </div>
                 </div>
@@ -2090,12 +2090,12 @@ export function BosInvoicesWorkstation({
               {/* QR Code and Tax Breakdown */}
               <div className="flex items-start gap-3 rounded-xl border border-[#DCE9E3] bg-white p-3">
                 <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-[#CBD5E1] bg-[#FAFDFB] p-1.5">
-                  <QrCode className="h-full w-full text-[#0A6847]" />
+                  <QrCode className="h-full w-full text-slate-500" />
                 </div>
                 <div className="space-y-1 text-[11px] flex-1">
-                  <p className="font-bold text-[#111827]">Signed QR Code Generated</p>
+                  <p className="font-bold text-[#111827]">Invoice QR Preview (Unsigned)</p>
                   <p className="text-[10px] text-[#64748B]">
-                    Contains digital signature, IRN, Seller/Buyer GSTIN, and Invoice Total for offline tax verification.
+                    Cryptographic signature and NIC-signed QR code are generated when uploaded to the government IRP portal.
                   </p>
                   <div className="pt-1 flex justify-between font-bold text-[#111827]">
                     <span>Total Invoice Value:</span>

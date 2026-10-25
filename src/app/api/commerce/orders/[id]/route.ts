@@ -58,7 +58,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const business = await ownerBusiness(req);
+    const business = await ownerBusiness(req, 'canPosBilling');
     const { id } = await params;
     const body = await req.json();
 
@@ -81,7 +81,9 @@ export async function PATCH(
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if(e.message==='FORBIDDEN')return NextResponse.json({error:'Forbidden'},{status:403});
+    if (e.message === 'FORBIDDEN' || e.message === 'FORBIDDEN_INSUFFICIENT_ROLE') {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions for order updates' }, { status: 403 });
+    }
     const failure=commerceError(e);
     return NextResponse.json({error:failure.message},{status:failure.status});
   }

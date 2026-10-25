@@ -23,9 +23,9 @@ export async function createCommerceOrder(business: { id: string; tenantId: stri
     deliveryType: body.tableNumber ? 'dine_in' : body.deliveryType || 'pickup',
     deliveryAddress: body.tableNumber ? `Table #${String(body.tableNumber).slice(0,30)}` : typeof body.deliveryAddress === 'string' ? body.deliveryAddress.slice(0,1000) : undefined,
     notes: typeof body.notes === 'string' ? body.notes.slice(0,2000) : undefined,
-    publicOrder, paymentMethod: publicOrder ? (body.paymentMethod === 'UPI' ? 'UPI' : 'CASH') : ['CASH','UPI','CARD','BANK_TRANSFER'].includes(body.paymentMethod) ? body.paymentMethod : 'CASH',
+    publicOrder, paymentMethod: publicOrder ? (body.paymentMethod === 'UPI' ? 'UPI' : 'CASH') : ['CASH','UPI','CARD','BANK_TRANSFER','CREDIT'].includes(body.paymentMethod) ? body.paymentMethod : 'CASH',
     whatsappConsent: body.whatsappConsent === true,
-    paymentStatus: !publicOrder && (body.paymentStatus === 'PAID' || (!body.paymentStatus && (!body.paymentMethod || body.paymentMethod === 'CASH'))) ? 'PAID' : 'UNPAID',
+    paymentStatus: !publicOrder && body.paymentMethod !== 'CREDIT' && (body.paymentStatus === 'PAID' || (!body.paymentStatus && (!body.paymentMethod || body.paymentMethod === 'CASH'))) ? 'PAID' : 'UNPAID',
   };
   return atomicCommerce<{ order: Record<string, any>; replayed: boolean }>('order', [business.id, key, payload]);
 }

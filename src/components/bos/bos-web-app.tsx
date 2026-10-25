@@ -900,7 +900,7 @@ function BosWebAppInner({
     : [
         { id: 'br-1', name: storeSettings.businessName || 'Main Store', location: storeSettings.address || 'Primary Branch' },
       ];
-  const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(true);
+  const [blueprintFilterEnabled, setBlueprintFilterEnabled] = useState(false);
   const [storeMenuOpen, setStoreMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<
@@ -1834,7 +1834,7 @@ function BosWebAppInner({
         deliveryType: 'takeout',
         paymentMethod:
           payload.paymentMode === 'khata'
-            ? 'CASH'
+            ? 'CREDIT'
             : payload.paymentMode.toUpperCase(),
         paymentStatus: payload.paymentMode === 'khata' ? 'UNPAID' : 'PAID',
         notes: payload.notes,
@@ -1881,41 +1881,13 @@ function BosWebAppInner({
       createdAt: 'Just now',
     };
 
-    // 3. If Khata, record credit debit on customer's ledger
+    // 3. If Khata, the atomic unpaid order recorded above is the canonical credit sale
     if (payload.paymentMode === 'khata') {
-      let khataRes: Response;
-      try {
-        khataRes = await authFetch('/api/commerce/khata', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': khataRequestKey,
-          },
-          body: JSON.stringify({
-            type: 'GAVE_UDHAAR',
-            amount: verifiedTotalAmount,
-            customerPhone: cleanCustomerPhone,
-            customerName: payload.customerName,
-            note: `POS Bill ${verifiedOrderId}`,
-            paymentMethod: 'CASH',
-            requestKey: khataRequestKey,
-          }),
-        });
-      } catch (networkErr: any) {
-        throw new Error(
-          `Order ${verifiedOrderId} created, but recording Khata credit failed due to network error (${networkErr?.message || 'offline'}). Please retry.`,
-        );
-      }
-
-      if (!khataRes.ok) {
-        const kErr = await khataRes.json().catch(() => null);
-        throw new Error(kErr?.error || `Order created (${verifiedOrderId}), but failed to record Khata credit. Please retry.`);
-      }
-
       setCustomers((prev) =>
         prev.map((c) =>
-          c.name.toLowerCase() === payload.customerName.toLowerCase()
-            ? { ...c, khataBalance: c.khataBalance + verifiedTotalAmount }
+          c.name.toLowerCase() === payload.customerName.toLowerCase() ||
+          (cleanCustomerPhone && c.phone === cleanCustomerPhone)
+            ? { ...c, khataBalance: (c.khataBalance || 0) + verifiedTotalAmount }
             : c,
         ),
       );

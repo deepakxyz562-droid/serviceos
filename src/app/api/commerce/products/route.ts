@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { ownerBusiness } from '@/lib/commerce/access';
 
 /**
  * GET /api/commerce/products - list all active products
@@ -52,13 +53,18 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const auth = await getAuthUser();
-    const tenantId = auth?.tenantId;
-    const workspaceId = auth?.workspaceId;
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    let business;
+    try {
+      business = await ownerBusiness(req, 'canManageProducts');
+    } catch (authErr: any) {
+      const isForbidden = authErr?.message === 'FORBIDDEN_INSUFFICIENT_ROLE';
+      return NextResponse.json(
+        { error: isForbidden ? 'Forbidden: Insufficient permissions to manage products' : 'Unauthorized: Authentication required' },
+        { status: isForbidden ? 403 : 401 }
+      );
     }
+
+    const tenantId = business.tenantId || business.id;
 
     const body = await req.json().catch(() => ({}));
     const { name, title, price, category, description, imageUrl, sku, stock, inStock } = body;
@@ -74,7 +80,10 @@ export async function POST(req: NextRequest) {
 
     // Update GptformCommerceConfig
     const config = await db.gptformCommerceConfig.findFirst({
-      where: { businessId: tenantId },
+      where: {
+        OR: [{ businessId: business.id }, ...(business.tenantId ? [{ businessId: business.tenantId }] : [])],
+      },
+      orderBy: { updatedAt: 'desc' },
     });
 
     const newItem = {
@@ -103,7 +112,7 @@ export async function POST(req: NextRequest) {
     } else {
       await db.gptformCommerceConfig.create({
         data: {
-          businessId: tenantId,
+          businessId: business.id,
           catalogJson: JSON.stringify([newItem]),
           fieldsJson: '[]',
         },

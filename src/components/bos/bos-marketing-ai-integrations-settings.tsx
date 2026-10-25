@@ -1663,7 +1663,7 @@ export function BosMarketingAiIntegrationsSettings({
                         body: JSON.stringify({
                           name: campaignTitle || 'Special Store Promotion',
                           type: 'promotional',
-                          status: 'active',
+                          status: 'draft',
                           channel,
                           messageContent: campaignText,
                           totalRecipients: targetAudienceCount,
@@ -1672,7 +1672,7 @@ export function BosMarketingAiIntegrationsSettings({
                       if (res.ok) {
                         launchSuccess = true;
                         setToast(
-                          `Campaign "${campaignTitle || 'Special Store Promotion'}" created and scheduled for ${campaignAudience} via ${campaignType}.`,
+                          `Campaign "${campaignTitle || 'Special Store Promotion'}" created and saved as Draft for ${campaignAudience}.`,
                         );
                       } else {
                         const err = await res.json().catch(() => null);
@@ -1695,7 +1695,7 @@ export function BosMarketingAiIntegrationsSettings({
                         sent: '0',
                         orders: 0,
                         revenue: 0,
-                        status: launchSuccess ? 'Scheduled' : 'Draft',
+                        status: 'Draft',
                         discountHeadline: campaignDiscountText,
                         messageBody: campaignText,
                         validTill: campaignValidTill,
@@ -1708,7 +1708,7 @@ export function BosMarketingAiIntegrationsSettings({
                   }}
                   className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white cursor-pointer"
                 >
-                  Save & Schedule Campaign
+                  Save Campaign Draft
                 </button>
               </div>
             </div>
