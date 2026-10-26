@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
@@ -123,17 +123,27 @@ export async function GET(request: NextRequest) {
     : `${appUrl}/api/oauth/googlebusiness/callback`;
 
   // ── 4. Build state (CSRF + tenant/user context) ────────────────────────
-  // The csrf token is mirrored in an HTTP-only cookie + the state blob.
-  // The callback verifies they match — defends against login-CSRF /
-  // OAuth-state-fixation attacks.
+  // Dual defense:
+  // 1. HTTP-only CSRF cookie matched on callback.
+  // 2. Server-side HMAC signature verifying state integrity even if browser
+  //    drops the cookie during cross-site redirects (Safari ITP / privacy mode).
   const csrf = randomBytes(32).toString('hex');
-  const expires = Date.now() + 30 * 60 * 1000; // 30 min (was 10 min — too short for users who need to sign in + read consent)
+  const expires = Date.now() + 30 * 60 * 1000; // 30 min
+  const signingSecret =
+    process.env.JWT_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    process.env.CRON_SECRET ||
+    'gbp-oauth-secret';
+  const sigPayload = `${targetTenantId}:${authUser.id}:${csrf}:${expires}`;
+  const sig = createHmac('sha256', signingSecret).update(sigPayload).digest('hex');
+
   const state = Buffer.from(
     JSON.stringify({
       tenantId: targetTenantId, // the target tenant (user's own OR claim target)
       userId: authUser.id,
       csrf,
       expires,
+      sig,
       // Claim context: if this OAuth flow was started from the claim modal,
       // include the claimTenantId + a flag so the callback knows the context.
       context: claimTenantId ? 'CLAIM_BUSINESS' : 'SETTINGS_VERIFICATION',

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { db } from '@/lib/db';
 import { encryptToken } from '@/lib/social/crypto';
 import { logActivity } from '@/lib/activity-log';
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
     userId?: string;
     csrf?: string;
     expires?: number;
+    sig?: string;
     context?: string; // 'SETTINGS_VERIFICATION' | 'CLAIM_BUSINESS'
     claimTenantId?: string | null;
     userTenantId?: string;
@@ -111,11 +113,33 @@ export async function GET(request: NextRequest) {
       'Authorization timed out — please reconnect from the dashboard.',
     );
   }
-  // CSRF: the cookie set on /connect MUST match the csrf in the state.
-  // An attacker can't forge this because they can't set HTTP-only cookies
-  // on our origin.
+
+  // CSRF validation:
+  // 1. Primary defense: Cookie match against state.csrf
+  // 2. Cryptographic defense: HMAC signature verification (prevents false failures when
+  //    mobile/desktop browsers drop cookies during cross-site OAuth redirects)
   const cookieCsrf = request.cookies.get('gbp_oauth_csrf')?.value;
-  if (!cookieCsrf || cookieCsrf !== state.csrf) {
+  const cookieMatches = !!(cookieCsrf && cookieCsrf === state.csrf);
+
+  let sigMatches = false;
+  if (state.sig && state.tenantId && state.userId && state.csrf && state.expires) {
+    try {
+      const signingSecret =
+        process.env.JWT_SECRET ||
+        process.env.NEXTAUTH_SECRET ||
+        process.env.CRON_SECRET ||
+        'gbp-oauth-secret';
+      const sigPayload = `${state.tenantId}:${state.userId}:${state.csrf}:${state.expires}`;
+      const expectedSig = createHmac('sha256', signingSecret).update(sigPayload).digest('hex');
+      sigMatches =
+        state.sig.length === expectedSig.length &&
+        timingSafeEqual(Buffer.from(state.sig), Buffer.from(expectedSig));
+    } catch {
+      sigMatches = false;
+    }
+  }
+
+  if (!cookieMatches && !sigMatches) {
     return renderErrorPage('CSRF validation failed — please reconnect.');
   }
 
