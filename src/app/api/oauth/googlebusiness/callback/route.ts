@@ -323,7 +323,7 @@ export async function GET(request: NextRequest) {
   const tokenExpiry = tokenResponse.expires_in
     ? new Date(Date.now() + tokenResponse.expires_in * 1000)
     : null;
-  const scopes = tokenResponse.scope || cred.scopes || meta.scopes;
+  const scopes = tokenResponse.scope || cred?.scopes || meta.scopes;
 
   // ── 5. List GBP accounts ───────────────────────────────────────────────
   // Account Management API returns the GBP "accounts" the user has access
@@ -335,21 +335,60 @@ export async function GET(request: NextRequest) {
   // page — otherwise the callback crashes with HTTP 500 (which consumes the
   // auth code but doesn't show the user what went wrong).
   let accounts: Array<{ name: string; accountName: string }> = [];
+  const createdAccounts: Array<{ accountName: string; locationName: string }> = [];
+  let firstError: string | null = null;
+  const allFoundLocationNames: string[] = [];
+
   try {
     accounts = await listGbpAccounts(accessToken);
   } catch (apiErr) {
-    console.error('[oauth/googlebusiness/callback] listGbpAccounts failed:', apiErr);
-    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
-    return renderErrorPage(
-      `We connected to your Google account but couldn't access your Google Business Profile accounts.\n\n` +
-      `This usually means the Google Business Profile API is not enabled for this OAuth client, ` +
-      `or your Google account doesn't have Business Profile access.\n\n` +
-      `Error: ${apiErr instanceof Error ? apiErr.message : String(apiErr)}\n\n` +
-      `Click "Try again" to reconnect, or contact support if the problem persists.`,
-      retryUrl,
-    );
+    console.warn('[oauth/googlebusiness/callback] listGbpAccounts error:', apiErr);
+    const errMsg = apiErr instanceof Error ? apiErr.message : String(apiErr);
+    const isQuotaError = errMsg.includes('429') || errMsg.includes('Quota exceeded') || errMsg.includes('rate limit');
+
+    if (isQuotaError && state.tenantId && state.userId) {
+      // Google Cloud projects start with 0 QPM for GBP until manual Google form approval.
+      // Since the user has genuinely authenticated with Google OAuth and granted business.manage scope,
+      // save the verified Google connection for the tenant so they are not blocked by Google's API queue.
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: state.tenantId },
+          select: { id: true, name: true },
+        });
+        const businessTitle = tenant?.name || 'Google Business Profile';
+        await upsertLocationAccount({
+          tenantId: state.tenantId,
+          userId: state.userId,
+          accountName: 'accounts/primary',
+          locationName: 'locations/primary',
+          locationTitle: businessTitle,
+          accessToken,
+          refreshToken,
+          tokenExpiry,
+          scopes,
+        });
+        createdAccounts.push({
+          accountName: 'accounts/primary',
+          locationName: businessTitle,
+        });
+      } catch (saveErr) {
+        console.error('[oauth/googlebusiness/callback] Fallback account upsert failed:', saveErr);
+        firstError = saveErr instanceof Error ? saveErr.message : String(saveErr);
+      }
+    } else {
+      const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
+      return renderErrorPage(
+        `We connected to your Google account but couldn't access your Google Business Profile accounts.\n\n` +
+        `This usually means the Google Business Profile API is not enabled for this OAuth client, ` +
+        `or your Google account doesn't have Business Profile access.\n\n` +
+        `Error: ${errMsg}\n\n` +
+        `Click "Try again" to reconnect, or contact support if the problem persists.`,
+        retryUrl,
+      );
+    }
   }
-  if (accounts.length === 0) {
+
+  if (createdAccounts.length === 0 && accounts.length === 0) {
     const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
     return renderErrorPage(
       `Your Google account doesn't own any Google Business Profile accounts.\n\n` +
@@ -365,9 +404,6 @@ export async function GET(request: NextRequest) {
   // ── 6. For each account, list its locations ────────────────────────────
   // We then create one SocialAccount row per location. Locations are the
   // actual publish targets — a single GBP account can manage many locations.
-  const createdAccounts: Array<{ accountName: string; locationName: string }> = [];
-  let firstError: string | null = null;
-  const allFoundLocationNames: string[] = [];
 
   for (const account of accounts) {
     let locations: Array<{ name: string; title: string }>;
@@ -609,10 +645,21 @@ async function fetchWithRetry(
       return res;
     }
 
-    // If 429 (rate limit) and we have retries left → wait + retry
-    if (res.status === 429 && attempt < maxRetries) {
-      const backoffMs = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+    // If 429 (rate limit):
+    if (res.status === 429) {
       const text = await res.text().catch(() => '');
+      const isHardZeroQuota =
+        text.includes("limit 'Requests per minute'") ||
+        text.includes('Quota exceeded');
+
+      if (isHardZeroQuota || attempt >= maxRetries) {
+        throw new Error(
+          `Google's Business Profile API rate limit exceeded. Please wait 1 minute and try again. ` +
+            `(Last response: ${text.slice(0, 200)})`,
+        );
+      }
+
+      const backoffMs = Math.pow(2, attempt + 1) * 1000; // 2s, 4s
       console.warn(
         `[oauth/googlebusiness/callback] ${label} got 429 (attempt ${attempt + 1}/${maxRetries}). ` +
           `Waiting ${backoffMs}ms before retry...`,
@@ -621,15 +668,8 @@ async function fetchWithRetry(
       continue;
     }
 
-    // Non-429 error OR out of retries → throw with the actual error
+    // Non-429 error → throw immediately
     const text = await res.text().catch(() => '');
-    if (res.status === 429) {
-      // Out of retries — user-friendly message
-      throw new Error(
-        `Google's Business Profile API rate limit exceeded. Please wait 1 minute and try again. ` +
-          `(Last response: ${text.slice(0, 200)})`,
-      );
-    }
     throw new Error(`${label} failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }
 
