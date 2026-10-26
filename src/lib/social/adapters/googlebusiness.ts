@@ -169,16 +169,26 @@ async function assertOk(
   }
 
   // Provide actionable hints for common GBP Google Cloud issues
-  let hint = '';
   if (res.status === 403) {
-    hint = ' (Google Business Profile API access may not be approved or enabled for this OAuth client project)';
-  } else if (res.status === 429) {
-    hint = ' (Google rate limit exceeded. Please wait 1 minute before retrying)';
-  } else if (res.status === 401) {
-    hint = ' (Authorization expired or revoked. Please reconnect your Google Business account)';
+    if (detail.includes('has not been used in project') || detail.includes('is disabled') || detail.includes('PERMISSION_DENIED')) {
+      throw new Error(
+        `Google Business Profile API access is not yet approved or enabled for your Google Cloud project (HTTP 403). ` +
+        `Google requires an approved API Access Request before posts can be published via API. ` +
+        `Use "Copy & Open Google Business" to publish this post directly on Google in the meantime.`,
+      );
+    }
+    throw new Error(`Google Business Profile API access denied (HTTP 403)${detail}. Check your OAuth scopes and project approval.`);
   }
 
-  throw new Error(`GBP ${context} failed (HTTP ${res.status})${detail}${hint}`);
+  if (res.status === 429) {
+    throw new Error(`Google Business Profile rate limit exceeded (HTTP 429). Please wait 1 minute before retrying.`);
+  }
+
+  if (res.status === 401) {
+    throw new Error(`Google Business Profile authorization expired or revoked (HTTP 401). Please reconnect your Google Business account in Social Accounts.`);
+  }
+
+  throw new Error(`GBP ${context} failed (HTTP ${res.status})${detail}`);
 }
 
 // ─── Adapter implementation ────────────────────────────────────────────────

@@ -20,6 +20,8 @@ import {
   Clock,
   CheckCircle2,
   AlertTriangle,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -633,8 +635,32 @@ export function PostsListView() {
               </div>
 
               {viewPost.failureReason && (
-                <div className="rounded border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
-                  <strong>Failure reason:</strong> {viewPost.failureReason}
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive space-y-2">
+                  <div>
+                    <strong>Failure reason:</strong> {viewPost.failureReason}
+                  </div>
+                  {viewPost.publishTargets.some((t) => t.platform === 'googlebusiness' && t.status === 'failed') && (
+                    <div className="pt-2 border-t border-destructive/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        Google API approval pending? You can publish directly on Google Business Profile now:
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1.5 border-destructive/30 hover:bg-destructive/10 text-destructive shrink-0"
+                        onClick={() => {
+                          const textToCopy = viewPost.content + (viewPost.linkUrl ? `\n\n${viewPost.linkUrl}` : '');
+                          navigator.clipboard.writeText(textToCopy);
+                          toast.success('Post content copied! Opening Google Business Profile...');
+                          window.open('https://business.google.com', '_blank');
+                        }}
+                      >
+                        <Copy className="size-3" />
+                        <span>Copy & Open Google ↗</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -644,7 +670,38 @@ export function PostsListView() {
                 </div>
               )}
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const textToCopy = viewPost.content + (viewPost.linkUrl ? `\n\n${viewPost.linkUrl}` : '');
+                    navigator.clipboard.writeText(textToCopy);
+                    toast.success('Caption copied to clipboard!');
+                  }}
+                  className="gap-1.5"
+                >
+                  <Copy className="size-3.5" />
+                  Copy caption
+                </Button>
+
+                {viewPost.publishTargets.some((t) => t.platform === 'googlebusiness') && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950 border-blue-200 dark:border-blue-800"
+                    onClick={() => {
+                      const textToCopy = viewPost.content + (viewPost.linkUrl ? `\n\n${viewPost.linkUrl}` : '');
+                      navigator.clipboard.writeText(textToCopy);
+                      toast.success('Post copied! Opening Google Business Profile...');
+                      window.open('https://business.google.com', '_blank');
+                    }}
+                  >
+                    <ExternalLink className="size-3.5" />
+                    Open Google Business
+                  </Button>
+                )}
+
                 {(viewPost.status === 'failed' || viewPost.status === 'partial') && (
                   <Button
                     size="sm"

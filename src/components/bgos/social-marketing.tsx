@@ -60,6 +60,7 @@ import {
   Mail,
   Bot,
   Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -1244,6 +1245,23 @@ export function SocialMediaView({
                     <Calendar className="size-3.5 text-slate-500" />
                     <span>Schedule</span>
                   </Button>
+                  {studioPreviewTab === 'Google Business' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const textToCopy = generatedCaption || studioPrompt || `✨ Special Offer from ${businessName}! ✨\nBook professional services online today.`;
+                        navigator.clipboard.writeText(textToCopy);
+                        toast.success('Post content copied! Opening Google Business Profile...');
+                        window.open('https://business.google.com', '_blank');
+                      }}
+                      className="h-8 rounded-lg text-xs font-semibold gap-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950 border-blue-200 dark:border-blue-800"
+                      title="Copy post and open Google Business Profile web console"
+                    >
+                      <ExternalLink className="size-3.5" />
+                      <span>Open GBP</span>
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1363,6 +1381,8 @@ export function SocialMediaView({
                             : '';
                           const isPub = post.status === 'published';
                           const isSched = post.status === 'scheduled';
+                          const isFailed = post.status === 'failed';
+                          const isPartial = post.status === 'partial';
                           return (
                             <tr key={post.id} className="group">
                               <td className="py-3 pr-3">
@@ -1375,7 +1395,9 @@ export function SocialMediaView({
                                       {post.content ? post.content.split('\n')[0].slice(0, 45) : 'Social Update'}
                                     </p>
                                     <p className="text-[11px] text-slate-400 truncate">
-                                      {post.content ? post.content.slice(0, 60) : 'Post ready for publishing'}
+                                      {post.failureReason
+                                        ? `Error: ${post.failureReason.slice(0, 50)}...`
+                                        : post.content ? post.content.slice(0, 60) : 'Post ready for publishing'}
                                     </p>
                                   </div>
                                 </div>
@@ -1392,10 +1414,14 @@ export function SocialMediaView({
                                       ? 'bg-[#E8F8EF] text-[#009F50]'
                                       : isSched
                                       ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400'
+                                      : isFailed
+                                      ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400'
+                                      : isPartial
+                                      ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400'
                                       : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
                                   }`}
                                 >
-                                  {isPub ? 'Published' : isSched ? 'Scheduled' : 'Draft'}
+                                  {isPub ? 'Published' : isSched ? 'Scheduled' : isFailed ? 'Failed' : isPartial ? 'Partial' : 'Draft'}
                                 </span>
                               </td>
                               <td className="py-3 px-2 whitespace-nowrap">
@@ -1405,9 +1431,33 @@ export function SocialMediaView({
                                 <p className="text-[11px] text-slate-400">{formattedTime}</p>
                               </td>
                               <td className="py-3 pl-2 whitespace-nowrap text-right">
-                                <div className="inline-flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                                  <span className="text-xs text-muted-foreground">Ready</span>
-                                  <MoreHorizontal className="size-4 text-slate-400 cursor-pointer" />
+                                <div className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                  {postPlatform === 'googlebusiness' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const textToCopy = post.content || '';
+                                        navigator.clipboard.writeText(textToCopy);
+                                        toast.success('Post copied! Opening Google Business Profile...');
+                                        window.open('https://business.google.com', '_blank');
+                                      }}
+                                      className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-blue-600 hover:text-blue-700"
+                                      title="Copy post and open Google Business Profile"
+                                    >
+                                      <ExternalLink className="size-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(post.content || '');
+                                      toast.success('Content copied to clipboard!');
+                                    }}
+                                    className="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600"
+                                    title="Copy caption"
+                                  >
+                                    <Copy className="size-3.5" />
+                                  </button>
                                 </div>
                               </td>
                             </tr>
