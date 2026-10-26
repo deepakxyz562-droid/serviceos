@@ -251,7 +251,7 @@ export function verifyTokenWithGrace(
  * throws; it's safe to call on every request.
  */
 export async function getAuthUser(
-  request?: { headers: { get(name: string): string | null } },
+  request?: { headers: { get(name: string): string | null }; url?: string; nextUrl?: { searchParams: URLSearchParams } },
 ): Promise<AuthUser | null> {
   try {
     let user: AuthUser | null = null;
@@ -271,6 +271,24 @@ export async function getAuthUser(
       if (authHeader?.startsWith('Bearer ')) {
         const bearerToken = authHeader.slice(7);
         user = verifyToken(bearerToken);
+      }
+    }
+
+    // 3. Fallback: Check auth or token query param (for full-page OAuth redirects where headers cannot be sent)
+    if (!user && request) {
+      try {
+        let queryToken: string | null = null;
+        if (request.nextUrl) {
+          queryToken = request.nextUrl.searchParams.get('auth') || request.nextUrl.searchParams.get('token');
+        } else if (request.url) {
+          const urlObj = new URL(request.url);
+          queryToken = urlObj.searchParams.get('auth') || urlObj.searchParams.get('token');
+        }
+        if (queryToken) {
+          user = verifyToken(queryToken);
+        }
+      } catch {
+        // ignore invalid URL
       }
     }
 

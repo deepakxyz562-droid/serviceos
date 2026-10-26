@@ -34,11 +34,13 @@ function addTransformPort(url: string): string {
 
 /**
  * Get the auth token from localStorage (client-side only).
- * The JWT token is stored during login as part of fieseros_auth.
+ * Checks both fieseros_token (direct token string) and fieseros_auth (JSON object).
  */
-function getAuthToken(): string | null {
+export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
+    const direct = localStorage.getItem('fieseros_token');
+    if (direct) return direct;
     const stored = localStorage.getItem('fieseros_auth');
     if (stored) {
       const parsed = JSON.parse(stored);

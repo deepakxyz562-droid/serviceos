@@ -38,7 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, getToken } from '@/lib/client-auth';
 
 interface VerificationStatus {
   level: number;
@@ -266,7 +266,9 @@ export function VerificationDashboard({
   function handleGoogleVerify() {
     // Redirect to the Google OAuth flow while preserving origin subdomain
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    window.location.href = `/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&returnView=verification`;
+    const token = getToken();
+    const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+    window.location.href = `/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&returnView=verification${authParam}`;
   }
 
   // Step 2: After OAuth returns with ?google=connected, fetch the connected locations

@@ -77,7 +77,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/api';
+import { authFetch, getAuthToken } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { parseAddress, formatAddress } from '@/components/bgos/settings';
@@ -2704,7 +2704,10 @@ export function ReviewsView({
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    window.location.href = '/api/oauth/googlebusiness/connect';
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const token = getAuthToken();
+                    const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+                    window.location.href = `/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
                   }}
                   className="text-xs rounded-xl"
                 >

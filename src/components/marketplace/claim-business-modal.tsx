@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/client-auth';
+import { authFetch, getToken } from '@/lib/client-auth';
 
 /**
  * ClaimBusinessModal
@@ -532,7 +532,10 @@ export function ClaimBusinessModal({
                   // matches it against this marketplace listing.
                   // The tenantId is passed via the state blob so the callback
                   // knows which business is being claimed.
-                  window.location.href = `/api/oauth/googlebusiness/connect?claimTenantId=${tenantId}`;
+                  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                  const token = getToken();
+                  const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+                  window.location.href = `/api/oauth/googlebusiness/connect?claimTenantId=${tenantId}&originHost=${encodeURIComponent(origin)}${authParam}`;
                 }}
               >
                 <Globe className="h-3.5 w-3.5" /> Connect Google Business Profile

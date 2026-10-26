@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes, createHmac } from 'crypto';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, verifyToken, COOKIE_OPTIONS } from '@/lib/auth';
 import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
 
 /**
@@ -35,9 +35,47 @@ import { OAUTH_PROVIDERS } from '@/lib/channel-meta';
  * its own dedicated connect/callback pair.
  */
 export async function GET(request: NextRequest) {
-  // ── 1. Auth check ──────────────────────────────────────────────────────
-  const authUser = await getAuthUser();
+  // ── 0. Resolve originHost early for reliable redirects and return URLs ──
+  const { searchParams } = new URL(request.url);
+  const queryOrigin = searchParams.get('originHost');
+  const referer = request.headers.get('referer');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const hostHeader = forwardedHost || request.headers.get('host');
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const proto = forwardedProto || (hostHeader?.startsWith('localhost') ? 'http' : 'https');
+
+  let originHost = queryOrigin;
+  if (!originHost && referer) {
+    try {
+      originHost = new URL(referer).origin;
+    } catch {}
+  }
+  if (!originHost && hostHeader) {
+    originHost = `${proto}://${hostHeader}`;
+  }
+  if (!originHost) {
+    originHost = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com';
+  }
+
+  // ── 1. Auth check (Cookie -> Header -> Query Param fallback) ───────────
+  let authUser = await getAuthUser(request);
+  const tokenFromQuery = searchParams.get('auth') || searchParams.get('token');
+  if (!authUser && tokenFromQuery) {
+    authUser = verifyToken(tokenFromQuery);
+  }
+
   if (!authUser) {
+    // If request was initiated by browser navigation (e.g. user clicked a link or pasted URL),
+    // redirect to login instead of returning raw JSON 401.
+    const isBrowserNav =
+      request.headers.get('accept')?.includes('text/html') ||
+      !request.headers.get('accept')?.includes('application/json');
+    if (isBrowserNav && originHost) {
+      const loginUrl = new URL('/', originHost);
+      loginUrl.searchParams.set('login', 'required');
+      loginUrl.searchParams.set('returnUrl', request.nextUrl.pathname + request.nextUrl.search);
+      return NextResponse.redirect(loginUrl.toString());
+    }
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
   const tenantId = authUser.tenantId;
@@ -58,7 +96,6 @@ export async function GET(request: NextRequest) {
   // claiming. The Google connection must be stored against the listing's
   // tenant so the match can compare Google data against the listing's
   // business details.
-  const { searchParams } = new URL(request.url);
   const claimTenantId = searchParams.get('claimTenantId');
   // If claimTenantId is provided, use it as the target tenant for the OAuth
   // flow. Otherwise, use the user's own tenantId (settings flow).
@@ -137,27 +174,7 @@ export async function GET(request: NextRequest) {
   const sigPayload = `${targetTenantId}:${authUser.id}:${csrf}:${expires}`;
   const sig = createHmac('sha256', signingSecret).update(sigPayload).digest('hex');
 
-  // Resolve originating subdomain (e.g. https://bgos.fieseros.com, https://bos.fieseros.com)
-  const queryOrigin = request.nextUrl.searchParams.get('originHost');
-  const referer = request.headers.get('referer');
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const hostHeader = forwardedHost || request.headers.get('host');
-  const forwardedProto = request.headers.get('x-forwarded-proto');
-  const proto = forwardedProto || (hostHeader?.startsWith('localhost') ? 'http' : 'https');
-
-  let originHost = queryOrigin;
-  if (!originHost && referer) {
-    try {
-      originHost = new URL(referer).origin;
-    } catch {}
-  }
-  if (!originHost && hostHeader) {
-    originHost = `${proto}://${hostHeader}`;
-  }
-  if (!originHost) {
-    originHost = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com';
-  }
-
+  // Resolve return context
   const queryProduct = request.nextUrl.searchParams.get('product');
   const returnProduct =
     queryProduct ||
@@ -204,7 +221,7 @@ export async function GET(request: NextRequest) {
   // incrementally without invalidating the existing refresh_token.
   authUrl.searchParams.set('include_granted_scopes', 'true');
 
-  // ── 6. Redirect with the CSRF cookie ───────────────────────────────────
+  // ── 6. Redirect with the CSRF cookie (+ set session cookie if query token used) ──
   const res = NextResponse.redirect(authUrl.toString());
   res.cookies.set('gbp_oauth_csrf', csrf, {
     httpOnly: true,
@@ -213,6 +230,12 @@ export async function GET(request: NextRequest) {
     path: '/',
     maxAge: 30 * 60, // 30 min — matches the state expiry
   });
+  if (tokenFromQuery && authUser) {
+    res.cookies.set({
+      ...COOKIE_OPTIONS,
+      value: tokenFromQuery,
+    });
+  }
   return res;
 }
 

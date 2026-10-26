@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/api';
+import { authFetch, getAuthToken } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 /**
@@ -179,7 +179,9 @@ export function SocialAccountsView() {
         const targetKey = setupPlatform?.key || 'facebook';
         setSetupPlatform(null);
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        window.location.href = `/api/oauth/${targetKey}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia`;
+        const token = getAuthToken();
+        const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+        window.location.href = `/api/oauth/${targetKey}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
       } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to save credentials. You can also configure META_APP_ID and META_APP_SECRET in Coolify.');
@@ -233,7 +235,9 @@ export function SocialAccountsView() {
     // branch fires and surfaces a "Redirecting…" toast with an "Open"
     // button (the user clicks to actually navigate).
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const connectUrl = `/api/oauth/${platform.key}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia`;
+    const token = getAuthToken();
+    const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+    const connectUrl = `/api/oauth/${platform.key}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
     authFetch(connectUrl, { method: 'HEAD' })
       .then((res) => {
         if (res.status === 404) {

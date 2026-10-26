@@ -44,7 +44,7 @@ import {
  */
 export async function GET(request: NextRequest) {
   // 1. Auth check.
-  const authUser = await getAuthUser();
+  const authUser = await getAuthUser(request);
   if (!authUser) {
     return NextResponse.json(
       { error: 'Authentication required' },
