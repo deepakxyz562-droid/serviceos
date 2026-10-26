@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 // LandingPage is loaded with ssr:false to optimize hydration and avoid
 // server-side overhead for interactive sub-views.
 const LandingPage = dynamic(
-  () => import('@/components/landing/dual-audience-landing').then(m => ({ default: m.DualAudienceLanding })),
+  () => import('@/components/landing/fieseros-all-in-one-landing').then(m => ({ default: m.FieserosAllInOneLanding })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
 const AuthPage = dynamic(
@@ -1301,6 +1301,10 @@ export default function HomePageClient() {
         onGetStarted={() => handleShowAuth('register')}
         onSignIn={() => handleShowAuth('login')}
         onTryDemo={handleTryDemo}
+        onSelectPlan={(planId) => {
+          setSelectedPlan(planId);
+          handleShowAuth('register');
+        }}
       />
       <PWAInstallBanner />
       <IOSInstallBanner />

@@ -70,6 +70,10 @@ db/*.db-journal
 !/apps/bos/public/bos/*.png
 !/apps/bos/public/bos/products/*.png
 
+# Landing page assets
+!/public/images/landing/*.png
+!/public/images/landing/v2/*.png
+
 # Mobile app assets MUST NOT be ignored (required for EAS Build)
 # The *.png rule above excludes ALL png files globally. EAS Build
 # reads this .gitignore when creating the build archive, which causes
