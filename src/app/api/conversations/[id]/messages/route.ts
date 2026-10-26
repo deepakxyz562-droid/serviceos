@@ -29,15 +29,17 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') ?? '50', 10)
     const offset = parseInt(searchParams.get('offset') ?? '0', 10)
 
-    // Tenant-scoped lookup: super-admins can access any tenant; everyone
-    // else is constrained to their own tenant. The Conversation model has
-    // a `tenantId` field for ownership.
+    // Tenant-scoped lookup: super-admins can access any tenant; customers
+    // are constrained to their own customerId; employees/admins to tenantId.
+    const isCustomer = user.role === 'customer'
     const isSuperAdmin =
       user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
     const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId }
 
     const conversation = await db.conversation.findFirst({
-      where: { id, ...tenantFilter },
+      where: isCustomer
+        ? { id, customerId: user.id }
+        : { id, ...tenantFilter },
     })
     if (!conversation) {
       return NextResponse.json(
@@ -72,8 +74,8 @@ export async function GET(
 // Append a message to an existing conversation.
 //
 // Security-3 IDOR fix:
-//   1. Require authentication + tenant isolation.
-//   2. Verify the conversation belongs to the user's tenant BEFORE creating
+//   1. Require authentication + tenant/customer isolation.
+//   2. Verify the conversation belongs to the user's tenant (or customer) BEFORE creating
 //      any message (prevents a caller from injecting messages into another
 //      tenant's conversation).
 
@@ -110,14 +112,15 @@ export async function POST(
       )
     }
 
-    // Tenant-scoped lookup: verify the conversation exists AND belongs to
-    // the caller's tenant BEFORE creating any message record.
+    const isCustomer = user.role === 'customer'
     const isSuperAdmin =
       user.isSuperAdmin || user.role === 'superadmin' || user.role === 'super_admin'
     const tenantFilter = isSuperAdmin ? {} : { tenantId: user.tenantId }
 
     const conversation = await db.conversation.findFirst({
-      where: { id, ...tenantFilter },
+      where: isCustomer
+        ? { id, customerId: user.id }
+        : { id, ...tenantFilter },
     })
     if (!conversation) {
       return NextResponse.json(
@@ -126,14 +129,18 @@ export async function POST(
       )
     }
 
+    const resolvedDirection = isCustomer ? 'inbound' : (direction ?? 'outbound')
+    const resolvedSenderName = isCustomer ? (user.name || 'Customer') : (senderName ?? null)
+    const resolvedSenderId = isCustomer ? user.id : (senderId ?? null)
+
     const message = await db.conversationMessage.create({
       data: {
         conversationId: id,
         type: type ?? 'text',
-        direction: direction ?? 'outbound',
+        direction: resolvedDirection,
         body: messageBody,
-        senderName: senderName ?? null,
-        senderId: senderId ?? null,
+        senderName: resolvedSenderName,
+        senderId: resolvedSenderId,
         templateName: templateName ?? null,
         interactiveJson: interactiveJson ?? null,
       },
@@ -142,9 +149,9 @@ export async function POST(
     await db.conversation.update({
       where: { id },
       data: {
-        lastMessage: messageBody,
+        lastMessageBody: messageBody,
         lastMessageAt: new Date(),
-        unreadCount: direction === 'inbound' ? { increment: 1 } : undefined,
+        lastDirection: resolvedDirection,
       },
     })
 

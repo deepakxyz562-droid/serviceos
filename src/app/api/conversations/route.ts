@@ -133,24 +133,49 @@ export async function POST(request: NextRequest) {
     }
     const body = await request.json()
 
-    const {
-      customerPhone,
-      customerName,
-      customerWhatsappId,
-      customerId,
-      leadId,
-      jobId,
-      status,
-      currentStage,
-    } = body
+    const isCustomer = authUser.role === 'customer'
 
-    if (!customerPhone) {
+    // If customer already has an active conversation, return that conversation
+    if (isCustomer) {
+      const existing = await db.conversation.findFirst({
+        where: { customerId: authUser.id, status: 'active' },
+        orderBy: { lastMessageAt: 'desc' },
+        include: {
+          customer: { select: { id: true, name: true, phone: true } },
+          lead: { select: { id: true, name: true, status: true } },
+          job: { select: { id: true, title: true, status: true } },
+        },
+      })
+      if (existing) {
+        return NextResponse.json({ conversation: existing }, { status: 200 })
+      }
+    }
+
+    const customerPhone = isCustomer
+      ? (authUser.phone || body.customerPhone || 'N/A')
+      : body.customerPhone
+
+    if (!customerPhone && !isCustomer) {
       return NextResponse.json({ error: 'customerPhone is required' }, { status: 400 })
     }
 
+    const customerName = isCustomer ? (authUser.name || body.customerName || 'Customer') : (body.customerName || null)
+    const customerId = isCustomer ? authUser.id : (body.customerId || null)
+
     // SECURITY: derive tenantId/workspaceId from the session, never from the body
-    const tenantId = resolveTenantId(authUser, body.tenantId)
-    const workspaceId = resolveWorkspaceId(authUser, body.workspaceId)
+    let tenantId = resolveTenantId(authUser, body.tenantId)
+    let workspaceId = resolveWorkspaceId(authUser, body.workspaceId)
+
+    if (isCustomer && (!tenantId || !workspaceId)) {
+      const cust = await db.customer.findUnique({
+        where: { id: authUser.id },
+        select: { workspaceId: true, workspace: { select: { tenantId: true } } }
+      })
+      if (cust) {
+        workspaceId = workspaceId || cust.workspaceId
+        tenantId = tenantId || cust.workspace?.tenantId || null
+      }
+    }
 
     // Generate a unique conversationId
     const conversationId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
@@ -158,14 +183,15 @@ export async function POST(request: NextRequest) {
     const conversation = await db.conversation.create({
       data: {
         conversationId,
-        customerPhone,
+        customerPhone: customerPhone || 'N/A',
         customerName: customerName || null,
-        customerWhatsappId: customerWhatsappId || null,
+        customerWhatsappId: body.customerWhatsappId || null,
         customerId: customerId || null,
-        leadId: leadId || null,
-        jobId: jobId || null,
-        status: status || 'active',
-        currentStage: currentStage || 'greeting',
+        leadId: isCustomer ? null : (body.leadId || null),
+        jobId: isCustomer ? null : (body.jobId || null),
+        status: body.status || 'active',
+        channel: isCustomer ? 'website' : (body.channel || 'whatsapp'),
+        currentStage: body.currentStage || 'greeting',
         tenantId: tenantId || null,
         workspaceId: workspaceId || null,
       },

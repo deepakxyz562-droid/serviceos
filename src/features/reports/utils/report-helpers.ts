@@ -157,12 +157,20 @@ export const JOB_STATUS_LABEL_MAP: Record<string, string> = {
  * whether the API grouped by `month` or `day`.
  */
 export function formatRevenueDate(dateKey: string, groupBy: string): string {
+  if (groupBy === 'year') {
+    return dateKey;
+  }
   if (groupBy === 'month') {
     const [year, month] = dateKey.split('-');
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const idx = parseInt(month, 10) - 1;
-    if (idx >= 0 && idx < 12) return monthNames[idx];
+    if (idx >= 0 && idx < 12) {
+      return year ? `${monthNames[idx]} '${year.slice(2)}` : monthNames[idx];
+    }
     return dateKey;
+  }
+  if (groupBy === 'week') {
+    return dateKey.replace('-W', ' Wk ');
   }
   if (groupBy === 'day') {
     const parts = dateKey.split('-');

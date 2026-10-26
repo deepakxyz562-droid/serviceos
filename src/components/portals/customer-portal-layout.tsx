@@ -2611,12 +2611,29 @@ function MessagesView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   const auth = useAppStore((s) => s.auth);
   const companyName = auth.tenant?.name || 'Support';
 
-  // `silent=true` skips the loading spinner + error reset so background
-  // refetches (on tab re-activation or after a mutation) update data in place
-  // without flashing the UI. The initial fetch on mount is non-silent.
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const formatMessageTime = (timestamp?: string) => {
+    if (!timestamp) return '';
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch {
+      return '';
+    }
+  };
+
   const fetchConversations = useCallback(async (silent = false) => {
     if (!silent) {
       setLoading(true);
@@ -2633,9 +2650,9 @@ function MessagesView({
       const data = await res.json();
       const convos: ConversationItem[] = data.conversations || [];
       setConversations(convos);
-      // Auto-select the most recent conversation
-      if (convos.length > 0 && !selectedConversationId) {
-        setSelectedConversationId(convos[0].id);
+      // Auto-select the most recent conversation if not set
+      if (convos.length > 0) {
+        setSelectedConversationId((prev) => prev || convos[0].id);
       }
       if (silent) setError(null);
     } catch (e) {
@@ -2643,18 +2660,50 @@ function MessagesView({
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [auth.user, selectedConversationId]);
+  }, [auth.user]);
+
+  // Fetch actual conversation messages
+  const fetchMessages = useCallback(async (convoId: string, silent = false) => {
+    if (!convoId) return;
+    if (!silent) setLoadingMessages(true);
+    try {
+      const res = await fetch(apiUrl(`/api/conversations/${convoId}/messages?limit=100`), {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load messages');
+      const data = await res.json();
+      const msgList = (data.messages || []).map((m: any) => ({
+        id: m.id,
+        from: (m.direction === 'inbound' || m.senderId === auth.user?.id) ? ('customer' as const) : ('business' as const),
+        text: m.body,
+        time: formatMessageTime(m.createdAt),
+        timestamp: m.createdAt,
+      }));
+      setMessages(msgList);
+    } catch (e) {
+      console.error('Failed to load conversation messages:', e);
+    } finally {
+      if (!silent) setLoadingMessages(false);
+    }
+  }, [auth.user?.id]);
 
   useEffect(() => {
     fetchConversations();
-  }, [auth.user]);
+  }, [fetchConversations]);
 
-  // Background refetch on tab re-activation + when dataNonce changes (mutation
-  // happened elsewhere). We use a ref to hold the latest fetchConversations so
-  // the effect's deps stay minimal — otherwise the effect would re-fire every
-  // time `selectedConversationId` changes (since fetchConversations depends on
-  // it). Skipped on the very first run — the initial-fetch effect above
-  // handles the first load with the loading spinner.
+  useEffect(() => {
+    if (selectedConversationId) {
+      fetchMessages(selectedConversationId);
+    } else {
+      setMessages([]);
+    }
+  }, [selectedConversationId, fetchMessages]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Background refetch on tab re-activation + when dataNonce changes
   const fetchConversationsRef = useRef(fetchConversations);
   useEffect(() => {
     fetchConversationsRef.current = fetchConversations;
@@ -2668,43 +2717,93 @@ function MessagesView({
     }
     if (!isActive) return;
     fetchConversationsRef.current(true);
-  }, [isActive, dataNonce]);
-
-  // Parse messages from the selected conversation
-  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
-  const messages: ConversationMessage[] = (() => {
-    if (!selectedConversation) return [];
-    try {
-      const parsed = JSON.parse(selectedConversation.messagesJson || '[]');
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((m: any, idx: number) => ({
-        id: m.id || idx,
-        from: m.direction === 'outbound' || m.from === 'business' ? 'business' : 'customer',
-        text: m.body || m.text || m.message || '',
-        time: m.time,
-        timestamp: m.timestamp || m.createdAt,
-      })).filter((m: ConversationMessage) => m.text);
-    } catch {
-      return [];
+    if (selectedConversationId) {
+      fetchMessages(selectedConversationId, true);
     }
-  })();
+  }, [isActive, dataNonce, selectedConversationId, fetchMessages]);
 
-  const formatMessageTime = (timestamp?: string) => {
-    if (!timestamp) return '';
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = newMessage.trim();
+    if (!text || isSending) return;
+
+    setIsSending(true);
+    let targetConvoId = selectedConversationId;
+
     try {
-      const d = new Date(timestamp);
-      if (isNaN(d.getTime())) return '';
-      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
-    } catch {
-      return '';
+      if (!targetConvoId) {
+        // Create conversation automatically
+        const createRes = await fetch(apiUrl('/api/conversations'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({}),
+        });
+        if (!createRes.ok) throw new Error('Failed to start conversation');
+        const createData = await createRes.json();
+        targetConvoId = createData.conversation?.id;
+        if (targetConvoId) {
+          setSelectedConversationId(targetConvoId);
+          setConversations((prev) => [createData.conversation, ...prev.filter((c) => c.id !== targetConvoId)]);
+        }
+      }
+
+      if (!targetConvoId) throw new Error('Unable to start conversation');
+
+      // Optimistic append
+      const tempId = `temp_${Date.now()}`;
+      const now = new Date().toISOString();
+      const optimisticMsg: ConversationMessage = {
+        id: tempId,
+        from: 'customer',
+        text,
+        time: formatMessageTime(now),
+        timestamp: now,
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setNewMessage('');
+
+      const res = await fetch(apiUrl(`/api/conversations/${targetConvoId}/messages`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          body: text,
+          direction: 'inbound',
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const savedMsg = await res.json();
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? {
+                id: savedMsg.id,
+                from: 'customer',
+                text: savedMsg.body,
+                time: formatMessageTime(savedMsg.createdAt),
+                timestamp: savedMsg.createdAt,
+              }
+            : m
+        )
+      );
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setIsSending(false);
     }
   };
 
   return (
     <div className="space-y-0">
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden flex flex-col h-[600px] border border-border shadow-sm">
         {/* Chat Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
+        <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30 shrink-0">
           <div className="flex items-center gap-3">
             <div className="size-10 rounded-full bg-teal-100 dark:bg-teal-950 flex items-center justify-center">
               <Zap className="size-5 text-teal-600 dark:text-teal-400" />
@@ -2713,50 +2812,65 @@ function MessagesView({
               <p className="text-sm font-semibold text-foreground">{companyName} Support</p>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                {conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
+                Live Customer Support
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="size-8">
-            <MoreVertical className="size-4" />
-          </Button>
+          {conversations.length > 1 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:inline">Conversations:</span>
+              <select
+                aria-label="Select conversation"
+                className="text-xs bg-background border border-border rounded-md px-2 py-1"
+                value={selectedConversationId || ''}
+                onChange={(e) => setSelectedConversationId(e.target.value)}
+              >
+                {conversations.map((c, i) => (
+                  <option key={c.id} value={c.id}>
+                    Conversation {i + 1}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Loading state */}
         {loading && (
-          <div className="p-8 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <Loader2 className="size-6 animate-spin text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Loading messages…</p>
+            <p className="text-sm text-muted-foreground">Loading chat…</p>
           </div>
         )}
 
         {/* Error state */}
         {!loading && error && (
-          <div className="p-8 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
             <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
             <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
-            <Button variant="outline" size="sm" onClick={fetchConversations}>Retry</Button>
+            <Button variant="outline" size="sm" onClick={() => fetchConversations()}>Retry</Button>
           </div>
         )}
 
-        {/* Empty state */}
-        {!loading && !error && messages.length === 0 && (
-          <div className="p-12 text-center">
-            <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
-              <MessageSquare className="size-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-base font-semibold text-foreground mb-1">No messages yet</h3>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              When {companyName} sends you messages, your conversation will appear here. Sending new messages is coming soon — please contact us via phone or email for now.
-            </p>
-          </div>
-        )}
-
-        {/* Messages Area */}
-        {!loading && !error && messages.length > 0 && (
-          <ScrollArea className="h-[450px] p-4">
-            <div className="space-y-4">
-              {messages.map((msg, idx) => (
+        {/* Messages Scroll Area */}
+        {!loading && !error && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {loadingMessages && messages.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                <div className="size-14 rounded-full bg-muted/60 flex items-center justify-center mx-auto mb-3">
+                  <MessageSquare className="size-7 text-muted-foreground" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground mb-1">Start a Conversation</h3>
+                <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                  Send a message below to chat directly with {companyName} regarding your services, quotes, or bookings.
+                </p>
+              </div>
+            ) : (
+              messages.map((msg, idx) => (
                 <div
                   key={msg.id || idx}
                   className={cn(
@@ -2766,58 +2880,65 @@ function MessagesView({
                 >
                   <div
                     className={cn(
-                      'max-w-[80%] sm:max-w-[65%] rounded-2xl px-4 py-2.5',
+                      'max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-2.5 shadow-xs',
                       msg.from === 'customer'
-                        ? 'bg-teal-600 text-white rounded-br-md'
-                        : 'bg-muted text-foreground rounded-bl-md'
+                        ? 'bg-teal-600 text-white rounded-br-xs'
+                        : 'bg-muted text-foreground rounded-bl-xs border border-border/50'
                     )}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
-                    <p className={cn(
-                      'text-[10px] mt-1',
-                      msg.from === 'customer' ? 'text-teal-100' : 'text-muted-foreground'
-                    )}>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap select-text">{msg.text}</p>
+                    <p
+                      className={cn(
+                        'text-[10px] mt-1',
+                        msg.from === 'customer' ? 'text-teal-100/90 text-right' : 'text-muted-foreground text-left'
+                      )}
+                    >
                       {msg.time || formatMessageTime(msg.timestamp)}
                     </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </ScrollArea>
+              ))
+            )}
+            <div ref={messagesEndRef} />
+          </div>
         )}
 
-        {/* Input Area — disabled: messaging send is not yet available */}
+        {/* Input Area — fully active & interactive */}
         {!loading && !error && (
-          <div className="p-3 border-t border-border bg-muted/30">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="size-9 shrink-0 text-muted-foreground" disabled aria-hidden tabIndex={-1}>
-                <Paperclip className="size-4" />
-              </Button>
+          <div className="p-3 border-t border-border bg-muted/20 shrink-0">
+            <form
+              onSubmit={handleSendMessage}
+              className="flex items-center gap-2"
+            >
               <div className="flex-1 relative">
                 <Input
-                  placeholder="Messaging is coming soon…"
+                  placeholder={`Message ${companyName}...`}
                   value={newMessage}
-                  onChange={() => { /* no-op: send is disabled */ }}
-                  disabled
-                  className="pr-10 h-10 rounded-full bg-background border-border"
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  disabled={isSending}
+                  className="h-10 pr-4 rounded-full bg-background border-border text-sm"
                 />
-                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground" disabled aria-hidden tabIndex={-1}>
-                  <Smile className="size-4" />
-                </Button>
               </div>
               <Button
+                type="submit"
                 size="icon"
-                className="size-10 rounded-full bg-teal-600 hover:bg-teal-700 text-white shrink-0"
-                disabled
-                aria-hidden
-                tabIndex={-1}
+                disabled={!newMessage.trim() || isSending}
+                className="size-10 rounded-full bg-teal-600 hover:bg-teal-700 text-white shrink-0 disabled:opacity-40 transition-colors"
+                title="Send message"
               >
-                <Send className="size-4" />
+                {isSending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
               </Button>
-            </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Messaging is coming soon. Please contact us via phone or email for now.
-            </p>
+            </form>
           </div>
         )}
       </Card>

@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { toISOString } from '@/lib/utils';
 import { cache } from '@/lib/cache';
 import { cachedJson } from '@/lib/cache-headers';
+import { parseDashboardRange, type DashboardRangeResult } from '@/lib/dashboard-date-helper';
 
 const CACHE_TTL = 60_000; // 60 seconds — dashboard data doesn't need sub-minute freshness
 
@@ -52,7 +53,7 @@ function getCurrentMonthRange() {
 }
 
 // GET /api/saas-stats - Comprehensive SaaS dashboard stats for FlowForge
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const authUser = await getAuthUser();
 
@@ -68,35 +69,26 @@ export async function GET() {
       return NextResponse.json(getZeroStats());
     }
 
+    const { searchParams } = new URL(request.url);
+    const range = searchParams.get('range') || 'month';
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+    const rangeConfig = parseDashboardRange(range, startDate, endDate);
+
     // Check cache first
-    const cacheKey = `saas-stats:${tenantId || 'superadmin'}`;
+    const cacheKey = `saas-stats:${tenantId || 'superadmin'}:${rangeConfig.rangeKey}:${startDate || ''}:${endDate || ''}`;
     const cached = cache.get<Record<string, unknown>>(cacheKey);
     if (cached) {
-      // P3: attach browser Cache-Control so the dashboard's second load
-      // within 30s is instant (no network round-trip). `private` because
-      // the response is auth-scoped — never cache on a shared CDN.
       return cachedJson(cached);
     }
 
     // Build tenant filter: super admins see all data, others only their tenant
     const tenantFilter = isSuperAdmin && !tenantId ? {} : { tenantId };
 
-    // "Today" window for date-filtered KPIs (Today's Bookings, Today's Schedule).
+    // "Today" window for fallbacks.
     const { startOfToday, startOfTomorrow } = getTodayRange();
-    // Current-month window for the Monthly Revenue KPI.
-    const { startOfMonth, startOfNextMonth } = getCurrentMonthRange();
 
-    // ── Group 1: Tenant-scoped queries (Lead + Invoice) — parallel ─────────
-    // PERFORMANCE: Previously 9 sequential awaits here. Now batched into a
-    // single Promise.all so they run concurrently. Net effect: ~500ms → ~80ms
-    // for the typical tenant. All queries are independent of each other.
-    //
-    // REVENUE: We now sum invoices with status IN ('paid', 'sent') — i.e.
-    // "billed revenue" — instead of just 'paid'. The result is split into
-    // `collected` (paid) and `pending` (sent) so the dashboard can show a
-    // clear breakdown instead of a single opaque number. Date filter is the
-    // current calendar month (by Invoice.createdAt = when the invoice was
-    // issued), so the KPI matches its "Monthly Revenue" label.
+    // Group 1: Tenant-scoped queries (Lead + Invoice) — parallel
     const [
       totalLeadsCount,
       leadsByStatus,
@@ -109,40 +101,57 @@ export async function GET() {
       monthlyRevenueData,
       recentLeads,
     ] = await Promise.all([
-      db.lead.count({ where: tenantFilter }),
+      db.lead.count({
+        where: {
+          ...tenantFilter,
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
+      }),
       db.lead.groupBy({
         by: ['status'],
-        where: tenantFilter,
+        where: {
+          ...tenantFilter,
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
         _count: { status: true },
         _sum: { value: true },
       }),
       db.lead.groupBy({
         by: ['source'],
-        where: tenantFilter,
+        where: {
+          ...tenantFilter,
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
         _count: { source: true },
       }),
-      // Collected revenue = sum of paid invoices, current month (by createdAt).
+      // Collected revenue = sum of paid invoices in the requested window
       db.invoice.aggregate({
         where: {
           ...tenantFilter,
           status: 'paid',
-          createdAt: { gte: startOfMonth, lt: startOfNextMonth },
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
         },
         _sum: { total: true },
       }),
-      // Pending revenue = sum of sent (not yet paid) invoices, current month.
+      // Pending revenue = sum of sent (not yet paid) invoices in the requested window
       db.invoice.aggregate({
         where: {
           ...tenantFilter,
           status: 'sent',
-          createdAt: { gte: startOfMonth, lt: startOfNextMonth },
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
         },
         _sum: { total: true },
       }),
-      db.lead.count({ where: { ...tenantFilter, status: 'won' } }),
+      db.lead.count({
+        where: {
+          ...tenantFilter,
+          status: 'won',
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
+      }),
       tenantId ? getLastMonthLeadsCount(tenantId) : Promise.resolve(0),
       tenantId ? getLastMonthRevenue(tenantId) : Promise.resolve(0),
-      tenantId ? getMonthlyRevenue(tenantId) : Promise.resolve([]),
+      tenantId ? getRevenueTrend(tenantId, rangeConfig) : Promise.resolve([]),
       db.lead.findMany({
         where: tenantFilter,
         orderBy: { createdAt: 'desc' },
@@ -180,11 +189,18 @@ export async function GET() {
     };
 
     // Today's-schedule filter: jobs whose scheduledAt falls inside today
-    // (UTC-midnight-aligned). Used by BOTH the "Today's Bookings" KPI count
-    // and the "Today's Schedule" list.
+    // (UTC-midnight-aligned). Used by the "Today's Schedule" list.
     const todaysJobsWhere = {
       ...workspaceFilter,
       scheduledAt: { gte: startOfToday, lt: startOfTomorrow },
+    };
+
+    // Period schedule filter: jobs in the selected range (or today if range is today)
+    const periodJobsWhere = {
+      ...workspaceFilter,
+      ...(Object.keys(rangeConfig.periodBookingsFilter).length
+        ? rangeConfig.periodBookingsFilter
+        : { scheduledAt: { gte: startOfToday, lt: startOfTomorrow } }),
     };
 
     const [
@@ -229,8 +245,8 @@ export async function GET() {
       }),
       // Active Jobs KPI: jobs not in a terminal state.
       db.job.count({ where: activeJobsFilter }),
-      // Today's Bookings KPI: jobs scheduled for today.
-      db.job.count({ where: todaysJobsWhere }),
+      // Range Bookings KPI: jobs scheduled for this period.
+      db.job.count({ where: periodJobsWhere }),
       // Today's Schedule list: jobs scheduled for today, ordered by time.
       db.job.findMany({
         where: todaysJobsWhere,
@@ -325,21 +341,24 @@ export async function GET() {
     }));
 
     const result = {
+      period: rangeConfig.rangeKey,
+      periodLabel: rangeConfig.label,
       totalLeads: { count: totalLeadsCount, trend: leadsTrend },
       // activeJobs.count now = jobs NOT in terminal state (matches label).
       // `totalJobs` (all jobs regardless of state) is exposed separately for
       // views that genuinely want the total (e.g. super-admin tenant list).
       activeJobs: { count: activeJobsCount, totalJobs: totalJobsCount, byStatus: jobsByStatusMap },
-      // monthlyRevenue: total billed this month (paid + sent), with the
+      // monthlyRevenue: total billed in this period (paid + sent), with the
       // collected/pending split so the UI can show a transparent breakdown.
       monthlyRevenue: {
         amount: currentRevenue,
         collected: collectedRevenue,
         pending: pendingRevenue,
         trend: revenueTrend,
+        periodLabel: rangeConfig.label,
       },
-      // NEW: Today's Bookings = jobs scheduled for today (count).
-      // NEW: todaysJobs = jobs scheduled for today (list, for "Today's Schedule").
+      // Range Bookings = jobs scheduled in this window (count).
+      // todaysJobs = jobs scheduled for today (list, for "Today's Schedule").
       todaysBookings: todaysBookingsCount,
       todaysJobs: formattedTodaysJobs,
       teamPerformance: { avgRating: parseFloat(avgRating), completedJobs: totalCompletedJobs },
@@ -394,6 +413,92 @@ async function getLastMonthRevenue(tenantId: string) {
   });
 
   return result._sum.total || 0;
+}
+
+async function getRevenueTrend(tenantId: string, rangeConfig: DashboardRangeResult) {
+  if (rangeConfig.rangeKey === 'today') {
+    const startOfToday = rangeConfig.dateFilter.gte || new Date();
+    const invoices = await db.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: REVENUE_INVOICE_STATUSES },
+        createdAt: { gte: startOfToday },
+      },
+      select: { total: true, createdAt: true },
+    });
+    const blocks = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'];
+    const buckets: Record<string, number> = {
+      '00:00': 0, '04:00': 0, '08:00': 0, '12:00': 0, '16:00': 0, '20:00': 0,
+    };
+    invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const h = d.getHours();
+      const blockIdx = Math.floor(h / 4);
+      const key = blocks[blockIdx] || '20:00';
+      buckets[key] = (buckets[key] || 0) + inv.total;
+    });
+    return blocks.map((b) => ({
+      month: b,
+      label: b,
+      revenue: Math.round((buckets[b] || 0) * 100) / 100,
+    }));
+  }
+
+  if (rangeConfig.rangeKey === 'month') {
+    const now = new Date();
+    const startOfMonth = rangeConfig.dateFilter.gte || new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = rangeConfig.dateFilter.lt || new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const invoices = await db.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: REVENUE_INVOICE_STATUSES },
+        createdAt: { gte: startOfMonth, lt: endOfMonth },
+      },
+      select: { total: true, createdAt: true },
+    });
+    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+    const weekBuckets: Record<string, number> = { 'Week 1': 0, 'Week 2': 0, 'Week 3': 0, 'Week 4': 0 };
+    invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const day = d.getDate();
+      if (day <= 7) weekBuckets['Week 1'] += inv.total;
+      else if (day <= 14) weekBuckets['Week 2'] += inv.total;
+      else if (day <= 21) weekBuckets['Week 3'] += inv.total;
+      else weekBuckets['Week 4'] += inv.total;
+    });
+    return weeks.map((w) => ({
+      month: w,
+      label: w,
+      revenue: Math.round((weekBuckets[w] || 0) * 100) / 100,
+    }));
+  }
+
+  if (rangeConfig.rangeKey === 'year') {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const invoices = await db.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: REVENUE_INVOICE_STATUSES },
+        createdAt: { gte: startOfYear },
+      },
+      select: { total: true, createdAt: true },
+    });
+    const monthlyData: Record<number, number> = {};
+    invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const m = d.getMonth();
+      monthlyData[m] = (monthlyData[m] || 0) + inv.total;
+    });
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return monthNames.map((name, idx) => ({
+      month: `${now.getFullYear()}-${String(idx + 1).padStart(2, '0')}`,
+      label: name,
+      revenue: Math.round((monthlyData[idx] || 0) * 100) / 100,
+    }));
+  }
+
+  return getMonthlyRevenue(tenantId);
 }
 
 async function getMonthlyRevenue(tenantId: string) {

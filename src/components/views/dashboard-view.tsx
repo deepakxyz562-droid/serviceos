@@ -115,6 +115,7 @@ interface MonthlyRevenue {
   collected: number;    // paid invoices only (cash in bank)
   pending: number;      // sent invoices only (awaiting payment)
   trend: number;
+  periodLabel?: string;
 }
 
 interface PipelineStage {
@@ -151,13 +152,11 @@ interface RecentJob {
 }
 
 interface SaaSStats {
+  period?: string;
+  periodLabel?: string;
   totalLeads: LeadTrend;
   activeJobs: ActiveJobs;
   monthlyRevenue: MonthlyRevenue;
-  // Jobs scheduled for today — count powers the "Today's Bookings" KPI card,
-  // the list powers the "Today's Schedule" section. Both are filtered by the
-  // API to scheduledAt = today (UTC-aligned), so the UI finally matches its
-  // labels instead of showing "pending"-status count / recent-by-creation jobs.
   todaysBookings?: number;
   todaysJobs?: RecentJob[];
   leadPipeline: PipelineStage[];
@@ -417,6 +416,7 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 export function DashboardView() {
   const { setCurrentView, setPendingCreate, auth, currentWorkspaceName } = useAppStore();
   const [stats, setStats] = useState<SaaSStats | null>(null);
+  const [period, setPeriod] = useState<'today' | 'month' | 'year' | 'all'>('month');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -512,7 +512,8 @@ export function DashboardView() {
 
     async function fetchBootstrap() {
       try {
-        const res = await fetch('/api/dashboard/bootstrap');
+        setLoading(true);
+        const res = await fetch(`/api/dashboard/bootstrap?range=${period}`);
         if (!res.ok) throw new Error('Bootstrap failed');
         const data = await res.json();
         if (cancelled) return;
@@ -529,7 +530,7 @@ export function DashboardView() {
         // compatibility — the dashboard still works even if the BFF
         // endpoint is unavailable (e.g. during a partial deploy).
         try {
-          const res = await fetch('/api/saas-stats');
+          const res = await fetch(`/api/saas-stats?range=${period}`);
           if (!res.ok) throw new Error('Failed to fetch dashboard stats');
           const data = await res.json();
           if (!cancelled) setStats(data);
@@ -543,7 +544,7 @@ export function DashboardView() {
     fetchBootstrap();
 
     return () => { cancelled = true; };
-  }, []);
+  }, [period]);
 
   // Fetch employees for presence section.
   // PERFORMANCE: Poll every 60s (was 30s) and pause when the tab is hidden.
@@ -781,7 +782,51 @@ export function DashboardView() {
             {subtitle}
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Period selector */}
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/60">
+            <button
+              type="button"
+              onClick={() => setPeriod('today')}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                period === 'today' ? "bg-background text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('month')}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                period === 'month' ? "bg-background text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              This Month
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('year')}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                period === 'year' ? "bg-background text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              This Year
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('all')}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                period === 'all' ? "bg-background text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              All Time
+            </button>
+          </div>
+
           <Button
             size="sm"
             onClick={() => {
@@ -810,7 +855,9 @@ export function DashboardView() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">Today&apos;s Bookings</p>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      {period === 'today' ? "Today's Bookings" : period === 'month' ? "This Month's Bookings" : period === 'year' ? "This Year's Bookings" : "All-Time Bookings"}
+                    </p>
                     <p className="text-2xl font-bold mt-1">
                       {stats.todaysBookings ?? 0}
                     </p>
@@ -818,8 +865,8 @@ export function DashboardView() {
                       <CalendarCheck className="size-3.5 text-emerald-500" />
                       <span className="text-xs font-medium text-muted-foreground">
                         {stats.todaysBookings && stats.todaysBookings > 0
-                          ? `${stats.todaysBookings} job${stats.todaysBookings === 1 ? '' : 's'} scheduled today`
-                          : 'No jobs scheduled today'}
+                          ? `${stats.todaysBookings} job${stats.todaysBookings === 1 ? '' : 's'} scheduled (${stats.periodLabel || 'in period'})`
+                          : `No jobs scheduled (${stats.periodLabel || 'in period'})`}
                       </span>
                     </div>
                   </div>
@@ -866,12 +913,14 @@ export function DashboardView() {
               </CardContent>
             </Card>
 
-            {/* Monthly Revenue */}
+            {/* Revenue */}
             <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">Monthly Revenue</p>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      {stats.periodLabel ? `${stats.periodLabel} Revenue` : 'Revenue'}
+                    </p>
                     <p className="text-2xl font-bold mt-1">{formatCompact(stats.monthlyRevenue.amount)}</p>
                     {/* Transparent breakdown: collected (paid) vs pending (sent).
                         Shown only when at least one of them is non-zero, so
@@ -900,7 +949,7 @@ export function DashboardView() {
                           stats.monthlyRevenue.trend >= 0 ? 'text-emerald-600' : 'text-red-600'
                         )}
                       >
-                        {Math.abs(stats.monthlyRevenue.trend)}% from last month
+                        {Math.abs(stats.monthlyRevenue.trend)}% vs previous period
                       </span>
                     </div>
                   </div>
@@ -919,7 +968,9 @@ export function DashboardView() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-muted-foreground font-medium">New Leads</p>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      Leads ({stats.periodLabel || 'Total'})
+                    </p>
                     <p className="text-2xl font-bold mt-1">{stats.totalLeads.count}</p>
                     <div className="flex items-center gap-1 mt-1">
                       {stats.totalLeads.trend >= 0 ? (

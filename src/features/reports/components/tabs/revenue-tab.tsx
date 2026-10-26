@@ -23,6 +23,7 @@ import { StatCard } from '@/components/shared/stat-card';
 import { ChartSkeleton, KpiSkeleton } from '@/components/shared/skeletons';
 import { ErrorState } from '@/components/shared/error-state';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { cn } from '@/lib/utils';
 import type {
   OverviewResponse,
   RevenueTrendsResponse,
@@ -48,6 +49,8 @@ interface RevenueTabProps {
   leadConvQuery: UseQueryResult<LeadConversionResponse>;
   /** Pre-computed in the parent because it's shared with the Overview tab. */
   overviewLoading: boolean;
+  revenueGroupBy?: 'day' | 'week' | 'month' | 'year';
+  onGroupByChange?: (groupBy: 'day' | 'week' | 'month' | 'year') => void;
 }
 
 export function RevenueTab({
@@ -56,6 +59,8 @@ export function RevenueTab({
   revenueQuery,
   leadConvQuery,
   overviewLoading,
+  revenueGroupBy = 'month',
+  onGroupByChange,
 }: RevenueTabProps) {
   const { format, formatCompact, symbol } = useCompanyCurrency();
   const overview = overviewQuery.data;
@@ -153,11 +158,41 @@ export function RevenueTab({
         )}
       </div>
 
-      {/* Monthly Revenue Trend - Area Chart */}
+      {/* Revenue Trend - Area Chart with Group By Switcher */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Monthly Revenue Trend</CardTitle>
-          <CardDescription>Revenue performance over time</CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="text-base capitalize">
+              {revenueGroupBy === 'day'
+                ? 'Daily Revenue Trend'
+                : revenueGroupBy === 'week'
+                ? 'Weekly Revenue Trend'
+                : revenueGroupBy === 'year'
+                ? 'Yearly Revenue Trend'
+                : 'Monthly Revenue Trend'}
+            </CardTitle>
+            <CardDescription>Revenue performance over time ({revenueGroupBy || 'month'} grouping)</CardDescription>
+          </div>
+          {onGroupByChange && (
+            <div className="flex items-center rounded-lg border bg-muted/40 p-1 text-xs self-start sm:self-auto">
+              <span className="text-[11px] text-muted-foreground mr-1.5 px-1 font-medium hidden sm:inline">Group:</span>
+              {(['day', 'week', 'month', 'year'] as const).map((gb) => (
+                <button
+                  key={gb}
+                  type="button"
+                  onClick={() => onGroupByChange(gb)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-md font-medium capitalize transition-colors text-xs",
+                    revenueGroupBy === gb
+                      ? "bg-background text-foreground shadow-xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {gb}
+                </button>
+              ))}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {revenueQuery.isLoading ? (

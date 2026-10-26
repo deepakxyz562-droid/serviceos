@@ -22,11 +22,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const dateFilter: Record<string, unknown> = {}
     if (startDate) {
       dateFilter.gte = new Date(startDate)
-    } else if (range) {
+    } else if (range && range !== 'all') {
       const now = new Date()
-      const rangeDays: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 }
-      const days = rangeDays[range] || 30
-      dateFilter.gte = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+      if (range === 'today' || range === '1d') {
+        dateFilter.gte = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+      } else if (range === 'month' || range === 'this_month') {
+        dateFilter.gte = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0)
+      } else if (range === 'year' || range === 'this_year') {
+        dateFilter.gte = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0)
+      } else {
+        const rangeDays: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '1y': 365, '12m': 365 }
+        const days = rangeDays[range] || 30
+        dateFilter.gte = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+      }
     }
     if (endDate) {
       dateFilter.lte = new Date(endDate)
@@ -571,6 +579,8 @@ async function handleJourneyAnalytics(
 function formatDateKey(date: Date, groupBy: string): string {
   const d = new Date(date)
   switch (groupBy) {
+    case 'year':
+      return `${d.getFullYear()}`
     case 'month':
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     case 'week': {

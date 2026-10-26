@@ -778,19 +778,19 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         type="button"
         onClick={() => setAiDrawerOpen(!useAppStore.getState().aiDrawerOpen)}
         className={cn(
-          "fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-3.5 py-2.5 rounded-full shadow-lg transition-all cursor-pointer",
-          "bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white hover:shadow-2xl hover:scale-105 active:scale-95 border border-emerald-400/40",
-          aiDrawerOpen && "ring-4 ring-emerald-500/30 scale-105 shadow-emerald-500/20"
+          "hidden md:flex fixed bottom-6 right-6 z-40 items-center gap-2 px-3.5 py-2 rounded-full shadow-md transition-all cursor-pointer",
+          "bg-slate-900 hover:bg-slate-800 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white border border-slate-700/80 dark:border-zinc-700 active:scale-95",
+          aiDrawerOpen && "ring-2 ring-teal-500/50 scale-105 shadow-teal-500/20"
         )}
         title="Open AI Copilot (⌘K)"
         aria-label="Open AI Copilot"
       >
         <div className="relative flex items-center justify-center">
-          <Sparkles className="size-4 animate-pulse" />
-          <span className="absolute -top-1 -right-1 size-2 rounded-full bg-amber-400 ring-2 ring-emerald-700" />
+          <Sparkles className="size-4 text-teal-400" />
+          <span className="absolute -top-1 -right-1 size-1.5 rounded-full bg-emerald-400 ring-2 ring-slate-900 dark:ring-zinc-800" />
         </div>
-        <span className="text-xs font-semibold tracking-tight hidden sm:inline">AI Copilot</span>
-        <kbd className="hidden md:inline-flex items-center gap-0.5 rounded bg-black/25 px-1.5 py-0.5 text-[10px] font-mono text-white/90">
+        <span className="text-xs font-medium tracking-tight text-slate-100 dark:text-zinc-100">AI Copilot</span>
+        <kbd className="hidden lg:inline-flex items-center gap-0.5 rounded bg-white/10 dark:bg-zinc-900/60 px-1.5 py-0.5 text-[10px] font-mono text-slate-300 dark:text-zinc-400 border border-white/10 dark:border-zinc-700">
           ⌘K
         </kbd>
       </button>

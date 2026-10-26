@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { toISOString } from '@/lib/utils';
 import { cache } from '@/lib/cache';
 import { cachedJson } from '@/lib/cache-headers';
+import { parseDashboardRange, type DashboardRangeResult } from '@/lib/dashboard-date-helper';
 
 /**
  * GET /api/dashboard/bootstrap
@@ -80,7 +81,7 @@ function getCurrentMonthRange() {
   return { startOfMonth, startOfNextMonth };
 }
 
-export async function GET() {
+export async function GET(request?: Request) {
   try {
     const authUser = await getAuthUser();
 
@@ -96,23 +97,22 @@ export async function GET() {
       return cachedJson(getEmptyBootstrap());
     }
 
+    const url = request?.url ? new URL(request.url) : null;
+    const range = url?.searchParams.get('range') || 'month';
+    const startDate = url?.searchParams.get('startDate');
+    const endDate = url?.searchParams.get('endDate');
+    const rangeConfig = parseDashboardRange(range, startDate, endDate);
+
     // Check cache first — same key scheme as saas-stats.
-    const cacheKey = `dashboard-bootstrap:${tenantId || 'superadmin'}`;
+    const cacheKey = `dashboard-bootstrap:${tenantId || 'superadmin'}:${rangeConfig.rangeKey}:${startDate || ''}:${endDate || ''}`;
     const cached = cache.get<Record<string, unknown>>(cacheKey);
     if (cached) {
       return cachedJson(cached);
     }
 
     // ── Run all 3 data fetches in parallel ──────────────────────────────
-    // Each fetch is independent, so Promise.all runs them concurrently.
-    // Net effect: 3 sequential round-trips → 1 parallel window.
-    //
-    // Each fetch is wrapped in its own try/catch so a failure in one
-    // (e.g. a single malformed Prisma query) does NOT silently zero-out
-    // the entire bootstrap. Errors are logged with their source label so
-    // they surface in dev.log instead of being swallowed.
     const [stats, employees, unreadCount] = await Promise.all([
-      fetchSaasStats(authUser, tenantId, isSuperAdmin).catch((err) => {
+      fetchSaasStats(authUser, tenantId, isSuperAdmin, rangeConfig).catch((err) => {
         console.error('[dashboard/bootstrap] fetchSaasStats failed:', err);
         return getZeroStats();
       }),
@@ -162,6 +162,7 @@ async function fetchSaasStats(
   authUser: Awaited<ReturnType<typeof getAuthUser>>,
   tenantId: string | undefined,
   isSuperAdmin: boolean,
+  rangeConfig: DashboardRangeResult,
 ) {
   if (!authUser) return getZeroStats();
 
@@ -169,7 +170,6 @@ async function fetchSaasStats(
 
   // Date windows for the KPI cards.
   const { startOfToday, startOfTomorrow } = getTodayRange();
-  const { startOfMonth, startOfNextMonth } = getCurrentMonthRange();
 
   const [
     totalLeadsCount,
@@ -182,12 +182,24 @@ async function fetchSaasStats(
     monthlyRevenueData,
     recentLeads,
   ] = await Promise.all([
-    safeQuery('lead.count', db.lead.count({ where: tenantFilter }), 0),
+    safeQuery(
+      'lead.count',
+      db.lead.count({
+        where: {
+          ...tenantFilter,
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
+      }),
+      0,
+    ),
     safeQuery(
       'lead.groupBy.status',
       db.lead.groupBy({
         by: ['status'],
-        where: tenantFilter,
+        where: {
+          ...tenantFilter,
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
         _count: { status: true },
         _sum: { value: true },
       }),
@@ -197,32 +209,43 @@ async function fetchSaasStats(
       'lead.groupBy.source',
       db.lead.groupBy({
         by: ['source'],
-        where: tenantFilter,
+        where: {
+          ...tenantFilter,
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
         _count: { source: true },
       }),
       [] as { source: string; _count: { source: number } }[],
     ),
-    // Collected revenue = paid invoices issued this month.
+    // Collected revenue = paid invoices issued in this period.
     safeQuery(
       'invoice.aggregate.paid',
       db.invoice.aggregate({
-        where: { ...tenantFilter, status: 'paid', createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+        where: {
+          ...tenantFilter,
+          status: 'paid',
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
         _sum: { total: true },
       }),
       { _sum: { total: 0 } as { _sum: { total: number | null } } },
     ),
-    // Pending revenue = sent (unpaid) invoices issued this month.
+    // Pending revenue = sent (unpaid) invoices issued in this period.
     safeQuery(
       'invoice.aggregate.sent',
       db.invoice.aggregate({
-        where: { ...tenantFilter, status: 'sent', createdAt: { gte: startOfMonth, lt: startOfNextMonth } },
+        where: {
+          ...tenantFilter,
+          status: 'sent',
+          ...(Object.keys(rangeConfig.dateFilter).length ? { createdAt: rangeConfig.dateFilter } : {}),
+        },
         _sum: { total: true },
       }),
       { _sum: { total: 0 } as { _sum: { total: number | null } } },
     ),
     safeQuery('getLastMonthLeadsCount', tenantId ? getLastMonthLeadsCount(tenantId) : Promise.resolve(0), 0),
     safeQuery('getLastMonthRevenue', tenantId ? getLastMonthRevenue(tenantId) : Promise.resolve(0), 0),
-    safeQuery('getMonthlyRevenue', tenantId ? getMonthlyRevenue(tenantId) : Promise.resolve([]), [] as { month: string; label: string; revenue: number }[]),
+    safeQuery('getRevenueTrend', tenantId ? getRevenueTrend(tenantId, rangeConfig) : Promise.resolve([]), [] as { month: string; label: string; revenue: number }[]),
     safeQuery(
       'lead.findMany.recent',
       db.lead.findMany({
@@ -257,6 +280,14 @@ async function fetchSaasStats(
     scheduledAt: { gte: startOfToday, lt: startOfTomorrow },
   };
 
+  // Period schedule filter: jobs in the selected range (or today if range is today)
+  const periodJobsWhere = {
+    ...workspaceFilter,
+    ...(Object.keys(rangeConfig.periodBookingsFilter).length
+      ? rangeConfig.periodBookingsFilter
+      : { scheduledAt: { gte: startOfToday, lt: startOfTomorrow } }),
+  };
+
   const [
     totalJobsCount,
     jobsByStatus,
@@ -284,7 +315,7 @@ async function fetchSaasStats(
       [] as { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }[],
     ),
     safeQuery('job.count.active', db.job.count({ where: activeJobsFilter }), 0),
-    safeQuery('job.count.todays', db.job.count({ where: todaysJobsWhere }), 0),
+    safeQuery('job.count.period', db.job.count({ where: periodJobsWhere }), 0),
     safeQuery(
       'job.findMany.todays',
       db.job.findMany({
@@ -367,6 +398,8 @@ async function fetchSaasStats(
     }));
 
   return {
+    period: rangeConfig.rangeKey,
+    periodLabel: rangeConfig.label,
     totalLeads: { count: totalLeadsCount, trend: leadsTrend },
     activeJobs: { count: activeJobsCount, totalJobs: totalJobsCount, byStatus: jobsByStatusMap },
     monthlyRevenue: {
@@ -374,6 +407,7 @@ async function fetchSaasStats(
       collected: collectedRevenue,
       pending: pendingRevenue,
       trend: revenueTrend,
+      periodLabel: rangeConfig.label,
     },
     todaysBookings: todaysBookingsCount,
     todaysJobs: formattedTodaysJobs,
@@ -492,6 +526,92 @@ async function getLastMonthRevenue(tenantId: string) {
   });
   // Defensive access — Supabase REST adapter may drop `_sum`.
   return result._sum?.total ?? 0;
+}
+
+async function getRevenueTrend(tenantId: string, rangeConfig: DashboardRangeResult) {
+  if (rangeConfig.rangeKey === 'today') {
+    const startOfToday = rangeConfig.dateFilter.gte || new Date();
+    const invoices = await db.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: REVENUE_INVOICE_STATUSES },
+        createdAt: { gte: startOfToday },
+      },
+      select: { total: true, createdAt: true },
+    });
+    const blocks = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'];
+    const buckets: Record<string, number> = {
+      '00:00': 0, '04:00': 0, '08:00': 0, '12:00': 0, '16:00': 0, '20:00': 0,
+    };
+    invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const h = d.getHours();
+      const blockIdx = Math.floor(h / 4);
+      const key = blocks[blockIdx] || '20:00';
+      buckets[key] = (buckets[key] || 0) + inv.total;
+    });
+    return blocks.map((b) => ({
+      month: b,
+      label: b,
+      revenue: Math.round((buckets[b] || 0) * 100) / 100,
+    }));
+  }
+
+  if (rangeConfig.rangeKey === 'month') {
+    const now = new Date();
+    const startOfMonth = rangeConfig.dateFilter.gte || new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = rangeConfig.dateFilter.lt || new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const invoices = await db.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: REVENUE_INVOICE_STATUSES },
+        createdAt: { gte: startOfMonth, lt: endOfMonth },
+      },
+      select: { total: true, createdAt: true },
+    });
+    const weeks = ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
+    const weekBuckets: Record<string, number> = { 'Week 1': 0, 'Week 2': 0, 'Week 3': 0, 'Week 4': 0 };
+    invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const day = d.getDate();
+      if (day <= 7) weekBuckets['Week 1'] += inv.total;
+      else if (day <= 14) weekBuckets['Week 2'] += inv.total;
+      else if (day <= 21) weekBuckets['Week 3'] += inv.total;
+      else weekBuckets['Week 4'] += inv.total;
+    });
+    return weeks.map((w) => ({
+      month: w,
+      label: w,
+      revenue: Math.round((weekBuckets[w] || 0) * 100) / 100,
+    }));
+  }
+
+  if (rangeConfig.rangeKey === 'year') {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+    const invoices = await db.invoice.findMany({
+      where: {
+        tenantId,
+        status: { in: REVENUE_INVOICE_STATUSES },
+        createdAt: { gte: startOfYear },
+      },
+      select: { total: true, createdAt: true },
+    });
+    const monthlyData: Record<number, number> = {};
+    invoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const m = d.getMonth();
+      monthlyData[m] = (monthlyData[m] || 0) + inv.total;
+    });
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return monthNames.map((name, idx) => ({
+      month: `${now.getFullYear()}-${String(idx + 1).padStart(2, '0')}`,
+      label: name,
+      revenue: Math.round((monthlyData[idx] || 0) * 100) / 100,
+    }));
+  }
+
+  return getMonthlyRevenue(tenantId);
 }
 
 async function getMonthlyRevenue(tenantId: string) {

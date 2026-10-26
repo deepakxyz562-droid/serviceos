@@ -17,19 +17,22 @@
  * a top-level "Checklists" affordance. On Save it POSTs/PUTs to /api/checklists.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ArrowLeft, Plus, Trash2, MoreVertical, GripVertical, RefreshCw,
   Type, AlignLeft, ChevronDown, CheckSquare, Hash, Pencil, Eye,
   Monitor, Smartphone, Save, X, ShieldCheck, Sparkles,
+  ClipboardCheck, HardHat, Search, Copy, Check, FileCheck, Info, Tag,
+  Clock, Loader2, Wrench, CheckCircle2,
 } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,6 +51,8 @@ export type QuestionType =
   | 'dropdown'
   | 'checkbox'
   | 'numerical';
+
+export type ChecklistScope = 'job' | 'pre_start';
 
 export interface ChecklistQuestion {
   id: string;
@@ -70,6 +75,25 @@ export interface ChecklistData {
   autoAttachJobs: boolean;
   autoAttachAssessments: boolean;
   sections: ChecklistSection[];
+  scope?: ChecklistScope;
+  updatedAt?: string;
+}
+
+export function isPrestartChecklist(c: { title?: string; category?: string }): boolean {
+  const cat = (c.category || '').toLowerCase();
+  const title = (c.title || '').toLowerCase();
+  return (
+    cat.includes('safety') ||
+    cat.includes('pre-start') ||
+    cat.includes('prestart') ||
+    cat.includes('swms') ||
+    title.includes('pre-start') ||
+    title.includes('prestart') ||
+    title.includes('start time') ||
+    title.includes('start-time') ||
+    title.includes('clock-in') ||
+    title.includes('safety inspection')
+  );
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -123,15 +147,25 @@ export function parseChecklistSections(json: string | null | undefined): Checkli
 
 export function ChecklistBuilder({
   initial = null,
+  initialScope = 'job',
   onCancel = () => {},
   onSaved = () => {},
 }: {
   initial?: ChecklistData | null;
+  initialScope?: ChecklistScope;
   onCancel?: () => void;
   onSaved?: (saved: ChecklistData) => void;
 } = {}) {
-  const [title, setTitle] = useState(initial?.title || 'New checklist');
-  const [category, setCategory] = useState(initial?.category || 'General');
+  const detectedScope: ChecklistScope = initial
+    ? (isPrestartChecklist(initial) ? 'pre_start' : 'job')
+    : initialScope;
+  const [scope, setScope] = useState<ChecklistScope>(detectedScope);
+  const [title, setTitle] = useState(
+    initial?.title || (detectedScope === 'pre_start' ? 'Daily Pre-Start Safety & Vehicle Checklist' : 'New checklist')
+  );
+  const [category, setCategory] = useState(
+    initial?.category || (detectedScope === 'pre_start' ? 'Safety' : 'General')
+  );
   const [autoAttachJobs, setAutoAttachJobs] = useState(initial?.autoAttachJobs ?? false);
   const [autoAttachAssessments, setAutoAttachAssessments] = useState(initial?.autoAttachAssessments ?? false);
   const [sections, setSections] = useState<ChecklistSection[]>(
@@ -158,6 +192,44 @@ export function ChecklistBuilder({
     }));
     setSections(hydrated);
     toast.success(`Loaded "${preset.title}" template`);
+  };
+
+  const loadDailyPrestartPreset = () => {
+    setScope('pre_start');
+    setTitle('Daily Pre-Start Safety & Vehicle Checklist');
+    setCategory('Safety');
+    setAutoAttachJobs(false);
+    setAutoAttachAssessments(false);
+    setSections([
+      {
+        id: newId(),
+        title: '1. Personal Protective Equipment (PPE)',
+        questions: [
+          { id: newId(), type: 'checkbox', label: 'Steel-cap safety work boots inspected and worn', required: true, options: [] },
+          { id: newId(), type: 'checkbox', label: 'Eye protection and trade-specific safety gloves equipped', required: true, options: [] },
+          { id: newId(), type: 'checkbox', label: 'High-visibility vest or compliant branded uniform worn', required: true, options: [] },
+        ],
+      },
+      {
+        id: newId(),
+        title: '2. Vehicle & Tool Roadworthiness',
+        questions: [
+          { id: newId(), type: 'checkbox', label: 'Vehicle safety check complete (Tires, mirrors, fluids & lights)', required: true, options: [] },
+          { id: newId(), type: 'checkbox', label: 'Ladders & heavy cargo securely strapped and locked down', required: true, options: [] },
+          { id: newId(), type: 'checkbox', label: 'Power tools, test instruments & leads inspected (Undamaged & tagged)', required: true, options: [] },
+        ],
+      },
+      {
+        id: newId(),
+        title: '3. Site Safety & Emergency Readiness',
+        questions: [
+          { id: newId(), type: 'checkbox', label: 'First aid kit stocked and easily accessible in vehicle', required: true, options: [] },
+          { id: newId(), type: 'checkbox', label: 'Supervisor contact & local emergency numbers confirmed', required: true, options: [] },
+          { id: newId(), type: 'checkbox', label: 'Fit for work (Well-rested, alert, zero impairment/medication risks)', required: true, options: [] },
+        ],
+      },
+    ]);
+    toast.success('Loaded Standard Mobile Pre-Start Template');
   };
 
   // ── Section / question mutations ─────────────────────────────────────
@@ -256,10 +328,11 @@ export function ChecklistBuilder({
     }
     setSaving(true);
     try {
+      const resolvedCategory = scope === 'pre_start' && category === 'General' ? 'Safety' : (category.trim() || 'General');
       const payload = {
         title: title.trim(),
-        category: category.trim() || 'General',
-        autoAttachJobs,
+        category: resolvedCategory,
+        autoAttachJobs: scope === 'pre_start' ? false : autoAttachJobs,
         autoAttachAssessments,
         sectionsJson: JSON.stringify(sections),
       };
@@ -290,6 +363,7 @@ export function ChecklistBuilder({
         autoAttachJobs: saved.autoAttachJobs,
         autoAttachAssessments: saved.autoAttachAssessments,
         sections,
+        scope,
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Network error');
@@ -308,10 +382,35 @@ export function ChecklistBuilder({
             <ArrowLeft className="size-4" /> Back
           </Button>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold leading-tight truncate">
-              {initial?.id ? 'Edit checklist' : 'New checklist'}
-            </h2>
-            <p className="text-xs text-muted-foreground hidden sm:block">Build a reusable on-site checklist</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold leading-tight truncate">
+                {initial?.id ? 'Edit checklist' : 'New checklist'}
+              </h2>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[11px] px-2 py-0.5 font-medium hidden sm:inline-flex",
+                  scope === 'pre_start'
+                    ? "bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+                    : "bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
+                )}
+              >
+                {scope === 'pre_start' ? (
+                  <>
+                    <HardHat className="size-3 mr-1 text-amber-600" /> Mobile Start-Time
+                  </>
+                ) : (
+                  <>
+                    <ClipboardCheck className="size-3 mr-1 text-blue-600" /> Job Checklist
+                  </>
+                )}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              {scope === 'pre_start'
+                ? 'Mobile app daily clock-in safety and vehicle readiness verification'
+                : 'Reusable on-site job completion and quality control checklist'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -578,6 +677,75 @@ export function ChecklistBuilder({
               <h3 className="font-semibold">Manage checklist</h3>
               <Separator />
 
+              {/* ── Checklist Scope Selector: Job vs Start-Time ── */}
+              <div className="space-y-2 p-3 rounded-lg border bg-muted/40">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground">Checklist Scope</span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] uppercase font-bold",
+                      scope === 'pre_start'
+                        ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300"
+                        : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300"
+                    )}
+                  >
+                    {scope === 'pre_start' ? 'Mobile Start-Time' : 'Job Checklist'}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-background rounded-md border text-xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScope('job');
+                      if (category === 'Safety') setCategory('General');
+                    }}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-1.5 rounded font-medium transition-all",
+                      scope === 'job'
+                        ? "bg-blue-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <ClipboardCheck className="size-3.5" /> Job Checklist
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScope('pre_start');
+                      if (category === 'General') setCategory('Safety');
+                    }}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 py-1.5 rounded font-medium transition-all",
+                      scope === 'pre_start'
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <HardHat className="size-3.5" /> Mobile Pre-Start
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-normal">
+                  {scope === 'job'
+                    ? 'Completed on-site during a customer work order (quality check, photos, sign-off).'
+                    : 'Prompted once daily on mobile app clock-in to verify PPE, vehicle, and tool safety.'}
+                </p>
+              </div>
+
+              {/* ── 1-Click Standard Pre-Start Template ── */}
+              {scope === 'pre_start' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={loadDailyPrestartPreset}
+                  className="w-full text-xs border-amber-300 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-900 dark:text-amber-300 justify-start"
+                >
+                  <HardHat className="size-3.5 mr-2 text-amber-600" />
+                  Load Standard Pre-Start (PPE & Vehicle)
+                </Button>
+              )}
+
               {/* ── Trade Safety (SWMS) Presets 1-Click Loader ── */}
               <div className="space-y-1.5 p-3 rounded-lg border border-emerald-200/80 dark:border-emerald-900/60 bg-emerald-50/40 dark:bg-emerald-950/20">
                 <div className="flex items-center justify-between">
@@ -769,3 +937,375 @@ export function ChecklistAttachPicker({
     </div>
   );
 }
+
+// ─── Checklists Management View ───────────────────────────────────────────
+// Comprehensive management view with clear distinction between Job Checklists
+// and Mobile App Start-Time Checklists.
+
+export function ChecklistsView() {
+  const [checklists, setChecklists] = useState<ChecklistData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'all' | 'job' | 'pre_start'>('all');
+  const [search, setSearch] = useState('');
+  const [editingChecklist, setEditingChecklist] = useState<ChecklistData | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createScope, setCreateScope] = useState<ChecklistScope>('job');
+
+  const fetchChecklists = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/checklists');
+      if (!res.ok) throw new Error('Failed to fetch checklists');
+      const data = await res.json();
+      const mapped: ChecklistData[] = (Array.isArray(data) ? data : []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        category: item.category,
+        autoAttachJobs: item.autoAttachJobs,
+        autoAttachAssessments: item.autoAttachAssessments,
+        sections: parseChecklistSections(item.sectionsJson),
+        updatedAt: item.updatedAt,
+      }));
+      setChecklists(mapped);
+    } catch (err) {
+      toast.error('Failed to load checklists');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchChecklists();
+  }, [fetchChecklists]);
+
+  const handleDelete = async (id: string, title: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
+    try {
+      const res = await fetch(`/api/checklists/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete checklist');
+      toast.success('Checklist deleted');
+      fetchChecklists();
+    } catch {
+      toast.error('Failed to delete checklist');
+    }
+  };
+
+  const handleDuplicate = async (item: ChecklistData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const res = await fetch('/api/checklists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: `${item.title} (Copy)`,
+          category: item.category || 'General',
+          autoAttachJobs: false,
+          autoAttachAssessments: false,
+          sectionsJson: JSON.stringify(item.sections),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to duplicate checklist');
+      toast.success('Checklist duplicated');
+      fetchChecklists();
+    } catch {
+      toast.error('Failed to duplicate checklist');
+    }
+  };
+
+  const filtered = useMemo(() => {
+    return checklists.filter((c) => {
+      const isPrestart = isPrestartChecklist(c);
+      if (activeTab === 'job' && isPrestart) return false;
+      if (activeTab === 'pre_start' && !isPrestart) return false;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchesTitle = c.title.toLowerCase().includes(q);
+        const matchesCat = (c.category || '').toLowerCase().includes(q);
+        return matchesTitle || matchesCat;
+      }
+      return true;
+    });
+  }, [checklists, activeTab, search]);
+
+  const jobCount = useMemo(() => checklists.filter((c) => !isPrestartChecklist(c)).length, [checklists]);
+  const prestartCount = useMemo(() => checklists.filter((c) => isPrestartChecklist(c)).length, [checklists]);
+
+  if (isCreating || editingChecklist) {
+    return (
+      <ChecklistBuilder
+        initial={editingChecklist}
+        initialScope={createScope}
+        onCancel={() => {
+          setIsCreating(false);
+          setEditingChecklist(null);
+        }}
+        onSaved={() => {
+          setIsCreating(false);
+          setEditingChecklist(null);
+          fetchChecklists();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* ─── Page Header ─────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Checklists & Procedures</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Differentiate between job execution checklists and morning start-time safety routines.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => {
+              setEditingChecklist(null);
+              setCreateScope('job');
+              setIsCreating(true);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5"
+            size="sm"
+          >
+            <ClipboardCheck className="size-4" /> New Job Checklist
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingChecklist(null);
+              setCreateScope('pre_start');
+              setIsCreating(true);
+            }}
+            className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5"
+            size="sm"
+          >
+            <HardHat className="size-4" /> New Start-Time Checklist
+          </Button>
+        </div>
+      </div>
+
+      {/* ─── Clear Differentiation Banner (Job vs Mobile Pre-Start) ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
+              <ClipboardCheck className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">Job Checklists (Work Orders)</h3>
+              <span className="text-[11px] text-blue-700/80 dark:text-blue-300/80">Completed during on-site customer visits</span>
+            </div>
+          </div>
+          <p className="text-xs text-blue-800/90 dark:text-blue-300/90 leading-relaxed">
+            Attach to specific job types or work orders. Technicians follow step-by-step service tasks, record numerical readings, upload verification photos, and obtain customer sign-offs.
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 p-4">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+              <HardHat className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">Mobile Start-Time Checklist</h3>
+              <span className="text-[11px] text-amber-700/80 dark:text-amber-300/80">Prompted once daily on employee app startup</span>
+            </div>
+          </div>
+          <p className="text-xs text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
+            Field technicians must verify PPE readiness, vehicle fluid/tire roadworthiness, and tool tagging every morning before commencing their shift on the Fieseros mobile app.
+          </p>
+        </div>
+      </div>
+
+      {/* ─── Filters & Search ────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Scope Tabs */}
+        <div className="flex items-center rounded-lg border bg-muted/40 p-1 text-xs gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('all')}
+            className={cn(
+              "px-3 py-1.5 rounded-md font-medium transition-colors",
+              activeTab === 'all'
+                ? "bg-background text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All Checklists ({checklists.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('job')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors",
+              activeTab === 'job'
+                ? "bg-blue-600 text-white shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <ClipboardCheck className="size-3.5" /> Job ({jobCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('pre_start')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-md font-medium transition-colors",
+              activeTab === 'pre_start'
+                ? "bg-amber-600 text-white shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <HardHat className="size-3.5" /> Mobile Start-Time ({prestartCount})
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="relative sm:w-64">
+          <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search checklists..."
+            className="pl-9 h-9 text-xs"
+          />
+        </div>
+      </div>
+
+      {/* ─── List of Checklists ──────────────────────────────────────── */}
+      {loading ? (
+        <div className="p-12 text-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Loading checklists…</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-12 text-center">
+            <div className="size-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
+              <ClipboardCheck className="size-6 text-muted-foreground" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground mb-1">No checklists found</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto mb-4">
+              {search
+                ? `No templates match "${search}". Try clearing your search.`
+                : activeTab === 'pre_start'
+                ? 'Create a morning safety checklist to verify PPE and vehicles when technicians clock in.'
+                : 'Create job checklists to standardize quality and steps across work orders.'}
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingChecklist(null);
+                  setCreateScope('job');
+                  setIsCreating(true);
+                }}
+              >
+                + New Job Checklist
+              </Button>
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => {
+                  setEditingChecklist(null);
+                  setCreateScope('pre_start');
+                  setIsCreating(true);
+                }}
+              >
+                + New Start-Time Checklist
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((item) => {
+            const isPrestart = isPrestartChecklist(item);
+            const totalQuestions = item.sections.reduce((acc, s) => acc + s.questions.length, 0);
+
+            return (
+              <Card
+                key={item.id}
+                onClick={() => setEditingChecklist(item)}
+                className="cursor-pointer hover:shadow-md transition-all border border-border group flex flex-col justify-between"
+              >
+                <CardContent className="p-5 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px] font-semibold px-2 py-0.5",
+                        isPrestart
+                          ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300"
+                          : "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300"
+                      )}
+                    >
+                      {isPrestart ? (
+                        <span className="flex items-center gap-1">
+                          <HardHat className="size-3" /> Mobile Start-Time
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <ClipboardCheck className="size-3" /> Job Checklist
+                        </span>
+                      )}
+                    </Badge>
+                    <span className="text-[11px] text-muted-foreground font-mono">
+                      {item.category || 'General'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-foreground group-hover:text-blue-600 transition-colors line-clamp-1">
+                      {item.title}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {isPrestart
+                        ? 'Prompts technicians on mobile app start'
+                        : item.autoAttachJobs
+                        ? 'Auto-attaches to all new jobs'
+                        : 'Manual attachment on work orders'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1 border-t border-border/50">
+                    <span>{item.sections.length} {item.sections.length === 1 ? 'section' : 'sections'}</span>
+                    <span>•</span>
+                    <span>{totalQuestions} {totalQuestions === 1 ? 'question' : 'questions'}</span>
+                  </div>
+                </CardContent>
+
+                <div className="px-5 py-3 bg-muted/20 border-t border-border flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Click to edit</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => handleDuplicate(item, e)}
+                      title="Duplicate checklist"
+                    >
+                      <Copy className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 text-muted-foreground hover:text-red-600"
+                      onClick={(e) => handleDelete(item.id!, item.title, e)}
+                      title="Delete checklist"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default ChecklistsView;

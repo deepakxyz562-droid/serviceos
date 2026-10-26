@@ -82,7 +82,7 @@ import { GenericPlaceholder } from '@/components/settings/sections/generic-place
 // Embed full developed views inside Settings (single source of truth pattern).
 import { ServiceCatalogView } from '@/components/views/service-catalog-view';
 import { WorkflowsView } from '@/components/views/workflows-view';
-import { ChecklistBuilder } from '@/components/views/checklists-view';
+import { ChecklistsView } from '@/components/views/checklists-view';
 import { FormBuilderView } from '@/components/views/form-builder-view';
 import ChannelsView from '@/components/views/channels-view';
 import { CredentialsView } from '@/components/views/credentials-view';
@@ -604,7 +604,7 @@ export function SettingsView() {
       case 'workflows':
         return <WorkflowsView />;
       case 'checklists':
-        return <ChecklistBuilder />;
+        return <ChecklistsView />;
       case 'custom-fields':
         return <FormBuilderView />;
       case 'channels-credentials':

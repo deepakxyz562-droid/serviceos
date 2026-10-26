@@ -6,9 +6,16 @@ import { BarChart3, Download, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 import { authFetch, apiUrl } from '@/lib/api';
+import { exportToCsv } from '@/lib/export-utils';
 
 // ─── Feature imports (Phase 6C1 extraction) ──────────────────────────────────
 import type {
@@ -39,6 +46,7 @@ import { CommissionsTab } from '@/features/reports/components/tabs/commissions-t
 export function ReportsView() {
   const [dateRange, setDateRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
+  const [revenueGroupBy, setRevenueGroupBy] = useState<'day' | 'week' | 'month' | 'year'>('month');
 
   // ─── Sales Outcomes (Phase 6) — separate filters ───────────────────
   // The Sales Pipeline tab has its own date-range presets (Last week,
@@ -97,16 +105,85 @@ export function ReportsView() {
   });
 
   const revenueQuery = useQuery<RevenueTrendsResponse>({
-    queryKey: ['reports', 'revenue_trends', dateRange],
+    queryKey: ['reports', 'revenue_trends', dateRange, revenueGroupBy],
     queryFn: async () => {
       const res = await authFetch(
-        apiUrl(`/api/analytics?metric=revenue_trends&range=${dateRange}&groupBy=month`),
+        apiUrl(`/api/analytics?metric=revenue_trends&range=${dateRange}&groupBy=${revenueGroupBy}`),
       );
       if (!res.ok) throw new Error('Failed to fetch revenue trends');
       return res.json() as Promise<RevenueTrendsResponse>;
     },
     placeholderData: keepPreviousData,
   });
+
+  // ─── CSV Export Handler ───────────────────────────────────────────
+  const handleExport = (type: 'revenue' | 'jobs' | 'overview') => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    try {
+      if (type === 'revenue') {
+        const rows = (revenueQuery.data?.data || []).map((d) => [
+          d.date,
+          revenueQuery.data?.groupBy || revenueGroupBy,
+          d.value,
+        ]);
+        if (rows.length === 0) {
+          toast.info('No revenue data available to export for this period.');
+          return;
+        }
+        exportToCsv({
+          filename: `fieseros-revenue-${revenueGroupBy}-${dateRange}-${todayStr}`,
+          headers: ['Period Date', 'Grouping', 'Revenue Amount'],
+          rows,
+        });
+        toast.success('Revenue report exported as CSV');
+      } else if (type === 'jobs') {
+        const jobs = overviewQuery.data?.recentJobs || [];
+        if (jobs.length === 0) {
+          toast.info('No job data available to export.');
+          return;
+        }
+        const rows = jobs.map((j) => [
+          j.id,
+          j.title,
+          j.customerName || 'N/A',
+          j.status,
+          typeof j.createdAt === 'string' ? j.createdAt.slice(0, 10) : new Date(j.createdAt).toISOString().slice(0, 10),
+        ]);
+        exportToCsv({
+          filename: `fieseros-jobs-${dateRange}-${todayStr}`,
+          headers: ['Job ID', 'Title', 'Customer', 'Status', 'Date'],
+          rows,
+        });
+        toast.success('Jobs report exported as CSV');
+      } else {
+        const overview = overviewQuery.data;
+        if (!overview) {
+          toast.info('Overview data is still loading.');
+          return;
+        }
+        const rows = [
+          ['Total Revenue', overview.totalRevenue],
+          ['Total Jobs', overview.totalJobs],
+          ['Completed Jobs', overview.completedJobs],
+          ['Completion Rate (%)', `${overview.completionRate}%`],
+          ['Active Leads', overview.activeLeads],
+          ['Total Customers', overview.totalCustomers],
+          ['Total Employees', overview.totalEmployees],
+          ['Date Range', dateRange],
+          ['Exported At', new Date().toISOString()],
+        ];
+        exportToCsv({
+          filename: `fieseros-overview-${dateRange}-${todayStr}`,
+          headers: ['Metric', 'Value'],
+          rows,
+        });
+        toast.success('Overview summary exported as CSV');
+      }
+    } catch (err) {
+      console.error('Export failed:', err);
+      toast.error('Failed to export CSV report');
+    }
+  };
 
   const jobStatsQuery = useQuery<JobStatsResponse>({
     queryKey: ['reports', 'job_stats', dateRange],
@@ -209,20 +286,39 @@ export function ReportsView() {
         </div>
         <div className="flex items-center gap-2">
           <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-[160px] h-9">
+            <SelectTrigger className="w-[170px] h-9">
               <Calendar className="size-3.5 mr-1.5 text-muted-foreground" />
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
               <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="month">This Month</SelectItem>
               <SelectItem value="30d">Last 30 days</SelectItem>
               <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="year">This Year</SelectItem>
               <SelectItem value="1y">Last 12 months</SelectItem>
+              <SelectItem value="all">All Time</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => toast.info('Export coming soon')}>
-            <Download className="size-3.5 mr-1.5" /> Export
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 cursor-pointer">
+                <Download className="size-3.5" /> Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => handleExport('revenue')} className="cursor-pointer">
+                Export Revenue Report (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('jobs')} className="cursor-pointer">
+                Export Recent Jobs (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('overview')} className="cursor-pointer">
+                Export KPI Summary (CSV)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -257,6 +353,8 @@ export function ReportsView() {
             revenueQuery={revenueQuery}
             leadConvQuery={leadConvQuery}
             overviewLoading={overviewLoading}
+            revenueGroupBy={revenueGroupBy}
+            onGroupByChange={setRevenueGroupBy}
           />
         </TabsContent>
 
