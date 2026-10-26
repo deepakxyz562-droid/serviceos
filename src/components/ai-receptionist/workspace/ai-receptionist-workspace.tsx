@@ -218,7 +218,7 @@ export function AiReceptionistWorkspace() {
           {/* Top Bar: Title, Live Status, Phone, Quick Actions */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3.5 min-w-0">
-              <div className="relative flex items-center justify-center size-10 sm:size-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm ring-1 ring-emerald-500/20 shrink-0">
+              <div className="relative flex items-center justify-center size-10 sm:size-11 rounded-xl bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs border border-emerald-600/20 shrink-0">
                 <Bot className="size-5 sm:size-6" />
                 {isAiActive && (
                   <span className="absolute -top-0.5 -right-0.5 size-2.5 sm:size-3 rounded-full bg-emerald-400 ring-2 ring-background animate-pulse" />
@@ -321,7 +321,7 @@ export function AiReceptionistWorkspace() {
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* ── Guided Setup Hub Banner (Shown when setup is incomplete) ── */}
         {!isSetupComplete && (
-          <Card className="border-emerald-500/30 bg-gradient-to-r from-emerald-500/5 via-teal-500/5 to-transparent shadow-sm">
+          <Card className="border-border/80 bg-card shadow-xs">
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1.5">

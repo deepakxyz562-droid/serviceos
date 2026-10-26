@@ -185,9 +185,9 @@ export function OverviewTab({ data, onNavigate, onTestCall }: OverviewTabProps) 
           <CardContent className="space-y-4">
             {/* Persona Hero */}
             <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40">
-              <div className="relative size-12 rounded-2xl bg-gradient-to-br from-primary to-purple-600 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+              <div className="relative size-12 rounded-2xl bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center font-bold text-base shadow-xs shrink-0">
                 <Bot className="size-6" />
-                <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-emerald-500 border-2 border-background" />
+                <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full bg-emerald-400 border-2 border-background" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-bold text-sm text-foreground truncate">
@@ -301,7 +301,7 @@ export function OverviewTab({ data, onNavigate, onTestCall }: OverviewTabProps) 
 
                 {/* Node 2: AI Core */}
                 <div className="flex flex-col items-center text-center w-24 shrink-0">
-                  <div className="size-10 rounded-xl bg-gradient-to-br from-primary to-purple-600 text-white flex items-center justify-center shadow-xs">
+                  <div className="size-10 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 flex items-center justify-center shadow-xs">
                     <Bot className="size-5" />
                   </div>
                   <span className="text-[11px] font-bold text-foreground mt-1">AI Receptionist</span>

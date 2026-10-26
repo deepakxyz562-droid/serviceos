@@ -67,6 +67,7 @@ import {
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
+import { cn } from '@/lib/utils';
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -578,7 +579,7 @@ export function ReviewsView({ initialReviews }: { initialReviews?: ReviewItem[] 
     return true;
   });
 
-  const recentOverviewReviews = reviewsList.slice(2, 7);
+  const recentOverviewReviews = reviewsList.length >= 7 ? reviewsList.slice(2, 7) : reviewsList.slice(0, 5);
 
   return (
     <div className="p-4 sm:p-5 lg:p-6 space-y-5 w-full bg-[#F7FAF9] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -972,23 +973,28 @@ export function ReviewsView({ initialReviews }: { initialReviews?: ReviewItem[] 
               </div>
 
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {recentOverviewReviews.map((rev) => (
-                  <div key={rev.id} className="py-3.5 first:pt-1 last:pb-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        {rev.avatarUrl ? (
-                          <img
-                            src={rev.avatarUrl}
-                            alt={rev.name}
-                            className="size-9 rounded-full object-cover shrink-0"
-                          />
-                        ) : (
-                          <div
-                            className={`size-9 rounded-full ${rev.avatarBg} flex items-center justify-center font-bold text-xs shrink-0`}
-                          >
-                            {rev.initials}
-                          </div>
-                        )}
+                {recentOverviewReviews.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-xs">
+                    No recent reviews yet.
+                  </div>
+                ) : (
+                  recentOverviewReviews.map((rev) => (
+                    <div key={rev.id} className="py-3.5 first:pt-1 last:pb-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          {rev.avatarUrl ? (
+                            <img
+                              src={rev.avatarUrl}
+                              alt={rev.name}
+                              className="size-9 rounded-full object-cover shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className={`size-9 rounded-full ${rev.avatarBg || 'bg-[#009F50] text-white'} flex items-center justify-center font-bold text-xs shrink-0`}
+                            >
+                              {rev.initials || 'CU'}
+                            </div>
+                          )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-bold text-slate-900 dark:text-white">
@@ -1073,7 +1079,7 @@ export function ReviewsView({ initialReviews }: { initialReviews?: ReviewItem[] 
                       </div>
                     )}
                   </div>
-                ))}
+                )))}
               </div>
             </div>
 
@@ -1964,212 +1970,256 @@ export function ReviewsView({ initialReviews }: { initialReviews?: ReviewItem[] 
 
             {/* Reviews List Feed */}
             <div className="space-y-2 max-h-[540px] overflow-y-auto pr-1">
-              {filteredReviews.map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => setSelectedReviewId(item.id)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                    selectedReviewId === item.id
-                      ? 'bg-[#E8F8EF]/60 dark:bg-emerald-950/20 border-[#009F50] shadow-2xs'
-                      : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 hover:bg-slate-100/60'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div
-                        className={`w-7 h-7 rounded-full ${item.avatarBg} text-white flex items-center justify-center font-bold text-xs shrink-0`}
-                      >
-                        {item.initials}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold truncate leading-tight">{item.name}</p>
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex text-amber-400">
-                            {[1, 2, 3, 4, 5].map((s) => (
-                              <Star
-                                key={s}
-                                className={`size-3 ${
-                                  s <= item.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
-                                }`}
-                              />
-                            ))}
+              {filteredReviews.length === 0 ? (
+                <div className="p-8 text-center rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                  <Star className="size-6 text-amber-400/60 mx-auto" />
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    No reviews in this view
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Connect your Google Business Profile or request reviews from your clients to start seeing feedback.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => setRequestReviewsOpen(true)}
+                    className="h-7 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-medium"
+                  >
+                    Request Reviews
+                  </Button>
+                </div>
+              ) : (
+                filteredReviews.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => setSelectedReviewId(item.id)}
+                    className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                      selectedReviewId === item.id
+                        ? 'bg-[#E8F8EF]/60 dark:bg-emerald-950/20 border-[#009F50] shadow-2xs'
+                        : 'bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/60 dark:border-slate-800 hover:bg-slate-100/60'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`w-7 h-7 rounded-full ${item.avatarBg || 'bg-[#009F50] text-white'} text-white flex items-center justify-center font-bold text-xs shrink-0`}
+                        >
+                          {item.initials || 'CU'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate leading-tight">{item.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex text-amber-400">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={`size-3 ${
+                                    s <= item.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-slate-400">{item.timeAgo}</span>
                           </div>
-                          <span className="text-[10px] text-slate-400">{item.timeAgo}</span>
                         </div>
                       </div>
+
+                      <Badge
+                        variant="secondary"
+                        className="bg-[#E8F8EF] text-[#009F50] dark:bg-emerald-950 dark:text-emerald-300 text-[10px] px-1.5 py-0.2 shrink-0 font-semibold"
+                      >
+                        {item.replied ? 'Replied' : 'Pending'}
+                      </Badge>
                     </div>
 
-                    <Badge
-                      variant="secondary"
-                      className="bg-[#E8F8EF] text-[#009F50] dark:bg-emerald-950 dark:text-emerald-300 text-[10px] px-1.5 py-0.2 shrink-0 font-semibold"
-                    >
-                      {item.replied ? 'Replied' : 'Pending'}
-                    </Badge>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
+                      {item.text}
+                    </p>
                   </div>
-
-                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                    {item.text}
-                  </p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
           {/* Center Column (5/12 cols): Active Review Inspector */}
           <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-2xs flex flex-col gap-4">
-            <div className="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-full ${selectedReview.avatarBg} text-white flex items-center justify-center font-bold text-sm shrink-0`}
-                >
-                  {selectedReview.initials}
+            {!selectedReview ? (
+              <div className="py-20 text-center space-y-3 my-auto">
+                <div className="size-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400">
+                  <Star className="size-6 text-amber-400/60" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold">{selectedReview.name}</h3>
-                    <Badge
-                      variant="secondary"
-                      className="bg-[#E8F8EF] text-[#009F50] text-[10px] px-1.5 py-0.2 font-semibold"
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    No Review Selected
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto mt-1">
+                    Once customer reviews arrive, select any review from the list to inspect details and dispatch replies.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-full ${selectedReview.avatarBg || 'bg-[#009F50] text-white'} text-white flex items-center justify-center font-bold text-sm shrink-0`}
                     >
-                      Replied
-                    </Badge>
+                      {selectedReview.initials || 'CU'}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold">{selectedReview.name}</h3>
+                        <Badge
+                          variant="secondary"
+                          className={cn(
+                            'text-[10px] px-1.5 py-0.2 font-semibold',
+                            selectedReview.replied
+                              ? 'bg-[#E8F8EF] text-[#009F50]'
+                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                          )}
+                        >
+                          {selectedReview.replied ? 'Replied' : 'Pending'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex text-amber-400">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star
+                              key={s}
+                              className={`size-3.5 ${
+                                s <= selectedReview.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[11px] text-slate-400">{selectedReview.timeAgo}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <div className="flex text-amber-400">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star
-                          key={s}
-                          className={`size-3.5 ${
-                            s <= selectedReview.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
-                          }`}
-                        />
+
+                  <button
+                    onClick={() => toast.info('Review inspector active')}
+                    className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
+                    {selectedReview.text}
+                  </p>
+
+                  {Array.isArray(selectedReview.keywords) && selectedReview.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedReview.keywords.map((k) => (
+                        <span
+                          key={k}
+                          className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-xs font-semibold border border-[#ccebd9]"
+                        >
+                          {k}
+                        </span>
                       ))}
                     </div>
-                    <span className="text-[11px] text-slate-400">{selectedReview.timeAgo}</span>
-                  </div>
+                  )}
                 </div>
-              </div>
 
-              <button
-                onClick={() => toast.info('Review inspector active')}
-                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-            </div>
+                {/* "Your Reply" Box */}
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <MessageSquare className="size-3.5 text-[#009F50]" /> Your Reply
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      {selectedReview.replyEdited || 'Edited 2 days ago'}
+                    </span>
+                  </div>
 
-            <div className="space-y-2">
-              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-normal">
-                {selectedReview.text}
-              </p>
+                  {isEditingReply ? (
+                    <div className="space-y-2">
+                      <Textarea
+                        value={replyDraft}
+                        onChange={(e) => setReplyDraft(e.target.value)}
+                        rows={3}
+                        className="w-full text-xs bg-white dark:bg-slate-900 resize-none rounded-lg"
+                        placeholder="Type your authentic response..."
+                      />
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setReplyDraft(selectedReview.replyText || '');
+                            setIsEditingReply(false);
+                          }}
+                          className="h-7 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleSaveReply()}
+                          className="h-7 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
+                        >
+                          Post Reply
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic bg-white dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200/50 dark:border-slate-800">
+                        "{replyDraft || 'No reply yet.'}"
+                      </p>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsEditingReply(true)}
+                          className="h-7 text-xs font-semibold"
+                        >
+                          Edit Reply
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {selectedReview.keywords.map((k) => (
-                  <span
-                    key={k}
-                    className="px-2 py-0.5 rounded-full bg-[#E8F8EF] text-[#009F50] text-xs font-semibold border border-[#ccebd9]"
-                  >
-                    {k}
+                {/* Customer Details Dossier */}
+                <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Customer Details
                   </span>
-                ))}
-              </div>
-            </div>
 
-            {/* "Your Reply" Box */}
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <MessageSquare className="size-3.5 text-[#009F50]" /> Your Reply
-                </span>
-                <span className="text-[11px] text-slate-400 font-mono">
-                  {selectedReview.replyEdited || 'Edited 2 days ago'}
-                </span>
-              </div>
-
-              {isEditingReply ? (
-                <div className="space-y-2">
-                  <Textarea
-                    value={replyDraft}
-                    onChange={(e) => setReplyDraft(e.target.value)}
-                    rows={3}
-                    className="w-full text-xs bg-white dark:bg-slate-900 resize-none rounded-lg"
-                    placeholder="Type your authentic response..."
-                  />
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setReplyDraft(selectedReview.replyText || '');
-                        setIsEditingReply(false);
-                      }}
-                      className="h-7 text-xs"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => handleSaveReply()}
-                      className="h-7 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
-                    >
-                      Post Reply
-                    </Button>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <p className="text-slate-400 text-[11px]">Name</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-[11px]">Location</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.location || 'Local'}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-[11px]">Reviews</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.reviewCount || 1} reviews</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-400 text-[11px]">Last Review</p>
+                      <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.timeAgo}</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic bg-white dark:bg-slate-900/60 p-2.5 rounded-lg border border-slate-200/50 dark:border-slate-800">
-                    "{replyDraft || 'No reply yet.'}"
-                  </p>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsEditingReply(true)}
-                      className="h-7 text-xs font-semibold"
-                    >
-                      Edit Reply
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
 
-            {/* Customer Details Dossier */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Customer Details
-              </span>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <p className="text-slate-400 text-[11px]">Name</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.name}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open('https://google.com/maps', '_blank')}
+                    className="w-full h-8 text-xs gap-1.5 bg-slate-50 dark:bg-slate-800 text-[#009F50] font-semibold"
+                  >
+                    <span>View in Google</span>
+                    <ExternalLink className="size-3.5" />
+                  </Button>
                 </div>
-                <div>
-                  <p className="text-slate-400 text-[11px]">Location</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.location}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-[11px]">Reviews</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.reviewCount} reviews</p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-[11px]">Last Review</p>
-                  <p className="font-semibold text-slate-800 dark:text-slate-200">{selectedReview.timeAgo}</p>
-                </div>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open('https://google.com/maps', '_blank')}
-                className="w-full h-8 text-xs gap-1.5 bg-slate-50 dark:bg-slate-800 text-[#009F50] font-semibold"
-              >
-                <span>View in Google</span>
-                <ExternalLink className="size-3.5" />
-              </Button>
-            </div>
+              </>
+            )}
           </div>
 
           {/* Right Column (3/12 cols): AI Reply Copilot & Insights */}
@@ -2187,8 +2237,8 @@ export function ReviewsView({ initialReviews }: { initialReviews?: ReviewItem[] 
                 <Button
                   size="sm"
                   onClick={handleGenerateAiReply}
-                  disabled={isGeneratingAi}
-                  className="h-7 text-[11px] font-bold px-2.5 rounded-lg bg-[#009F50] hover:bg-[#008A45] text-white"
+                  disabled={isGeneratingAi || !selectedReview}
+                  className="h-7 text-[11px] font-bold px-2.5 rounded-lg bg-[#009F50] hover:bg-[#008A45] text-white disabled:opacity-50"
                 >
                   {isGeneratingAi ? 'Drafting...' : 'Generate Reply'}
                 </Button>

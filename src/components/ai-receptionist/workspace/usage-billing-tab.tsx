@@ -160,7 +160,7 @@ export function UsageBillingTab({ usage, subscription }: UsageBillingTabProps) {
   if (!localUsage || !localUsage.hasEntitlement) {
     return (
       <div className="space-y-8">
-        <Card className="border-dashed bg-gradient-to-b from-muted/30 to-background shadow-xs">
+        <Card className="border-border/80 bg-card shadow-xs">
           <CardContent className="flex flex-col items-center justify-center py-12 px-4 text-center max-w-2xl mx-auto">
             <div className="flex items-center justify-center size-14 rounded-2xl bg-emerald-500/10 text-emerald-600 mb-4 ring-1 ring-emerald-500/20">
               <Sparkles className="size-7" />

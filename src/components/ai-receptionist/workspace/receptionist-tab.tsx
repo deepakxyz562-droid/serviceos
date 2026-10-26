@@ -30,9 +30,15 @@ import {
   Calendar,
   Layers,
   HelpCircle,
-  Copy,
   Plus,
   ShieldCheck,
+  Wrench,
+  MapPin,
+  DollarSign,
+  AlertTriangle,
+  Trash2,
+  RefreshCw,
+  Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -821,11 +827,19 @@ function KnowledgeSubTab({
   const config = (() => {
     try {
       return JSON.parse(receptionist.knowledgeConfigJson || '{}') as {
-        businessInfoScope?: string;
+        businessTrade?: string;
+        serviceArea?: string;
+        diagnosticFee?: string;
+        emergencyAvailable?: boolean;
+        emergencyDetails?: string;
+        warrantyPolicy?: string;
+        paymentMethods?: string;
+        customInstructions?: string;
         faqEnabled?: boolean;
         servicesEnabled?: boolean;
         bookingEnabled?: boolean;
         pricingEnabled?: boolean;
+        faqList?: Array<{ question: string; answer: string }>;
         faqIds?: string[];
         documentIds?: string[];
       };
@@ -834,95 +848,371 @@ function KnowledgeSubTab({
     }
   })();
 
-  const [businessInfoScope, setBusinessInfoScope] = useState(config.businessInfoScope || 'all');
+  const [businessTrade, setBusinessTrade] = useState(config.businessTrade || '');
+  const [serviceArea, setServiceArea] = useState(config.serviceArea || '');
+  const [diagnosticFee, setDiagnosticFee] = useState(config.diagnosticFee || '');
+  const [emergencyAvailable, setEmergencyAvailable] = useState(config.emergencyAvailable ?? true);
+  const [emergencyDetails, setEmergencyDetails] = useState(config.emergencyDetails || '');
+  const [warrantyPolicy, setWarrantyPolicy] = useState(config.warrantyPolicy || '');
+  const [paymentMethods, setPaymentMethods] = useState(config.paymentMethods || '');
+  const [customInstructions, setCustomInstructions] = useState(config.customInstructions || '');
   const [faqEnabled, setFaqEnabled] = useState(config.faqEnabled !== false);
   const [servicesEnabled, setServicesEnabled] = useState(config.servicesEnabled !== false);
   const [bookingEnabled, setBookingEnabled] = useState(config.bookingEnabled !== false);
   const [pricingEnabled, setPricingEnabled] = useState(config.pricingEnabled !== false);
+  const [faqs, setFaqs] = useState<Array<{ question: string; answer: string }>>(
+    config.faqList || [
+      { question: 'Do you offer free estimates?', answer: 'We offer free estimates for new equipment installations and full system replacements. For repairs, a standard diagnostic applies.' },
+      { question: 'Are you licensed and insured?', answer: 'Yes, all our technicians are fully licensed, bonded, and insured with verified background checks.' }
+    ]
+  );
+  const [newQ, setNewQ] = useState('');
+  const [newA, setNewA] = useState('');
+  const [syncingVapi, setSyncingVapi] = useState(false);
+
   const { saving, save } = useReceptionistPatch(receptionist, onChanged);
 
   const dirty =
-    businessInfoScope !== (config.businessInfoScope || 'all') ||
+    businessTrade !== (config.businessTrade || '') ||
+    serviceArea !== (config.serviceArea || '') ||
+    diagnosticFee !== (config.diagnosticFee || '') ||
+    emergencyAvailable !== (config.emergencyAvailable ?? true) ||
+    emergencyDetails !== (config.emergencyDetails || '') ||
+    warrantyPolicy !== (config.warrantyPolicy || '') ||
+    paymentMethods !== (config.paymentMethods || '') ||
+    customInstructions !== (config.customInstructions || '') ||
     faqEnabled !== (config.faqEnabled !== false) ||
     servicesEnabled !== (config.servicesEnabled !== false) ||
     bookingEnabled !== (config.bookingEnabled !== false) ||
-    pricingEnabled !== (config.pricingEnabled !== false);
+    pricingEnabled !== (config.pricingEnabled !== false) ||
+    JSON.stringify(faqs) !== JSON.stringify(config.faqList || []);
+
+  const buildPayload = () => ({
+    knowledgeConfigJson: JSON.stringify({
+      businessTrade,
+      serviceArea,
+      diagnosticFee,
+      emergencyAvailable,
+      emergencyDetails,
+      warrantyPolicy,
+      paymentMethods,
+      customInstructions,
+      faqEnabled,
+      servicesEnabled,
+      bookingEnabled,
+      pricingEnabled,
+      faqList: faqs,
+      faqIds: config.faqIds || [],
+      documentIds: config.documentIds || [],
+    }),
+  });
+
+  const handleSaveAndSyncVapi = async () => {
+    setSyncingVapi(true);
+    try {
+      // 1. Save local knowledge
+      await save(buildPayload());
+      // 2. Trigger Vapi deployment/re-compilation
+      const res = await fetch('/api/addons/receptionist/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        toast.success('AI Voice Agent trained and synced with your business data!');
+        await onChanged();
+      } else {
+        toast.error(data.error || 'Failed to sync with voice engine');
+      }
+    } catch (err) {
+      toast.error('Network error during AI synchronization');
+    } finally {
+      setSyncingVapi(false);
+    }
+  };
+
+  const handleAddFaq = () => {
+    if (!newQ.trim() || !newA.trim()) {
+      toast.error('Please enter both a question and answer');
+      return;
+    }
+    setFaqs([...faqs, { question: newQ.trim(), answer: newA.trim() }]);
+    setNewQ('');
+    setNewA('');
+  };
+
+  const handleRemoveFaq = (index: number) => {
+    setFaqs(faqs.filter((_, i) => i !== index));
+  };
 
   return (
-    <Card className="border-border/60 shadow-sm">
-      <CardHeader className="pb-4">
-        <CardTitle className="text-sm font-semibold">CRM Capabilities &amp; Business Knowledge</CardTitle>
-        <CardDescription className="text-xs">
-          Select which CRM modules and knowledge areas your AI Receptionist can query during live calls
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <CapabilityCard
-            icon={Calendar}
-            title="Calendar Slot Availability &amp; Booking"
-            description="Allows AI to check open schedule slots and book appointments directly into your CRM"
-            active={bookingEnabled}
-            onChange={setBookingEnabled}
-          />
-          <CapabilityCard
-            icon={Layers}
-            title="Service Catalog &amp; Descriptions"
-            description="Allows AI to describe your services, package inclusions, and typical durations"
-            active={servicesEnabled}
-            onChange={setServicesEnabled}
-          />
-          <CapabilityCard
-            icon={Sparkles}
-            title="Catalog Pricing &amp; Estimates"
-            description="Allows AI to quote starting prices and estimate standard job costs accurately"
-            active={pricingEnabled}
-            onChange={setPricingEnabled}
-          />
-          <CapabilityCard
-            icon={HelpCircle}
-            title="Knowledge Base &amp; FAQs"
-            description="Allows AI to answer common customer inquiries using your company knowledge base"
-            active={faqEnabled}
-            onChange={setFaqEnabled}
-          />
-        </div>
-
-        <Separator className="bg-border/60" />
-
-        <div className="p-3.5 rounded-xl border border-emerald-200/60 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 text-xs">
-          <div className="flex items-center gap-2 mb-1">
-            <ShieldCheck className="size-4 text-emerald-600" />
-            <span className="font-semibold text-emerald-900 dark:text-emerald-300">
-              Live Safe-Guards Active
-            </span>
+    <div className="space-y-6">
+      {/* ── Business Profile & Voice Persona Training ── */}
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Wrench className="size-4 text-emerald-600" />
+                Business Specialty &amp; Operating Knowledge
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Train your AI receptionist on your specific trade, coverage territory, diagnostic fees, and policies
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSaveAndSyncVapi}
+              disabled={syncingVapi}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-8 shadow-xs shrink-0 self-start sm:self-auto"
+            >
+              {syncingVapi ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
+              <span>Train &amp; Sync Voice Agent</span>
+            </Button>
           </div>
-          <p className="text-emerald-800 dark:text-emerald-400">
-            The AI only quotes information present in your verified CRM catalog and will never invent services or pricing not approved by your business.
-          </p>
-        </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Business Trade &amp; Specialty</Label>
+              <Input
+                value={businessTrade}
+                onChange={(e) => setBusinessTrade(e.target.value)}
+                placeholder="e.g. Residential &amp; Commercial Plumbing (ABC Plumbing)"
+                className="text-xs h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Declares your trade so the AI introduces and positions your company accurately.
+              </p>
+            </div>
 
-        <div className="flex justify-end pt-3 border-t border-border/40">
-          <SaveButton
-            saving={saving}
-            disabled={!dirty}
-            onSave={() =>
-              save({
-                knowledgeConfigJson: JSON.stringify({
-                  businessInfoScope,
-                  faqEnabled,
-                  servicesEnabled,
-                  bookingEnabled,
-                  pricingEnabled,
-                  faqIds: config.faqIds || [],
-                  documentIds: config.documentIds || [],
-                }),
-              })
-            }
-          />
-        </div>
-      </CardContent>
-    </Card>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Service Area &amp; Territory</Label>
+              <Input
+                value={serviceArea}
+                onChange={(e) => setServiceArea(e.target.value)}
+                placeholder="e.g. Dallas, Fort Worth, Plano, Arlington &amp; surrounding areas"
+                className="text-xs h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Cities and regions your technicians service.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Diagnostic / Dispatch Fee Policy</Label>
+              <Input
+                value={diagnosticFee}
+                onChange={(e) => setDiagnosticFee(e.target.value)}
+                placeholder="e.g. $89 standard diagnostic fee (waived if repair is approved)"
+                className="text-xs h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Explain your dispatch or trip charge so the AI quotes it transparently.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Warranty &amp; Workmanship Guarantee</Label>
+              <Input
+                value={warrantyPolicy}
+                onChange={(e) => setWarrantyPolicy(e.target.value)}
+                placeholder="e.g. 1-year warranty on all parts and labor"
+                className="text-xs h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Gives callers peace of mind when inquiring about service quality.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Accepted Payment Methods</Label>
+              <Input
+                value={paymentMethods}
+                onChange={(e) => setPaymentMethods(e.target.value)}
+                placeholder="e.g. Credit/Debit Card, Cash, Check, Online payment link"
+                className="text-xs h-9"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Methods of payment accepted on-site or online.
+              </p>
+            </div>
+
+            <div className="space-y-2 p-3 rounded-xl border border-border/60 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs font-semibold">24/7 Emergency Dispatch</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Does your business take emergency night/weekend calls?
+                  </p>
+                </div>
+                <Switch checked={emergencyAvailable} onCheckedChange={setEmergencyAvailable} />
+              </div>
+              {emergencyAvailable && (
+                <Input
+                  value={emergencyDetails}
+                  onChange={(e) => setEmergencyDetails(e.target.value)}
+                  placeholder="e.g. 24/7 emergency response for active burst pipes and flooding"
+                  className="text-xs h-8"
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Special Instructions for Phone AI</Label>
+            <Textarea
+              value={customInstructions}
+              onChange={(e) => setCustomInstructions(e.target.value)}
+              placeholder="e.g. Always ask caller if they have an active leak and guide them to shut off the main water valve. Never quote final repiping prices over the phone without an on-site inspection."
+              rows={3}
+              className="text-xs leading-relaxed"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Direct rules and operating policies your AI receptionist will follow during customer calls.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── CRM Capabilities ── */}
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-sm font-semibold">CRM Capabilities &amp; Catalog Access</CardTitle>
+          <CardDescription className="text-xs">
+            Toggle which CRM capabilities the voice assistant can query in real time
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <CapabilityCard
+              icon={Calendar}
+              title="Calendar Slot Availability &amp; Booking"
+              description="Allows AI to check open schedule slots and book appointments directly into your CRM"
+              active={bookingEnabled}
+              onChange={setBookingEnabled}
+            />
+            <CapabilityCard
+              icon={Layers}
+              title="Service Catalog &amp; Descriptions"
+              description="Allows AI to describe your services, package inclusions, and typical durations"
+              active={servicesEnabled}
+              onChange={setServicesEnabled}
+            />
+            <CapabilityCard
+              icon={Sparkles}
+              title="Catalog Pricing &amp; Estimates"
+              description="Allows AI to quote starting prices and estimate standard job costs accurately"
+              active={pricingEnabled}
+              onChange={setPricingEnabled}
+            />
+            <CapabilityCard
+              icon={HelpCircle}
+              title="Knowledge Base &amp; FAQs"
+              description="Allows AI to answer common customer inquiries using your company knowledge base"
+              active={faqEnabled}
+              onChange={setFaqEnabled}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Caller FAQs ── */}
+      <Card className="border-border/60 shadow-xs">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <HelpCircle className="size-4 text-emerald-600" />
+            Frequently Asked Questions (Spoken FAQs)
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Train your AI to answer common customer inquiries with exact, approved responses
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {faqs.length > 0 && (
+            <div className="space-y-2.5">
+              {faqs.map((faq, index) => (
+                <div key={index} className="p-3 rounded-xl border border-border/60 bg-muted/20 flex items-start justify-between gap-3">
+                  <div className="space-y-1 flex-1 min-w-0 text-xs">
+                    <p className="font-semibold text-foreground">Q: {faq.question}</p>
+                    <p className="text-muted-foreground leading-relaxed">A: {faq.answer}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemoveFaq(index)}
+                    className="size-7 p-0 text-muted-foreground hover:text-red-600 shrink-0"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add new FAQ */}
+          <div className="p-3.5 rounded-xl border border-dashed border-border/80 bg-muted/10 space-y-3">
+            <p className="text-xs font-semibold text-foreground">Add Common Question &amp; Answer</p>
+            <Input
+              value={newQ}
+              onChange={(e) => setNewQ(e.target.value)}
+              placeholder="e.g. Do you offer financing?"
+              className="text-xs h-8"
+            />
+            <Textarea
+              value={newA}
+              onChange={(e) => setNewA(e.target.value)}
+              placeholder="e.g. Yes, we offer 0% interest financing through Wisetack for purchases over $500."
+              rows={2}
+              className="text-xs leading-relaxed"
+            />
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddFaq}
+                className="text-xs h-8 gap-1"
+              >
+                <Plus className="size-3.5" /> Add to Knowledge
+              </Button>
+            </div>
+          </div>
+
+          <Separator className="bg-border/60" />
+
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-xs text-muted-foreground">
+              {dirty ? 'You have unsaved changes' : 'All training changes saved'}
+            </p>
+            <div className="flex items-center gap-2">
+              <SaveButton
+                saving={saving}
+                disabled={!dirty}
+                onSave={() => save(buildPayload())}
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleSaveAndSyncVapi}
+                disabled={syncingVapi}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs h-9 shadow-xs"
+              >
+                {syncingVapi ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                <span>Sync with Vapi</span>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

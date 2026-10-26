@@ -709,9 +709,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // "Back to App" button that restores the normal tenant shell.
   const isSuperAdminConsole = currentView === 'superadmin';
 
-  // ─── Full-takeover AI Agent Studio: hides app sidebar & header ─────────
-  // The studio takes 100% of viewport and provides its own "Back to Dashboard" button.
-  const isAgentStudioTakeover = !isBgos && (currentView === 'agentStudio' || currentView === 'chatbotBuilder');
+  // ─── Standard App Chrome: Sidebar & Header stay visible across AI Agent Studio ──
+  // The studio renders seamlessly inside the main content canvas with the sidebar intact.
+  const isAgentStudioTakeover = false;
 
   // ─── SuperAdmin console — full-takeover (no app sidebar / header / bottom
   // nav). The console component renders its own three-panel layout. ───────

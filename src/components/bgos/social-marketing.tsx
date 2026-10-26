@@ -414,7 +414,7 @@ export function SocialMediaView({
   }, [auth?.isAuthenticated]);
 
   const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(
-    () => new Set(['whatsapp', 'email', 'sms'])
+    () => new Set(isDemo ? ['whatsapp', 'email', 'sms'] : [])
   );
 
   // AI Content Suggestions State
@@ -523,19 +523,37 @@ export function SocialMediaView({
       }
 
       try {
-        const accRes = await fetch('/api/social/accounts');
-        if (accRes.ok && isMounted) {
-          const accJson = await accRes.json();
-          const list = accJson?.data || (Array.isArray(accJson) ? accJson : []);
-          if (Array.isArray(list) && list.length > 0) {
-            const set = new Set<string>();
-            for (const a of list) {
-              if (a.platform) set.add(String(a.platform).toLowerCase());
+        const [accRes, provRes] = await Promise.allSettled([
+          fetch('/api/social/accounts'),
+          fetch('/api/campaigns/provider-status'),
+        ]);
+
+        if (isMounted) {
+          const set = new Set<string>(isDemo ? ['whatsapp', 'email', 'sms'] : []);
+
+          if (accRes.status === 'fulfilled' && accRes.value.ok) {
+            const accJson = await accRes.value.json();
+            const list = accJson?.data || (Array.isArray(accJson) ? accJson : []);
+            if (Array.isArray(list)) {
+              for (const a of list) {
+                if (a.platform) {
+                  const plat = String(a.platform).toLowerCase();
+                  set.add(plat);
+                  if (plat === 'googlebusiness') set.add('google');
+                  if (plat === 'google') set.add('googlebusiness');
+                }
+              }
             }
-            set.add('email');
-            set.add('sms');
-            setConnectedPlatforms(set);
           }
+
+          if (provRes.status === 'fulfilled' && provRes.value.ok) {
+            const provJson = await provRes.value.json();
+            if (provJson?.whatsapp?.configured) set.add('whatsapp');
+            if (provJson?.email?.configured) set.add('email');
+            if (provJson?.sms?.configured) set.add('sms');
+          }
+
+          setConnectedPlatforms(set);
         }
       } catch {
         // keep defaults
@@ -1147,7 +1165,13 @@ export function SocialMediaView({
                     <button
                       key={ch.name}
                       type="button"
-                      onClick={() => setActiveTab('accounts')}
+                      onClick={() => {
+                        if (['whatsapp', 'email', 'sms'].includes(ch.key)) {
+                          setCurrentView('settings');
+                        } else {
+                          setActiveTab('accounts');
+                        }
+                      }}
                       className="w-full py-2.5 first:pt-1 last:pb-0 flex items-center justify-between gap-2.5 text-left hover:opacity-85 transition-opacity"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">

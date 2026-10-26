@@ -21,6 +21,9 @@ export interface ChatbotBuilderViewProps {
   onBackToDashboard?: () => void;
 }
 
+// Cache primary agent in module memory so switching between views is instant (no spinner)
+let cachedPrimaryAgent: FormAgentData | null = null;
+
 export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: ChatbotBuilderViewProps = {}) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const auth = useAppStore((s) => s.auth);
@@ -37,20 +40,22 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
     }
   };
 
-  const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [activeStudioAgent, setActiveStudioAgent] = useState<FormAgentData | null>(() => cachedPrimaryAgent);
+  const [loading, setLoading] = useState(() => !cachedPrimaryAgent);
   const [error, setError] = useState<string | null>(null);
   const [siteOrigin, setSiteOrigin] = useState('');
 
   const fetchPrimaryAgent = useCallback(async () => {
-    setLoading(true);
+    if (!cachedPrimaryAgent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const res = await fetch('/api/forms/agents');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.agents) && data.agents.length > 0) {
-          // Open the business's primary AI agent directly
+          cachedPrimaryAgent = data.agents[0];
           setActiveStudioAgent(data.agents[0]);
         } else {
           // Auto-initialize the single agent for this business
@@ -71,12 +76,16 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
             });
             if (saveRes.ok) {
               const saved = await saveRes.json();
-              setActiveStudioAgent(saved.agent || defaultAgent);
+              const ag = saved.agent || defaultAgent;
+              cachedPrimaryAgent = ag;
+              setActiveStudioAgent(ag);
             } else {
+              cachedPrimaryAgent = defaultAgent;
               setActiveStudioAgent(defaultAgent);
               toast.info('AI Assistant initialized locally');
             }
           } catch {
+            cachedPrimaryAgent = defaultAgent;
             setActiveStudioAgent(defaultAgent);
             toast.info('AI Assistant loaded locally');
           }
@@ -105,9 +114,9 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
 
   if (loading && !activeStudioAgent) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
+      <div className="flex flex-1 h-full min-h-[400px] w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="size-8 animate-spin text-[#009F50]" />
+          <Loader2 className="size-8 animate-spin text-emerald-600" />
           <p className="text-xs font-semibold text-muted-foreground">Opening AI Agent Builder...</p>
         </div>
       </div>
@@ -116,7 +125,7 @@ export function ChatbotBuilderView({ embedded = false, onBackToDashboard }: Chat
 
   if (error && !activeStudioAgent) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-6">
+      <div className="flex flex-1 h-full min-h-[400px] w-full flex-col items-center justify-center bg-background p-6">
         <div className="flex max-w-md flex-col items-center gap-3 text-center">
           <div className="size-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
             <Loader2 className="size-6 text-red-500" />
