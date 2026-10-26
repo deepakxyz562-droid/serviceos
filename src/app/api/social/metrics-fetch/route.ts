@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { decryptToken } from '@/lib/social/crypto';
 import { ensureAdaptersLoaded, getAdapter } from '@/lib/social/registry';
+import { normalizeDate } from '@/lib/social/token-refresh';
 import type { SocialAccountData, SocialPlatform } from '@/lib/social/types';
 import { verifySocialCronAuth } from '@/lib/social/cron-auth';
 
@@ -63,7 +64,7 @@ function toAccountData(account: {
   accountName: string;
   accessToken: string;
   refreshToken: string | null;
-  tokenExpiry: Date | null;
+  tokenExpiry: Date | string | null;
   metadata: string | null;
 }): SocialAccountData {
   let metadata: Record<string, unknown> | undefined;
@@ -84,7 +85,7 @@ function toAccountData(account: {
     accountName: account.accountName,
     accessToken: decryptToken(account.accessToken),
     refreshToken: account.refreshToken ? decryptToken(account.refreshToken) : undefined,
-    tokenExpiry: account.tokenExpiry ?? undefined,
+    tokenExpiry: normalizeDate(account.tokenExpiry),
     metadata,
   };
 }

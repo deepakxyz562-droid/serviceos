@@ -631,8 +631,11 @@ export function SocialMediaView({
         return;
       }
 
-      toast.success(`Successfully published to ${channelName}!`);
+      toast.success(`Post submitted! Publishing to ${channelName}...`);
       fetchSocialPosts();
+      setTimeout(() => {
+        fetchSocialPosts();
+      }, 2500);
     } catch (err) {
       console.warn('[Marketing Studio] Social post publish failed', err);
       toast.error(`Network error publishing to ${channelName}`);

@@ -36,15 +36,32 @@ import type { SocialAccountData } from '@/lib/social/types';
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 /**
+ * Safely parse any date representation (Date instance, ISO string, timestamp number)
+ * into a valid Date, or undefined if invalid or missing.
+ */
+export function normalizeDate(value: unknown): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  }
+  return undefined;
+}
+
+/**
  * Determine whether a token is expired or about to expire.
  *
- * `undefined` expiry → conservatively assume still valid (some platforms
+ * `undefined` or unparseable expiry → conservatively assume still valid (some platforms
  * don't return an expiry; the publish will fail with 401 if it's stale).
  */
-function isExpiringSoon(expiry: Date | undefined): boolean {
-  if (!expiry) return false;
+export function isExpiringSoon(expiry: unknown): boolean {
+  const expiryDate = normalizeDate(expiry);
+  if (!expiryDate) return false;
   const now = Date.now();
-  return expiry.getTime() - now < REFRESH_BUFFER_MS;
+  return expiryDate.getTime() - now < REFRESH_BUFFER_MS;
 }
 
 /**
@@ -68,25 +85,30 @@ function isExpiringSoon(expiry: Date | undefined): boolean {
 export async function refreshExpiredToken(
   account: SocialAccountData,
 ): Promise<SocialAccountData> {
+  const normalizedAccount: SocialAccountData = {
+    ...account,
+    tokenExpiry: normalizeDate(account.tokenExpiry),
+  };
+
   // Fast path: token is still valid.
-  if (!isExpiringSoon(account.tokenExpiry)) {
-    return account;
+  if (!isExpiringSoon(normalizedAccount.tokenExpiry)) {
+    return normalizedAccount;
   }
 
   // Make sure adapter modules are loaded (lazy bootstrap on first call).
   await ensureAdaptersLoaded();
 
-  const adapter = getAdapter(account.platform);
+  const adapter = getAdapter(normalizedAccount.platform);
   if (!adapter) {
     // No adapter for this platform — can't refresh. Return as-is and
     // let the publish attempt fail with a clearer "no adapter" error.
-    return account;
+    return normalizedAccount;
   }
 
   if (!adapter.refreshToken) {
     // Adapter doesn't support refresh (e.g. Facebook long-lived page
     // tokens). Return as-is; publish will fail with 401 if truly expired.
-    return account;
+    return normalizedAccount;
   }
 
   let refreshResult: {
@@ -96,13 +118,13 @@ export async function refreshExpiredToken(
   };
 
   try {
-    refreshResult = await adapter.refreshToken(account);
+    refreshResult = await adapter.refreshToken(normalizedAccount);
   } catch (err) {
     // Refresh failed — mark the account inactive so the user sees a
     // "reconnect required" banner in the UI, then propagate the error.
-    await markAccountInactive(account.id, err);
+    await markAccountInactive(normalizedAccount.id, err);
     throw new Error(
-      `Token refresh failed for ${account.platform} account ${account.accountName}: ${
+      `Token refresh failed for ${normalizedAccount.platform} account ${normalizedAccount.accountName}: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
@@ -136,7 +158,7 @@ export async function refreshExpiredToken(
     ...account,
     accessToken: refreshResult.accessToken,
     refreshToken: refreshResult.refreshToken ?? account.refreshToken,
-    tokenExpiry: refreshResult.tokenExpiry ?? account.tokenExpiry,
+    tokenExpiry: normalizeDate(refreshResult.tokenExpiry) ?? normalizeDate(account.tokenExpiry),
   };
 }
 

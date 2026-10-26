@@ -33,7 +33,7 @@
 import { db } from '@/lib/db';
 import { decryptToken } from '@/lib/social/crypto';
 import { ensureAdaptersLoaded, getAdapter } from '@/lib/social/registry';
-import { refreshExpiredToken } from '@/lib/social/token-refresh';
+import { normalizeDate, refreshExpiredToken } from '@/lib/social/token-refresh';
 import type {
   PublishTarget,
   PublishParams,
@@ -75,7 +75,7 @@ function toAccountData(account: {
   accountName: string;
   accessToken: string;
   refreshToken: string | null;
-  tokenExpiry: Date | null;
+  tokenExpiry: Date | string | null;
   metadata: string | null;
 }): SocialAccountData {
   let metadata: Record<string, unknown> | undefined;
@@ -97,7 +97,7 @@ function toAccountData(account: {
     accountName: account.accountName,
     accessToken: decryptToken(account.accessToken),
     refreshToken: account.refreshToken ? decryptToken(account.refreshToken) : undefined,
-    tokenExpiry: account.tokenExpiry ?? undefined,
+    tokenExpiry: normalizeDate(account.tokenExpiry),
     metadata,
   };
 }

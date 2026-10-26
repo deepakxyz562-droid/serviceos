@@ -167,7 +167,18 @@ async function assertOk(
       detail = '';
     }
   }
-  throw new Error(`GBP ${context} failed (HTTP ${res.status})${detail}`);
+
+  // Provide actionable hints for common GBP Google Cloud issues
+  let hint = '';
+  if (res.status === 403) {
+    hint = ' (Google Business Profile API access may not be approved or enabled for this OAuth client project)';
+  } else if (res.status === 429) {
+    hint = ' (Google rate limit exceeded. Please wait 1 minute before retrying)';
+  } else if (res.status === 401) {
+    hint = ' (Authorization expired or revoked. Please reconnect your Google Business account)';
+  }
+
+  throw new Error(`GBP ${context} failed (HTTP ${res.status})${detail}${hint}`);
 }
 
 // ─── Adapter implementation ────────────────────────────────────────────────
@@ -192,7 +203,8 @@ export const googleBusinessAdapter: PlatformAdapter = {
    */
   async publish(account, params) {
     const { accountName, locationId } = extractLocationRef(account);
-    const url = `${GBP_API_BASE}/${accountName}/locations/${locationId}/localPosts`;
+    const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+    const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/localPosts`;
 
     // Build the request body based on post type.
     const postType = (params.gbpPostType || 'whats_new').toLowerCase();
