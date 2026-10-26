@@ -318,6 +318,7 @@ export async function PUT(request: NextRequest) {
       body.invoicePrefix !== undefined ||
       body.defaultTaxRate !== undefined ||
       body.location !== undefined ||
+      (body as any).businessAddress !== undefined ||
       body.notifications !== undefined ||
       body.automation !== undefined ||
       body.preferences !== undefined
@@ -379,10 +380,11 @@ export async function PUT(request: NextRequest) {
           ...(body.phoneNumber !== undefined ? { phone: (body.phoneNumber || '').trim() || null } : {}),
           ...(body.emailAddress !== undefined ? { email: (body.emailAddress || '').trim() || null } : {}),
           ...(body.whatsappNumber !== undefined ? { whatsappPhone: (body.whatsappNumber || '').trim() || null } : {}),
-          // businessAddress maps to Tenant.address (we accept `location` from
-          // the existing brand-profile shape so the form's "Business Address"
-          // input is persisted even if the caller only sent `location`).
-          ...(body.location !== undefined ? { address: (body.location || '').trim() || null } : {}),
+          // businessAddress maps to Tenant.address (we accept `location` or `businessAddress`
+          // so the form's structured address is persisted accurately).
+          ...((body.location !== undefined || (body as any).businessAddress !== undefined)
+            ? { address: (((body as any).businessAddress ?? body.location) || '').trim() || null }
+            : {}),
           // Tax/compliance fields live inside settingsJson.taxCompliance so
           // we don't need a schema migration to add new operational columns.
           ...(settingsJson !== undefined ? { settingsJson } : {}),

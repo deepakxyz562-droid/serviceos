@@ -73,6 +73,7 @@
     "@hookform/resolvers": "^5.1.1",
     "@neondatabase/serverless": "^1.1.0",
     "@node-saml/passport-saml": "^5.1.0",
+    "@openrouter/sdk": "^1.5.7",
     "@paypal/paypal-js": "^9.8.0",
     "@paypal/react-paypal-js": "^9.3.0",
     "@prisma/adapter-neon": "6.19.2",

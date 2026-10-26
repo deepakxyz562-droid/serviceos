@@ -10,7 +10,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { BgosNavigation, BgosMobileNavigation } from '@/components/bgos/navigation';
-import { BgosViewNavigation } from '@/components/bgos/view-navigation';
 import '@/components/bgos/workspace.css';
 import { AppSidebar } from '@/components/layout/sidebar';
 import { AppHeader } from '@/components/layout/header';
@@ -42,6 +41,7 @@ const BgosReviewsWorkstation = lazy(() => import('@/components/bgos/reviews-work
 const BgosOmnichannelInbox = lazy(() => import('@/components/bgos/omnichannel-inbox').then(m => ({ default: m.BgosOmnichannelInbox })));
 const BgosHelpdeskWorkstation = lazy(() => import('@/components/bgos/helpdesk-workstation').then(m => ({ default: m.BgosHelpdeskWorkstation })));
 const BgosSocialMarketing = lazy(() => import('@/components/bgos/social-marketing').then(m => ({ default: m.BgosSocialMarketing })));
+const BgosLeadsWorkstation = lazy(() => import('@/components/bgos/leads-workstation').then(m => ({ default: m.BgosLeadsWorkstation })));
 const DashboardView = lazy(() => import('@/components/views/dashboard-view').then(m => ({ default: m.DashboardView })));
 
 // CRM
@@ -659,6 +659,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       if (bgosView(viewId) !== viewId) return null;
       const isDemo = typeof window !== 'undefined' && window.location.search.includes('demo=true');
       if (viewId === 'dashboard') return <BgosDashboard isDemo={isDemo} initialTasks={isDemo ? undefined : []} initialActivities={isDemo ? undefined : []} />;
+      if (viewId === 'leads') return <BgosLeadsWorkstation isDemo={isDemo} />;
       if (viewId === 'reviews') return <BgosReviewsWorkstation />;
       if (viewId === 'omnichannel') return <BgosOmnichannelInbox isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
       if (viewId === 'liveChat') return <BgosOmnichannelInbox initialTab="visitors" isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
@@ -771,7 +772,6 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
               The `renderView` callback receives `isActive` so it can decide
               whether to show the Suspense loader (active) or null (hidden,
               silent load). */}
-          {isBgos && <BgosViewNavigation />}
           <ViewCache
             currentView={currentView}
             isViewFullHeight={isViewFullHeight}

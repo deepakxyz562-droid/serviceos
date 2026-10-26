@@ -15,6 +15,7 @@
         "@hookform/resolvers": "^5.1.1",
         "@neondatabase/serverless": "^1.1.0",
         "@node-saml/passport-saml": "^5.1.0",
+        "@openrouter/sdk": "^1.5.7",
         "@paypal/paypal-js": "^9.8.0",
         "@paypal/react-paypal-js": "^9.3.0",
         "@prisma/adapter-neon": "6.19.2",
@@ -1088,6 +1089,8 @@
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "https://registry.npmjs.com/@nodelib/fs.walk/-/fs.walk-1.2.8.tgz", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
 
     "@nolyfill/is-core-module": ["@nolyfill/is-core-module@1.0.39", "https://registry.npmjs.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz", {}, "sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA=="],
+
+    "@openrouter/sdk": ["@openrouter/sdk@1.5.7", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-vEbQCfRYNTewy02sP3nHk/bbiTZiArykfVsyskvb3Tebs6rBMqBsHewu67GEFjjPdcVMF46wrgOMDGWVx4t8Nw=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.147.0", "", {}, "sha512-IJ3s6ltHLp45S0bh7phkX+gJO7A1Wuz2EaqpAhb8WjqDwbzMiWKHhyyT42tskaWjEYXtHtVCPpnBJVT9+dcRLg=="],
 

@@ -264,8 +264,9 @@ export function VerificationDashboard({
   // Step 1: "Connect Google Business Profile" → starts OAuth
   // After OAuth returns, the useEffect below detects ?google=connected + fetches locations
   function handleGoogleVerify() {
-    // Redirect to the Google OAuth flow
-    window.location.href = '/api/oauth/googlebusiness/connect';
+    // Redirect to the Google OAuth flow while preserving origin subdomain
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    window.location.href = `/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&returnView=verification`;
   }
 
   // Step 2: After OAuth returns with ?google=connected, fetch the connected locations

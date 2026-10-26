@@ -17,10 +17,14 @@ import {
   XCircle,
   Loader2,
   Plug,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -143,11 +147,48 @@ interface SocialAccount {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
-export function SocialAccountsView() {
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [manageAccount, setManageAccount] = useState<SocialAccount | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [setupPlatform, setSetupPlatform] = useState<PlatformMeta | null>(null);
+  const [appIdInput, setAppIdInput] = useState('');
+  const [appSecretInput, setAppSecretInput] = useState('');
+  const [isSavingCreds, setIsSavingCreds] = useState(false);
+
+  const handleSaveMetaCredentials = async () => {
+    if (!appIdInput.trim() || !appSecretInput.trim()) {
+      toast.error('Please enter both App ID and App Secret');
+      return;
+    }
+    setIsSavingCreds(true);
+    try {
+      const res = await fetch('/api/superadmin/social-publishing-config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: 'facebook', // Meta app covers both facebook and instagram
+          clientId: appIdInput.trim(),
+          clientSecret: appSecretInput.trim(),
+          enabled: true,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Meta credentials saved! Starting authorization...');
+        const targetKey = setupPlatform?.key || 'facebook';
+        setSetupPlatform(null);
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        window.location.href = `/api/oauth/${targetKey}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia`;
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to save credentials. You can also configure META_APP_ID and META_APP_SECRET in Coolify.');
+      }
+    } catch {
+      toast.error('Network error saving credentials');
+    } finally {
+      setIsSavingCreds(false);
+    }
+  };
 
   const loadAccounts = useCallback(async () => {
     setIsLoading(true);
@@ -190,7 +231,8 @@ export function SocialAccountsView() {
     // redirect cross-origin, which typically fails CORS, so the catch
     // branch fires and surfaces a "Redirecting…" toast with an "Open"
     // button (the user clicks to actually navigate).
-    const connectUrl = `/api/oauth/${platform.key}`;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const connectUrl = `/api/oauth/${platform.key}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia`;
     authFetch(connectUrl, { method: 'HEAD' })
       .then((res) => {
         if (res.status === 404) {
@@ -199,20 +241,17 @@ export function SocialAccountsView() {
           );
           return;
         }
-        // Route exists — redirect to it.
+        if (res.status === 503) {
+          // Platform credentials not registered on server
+          setSetupPlatform(platform);
+          return;
+        }
+        // Route exists and credentials configured — navigate to it.
         window.location.href = connectUrl;
       })
       .catch(() => {
-        // Network error fetching HEAD — try the redirect anyway; the user
-        // will see OAuth or a 404.
-        toast.info(`Redirecting to ${platform.label} OAuth…`, {
-          action: {
-            label: 'Open',
-            onClick: () => {
-              window.location.href = connectUrl;
-            },
-          },
-        });
+        // Fallback: attempt direct navigation
+        window.location.href = connectUrl;
       });
   };
 
@@ -444,6 +483,92 @@ export function SocialAccountsView() {
             >
               <Trash2 className="size-4" />
               Disconnect
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Meta Configuration Dialog */}
+      <Dialog open={!!setupPlatform} onOpenChange={(o) => !o && setSetupPlatform(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Facebook className="size-5 text-blue-600" />
+              Connect {setupPlatform?.label}
+            </DialogTitle>
+            <DialogDescription>
+              To publish to Facebook Pages and Instagram Business accounts, Meta requires an authorized Meta App ID and Secret.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+              <div className="font-semibold">OAuth Redirect URI:</div>
+              <div className="flex items-center gap-2 mt-1">
+                <code className="flex-1 bg-white dark:bg-zinc-900 px-2 py-1 rounded border text-[11px] truncate">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/api/oauth/facebook/callback` : 'https://bgos.fieseros.com/api/oauth/facebook/callback'}
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    const uri = `${window.location.origin}/api/oauth/facebook/callback`;
+                    navigator.clipboard.writeText(uri);
+                    toast.success('Redirect URI copied to clipboard');
+                  }}
+                >
+                  <Copy className="size-3 mr-1" />
+                  Copy
+                </Button>
+              </div>
+              <div className="text-[11px] text-muted-foreground pt-1">
+                Add this URI to <strong>Meta Developer Console &rarr; Facebook Login &rarr; Valid OAuth Redirect URIs</strong>.
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label htmlFor="metaAppId">Meta App ID</Label>
+                <Input
+                  id="metaAppId"
+                  placeholder="e.g. 1234567890123456"
+                  value={appIdInput}
+                  onChange={(e) => setAppIdInput(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="metaAppSecret">Meta App Secret</Label>
+                <Input
+                  id="metaAppSecret"
+                  type="password"
+                  placeholder="••••••••••••••••••••••••"
+                  value={appSecretInput}
+                  onChange={(e) => setAppSecretInput(e.target.value)}
+                />
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Alternatively, an administrator can set <code className="bg-muted px-1 rounded">META_APP_ID</code> and <code className="bg-muted px-1 rounded">META_APP_SECRET</code> in the Coolify environment variables.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setSetupPlatform(null)} disabled={isSavingCreds}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveMetaCredentials} disabled={isSavingCreds || !appIdInput.trim() || !appSecretInput.trim()}>
+              {isSavingCreds ? (
+                <>
+                  <Loader2 className="size-4 animate-spin mr-1.5" />
+                  Saving & Connecting...
+                </>
+              ) : (
+                'Save & Connect'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

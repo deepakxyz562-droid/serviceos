@@ -96,6 +96,9 @@ export async function GET(request: NextRequest) {
     csrf?: string;
     expires?: number;
     sig?: string;
+    originHost?: string;
+    returnProduct?: string | null;
+    returnView?: string | null;
     context?: string; // 'SETTINGS_VERIFICATION' | 'CLAIM_BUSINESS'
     claimTenantId?: string | null;
     userTenantId?: string;
@@ -113,6 +116,29 @@ export async function GET(request: NextRequest) {
       'Authorization timed out — please reconnect from the dashboard.',
     );
   }
+
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    getAppUrlFromRequest(request);
+
+  // Subdomain & product preservation (e.g. https://bgos.fieseros.com)
+  const originBase = state.originHost && isAllowedOriginHost(state.originHost)
+    ? state.originHost.replace(/\/+$/, '')
+    : appUrl;
+
+  const productParam = state.returnProduct
+    ? `&product=${encodeURIComponent(state.returnProduct)}`
+    : originBase.includes('bgos.')
+    ? '&product=bgos'
+    : '';
+
+  const viewParam =
+    state.returnView ||
+    (originBase.includes('bgos.') ? 'socialMedia' : 'verification');
+
+  const backUrl = `${originBase}/?view=${viewParam}${productParam}`;
+  const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(originBase)}&returnView=${viewParam}${productParam}`;
 
   // CSRF validation:
   // 1. Primary defense: Cookie match against state.csrf
@@ -140,7 +166,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (!cookieMatches && !sigMatches) {
-    return renderErrorPage('CSRF validation failed — please reconnect.');
+    return renderErrorPage('CSRF validation failed — please reconnect.', retryUrl, backUrl);
   }
 
   // NOTE: The code-lock (isCodeAlreadyProcessed / markCodeAsProcessed) was
@@ -169,13 +195,11 @@ export async function GET(request: NextRequest) {
   if (!clientId || !clientSecret) {
     return renderErrorPage(
       'Platform credentials for Google Business Profile are not configured in DB or environment variables.',
+      null,
+      backUrl,
     );
   }
 
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    getAppUrlFromRequest(request);
   const redirectUri = cred?.redirectUri
     ? cred.redirectUri
     : `${appUrl}/api/oauth/googlebusiness/callback`;
@@ -259,11 +283,11 @@ export async function GET(request: NextRequest) {
           });
           if (existingAccount) {
             // The first exchange worked — this is just a duplicate retry.
-            // Redirect to the verification dashboard with success.
+            // Redirect to the dashboard with success on the originating domain.
             console.log('[oauth/googlebusiness/callback] Code already used but SocialAccount exists — redirecting to success');
             const redirectUrl = new URL(
-              '/?view=verification&google=connected',
-              appUrl,
+              `/?view=${viewParam}&google=connected${productParam}`,
+              originBase,
             );
             const res = NextResponse.redirect(redirectUrl.toString());
             res.cookies.delete('gbp_oauth_csrf');
@@ -278,7 +302,6 @@ export async function GET(request: NextRequest) {
 
       // ── Build a helpful, specific error message ──
       let helpfulMessage: string;
-      const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
       if (errorCode === 'redirect_uri_mismatch') {
         helpfulMessage =
           `Google rejected the connection: redirect_uri_mismatch.\n\n` +
@@ -300,19 +323,19 @@ export async function GET(request: NextRequest) {
           `Google rejected the authorization (HTTP ${tokenReq.status}): ${googleError}.\n\n` +
           `Click "Try again" below to start a fresh connection.`;
       }
-      return renderErrorPage(helpfulMessage, retryUrl);
+      return renderErrorPage(helpfulMessage, retryUrl, backUrl);
     }
     tokenResponse = (await tokenReq.json()) as typeof tokenResponse;
   } catch (err) {
     console.error('[oauth/googlebusiness/callback] Token exchange error:', err);
-    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
     return renderErrorPage(
       'Network error while exchanging the authorization code. Click "Try again" below.',
       retryUrl,
+      backUrl,
     );
   }
   if (!tokenResponse.access_token) {
-    return renderErrorPage('Google did not return an access token.');
+    return renderErrorPage('Google did not return an access token.', retryUrl, backUrl);
   }
   // `refresh_token` is only returned the FIRST time the user consents
   // (or when prompt=consent forces re-issue). If it's missing, the user
@@ -376,7 +399,6 @@ export async function GET(request: NextRequest) {
         firstError = saveErr instanceof Error ? saveErr.message : String(saveErr);
       }
     } else {
-      const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
       return renderErrorPage(
         `We connected to your Google account but couldn't access your Google Business Profile accounts.\n\n` +
         `This usually means the Google Business Profile API is not enabled for this OAuth client, ` +
@@ -384,12 +406,12 @@ export async function GET(request: NextRequest) {
         `Error: ${errMsg}\n\n` +
         `Click "Try again" to reconnect, or contact support if the problem persists.`,
         retryUrl,
+        backUrl,
       );
     }
   }
 
   if (createdAccounts.length === 0 && accounts.length === 0) {
-    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
     return renderErrorPage(
       `Your Google account doesn't own any Google Business Profile accounts.\n\n` +
       `To use Fieseros marketplace verification, you need to:\n` +
@@ -398,6 +420,7 @@ export async function GET(request: NextRequest) {
       `3. Come back here and click "Try again" to connect it.\n\n` +
       `Make sure you sign in with the Google account that OWNS the Business Profile for your business.`,
       retryUrl,
+      backUrl,
     );
   }
 
@@ -454,7 +477,6 @@ export async function GET(request: NextRequest) {
   }
 
   if (createdAccounts.length === 0) {
-    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
     if (firstError) {
       // Locations were found but couldn't be saved (DB error, etc.)
       return renderErrorPage(
@@ -462,6 +484,7 @@ export async function GET(request: NextRequest) {
         `Error: ${firstError}\n\n` +
         `Click "Try again" below. If the problem persists, contact support.`,
         retryUrl,
+        backUrl,
       );
     }
     // The user owns GBP accounts but none have locations yet.
@@ -478,24 +501,20 @@ export async function GET(request: NextRequest) {
       `3. Add a location (your business name + address)\n` +
       `4. Come back here and click "Try again" to connect it.`,
       retryUrl,
+      backUrl,
     );
   }
 
   // ── 7. Clear the CSRF cookie + redirect to dashboard ───────────────────
-  // Redirect to / (root) with ?view=social-accounts — NOT /dashboard (which
-  // doesn't exist as a route). The root page is the SPA shell; HomePageClient
-  // reads ?view=verification from window.location.search and switches to
-  // the verification view client-side.
-  //
-  // For the claim flow (context='CLAIM_BUSINESS'), include the claimTenantId
-  // in the redirect URL so the verification dashboard can show the location
-  // selection for the claim target (not the user's own tenant).
+  // Redirect back to the originating host (e.g. https://bgos.fieseros.com)
+  // so the user stays on their specific product workspace (BGOS, BOS, etc.)
   const claimContext = state.context === 'CLAIM_BUSINESS' && state.claimTenantId
     ? `&claimTenantId=${state.claimTenantId}`
     : '';
+
   const redirectUrl = new URL(
-    `/?view=verification&google=connected${claimContext}`,
-    appUrl,
+    `/?view=${viewParam}&google=connected${productParam}${claimContext}`,
+    originBase,
   );
   // CRITICAL: Return an HTML page with a JavaScript redirect instead of a
   // NextResponse.redirect(). A 307 redirect is intercepted by the Service
@@ -520,7 +539,7 @@ export async function GET(request: NextRequest) {
 <body>
 <div style="text-align:center">
 <p style="color:#16a34a;font-size:18px;font-weight:600">✓ Google Business Profile connected!</p>
-<p style="color:#6b7280;font-size:14px">Redirecting to verification...</p>
+<p style="color:#6b7280;font-size:14px">Redirecting to ${originBase.includes('bgos') ? 'BGOS' : 'dashboard'}...</p>
 </div>
 <script>window.location.replace("${redirectUrl.toString()}");</script>
 </body></html>`,
@@ -541,12 +560,27 @@ export async function GET(request: NextRequest) {
       process.env.NEXT_PUBLIC_APP_URL ||
       process.env.APP_URL ||
       getAppUrlFromRequest(request);
-    const retryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
+    let catchBackUrl: string | null = null;
+    let catchRetryUrl = `${appUrl}/api/oauth/googlebusiness/connect`;
+    try {
+      const sp = request.nextUrl.searchParams.get('state');
+      if (sp) {
+        const parsed = JSON.parse(Buffer.from(sp, 'base64url').toString());
+        if (parsed.originHost && isAllowedOriginHost(parsed.originHost)) {
+          const origin = parsed.originHost.replace(/\/+$/, '');
+          const view = parsed.returnView || (origin.includes('bgos.') ? 'socialMedia' : 'verification');
+          const prod = parsed.returnProduct ? `&product=${encodeURIComponent(parsed.returnProduct)}` : '';
+          catchBackUrl = `${origin}/?view=${view}${prod}`;
+          catchRetryUrl = `${appUrl}/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&returnView=${view}${prod}`;
+        }
+      }
+    } catch {}
     return renderErrorPage(
       `An unexpected error occurred during the Google Business Profile connection.\n\n` +
       `Error: ${topErr instanceof Error ? topErr.message : String(topErr)}\n\n` +
       `Click "Try again" to start a fresh connection.`,
-      retryUrl,
+      catchRetryUrl,
+      catchBackUrl,
     );
   }
 }
@@ -866,6 +900,26 @@ function getAppUrlFromRequest(request: NextRequest): string {
 }
 
 /**
+ * Validate that an originHost is on an allowed domain (*.fieseros.com,
+ * canonical app URL, or localhost).
+ */
+function isAllowedOriginHost(uriOrHost: string): boolean {
+  try {
+    const url = uriOrHost.startsWith('http://') || uriOrHost.startsWith('https://')
+      ? new URL(uriOrHost)
+      : new URL(`https://${uriOrHost}`);
+    const canonicalUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://fieseros.com';
+    const canonicalHost = new URL(canonicalUrl).host;
+    if (url.host === canonicalHost) return true;
+    if (url.host === 'fieseros.com' || url.host.endsWith('.fieseros.com')) return true;
+    if (url.host.startsWith('localhost') || /^\d+\.\d+\.\d+\.\d+$/.test(url.host)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Render a self-contained HTML error page. We use HTML (not JSON) because
  * the OAuth callback is loaded in a top-level browser navigation — the
  * user needs to see a human-readable message, not a JSON payload.
@@ -878,8 +932,13 @@ function getAppUrlFromRequest(request: NextRequest): string {
  * @param message — the human-readable error message (will be HTML-escaped)
  * @param retryUrl — optional URL to restart the OAuth flow. If provided, a
  *   "Try again" button is shown. If null, only the "Back to Dashboard" link.
+ * @param backUrl — optional URL for "Back to Dashboard" button (preserves bgos.fieseros.com).
  */
-function renderErrorPage(message: string, retryUrl: string | null = null): NextResponse {
+function renderErrorPage(
+  message: string,
+  retryUrl: string | null = null,
+  backUrl: string | null = null,
+): NextResponse {
   const safe = message
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -888,6 +947,7 @@ function renderErrorPage(message: string, retryUrl: string | null = null): NextR
   const retryButton = retryUrl
     ? `<a href="${retryUrl}" style="background: #4f46e5; margin-right: 0.75rem;">Try again</a>`
     : '';
+  const returnLink = backUrl || '/?view=verification';
   return new NextResponse(
     `<!html>
 <html><head><title>Connection Failed</title><style>
@@ -906,7 +966,7 @@ a, button { background: #dc2626; color: white; border: none; padding: 0.75rem 1.
   <p>${safe}</p>
   <div style="margin-top: 1.5rem;">
     ${retryButton}
-    <a href="/?view=verification">Back to Dashboard</a>
+    <a href="${returnLink}">Back to Dashboard</a>
   </div>
   <script>
     if (window.opener) {

@@ -206,7 +206,7 @@ export async function getTenantReceptionistContext(
       basePrice: s.basePrice,
       duration: s.duration,
     })),
-    knowledgeDocs: (knowledgeDocs || []).map((doc) => ({
+    knowledgeDocuments: (knowledgeDocs || []).map((doc) => ({
       title: doc.title,
       summary: (doc.content || '').slice(0, 300),
     })),

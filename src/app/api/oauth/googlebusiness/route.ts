@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
     ? cred.redirectUri
     : `${appUrl}/api/oauth/googlebusiness/callback`;
 
-  // ── 4. Build state (CSRF + tenant/user context) ────────────────────────
+  // ── 4. Build state (CSRF + tenant/user context + subdomain preservation) ──
   // Dual defense:
   // 1. HTTP-only CSRF cookie matched on callback.
   // 2. Server-side HMAC signature verifying state integrity even if browser
@@ -137,6 +137,37 @@ export async function GET(request: NextRequest) {
   const sigPayload = `${targetTenantId}:${authUser.id}:${csrf}:${expires}`;
   const sig = createHmac('sha256', signingSecret).update(sigPayload).digest('hex');
 
+  // Resolve originating subdomain (e.g. https://bgos.fieseros.com, https://bos.fieseros.com)
+  const queryOrigin = request.nextUrl.searchParams.get('originHost');
+  const referer = request.headers.get('referer');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const hostHeader = forwardedHost || request.headers.get('host');
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const proto = forwardedProto || (hostHeader?.startsWith('localhost') ? 'http' : 'https');
+
+  let originHost = queryOrigin;
+  if (!originHost && referer) {
+    try {
+      originHost = new URL(referer).origin;
+    } catch {}
+  }
+  if (!originHost && hostHeader) {
+    originHost = `${proto}://${hostHeader}`;
+  }
+  if (!originHost) {
+    originHost = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com';
+  }
+
+  const queryProduct = request.nextUrl.searchParams.get('product');
+  const returnProduct =
+    queryProduct ||
+    (originHost.includes('bgos.') ? 'bgos' : originHost.includes('bos.') ? 'bos' : null);
+
+  const queryView = request.nextUrl.searchParams.get('returnView') || request.nextUrl.searchParams.get('view');
+  const returnView =
+    queryView ||
+    (returnProduct === 'bgos' || originHost.includes('bgos.') ? 'socialMedia' : 'verification');
+
   const state = Buffer.from(
     JSON.stringify({
       tenantId: targetTenantId, // the target tenant (user's own OR claim target)
@@ -144,6 +175,9 @@ export async function GET(request: NextRequest) {
       csrf,
       expires,
       sig,
+      originHost,
+      returnProduct,
+      returnView,
       // Claim context: if this OAuth flow was started from the claim modal,
       // include the claimTenantId + a flag so the callback knows the context.
       context: claimTenantId ? 'CLAIM_BUSINESS' : 'SETTINGS_VERIFICATION',

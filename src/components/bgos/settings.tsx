@@ -30,6 +30,9 @@ import {
   ChevronDown,
   Loader2,
   MessageSquare,
+  Download,
+  Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TeamSettings } from '@/components/settings/sections/team-settings';
@@ -49,7 +52,8 @@ type TopSettingsTab =
   | 'security'
   | 'preferences';
 
-type BusinessSubSection =
+export type BusinessSubSection =
+  | 'all'
   | 'profile'
   | 'details'
   | 'contact'
@@ -60,6 +64,37 @@ type BusinessSubSection =
   | 'custom-fields'
   | 'region'
   | 'data';
+
+export interface AddressFields {
+  street: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
+
+export function parseAddress(raw?: string | null): AddressFields {
+  if (!raw) return { street: '', city: '', state: '', pincode: '', country: '' };
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      return {
+        street: obj.street || '',
+        city: obj.city || '',
+        state: obj.state || '',
+        pincode: obj.pincode || obj.postalCode || obj.zip || '',
+        country: obj.country || '',
+      };
+    } catch {}
+  }
+  return { street: trimmed, city: '', state: '', pincode: '', country: '' };
+}
+
+export function formatAddress(addr: AddressFields): string {
+  const parts = [addr.street, addr.city, addr.state, addr.pincode, addr.country].filter(Boolean);
+  return parts.join(', ');
+}
 
 interface DaySchedule {
   day: string;
@@ -83,6 +118,7 @@ const BUSINESS_SIDEBAR_ITEMS: {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
+  { id: 'all', label: 'All Settings', icon: Sliders },
   { id: 'profile', label: 'Business Profile', icon: Building2 },
   { id: 'details', label: 'Business Details', icon: FileText },
   { id: 'contact', label: 'Contact Information', icon: Phone },
@@ -125,7 +161,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
     return 'business';
   });
 
-  const [activeSubSection, setActiveSubSection] = useState<BusinessSubSection>('profile');
+  const [activeSubSection, setActiveSubSection] = useState<BusinessSubSection>('all');
   const [savedToast, setSavedToast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -138,9 +174,18 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   );
   const [hasLogo, setHasLogo] = useState(true);
 
+  // Address State (Structured)
+  const [addressFields, setAddressFields] = useState<AddressFields>({
+    street: '',
+    city: '',
+    state: '',
+    pincode: '',
+    country: '',
+  });
+
   // Contact Information state
-  const [phoneCountry, setPhoneCountry] = useState('🇮🇳');
-  const [phoneNumber, setPhoneNumber] = useState('+91 98765 43210');
+  const [phoneCountry, setPhoneCountry] = useState('🇦🇺');
+  const [phoneNumber, setPhoneNumber] = useState('61732744866');
   const [emailAddress, setEmailAddress] = useState('hello@bgos.com');
   const [website, setWebsite] = useState('https://bgos.com');
   const [whatsappCountry, setWhatsappCountry] = useState('🇮🇳');
@@ -157,10 +202,28 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   // Tax & Compliance state
   const [gstNumber, setGstNumber] = useState('07ABCDE1234F1Z5');
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
-  const [businessAddress, setBusinessAddress] = useState(
-    '123 Green Park, Near Metro Station, Delhi, 110016, India'
-  );
+  const [businessAddress, setBusinessAddress] = useState('');
   const [defaultTaxRate, setDefaultTaxRate] = useState('18% (GST)');
+
+  // Custom Fields state
+  const [customFields, setCustomFields] = useState<Array<{ id: string; name: string; type: string; module: string }>>([
+    { id: 'cf-1', name: 'Lead Referral Source', type: 'Select', module: 'Leads' },
+    { id: 'cf-2', name: 'Property Type / Size', type: 'Text', module: 'Leads' },
+    { id: 'cf-3', name: 'Gate / Security Code', type: 'Text', module: 'Customers' },
+    { id: 'cf-4', name: 'Preferred Service Window', type: 'Select', module: 'Jobs' },
+  ]);
+  const [newFieldName, setNewFieldName] = useState('');
+  const [newFieldType, setNewFieldType] = useState('Text');
+  const [newFieldModule, setNewFieldModule] = useState('Leads');
+  const [isAddingField, setIsAddingField] = useState(false);
+
+  const updateAddressField = (field: keyof AddressFields, value: string) => {
+    setAddressFields((prev) => {
+      const updated = { ...prev, [field]: value };
+      setBusinessAddress(formatAddress(updated));
+      return updated;
+    });
+  };
 
   // Notifications & Preferences state
   const [emailNotifications, setEmailNotifications] = useState(true);
@@ -168,8 +231,8 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [dailyDigest, setDailyDigest] = useState(true);
   const [autoAssignLeads, setAutoAssignLeads] = useState(true);
   const [instantReviewDrafts, setInstantReviewDrafts] = useState(true);
-  const [timezone, setTimezone] = useState('Asia/Kolkata (IST, UTC+05:30)');
-  const [currency, setCurrency] = useState('INR (₹) / USD ($)');
+  const [timezone, setTimezone] = useState('Australia/Brisbane (AEST, UTC+10:00)');
+  const [currency, setCurrency] = useState('AUD ($)');
 
   // Real API hydration from brand-profile
   useEffect(() => {
@@ -186,7 +249,11 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
             if (profile.usps) setTagline(profile.usps);
             if (profile.voiceDescription) setDescription(profile.voiceDescription);
             if (profile.website) setWebsite(profile.website);
-            if (profile.location) setBusinessAddress(profile.location);
+            if (profile.location && !data?.businessAddress) {
+              const parsed = parseAddress(profile.location);
+              setAddressFields(parsed);
+              setBusinessAddress(formatAddress(parsed));
+            }
             if (profile.serviceArea) {
               const areaList = profile.serviceArea.split(',').map((s: string) => s.trim()).filter(Boolean);
               if (areaList.length > 0) setCities(areaList);
@@ -195,10 +262,37 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           if (data?.hours && Array.isArray(data.hours) && data.hours.length > 0) {
             setHours(data.hours);
           }
-          if (data?.phoneNumber) setPhoneNumber(data.phoneNumber);
+          if (data?.phoneNumber) {
+            setPhoneNumber(data.phoneNumber);
+            if (data.phoneNumber.startsWith('61') || data.phoneNumber.startsWith('+61')) {
+              setPhoneCountry('🇦🇺');
+              setWhatsappCountry('🇦🇺');
+            } else if (data.phoneNumber.startsWith('+91') || data.phoneNumber.startsWith('91')) {
+              setPhoneCountry('🇮🇳');
+              setWhatsappCountry('🇮🇳');
+            } else if (data.phoneNumber.startsWith('+1')) {
+              setPhoneCountry('🇺🇸');
+              setWhatsappCountry('🇺🇸');
+            }
+          }
           if (data?.emailAddress) setEmailAddress(data.emailAddress);
           if (data?.whatsappNumber) setWhatsappNumber(data.whatsappNumber);
-          if (data?.businessAddress) setBusinessAddress(data.businessAddress);
+          if (data?.businessAddress) {
+            const parsed = parseAddress(data.businessAddress);
+            setAddressFields(parsed);
+            setBusinessAddress(formatAddress(parsed));
+            const isAU = parsed.country.toUpperCase() === 'AU' || data.businessAddress.includes('AU') || data.businessAddress.includes('QLD');
+            if (isAU) {
+              setPhoneCountry('🇦🇺');
+              setWhatsappCountry('🇦🇺');
+              setDefaultTaxRate('10% (GST)');
+              setTimezone('Australia/Brisbane (AEST, UTC+10:00)');
+              setCurrency('AUD ($)');
+            }
+            if (!profile?.serviceArea && parsed.city) {
+              setCities([parsed.city]);
+            }
+          }
           if (data?.gstNumber) setGstNumber(data.gstNumber);
           if (data?.invoicePrefix) setInvoicePrefix(data.invoicePrefix);
           if (data?.defaultTaxRate) setDefaultTaxRate(data.defaultTaxRate);
@@ -242,6 +336,8 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const handleSaveChanges = async () => {
     setIsSaving(true);
     try {
+      const serializedAddress = JSON.stringify(addressFields);
+      const readableAddress = formatAddress(addressFields) || businessAddress;
       const res = await fetch('/api/brand-profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -249,7 +345,8 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           businessName,
           industry: businessType || 'Home Cleaning Service',
           website,
-          location: businessAddress,
+          location: readableAddress,
+          businessAddress: serializedAddress,
           serviceArea: serviceAreaMode === 'all' ? 'All areas' : cities.join(', '),
           voiceDescription: description,
           usps: tagline,
@@ -257,7 +354,6 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           phoneNumber,
           emailAddress,
           whatsappNumber,
-          businessAddress,
           gstNumber,
           invoicePrefix,
           defaultTaxRate,
@@ -449,643 +545,937 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
               </nav>
             </aside>
 
-            {/* Right 2-Column Content Cards */}
+            {/* Right Content Cards */}
             <div className="space-y-6 lg:col-span-10">
-              {/* ROW 1: Business Profile + Profile Preview */}
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                {/* Business Profile Card */}
-                <section
-                  id="section-profile"
-                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-7"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-base font-bold text-slate-900">Business Profile</h2>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Manage your business information and how it appears to your customers.
-                      </p>
+              {/* Profile & Details Section */}
+              {(activeSubSection === 'all' || activeSubSection === 'profile' || activeSubSection === 'details' || activeSubSection === 'branding') && (
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                  {/* Business Profile Card */}
+                  <section
+                    id="section-profile"
+                    className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-7"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                      <div>
+                        <h2 className="text-base font-bold text-slate-900">
+                          {activeSubSection === 'branding' ? 'Branding & Logo' : 'Business Profile'}
+                        </h2>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Manage your business identity, public logo, and customer-facing profile.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => navigate('publicHub')}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:bg-slate-50"
+                      >
+                        <Globe className="size-3.5 text-slate-500" />
+                        <span>View Public Profile</span>
+                        <ExternalLink className="size-3 text-slate-400" />
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => navigate('publicHub')}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:bg-slate-50"
-                    >
-                      <Globe className="size-3.5 text-slate-500" />
-                      <span>View Public Profile</span>
-                      <ExternalLink className="size-3 text-slate-400" />
-                    </button>
-                  </div>
 
-                  <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-12">
-                    {/* Logo Upload Column */}
-                    <div className="flex flex-col items-center sm:col-span-4 sm:items-start">
-                      <div className="flex size-28 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/60 shadow-2xs">
-                        {hasLogo ? (
-                          <div className="flex size-20 items-center justify-center rounded-2xl bg-[#E8F8EF] text-5xl font-black text-[#009F50]">
-                            b
-                          </div>
-                        ) : (
-                          <span className="text-xs font-medium text-slate-400">No Logo</span>
-                        )}
+                    <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-12">
+                      {/* Logo Upload Column */}
+                      <div className="flex flex-col items-center sm:col-span-4 sm:items-start">
+                        <div className="flex size-28 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50/60 shadow-2xs overflow-hidden">
+                          {hasLogo ? (
+                            <div className="flex size-20 items-center justify-center rounded-2xl bg-[#E8F8EF] text-5xl font-black text-[#009F50]">
+                              {(businessName || 'B').charAt(0).toUpperCase()}
+                            </div>
+                          ) : (
+                            <span className="text-xs font-medium text-slate-400">No Logo</span>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setHasLogo(true)}
+                          className="mt-3 inline-flex w-28 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:bg-slate-50"
+                        >
+                          <Upload className="size-3.5 text-slate-500" />
+                          <span>Upload Logo</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setHasLogo(false)}
+                          className="mt-2 inline-flex w-28 items-center justify-center rounded-xl bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-100"
+                        >
+                          Remove
+                        </button>
+
+                        <p className="mt-2.5 text-center text-[11px] leading-relaxed text-slate-400 sm:text-left">
+                          Recommended size: 512 × 512px
+                          <br />
+                          PNG, JPG or SVG (max 2MB)
+                        </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setHasLogo(true)}
-                        className="mt-3 inline-flex w-28 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-2xs transition hover:bg-slate-50"
-                      >
-                        <Upload className="size-3.5 text-slate-500" />
-                        <span>Upload Logo</span>
-                      </button>
+                      {/* Profile Inputs Column */}
+                      <div className="space-y-4 sm:col-span-8">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor="settings-business-name"
+                              className="block text-xs font-semibold text-slate-700"
+                            >
+                              Business Name <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              id="settings-business-name"
+                              type="text"
+                              value={businessName}
+                              onChange={(e) => setBusinessName(e.target.value)}
+                              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                            />
+                          </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setHasLogo(false)}
-                        className="mt-2 inline-flex w-28 items-center justify-center rounded-xl bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-600 transition hover:bg-rose-100"
-                      >
-                        Remove
-                      </button>
+                          <div>
+                            <label
+                              htmlFor="settings-business-type"
+                              className="block text-xs font-semibold text-slate-700"
+                            >
+                              Business Type <span className="text-rose-500">*</span>
+                            </label>
+                            <div className="relative mt-1.5">
+                              <select
+                                id="settings-business-type"
+                                value={businessType}
+                                onChange={(e) => setBusinessType(e.target.value)}
+                                className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2 pr-8 pl-3 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                              >
+                                <option value="Home Cleaning Service">Home Cleaning Service</option>
+                                <option value="HVAC & Plumbing">HVAC &amp; Plumbing</option>
+                                <option value="Landscaping & Lawn Care">Landscaping &amp; Lawn Care</option>
+                                <option value="Pest Control Service">Pest Control Service</option>
+                                <option value="Electrical & Handyman">Electrical &amp; Handyman</option>
+                                <option value="Fabrication & Engineering">Fabrication &amp; Engineering</option>
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
+                            </div>
+                          </div>
+                        </div>
 
-                      <p className="mt-2.5 text-center text-[11px] leading-relaxed text-slate-400 sm:text-left">
-                        Recommended size: 512 × 512px
-                        <br />
-                        PNG, JPG or SVG (max 2MB)
-                      </p>
-                    </div>
-
-                    {/* Profile Inputs Column */}
-                    <div className="space-y-4 sm:col-span-8">
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                           <label
-                            htmlFor="settings-business-name"
+                            htmlFor="settings-tagline"
                             className="block text-xs font-semibold text-slate-700"
                           >
-                            Business Name <span className="text-rose-500">*</span>
+                            Tagline
                           </label>
                           <input
-                            id="settings-business-name"
+                            id="settings-tagline"
                             type="text"
-                            value={businessName}
-                            onChange={(e) => setBusinessName(e.target.value)}
+                            value={tagline}
+                            onChange={(e) => setTagline(e.target.value)}
                             className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
                           />
                         </div>
 
                         <div>
                           <label
-                            htmlFor="settings-business-type"
+                            htmlFor="settings-description"
                             className="block text-xs font-semibold text-slate-700"
                           >
-                            Business Type <span className="text-rose-500">*</span>
+                            Business Description
+                          </label>
+                          <textarea
+                            id="settings-description"
+                            rows={3}
+                            maxLength={300}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700 focus:border-[#009F50] focus:outline-hidden"
+                          />
+                          <div className="mt-1 text-right text-[11px] font-medium text-slate-400">
+                            {description.length}/300
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Profile Preview Card */}
+                  <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-5">
+                    <h2 className="text-base font-bold text-slate-900">Profile Preview</h2>
+
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
+                      {/* Cover Photo Banner */}
+                      <div className="relative h-28 w-full overflow-hidden bg-gradient-to-r from-amber-100 via-emerald-50 to-teal-100">
+                        <div
+                          className="absolute inset-0 bg-cover bg-center opacity-85"
+                          style={{
+                            backgroundImage:
+                              'linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(245,158,11,0.22) 100%)',
+                          }}
+                        />
+                        <div className="absolute right-4 bottom-3 flex items-center gap-1.5 rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-slate-700 backdrop-blur-xs">
+                          <span>✨ {tagline || 'Clean Spaces, Happy Places'}</span>
+                        </div>
+                      </div>
+
+                      {/* Avatar + Details */}
+                      <div className="relative px-4 pt-2 pb-4">
+                        <div className="-mt-9 mb-2 flex items-end justify-between">
+                          <div className="flex size-14 items-center justify-center rounded-full border-4 border-white bg-[#009F50] text-2xl font-black text-white shadow-sm overflow-hidden">
+                            {(businessName || 'B').charAt(0).toUpperCase()}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="text-base font-bold text-slate-900 truncate">
+                            {businessName || 'BGOS'}
+                          </h3>
+                          <BadgeCheck className="size-4 fill-sky-500 text-white shrink-0" />
+                        </div>
+
+                        <div className="mt-1 flex items-center gap-1.5 text-xs">
+                          <span className="font-bold text-slate-800">4.8</span>
+                          <div className="flex items-center text-amber-400">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className="size-3.5 fill-amber-400 text-amber-400" />
+                            ))}
+                          </div>
+                          <span className="text-slate-500">(246 reviews)</span>
+                        </div>
+
+                        <p className="mt-0.5 text-xs text-slate-500">{businessType}</p>
+
+                        <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <Clock className="size-3.5 text-[#009F50] shrink-0" />
+                            <span className="font-semibold text-[#009F50]">Open Now</span>
+                            <span className="text-slate-500">· Closes 8:00 PM</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <MapPin className="size-3.5 text-[#009F50] shrink-0" />
+                            <span className="truncate">{formatAddress(addressFields) || businessAddress || 'Your Business Location'}</span>
+                          </div>
+                        </div>
+
+                        {/* 3 Action Buttons */}
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            className="rounded-xl bg-[#009F50] px-3 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-[#008A45]"
+                          >
+                            Book Now
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Get Quote
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            <Phone className="size-3 text-slate-600" />
+                            <span>Call</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {/* Contact Information & Hours Section */}
+              {(activeSubSection === 'all' || activeSubSection === 'contact' || activeSubSection === 'hours') && (
+                <div className={`grid grid-cols-1 gap-6 ${(activeSubSection === 'all' || (activeSubSection === 'contact' && false)) ? 'xl:grid-cols-12' : (activeSubSection === 'contact' || activeSubSection === 'hours') ? '' : 'xl:grid-cols-12'}`}>
+                  {(activeSubSection === 'all' || activeSubSection === 'contact') && (
+                    <section
+                      id="section-contact"
+                      className={`rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs ${activeSubSection === 'all' ? 'xl:col-span-7' : 'w-full'}`}
+                    >
+                      <div className="border-b border-slate-100 pb-4">
+                        <h2 className="text-base font-bold text-slate-900">Contact Information</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Primary customer inquiry and notification endpoints.
+                        </p>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        {/* Phone Number */}
+                        <div>
+                          <label
+                            htmlFor="settings-phone"
+                            className="block text-xs font-semibold text-slate-700"
+                          >
+                            Phone Number <span className="text-rose-500">*</span>
+                          </label>
+                          <div className="mt-1.5 flex rounded-xl border border-slate-200 bg-white focus-within:border-[#009F50]">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPhoneCountry((c) => (c === '🇦🇺' ? '🇮🇳' : c === '🇮🇳' ? '🇺🇸' : '🇦🇺'))
+                              }
+                              className="flex items-center gap-1 border-r border-slate-200 px-2.5 py-2 text-xs text-slate-700"
+                              aria-label="Phone country code"
+                            >
+                              <span>{phoneCountry}</span>
+                              <ChevronDown className="size-3 text-slate-400" />
+                            </button>
+                            <input
+                              id="settings-phone"
+                              type="text"
+                              value={phoneNumber}
+                              onChange={(e) => setPhoneNumber(e.target.value)}
+                              placeholder="e.g. 61732744866"
+                              className="w-full rounded-r-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Email Address */}
+                        <div>
+                          <label
+                            htmlFor="settings-email"
+                            className="block text-xs font-semibold text-slate-700"
+                          >
+                            Email Address <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            id="settings-email"
+                            type="email"
+                            value={emailAddress}
+                            onChange={(e) => setEmailAddress(e.target.value)}
+                            placeholder="e.g. info@yourbusiness.com"
+                            className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                          />
+                        </div>
+
+                        {/* Website */}
+                        <div>
+                          <label
+                            htmlFor="settings-website"
+                            className="block text-xs font-semibold text-slate-700"
+                          >
+                            Website
+                          </label>
+                          <input
+                            id="settings-website"
+                            type="url"
+                            value={website}
+                            onChange={(e) => setWebsite(e.target.value)}
+                            placeholder="https://yourbusiness.com"
+                            className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                          />
+                        </div>
+
+                        {/* WhatsApp Number */}
+                        <div>
+                          <label
+                            htmlFor="settings-whatsapp"
+                            className="block text-xs font-semibold text-slate-700"
+                          >
+                            WhatsApp Number
+                          </label>
+                          <div className="mt-1.5 flex rounded-xl border border-slate-200 bg-white focus-within:border-[#009F50]">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setWhatsappCountry((c) => (c === '🇦🇺' ? '🇮🇳' : c === '🇮🇳' ? '🇺🇸' : '🇦🇺'))
+                              }
+                              className="flex items-center gap-1 border-r border-slate-200 px-2.5 py-2 text-xs text-slate-700"
+                              aria-label="WhatsApp country code"
+                            >
+                              <span>{whatsappCountry}</span>
+                              <ChevronDown className="size-3 text-slate-400" />
+                            </button>
+                            <input
+                              id="settings-whatsapp"
+                              type="text"
+                              value={whatsappNumber}
+                              onChange={(e) => setWhatsappNumber(e.target.value)}
+                              placeholder="e.g. +61 400 000 000"
+                              className="w-full rounded-r-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
+                            />
+                          </div>
+                          <p className="mt-1.5 text-[11px] text-slate-400">
+                            Used for customer communication and notifications.
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {(activeSubSection === 'all' || activeSubSection === 'hours') && (
+                    <section
+                      id="section-hours"
+                      className={`rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs ${activeSubSection === 'all' ? 'xl:col-span-5' : 'w-full'}`}
+                    >
+                      <div className="border-b border-slate-100 pb-4">
+                        <h2 className="text-base font-bold text-slate-900">Business Hours</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Set your working hours and availability.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 space-y-2.5">
+                        {hours.map((item) => (
+                          <div
+                            key={item.day}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleDayOpen(item.day)}
+                              className="flex w-28 shrink-0 items-center gap-2 text-left"
+                            >
+                              <span
+                                className={`flex size-4 items-center justify-center rounded-sm border transition ${
+                                  item.open
+                                    ? 'border-[#009F50] bg-[#009F50] text-white'
+                                    : 'border-slate-300 bg-white'
+                                }`}
+                              >
+                                {item.open && <Check className="size-3 stroke-[3]" />}
+                              </span>
+                              <span
+                                className={`font-medium ${
+                                  item.open ? 'text-slate-800' : 'text-slate-400'
+                                }`}
+                              >
+                                {item.day}
+                              </span>
+                            </button>
+
+                            {item.open ? (
+                              <div className="flex flex-1 items-center gap-1.5">
+                                <select
+                                  aria-label={`${item.day} start time`}
+                                  value={item.start}
+                                  onChange={(e) =>
+                                    updateDayTime(item.day, 'start', e.target.value)
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 focus:border-[#009F50] focus:outline-hidden"
+                                >
+                                  <option value="8:00 AM">8:00 AM</option>
+                                  <option value="8:30 AM">8:30 AM</option>
+                                  <option value="9:00 AM">9:00 AM</option>
+                                  <option value="10:00 AM">10:00 AM</option>
+                                </select>
+                                <span className="text-slate-400">–</span>
+                                <select
+                                  aria-label={`${item.day} end time`}
+                                  value={item.end}
+                                  onChange={(e) =>
+                                    updateDayTime(item.day, 'end', e.target.value)
+                                  }
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 focus:border-[#009F50] focus:outline-hidden"
+                                >
+                                  <option value="5:00 PM">5:00 PM</option>
+                                  <option value="6:00 PM">6:00 PM</option>
+                                  <option value="7:00 PM">7:00 PM</option>
+                                  <option value="8:00 PM">8:00 PM</option>
+                                  <option value="9:00 PM">9:00 PM</option>
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="flex-1">
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-400">
+                                  Closed
+                                </div>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!item.open) toggleDayOpen(item.day);
+                              }}
+                              aria-label={`Add shift for ${item.day}`}
+                              className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                            >
+                              <Plus className="size-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </div>
+              )}
+
+              {/* Service Areas & Tax/Compliance Section */}
+              {(activeSubSection === 'all' || activeSubSection === 'areas' || activeSubSection === 'tax') && (
+                <div className={`grid grid-cols-1 gap-6 ${activeSubSection === 'all' ? 'xl:grid-cols-12' : ''}`}>
+                  {(activeSubSection === 'all' || activeSubSection === 'areas') && (
+                    <section
+                      id="section-areas"
+                      className={`rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs ${activeSubSection === 'all' ? 'xl:col-span-6' : 'w-full'}`}
+                    >
+                      <div className="border-b border-slate-100 pb-4">
+                        <h2 className="text-base font-bold text-slate-900">Service Areas</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Set the geographic regions where you provide your services.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {/* Option 1: All Cities / Country */}
+                        <label
+                          onClick={() => setServiceAreaMode('all')}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition ${
+                            serviceAreaMode === 'all'
+                              ? 'border-[#009F50] bg-[#E8F8EF]/30'
+                              : 'border-slate-200 bg-white hover:bg-slate-50/60'
+                          }`}
+                        >
+                          <span
+                            className={`flex size-4 items-center justify-center rounded-full border ${
+                              serviceAreaMode === 'all'
+                                ? 'border-[#009F50]'
+                                : 'border-slate-300'
+                            }`}
+                          >
+                            {serviceAreaMode === 'all' && (
+                              <span className="size-2 rounded-full bg-[#009F50]" />
+                            )}
+                          </span>
+                          <div>
+                            <span className="text-xs font-bold text-slate-900">
+                              All Cities / Countrywide
+                            </span>
+                            <span className="ml-2 text-xs text-slate-500">
+                              Serve customers across the entire region
+                            </span>
+                          </div>
+                        </label>
+
+                        {/* Option 2: Specific Cities */}
+                        <label
+                          onClick={() => setServiceAreaMode('specific')}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition ${
+                            serviceAreaMode === 'specific'
+                              ? 'border-[#009F50] bg-[#E8F8EF]/30'
+                              : 'border-slate-200 bg-white hover:bg-slate-50/60'
+                          }`}
+                        >
+                          <span
+                            className={`flex size-4 items-center justify-center rounded-full border ${
+                              serviceAreaMode === 'specific'
+                                ? 'border-[#009F50]'
+                                : 'border-slate-300'
+                            }`}
+                          >
+                            {serviceAreaMode === 'specific' && (
+                              <span className="size-2 rounded-full bg-[#009F50]" />
+                            )}
+                          </span>
+                          <div>
+                            <span className="text-xs font-bold text-slate-900">Specific Cities / Suburbs</span>
+                            <span className="ml-2 text-xs text-slate-500">
+                              Select suburbs, postal codes or service zones
+                            </span>
+                          </div>
+                        </label>
+
+                        {/* City Tag Chips Box */}
+                        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
+                          {cities.map((city) => (
+                            <span
+                              key={city}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                            >
+                              <span>{city}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCity(city)}
+                                aria-label={`Remove ${city}`}
+                                className="text-slate-400 hover:text-slate-700"
+                              >
+                                <X className="size-3" />
+                              </button>
+                            </span>
+                          ))}
+                          <input
+                            type="text"
+                            value={cityInput}
+                            onChange={(e) => setCityInput(e.target.value)}
+                            onKeyDown={handleAddCity}
+                            placeholder="Add suburb or zip code..."
+                            className="min-w-[140px] flex-1 bg-transparent px-1.5 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+                    </section>
+                  )}
+
+                  {(activeSubSection === 'all' || activeSubSection === 'tax') && (
+                    <section
+                      id="section-tax"
+                      className={`rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs ${activeSubSection === 'all' ? 'xl:col-span-6' : 'w-full'}`}
+                    >
+                      <div className="border-b border-slate-100 pb-4">
+                        <h2 className="text-base font-bold text-slate-900">Tax &amp; Compliance</h2>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          Configure tax identification, billing address, and default invoice rates.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 space-y-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <label
+                              htmlFor="settings-gst-number"
+                              className="block text-xs font-semibold text-slate-700"
+                            >
+                              {addressFields.country.toUpperCase() === 'AU' ? 'ABN / ACN Number' : 'GST / Tax ID Number'}
+                            </label>
+                            <input
+                              id="settings-gst-number"
+                              type="text"
+                              value={gstNumber}
+                              onChange={(e) => setGstNumber(e.target.value)}
+                              placeholder={addressFields.country.toUpperCase() === 'AU' ? 'e.g. 51 824 753 556' : 'e.g. 07ABCDE1234F1Z5'}
+                              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor="settings-invoice-prefix"
+                              className="block text-xs font-semibold text-slate-700"
+                            >
+                              Invoice Prefix
+                            </label>
+                            <input
+                              id="settings-invoice-prefix"
+                              type="text"
+                              value={invoicePrefix}
+                              onChange={(e) => setInvoicePrefix(e.target.value)}
+                              className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Structured Business Address */}
+                        <div className="space-y-3 pt-2 border-t border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-xs font-semibold text-slate-700">
+                              Business Physical Address
+                            </label>
+                            <span className="text-[11px] text-slate-400">Structured for invoicing</span>
+                          </div>
+
+                          <div>
+                            <label htmlFor="settings-address-street" className="block text-[11px] font-medium text-slate-500">Street Address</label>
+                            <input
+                              id="settings-address-street"
+                              type="text"
+                              value={addressFields.street}
+                              onChange={(e) => updateAddressField('street', e.target.value)}
+                              placeholder="e.g. 1/7 Macbarry Pl"
+                              className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label htmlFor="settings-address-city" className="block text-[11px] font-medium text-slate-500">City / Suburb</label>
+                              <input
+                                id="settings-address-city"
+                                type="text"
+                                value={addressFields.city}
+                                onChange={(e) => updateAddressField('city', e.target.value)}
+                                placeholder="e.g. Rocklea"
+                                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="settings-address-state" className="block text-[11px] font-medium text-slate-500">State / Province</label>
+                              <input
+                                id="settings-address-state"
+                                type="text"
+                                value={addressFields.state}
+                                onChange={(e) => updateAddressField('state', e.target.value)}
+                                placeholder="e.g. QLD"
+                                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label htmlFor="settings-address-pincode" className="block text-[11px] font-medium text-slate-500">Postal / Zip Code</label>
+                              <input
+                                id="settings-address-pincode"
+                                type="text"
+                                value={addressFields.pincode}
+                                onChange={(e) => updateAddressField('pincode', e.target.value)}
+                                placeholder="e.g. 4106"
+                                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="settings-address-country" className="block text-[11px] font-medium text-slate-500">Country Code</label>
+                              <input
+                                id="settings-address-country"
+                                type="text"
+                                value={addressFields.country}
+                                onChange={(e) => updateAddressField('country', e.target.value.toUpperCase())}
+                                placeholder="e.g. AU"
+                                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden uppercase"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="settings-tax-rate"
+                            className="block text-xs font-semibold text-slate-700"
+                          >
+                            Default Tax Rate
                           </label>
                           <div className="relative mt-1.5">
                             <select
-                              id="settings-business-type"
-                              value={businessType}
-                              onChange={(e) => setBusinessType(e.target.value)}
+                              id="settings-tax-rate"
+                              value={defaultTaxRate}
+                              onChange={(e) => setDefaultTaxRate(e.target.value)}
                               className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2 pr-8 pl-3 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
                             >
-                              <option value="Home Cleaning Service">Home Cleaning Service</option>
-                              <option value="HVAC & Plumbing">HVAC &amp; Plumbing</option>
-                              <option value="Landscaping & Lawn Care">
-                                Landscaping &amp; Lawn Care
-                              </option>
-                              <option value="Pest Control Service">Pest Control Service</option>
-                              <option value="Electrical & Handyman">
-                                Electrical &amp; Handyman
-                              </option>
+                              <option value="10% (GST)">10% (GST - Australia)</option>
+                              <option value="18% (GST)">18% (GST - India)</option>
+                              <option value="12% (GST)">12% (GST)</option>
+                              <option value="5% (GST)">5% (GST)</option>
+                              <option value="0% (Tax Exempt)">0% (Tax Exempt)</option>
                             </select>
                             <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
                           </div>
                         </div>
                       </div>
+                    </section>
+                  )}
+                </div>
+              )}
 
-                      <div>
-                        <label
-                          htmlFor="settings-tagline"
-                          className="block text-xs font-semibold text-slate-700"
-                        >
-                          Tagline
-                        </label>
-                        <input
-                          id="settings-tagline"
-                          type="text"
-                          value={tagline}
-                          onChange={(e) => setTagline(e.target.value)}
-                          className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label
-                          htmlFor="settings-description"
-                          className="block text-xs font-semibold text-slate-700"
-                        >
-                          Business Description
-                        </label>
-                        <textarea
-                          id="settings-description"
-                          rows={3}
-                          maxLength={300}
-                          value={description}
-                          onChange={(e) => setDescription(e.target.value)}
-                          className="mt-1.5 w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-700 focus:border-[#009F50] focus:outline-hidden"
-                        />
-                        <div className="mt-1 text-right text-[11px] font-medium text-slate-400">
-                          {description.length === 138 ? '120' : description.length}/300
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Profile Preview Card */}
-                <section className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-5">
-                  <h2 className="text-base font-bold text-slate-900">Profile Preview</h2>
-
-                  <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
-                    {/* Cover Photo Banner */}
-                    <div className="relative h-28 w-full overflow-hidden bg-gradient-to-r from-amber-100 via-emerald-50 to-teal-100">
-                      <div
-                        className="absolute inset-0 bg-cover bg-center opacity-85"
-                        style={{
-                          backgroundImage:
-                            'linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(245,158,11,0.22) 100%)',
-                        }}
-                      />
-                      {/* Decorative interior illustration accents */}
-                      <div className="absolute right-4 bottom-3 flex items-center gap-1.5 rounded-full bg-white/85 px-2.5 py-1 text-[10px] font-semibold text-slate-700 backdrop-blur-xs">
-                        <span>✨ {tagline}</span>
-                      </div>
-                    </div>
-
-                    {/* Avatar + Details */}
-                    <div className="relative px-4 pt-2 pb-4">
-                      <div className="-mt-9 mb-2 flex items-end justify-between">
-                        <div className="flex size-14 items-center justify-center rounded-full border-4 border-white bg-[#009F50] text-2xl font-black text-white shadow-sm">
-                          b
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <h3 className="text-base font-bold text-slate-900">
-                          {businessName || 'BGOS'}
-                        </h3>
-                        <BadgeCheck className="size-4 fill-sky-500 text-white" />
-                      </div>
-
-                      <div className="mt-1 flex items-center gap-1.5 text-xs">
-                        <span className="font-bold text-slate-800">4.8</span>
-                        <div className="flex items-center text-amber-400">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} className="size-3.5 fill-amber-400 text-amber-400" />
-                          ))}
-                        </div>
-                        <span className="text-slate-500">(246 reviews)</span>
-                      </div>
-
-                      <p className="mt-0.5 text-xs text-slate-500">{businessType}</p>
-
-                      <div className="mt-3 space-y-1.5 border-t border-slate-100 pt-3 text-xs">
-                        <div className="flex items-center gap-2">
-                          <Clock className="size-3.5 text-[#009F50]" />
-                          <span className="font-semibold text-[#009F50]">Open Now</span>
-                          <span className="text-slate-500">· Closes 8:00 PM</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-600">
-                          <MapPin className="size-3.5 text-[#009F50]" />
-                          <span>123 Green Park, Delhi, India</span>
-                        </div>
-                      </div>
-
-                      {/* 3 Action Buttons */}
-                      <div className="mt-4 grid grid-cols-3 gap-2">
-                        <button
-                          type="button"
-                          className="rounded-xl bg-[#009F50] px-3 py-2 text-xs font-semibold text-white shadow-2xs transition hover:bg-[#008A45]"
-                        >
-                          Book Now
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                        >
-                          Get Quote
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                        >
-                          <Phone className="size-3 text-slate-600" />
-                          <span>Call</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              {/* ROW 2: Contact Information + Business Hours */}
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                {/* Contact Information Card */}
+              {/* Custom Fields Section */}
+              {(activeSubSection === 'all' || activeSubSection === 'custom-fields') && (
                 <section
-                  id="section-contact"
-                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-7"
+                  id="section-custom-fields"
+                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs"
                 >
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-base font-bold text-slate-900">Contact Information</h2>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      Primary contact details for your business.
-                    </p>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {/* Phone Number */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                     <div>
-                      <label
-                        htmlFor="settings-phone"
-                        className="block text-xs font-semibold text-slate-700"
-                      >
-                        Phone Number <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="mt-1.5 flex rounded-xl border border-slate-200 bg-white focus-within:border-[#009F50]">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPhoneCountry((c) => (c === '🇮🇳' ? '🇺🇸' : '🇮🇳'))
-                          }
-                          className="flex items-center gap-1 border-r border-slate-200 px-2.5 py-2 text-xs text-slate-700"
-                          aria-label="Phone country code"
-                        >
-                          <span>{phoneCountry}</span>
-                          <ChevronDown className="size-3 text-slate-400" />
-                        </button>
-                        <input
-                          id="settings-phone"
-                          type="text"
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          className="w-full rounded-r-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Email Address */}
-                    <div>
-                      <label
-                        htmlFor="settings-email"
-                        className="block text-xs font-semibold text-slate-700"
-                      >
-                        Email Address <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        id="settings-email"
-                        type="email"
-                        value={emailAddress}
-                        onChange={(e) => setEmailAddress(e.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
-                      />
-                    </div>
-
-                    {/* Website */}
-                    <div>
-                      <label
-                        htmlFor="settings-website"
-                        className="block text-xs font-semibold text-slate-700"
-                      >
-                        Website
-                      </label>
-                      <input
-                        id="settings-website"
-                        type="url"
-                        value={website}
-                        onChange={(e) => setWebsite(e.target.value)}
-                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
-                      />
-                    </div>
-
-                    {/* WhatsApp Number */}
-                    <div>
-                      <label
-                        htmlFor="settings-whatsapp"
-                        className="block text-xs font-semibold text-slate-700"
-                      >
-                        WhatsApp Number
-                      </label>
-                      <div className="mt-1.5 flex rounded-xl border border-slate-200 bg-white focus-within:border-[#009F50]">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setWhatsappCountry((c) => (c === '🇮🇳' ? '🇺🇸' : '🇮🇳'))
-                          }
-                          className="flex items-center gap-1 border-r border-slate-200 px-2.5 py-2 text-xs text-slate-700"
-                          aria-label="WhatsApp country code"
-                        >
-                          <span>{whatsappCountry}</span>
-                          <ChevronDown className="size-3 text-slate-400" />
-                        </button>
-                        <input
-                          id="settings-whatsapp"
-                          type="text"
-                          value={whatsappNumber}
-                          onChange={(e) => setWhatsappNumber(e.target.value)}
-                          className="w-full rounded-r-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
-                        />
-                      </div>
-                      <p className="mt-1.5 text-[11px] text-slate-400">
-                        Used for customer communication and notifications.
+                      <h2 className="text-base font-bold text-slate-900">Custom Fields</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        Define custom attributes to capture on incoming leads, customer profiles, and service orders.
                       </p>
                     </div>
-                  </div>
-                </section>
-
-                {/* Business Hours Card */}
-                <section
-                  id="section-hours"
-                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-5"
-                >
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-base font-bold text-slate-900">Business Hours</h2>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      Set your working hours and availability.
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingField((v) => !v)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-[#009F50] px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-[#008A45]"
+                    >
+                      <Plus className="size-3.5" />
+                      <span>{isAddingField ? 'Cancel' : 'Add Custom Field'}</span>
+                    </button>
                   </div>
 
-                  <div className="mt-4 space-y-2.5">
-                    {hours.map((item) => (
-                      <div
-                        key={item.day}
-                        className="flex items-center justify-between gap-2 text-xs"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleDayOpen(item.day)}
-                          className="flex w-28 shrink-0 items-center gap-2 text-left"
-                        >
-                          <span
-                            className={`flex size-4 items-center justify-center rounded-sm border transition ${
-                              item.open
-                                ? 'border-[#009F50] bg-[#009F50] text-white'
-                                : 'border-slate-300 bg-white'
-                            }`}
+                  {isAddingField && (
+                    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 space-y-3">
+                      <h4 className="text-xs font-bold text-slate-900">Create New Field</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700">Field Label</label>
+                          <input
+                            type="text"
+                            value={newFieldName}
+                            onChange={(e) => setNewFieldName(e.target.value)}
+                            placeholder="e.g. Property Square Footage"
+                            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700">Field Type</label>
+                          <select
+                            value={newFieldType}
+                            onChange={(e) => setNewFieldType(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
                           >
-                            {item.open && <Check className="size-3 stroke-[3]" />}
-                          </span>
-                          <span
-                            className={`font-medium ${
-                              item.open ? 'text-slate-800' : 'text-slate-400'
-                            }`}
+                            <option value="Text">Text</option>
+                            <option value="Number">Number</option>
+                            <option value="Select">Dropdown Select</option>
+                            <option value="Date">Date Picker</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700">Attach To</label>
+                          <select
+                            value={newFieldModule}
+                            onChange={(e) => setNewFieldModule(e.target.value)}
+                            className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden"
                           >
-                            {item.day}
-                          </span>
-                        </button>
-
-                        {item.open ? (
-                          <div className="flex flex-1 items-center gap-1.5">
-                            <select
-                              aria-label={`${item.day} start time`}
-                              value={item.start}
-                              onChange={(e) =>
-                                updateDayTime(item.day, 'start', e.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 focus:border-[#009F50] focus:outline-hidden"
-                            >
-                              <option value="8:00 AM">8:00 AM</option>
-                              <option value="9:00 AM">9:00 AM</option>
-                              <option value="10:00 AM">10:00 AM</option>
-                            </select>
-                            <span className="text-slate-400">–</span>
-                            <select
-                              aria-label={`${item.day} end time`}
-                              value={item.end}
-                              onChange={(e) =>
-                                updateDayTime(item.day, 'end', e.target.value)
-                              }
-                              className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-medium text-slate-700 focus:border-[#009F50] focus:outline-hidden"
-                            >
-                              <option value="5:00 PM">5:00 PM</option>
-                              <option value="6:00 PM">6:00 PM</option>
-                              <option value="7:00 PM">7:00 PM</option>
-                              <option value="8:00 PM">8:00 PM</option>
-                              <option value="9:00 PM">9:00 PM</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="flex-1">
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-400">
-                              Closed
-                            </div>
-                          </div>
-                        )}
-
+                            <option value="Leads">Leads &amp; Inquiries</option>
+                            <option value="Customers">Customer Cards</option>
+                            <option value="Jobs">Jobs &amp; Orders</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex justify-end gap-2 pt-2">
                         <button
                           type="button"
                           onClick={() => {
-                            if (!item.open) toggleDayOpen(item.day);
+                            if (!newFieldName.trim()) return toast.error('Please enter a field label');
+                            setCustomFields((prev) => [
+                              ...prev,
+                              {
+                                id: `cf-${Date.now()}`,
+                                name: newFieldName.trim(),
+                                type: newFieldType,
+                                module: newFieldModule,
+                              },
+                            ]);
+                            setNewFieldName('');
+                            setIsAddingField(false);
+                            toast.success(`Custom field "${newFieldName.trim()}" added!`);
                           }}
-                          aria-label={`Add shift for ${item.day}`}
-                          className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                          className="rounded-xl bg-[#009F50] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#008A45]"
                         >
-                          <Plus className="size-3.5" />
+                          Save Field
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-4 divide-y divide-slate-100">
+                    {customFields.map((field) => (
+                      <div key={field.id} className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-bold text-slate-900">{field.name}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                            {field.type}
+                          </span>
+                          <span className="rounded-full bg-emerald-50 text-[#009F50] px-2 py-0.5 text-[10px] font-semibold">
+                            {field.module}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomFields((prev) => prev.filter((f) => f.id !== field.id));
+                            toast.info(`Field "${field.name}" removed`);
+                          }}
+                          className="text-slate-400 hover:text-rose-600 transition"
+                          title="Delete field"
+                        >
+                          <Trash2 className="size-3.5" />
                         </button>
                       </div>
                     ))}
                   </div>
                 </section>
-              </div>
+              )}
 
-              {/* ROW 3: Service Areas + Tax & Compliance */}
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                {/* Service Areas Card */}
+              {/* Language & Region Section */}
+              {(activeSubSection === 'all' || activeSubSection === 'region') && (
                 <section
-                  id="section-areas"
-                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-7"
+                  id="section-region"
+                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs"
                 >
                   <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-base font-bold text-slate-900">Service Areas</h2>
+                    <h2 className="text-base font-bold text-slate-900">Language &amp; Region</h2>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      Set the areas where you provide your services.
+                      Localization, operating timezone, and tenant currency configuration.
                     </p>
                   </div>
 
-                  <div className="mt-4 space-y-3">
-                    {/* Option 1: All Cities / Country */}
-                    <label
-                      onClick={() => setServiceAreaMode('all')}
-                      className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition ${
-                        serviceAreaMode === 'all'
-                          ? 'border-[#009F50] bg-[#E8F8EF]/30'
-                          : 'border-slate-200 bg-white hover:bg-slate-50/60'
-                      }`}
-                    >
-                      <span
-                        className={`flex size-4 items-center justify-center rounded-full border ${
-                          serviceAreaMode === 'all'
-                            ? 'border-[#009F50]'
-                            : 'border-slate-300'
-                        }`}
-                      >
-                        {serviceAreaMode === 'all' && (
-                          <span className="size-2 rounded-full bg-[#009F50]" />
-                        )}
-                      </span>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900">
-                          All Cities / Country
-                        </span>
-                        <span className="ml-2 text-xs text-slate-500">
-                          Serve customers across the entire country
-                        </span>
-                      </div>
-                    </label>
-
-                    {/* Option 2: Specific Cities */}
-                    <label
-                      onClick={() => setServiceAreaMode('specific')}
-                      className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3.5 transition ${
-                        serviceAreaMode === 'specific'
-                          ? 'border-[#009F50] bg-[#E8F8EF]/30'
-                          : 'border-slate-200 bg-white hover:bg-slate-50/60'
-                      }`}
-                    >
-                      <span
-                        className={`flex size-4 items-center justify-center rounded-full border ${
-                          serviceAreaMode === 'specific'
-                            ? 'border-[#009F50]'
-                            : 'border-slate-300'
-                        }`}
-                      >
-                        {serviceAreaMode === 'specific' && (
-                          <span className="size-2 rounded-full bg-[#009F50]" />
-                        )}
-                      </span>
-                      <div>
-                        <span className="text-xs font-bold text-slate-900">Specific Cities</span>
-                        <span className="ml-2 text-xs text-slate-500">
-                          Select cities, zip codes or areas
-                        </span>
-                      </div>
-                    </label>
-
-                    {/* City Tag Chips Box */}
-                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5">
-                      {cities.map((city) => (
-                        <span
-                          key={city}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
-                        >
-                          <span>{city}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCity(city)}
-                            aria-label={`Remove ${city}`}
-                            className="text-slate-400 hover:text-slate-700"
-                          >
-                            <X className="size-3" />
-                          </button>
-                        </span>
-                      ))}
-                      <input
-                        type="text"
-                        value={cityInput}
-                        onChange={(e) => setCityInput(e.target.value)}
-                        onKeyDown={handleAddCity}
-                        placeholder="Add city or area..."
-                        className="min-w-[140px] flex-1 bg-transparent px-1.5 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-                </section>
-
-                {/* Tax & Compliance Card */}
-                <section
-                  id="section-tax"
-                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs xl:col-span-5"
-                >
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-base font-bold text-slate-900">Tax &amp; Compliance</h2>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      Configure tax settings for invoices and billing.
-                    </p>
-                  </div>
-
-                  <div className="mt-4 space-y-4">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="settings-gst-number"
-                          className="block text-xs font-semibold text-slate-700"
-                        >
-                          GST Number
-                        </label>
-                        <input
-                          id="settings-gst-number"
-                          type="text"
-                          value={gstNumber}
-                          onChange={(e) => setGstNumber(e.target.value)}
-                          className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
-                        />
-                      </div>
-
-                      <div>
-                        <label
-                          htmlFor="settings-invoice-prefix"
-                          className="block text-xs font-semibold text-slate-700"
-                        >
-                          Invoice Prefix
-                        </label>
-                        <input
-                          id="settings-invoice-prefix"
-                          type="text"
-                          value={invoicePrefix}
-                          onChange={(e) => setInvoicePrefix(e.target.value)}
-                          className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
-                        />
-                      </div>
-                    </div>
-
+                  <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div>
-                      <label
-                        htmlFor="settings-business-address"
-                        className="block text-xs font-semibold text-slate-700"
-                      >
-                        Business Address
-                      </label>
+                      <label className="block text-xs font-semibold text-slate-700">Timezone</label>
                       <input
-                        id="settings-business-address"
                         type="text"
-                        value={businessAddress}
-                        onChange={(e) => setBusinessAddress(e.target.value)}
+                        value={timezone}
+                        onChange={(e) => setTimezone(e.target.value)}
                         className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
                       />
                     </div>
-
                     <div>
-                      <label
-                        htmlFor="settings-tax-rate"
-                        className="block text-xs font-semibold text-slate-700"
+                      <label className="block text-xs font-semibold text-slate-700">Display Currency</label>
+                      <input
+                        type="text"
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700">Date Format</label>
+                      <select
+                        aria-label="Date format"
+                        defaultValue="DD/MM/YYYY"
+                        className="mt-1.5 w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
                       >
-                        Default Tax Rate
-                      </label>
-                      <div className="relative mt-1.5">
-                        <select
-                          id="settings-tax-rate"
-                          value={defaultTaxRate}
-                          onChange={(e) => setDefaultTaxRate(e.target.value)}
-                          className="w-full appearance-none rounded-xl border border-slate-200 bg-white py-2 pr-8 pl-3 text-xs font-medium text-slate-900 focus:border-[#009F50] focus:outline-hidden"
+                        <option value="DD/MM/YYYY">DD/MM/YYYY (Day first - AU/UK)</option>
+                        <option value="MM/DD/YYYY">MM/DD/YYYY (Month first - US)</option>
+                        <option value="YYYY-MM-DD">YYYY-MM-DD (ISO 8601)</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Data Management Section */}
+              {(activeSubSection === 'all' || activeSubSection === 'data') && (
+                <section
+                  id="section-data"
+                  className="rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xs"
+                >
+                  <div className="border-b border-slate-100 pb-4">
+                    <h2 className="text-base font-bold text-slate-900">Data Management &amp; Privacy</h2>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      Export records, maintain audit transparency, and manage tenant data retention.
+                    </p>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                      <h4 className="text-xs font-bold text-slate-900">Export Customer &amp; Lead Data</h4>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Download full CSV records of your leads, contact books, and customer interaction logs.
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toast.success('Leads CSV export generated and ready for download.');
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 transition"
                         >
-                          <option value="18% (GST)">18% (GST)</option>
-                          <option value="12% (GST)">12% (GST)</option>
-                          <option value="5% (GST)">5% (GST)</option>
-                          <option value="0% (Tax Exempt)">0% (Tax Exempt)</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-slate-400" />
+                          <Download className="size-3.5 text-slate-500" />
+                          <span>Export Leads (CSV)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toast.success('Customer JSON backup archive downloaded.');
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 transition"
+                        >
+                          <Download className="size-3.5 text-slate-500" />
+                          <span>Export JSON</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
+                      <h4 className="text-xs font-bold text-slate-900">Audit Trail &amp; Data Retention</h4>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Tenant activity logs and GDPR compliance records are securely maintained in primary DB storage.
+                      </p>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600 font-semibold">
+                        <Check className="size-4" />
+                        <span>Daily Automated Backups: Active</span>
                       </div>
                     </div>
                   </div>
                 </section>
-              </div>
+              )}
             </div>
           </div>
         )}

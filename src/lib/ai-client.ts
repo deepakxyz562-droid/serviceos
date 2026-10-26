@@ -86,6 +86,7 @@ const GEMINI_BASE_URL =
  * array if a model returns 404 ("No endpoints found") or persistent 429s.
  */
 const OPENROUTER_MODELS = [
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
   'google/gemma-4-26b-a4b-it:free',
   'google/gemma-4-31b-it:free',
   'qwen/qwen3.8-27b:free',
@@ -364,6 +365,7 @@ const openRouterAdapter: AiProviderAdapter = {
     signal,
   }): Promise<ProviderResult> {
     try {
+      const isNvidia = model.toLowerCase().includes('nvidia');
       const res = await fetch(OPENROUTER_URL, {
         method: 'POST',
         headers: {
@@ -377,6 +379,7 @@ const openRouterAdapter: AiProviderAdapter = {
           messages,
           temperature: temperature ?? 0.7,
           max_tokens: maxTokens ?? 4096,
+          ...(isNvidia ? { provider: { only: ['nvidia'], allow_fallbacks: false } } : {}),
           // Encourage JSON output — silently ignored by models that lack it.
           ...(json ? { response_format: { type: 'json_object' } } : {}),
         }),

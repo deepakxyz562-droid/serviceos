@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AI Receptionist not found' }, { status: 404 });
     }
 
+    const body = await request.json();
     let systemPrompt = body.systemPrompt;
     if (!systemPrompt || typeof systemPrompt !== 'string' || systemPrompt.includes('a service business')) {
       const { getTenantReceptionistContext, buildReceptionistSystemPrompt } = await import('@/lib/receptionist-knowledge-builder');

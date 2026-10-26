@@ -84,6 +84,47 @@ export async function GET(request: NextRequest) {
     process.env.FACEBOOK_CLIENT_ID;
 
   if (!clientId) {
+    const originHost =
+      request.nextUrl.searchParams.get('originHost') ||
+      request.headers.get('referer') ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      'https://bgos.fieseros.com';
+    const cleanOrigin = originHost.startsWith('http') ? originHost.split('?')[0].replace(/\/+$/, '') : 'https://bgos.fieseros.com';
+    const returnUrl = `${cleanOrigin}/?view=socialMedia`;
+
+    if (request.headers.get('accept')?.includes('text/html')) {
+      return new NextResponse(
+        `<!html>
+<html><head><title>Meta App Configuration Required</title><style>
+body { font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f8fafc; }
+.card { text-align: center; padding: 2.5rem; background: white; border-radius: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); max-width: 520px; border: 1px solid #e2e8f0; }
+.icon { width: 56px; height: 56px; margin: 0 auto 1rem; background: #fdf2f8; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #db2777; }
+h1 { color: #0f172a; margin: 0 0 0.5rem; font-size: 1.25rem; font-weight: 700; }
+p { color: #64748b; margin: 0 0 1.25rem; line-height: 1.5; font-size: 0.875rem; text-align: left; }
+.code-box { background: #f1f5f9; padding: 0.75rem 1rem; border-radius: 8px; font-family: monospace; font-size: 0.8rem; text-align: left; margin-bottom: 1.25rem; color: #334155; }
+a, button { background: #009F50; color: white; border: none; padding: 0.65rem 1.25rem; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; font-size: 0.875rem; }
+</style></head>
+<body>
+<div class="card">
+  <div class="icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+  </div>
+  <h1>Instagram / Meta App Required</h1>
+  <p>To connect Instagram Business Profiles, a platform admin must register Meta OAuth credentials (in SuperAdmin Integration Credentials or server environment variables):</p>
+  <div class="code-box">
+    META_APP_ID=your_meta_app_id<br/>
+    META_APP_SECRET=your_meta_app_secret
+  </div>
+  <a href="${returnUrl}">Back to Marketing Studio</a>
+</div>
+</body></html>`,
+        {
+          status: 503,
+          headers: { 'Content-Type': 'text/html' },
+        },
+      );
+    }
+
     return NextResponse.json(
       {
         error: 'PLATFORM_NOT_CONFIGURED',
