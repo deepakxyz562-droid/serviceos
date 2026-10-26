@@ -147,6 +147,7 @@ interface SocialAccount {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
+export function SocialAccountsView() {
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [manageAccount, setManageAccount] = useState<SocialAccount | null>(null);
