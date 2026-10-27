@@ -27,6 +27,7 @@ import {
   Image as ImageIcon,
   IndianRupee,
   Mail,
+  Lock,
   MapPin,
   Megaphone,
   MessageCircle,

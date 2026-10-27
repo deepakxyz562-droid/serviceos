@@ -1,0 +1,21 @@
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { NextRequest } from 'next/server';
+import { proxy } from '@/proxy';
+const state=vi.hoisted(()=>({query:''}));
+vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(state.query)}));
+vi.mock('next/dynamic',()=>({default:()=>({demoMode}:{demoMode:boolean})=><div data-testid="workspace">{demoMode?'Demo':'Signed-in workspace'}</div>}));
+import BosEntry from '@/components/bos/landing/bos-entry';
+import { BosLanding } from '@/components/bos/landing/bos-landing';
+beforeEach(()=>{state.query='';vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false}));});
+afterEach(()=>{cleanup();vi.unstubAllGlobals();});
+describe('BOS landing routing',()=>{
+ it('shows marketing to anonymous visitors without redirecting to login',async()=>{render(<BosEntry/>);expect(screen.getByRole('heading',{level:1}).textContent).toContain('Run your entire');await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(1));expect(screen.queryByTestId('workspace')).toBeNull();});
+ it('preserves explicit demo links without requesting merchant auth',()=>{state.query='demo=true&view=pos';render(<BosEntry/>);expect(screen.getByTestId('workspace').textContent).toBe('Demo');expect(fetch).not.toHaveBeenCalled();});
+ it('opens the workspace for an authenticated session',async()=>{vi.mocked(fetch).mockResolvedValue({ok:true,json:async()=>({user:{id:'merchant'}})} as Response);render(<BosEntry/>);await waitFor(()=>expect(screen.getByTestId('workspace').textContent).toBe('Signed-in workspace'));});
+ it('keeps explicit landing/logout links public',()=>{state.query='logout=1';render(<BosEntry/>);expect(screen.getByRole('heading',{level:1})).toBeTruthy();expect(fetch).not.toHaveBeenCalled();});
+ it('connects signup and demo CTAs and exposes mobile navigation',()=>{render(<BosLanding/>);expect(screen.getAllByRole('link',{name:/Get Started/})[0].getAttribute('href')).toContain('mode=register');expect(screen.getByRole('link',{name:'Explore Live Demo'}).getAttribute('href')).toBe('/?demo=true');fireEvent.click(screen.getByRole('button',{name:'Open navigation'}));expect(screen.getByRole('button',{name:'Close navigation'}).getAttribute('aria-expanded')).toBe('true');});
+ it('rewrites the BOS root in core while preserving demo query',async()=>{const res=await proxy(new NextRequest('https://bos.fieseros.com/?demo=true',{headers:{host:'bos.fieseros.com'}}));expect(res.headers.get('x-middleware-rewrite')).toBe('https://bos.fieseros.com/bos-home?demo=true');});
+ it('preserves the existing core authentication entry',async()=>{const res=await proxy(new NextRequest('https://bos.fieseros.com/?auth=login',{headers:{host:'bos.fieseros.com'}}));expect(res.headers.get('x-middleware-rewrite')||'').not.toContain('/bos-home');});
+});

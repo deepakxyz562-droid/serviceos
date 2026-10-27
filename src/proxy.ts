@@ -238,6 +238,12 @@ export async function proxy(request: NextRequest) {
   }
 
   const appProduct = productForHostname(lowerHost);
+  // Keep the BOS public entry consistent on core and standalone deployments.
+  if (appProduct === 'bos' && pathname === '/' && !request.nextUrl.searchParams.has('auth')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/bos-home';
+    return NextResponse.rewrite(url);
+  }
   const bosIcon = bosIconRedirect(appProduct, pathname);
   if (bosIcon && ['GET', 'HEAD'].includes(request.method)) {
     const response = NextResponse.redirect(new URL(bosIcon, request.url), 307);

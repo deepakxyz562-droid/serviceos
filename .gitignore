@@ -188,3 +188,8 @@ next-dev.pid
 # Australian landing page imagery.
 !/public/images/au/*.webp
 !/public/images/au/*-hd.png
+
+# BOS landing artwork and HD source deliverables
+!public/bos/landing/*.webp
+!apps/bos/public/bos/landing/*.webp
+!assets/bos-landing-hd/*.png

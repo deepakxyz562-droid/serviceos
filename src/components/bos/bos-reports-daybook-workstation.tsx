@@ -1792,11 +1792,11 @@ export function BosReportsDaybookWorkstation({
     const saleInvoicesKpis = {
       totalSales: (periodFilteredOrders || []).reduce((sum, o) => sum + (o.totalAmount || 0), 0),
       received: (periodFilteredOrders || []).reduce((sum, o) => {
-        const bal = o.balanceDue ?? (o.paymentStatus === 'PAID' || o.paymentStatus === 'paid' ? 0 : o.totalAmount);
+        const bal = o.balanceDue ?? (o.paymentStatus === 'paid' ? 0 : o.totalAmount);
         return sum + Math.max(0, (o.totalAmount || 0) - bal);
       }, 0),
       balanceDue: (periodFilteredOrders || []).reduce((sum, o) => {
-        const bal = o.balanceDue ?? (o.paymentStatus === 'PAID' || o.paymentStatus === 'paid' ? 0 : o.totalAmount);
+        const bal = o.balanceDue ?? (o.paymentStatus === 'paid' ? 0 : o.totalAmount);
         return sum + bal;
       }, 0),
     };
@@ -2590,7 +2590,7 @@ export function BosReportsDaybookWorkstation({
                         </thead>
                         <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
                           {filteredSalesOrders.map((o) => {
-                            const bal = o.balanceDue ?? (o.paymentStatus === 'PAID' || o.paymentStatus === 'paid' ? 0 : o.totalAmount);
+                            const bal = o.balanceDue ?? (o.paymentStatus === 'paid' ? 0 : o.totalAmount);
                             return (
                               <tr key={o.id} className="hover:bg-[#F9FCFA]">
                                 <td className="py-2.5 px-3 text-xs text-[#64748B]">{o.createdAt || 'Today'}</td>

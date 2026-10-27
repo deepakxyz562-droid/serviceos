@@ -12,6 +12,13 @@ export const metadata: Metadata = {
     apple: BOS_TOUCH_ICON_SRC,
   },
   manifest: '/bos/manifest.webmanifest',
+  alternates: { canonical: 'https://bos.fieseros.com/' },
+  openGraph: {
+    title: 'BOS — Run Your Entire Business in One Place',
+    description: 'Bring sales, inventory, customers and your online store together.',
+    url: 'https://bos.fieseros.com/',
+    images: [{ url: 'https://bos.fieseros.com/bos/landing/owner.webp', width: 1536, height: 1024 }],
+  },
 };
 
 export default function RootLayout({
