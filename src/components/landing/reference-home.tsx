@@ -13,12 +13,12 @@ const trades: [
     LucideIcon,
     string
 ][] = [['Plumbing', Wrench, '/plumbing-software'], ['HVAC', Snowflake, '/hvac-software'], ['Electrical', Zap, '/electrical-contractor-software'], ['Cleaning', Sparkles, '/cleaning-business-software'], ['Landscaping', Leaf, '/landscaping-software'], ['Roofing', Home, '/roofing-software'], ['Pest control', Bug, '/pest-control-software'], ['Handyman', Hammer, '/handyman-software'], ['Pool services', Waves, '/pool-service-software']];
-const workflow: [
+export const workflow: [
     string,
     string,
     LucideIcon
 ][] = [['Get the lead', 'Capture enquiries from calls, chat and forms.', Phone], ['Send a quote', 'Create professional quotes with e-signatures.', FileText], ['Schedule the job', 'Find the right technician and time slot.', CalendarDays], ['Dispatch & complete', 'Keep your team connected in the field.', Truck], ['Get paid', 'Send invoices and accept online payments.', CreditCard]];
-const features = [
+export const features = [
     { label: 'CRM & Leads', title: 'Win more jobs with a powerful CRM.', text: 'Capture leads from calls, forms, chat and messages. Keep every customer detail in one place and turn more enquiries into booked jobs.', bullets: ['Unified customer conversations', 'Pipeline and lead tracking', 'A complete customer history', 'Follow-up automation'], icon: Users },
     { label: 'Scheduling & Dispatch', title: 'A better plan for every working day.', text: 'Bring your calendar, jobs and technicians together. See what is coming up and keep everyone moving in the right direction.', bullets: ['One shared team calendar', 'Assign jobs to your technicians', 'Job status at a glance', 'Keep customers informed'], icon: CalendarDays },
     { label: 'Quotes & Invoices', title: 'From a great quote to a paid invoice.', text: 'Create professional quotes, collect signatures and turn approved work into invoices without entering everything twice.', bullets: ['Branded quotes and invoices', 'Digital customer signatures', 'Quote-to-invoice conversion', 'Track outstanding payments'], icon: FileText },
@@ -27,7 +27,7 @@ const features = [
     { label: 'Reports', title: 'See how your business is doing.', text: 'Bring your business activity into focus with reporting that helps you understand your jobs, customers and revenue.', bullets: ['Business activity overview', 'Revenue reporting', 'Job performance insights', 'Export your data'], icon: BarChart3 },
     { label: 'Team Management', title: 'Give your whole team a clearer day.', text: 'Connect the office and the field with a shared view of the work, the schedule and the customer.', bullets: ['Team roles and permissions', 'Employee workspace', 'Time tracking', 'Shared job information'], icon: Users },
 ];
-function Tag({ children }: {
+export function Tag({ children }: {
     children: React.ReactNode;
 }) { return <span className={s.tag}><Sparkles size={12}/>{children}</span>; }
 function Action({ children, onClick, secondary = false }: {
@@ -35,7 +35,7 @@ function Action({ children, onClick, secondary = false }: {
     onClick: () => void;
     secondary?: boolean;
 }) { return <button type="button" className={secondary ? s.secondary : s.primary} onClick={onClick}>{children}{secondary ? <Play size={15} fill="currentColor"/> : <ArrowRight size={17}/>}</button>; }
-function Checks({ items }: {
+export function Checks({ items }: {
     items: string[];
 }) { return <ul className={s.checks}>{items.map(item => <li key={item}><Check size={15}/><span>{item}</span></li>)}</ul>; }
 function Avatar({ size = 54 }: {
@@ -43,7 +43,7 @@ function Avatar({ size = 54 }: {
 }) { return <Image className={s.avatar} src="/images/home/assistant.webp" width={size} height={size} alt="Fieseros AI assistant avatar"/>; }
 function MiniBrand() { return <span className={s.miniBrand}><BrandMark size={18}/>Fieseros</span>; }
 const jobs = ['AC repair', 'Plumbing', 'Electrical', 'Maintenance'];
-function PhonePreview({ call = false }: {
+export function PhonePreview({ call = false }: {
     call?: boolean;
 }) {
     return <div className={`${s.phone} ${call ? s.callPhone : ''}`} aria-label={call ? 'Illustrative AI receptionist call preview' : 'Illustrative mobile job list'}>
@@ -51,7 +51,7 @@ function PhonePreview({ call = false }: {
     {call ? <><small>AI RECEPTIONIST · PREVIEW</small><h3>Fieseros AI</h3><span className={s.callTime}>Here for your next customer</span><Avatar size={100}/><div className={s.wave}>{Array.from({ length: 29 }, (_, i) => <i key={i} style={{ height: `${8 + (i * 17 % 41)}px` }}/>)}</div><div className={s.callControls}>{[Mic, LayoutDashboard, Headphones].map((Icon, i) => <span key={i}><Icon size={18}/></span>)}</div><span className={s.hangup}><Phone size={20}/></span></> : <><MiniBrand /><h4>Good morning, Jake! <span>☀</span></h4><p>Let’s make today a great day.</p><div className={s.jobSummary}><strong>4</strong> jobs today <span>All on track</span></div>{jobs.map((job, i) => <div className={s.mobileJob} key={job}><span className={s.jobIcon}><ClipboardCheck size={16}/></span><div><b>{job}</b><small>{['Sarah Johnson', 'Michael Chen', 'Emma Wilson', 'James Miller'][i]}</small><small>{['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM'][i]} · On site</small></div><em>{i === 0 ? 'In progress' : 'Upcoming'}</em></div>)}<div className={s.phoneNav}><span><Home size={16}/>Today</span><span><CalendarDays size={16}/>Jobs</span><span><MessageCircle size={16}/>Messages</span><span><Users size={16}/>Profile</span></div></>}
   </div>;
 }
-function Dashboard({ calendar = false, selected = 0 }: {
+export function Dashboard({ calendar = false, selected = 0 }: {
     calendar?: boolean;
     selected?: number;
 }) {

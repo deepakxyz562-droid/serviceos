@@ -26,12 +26,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   let title = 'Field Service Software for Australia | Fieseros Tradie CRM, Scheduling & AI Receptionist';
   let description =
-    'The all-in-one operating system for Australian tradies. Smart dispatch, quotes, ATO-compliant tax invoices (10% GST), Xero & MYOB sync, and 24/7 Australian AI phone receptionist.';
+    'The all-in-one operating system for Australian tradies. Smart dispatch, quotes, invoices, a mobile workspace, and AI phone reception.';
 
   if (slug === 'field-service' || slug === 'tradie-software') {
     title = 'Field Service Software Australia | Fieseros Tradie Job Management & Invoicing';
     description =
-      'Manage jobs, customers, scheduling and ATO-compliant invoices in one Australian field service platform. Built for plumbers, electricians, HVAC & cleaners.';
+      'Manage jobs, customers, scheduling and invoices in one Australian field service platform. Built for plumbers, electricians, HVAC & cleaners.';
   } else if (slug === 'repeat-jobs' || slug === 'recurring-jobs') {
     title = 'Recurring Job Scheduling Software Australia | Fieseros Tradie Operating System';
     description =
@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   } else if (slug === 'ai-receptionist' || slug === 'tradie-ai') {
     title = '24/7 AI Receptionist for Australian Tradies | Fieseros Call Answering & Quoting';
     description =
-      'Answer incoming calls, qualify emergencies, and quote jobs while you are on the tools. Trained on Australian trade terminology with 24/7 call dispatch.';
+      'Answer incoming calls, qualify emergencies, and quote jobs while you are on the tools. Explore AI call answering for Australian service businesses.';
   }
 
   return {

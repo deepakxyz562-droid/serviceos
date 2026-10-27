@@ -184,3 +184,7 @@ next-dev.pid
 # Fieseros homepage production images and HD source assets.
 !/public/images/home/*.webp
 !/public/images/home/*-hd.png
+
+# Australian landing page imagery.
+!/public/images/au/*.webp
+!/public/images/au/*-hd.png
