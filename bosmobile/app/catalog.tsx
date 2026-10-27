@@ -33,6 +33,15 @@ export interface ProductItem {
   sku?: string;
   isActive: boolean;
   source?: 'manual' | 'shopify' | 'woocommerce' | 'csv';
+  itemType?: 'product' | 'service';
+  hsnCode?: string;
+  sacCode?: string;
+  unit?: string;
+  priceWithTax?: boolean;
+  taxRate?: number;
+  wholesalePrice?: number;
+  minWholesaleQty?: number;
+  duration?: string;
 }
 
 const DEFAULT_CATEGORY_PILLS_BY_TYPE: Record<string, string[]> = {
@@ -105,6 +114,15 @@ export default function MobileCatalogScreen() {
   const [formImageUrl, setFormImageUrl] = useState('');
   const [formSku, setFormSku] = useState('');
   const [formIsActive, setFormIsActive] = useState(true);
+  const [formItemType, setFormItemType] = useState<'product' | 'service'>('product');
+  const [formHsn, setFormHsn] = useState('');
+  const [formSac, setFormSac] = useState('');
+  const [formUnit, setFormUnit] = useState('Pcs');
+  const [formPriceWithTax, setFormPriceWithTax] = useState(false);
+  const [formTaxRate, setFormTaxRate] = useState(18);
+  const [formWholesalePrice, setFormWholesalePrice] = useState('');
+  const [formMinWholesaleQty, setFormMinWholesaleQty] = useState('');
+  const [formDuration, setFormDuration] = useState('');
 
   // Store Sync Modal state
   const [syncModalVisible, setSyncModalVisible] = useState(false);
@@ -176,6 +194,15 @@ export default function MobileCatalogScreen() {
     setFormImageUrl('');
     setFormSku('');
     setFormIsActive(true);
+    setFormItemType(isServiceOrCreative ? 'service' : 'product');
+    setFormHsn('');
+    setFormSac(isServiceOrCreative ? '9987' : '');
+    setFormUnit(isServiceOrCreative ? 'Session' : 'Pcs');
+    setFormPriceWithTax(false);
+    setFormTaxRate(18);
+    setFormWholesalePrice('');
+    setFormMinWholesaleQty('');
+    setFormDuration('');
     setModalVisible(true);
   };
 
@@ -191,6 +218,15 @@ export default function MobileCatalogScreen() {
     setFormImageUrl(item.imageUrl || '');
     setFormSku(item.sku || '');
     setFormIsActive(item.isActive !== false);
+    setFormItemType(item.itemType || (isServiceOrCreative ? 'service' : 'product'));
+    setFormHsn(item.hsnCode || '');
+    setFormSac(item.sacCode || '');
+    setFormUnit(item.unit || (item.itemType === 'service' ? 'Session' : 'Pcs'));
+    setFormPriceWithTax(!!item.priceWithTax);
+    setFormTaxRate(item.taxRate ?? 18);
+    setFormWholesalePrice(item.wholesalePrice ? String(item.wholesalePrice) : '');
+    setFormMinWholesaleQty(item.minWholesaleQty ? String(item.minWholesaleQty) : '');
+    setFormDuration(item.duration || '');
     setModalVisible(true);
   };
 
@@ -206,6 +242,9 @@ export default function MobileCatalogScreen() {
     const parsedPrice = Number(formPrice);
     if(!Number.isFinite(parsedPrice)||parsedPrice<0||Math.abs(parsedPrice*100-Math.round(parsedPrice*100))>0.00001){Alert.alert(t('Invalid price','सही कीमत भरें'),t('Enter a price with up to two decimal places.','दशमलव के बाद अधिकतम दो अंक भरें।'));return;}
 
+    const wholesaleParsed = formWholesalePrice.trim() ? Number(formWholesalePrice) : undefined;
+    const minWholesaleParsed = formMinWholesaleQty.trim() ? Number(formMinWholesaleQty) : undefined;
+
     let updated: ProductItem[];
     if (editingItem) {
       updated = catalog.map((it) =>
@@ -219,6 +258,15 @@ export default function MobileCatalogScreen() {
               imageUrl: formImageUrl.trim(),
               sku: formSku.trim(),
               isActive: formIsActive,
+              itemType: formItemType,
+              hsnCode: formItemType === 'product' ? formHsn.trim() : undefined,
+              sacCode: formItemType === 'service' ? formSac.trim() : undefined,
+              unit: formUnit,
+              priceWithTax: formPriceWithTax,
+              taxRate: formTaxRate,
+              wholesalePrice: wholesaleParsed,
+              minWholesaleQty: minWholesaleParsed,
+              duration: formDuration.trim() || undefined,
             }
           : it
       );
@@ -233,6 +281,15 @@ export default function MobileCatalogScreen() {
         sku: formSku.trim(),
         isActive: formIsActive,
         source: 'manual',
+        itemType: formItemType,
+        hsnCode: formItemType === 'product' ? formHsn.trim() : undefined,
+        sacCode: formItemType === 'service' ? formSac.trim() : undefined,
+        unit: formUnit,
+        priceWithTax: formPriceWithTax,
+        taxRate: formTaxRate,
+        wholesalePrice: wholesaleParsed,
+        minWholesaleQty: minWholesaleParsed,
+        duration: formDuration.trim() || undefined,
       };
       updated = [...catalog, newItem];
     }
@@ -570,14 +627,37 @@ export default function MobileCatalogScreen() {
                     </Text>
                   </View>
 
-                  <View style={styles.metaRow}>
+                  <View style={[styles.metaRow, { flexWrap: 'wrap', gap: 4 }]}>
                     <View style={styles.categoryBadge}>
                       <Text style={styles.categoryBadgeText}>{item.category || 'General'}</Text>
                     </View>
+                    <View style={{ backgroundColor: item.itemType === 'service' ? '#f3e8ff' : '#eff6ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: item.itemType === 'service' ? '#7e22ce' : '#1d4ed8' }}>
+                        {item.itemType === 'service' ? '🛠️ Service' : '📦 Product'}
+                      </Text>
+                    </View>
+                    {item.sacCode ? (
+                      <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>SAC: {item.sacCode}</Text>
+                      </View>
+                    ) : item.hsnCode ? (
+                      <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 10, color: '#475569', fontWeight: '600' }}>HSN: {item.hsnCode}</Text>
+                      </View>
+                    ) : null}
                     {item.sku ? (
                       <Text style={styles.skuText}>SKU: {item.sku}</Text>
                     ) : null}
                   </View>
+
+                  {item.wholesalePrice && item.wholesalePrice > 0 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                      <MaterialIcons name="local-offer" size={12} color="#9333ea" />
+                      <Text style={{ fontSize: 10, color: '#7e22ce', fontWeight: '700' }}>
+                        Wholesale: ₹{item.wholesalePrice} {item.minWholesaleQty ? `(min ${item.minWholesaleQty})` : ''}
+                      </Text>
+                    </View>
+                  ) : null}
 
                   {item.description ? (
                     <Text style={styles.descriptionText} numberOfLines={2}>
@@ -587,7 +667,15 @@ export default function MobileCatalogScreen() {
 
                   {blueprint.capabilities.inventory&&<TouchableOpacity accessibilityRole="button" disabled={stockError} onPress={()=>{setStockProduct(item);setSaveError(null);const stock=quantities[item.id]?.totalStock??quantities[item.id]?.stock;setStockQuantity(stock==null?'':String(stock));}} style={{paddingVertical:12}}><Text style={{color:'#047857',fontWeight:'600'}}>{stockError?t('Stock unavailable','स्टॉक उपलब्ध नहीं'):quantities[item.id]?.stock==null?t('Set stock quantity','स्टॉक की मात्रा जोड़ें'):`${t('In stock','स्टॉक')}: ${quantities[item.id].stock}`}  ·  {t('Update','बदलें')}</Text></TouchableOpacity>}
                   <View style={styles.priceRow}>
-                    <Text style={styles.itemPrice}>{countryPack.currency.symbol}{Number(item.price).toFixed(2)}</Text>
+                    <View>
+                      <Text style={styles.itemPrice}>
+                        {countryPack.currency.symbol}{Number(item.price).toFixed(2)}
+                        {item.unit ? <Text style={{ fontSize: 11, fontWeight: '500', color: '#64748b' }}> / {item.unit}</Text> : null}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#64748b' }}>
+                        {item.priceWithTax ? t('Incl. Tax', 'कर सहित') : t('+ GST Extra', '+ जीएसटी अलग')}
+                      </Text>
+                    </View>
 
                     {/* Stock Status Badge & Switch */}
                     <TouchableOpacity
@@ -672,21 +760,63 @@ export default function MobileCatalogScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 40 }}
             >
+              {/* Item Type Switcher (Product vs Service) */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 14 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticFeedback.light();
+                    setFormItemType('product');
+                    if (formUnit === 'Session' || formUnit === 'Hour' || formUnit === 'Job') setFormUnit('Pcs');
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 9,
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: formItemType === 'product' ? '#ffffff' : 'transparent',
+                    shadowColor: formItemType === 'product' ? '#000' : 'transparent',
+                    shadowOpacity: formItemType === 'product' ? 0.05 : 0,
+                    shadowRadius: 3,
+                    elevation: formItemType === 'product' ? 1 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: formItemType === 'product' ? '800' : '600', color: formItemType === 'product' ? '#0f172a' : '#64748b' }}>
+                    📦 {t('Product / Good', 'सामान / उत्पाद')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    hapticFeedback.light();
+                    setFormItemType('service');
+                    if (formUnit === 'Pcs') setFormUnit('Session');
+                  }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 9,
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: formItemType === 'service' ? '#ffffff' : 'transparent',
+                    shadowColor: formItemType === 'service' ? '#000' : 'transparent',
+                    shadowOpacity: formItemType === 'service' ? 0.05 : 0,
+                    shadowRadius: 3,
+                    elevation: formItemType === 'service' ? 1 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: formItemType === 'service' ? '800' : '600', color: formItemType === 'service' ? '#0f172a' : '#64748b' }}>
+                    🛠️ {t('Service / Work', 'सेवा / कार्य')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.inputLabel}>
-                {isServiceOrCreative ? t('Service / Item Name *', 'सेवा / सामान का नाम *') : t('Product Name *', 'सामान का नाम *')}
+                {formItemType === 'service' ? t('Service Name *', 'सेवा का नाम *') : t('Product Name *', 'सामान का नाम *')}
               </Text>
               <TextInput
                 style={styles.input}
                 placeholder={
-                  blueprint.businessType === 'services' || blueprint.businessType === 'manufacturing'
-                    ? t('e.g. MS Grille Fabrication / Gate Repair', 'जैसे ग्रिल फैब्रिकेशन / गेट रिपेयर')
-                    : blueprint.businessType === 'salon'
-                    ? t('e.g. Hair Spa & Styling / Beard Trim', 'जैसे हेयर स्पा / शेविंग')
-                    : blueprint.businessType === 'restaurant'
-                    ? t('e.g. Paneer Butter Masala / Cold Brew Coffee', 'जैसे पनीर बटर मसाला')
-                    : blueprint.businessType === 'creative' || blueprint.businessType === 'freelancer'
-                    ? t('e.g. Actor Headshot Session / Video Edit', 'जैसे हेडशॉट सेशन / वीडियो एडिट')
-                    : t('e.g. Basmati Rice 1 kg / Cold Brew Coffee', 'जैसे बासमती चावल 1 किलो')
+                  formItemType === 'service'
+                    ? t('e.g. Actor Headshot Session / MS Fabrication', 'जैसे हेडशॉट सेशन / फैब्रिकेशन')
+                    : t('e.g. Basmati Rice 1 kg / Premium Steel Tube', 'जैसे बासमती चावल 1 किलो')
                 }
                 placeholderTextColor="#94a3b8"
                 value={formName}
@@ -694,27 +824,214 @@ export default function MobileCatalogScreen() {
                 autoFocus={!editingItem}
               />
 
-              {/* Price and Category */}
+              {/* HSN / SAC Code & Unit Row */}
               <View style={styles.formRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>{t('Price *', 'कीमत *')}</Text>
-                  <View style={styles.currencyInputRow}>
-                    <View style={styles.currencyBadge}>
-                      <Text style={styles.currencyBadgeText}>{countryPack.currency.symbol || '₹'}</Text>
-                    </View>
-                    <TextInput
-                      style={styles.currencyTextInput}
-                      placeholder="0.00"
-                      placeholderTextColor="#94a3b8"
-                      keyboardType="numeric"
-                      value={formPrice}
-                      onChangeText={setFormPrice}
-                    />
-                  </View>
+                  <Text style={styles.inputLabel}>
+                    {formItemType === 'service' ? t('SAC Code', 'SAC कोड') : t('HSN Code', 'HSN कोड')}
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={formItemType === 'service' ? 'e.g. 9987' : 'e.g. 1006'}
+                    placeholderTextColor="#94a3b8"
+                    value={formItemType === 'service' ? formSac : formHsn}
+                    onChangeText={formItemType === 'service' ? setFormSac : setFormHsn}
+                    keyboardType="numeric"
+                  />
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>{t('SKU Code', 'SKU कोड')}</Text>
+                  <Text style={styles.inputLabel}>{t('Unit of Measure', 'इकाई (Unit)')}</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={formItemType === 'service' ? 'Session / Hour' : 'Pcs / Kg'}
+                    placeholderTextColor="#94a3b8"
+                    value={formUnit}
+                    onChangeText={setFormUnit}
+                  />
+                </View>
+              </View>
+
+              {/* Quick Unit Pills */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: 2, marginBottom: 8 }}
+                contentContainerStyle={{ gap: 6 }}
+              >
+                {(formItemType === 'service'
+                  ? ['Session', 'Hour', 'Job', 'Visit', 'Day', 'Fixed', 'Sq Ft']
+                  : ['Pcs', 'Kg', 'Ltr', 'Box', 'Pkt', 'Dozen', 'Meter', 'Gm']
+                ).map((u) => (
+                  <TouchableOpacity
+                    key={u}
+                    onPress={() => {
+                      hapticFeedback.light();
+                      setFormUnit(u);
+                    }}
+                    style={[
+                      styles.quickCatPill,
+                      formUnit.toLowerCase() === u.toLowerCase() && styles.quickCatPillActive,
+                      { paddingHorizontal: 10, paddingVertical: 4 },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.quickCatPillText,
+                        formUnit.toLowerCase() === u.toLowerCase() && styles.quickCatPillTextActive,
+                      ]}
+                    >
+                      {u}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* Price and Tax Row */}
+              <View style={{ backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 12, marginTop: 4, marginBottom: 10 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+                    {t('Sale Price & Tax Calculation', 'बिक्री दर और टैक्स गणना')}
+                  </Text>
+                  {/* Without Tax vs With Tax Selector */}
+                  <View style={{ flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 8, padding: 2 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticFeedback.light();
+                        setFormPriceWithTax(false);
+                      }}
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                        backgroundColor: !formPriceWithTax ? '#ffffff' : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: !formPriceWithTax ? '800' : '600', color: !formPriceWithTax ? '#0f172a' : '#64748b' }}>
+                        {t('Without Tax', 'बिना टैक्स')}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => {
+                        hapticFeedback.light();
+                        setFormPriceWithTax(true);
+                      }}
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                        backgroundColor: formPriceWithTax ? '#ffffff' : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: formPriceWithTax ? '800' : '600', color: formPriceWithTax ? '#059669' : '#64748b' }}>
+                        {t('With Tax', 'टैक्स सहित')}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.formRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>{t('Rate / Price *', 'मूल्य *')}</Text>
+                    <View style={styles.currencyInputRow}>
+                      <View style={styles.currencyBadge}>
+                        <Text style={styles.currencyBadgeText}>{countryPack.currency.symbol || '₹'}</Text>
+                      </View>
+                      <TextInput
+                        style={styles.currencyTextInput}
+                        placeholder="0.00"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="numeric"
+                        value={formPrice}
+                        onChangeText={setFormPrice}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>{t('GST Slab (%)', 'जीएसटी दर (%)')}</Text>
+                    <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                      {[0, 5, 12, 18, 28].map((rate) => (
+                        <TouchableOpacity
+                          key={rate}
+                          onPress={() => {
+                            hapticFeedback.light();
+                            setFormTaxRate(rate);
+                          }}
+                          style={{
+                            paddingHorizontal: 7,
+                            paddingVertical: 6,
+                            borderRadius: 6,
+                            backgroundColor: formTaxRate === rate ? '#047857' : '#ffffff',
+                            borderWidth: 1,
+                            borderColor: formTaxRate === rate ? '#047857' : '#cbd5e1',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: formTaxRate === rate ? '#ffffff' : '#334155' }}>
+                            {rate}%
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                {/* Calculation breakdown hint */}
+                {!!formPrice && Number(formPrice) > 0 && (
+                  <View style={{ marginTop: 8, padding: 8, backgroundColor: '#ffffff', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                    <Text style={{ fontSize: 11, color: '#475569' }}>
+                      {formPriceWithTax ? (
+                        <>
+                          {t('Inclusive Price', 'कुल कीमत')}: <Text style={{ fontWeight: '800' }}>₹{Number(formPrice).toFixed(2)}</Text> · {t('Base', 'मूल्य')}: ₹{(Number(formPrice) / (1 + formTaxRate / 100)).toFixed(2)} · {t('GST', 'टैक्स')} ({formTaxRate}%): ₹{(Number(formPrice) - Number(formPrice) / (1 + formTaxRate / 100)).toFixed(2)}
+                        </>
+                      ) : (
+                        <>
+                          {t('Base Price', 'मूल्य')}: <Text style={{ fontWeight: '800' }}>₹{Number(formPrice).toFixed(2)}</Text> + {t('GST', 'टैक्स')} ({formTaxRate}%): ₹{(Number(formPrice) * (formTaxRate / 100)).toFixed(2)} = <Text style={{ fontWeight: '800', color: '#047857' }}>{t('Total', 'कुल')}: ₹{(Number(formPrice) * (1 + formTaxRate / 100)).toFixed(2)}</Text>
+                        </>
+                      )}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Wholesale Pricing Tier */}
+              <View style={{ backgroundColor: '#fdf4ff', borderWidth: 1, borderColor: '#f5d0fe', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <MaterialIcons name="local-offer" size={16} color="#a21caf" />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#86198f' }}>
+                    {t('Wholesale / Bulk Price (Optional)', 'थोक / थोक दर (वैकल्पिक)')}
+                  </Text>
+                </View>
+                <View style={styles.formRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>{t('Wholesale Rate (₹)', 'थोक मूल्य (₹)')}</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 850"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numeric"
+                      value={formWholesalePrice}
+                      onChangeText={setFormWholesalePrice}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>{t('Min Wholesale Qty', 'न्यूनतम थोक मात्रा')}</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 10"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numeric"
+                      value={formMinWholesaleQty}
+                      onChangeText={setFormMinWholesaleQty}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* SKU & Barcode */}
+              <View style={styles.formRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabel}>{t('SKU / Item Code', 'SKU / सामान कोड')}</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. BRD-001"
@@ -723,6 +1040,18 @@ export default function MobileCatalogScreen() {
                     onChangeText={setFormSku}
                   />
                 </View>
+                {formItemType === 'service' && (
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>{t('Estimated Duration', 'अनुमानित समय')}</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 45 Mins / 2 Days"
+                      placeholderTextColor="#94a3b8"
+                      value={formDuration}
+                      onChangeText={setFormDuration}
+                    />
+                  </View>
+                )}
               </View>
 
               {/* Category Input & Quick Pills */}

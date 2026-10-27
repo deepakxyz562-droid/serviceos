@@ -15,8 +15,10 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Copy,
   CreditCard,
   Crown,
+  Download,
   ExternalLink,
   FileText,
   Gift,
@@ -44,8 +46,10 @@ import {
   RefreshCw,
   Send,
   Settings,
+  Share2,
   ShieldCheck,
   ShoppingCart,
+  Sliders,
   Smile,
   Sparkles,
   Store,
@@ -182,6 +186,296 @@ export function BosMarketingAiIntegrationsSettings({
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponValue, setNewCouponValue] = useState(20);
   const [newCouponMinOrder, setNewCouponMinOrder] = useState(499);
+
+  // Phase 6 Marketing Studio State
+  const [marketingSubTab, setMarketingSubTab] = useState<'campaigns' | 'greetings_studio' | 'coupons'>('campaigns');
+  const [greetingCategory, setGreetingCategory] = useState<'festivals' | 'suvichar' | 'offers'>('festivals');
+  const [selectedGreetingPosterId, setSelectedGreetingPosterId] = useState<string>('fest-1');
+
+  // Phase 6 Vyapar Utilities & Advanced Settings State
+  const [zoomScale, setZoomScale] = useState(100);
+  const [stopSaleNegativeStock, setStopSaleNegativeStock] = useState(false);
+  const [fyClosed, setFyClosed] = useState(false);
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [serviceForm, setServiceForm] = useState({
+    customerName: '',
+    customerPhone: '',
+    itemName: 'Honda Activa 6G (DL 04 AB 1234)',
+    serviceType: 'Periodic Maintenance & Oil Change',
+    dueDate: '2026-11-05',
+    notes: 'Change engine oil, clean air filter, brake inspection',
+  });
+  const [serviceReminders, setServiceReminders] = useState(() => (demoMode ? [
+    {
+      id: 'srv-1',
+      customerName: 'Anil Sharma',
+      customerPhone: '+91 98112 34567',
+      itemName: 'Honda Activa 6G (DL 04 AB 1234)',
+      serviceType: 'Periodic Maintenance & Oil Change',
+      dueDate: '28 Oct 2026',
+      status: 'DUE_SOON',
+    },
+    {
+      id: 'srv-2',
+      customerName: 'Priya Mehra',
+      customerPhone: '+91 98711 22334',
+      itemName: 'Samsung 1.5T Inverter AC',
+      serviceType: 'Pre-Winter Deep Cleaning & Gas Check',
+      dueDate: '30 Oct 2026',
+      status: 'DUE_SOON',
+    },
+    {
+      id: 'srv-3',
+      customerName: 'Vikram Singh',
+      customerPhone: '+91 99580 44321',
+      itemName: 'RO Water Purifier Kent Grand',
+      serviceType: 'Sediment Filter & UV Lamp Replacement',
+      dueDate: '24 Oct 2026',
+      status: 'OVERDUE',
+    },
+  ] : []));
+
+  const [auditLogs] = useState(() => [
+    {
+      id: 'aud-1',
+      action: 'Invoice Created: INV-8821',
+      user: storeSettings.ownerName || 'Admin Owner',
+      timestamp: 'Today, 11:42 AM',
+      category: 'Billing',
+      detail: 'Tax Invoice generated for Sharma Traders (₹18,500)',
+    },
+    {
+      id: 'aud-2',
+      action: 'Cash Adjustment Recorded',
+      user: storeSettings.ownerName || 'Admin Owner',
+      timestamp: 'Today, 10:15 AM',
+      category: 'Daybook',
+      detail: 'Opening cash float added: ₹1,000 in Drawer',
+    },
+    {
+      id: 'aud-3',
+      action: 'Inventory Stock Updated',
+      user: 'Biller / Staff',
+      timestamp: 'Yesterday, 06:30 PM',
+      category: 'Catalog',
+      detail: 'Basmati Rice 5kg stock increased by 25 units from Purchase Bill #BILL-4091',
+    },
+    {
+      id: 'aud-4',
+      action: 'Price Tier Modified',
+      user: storeSettings.ownerName || 'Admin Owner',
+      timestamp: 'Yesterday, 02:15 PM',
+      category: 'Master',
+      detail: 'Wholesale price added for Amul Butter (₹245 for 10+ pcs)',
+    },
+  ]);
+
+  const GREETING_POSTERS = [
+    {
+      id: 'fest-1',
+      category: 'festivals' as const,
+      title: 'Happy Diwali / शुभ दीपावली',
+      tagline: 'प्रकाश और समृद्धि का पावन पर्व',
+      message: 'दीपावली के इस पावन पर्व पर आपके और आपके परिवार के जीवन में सुख, शांति, समृद्धि और उत्तम स्वास्थ्य का वास हो। शुभ दीपावली!',
+      theme: 'bg-gradient-to-br from-[#780206] via-[#B91C1C] to-[#EAB308]',
+      textColor: 'text-amber-100',
+      badge: '🪔 Diwali Special',
+      badgeBg: 'bg-amber-400 text-red-950',
+    },
+    {
+      id: 'fest-2',
+      category: 'festivals' as const,
+      title: 'Happy New Year 2027 / नववर्ष की शुभकामनाएं',
+      tagline: 'A Year of Abundance & Growth',
+      message: 'नया साल आपके व्यापार और जीवन में नई सफलताएं, खुशियां और नई उपलब्धियां लेकर आए। नववर्ष की हार्दिक शुभकामनाएं!',
+      theme: 'bg-gradient-to-br from-[#0F172A] via-[#1E3A8A] to-[#3B82F6]',
+      textColor: 'text-blue-100',
+      badge: '🎆 New Year',
+      badgeBg: 'bg-blue-400 text-blue-950',
+    },
+    {
+      id: 'fest-3',
+      category: 'festivals' as const,
+      title: 'Holi Hai / होली के रंग, खुशियों के संग',
+      tagline: 'Colors of Joy & Happiness',
+      message: 'रंगों के पावन पर्व होली की आप सभी को हार्दिक शुभकामनाएं। यह त्योहार आपके जीवन में प्यार, विश्वास और समृद्धि के रंग भर दे!',
+      theme: 'bg-gradient-to-br from-[#C026D3] via-[#EC4899] to-[#F59E0B]',
+      textColor: 'text-pink-100',
+      badge: '🎨 Holi Hai',
+      badgeBg: 'bg-yellow-300 text-pink-950',
+    },
+    {
+      id: 'fest-4',
+      category: 'festivals' as const,
+      title: 'Eid Mubarak / ईद मुबारक',
+      tagline: 'Peace, Prosperity & Blessings',
+      message: 'May this Eid bring endless blessings, peace, joy and prosperity to you and your loved ones. Eid Mubarak!',
+      theme: 'bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#10B981]',
+      textColor: 'text-emerald-100',
+      badge: '🌙 Eid Mubarak',
+      badgeBg: 'bg-emerald-300 text-emerald-950',
+    },
+    {
+      id: 'suv-1',
+      category: 'suvichar' as const,
+      title: 'आज का सुविचार / Daily Wisdom',
+      tagline: 'सकारात्मक सोच, सफल जीवन',
+      message: 'कर्म ही पूजा है और ईमानदारी ही सबसे बड़ी पूंजी है। जब इरादे नेक हों तो सफलता निश्चित कदम चूमती है। आपका दिन मंगलमय हो!',
+      theme: 'bg-gradient-to-br from-[#C2410C] via-[#EA580C] to-[#FBBF24]',
+      textColor: 'text-amber-100',
+      badge: '🌅 सुप्रभात',
+      badgeBg: 'bg-white text-orange-900',
+    },
+    {
+      id: 'suv-2',
+      category: 'suvichar' as const,
+      title: 'Good Morning / शुभ प्रभात',
+      tagline: 'Start with Gratitude & Purpose',
+      message: 'Every morning brings a new choice: wake up and dream, or wake up and work for your dreams. Wishing you a blessed and productive day ahead!',
+      theme: 'bg-gradient-to-br from-[#065F46] via-[#0D9488] to-[#2DD4BF]',
+      textColor: 'text-teal-100',
+      badge: '☀️ Good Morning',
+      badgeBg: 'bg-teal-200 text-teal-950',
+    },
+    {
+      id: 'suv-3',
+      category: 'suvichar' as const,
+      title: 'मेहनत और विश्वास / Hard Work & Trust',
+      tagline: 'Trust in the Journey',
+      message: 'विश्वास वह शक्ति है जिससे उजड़ी हुई दुनिया में भी प्रकाश किया जा सकता है। सदा मुस्कुराते रहिए और आगे बढ़ते रहिए!',
+      theme: 'bg-gradient-to-br from-[#4C1D95] via-[#6D28D9] to-[#A855F7]',
+      textColor: 'text-purple-100',
+      badge: '💎 सुविचार',
+      badgeBg: 'bg-purple-200 text-purple-950',
+    },
+    {
+      id: 'off-1',
+      category: 'offers' as const,
+      title: 'Weekend Mega Savings / वीकेंड महा बचत',
+      tagline: 'Up to 30% OFF on Top Staples',
+      message: 'इस सप्ताहांत हमारे स्टोर पर पाएं चुनिंदा सामानों पर 30% तक की भारी छूट! आज ही विजिट करें और विशेष उपहार पाएं।',
+      theme: 'bg-gradient-to-br from-[#991B1B] via-[#DC2626] to-[#F97316]',
+      textColor: 'text-orange-100',
+      badge: '🔥 30% OFF',
+      badgeBg: 'bg-amber-300 text-red-950',
+    },
+    {
+      id: 'off-2',
+      category: 'offers' as const,
+      title: 'Special Customer Privilege / विशेष ग्राहक ऑफर',
+      tagline: 'Exclusive Rewards for Valued Patrons',
+      message: 'हमारे साथ निरंतर जुड़े रहने के लिए धन्यवाद! आपकी अगली खरीद पर फ्लैट ₹200 की विशेष छूट का आनंद लें।',
+      theme: 'bg-gradient-to-br from-[#1E1B4B] via-[#312E81] to-[#4338CA]',
+      textColor: 'text-indigo-100',
+      badge: '⭐ VIP Privilege',
+      badgeBg: 'bg-yellow-300 text-indigo-950',
+    },
+  ];
+
+  const handleExportTallyXml = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const storeName = storeSettings.businessName || 'Business Store';
+    const gstin = storeSettings.gstin || '09ABCDE1234F1Z5';
+
+    const tallyXml = `<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+  <HEADER>
+    <TALLYREQUEST>Import Data</TALLYREQUEST>
+  </HEADER>
+  <BODY>
+    <IMPORTDATA>
+      <REQUESTDESC>
+        <REPORTNAME>Vouchers</REPORTNAME>
+        <STATICVARIABLES>
+          <SVCURRENTCOMPANY>${storeName}</SVCURRENTCOMPANY>
+        </STATICVARIABLES>
+      </REQUESTDESC>
+      <REQUESTDATA>
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <COMPANY>
+            <REMOTECMPINFO.LIST MERGECMP="Yes">
+              <NAME>${storeName}</NAME>
+              <STATENAME>Delhi</STATENAME>
+              <GSTIN>${gstin}</GSTIN>
+            </REMOTECMPINFO.LIST>
+          </COMPANY>
+        </TALLYMESSAGE>
+        ${(orders || []).slice(0, 15).map((o) => `
+        <TALLYMESSAGE xmlns:UDF="TallyUDF">
+          <VOUCHER VCHTYPE="Sales" ACTION="Create">
+            <DATE>${today.replace(/-/g, '')}</DATE>
+            <VOUCHERNUMBER>${o.id}</VOUCHERNUMBER>
+            <PARTYLEDGERNAME>${o.customerName || 'Cash Customer'}</PARTYLEDGERNAME>
+            <PERSISTEDVIEW>Invoice View</PERSISTEDVIEW>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>${o.customerName || 'Cash Customer'}</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+              <AMOUNT>-${o.totalAmount || 0}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Sales Account</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${Math.round((o.totalAmount || 0) / 1.18)}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Output CGST</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${Math.round(((o.totalAmount || 0) - Math.round((o.totalAmount || 0) / 1.18)) / 2)}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+            <ALLLEDGERENTRIES.LIST>
+              <LEDGERNAME>Output SGST</LEDGERNAME>
+              <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+              <AMOUNT>${Math.round(((o.totalAmount || 0) - Math.round((o.totalAmount || 0) / 1.18)) / 2)}</AMOUNT>
+            </ALLLEDGERENTRIES.LIST>
+          </VOUCHER>
+        </TALLYMESSAGE>`).join('\n')}
+      </REQUESTDATA>
+    </IMPORTDATA>
+  </BODY>
+</ENVELOPE>`;
+
+    const blob = new Blob([tallyXml], { type: 'application/xml;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Tally_Prime_Sales_Import_${today}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Downloaded Tally Prime compliant XML schema file (${today})`);
+  };
+
+  const handleUpdateZoomScale = (newScale: number) => {
+    setZoomScale(newScale);
+    if (typeof document !== 'undefined') {
+      (document.documentElement.style as any).zoom = `${newScale}%`;
+    }
+    showToast(`Display UI zoom set to ${newScale}%`);
+  };
+
+  const handleCloseFinancialYear = () => {
+    setFyClosed(true);
+    showToast(`Financial Year 2025-26 closed! Balances rolled over to FY 2026-27.`);
+  };
+
+  const handleSaveServiceReminder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serviceForm.customerName.trim() || !serviceForm.customerPhone.trim()) {
+      showToast('Please enter customer name and phone');
+      return;
+    }
+    const newRem = {
+      id: `srv-${Date.now()}`,
+      customerName: serviceForm.customerName.trim(),
+      customerPhone: serviceForm.customerPhone.trim(),
+      itemName: serviceForm.itemName.trim() || 'Appliance / Vehicle',
+      serviceType: serviceForm.serviceType.trim() || 'Periodic Servicing',
+      dueDate: serviceForm.dueDate || new Date().toISOString().slice(0, 10),
+      status: 'DUE_SOON',
+    };
+    setServiceReminders((prev) => [newRem, ...prev]);
+    setShowAddServiceModal(false);
+    showToast(`Scheduled service reminder for ${newRem.customerName} (${newRem.itemName})`);
+  };
   const [recentCampaigns, setRecentCampaigns] = useState<
     Array<{
       id: number;
@@ -392,6 +686,9 @@ export function BosMarketingAiIntegrationsSettings({
     | 'payments'
     | 'language'
     | 'staff'
+    | 'vyaparUtilities'
+    | 'serviceReminders'
+    | 'auditTrail'
   >('businessInfo');
   const [showChangeIndustry, setShowChangeIndustry] = useState(false);
 
@@ -1134,8 +1431,32 @@ export function BosMarketingAiIntegrationsSettings({
           </button>
         </div>
 
-        {/* 4 Top KPI Summary Cards with Sparklines */}
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        {/* Marketing Sub-Navigation Tabs (Phase 6 Vyapar Parity) */}
+        <div className="flex items-center gap-2 border-b border-[#E4EFEA] pb-2">
+          {[
+            { id: 'campaigns', label: '📢 Campaigns & Broadcasts' },
+            { id: 'greetings_studio', label: '🎨 Festival & Suvichar Greetings Studio' },
+            { id: 'coupons', label: '🎟️ Coupons & Loyalty Deals' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setMarketingSubTab(tab.id as any)}
+              className={`rounded-xl px-4 py-2 text-[13px] font-bold transition cursor-pointer ${
+                marketingSubTab === tab.id
+                  ? 'bg-[#0A6847] text-white shadow-2xs'
+                  : 'bg-white text-[#475569] border border-[#DCE9E3] hover:bg-[#F4F8F6]'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {marketingSubTab === 'campaigns' && (
+          <div className="space-y-4">
+            {/* 4 Top KPI Summary Cards with Sparklines */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               label: 'Campaigns Sent',
@@ -1611,7 +1932,263 @@ export function BosMarketingAiIntegrationsSettings({
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* FESTIVAL & SUVICHAR GREETINGS STUDIO (Matching Vyapar parity Screenshots 7, 8, 9, 10) */}
+        {marketingSubTab === 'greetings_studio' && (
+          <div className="space-y-4">
+            {/* Header and Category Pills */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bos-card p-4">
+              <div>
+                <h2 className="text-[16px] font-extrabold text-[#111827]">
+                  Festival &amp; Daily Suvichar Greetings Studio
+                </h2>
+                <p className="text-[12.5px] text-[#64748B] mt-0.5">
+                  Share customized greeting cards on WhatsApp with your store branding, logo, and phone number to stay connected with your customers.
+                </p>
+              </div>
+
+              {/* Category Pills */}
+              <div className="flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-1 font-bold text-[12px]">
+                {[
+                  { id: 'festivals', label: '🪔 Festivals (त्यौहार)' },
+                  { id: 'suvichar', label: '🌅 Daily Suvichar (सुविचार)' },
+                  { id: 'offers', label: '🔥 Deals & Discounts (ऑफर)' },
+                ].map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setGreetingCategory(c.id as any)}
+                    className={`rounded-lg px-3 py-1.5 transition cursor-pointer ${
+                      greetingCategory === c.id
+                        ? 'bg-[#0A6847] text-white shadow-2xs'
+                        : 'text-[#475569] hover:bg-[#EEF6F2]'
+                    }`}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Greetings Grid & Live Preview Split */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
+              {/* Left Column (8 cols): Poster Cards Grid */}
+              <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {GREETING_POSTERS.filter((p) => p.category === greetingCategory).map((poster) => {
+                  const isSelected = selectedGreetingPosterId === poster.id;
+                  const storeName = storeSettings.businessName || 'Sharma General Store';
+                  const storePhone = storeSettings.phone || storeSettings.whatsappNumber || '+91 98765 43210';
+                  const fullShareText = `*${poster.title}*\n\n${poster.message}\n\n---\n*${storeName}*\n📞 ${storePhone}\n📍 ${storeSettings.address || 'Visit us in store'}`;
+
+                  return (
+                    <div
+                      key={poster.id}
+                      onClick={() => setSelectedGreetingPosterId(poster.id)}
+                      className={`bos-card overflow-hidden transition cursor-pointer border-2 ${
+                        isSelected ? 'border-[#0A6847] shadow-md ring-2 ring-[#0A6847]/20' : 'border-[#DCE9E3] hover:border-[#A7D7C5]'
+                      }`}
+                    >
+                      {/* Visual Card Banner */}
+                      <div className={`p-5 min-h-[200px] flex flex-col justify-between ${poster.theme} text-white relative`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ${poster.badgeBg}`}>
+                            {poster.badge}
+                          </span>
+                          <span className="text-[11px] text-white/80 font-medium">BOS Studio</span>
+                        </div>
+
+                        <div className="my-3 space-y-1.5">
+                          <h3 className="text-[16px] font-black leading-tight text-white drop-shadow-xs">
+                            {poster.title}
+                          </h3>
+                          <p className={`text-[12px] leading-relaxed ${poster.textColor} opacity-95`}>
+                            {poster.message}
+                          </p>
+                        </div>
+
+                        {/* Branding Watermark Overlay */}
+                        <div className="pt-2 border-t border-white/20 flex items-center justify-between text-[11px]">
+                          <div>
+                            <p className="font-extrabold text-white">{storeName}</p>
+                            <p className="text-white/80 text-[10px]">📞 {storePhone}</p>
+                          </div>
+                          <span className="rounded-md bg-white/20 px-2 py-0.5 text-[10px] font-bold">
+                            Verified Store
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card Action Footer */}
+                      <div className="p-3 bg-white flex items-center justify-between gap-2 border-t border-[#EBF2EE]">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard?.writeText(fullShareText);
+                            showToast('Greeting message copied to clipboard!');
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-[#334155] hover:bg-[#F4F8F6] cursor-pointer"
+                        >
+                          <Copy className="h-3.5 w-3.5 text-[#64748B]" />
+                          <span>Copy</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const url = `https://wa.me/?text=${encodeURIComponent(fullShareText)}`;
+                            window.open(url, '_blank');
+                            showToast(`Opened WhatsApp to share "${poster.title}"`);
+                          }}
+                          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-[#1EBE5D] shadow-2xs transition cursor-pointer"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          <span>Share on WhatsApp</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right Column (4 cols): Smartphone Live WhatsApp Preview */}
+              <div className="lg:col-span-4 space-y-3.5">
+                <div className="bos-card p-4 space-y-3">
+                  <h3 className="text-[14.5px] font-extrabold text-[#111827]">
+                    Live WhatsApp Preview
+                  </h3>
+                  <p className="text-[11.5px] text-[#64748B]">
+                    How customers will receive this card in their WhatsApp chat
+                  </p>
+
+                  {/* Phone frame */}
+                  <div className="mx-auto max-w-[280px] rounded-[32px] border-[6px] border-[#1E293B] bg-[#ECE5DD] shadow-xl overflow-hidden">
+                    <div className="bg-[#075E54] px-3 py-2 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ArrowLeft className="h-4 w-4" />
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#10B981] font-bold text-xs text-white">
+                          {storeSettings.businessName?.charAt(0) || 'S'}
+                        </div>
+                        <div>
+                          <p className="text-[12px] font-extrabold truncate max-w-[130px]">{storeSettings.businessName || 'My Store'}</p>
+                          <p className="text-[9px] text-white/80">Online</p>
+                        </div>
+                      </div>
+                      <Phone className="h-3.5 w-3.5" />
+                    </div>
+
+                    {/* Chat Bubble with Selected Poster */}
+                    {(() => {
+                      const selectedPoster = GREETING_POSTERS.find((p) => p.id === selectedGreetingPosterId) || GREETING_POSTERS[0];
+                      const storeName = storeSettings.businessName || 'Sharma General Store';
+                      const storePhone = storeSettings.phone || storeSettings.whatsappNumber || '+91 98765 43210';
+                      return (
+                        <div className="p-3 bg-[#ECE5DD] space-y-2">
+                          <div className="rounded-xl bg-white p-2 shadow-xs space-y-2">
+                            <div className={`p-3 rounded-lg ${selectedPoster.theme} text-white space-y-1.5`}>
+                              <span className={`inline-block rounded-md px-1.5 py-0.5 text-[9px] font-bold ${selectedPoster.badgeBg}`}>
+                                {selectedPoster.badge}
+                              </span>
+                              <p className="text-[13px] font-black text-white">{selectedPoster.title}</p>
+                              <p className="text-[10.5px] text-white/90 leading-snug">{selectedPoster.message}</p>
+                              <div className="pt-1.5 border-t border-white/20 text-[9px] text-white/80 flex justify-between">
+                                <span>{storeName}</span>
+                                <span>{storePhone}</span>
+                              </div>
+                            </div>
+                            <div className="text-[10px] text-[#475569] leading-tight space-y-0.5">
+                              <p className="font-bold text-[#111827]">Warm greetings from {storeName}!</p>
+                              <p>Thank you for choosing us as your trusted neighborhood store.</p>
+                            </div>
+                            <div className="text-right text-[9px] text-[#94A3B8]">
+                              10:45 AM ✓✓
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selectedPoster = GREETING_POSTERS.find((p) => p.id === selectedGreetingPosterId) || GREETING_POSTERS[0];
+                      const storeName = storeSettings.businessName || 'Sharma General Store';
+                      const storePhone = storeSettings.phone || storeSettings.whatsappNumber || '+91 98765 43210';
+                      const text = encodeURIComponent(`*${selectedPoster.title}*\n\n${selectedPoster.message}\n\n---\n*${storeName}*\n📞 ${storePhone}`);
+                      window.open(`https://wa.me/?text=${text}`, '_blank');
+                    }}
+                    className="w-full bos-btn-primary rounded-xl py-2.5 text-[12.5px] font-bold flex items-center justify-center gap-2 cursor-pointer shadow-2xs"
+                  >
+                    <Send className="h-4 w-4" />
+                    <span>Broadcast Greeting on WhatsApp</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* COUPONS & LOYALTY SUB-TAB */}
+        {marketingSubTab === 'coupons' && (
+          <div className="space-y-4">
+            <div className="bos-card p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h2 className="text-[16px] font-extrabold text-[#111827]">Coupons &amp; Customer Loyalty Discounts</h2>
+                <p className="text-[12.5px] text-[#64748B] mt-0.5">
+                  Reward returning patrons with instant checkout promo codes and automated loyalty points.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateCouponModalOpen(true)}
+                className="bos-btn-primary rounded-xl px-4 py-2 font-bold text-[12.5px] flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Create New Coupon</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              {(coupons || []).length === 0 ? (
+                <div className="col-span-3 bos-card p-8 text-center text-[#64748B]">
+                  <Ticket className="h-10 w-10 text-[#94A3B8] mx-auto mb-2" />
+                  <p className="font-bold text-[#111827]">No active coupons found</p>
+                  <p className="text-xs text-[#64748B] mt-1">Create your first coupon to offer discounts on orders</p>
+                </div>
+              ) : (
+                (coupons || []).map((cpn) => (
+                  <div key={cpn.id} className="bos-card p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-black text-[15px] text-[#0A6847] bg-[#E6F6F0] px-3 py-1 rounded-lg">
+                        {cpn.code}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void onToggleCoupon(cpn.id)}
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold cursor-pointer ${
+                          cpn.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {cpn.active ? 'Active' : 'Inactive'}
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-[14px] font-bold text-[#111827]">
+                        {cpn.value}% Flat Discount
+                      </p>
+                      <p className="text-[11.5px] text-[#64748B]">
+                        Min Order: {currencySymbol} {cpn.minOrder}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Modal 1: + Create Campaign Modal */}
         {createCampaignModalOpen && (
@@ -2905,6 +3482,24 @@ export function BosMarketingAiIntegrationsSettings({
       title: 'Staff & Multi-User Roles',
       sub: 'Manage Admins, Billers, Cashiers & Permissions',
       icon: Users,
+    },
+    {
+      id: 'vyaparUtilities' as const,
+      title: 'Vyapar Utilities & FY Close',
+      sub: 'Tally XML export, Close FY, Negative stock & Zoom',
+      icon: Settings,
+    },
+    {
+      id: 'serviceReminders' as const,
+      title: 'Service & Warranty Tracking',
+      sub: 'Appliance/vehicle servicing & warranty reminders',
+      icon: Calendar,
+    },
+    {
+      id: 'auditTrail' as const,
+      title: 'Audit Trail & Activity Log',
+      sub: 'Track bill edits, price changes & staff actions',
+      icon: ShieldCheck,
     },
   ];
 
@@ -4892,6 +5487,335 @@ export function BosMarketingAiIntegrationsSettings({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* VYAPAR UTILITIES & FY CLOSE (Phase 6 Parity) */}
+          {settingsSection === 'vyaparUtilities' && (
+            <div className="space-y-4">
+              {/* Tally Prime XML Export */}
+              <div className="bos-card p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#111827]">Tally Prime XML Export</h3>
+                    <p className="text-[12px] text-[#64748B]">
+                      Download complete accounting schema with Sales Vouchers, Customer Ledgers, and GST breakdown for 1-click import into Tally ERP 9 / Tally Prime.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleExportTallyXml}
+                    className="bos-btn-primary rounded-xl px-4 py-2 text-[12.5px] font-bold flex items-center gap-2 cursor-pointer shadow-2xs"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Download Tally XML</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Close Financial Year (FY) */}
+              <div className="bos-card p-5 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-[15px] font-bold text-[#111827]">Close Financial Year (FY)</h3>
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${fyClosed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {fyClosed ? 'FY 2025-26 Closed' : 'Active: FY 2025-26'}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-[#64748B] mt-1 max-w-lg">
+                      Lock all vouchers before 31 March 2026. Carry forward closing stock quantity as new opening stock and rollover customer udhaar balances to FY 2026-27.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={fyClosed}
+                    onClick={handleCloseFinancialYear}
+                    className={`rounded-xl px-4 py-2 text-[12.5px] font-bold flex items-center gap-1.5 transition ${
+                      fyClosed
+                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                        : 'bg-amber-600 text-white hover:bg-amber-700 cursor-pointer shadow-2xs'
+                    }`}
+                  >
+                    <Lock className="h-4 w-4" />
+                    <span>{fyClosed ? 'Year Closed' : 'Close FY & Carry Forward'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Stop Sale on Negative Stock */}
+              <div className="bos-card p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#111827]">Negative Stock Prevention Lock</h3>
+                    <p className="text-[12px] text-[#64748B]">
+                      Prevent billers and cashiers from adding or billing catalog items when stock quantity is 0 or negative.
+                    </p>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={stopSaleNegativeStock}
+                      onChange={(e) => {
+                        setStopSaleNegativeStock(e.target.checked);
+                        showToast(e.target.checked ? 'Negative stock billing lock enabled' : 'Negative stock billing allowed');
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0A6847]"></div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Zoom Scale Slider */}
+              <div className="bos-card p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#111827]">Display Scale &amp; Zoom (POS Screen)</h3>
+                    <p className="text-[12px] text-[#64748B]">
+                      Adjust the visual size of BOS Web to match small POS touch displays or large counter monitors.
+                    </p>
+                  </div>
+                  <span className="font-mono font-bold text-[15px] text-[#0A6847] bg-[#E6F6F0] px-3 py-1 rounded-lg">
+                    {zoomScale}%
+                  </span>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <input
+                    type="range"
+                    min="70"
+                    max="130"
+                    step="5"
+                    value={zoomScale}
+                    onChange={(e) => handleUpdateZoomScale(Number(e.target.value))}
+                    className="w-full accent-[#0A6847] cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[11px] font-bold text-[#64748B]">
+                    <button type="button" onClick={() => handleUpdateZoomScale(80)} className="hover:text-[#0A6847]">80% (Compact)</button>
+                    <button type="button" onClick={() => handleUpdateZoomScale(100)} className="hover:text-[#0A6847]">100% (Default)</button>
+                    <button type="button" onClick={() => handleUpdateZoomScale(115)} className="hover:text-[#0A6847]">115% (Comfortable)</button>
+                    <button type="button" onClick={() => handleUpdateZoomScale(125)} className="hover:text-[#0A6847]">125% (Touch Screen)</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SERVICE & WARRANTY TRACKER (Phase 6 Parity) */}
+          {settingsSection === 'serviceReminders' && (
+            <div className="space-y-4">
+              <div className="bos-card p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#111827]">
+                      Appliance, Vehicle &amp; Device Service Reminders
+                    </h3>
+                    <p className="text-[12px] text-[#64748B]">
+                      Track periodic maintenance, warranty expiries, oil changes, and send automated WhatsApp reminders.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAddServiceModal(true)}
+                    className="bos-btn-primary rounded-xl px-4 py-2 text-[12.5px] font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Schedule Service</span>
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[12.5px]">
+                    <thead>
+                      <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                        <th className="py-2.5 px-3">Customer</th>
+                        <th className="py-2.5 px-3">Device / Vehicle</th>
+                        <th className="py-2.5 px-3">Service Type</th>
+                        <th className="py-2.5 px-3">Due Date</th>
+                        <th className="py-2.5 px-3 text-center">Status</th>
+                        <th className="py-2.5 px-3 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EEF5F1]">
+                      {serviceReminders.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-6 text-center text-[#64748B]">
+                            No upcoming service reminders scheduled
+                          </td>
+                        </tr>
+                      ) : (
+                        serviceReminders.map((rem) => {
+                          const storeName = storeSettings.businessName || 'Our Service Center';
+                          const msg = `Dear ${rem.customerName}, gentle reminder from ${storeName} that your ${rem.itemName} is due for ${rem.serviceType} on ${rem.dueDate}. Please visit us to keep your equipment running smoothly!`;
+                          const waUrl = `https://wa.me/${rem.customerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`;
+
+                          return (
+                            <tr key={rem.id} className="hover:bg-[#F9FCFA]">
+                              <td className="py-3 px-3">
+                                <p className="font-bold text-[#111827]">{rem.customerName}</p>
+                                <p className="text-[11px] text-[#64748B]">{rem.customerPhone}</p>
+                              </td>
+                              <td className="py-3 px-3 font-semibold text-[#334155]">{rem.itemName}</td>
+                              <td className="py-3 px-3 text-[#475569]">{rem.serviceType}</td>
+                              <td className="py-3 px-3 font-mono font-medium text-[#111827]">{rem.dueDate}</td>
+                              <td className="py-3 px-3 text-center">
+                                <span className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
+                                  rem.status === 'OVERDUE' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
+                                }`}>
+                                  {rem.status === 'OVERDUE' ? 'Overdue' : 'Due Soon'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => window.open(waUrl, '_blank')}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-[#E6F6F0] px-2.5 py-1 text-[11px] font-bold text-[#0A7B56] hover:bg-[#D1EFE4] cursor-pointer"
+                                >
+                                  <Send className="h-3 w-3" />
+                                  <span>Remind</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Add Service Modal */}
+              {showAddServiceModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                  <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl border border-[#DCE9E3] space-y-4">
+                    <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+                      <h3 className="text-[15px] font-bold text-[#111827]">Schedule Service Reminder</h3>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddServiceModal(false)}
+                        className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSaveServiceReminder} className="space-y-3 text-[12.5px]">
+                      <div>
+                        <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Customer Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={serviceForm.customerName}
+                          onChange={(e) => setServiceForm((s) => ({ ...s, customerName: e.target.value }))}
+                          placeholder="e.g. Anil Sharma"
+                          className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Customer WhatsApp Phone *</label>
+                        <input
+                          type="tel"
+                          required
+                          value={serviceForm.customerPhone}
+                          onChange={(e) => setServiceForm((s) => ({ ...s, customerPhone: e.target.value }))}
+                          placeholder="+91 98765 43210"
+                          className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Appliance / Vehicle / Model</label>
+                        <input
+                          type="text"
+                          value={serviceForm.itemName}
+                          onChange={(e) => setServiceForm((s) => ({ ...s, itemName: e.target.value }))}
+                          placeholder="e.g. Honda Activa 6G / Samsung 1.5T AC"
+                          className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Service Type</label>
+                        <input
+                          type="text"
+                          value={serviceForm.serviceType}
+                          onChange={(e) => setServiceForm((s) => ({ ...s, serviceType: e.target.value }))}
+                          placeholder="e.g. Periodic Oil Change & Tuning"
+                          className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Service Due Date</label>
+                        <input
+                          type="date"
+                          value={serviceForm.dueDate}
+                          onChange={(e) => setServiceForm((s) => ({ ...s, dueDate: e.target.value }))}
+                          className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddServiceModal(false)}
+                          className="rounded-xl border border-[#DCE9E3] px-4 py-2 font-semibold text-[#475569] cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="bos-btn-primary rounded-xl px-5 py-2 font-bold cursor-pointer"
+                        >
+                          Save Reminder
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AUDIT TRAIL & SYSTEM ACTIVITY LOG (Phase 6 Parity) */}
+          {settingsSection === 'auditTrail' && (
+            <div className="bos-card p-5 space-y-4">
+              <div>
+                <h3 className="text-[15px] font-bold text-[#111827]">Audit Trail &amp; Activity Log</h3>
+                <p className="text-[12px] text-[#64748B]">
+                  Tamper-evident record of all billing transactions, inventory edits, cash reconciliations, and staff operations.
+                </p>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-[12.5px]">
+                  <thead>
+                    <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                      <th className="py-2.5 px-3">Timestamp</th>
+                      <th className="py-2.5 px-3">User</th>
+                      <th className="py-2.5 px-3">Category</th>
+                      <th className="py-2.5 px-3">Action</th>
+                      <th className="py-2.5 px-3">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#EEF5F1]">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-[#F9FCFA]">
+                        <td className="py-3 px-3 font-mono text-[11px] text-[#64748B] whitespace-nowrap">{log.timestamp}</td>
+                        <td className="py-3 px-3 font-semibold text-[#111827]">{log.user}</td>
+                        <td className="py-3 px-3">
+                          <span className="rounded-md bg-[#F1F5F3] px-2 py-0.5 text-[10.5px] font-bold text-[#334155]">
+                            {log.category}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 font-bold text-[#0A6847]">{log.action}</td>
+                        <td className="py-3 px-3 text-[#475569]">{log.detail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

@@ -75,8 +75,13 @@ export default function ExpensesScreen() {
   const [filterType, setFilterType] = useState<'ALL' | 'INFLOW' | 'OUTFLOW'>('ALL');
   const [error, setError] = useState<string | null>(null);
 
-  // Add Expense Modal State
+  // Add Expense / Purchase Bill Modal State
   const [modalOpen, setModalOpen] = useState(create === '1');
+  const [recordType, setRecordType] = useState<'expense' | 'purchase'>('expense');
+  const [vendorName, setVendorName] = useState('');
+  const [billNumber, setBillNumber] = useState('');
+  const [taxRate, setTaxRate] = useState('18');
+  const [paidAmount, setPaidAmount] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(EXPENSE_CATEGORIES[0]);
   const [description, setDescription] = useState('');
@@ -109,24 +114,55 @@ export default function ExpensesScreen() {
   const handleRecordExpense = async () => {
     const amt = parseFloat(amount);
     if (isNaN(amt) || amt <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid expense amount.');
+      Alert.alert('Invalid Amount', 'Please enter a valid amount.');
       return;
     }
+
+    if (recordType === 'purchase' && !vendorName.trim()) {
+      Alert.alert('Missing Vendor', 'Please enter the Vendor or Supplier Name.');
+      return;
+    }
+
+    const paid = recordType === 'purchase' && paidAmount ? parseFloat(paidAmount) : amt;
+    const cat = recordType === 'purchase' ? 'Raw Materials' : category;
+    const desc = recordType === 'purchase'
+      ? `Purchase Bill #${billNumber.trim() || 'INW'} - ${vendorName.trim()} (GST ${taxRate}%, Total ₹${amt.toFixed(2)}, Paid ₹${paid.toFixed(2)})`
+      : description.trim() || category;
 
     setSubmitting(true);
     await hapticFeedback.medium();
     try {
-      const payload = { amount: amt, category, description: description.trim() || category, paymentMode };
-      await apiRequest(API_PATHS.commerceExpenses, { method: 'POST', body: payload, headers: { 'Idempotency-Key': requestTracker.current.for(payload) } });
+      const payload = {
+        amount: paid,
+        category: cat,
+        description: desc,
+        paymentMode,
+        vendorName: recordType === 'purchase' ? vendorName.trim() : undefined,
+        billNumber: recordType === 'purchase' ? billNumber.trim() : undefined,
+        totalAmount: amt,
+      };
+      await apiRequest(API_PATHS.commerceExpenses, {
+        method: 'POST',
+        body: payload,
+        headers: { 'Idempotency-Key': requestTracker.current.for(payload) },
+      });
       requestTracker.current.clear();
 
       setModalOpen(false);
       setAmount('');
+      setPaidAmount('');
       setDescription('');
-      Alert.alert('Expense Recorded ✓', `₹${amt.toFixed(2)} recorded under ${category}.`);
+      setVendorName('');
+      setBillNumber('');
+      Alert.alert(
+        recordType === 'purchase' ? 'Purchase Bill Recorded ✓' : 'Expense Recorded ✓',
+        recordType === 'purchase'
+          ? `Recorded bill for ${vendorName} (Paid ₹${paid.toFixed(2)} of ₹${amt.toFixed(2)}).`
+          : `₹${amt.toFixed(2)} recorded under ${category}.`,
+      );
       fetchDaybook();
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Could not record expense.');
+      Alert.alert('Error', err?.message || 'Could not record transaction.');
     } finally {
       setSubmitting(false);
     }
@@ -368,7 +404,9 @@ export default function ExpensesScreen() {
         >
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Record Operating Expense</Text>
+              <Text style={styles.modalTitle}>
+                {recordType === 'purchase' ? 'Record Vendor Purchase Bill' : 'Record Operating Expense'}
+              </Text>
               <TouchableOpacity onPress={() => setModalOpen(false)}>
                 <MaterialIcons name="close" size={20} color="#64748b" />
               </TouchableOpacity>
@@ -380,37 +418,139 @@ export default function ExpensesScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ paddingBottom: 40 }}
             >
-              <Text style={styles.inputLabel}>Amount (₹) *</Text>
+              {/* Type Switcher */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 12, padding: 4, marginBottom: 14 }}>
+                <TouchableOpacity
+                  onPress={() => setRecordType('expense')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    backgroundColor: recordType === 'expense' ? '#059669' : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: recordType === 'expense' ? '#ffffff' : '#475569' }}>
+                    💸 Store Expense
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setRecordType('purchase')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    backgroundColor: recordType === 'purchase' ? '#0284c7' : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: recordType === 'purchase' ? '#ffffff' : '#475569' }}>
+                    📦 Purchase Bill
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {recordType === 'purchase' && (
+                <>
+                  <Text style={styles.inputLabel}>Vendor / Supplier Name *</Text>
+                  <TextInput
+                    value={vendorName}
+                    onChangeText={setVendorName}
+                    style={styles.modalInput}
+                    placeholder="e.g. Metro Cash & Carry, Amul Dairy"
+                  />
+
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>Bill / Invoice Number</Text>
+                  <TextInput
+                    value={billNumber}
+                    onChangeText={setBillNumber}
+                    style={styles.modalInput}
+                    placeholder="e.g. BILL-4091"
+                  />
+
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>GST Tax Rate</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                    {['0', '5', '12', '18', '28'].map((rate) => (
+                      <TouchableOpacity
+                        key={rate}
+                        onPress={() => setTaxRate(rate)}
+                        style={[
+                          styles.categoryChip,
+                          taxRate === rate && styles.categoryChipActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            taxRate === rate && styles.categoryChipTextActive,
+                          ]}
+                        >
+                          {rate}% GST
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                {recordType === 'purchase' ? 'Total Bill Amount (₹) *' : 'Amount (₹) *'}
+              </Text>
               <TextInput
                 keyboardType="numeric"
                 value={amount}
-                onChangeText={setAmount}
+                onChangeText={(val) => {
+                  setAmount(val);
+                  if (recordType === 'purchase' && !paidAmount) setPaidAmount(val);
+                }}
                 style={styles.modalInput}
                 placeholder="₹ 0.00"
               />
 
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {EXPENSE_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    onPress={() => setCategory(cat)}
-                    style={[
-                      styles.categoryChip,
-                      category === cat && styles.categoryChipActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryChipText,
-                        category === cat && styles.categoryChipTextActive,
-                      ]}
-                    >
-                      {cat}
+              {recordType === 'purchase' && (
+                <>
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>Amount Paid Now (₹)</Text>
+                  <TextInput
+                    keyboardType="numeric"
+                    value={paidAmount}
+                    onChangeText={setPaidAmount}
+                    style={styles.modalInput}
+                    placeholder="₹ 0.00"
+                  />
+                  {parseFloat(amount || '0') > parseFloat(paidAmount || '0') && (
+                    <Text style={{ fontSize: 11, color: '#d97706', fontWeight: '700', marginTop: 4 }}>
+                      Balance Due: ₹{(parseFloat(amount || '0') - parseFloat(paidAmount || '0')).toFixed(2)} (Recorded as supplier payable)
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                  )}
+                </>
+              )}
+
+              {recordType === 'expense' && (
+                <>
+                  <Text style={[styles.inputLabel, { marginTop: 12 }]}>Category</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                    {EXPENSE_CATEGORIES.map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        onPress={() => setCategory(cat)}
+                        style={[
+                          styles.categoryChip,
+                          category === cat && styles.categoryChipActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryChipText,
+                            category === cat && styles.categoryChipTextActive,
+                          ]}
+                        >
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
 
               <Text style={[styles.inputLabel, { marginTop: 12 }]}>Payment Mode</Text>
               <View style={styles.paymentModeRow}>
@@ -448,24 +588,31 @@ export default function ExpensesScreen() {
                 </TouchableOpacity>
               </View>
 
-              <Text style={[styles.inputLabel, { marginTop: 12 }]}>Note / Details</Text>
+              <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                {recordType === 'purchase' ? 'Purchased Items / Description' : 'Note / Details'}
+              </Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
                 style={styles.modalInput}
-                placeholder="e.g. Milk 10 packets, Vegetables, Sugar"
+                placeholder={recordType === 'purchase' ? 'e.g. FMCG wholesale cartons, Grocery stock' : 'e.g. Milk 10 packets, Vegetables, Sugar'}
               />
 
               <TouchableOpacity
                 onPress={handleRecordExpense}
                 disabled={submitting}
-                style={styles.modalSubmitBtn}
+                style={[
+                  styles.modalSubmitBtn,
+                  recordType === 'purchase' && { backgroundColor: '#0284c7' },
+                ]}
                 activeOpacity={0.8}
               >
                 {submitting ? (
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
-                  <Text style={styles.modalSubmitText}>Save Expense to Day Book</Text>
+                  <Text style={styles.modalSubmitText}>
+                    {recordType === 'purchase' ? 'Save Purchase Bill to Day Book' : 'Save Expense to Day Book'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>

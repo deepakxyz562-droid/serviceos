@@ -49,7 +49,7 @@ import {
 import { authFetch } from '@/lib/client-auth';
 import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
-type InvoiceDocType = 'gst' | 'non_gst' | 'credit_note';
+export type InvoiceDocType = 'gst' | 'quotation' | 'proforma' | 'delivery_challan' | 'credit_note' | 'non_gst';
 type RightPreviewTab = 'preview' | 'einvoice' | 'ewaybill' | 'payment';
 type PreviewPaperMode = 'a4' | 'thermal';
 
@@ -77,6 +77,12 @@ export type SavedBosInvoice = {
   totalAmount: number;
   paidAmount: number;
   status: 'Paid' | 'Partial' | 'Unpaid' | 'Draft';
+  quotationRef?: string;
+  deliveryChallanNumber?: string;
+  roundOff?: number;
+  receivedAmount?: number;
+  balanceDue?: number;
+  paymentMode?: 'cash' | 'upi' | 'card' | 'bank' | 'cheque';
 };
 
 type BosInvoicesWorkstationProps = {
@@ -266,6 +272,11 @@ export function BosInvoicesWorkstation({
 
   // Top & Builder States matching screenshot 1:1 in demoMode, dynamic in production
   const [docType, setDocType] = useState<InvoiceDocType>('gst');
+  const [quotationRef, setQuotationRef] = useState<string>('');
+  const [deliveryChallanNumber, setDeliveryChallanNumber] = useState<string>('');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'card' | 'bank' | 'cheque'>('cash');
+  const [receivedAmount, setReceivedAmount] = useState<number>(0);
+  const [receivedAmountInitialized, setReceivedAmountInitialized] = useState(false);
   const [invoiceNumber, setInvoiceNumber] = useState(() =>
     demoMode
       ? 'INV-2024-1068'
@@ -290,6 +301,29 @@ export function BosInvoicesWorkstation({
         }).format(new Date())
   );
   const [salesType, setSalesType] = useState('B2B - Business');
+
+  const handleSelectDocType = (type: InvoiceDocType) => {
+    setDocType(type);
+    const prefixMap: Record<InvoiceDocType, string> = {
+      gst: 'INV',
+      quotation: 'EST',
+      proforma: 'PI',
+      delivery_challan: 'DC',
+      credit_note: 'CN',
+      non_gst: 'BILL',
+    };
+    const prefix = prefixMap[type] || 'INV';
+    setInvoiceNumber(`${prefix}-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`);
+  };
+
+  const handleConvertToInvoice = () => {
+    const oldQuote = invoiceNumber;
+    setQuotationRef(oldQuote);
+    setDocType('gst');
+    const newNum = `INV-${new Date().getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    setInvoiceNumber(newNum);
+    showToast(`Quotation ${oldQuote} converted to Tax Invoice ${newNum}!`);
+  };
 
   // Customer Details States
   const [selectedCustomerName, setSelectedCustomerName] = useState(() =>
@@ -778,6 +812,12 @@ export function BosInvoicesWorkstation({
         currencySymbol,
       );
 
+      const rawTotal = calculations.totalAmount;
+      const roundedTotal = Math.round(rawTotal);
+      const roundOff = +(roundedTotal - rawTotal).toFixed(2);
+      const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
+      const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
+
       const saved: SavedBosInvoice = {
         id: verifiedInvoiceId,
         invoiceNumber: verifiedInvoiceNumber,
@@ -786,9 +826,15 @@ export function BosInvoicesWorkstation({
         customerGstin: selectedCustomerGstin,
         date: invoiceDate,
         dueDate,
-        totalAmount: calculations.totalAmount,
-        paidAmount: 0,
-        status: 'Draft',
+        totalAmount: roundedTotal,
+        paidAmount: effectiveReceived,
+        status: balanceDue <= 0 ? 'Paid' : effectiveReceived > 0 ? 'Partial' : 'Unpaid',
+        quotationRef: quotationRef || undefined,
+        deliveryChallanNumber: deliveryChallanNumber || undefined,
+        roundOff,
+        receivedAmount: effectiveReceived,
+        balanceDue,
+        paymentMode,
       };
       onInvoiceSaved?.(saved);
 
@@ -1016,12 +1062,15 @@ export function BosInvoicesWorkstation({
                 Invoice Details
               </h2>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {(
                   [
-                    { id: 'gst', label: 'GST Invoice' },
-                    { id: 'non_gst', label: 'Non-GST Invoice' },
+                    { id: 'gst', label: 'Tax Invoice' },
+                    { id: 'quotation', label: 'Estimate / Quotation' },
+                    { id: 'proforma', label: 'Proforma Invoice' },
+                    { id: 'delivery_challan', label: 'Delivery Challan' },
                     { id: 'credit_note', label: 'Credit Note' },
+                    { id: 'non_gst', label: 'Non-GST Bill' },
                   ] as const
                 ).map((tab) => {
                   const active = docType === tab.id;
@@ -1029,8 +1078,8 @@ export function BosInvoicesWorkstation({
                     <button
                       key={tab.id}
                       type="button"
-                      onClick={() => setDocType(tab.id)}
-                      className={`rounded-lg px-3.5 py-1.5 text-[12px] font-bold transition cursor-pointer ${
+                      onClick={() => handleSelectDocType(tab.id)}
+                      className={`rounded-lg px-2.5 py-1 text-[11.5px] font-bold transition cursor-pointer ${
                         active
                           ? 'bg-[#0A6847] text-white shadow-2xs'
                           : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#334155] hover:bg-[#F1F5F9]'
@@ -1759,10 +1808,121 @@ export function BosInvoicesWorkstation({
               </div>
             </div>
           </div>
+
+          {/* CARD 5: PAYMENT & SETTLEMENT */}
+          {(() => {
+            const rawTotal = calculations.totalAmount;
+            const roundedTotal = Math.round(rawTotal);
+            const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
+            const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
+            return (
+              <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[15.5px] font-extrabold text-[#111827]">
+                    Payment &amp; Settlement
+                  </h2>
+                  <span className="text-[11.5px] font-bold text-[#64748B]">
+                    Net: {currencySymbol} {formatTwoDecimals(roundedTotal)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="block text-[11.5px] font-medium text-[#475569] mb-1">
+                      Payment Mode
+                    </label>
+                    <select
+                      aria-label="Payment Mode"
+                      value={paymentMode}
+                      onChange={(e) => setPaymentMode(e.target.value as any)}
+                      className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] font-semibold text-[#111827]"
+                    >
+                      <option value="cash">💵 Cash In Hand</option>
+                      <option value="upi">📱 UPI / QR</option>
+                      <option value="card">💳 Debit / Credit Card</option>
+                      <option value="bank">🏦 Net Banking / NEFT</option>
+                      <option value="cheque">🧾 Cheque</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[11.5px] font-medium text-[#475569]">
+                        Received ({currencySymbol})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReceivedAmount(roundedTotal);
+                          setReceivedAmountInitialized(true);
+                        }}
+                        className="text-[10.5px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                      >
+                        Full Paid
+                      </button>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={effectiveReceived}
+                      onChange={(e) => {
+                        setReceivedAmount(Math.max(0, Number(e.target.value) || 0));
+                        setReceivedAmountInitialized(true);
+                      }}
+                      className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 text-[12.5px] font-bold text-[#111827]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11.5px] font-medium text-[#475569] mb-1">
+                      Balance Due ({currencySymbol})
+                    </label>
+                    <div
+                      className={`h-9 w-full flex items-center px-3 rounded-xl border text-[13px] font-extrabold ${
+                        balanceDue > 0
+                          ? 'border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]'
+                          : 'border-[#D1FAE5] bg-[#ECFDF5] text-[#059669]'
+                      }`}
+                    >
+                      {currencySymbol} {formatTwoDecimals(balanceDue)}
+                      {balanceDue > 0 ? (
+                        <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-[#DC2626]">
+                          Unpaid
+                        </span>
+                      ) : (
+                        <span className="ml-auto text-[10px] font-bold uppercase tracking-wider text-[#059669]">
+                          Paid
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* RIGHT COLUMN: LIVE INVOICE PREVIEW PANEL (5 cols) */}
         <div className="lg:col-span-5 rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
+          {/* 1-Click Convert Quotation to Tax Invoice Banner (Screenshot matching) */}
+          {docType === 'quotation' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-xl text-[12px]">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-[#059669] shrink-0" />
+                <span className="font-semibold text-[#065F46]">
+                  Estimate / Quotation ready. Convert to Tax Invoice?
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleConvertToInvoice}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#059669] text-white rounded-lg font-bold text-[11.5px] hover:bg-[#047857] shadow-2xs transition cursor-pointer"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Convert to Tax Invoice</span>
+              </button>
+            </div>
+          )}
+
           {/* Top Underline Tabs: Invoice Preview | e-Invoice | e-Way Bill | Payment */}
           <div className="flex items-center gap-5 border-b border-[#EBF2EE]">
             {(
@@ -1844,11 +2004,25 @@ export function BosInvoicesWorkstation({
                     <BosBrand variant="light" />
                   )}
                   <div className="text-right">
-                    <p className="text-[14px] font-extrabold tracking-tight text-[#111827]">
-                      TAX INVOICE
+                    <p className="text-[14px] font-extrabold tracking-tight text-[#111827] uppercase">
+                      {docType === 'quotation'
+                        ? 'ESTIMATE / QUOTATION'
+                        : docType === 'proforma'
+                        ? 'PROFORMA INVOICE'
+                        : docType === 'delivery_challan'
+                        ? 'DELIVERY CHALLAN'
+                        : docType === 'credit_note'
+                        ? 'CREDIT NOTE'
+                        : docType === 'non_gst'
+                        ? 'COMMERCIAL BILL'
+                        : 'TAX INVOICE'}
                     </p>
                     <span className="mt-1 inline-flex rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[10px] font-bold text-[#0A7B56]">
-                      Original for Recipient
+                      {docType === 'quotation'
+                        ? 'Valid for 15 Days'
+                        : docType === 'delivery_challan'
+                        ? 'Goods Dispatch'
+                        : 'Original for Recipient'}
                     </span>
                   </div>
                 </div>
@@ -1882,6 +2056,12 @@ export function BosInvoicesWorkstation({
                         {invoiceNumber}
                       </span>
                     </div>
+                    {quotationRef ? (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-[#64748B]">Quotation Ref:</span>
+                        <span className="font-semibold text-[#0A6847]">{quotationRef}</span>
+                      </div>
+                    ) : null}
                     <div className="flex justify-between gap-2">
                       <span className="text-[#64748B]">Date:</span>
                       <span className="font-semibold text-[#111827]">
@@ -2042,15 +2222,47 @@ export function BosInvoicesWorkstation({
                         </div>
                       </>
                     )}
-                    <div className="flex items-baseline justify-between border-t border-[#DCE9E3] pt-1.5">
-                      <span className="text-[12.5px] font-extrabold text-[#111827]">
-                        Total Amount
-                      </span>
-                      <span className="text-[16px] font-extrabold text-[#111827]">
-                        {currencySymbol}{' '}
-                        {formatTwoDecimals(calculations.totalAmount)}
-                      </span>
-                    </div>
+                    {(() => {
+                      const rawTotal = calculations.totalAmount;
+                      const roundedTotal = Math.round(rawTotal);
+                      const roundOff = +(roundedTotal - rawTotal).toFixed(2);
+                      const effectiveReceived = receivedAmountInitialized ? receivedAmount : roundedTotal;
+                      const balanceDue = Math.max(0, +(roundedTotal - effectiveReceived).toFixed(2));
+                      return (
+                        <>
+                          {roundOff !== 0 && (
+                            <div className="flex justify-between text-[10.5px] text-[#64748B]">
+                              <span>Round Off</span>
+                              <span className="font-semibold text-[#111827]">
+                                {roundOff > 0 ? `+ ${currencySymbol} ${roundOff}` : `- ${currencySymbol} ${Math.abs(roundOff)}`}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex items-baseline justify-between border-t border-[#DCE9E3] pt-1.5">
+                            <span className="text-[12.5px] font-extrabold text-[#111827]">
+                              Total Amount
+                            </span>
+                            <span className="text-[16px] font-extrabold text-[#111827]">
+                              {currencySymbol} {formatTwoDecimals(roundedTotal)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[11px] text-[#475569] pt-1">
+                            <span>Received ({paymentMode.toUpperCase()})</span>
+                            <span className="font-bold text-[#059669]">
+                              {currencySymbol} {formatTwoDecimals(effectiveReceived)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-[11px] font-extrabold pt-0.5">
+                            <span className={balanceDue > 0 ? 'text-[#DC2626]' : 'text-[#475569]'}>
+                              Balance Due
+                            </span>
+                            <span className={balanceDue > 0 ? 'text-[#DC2626]' : 'text-[#111827]'}>
+                              {currencySymbol} {formatTwoDecimals(balanceDue)}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 

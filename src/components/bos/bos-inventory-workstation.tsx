@@ -17,6 +17,7 @@ import {
   MoreVertical,
   Package,
   Plus,
+  Printer,
   Search,
   SlidersHorizontal,
   Sparkles,
@@ -379,25 +380,36 @@ export function BosInventoryWorkstation({
   const [showStockModal, setShowStockModal] = useState(false);
   const [stockDeltaInput, setStockDeltaInput] = useState<number>(10);
 
-  // Add / Edit Product Modal
+  // Add / Edit Product Modal & Barcode Generator
   const [showProductModal, setShowProductModal] = useState(initialOpenAddModal);
   const [editingProduct, setEditingProduct] = useState<BosProductItem | null>(null);
   const [fetchingPublicImage, setFetchingPublicImage] = useState(false);
   const [modalFetchMessage, setModalFetchMessage] = useState<string | null>(null);
+  const [activeItemModalTab, setActiveItemModalTab] = useState<'pricing' | 'stock'>('pricing');
+  const [showBarcodeLabelModal, setShowBarcodeLabelModal] = useState(false);
+  const [barcodeCopies, setBarcodeCopies] = useState(12);
+  const [barcodeLabelLayout, setBarcodeLabelLayout] = useState<'thermal' | 'sheet24'>('sheet24');
   const [formState, setFormState] = useState({
     name: '',
-    category: 'Grocery',
+    itemType: isServiceBusiness ? ('service' as const) : ('product' as const),
+    category: isServiceBusiness ? 'Services' : 'Grocery',
     brand: '',
     price: 120,
+    priceWithTax: false,
+    costPriceWithTax: false,
     mrp: 135,
     costPrice: 95,
+    wholesalePrice: 108,
+    minWholesaleQty: 10,
+    hasWholesale: false,
     stockQuantity: 45,
     lowStockThreshold: 10,
     sku: '',
     barcode: '',
-    unit: '1kg',
-    gstRate: 5,
+    unit: isServiceBusiness ? 'Service' : '1kg',
+    gstRate: isServiceBusiness ? 18 : 5,
     hsnCode: '1006',
+    sacCode: '9983',
     imageUrl: '',
     description: '',
     duration: '',
@@ -689,11 +701,25 @@ export function BosInventoryWorkstation({
     );
   };
 
+  const handleAssignRandomBarcode = () => {
+    const prefix = '890'; // GS1 India prefix
+    const randomSuffix = Math.floor(100000000 + Math.random() * 900000000).toString();
+    const generated = `${prefix}${randomSuffix}`;
+    setFormState((prev) => ({
+      ...prev,
+      barcode: generated,
+      sku: prev.sku || `SKU-${generated.slice(-5)}`,
+    }));
+    showToast(`Assigned barcode: ${generated}`);
+  };
+
   const openAddProductModal = () => {
     setEditingProduct(null);
     setModalFetchMessage(null);
+    setActiveItemModalTab('pricing');
     setFormState({
       name: '',
+      itemType: isServiceBusiness ? 'service' : 'product',
       category: isCreativeOrFreelancer
         ? 'Photography & Headshots'
         : isSalon
@@ -703,8 +729,13 @@ export function BosInventoryWorkstation({
         : 'Grocery',
       brand: isServiceBusiness ? '' : '',
       price: isCreativeOrFreelancer ? 6500 : isServiceOrTrades ? 1500 : isSalon ? 450 : 120,
+      priceWithTax: false,
+      costPriceWithTax: false,
       mrp: isCreativeOrFreelancer ? 7500 : isServiceOrTrades ? 1800 : isSalon ? 500 : 135,
       costPrice: isServiceBusiness ? 0 : 95,
+      wholesalePrice: isServiceBusiness ? 0 : 108,
+      minWholesaleQty: 10,
+      hasWholesale: false,
       stockQuantity: isServiceBusiness ? 999 : 40,
       lowStockThreshold: isServiceBusiness ? 0 : 10,
       sku: isServiceBusiness
@@ -719,7 +750,8 @@ export function BosInventoryWorkstation({
         ? 'Service'
         : '1kg',
       gstRate: isServiceBusiness ? 18 : 5,
-      hsnCode: isServiceBusiness ? '9983' : '1006',
+      hsnCode: '1006',
+      sacCode: '9983',
       imageUrl: '',
       description: '',
       duration: isCreativeOrFreelancer ? '2-3 Days' : isServiceOrTrades ? '1 Day' : '',
@@ -733,20 +765,29 @@ export function BosInventoryWorkstation({
     const meta = getResolvedRowMeta(product);
     setEditingProduct(product);
     setModalFetchMessage(null);
+    setActiveItemModalTab('pricing');
+    const isSrv = product.itemType === 'service' || Boolean(product.isService) || isServiceBusiness;
     setFormState({
       name: meta.displayName,
+      itemType: isSrv ? 'service' : 'product',
       category: meta.categoryPill,
       brand: meta.brand,
       price: meta.price,
+      priceWithTax: Boolean(product.priceWithTax),
+      costPriceWithTax: Boolean(product.costPriceWithTax),
       mrp: meta.mrp,
       costPrice: meta.purchasePrice,
+      wholesalePrice: product.wholesalePrice || Math.round(meta.price * 0.9),
+      minWholesaleQty: product.minWholesaleQty || 10,
+      hasWholesale: Boolean(product.wholesalePrice),
       stockQuantity: meta.stock,
       lowStockThreshold: meta.minStock,
       sku: meta.sku,
       barcode: meta.barcode,
       unit: meta.unitSubtitle,
       gstRate: meta.gstRate,
-      hsnCode: product.hsnCode || (isServiceBusiness ? '9983' : '1006'),
+      hsnCode: product.hsnCode || '1006',
+      sacCode: product.sacCode || '9983',
       imageUrl: product.imageUrl || '',
       description: product.description || '',
       duration: product.duration || '',
@@ -795,26 +836,34 @@ export function BosInventoryWorkstation({
     }
   };
 
-  const handleProductFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleProductFormSubmit = async (e?: React.FormEvent, stayOpen = false) => {
+    if (e) e.preventDefault();
     if (!formState.name.trim()) return;
+    const isSrv = formState.itemType === 'service';
     const item: BosProductItem = {
       id: editingProduct?.id || `prod-${Date.now()}`,
       name: formState.name.trim(),
-      category: formState.category.trim() || (isServiceBusiness ? 'Services' : 'General'),
-      brand: formState.brand.trim() || (isServiceBusiness ? 'Professional Service' : 'Store Brand'),
+      itemType: formState.itemType,
+      isService: isSrv,
+      category: formState.category.trim() || (isSrv ? 'Services' : 'General'),
+      brand: formState.brand.trim() || (isSrv ? 'Professional Service' : 'Store Brand'),
       price: Number(formState.price) || 0,
+      priceWithTax: formState.priceWithTax,
+      costPriceWithTax: formState.costPriceWithTax,
       mrp: Number(formState.mrp) || Number(formState.price) || 0,
-      costPrice: isServiceBusiness
+      wholesalePrice: formState.hasWholesale ? Number(formState.wholesalePrice) || undefined : undefined,
+      minWholesaleQty: formState.hasWholesale ? Number(formState.minWholesaleQty) || 10 : undefined,
+      costPrice: isSrv
         ? 0
         : Number(formState.costPrice) || Math.round((Number(formState.price) || 0) * 0.8),
-      stockQuantity: isServiceBusiness ? 999 : Math.max(0, Number(formState.stockQuantity) || 0),
-      lowStockThreshold: isServiceBusiness ? 0 : Math.max(1, Number(formState.lowStockThreshold) || 10),
-      sku: formState.sku.trim() || `${isServiceBusiness ? 'SRV' : 'SKU'}-${Date.now().toString().slice(-4)}`,
+      stockQuantity: isSrv ? 999 : Math.max(0, Number(formState.stockQuantity) || 0),
+      lowStockThreshold: isSrv ? 0 : Math.max(1, Number(formState.lowStockThreshold) || 10),
+      sku: formState.sku.trim() || `${isSrv ? 'SRV' : 'SKU'}-${Date.now().toString().slice(-4)}`,
       barcode: formState.barcode.trim() || undefined,
-      unit: formState.unit.trim() || (isCreativeOrFreelancer ? 'Session' : isServiceOrTrades ? 'Job' : 'Unit'),
-      gstRate: Number(formState.gstRate) || (isServiceBusiness ? 18 : 0),
-      hsnCode: formState.hsnCode.trim() || (isServiceBusiness ? '9983' : '1006'),
+      unit: formState.unit.trim() || (isSrv ? 'Service' : '1kg'),
+      gstRate: Number(formState.gstRate) || (isSrv ? 18 : 0),
+      hsnCode: !isSrv ? (formState.hsnCode.trim() || '1006') : undefined,
+      sacCode: isSrv ? (formState.sacCode.trim() || '9983') : undefined,
       location: 'Main Store',
       imageUrl: formState.imageUrl.trim() || undefined,
       description: formState.description?.trim() || undefined,
@@ -826,12 +875,26 @@ export function BosInventoryWorkstation({
     await onSaveProduct(item, !editingProduct);
     setStockOverrides((prev) => ({ ...prev, [item.id]: item.stockQuantity }));
     setSelectedProductId(item.id);
-    setShowProductModal(false);
-    showToast(
-      editingProduct
-        ? `Updated "${item.name}".`
-        : `Added "${item.name}" successfully.`,
-    );
+
+    if (stayOpen) {
+      showToast(`Saved "${item.name}". Ready for next item.`);
+      const nextSku = `${isSrv ? 'SRV' : 'PRD'}-${Math.floor(100 + Math.random() * 899)}`;
+      setFormState((prev) => ({
+        ...prev,
+        name: '',
+        sku: nextSku,
+        barcode: '',
+        imageUrl: '',
+        description: '',
+      }));
+    } else {
+      setShowProductModal(false);
+      showToast(
+        editingProduct
+          ? `Updated "${item.name}".`
+          : `Added "${item.name}" successfully.`,
+      );
+    }
   };
 
   const handleDuplicateSelected = async () => {
@@ -1066,6 +1129,16 @@ export function BosInventoryWorkstation({
               >
                 <Download className="h-4 w-4 text-[#475569]" />
                 <span>{t('inventory.exportCsv', 'Export')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowBarcodeLabelModal(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#1E293B] shadow-2xs hover:bg-[#F4F8F6] transition cursor-pointer"
+                title="Generate and print barcode sticker labels"
+              >
+                <Barcode className="h-4 w-4 text-[#475569]" />
+                <span>Print Barcodes</span>
               </button>
             </>
           )}
@@ -2004,36 +2077,77 @@ export function BosInventoryWorkstation({
         </div>
       )}
 
-      {/* Add / Edit Product Modal with Zero-Hosting Public Barcode Image Lookup & Icon+Name Fallback Preview */}
+      {/* Add / Edit Item Modal: Dual Product vs. Service Architecture */}
       {showProductModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-[#DCE9E3]">
-            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
-              <div>
-                <h3 className="text-[16px] font-bold text-[#111827]">
-                  {editingProduct ? 'Edit Product' : 'Add New Product'}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl border border-[#DCE9E3] my-8 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <h3 className="text-[17px] font-bold text-[#111827]">
+                  {editingProduct ? 'Edit Item' : 'Add Item'}
                 </h3>
-                <p className="text-[12px] text-[#64748B]">
-                  Auto-fetches image from centralized/public barcode CDN or displays Icon + Product Name.
-                </p>
+                {/* [ Product | Service ] Toggle Pill */}
+                <div className="inline-flex items-center rounded-xl border border-[#DCE9E3] bg-[#F1F5F9] p-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormState((s) => ({
+                        ...s,
+                        itemType: 'product',
+                        unit: s.unit === 'Service' || s.unit === 'Session' ? 'Pcs' : s.unit,
+                      }))
+                    }
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-bold transition cursor-pointer ${
+                      formState.itemType === 'product'
+                        ? 'bg-white text-[#0A6847] shadow-xs'
+                        : 'text-[#64748B] hover:text-[#111827]'
+                    }`}
+                  >
+                    <Box className="h-3.5 w-3.5" />
+                    <span>Product</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormState((s) => ({
+                        ...s,
+                        itemType: 'service',
+                        unit: s.unit === '1kg' || s.unit === 'Pcs' ? 'Service' : s.unit,
+                        gstRate: 18,
+                      }))
+                    }
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-bold transition cursor-pointer ${
+                      formState.itemType === 'service'
+                        ? 'bg-white text-[#0A6847] shadow-xs'
+                        : 'text-[#64748B] hover:text-[#111827]'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Service</span>
+                  </button>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowProductModal(false)}
-                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6]"
+                className="rounded-lg p-1.5 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleProductFormSubmit} className="mt-4 space-y-3">
-              {/* Live Thumbnail Preview (Image or Icon + Product Name fallback) */}
-              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2">
+            <form
+              onSubmit={(e) => handleProductFormSubmit(e, false)}
+              className="mt-3.5 space-y-4 overflow-y-auto pr-1 flex-1"
+            >
+              {/* Product Live Thumbnail & Auto-Fetch */}
+              <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <BosProductThumbnail
                       product={{
-                        name: formState.name || 'New Product',
+                        name: formState.name || 'New Item',
                         category: formState.category,
                         barcode: formState.barcode,
                         imageUrl: formState.imageUrl,
@@ -2041,15 +2155,14 @@ export function BosInventoryWorkstation({
                       size="md"
                     />
                     <div className="min-w-0">
-                      <p className="text-[12.5px] font-bold text-[#111827] truncate">
-                        {formState.name || 'Product Preview'}
+                      <p className="text-[13px] font-bold text-[#111827] truncate">
+                        {formState.name || (formState.itemType === 'service' ? 'Service Preview' : 'Product Preview')}
                       </p>
                       <p className="text-[11px] text-[#64748B] truncate">
-                        {modalFetchMessage
-                          ? modalFetchMessage
-                          : formState.imageUrl
+                        {modalFetchMessage ||
+                          (formState.imageUrl
                             ? 'Using Centralized / Public CDN Image URL'
-                            : 'No hosted image needed — auto-resolves or shows Icon + Product Name'}
+                            : 'Auto-fetches image or uses smart category icon')}
                       </p>
                     </div>
                   </div>
@@ -2059,11 +2172,11 @@ export function BosInventoryWorkstation({
                         type="button"
                         onClick={() => {
                           setFormState((s) => ({ ...s, imageUrl: '' }));
-                          setModalFetchMessage('Cleared external image — using Icon + Product Name');
+                          setModalFetchMessage('Cleared image — using Icon + Name');
                         }}
                         className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1.5 text-[11px] font-semibold text-[#475569] hover:bg-[#F1F5F9] cursor-pointer"
                       >
-                        Use Icon
+                        Clear Image
                       </button>
                     )}
                     <button
@@ -2073,323 +2186,615 @@ export function BosInventoryWorkstation({
                       className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A6847] px-2.5 py-1.5 text-[11.5px] font-semibold text-white hover:bg-[#085238] disabled:opacity-50 shrink-0 cursor-pointer"
                     >
                       <Globe className="h-3.5 w-3.5" />
-                      <span>
-                        {fetchingPublicImage ? 'Looking up...' : 'Auto-Fetch Image'}
-                      </span>
+                      <span>{fetchingPublicImage ? 'Searching...' : 'Auto-Fetch Image'}</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {isServiceBusiness ? (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Service / Package Title *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formState.name}
-                        onChange={(e) => {
-                          const nextName = e.target.value;
-                          setModalFetchMessage(null);
-                          setFormState((s) => ({ ...s, name: nextName }));
-                        }}
-                        placeholder={
-                          isCreativeOrFreelancer
-                            ? 'e.g. Actor Headshot Session (3 Looks & Retouching)'
-                            : isSalon
-                            ? 'e.g. Deep Conditioning Hair Spa'
-                            : 'e.g. Commercial Fabrication / Repair Visit'
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Service Category *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formState.category}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, category: e.target.value }))
-                        }
-                        placeholder={
-                          isCreativeOrFreelancer
-                            ? 'e.g. Photography & Headshots, Video Production'
-                            : isSalon
-                            ? 'e.g. Hair Services, Skin Care'
-                            : 'e.g. Fabrication, Maintenance, Repair'
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                  </div>
+              {/* Basic Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-[11.5px] font-semibold text-[#334155]">
+                    {formState.itemType === 'service' ? 'Service / Package Title *' : 'Item Name *'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formState.name}
+                    onChange={(e) => setFormState((s) => ({ ...s, name: e.target.value }))}
+                    placeholder={
+                      formState.itemType === 'service'
+                        ? 'e.g. Fabrication & Welding Repair (Site Visit)'
+                        : 'e.g. Maggi 2-Minute Instant Noodles 70g'
+                    }
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
+                  />
+                </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Price / Rate ({currencySymbol}) *
-                      </label>
-                      <input
-                        type="number"
-                        required
-                        value={formState.price}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, price: Number(e.target.value) }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Billing Unit
-                      </label>
-                      <select
-                        value={formState.unit}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, unit: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px]"
-                      >
-                        <option value="Session">Per Session</option>
-                        <option value="Hour">Per Hour</option>
-                        <option value="Project">Per Project</option>
-                        <option value="Deliverable">Per Deliverable / Reel</option>
-                        <option value="Half Day">Half Day (4h)</option>
-                        <option value="Full Day">Full Day (8h)</option>
-                        <option value="Script">Per Script</option>
-                        <option value="Visit">Per Visit</option>
-                        <option value="Service">Per Service</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Turnaround / Duration
-                      </label>
-                      <input
-                        type="text"
-                        value={formState.duration || ''}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, duration: e.target.value }))
-                        }
-                        placeholder="e.g. 24-48 hrs, 2 hours"
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11.5px] font-semibold text-[#334155]">
-                      Service Description &amp; Deliverables
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={formState.description || ''}
-                      onChange={(e) =>
-                        setFormState((s) => ({ ...s, description: e.target.value }))
-                      }
-                      placeholder="e.g. Includes 3 edited high-res photos, 2 outfit changes, indoor studio lighting"
-                      className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155]">
+                    {formState.itemType === 'service' ? 'SAC Code' : 'HSN Code'}
+                  </label>
+                  <div className="relative mt-1">
+                    <input
+                      type="text"
+                      value={formState.itemType === 'service' ? formState.sacCode : formState.hsnCode}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormState((s) =>
+                          formState.itemType === 'service' ? { ...s, sacCode: v } : { ...s, hsnCode: v }
+                        );
+                      }}
+                      placeholder={formState.itemType === 'service' ? '9987 / 9954' : '1006 / 1902'}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
                     />
+                    <select
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        setFormState((s) =>
+                          formState.itemType === 'service'
+                            ? { ...s, sacCode: e.target.value }
+                            : { ...s, hsnCode: e.target.value }
+                        );
+                      }}
+                      className="absolute right-1.5 top-1.5 h-7 rounded border-none bg-transparent text-[11px] font-semibold text-[#0A6847] cursor-pointer"
+                    >
+                      <option value="">Pick</option>
+                      {formState.itemType === 'service' ? (
+                        <>
+                          <option value="9987">9987 - Maintenance & Repair</option>
+                          <option value="9954">9954 - Construction & Fabrication</option>
+                          <option value="9983">9983 - Professional & Creative</option>
+                          <option value="9997">9997 - Salon & Beauty</option>
+                          <option value="9965">9965 - Transport & Logistics</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="1006">1006 - Rice & Cereals (0%/5%)</option>
+                          <option value="0401">0401 - Dairy & Milk (0%/5%)</option>
+                          <option value="1902">1902 - Noodles & Pasta (5%/12%)</option>
+                          <option value="1512">1512 - Edible Oils (5%)</option>
+                          <option value="1905">1905 - Biscuits & Bakery (18%)</option>
+                          <option value="3401">3401 - Soaps & Detergents (18%)</option>
+                          <option value="8544">8544 - Electrical Cables (18%)</option>
+                          <option value="7214">7214 - Steel & Metals (18%)</option>
+                        </>
+                      )}
+                    </select>
                   </div>
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Video Showreel / YouTube Link
-                      </label>
-                      <input
-                        type="url"
-                        value={formState.videoUrl || ''}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, videoUrl: e.target.value }))
-                        }
-                        placeholder="e.g. https://youtube.com/watch?v=..."
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Instagram Reel / Portfolio URL
-                      </label>
-                      <input
-                        type="url"
-                        value={formState.portfolioUrl || ''}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, portfolioUrl: e.target.value }))
-                        }
-                        placeholder="e.g. https://instagram.com/reel/..."
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Product Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formState.name}
-                        onChange={(e) => {
-                          const nextName = e.target.value;
-                          setModalFetchMessage(null);
-                          setFormState((s) => ({ ...s, name: nextName }));
-                        }}
-                        placeholder="e.g. Loose Basmati Rice"
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Brand
-                      </label>
-                      <input
-                        type="text"
-                        value={formState.brand}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, brand: e.target.value }))
-                        }
-                        placeholder="e.g. Nestle, Amul, Local"
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
-                    </div>
-                  </div>
+              {/* Row 2: Category, Unit, Code / Barcode */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155]">
+                    Category *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formState.category}
+                    onChange={(e) => setFormState((s) => ({ ...s, category: e.target.value }))}
+                    placeholder="e.g. Grocery, Hardware, Styling"
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
+                  />
+                </div>
 
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155]">
+                    Unit
+                  </label>
+                  <select
+                    value={formState.unit}
+                    onChange={(e) => setFormState((s) => ({ ...s, unit: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
+                  >
+                    {formState.itemType === 'service' ? (
+                      <>
+                        <option value="Service">Per Service</option>
+                        <option value="Hour">Per Hour</option>
+                        <option value="Session">Per Session</option>
+                        <option value="Visit">Per Visit</option>
+                        <option value="Job">Per Job / Contract</option>
+                        <option value="Sq Ft">Per Sq Ft</option>
+                        <option value="Day">Per Day</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Pcs">Pcs (Pieces)</option>
+                        <option value="1kg">Kg (Kilogram)</option>
+                        <option value="Ltr">Ltr (Liter)</option>
+                        <option value="Box">Box</option>
+                        <option value="Pkt">Packet</option>
+                        <option value="Mtr">Meter</option>
+                        <option value="Dozen">Dozen</option>
+                        <option value="Can">Can / Bottle</option>
+                        <option value="Roll">Roll</option>
+                        <option value="Sq Ft">Sq Ft</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                {formState.itemType === 'product' ? (
+                  <div>
+                    <div className="flex items-center justify-between">
                       <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        SKU
+                        Item Code / Barcode
                       </label>
-                      <input
-                        type="text"
-                        value={formState.sku}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, sku: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
+                      <button
+                        type="button"
+                        onClick={handleAssignRandomBarcode}
+                        className="text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                      >
+                        Assign Code
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Barcode (EAN-13)
-                      </label>
+                    <div className="relative mt-1">
                       <input
                         type="text"
                         value={formState.barcode}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, barcode: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                        onChange={(e) => setFormState((s) => ({ ...s, barcode: e.target.value }))}
+                        placeholder="Scan or Assign EAN"
+                        className="w-full rounded-xl border border-[#DCE9E3] pl-8 pr-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
                       />
+                      <Barcode className="absolute left-2.5 top-2.5 h-4 w-4 text-[#94A3B8]" />
                     </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Category
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155]">
+                      Duration / Turnaround
+                    </label>
+                    <input
+                      type="text"
+                      value={formState.duration}
+                      onChange={(e) => setFormState((s) => ({ ...s, duration: e.target.value }))}
+                      placeholder="e.g. 1-2 Hours, 3 Days"
+                      className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] focus:outline-none focus:border-[#0A6847]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Sub-Tabs: Pricing | Stock */}
+              <div className="border-b border-[#E2ECE7] flex items-center gap-6 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveItemModalTab('pricing')}
+                  className={`pb-2 text-[13px] font-bold transition cursor-pointer relative ${
+                    activeItemModalTab === 'pricing'
+                      ? 'text-[#0A6847]'
+                      : 'text-[#64748B] hover:text-[#111827]'
+                  }`}
+                >
+                  <span>Pricing &amp; Taxes</span>
+                  {activeItemModalTab === 'pricing' && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0A6847] rounded-full" />
+                  )}
+                </button>
+                {formState.itemType === 'product' && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveItemModalTab('stock')}
+                    className={`pb-2 text-[13px] font-bold transition cursor-pointer relative ${
+                      activeItemModalTab === 'stock'
+                        ? 'text-[#0A6847]'
+                        : 'text-[#64748B] hover:text-[#111827]'
+                    }`}
+                  >
+                    <span>Stock &amp; Godown</span>
+                    {activeItemModalTab === 'stock' && (
+                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0A6847] rounded-full" />
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* TAB 1: PRICING */}
+              {activeItemModalTab === 'pricing' && (
+                <div className="space-y-3 pt-1">
+                  {/* Sale Price Card with Without Tax / With Tax switch */}
+                  <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3.5 space-y-3">
+                    <p className="text-[12px] font-bold text-[#111827]">Sale Price Configuration</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          Sale Price ({currencySymbol}) *
+                        </label>
+                        <div className="mt-1 flex items-center rounded-xl border border-[#DCE9E3] bg-white overflow-hidden">
+                          <input
+                            type="number"
+                            required
+                            value={formState.price}
+                            onChange={(e) =>
+                              setFormState((s) => ({ ...s, price: Number(e.target.value) }))
+                            }
+                            className="flex-1 px-3 py-2 text-[13px] font-bold text-[#111827] focus:outline-none"
+                          />
+                          <select
+                            value={formState.priceWithTax ? 'with' : 'without'}
+                            onChange={(e) =>
+                              setFormState((s) => ({ ...s, priceWithTax: e.target.value === 'with' }))
+                            }
+                            className="bg-[#F1F5F9] border-l border-[#DCE9E3] px-2.5 py-2 text-[11.5px] font-semibold text-[#334155] cursor-pointer"
+                          >
+                            <option value="without">Without Tax</option>
+                            <option value="with">With Tax (MRP)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          Maximum Retail Price (MRP)
+                        </label>
+                        <input
+                          type="number"
+                          value={formState.mrp}
+                          onChange={(e) =>
+                            setFormState((s) => ({ ...s, mrp: Number(e.target.value) }))
+                          }
+                          className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[13px] font-medium text-[#111827]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Wholesale Tier Checkbox */}
+                    <div className="pt-1">
+                      <label className="inline-flex items-center gap-2 cursor-pointer text-[12px] font-semibold text-[#0A6847]">
+                        <input
+                          type="checkbox"
+                          checked={formState.hasWholesale}
+                          onChange={(e) =>
+                            setFormState((s) => ({ ...s, hasWholesale: e.target.checked }))
+                          }
+                          className="rounded text-[#0A6847] focus:ring-[#0A6847]"
+                        />
+                        <span>+ Add Wholesale Price Tier (Bulk B2B)</span>
                       </label>
-                      <input
-                        type="text"
-                        value={formState.category}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, category: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                      />
+                      {formState.hasWholesale && (
+                        <div className="mt-2 grid grid-cols-2 gap-3 pl-5 border-l-2 border-[#A3E0C6]">
+                          <div>
+                            <label className="block text-[11px] font-medium text-[#475569]">
+                              Min Wholesale Qty
+                            </label>
+                            <input
+                              type="number"
+                              value={formState.minWholesaleQty}
+                              onChange={(e) =>
+                                setFormState((s) => ({
+                                  ...s,
+                                  minWholesaleQty: Number(e.target.value),
+                                }))
+                              }
+                              className="mt-0.5 w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12.5px]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-medium text-[#475569]">
+                              Wholesale Rate ({currencySymbol})
+                            </label>
+                            <input
+                              type="number"
+                              value={formState.wholesalePrice}
+                              onChange={(e) =>
+                                setFormState((s) => ({
+                                  ...s,
+                                  wholesalePrice: Number(e.target.value),
+                                }))
+                              }
+                              className="mt-0.5 w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12.5px]"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2.5">
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Selling ({currencySymbol})
-                      </label>
-                      <input
-                        type="number"
-                        value={formState.price}
+                  {/* Purchase Price & Tax Slabs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {formState.itemType === 'product' && (
+                      <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-1.5">
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          Purchase Price ({currencySymbol})
+                        </label>
+                        <div className="flex items-center rounded-xl border border-[#DCE9E3] bg-white overflow-hidden">
+                          <input
+                            type="number"
+                            value={formState.costPrice}
+                            onChange={(e) =>
+                              setFormState((s) => ({ ...s, costPrice: Number(e.target.value) }))
+                            }
+                            className="flex-1 px-3 py-2 text-[13px] font-bold text-[#111827] focus:outline-none"
+                          />
+                          <select
+                            value={formState.costPriceWithTax ? 'with' : 'without'}
+                            onChange={(e) =>
+                              setFormState((s) => ({
+                                ...s,
+                                costPriceWithTax: e.target.value === 'with',
+                              }))
+                            }
+                            className="bg-[#F1F5F9] border-l border-[#DCE9E3] px-2 py-2 text-[11.5px] font-semibold text-[#334155] cursor-pointer"
+                          >
+                            <option value="without">Without Tax</option>
+                            <option value="with">With Tax</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          GST Tax Slab
+                        </label>
+                        <span className="text-[11px] font-bold text-[#0A6847]">
+                          {formState.gstRate}% GST
+                        </span>
+                      </div>
+                      <select
+                        value={formState.gstRate}
                         onChange={(e) =>
-                          setFormState((s) => ({ ...s, price: Number(e.target.value) }))
+                          setFormState((s) => ({ ...s, gstRate: Number(e.target.value) }))
                         }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Purchase ({currencySymbol})
-                      </label>
-                      <input
-                        type="number"
-                        value={formState.costPrice}
-                        onChange={(e) =>
-                          setFormState((s) => ({
-                            ...s,
-                            costPrice: Number(e.target.value),
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Stock Qty
-                      </label>
-                      <input
-                        type="number"
-                        value={formState.stockQuantity}
-                        onChange={(e) =>
-                          setFormState((s) => ({
-                            ...s,
-                            stockQuantity: Number(e.target.value),
-                          }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11.5px] font-semibold text-[#334155]">
-                        Unit
-                      </label>
-                      <input
-                        type="text"
-                        value={formState.unit}
-                        onChange={(e) =>
-                          setFormState((s) => ({ ...s, unit: e.target.value }))
-                        }
-                        className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-2.5 py-2 text-[12.5px]"
-                      />
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#111827] focus:outline-none cursor-pointer"
+                      >
+                        <option value="0">None / Exempt (0%)</option>
+                        <option value="0.25">0.25% (Precious Stones)</option>
+                        <option value="3">3% (Gold &amp; Jewellery)</option>
+                        <option value="5">5% (Essentials, Food)</option>
+                        <option value="12">12% (Processed Goods)</option>
+                        <option value="18">18% (Standard Goods / Services)</option>
+                        <option value="28">28% (Luxury / Automobiles)</option>
+                      </select>
                     </div>
                   </div>
-                </>
+                </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
+              {/* TAB 2: STOCK (Only for Products) */}
+              {activeItemModalTab === 'stock' && formState.itemType === 'product' && (
+                <div className="space-y-3 pt-1">
+                  <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3.5 space-y-3">
+                    <p className="text-[12px] font-bold text-[#111827]">Opening Stock &amp; Alert Level</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          Opening Quantity
+                        </label>
+                        <input
+                          type="number"
+                          value={formState.stockQuantity}
+                          onChange={(e) =>
+                            setFormState((s) => ({ ...s, stockQuantity: Number(e.target.value) }))
+                          }
+                          className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          Low Stock Alert Level
+                        </label>
+                        <input
+                          type="number"
+                          value={formState.lowStockThreshold}
+                          onChange={(e) =>
+                            setFormState((s) => ({
+                              ...s,
+                              lowStockThreshold: Number(e.target.value),
+                            }))
+                          }
+                          className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-[#475569]">
+                          Godown / Store Location
+                        </label>
+                        <select className="mt-1 w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px]">
+                          <option>Main Store</option>
+                          <option>Godown #1 (Warehouse)</option>
+                          <option>Basement Storage</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Modal Footer Actions */}
+              <div className="flex items-center justify-between pt-3 border-t border-[#EBF2EE] shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12.5px] font-semibold text-[#475569]"
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12.5px] font-semibold text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[#085238]"
-                >
-                  {editingProduct
-                    ? 'Save Changes'
-                    : isServiceBusiness
-                    ? 'Add Service'
-                    : 'Add Product'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleProductFormSubmit(undefined, true)}
+                    className="rounded-xl border border-[#0A6847] bg-[#E6F6F0] px-4 py-2 text-[12.5px] font-bold text-[#0A6847] hover:bg-[#D5EFE5] cursor-pointer"
+                  >
+                    Save &amp; New
+                  </button>
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-[#0A6847] px-5 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+                  >
+                    {editingProduct ? 'Save Changes' : 'Save'}
+                  </button>
+                </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Barcode Label Printing Utility Modal */}
+      {showBarcodeLabelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-2xl border border-[#DCE9E3] my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                  <Barcode className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-bold text-[#111827]">
+                    Barcode Sticker Label Generator
+                  </h3>
+                  <p className="text-[12px] text-[#64748B]">
+                    Generate print-ready sticker labels with barcode, product name, MRP, and your selling price.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBarcodeLabelModal(false)}
+                className="rounded-lg p-1.5 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Controls Bar */}
+            {(() => {
+              const currentBarcodeProduct = products.find((p) => p.id === selectedProductId) || products[0];
+              return (
+                <>
+                  <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 shrink-0">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#475569]">Select Product</label>
+                      <select
+                        onChange={(e) => {
+                          const found = products.find((p) => p.id === e.target.value);
+                          if (found) setSelectedProductId(found.id);
+                        }}
+                        value={currentBarcodeProduct?.id || ''}
+                        className="mt-1 w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] font-semibold"
+                      >
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.barcode || p.sku})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#475569]">Label Sheet Format</label>
+                      <select
+                        value={barcodeLabelLayout}
+                        onChange={(e) => setBarcodeLabelLayout(e.target.value as any)}
+                        className="mt-1 w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] font-semibold"
+                      >
+                        <option value="sheet24">A4 Sheet (24 Labels: 3 cols × 8 rows)</option>
+                        <option value="thermal">Continuous Thermal Roll (50mm × 25mm)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#475569]">Number of Stickers</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={240}
+                        value={barcodeCopies}
+                        onChange={(e) => setBarcodeCopies(Math.max(1, Number(e.target.value)))}
+                        className="mt-1 w-full rounded-lg border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] font-semibold"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Live Sheet Preview */}
+                  <div className="mt-4 flex-1 overflow-y-auto rounded-xl border border-[#E2E8F0] bg-[#F1F5F9] p-4">
+                    <p className="text-[11.5px] font-bold text-[#64748B] mb-2 uppercase tracking-wider">
+                      Live Print Preview ({barcodeCopies} Stickers • {barcodeLabelLayout === 'sheet24' ? 'A4 Grid' : 'Thermal Roll'})
+                    </p>
+                    <div
+                      className={`grid gap-3 bg-white p-4 shadow-sm rounded-lg ${
+                        barcodeLabelLayout === 'sheet24'
+                          ? 'grid-cols-2 sm:grid-cols-3'
+                          : 'grid-cols-1 sm:grid-cols-2'
+                      }`}
+                    >
+                      {Array.from({ length: Math.min(barcodeCopies, 12) }).map((_, idx) => (
+                        <div
+                          key={idx}
+                          className="border border-dashed border-[#94A3B8] p-2.5 rounded-md flex flex-col items-center justify-between text-center bg-white"
+                        >
+                          <p className="text-[10px] font-extrabold uppercase tracking-tight text-[#0A6847]">
+                            {businessType ? `${businessType.toUpperCase()} STORE` : 'RETAIL STORE'}
+                          </p>
+                          <p className="text-[12px] font-bold text-[#111827] line-clamp-1 mt-0.5">
+                            {currentBarcodeProduct?.name || 'Maggi Noodles 70g'}
+                          </p>
+                          {/* Simulated SVG Barcode */}
+                          <div className="my-1.5 flex flex-col items-center">
+                            <div className="flex items-center gap-[2px] h-7">
+                              {Array.from({ length: 28 }).map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`h-full bg-black ${
+                                    i % 3 === 0 ? 'w-[2.5px]' : i % 5 === 0 ? 'w-[1.5px]' : 'w-[1px]'
+                                  }`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[10px] font-mono tracking-widest text-[#334155] mt-0.5">
+                              {currentBarcodeProduct?.barcode || currentBarcodeProduct?.sku || '8901058000012'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between w-full pt-1 border-t border-[#E2E8F0] text-[11px]">
+                            <span className="text-[#64748B] line-through">
+                              MRP: {currencySymbol}
+                              {currentBarcodeProduct?.mrp || (currentBarcodeProduct?.price || 10) + 10}
+                            </span>
+                            <span className="font-extrabold text-[#0A6847]">
+                              Our: {currencySymbol}
+                              {currentBarcodeProduct?.price || 10}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* Modal Actions */}
+            <div className="mt-4 flex items-center justify-between pt-3 border-t border-[#EBF2EE] shrink-0">
+              <span className="text-[11.5px] text-[#64748B]">
+                Compatible with all standard barcode label printers &amp; A4 sticky sheets.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBarcodeLabelModal(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12.5px] font-semibold text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.print();
+                    showToast('Sending barcode stickers to printer...');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Print {barcodeCopies} Labels</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

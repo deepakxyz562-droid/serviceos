@@ -472,12 +472,21 @@ export function BosCustomersKhataWorkstation({
   const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [adjustAmountInput, setAdjustAmountInput] = useState('500');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(initialOpenAddCustomer);
+  const [partyModalTab, setPartyModalTab] = useState<'general' | 'address' | 'credit'>('general');
   const [newCustomerForm, setNewCustomerForm] = useState({
+    partyType: 'customer' as 'customer' | 'supplier',
     name: '',
     phone: '',
     email: '',
-    address: '',
+    gstin: '',
+    gstType: 'unregistered' as 'unregistered' | 'regular' | 'composition' | 'overseas',
+    state: 'Delhi (07)',
+    billingAddress: '',
+    shippingAddress: '',
+    sameAsBilling: true,
+    creditLimit: '',
     openingKhata: 0,
+    openingBalanceType: 'receive' as 'receive' | 'pay',
   });
 
   const [toast, setToast] = useState<string | null>(null);
@@ -807,15 +816,24 @@ export function BosCustomersKhataWorkstation({
     }
   };
 
-  const handleCreateCustomerSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateCustomerSubmit = async (e?: React.FormEvent, saveAndNew: boolean = false) => {
+    if (e) e.preventDefault();
     if (!newCustomerForm.name.trim()) return;
     const customerName = newCustomerForm.name.trim();
     await onAddCustomer({
       name: customerName,
       phone: newCustomerForm.phone.trim(),
       email: newCustomerForm.email.trim() || undefined,
-      address: newCustomerForm.address.trim() || undefined,
+      address: newCustomerForm.billingAddress.trim() || undefined,
+      billingAddress: newCustomerForm.billingAddress.trim() || undefined,
+      shippingAddress: (newCustomerForm.sameAsBilling ? newCustomerForm.billingAddress.trim() : newCustomerForm.shippingAddress.trim()) || undefined,
+      gstin: newCustomerForm.gstin.trim() || undefined,
+      gstType: newCustomerForm.gstType,
+      state: newCustomerForm.state,
+      partyType: newCustomerForm.partyType,
+      creditLimit: newCustomerForm.creditLimit ? Number(newCustomerForm.creditLimit) : undefined,
+      openingBalance: Number(newCustomerForm.openingKhata) || 0,
+      openingBalanceType: newCustomerForm.openingBalanceType === 'pay' ? 'payable' : 'receivable',
       segment: 'Regular',
       ordersCount: 0,
       totalSpent: Number(newCustomerForm.openingKhata) || 0,
@@ -823,15 +841,114 @@ export function BosCustomersKhataWorkstation({
       loyaltyPoints: 0,
       lastVisit: 'New',
     });
-    setShowAddCustomerModal(false);
-    setNewCustomerForm({
-      name: '',
-      phone: '',
-      email: '',
-      address: '',
-      openingKhata: 0,
-    });
-    showToastMsg(`Added customer "${customerName}"`);
+
+    showToastMsg(`Saved party "${customerName}" (${newCustomerForm.partyType === 'supplier' ? 'Supplier' : 'Customer'})`);
+
+    if (saveAndNew) {
+      setNewCustomerForm({
+        partyType: newCustomerForm.partyType,
+        name: '',
+        phone: '',
+        email: '',
+        gstin: '',
+        gstType: 'unregistered',
+        state: 'Delhi (07)',
+        billingAddress: '',
+        shippingAddress: '',
+        sameAsBilling: true,
+        creditLimit: '',
+        openingKhata: 0,
+        openingBalanceType: 'receive',
+      });
+      setPartyModalTab('general');
+    } else {
+      setShowAddCustomerModal(false);
+      setNewCustomerForm({
+        partyType: 'customer',
+        name: '',
+        phone: '',
+        email: '',
+        gstin: '',
+        gstType: 'unregistered',
+        state: 'Delhi (07)',
+        billingAddress: '',
+        shippingAddress: '',
+        sameAsBilling: true,
+        creditLimit: '',
+        openingKhata: 0,
+        openingBalanceType: 'receive',
+      });
+    }
+  };
+
+  const handleDownloadPartyStatement = (customer: ShowcaseCustomerRow) => {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Party Ledger - ${customer.name}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 32px; color: #0f172a; line-height: 1.5; }
+            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #059669; padding-bottom: 20px; margin-bottom: 24px; }
+            .brand { font-size: 22px; font-weight: 800; color: #059669; }
+            .badge { display: inline-block; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
+            .grid { display: flex; gap: 16px; margin-bottom: 24px; }
+            .card { flex: 1; padding: 14px 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
+            .card-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+            .card-val { font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+            th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; }
+            th { background: #f1f5f9; font-weight: 700; color: #334155; }
+            .in { color: #059669; font-weight: 700; }
+            .out { color: #dc2626; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="brand">${businessName}</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Party Account Statement (Khata Ledger)</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 15px; font-weight: 800;">${customer.name}</div>
+              <div style="font-size: 12px; color: #64748b;">Phone: +91 ${customer.phone}</div>
+              <div style="font-size: 12px; color: #64748b;">Address: ${customer.address || 'Local'}</div>
+              <div class="badge" style="margin-top: 6px;">${customer.status === 'Paid' ? 'Account Settled' : 'Balance Pending'}</div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="card"><div class="card-title">Total Purchases</div><div class="card-val">${currencySymbol} ${customer.totalPurchases.toLocaleString('en-IN')}</div></div>
+            <div class="card"><div class="card-title">Total Paid</div><div class="card-val" style="color: #059669;">${currencySymbol} ${customer.totalPaid.toLocaleString('en-IN')}</div></div>
+            <div class="card"><div class="card-title">Net Balance Due</div><div class="card-val" style="color: ${customer.balance > 0 ? '#dc2626' : '#059669'};">${currencySymbol} ${customer.balance.toLocaleString('en-IN')}</div></div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Date / Time</th><th>Voucher / Description</th><th>Type</th><th style="text-align:right;">Debit (+)</th><th style="text-align:right;">Credit (-)</th></tr>
+            </thead>
+            <tbody>
+              ${customer.transactions.map(t => `
+                <tr>
+                  <td>${t.subtitle}</td>
+                  <td style="font-weight: 600;">${t.title}</td>
+                  <td>${t.direction === 'in' ? 'Payment Received' : 'Invoice / Debit'}</td>
+                  <td style="text-align: right;" class="${t.direction === 'out' ? 'out' : ''}">${t.direction === 'out' ? `${currencySymbol} ${t.amount.toLocaleString('en-IN')}` : '—'}</td>
+                  <td style="text-align: right;" class="${t.direction === 'in' ? 'in' : ''}">${t.direction === 'in' ? `${currencySymbol} ${t.amount.toLocaleString('en-IN')}` : '—'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div style="margin-top: 32px; font-size: 11px; color: #94a3b8; text-align: center;">Computer generated ledger statement • Generated via ServiceOS BOS</div>
+        </body>
+      </html>
+    `;
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+    }
   };
 
   const handleExportCsv = () => {
@@ -1696,6 +1813,15 @@ export function BosCustomersKhataWorkstation({
                 <Send className="h-3.5 w-3.5 text-[#475569]" />
                 <span>Send Reminder</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleDownloadPartyStatement(selectedCustomer)}
+                className="col-span-2 mt-1 inline-flex items-center justify-center gap-2 rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12px] font-bold text-[#1E293B] hover:bg-[#F1FAF5] transition cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5 text-[#0A6847]" />
+                <span>Download Party Statement / Ledger</span>
+              </button>
             </div>
 
             {/* Recent Transactions List */}
@@ -1761,117 +1887,343 @@ export function BosCustomersKhataWorkstation({
         )}
       </div>
 
-      {/* Add Customer Modal */}
+      {/* Comprehensive Add Party Dialog (Screenshot 5 matching) */}
       {showAddCustomerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-xl rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
-              <h3 className="text-[16px] font-bold text-[#111827]">
-                Add New Customer
-              </h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-[16px] font-extrabold text-[#111827]">
+                  Add Party
+                </h3>
+                {/* Party Type Toggle: Customer vs Supplier */}
+                <div className="inline-flex rounded-lg border border-[#DCE9E3] bg-[#F8FAFC] p-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewCustomerForm((s) => ({ ...s, partyType: 'customer' }))
+                    }
+                    className={`rounded-md px-3 py-1 text-[11.5px] font-bold transition cursor-pointer ${
+                      newCustomerForm.partyType === 'customer'
+                        ? 'bg-[#0A6847] text-white shadow-2xs'
+                        : 'text-[#475569] hover:text-[#111827]'
+                    }`}
+                  >
+                    Customer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewCustomerForm((s) => ({ ...s, partyType: 'supplier' }))
+                    }
+                    className={`rounded-md px-3 py-1 text-[11.5px] font-bold transition cursor-pointer ${
+                      newCustomerForm.partyType === 'supplier'
+                        ? 'bg-[#0A6847] text-white shadow-2xs'
+                        : 'text-[#475569] hover:text-[#111827]'
+                    }`}
+                  >
+                    Supplier
+                  </button>
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setShowAddCustomerModal(false)}
-                className="rounded-lg p-1 text-[#64748B]"
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateCustomerSubmit} className="mt-4 space-y-3">
-              <div>
-                <label className="block text-[11.5px] font-semibold text-[#334155]">
-                  Customer Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newCustomerForm.name}
-                  onChange={(e) =>
-                    setNewCustomerForm((s) => ({ ...s, name: e.target.value }))
-                  }
-                  placeholder="e.g. Rajesh Sharma"
-                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                />
-              </div>
+            {/* Sub-tabs inside Party Dialog */}
+            <div className="flex items-center gap-4 border-b border-[#EBF2EE] pt-2 px-1 text-[12px]">
+              {(
+                [
+                  { id: 'general', label: 'General & GST' },
+                  { id: 'address', label: 'Address Details' },
+                  { id: 'credit', label: 'Credit & Balances' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setPartyModalTab(tab.id)}
+                  className={`pb-2 font-bold transition border-b-2 cursor-pointer ${
+                    partyModalTab === tab.id
+                      ? 'border-[#0A6847] text-[#0A6847]'
+                      : 'border-transparent text-[#64748B] hover:text-[#111827]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Phone Number *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newCustomerForm.phone}
-                    onChange={(e) =>
-                      setNewCustomerForm((s) => ({ ...s, phone: e.target.value }))
-                    }
-                    placeholder="9876543210"
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11.5px] font-semibold text-[#334155]">
-                    Opening Khata ({currencySymbol})
-                  </label>
-                  <input
-                    type="number"
-                    value={newCustomerForm.openingKhata}
-                    onChange={(e) =>
-                      setNewCustomerForm((s) => ({
-                        ...s,
-                        openingKhata: Number(e.target.value),
-                      }))
-                    }
-                    className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                  />
-                </div>
-              </div>
+            <form
+              onSubmit={(e) => void handleCreateCustomerSubmit(e, false)}
+              className="mt-4 space-y-3 overflow-y-auto pr-1 flex-1 text-[12px]"
+            >
+              {partyModalTab === 'general' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        Party Name <span className="text-[#EF4444]">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newCustomerForm.name}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({ ...s, name: e.target.value }))
+                        }
+                        placeholder="e.g. Ramesh Traders"
+                        className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-medium"
+                      />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        Contact Phone <span className="text-[#EF4444]">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={newCustomerForm.phone}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({ ...s, phone: e.target.value }))
+                        }
+                        placeholder="9876543210"
+                        className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                      />
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-[11.5px] font-semibold text-[#334155]">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={newCustomerForm.email}
-                  onChange={(e) =>
-                    setNewCustomerForm((s) => ({ ...s, email: e.target.value }))
-                  }
-                  placeholder="customer@gmail.com"
-                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        GSTIN
+                      </label>
+                      <input
+                        type="text"
+                        value={newCustomerForm.gstin}
+                        onChange={(e) => {
+                          const val = e.target.value.toUpperCase();
+                          setNewCustomerForm((s) => ({
+                            ...s,
+                            gstin: val,
+                            gstType: val.length >= 15 ? 'regular' : s.gstType,
+                          }));
+                        }}
+                        placeholder="07AAAAA0000A1Z5"
+                        maxLength={15}
+                        className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12px] font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        GST Type
+                      </label>
+                      <select
+                        value={newCustomerForm.gstType}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({
+                            ...s,
+                            gstType: e.target.value as any,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-2 text-[12px]"
+                      >
+                        <option value="unregistered">Unregistered / Consumer</option>
+                        <option value="regular">Registered Regular</option>
+                        <option value="composition">Composition</option>
+                        <option value="overseas">Overseas / SEZ</option>
+                      </select>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="block text-[11.5px] font-semibold text-[#334155]">
-                  Address
-                </label>
-                <input
-                  type="text"
-                  value={newCustomerForm.address}
-                  onChange={(e) =>
-                    setNewCustomerForm((s) => ({ ...s, address: e.target.value }))
-                  }
-                  placeholder="123 Green Park, Delhi - 110016"
-                  className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
-                />
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        State
+                      </label>
+                      <select
+                        value={newCustomerForm.state}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({ ...s, state: e.target.value }))
+                        }
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-2 text-[12px]"
+                      >
+                        <option value="Delhi (07)">Delhi (07)</option>
+                        <option value="Maharashtra (27)">Maharashtra (27)</option>
+                        <option value="Uttar Pradesh (09)">Uttar Pradesh (09)</option>
+                        <option value="Haryana (06)">Haryana (06)</option>
+                        <option value="Karnataka (29)">Karnataka (29)</option>
+                        <option value="Gujarat (24)">Gujarat (24)</option>
+                        <option value="Tamil Nadu (33)">Tamil Nadu (33)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={newCustomerForm.email}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({ ...s, email: e.target.value }))
+                        }
+                        placeholder="party@example.com"
+                        className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12px]"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
-              <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
+              {partyModalTab === 'address' && (
+                <>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                      Billing Address
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={newCustomerForm.billingAddress}
+                      onChange={(e) =>
+                        setNewCustomerForm((s) => ({
+                          ...s,
+                          billingAddress: e.target.value,
+                        }))
+                      }
+                      placeholder="Shop/Building No, Street, City, Pincode"
+                      className="w-full rounded-xl border border-[#DCE9E3] p-2.5 text-[12px]"
+                    />
+                  </div>
+
+                  <div className="pt-1">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-[12px] font-medium text-[#334155]">
+                      <input
+                        type="checkbox"
+                        checked={newCustomerForm.sameAsBilling}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({
+                            ...s,
+                            sameAsBilling: e.target.checked,
+                          }))
+                        }
+                        className="h-4 w-4 rounded accent-[#0A6847]"
+                      />
+                      <span>Shipping address is same as billing address</span>
+                    </label>
+                  </div>
+
+                  {!newCustomerForm.sameAsBilling && (
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        Shipping Address
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={newCustomerForm.shippingAddress}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({
+                            ...s,
+                            shippingAddress: e.target.value,
+                          }))
+                        }
+                        placeholder="Warehouse/Delivery Destination Address"
+                        className="w-full rounded-xl border border-[#DCE9E3] p-2.5 text-[12px]"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {partyModalTab === 'credit' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        Opening Balance ({currencySymbol})
+                      </label>
+                      <input
+                        type="number"
+                        value={newCustomerForm.openingKhata || ''}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({
+                            ...s,
+                            openingKhata: Number(e.target.value),
+                          }))
+                        }
+                        placeholder="0.00"
+                        className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                        Balance Type
+                      </label>
+                      <select
+                        value={newCustomerForm.openingBalanceType}
+                        onChange={(e) =>
+                          setNewCustomerForm((s) => ({
+                            ...s,
+                            openingBalanceType: e.target.value as any,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-2 text-[12px] font-semibold"
+                      >
+                        <option value="receive">To Receive (Receivable)</option>
+                        <option value="pay">To Pay (Payable)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                      Credit Limit ({currencySymbol})
+                    </label>
+                    <input
+                      type="number"
+                      value={newCustomerForm.creditLimit}
+                      onChange={(e) =>
+                        setNewCustomerForm((s) => ({
+                          ...s,
+                          creditLimit: e.target.value,
+                        }))
+                      }
+                      placeholder="e.g. 50000 (Warn or block sales above limit)"
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12px]"
+                    />
+                    <p className="mt-1 text-[11px] text-[#64748B]">
+                      POS register warns cashier when client credit limit is breached.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-[#EBF2EE]">
                 <button
                   type="button"
                   onClick={() => setShowAddCustomerModal(false)}
-                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12.5px] font-semibold text-[#475569]"
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F8FAFC]"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[#085238]"
+                  type="button"
+                  onClick={() => void handleCreateCustomerSubmit(undefined, true)}
+                  className="rounded-xl border border-[#0A6847]/30 bg-[#F4FAF7] px-4 py-2 text-[12px] font-bold text-[#0A6847] hover:bg-[#E6F6F0]"
                 >
-                  Add Customer
+                  Save &amp; New
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-[#0A6847] px-5 py-2 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs"
+                >
+                  Save Party
                 </button>
               </div>
             </form>

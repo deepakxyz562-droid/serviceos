@@ -1115,10 +1115,11 @@ function BosWebAppInner({
     sectionLabel: activeNavMeta.label,
   });
 
-  // Keyboard shortcut Cmd+K / Ctrl+K for Global Search / Ask BOS AI
+  // Keyboard shortcut Cmd+K / Ctrl+K / Cmd+F for Global Search / Ask BOS AI
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      const key = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && (key === 'k' || key === 'f')) {
         e.preventDefault();
         globalSearchInputRef.current?.focus();
         setSearchFocused(true);
@@ -3578,6 +3579,7 @@ function BosWebAppInner({
                 daybookEntries={daybookEntries}
                 initialOpeningBalance={storeSettings.openingBalance || 0}
                 onAddDaybookEntry={handleAddDaybookEntry}
+                onNavigateToBilling={() => setActiveView('invoices')}
               />
             )}
 

@@ -20,7 +20,23 @@ export type BosProductItem = {
   duration?: string;
   videoUrl?: string;
   portfolioUrl?: string;
+  itemType?: 'product' | 'service';
+  priceWithTax?: boolean;
+  costPriceWithTax?: boolean;
+  wholesalePrice?: number;
+  minWholesaleQty?: number;
+  sacCode?: string;
+  isService?: boolean;
+  serviceDuration?: string;
 };
+
+export type BosDocumentType =
+  | 'tax_invoice'
+  | 'quotation'
+  | 'proforma'
+  | 'delivery_challan'
+  | 'credit_note'
+  | 'debit_note';
 
 export type BosOrderLineItem = {
   id?: string;
@@ -29,6 +45,9 @@ export type BosOrderLineItem = {
   price: number;
   gstRate?: number;
   sku?: string;
+  unit?: string;
+  priceWithTax?: boolean;
+  hsnOrSac?: string;
 };
 
 export type BosOrder = {
@@ -36,19 +55,27 @@ export type BosOrder = {
   customerName: string;
   customerPhone: string;
   customerAddress?: string;
+  customerGstin?: string;
   channel: 'pos' | 'online' | 'whatsapp';
+  documentType?: BosDocumentType;
   status: 'new' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'cancelled';
-  paymentMode: 'cash' | 'upi' | 'card' | 'khata';
+  paymentMode: 'cash' | 'upi' | 'card' | 'khata' | 'bank' | 'cheque';
   paymentStatus: 'paid' | 'pending' | 'partial' | 'unpaid' | 'refund_pending' | 'refunded';
   totalAmount: number;
   subtotalAmount?: number;
   discountAmount?: number;
   taxAmount?: number;
+  roundOff?: number;
+  receivedAmount?: number;
+  balanceDue?: number;
   items: BosOrderLineItem[];
   notes?: string;
   cancellationReason?: string;
   supportStatus?: 'none' | 'open' | 'resolved' | 'escalated';
+  quotationRef?: string;
+  deliveryChallanNumber?: string;
   createdAt: string;
+  dueDate?: string;
 };
 
 export type BosCustomer = {
@@ -57,13 +84,72 @@ export type BosCustomer = {
   phone: string;
   email?: string;
   address?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  state?: string;
   gstin?: string;
+  partyType?: 'customer' | 'supplier';
+  gstType?: 'unregistered' | 'regular' | 'composition' | 'overseas';
+  creditLimit?: number;
+  openingBalance?: number;
+  openingBalanceType?: 'receivable' | 'payable';
   segment: 'VIP' | 'Regular' | 'Wholesale' | 'New';
   ordersCount: number;
   totalSpent: number;
   khataBalance: number; // positive = receivable ("You'll Get"), negative = advance ("You'll Give")
   loyaltyPoints: number;
   lastVisit: string;
+};
+
+export type BosBankAccount = {
+  id: string;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  ifscCode: string;
+  branch?: string;
+  upiId?: string;
+  balance: number;
+  isDefault?: boolean;
+  printOnInvoice?: boolean;
+};
+
+export type BosCheque = {
+  id: string;
+  partyName: string;
+  chequeNumber: string;
+  bankName: string;
+  amount: number;
+  date: string;
+  type: 'received' | 'issued';
+  status: 'pending' | 'deposited' | 'cleared' | 'bounced';
+  notes?: string;
+};
+
+export type BosExpense = {
+  id: string;
+  category: 'Rent' | 'Salary' | 'Tea & Snacks' | 'Electricity' | 'Travel' | 'Maintenance' | 'Marketing' | 'Other';
+  title: string;
+  amount: number;
+  paymentMode: 'cash' | 'bank' | 'upi' | 'cheque';
+  paymentRef?: string;
+  notes?: string;
+  date: string;
+  receiptUrl?: string;
+};
+
+export type BosPurchaseBill = {
+  id: string;
+  billNumber: string;
+  vendorName: string;
+  vendorGstin?: string;
+  date: string;
+  dueDate?: string;
+  totalAmount: number;
+  taxAmount: number;
+  paymentStatus: 'paid' | 'partial' | 'unpaid';
+  paidAmount: number;
+  items: BosOrderLineItem[];
 };
 
 export type BosKhataTransaction = {
@@ -101,9 +187,9 @@ export type BosDaybookEntry = {
   partyName: string;
   particulars?: string;
   subtitle: string;
-  category: 'POS Sale' | 'Invoice' | 'Khata In' | 'Supplier' | 'Expense' | 'Online Sale';
+  category: 'POS Sale' | 'Invoice' | 'Khata In' | 'Supplier' | 'Expense' | 'Online Sale' | 'Adjustment';
   refNumber: string;
-  paymentMode: 'cash' | 'upi' | 'card' | 'bank';
+  paymentMode: 'cash' | 'upi' | 'card' | 'bank' | 'cheque';
   moneyIn: number;
   moneyOut: number;
   createdAt: string;
@@ -177,6 +263,14 @@ export type BosStoreSettings = {
   enableGst?: boolean;
   taxRate?: number;
   taxType?: 'inclusive' | 'exclusive';
+  bankAccounts?: BosBankAccount[];
+  stopSaleOnNegativeStock?: boolean;
+  blockNewItemsFromTxn?: boolean;
+  blockNewPartiesFromTxn?: boolean;
+  enableAuditTrail?: boolean;
+  zoomScale?: number;
+  enablePasscode?: boolean;
+  serviceReminders?: boolean;
 };
 
 export function formatBosCurrency(amount: number, symbol = '₹'): string {

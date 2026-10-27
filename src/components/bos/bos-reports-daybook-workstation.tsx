@@ -72,7 +72,111 @@ type BosReportsDaybookWorkstationProps = {
   onAddDaybookEntry: (
     entry: Omit<BosDaybookEntry, 'id' | 'time' | 'createdAt'>,
   ) => Promise<void>;
+  onNavigateToBilling?: () => void;
 };
+
+export type ReportCategory = 'transaction' | 'party' | 'gst' | 'stock';
+
+export type ReportItemId =
+  | 'sale_invoices'
+  | 'quotations'
+  | 'proforma'
+  | 'delivery_challan'
+  | 'purchase_bills'
+  | 'day_book'
+  | 'profit_loss'
+  | 'cash_flow'
+  | 'balance_sheet'
+  | 'party_statement'
+  | 'party_pnl'
+  | 'all_parties'
+  | 'gstr1'
+  | 'gstr2'
+  | 'gstr3b'
+  | 'hsn_summary'
+  | 'stock_summary'
+  | 'low_stock'
+  | 'item_sales';
+
+export interface PurchaseBillRecord {
+  id: string;
+  billNumber: string;
+  vendorName: string;
+  billDate: string;
+  particulars: string;
+  totalAmount: number;
+  taxRate: number;
+  paymentMode: 'Cash' | 'UPI' | 'Card' | 'Bank' | 'Cheque';
+  paidAmount: number;
+  balanceDue: number;
+  status: 'PAID' | 'PARTIAL' | 'UNPAID';
+}
+
+export interface ChequeRecord {
+  id: string;
+  partyName: string;
+  bankName: string;
+  chequeNumber: string;
+  amount: number;
+  dueDate: string;
+  status: 'PENDING' | 'DEPOSITED' | 'CLEARED' | 'BOUNCED';
+  type: 'RECEIVED' | 'ISSUED';
+}
+
+const REPORT_SECTIONS: Array<{
+  id: ReportCategory;
+  title: string;
+  items: Array<{
+    id: ReportItemId;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    desc: string;
+  }>;
+}> = [
+  {
+    id: 'transaction',
+    title: 'Transaction Reports',
+    items: [
+      { id: 'sale_invoices', label: 'Sale Invoices', icon: FileText, desc: 'Sales invoices, receipts & settlements' },
+      { id: 'quotations', label: 'Estimate / Quotations', icon: BookOpen, desc: 'Quotations and price estimates' },
+      { id: 'proforma', label: 'Proforma Invoices', icon: FileSpreadsheet, desc: 'Proforma commercial invoices' },
+      { id: 'delivery_challan', label: 'Delivery Challans', icon: Truck, desc: 'Goods dispatch challans & receipts' },
+      { id: 'purchase_bills', label: 'Purchase Bills', icon: ShoppingCart, desc: 'Supplier bills, raw materials & stock in' },
+      { id: 'day_book', label: 'Day Book', icon: Calendar, desc: 'Daily money in/out journal register' },
+      { id: 'profit_loss', label: 'Profit & Loss', icon: TrendingUp, desc: 'Net income, operating profit & margins' },
+      { id: 'cash_flow', label: 'Cash Flow', icon: ArrowUpDown, desc: 'Cash movement across sales & expenses' },
+      { id: 'balance_sheet', label: 'Balance Sheet', icon: Layers, desc: 'Assets, liabilities & net capital' },
+    ],
+  },
+  {
+    id: 'party',
+    title: 'Party Reports',
+    items: [
+      { id: 'party_statement', label: 'Party Statement / Ledger', icon: Users, desc: 'Complete account ledger with running balance' },
+      { id: 'party_pnl', label: 'Party Wise Profit & Loss', icon: BarChart3, desc: 'Profitability per customer and supplier' },
+      { id: 'all_parties', label: 'All Parties Summary', icon: UserCheck, desc: 'Receivables, payables & credit limits' },
+    ],
+  },
+  {
+    id: 'gst',
+    title: 'GST Reports',
+    items: [
+      { id: 'gstr1', label: 'GSTR-1 (Sales)', icon: Percent, desc: 'Outward supplies for GSTR-1 portal filing' },
+      { id: 'gstr2', label: 'GSTR-2 (Purchases / ITC)', icon: CheckCircle2, desc: 'Inward supplies & input tax credit' },
+      { id: 'gstr3b', label: 'GSTR-3B Summary', icon: FileText, desc: 'Monthly tax liability and net payable' },
+      { id: 'hsn_summary', label: 'HSN / SAC Summary', icon: QrCode, desc: 'HSN/SAC wise turnover & tax slabs' },
+    ],
+  },
+  {
+    id: 'stock',
+    title: 'Item / Stock Reports',
+    items: [
+      { id: 'stock_summary', label: 'Stock Summary & Valuation', icon: Layers, desc: 'Stock valuation at cost and retail price' },
+      { id: 'low_stock', label: 'Low Stock Summary', icon: AlertTriangle, desc: 'Items below minimum reorder threshold' },
+      { id: 'item_sales', label: 'Item Sales Report', icon: ShoppingCart, desc: 'Top selling items, quantity sold & revenue' },
+    ],
+  },
+];
 
 type DaybookShowcaseRow = {
   id: string;
@@ -403,6 +507,7 @@ export function BosReportsDaybookWorkstation({
   initialOpeningBalance = 0,
   demoMode = false,
   storeSettings,
+  onNavigateToBilling,
 }: BosReportsDaybookWorkstationProps) {
   const [reportTab, setReportTab] = useState<
     'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata'
@@ -411,6 +516,122 @@ export function BosReportsDaybookWorkstation({
     'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy'
   >('this_month');
   const [salesSearchQuery, setSalesSearchQuery] = useState('');
+
+  // Secondary Reports Directory Tree (Vyapar Parity)
+  const [selectedReportId, setSelectedReportId] = useState<ReportItemId>('sale_invoices');
+  const [reportTreeSearch, setReportTreeSearch] = useState('');
+  const [selectedFirm, setSelectedFirm] = useState('all_firms');
+
+  // Purchase Bills State (Phase 5)
+  const [showAddPurchaseModal, setShowAddPurchaseModal] = useState(false);
+  const [purchaseBillForm, setPurchaseBillForm] = useState({
+    vendorName: '',
+    billNumber: `BILL-${1045 + Math.floor(Math.random() * 900)}`,
+    billDate: new Date().toLocaleDateString('en-GB'),
+    particulars: '',
+    totalAmount: 5000,
+    taxRate: 18,
+    paymentMode: 'Bank' as const,
+    paidAmount: 5000,
+  });
+  const [purchaseBills, setPurchaseBills] = useState<PurchaseBillRecord[]>(() => (demoMode ? [
+    {
+      id: 'pur-1',
+      billNumber: 'BILL-4091',
+      vendorName: 'Metro Cash & Carry',
+      billDate: '24 Oct 2026',
+      particulars: 'Grocery Staples & FMCG bulk pack',
+      totalAmount: 18500,
+      taxRate: 18,
+      paymentMode: 'Bank',
+      paidAmount: 18500,
+      balanceDue: 0,
+      status: 'PAID',
+    },
+    {
+      id: 'pur-2',
+      billNumber: 'INV-8821',
+      vendorName: 'Hindustan Unilever Distributor',
+      billDate: '25 Oct 2026',
+      particulars: 'Soaps, Shampoos & Cleaning supplies',
+      totalAmount: 12400,
+      taxRate: 18,
+      paymentMode: 'UPI',
+      paidAmount: 10000,
+      balanceDue: 2400,
+      status: 'PARTIAL',
+    },
+    {
+      id: 'pur-3',
+      billNumber: 'PB-1044',
+      vendorName: 'Amul Dairy Supplies',
+      billDate: '26 Oct 2026',
+      particulars: 'Butter, Cheese & Milk cartons',
+      totalAmount: 6200,
+      taxRate: 5,
+      paymentMode: 'Cash',
+      paidAmount: 6200,
+      balanceDue: 0,
+      status: 'PAID',
+    },
+  ] : []));
+
+  // Cash In Hand Adjustment Modal State (Phase 5)
+  const [showAdjustCashModal, setShowAdjustCashModal] = useState(false);
+  const [cashAdjustType, setCashAdjustType] = useState<'add' | 'reduce' | 'count'>('add');
+  const [cashAdjustAmount, setCashAdjustAmount] = useState('1000');
+  const [cashAdjustReason, setCashAdjustReason] = useState('');
+  const [denominations, setDenominations] = useState<{ [denom: number]: number }>({
+    500: 0,
+    200: 0,
+    100: 0,
+    50: 0,
+    20: 0,
+    10: 0,
+    1: 0,
+  });
+
+  const physicalCashSum = useMemo(() => {
+    return Object.entries(denominations).reduce(
+      (sum, [denom, count]) => sum + Number(denom) * (Number(count) || 0),
+      0,
+    );
+  }, [denominations]);
+
+  // Multi-Bank & Cheques Register State (Phase 5)
+  const [chequeFilter, setChequeFilter] = useState<'ALL' | 'PENDING' | 'DEPOSITED' | 'CLEARED' | 'BOUNCED'>('ALL');
+  const [cheques, setCheques] = useState<ChequeRecord[]>(() => (demoMode ? [
+    {
+      id: 'chq-1',
+      partyName: 'Sharma Traders',
+      bankName: 'HDFC Bank',
+      chequeNumber: '448102',
+      amount: 15000,
+      dueDate: '28 Oct 2026',
+      status: 'PENDING',
+      type: 'RECEIVED',
+    },
+    {
+      id: 'chq-2',
+      partyName: 'Priya Verma',
+      bankName: 'ICICI Bank',
+      chequeNumber: '610293',
+      amount: 4500,
+      dueDate: '25 Oct 2026',
+      status: 'DEPOSITED',
+      type: 'RECEIVED',
+    },
+    {
+      id: 'chq-3',
+      partyName: 'Metro Distributors',
+      bankName: 'State Bank of India',
+      chequeNumber: '003912',
+      amount: 22000,
+      dueDate: '20 Oct 2026',
+      status: 'CLEARED',
+      type: 'ISSUED',
+    },
+  ] : []));
 
   const periodFilteredOrders = useMemo(() => {
     const { start, end } = getDateRangeForPeriod(reportPeriod);
@@ -899,6 +1120,57 @@ export function BosReportsDaybookWorkstation({
       setToast((prev) => (prev === msg ? null : prev));
     }, 3200);
   };
+
+  const handleAdjustCashSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let amt = Math.max(0, Number(cashAdjustAmount) || 0);
+    let type = cashAdjustType;
+    let reason = cashAdjustReason.trim();
+
+    if (type === 'count') {
+      const diff = physicalCashSum - closingBalance;
+      if (diff === 0) {
+        showToast(`Physical cash matches expected balance (${currencySymbol} ${closingBalance.toLocaleString('en-IN')}). No adjustment needed.`);
+        setShowAdjustCashModal(false);
+        return;
+      }
+      amt = Math.abs(diff);
+      type = diff > 0 ? 'add' : 'reduce';
+      reason = `Cash Count: Counted ${currencySymbol} ${physicalCashSum.toLocaleString('en-IN')}, Expected ${currencySymbol} ${closingBalance.toLocaleString('en-IN')} (${diff > 0 ? 'Surplus' : 'Shortage'} of ${currencySymbol} ${amt.toLocaleString('en-IN')})`;
+    } else {
+      if (!reason) {
+        reason = type === 'add' ? 'Cash Float Added' : 'Cash Withdrawn to Bank/Owner';
+      }
+    }
+
+    setShowAdjustCashModal(false);
+    try {
+      await onAddDaybookEntry({
+        partyName: reason,
+        subtitle: `Cash Drawer (${type === 'add' ? 'Money In' : 'Money Out'})`,
+        category: 'Adjustment',
+        refNumber: `ADJ-${Date.now().toString().slice(-4)}`,
+        paymentMode: 'cash',
+        moneyIn: type === 'add' ? amt : 0,
+        moneyOut: type === 'reduce' ? amt : 0,
+      });
+      showToast(`Adjusted cash by ${currencySymbol} ${amt.toLocaleString('en-IN')} (${reason})`);
+    } catch (err: unknown) {
+      showToast(`Saved adjustment locally: ${reason}`);
+    }
+  };
+
+  const handleUpdateChequeStatus = (id: string, newStatus: ChequeRecord['status']) => {
+    setCheques((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
+    );
+    showToast(`Cheque ${id} marked as ${newStatus}`);
+  };
+
+  const filteredCheques = useMemo(() => {
+    if (chequeFilter === 'ALL') return cheques;
+    return cheques.filter((c) => c.status === chequeFilter);
+  }, [cheques, chequeFilter]);
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1484,6 +1756,28 @@ export function BosReportsDaybookWorkstation({
     );
     const potentialStockProfit = Math.max(0, totalInventoryRetailValue - totalInventoryCostValue);
 
+    const filteredReportSections = REPORT_SECTIONS.map((sec) => {
+      if (!reportTreeSearch.trim()) return sec;
+      const q = reportTreeSearch.toLowerCase();
+      return {
+        ...sec,
+        items: sec.items.filter(
+          (it) => it.label.toLowerCase().includes(q) || it.desc.toLowerCase().includes(q)
+        ),
+      };
+    }).filter((sec) => sec.items.length > 0);
+
+    const activeDateRangeStr = (() => {
+      const { start, end } = getDateRangeForPeriod(reportPeriod);
+      const fmt = (d: Date) => {
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const yy = d.getFullYear();
+        return `${dd}/${mm}/${yy}`;
+      };
+      return `${fmt(start)} To ${fmt(end)}`;
+    })();
+
     const filteredSalesOrders = (periodFilteredOrders || []).filter((o) => {
       if (!salesSearchQuery.trim()) return true;
       const q = salesSearchQuery.trim().toLowerCase();
@@ -1495,120 +1789,231 @@ export function BosReportsDaybookWorkstation({
       );
     });
 
+    const saleInvoicesKpis = {
+      totalSales: (periodFilteredOrders || []).reduce((sum, o) => sum + (o.totalAmount || 0), 0),
+      received: (periodFilteredOrders || []).reduce((sum, o) => {
+        const bal = o.balanceDue ?? (o.paymentStatus === 'PAID' || o.paymentStatus === 'paid' ? 0 : o.totalAmount);
+        return sum + Math.max(0, (o.totalAmount || 0) - bal);
+      }, 0),
+      balanceDue: (periodFilteredOrders || []).reduce((sum, o) => {
+        const bal = o.balanceDue ?? (o.paymentStatus === 'PAID' || o.paymentStatus === 'paid' ? 0 : o.totalAmount);
+        return sum + bal;
+      }, 0),
+    };
+
+    const purchaseBillsKpis = {
+      totalPurchases: purchaseBills.reduce((sum, b) => sum + b.totalAmount, 0),
+      paid: purchaseBills.reduce((sum, b) => sum + b.paidAmount, 0),
+      balanceDue: purchaseBills.reduce((sum, b) => sum + b.balanceDue, 0),
+    };
+
+    const handleExcelExport = () => {
+      if (selectedReportId === 'sale_invoices') {
+        handleExportSalesReportCsv();
+      } else if (selectedReportId === 'purchase_bills') {
+        const today = new Date().toISOString().slice(0, 10);
+        const header = ['Bill No', 'Date', 'Vendor Name', 'Particulars', 'Total Amount', 'Paid Amount', 'Balance Due', 'Status'];
+        const rows = purchaseBills.map((b) => [b.billNumber, b.billDate, `"${b.vendorName}"`, `"${b.particulars}"`, b.totalAmount, b.paidAmount, b.balanceDue, b.status]);
+        const csvContent = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Purchase_Bills_${today}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Exported Purchase Bills CSV (${today})`);
+      } else if (selectedReportId === 'gstr1' || selectedReportId === 'gstr2' || selectedReportId === 'gstr3b' || selectedReportId === 'hsn_summary') {
+        handleExportGstrSummaryCsv();
+      } else if (selectedReportId === 'stock_summary' || selectedReportId === 'low_stock' || selectedReportId === 'item_sales') {
+        handleExportInventoryCsv();
+      } else if (selectedReportId === 'party_statement' || selectedReportId === 'party_pnl' || selectedReportId === 'all_parties') {
+        handleExportKhataCsv();
+      } else {
+        handleExportOverviewCsv();
+      }
+    };
+
+    const handleSavePurchaseBill = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const tot = Math.max(1, Number(purchaseBillForm.totalAmount) || 0);
+      const paid = Math.min(tot, Math.max(0, Number(purchaseBillForm.paidAmount) || 0));
+      const bal = Math.max(0, tot - paid);
+      const vendor = purchaseBillForm.vendorName.trim() || 'Distributor Vendor';
+      const status: 'PAID' | 'PARTIAL' | 'UNPAID' = bal === 0 ? 'PAID' : paid > 0 ? 'PARTIAL' : 'UNPAID';
+
+      const newBill: PurchaseBillRecord = {
+        id: `pur-${Date.now()}`,
+        billNumber: purchaseBillForm.billNumber.trim() || `BILL-${Date.now()}`,
+        vendorName: vendor,
+        billDate: purchaseBillForm.billDate || new Date().toLocaleDateString('en-GB'),
+        particulars: purchaseBillForm.particulars.trim() || 'Inventory Supplies',
+        totalAmount: tot,
+        taxRate: Number(purchaseBillForm.taxRate) || 0,
+        paymentMode: purchaseBillForm.paymentMode,
+        paidAmount: paid,
+        balanceDue: bal,
+        status,
+      };
+
+      setPurchaseBills((prev) => [newBill, ...prev]);
+      setShowAddPurchaseModal(false);
+
+      try {
+        if (paid > 0) {
+          await onAddDaybookEntry({
+            partyName: vendor,
+            subtitle: `Purchase Bill #${newBill.billNumber} (${purchaseBillForm.particulars || 'Stock in'})`,
+            category: 'Supplier',
+            refNumber: newBill.billNumber,
+            paymentMode: purchaseBillForm.paymentMode.toLowerCase() as BosDaybookEntry['paymentMode'],
+            moneyIn: 0,
+            moneyOut: paid,
+          });
+        }
+        showToast(`Recorded Purchase Bill ${newBill.billNumber} for ${vendor} (${currencySymbol} ${tot.toLocaleString('en-IN')})`);
+      } catch (err: unknown) {
+        showToast(`Saved locally. Daybook note: ${err instanceof Error ? err.message : 'Error syncing'}`);
+      }
+    };
+
     return (
       <div className="w-full max-w-none space-y-4 pb-6">
-        {/* Top Header: Sub-Tabs & Date Filter Bar */}
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[#E4EFEA] bg-white p-1.5">
-            {(
-              [
-                { id: 'overview', label: 'Overview' },
-                { id: 'sales', label: 'Sales & Revenue' },
-                { id: 'pnl', label: 'Profit & Loss' },
-                { id: 'gst', label: 'GST & Tax Reports' },
-                { id: 'inventory', label: 'Inventory Valuation' },
-                { id: 'khata', label: 'Customer & Khata' },
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setReportTab(t.id)}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold transition cursor-pointer ${
-                  reportTab === t.id
-                    ? 'bg-[#0A6847] text-white shadow-2xs'
-                    : 'text-[#475569] hover:bg-[#F4F8F6]'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Period selector pills */}
-            <div className="flex items-center gap-1 rounded-xl border border-[#E4EFEA] bg-white p-1">
-              {(
-                [
-                  { id: 'today', label: 'Today' },
-                  { id: 'yesterday', label: 'Yesterday' },
-                  { id: 'this_week', label: 'This Week' },
-                  { id: 'this_month', label: 'This Month' },
-                  { id: 'this_fy', label: 'This FY' },
-                ] as const
-              ).map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setReportPeriod(p.id)}
-                  className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
-                    reportPeriod === p.id
-                      ? 'bg-[#0A6847] text-white'
-                      : 'text-[#64748B] hover:bg-[#F4F8F6]'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+        {/* 2-Column Split: Secondary Navigation Tree (Left) + Report Viewer (Right) */}
+        <div className="flex flex-col gap-4 lg:flex-row items-start w-full">
+          {/* LEFT COLUMN: SECONDARY DIRECTORY TREE (Matching media_1793082329695.png) */}
+          <div className="w-full lg:w-64 shrink-0 rounded-2xl border border-[#DCE9E3] bg-white p-3 shadow-2xs space-y-3">
+            {/* Search Reports */}
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#94A3B8]" />
+              <input
+                type="text"
+                value={reportTreeSearch}
+                onChange={(e) => setReportTreeSearch(e.target.value)}
+                placeholder="Search Reports..."
+                className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] pl-8 pr-3 text-[11.5px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+              />
             </div>
 
-            {reportTab === 'gst' ? (
-              <button
-                type="button"
-                onClick={handleExportGstrSummaryCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-                <span>GSTR-1 CSV</span>
-              </button>
-            ) : reportTab === 'sales' ? (
-              <button
-                type="button"
-                onClick={handleExportSalesReportCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-                <span>Sales CSV</span>
-              </button>
-            ) : reportTab === 'inventory' ? (
-              <button
-                type="button"
-                onClick={handleExportInventoryCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-                <span>Stock CSV</span>
-              </button>
-            ) : reportTab === 'khata' ? (
-              <button
-                type="button"
-                onClick={handleExportKhataCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-                <span>Khata Dues CSV</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleExportOverviewCsv}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
-              >
-                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-                <span>Overview CSV</span>
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleDownloadPdfReport}
-              className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] cursor-pointer"
-            >
-              <Download className="h-4 w-4" />
-              <span>Download PDF</span>
-            </button>
+            {/* Tree Sections */}
+            <div className="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto pr-1">
+              {filteredReportSections.map((sec) => (
+                <div key={sec.id} className="space-y-1">
+                  <p className="px-2 text-[10.5px] font-extrabold uppercase tracking-wider text-[#64748B]">
+                    {sec.title}
+                  </p>
+                  <div className="space-y-0.5">
+                    {sec.items.map((item) => {
+                      const active = selectedReportId === item.id;
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedReportId(item.id);
+                            if (item.id === 'profit_loss') setReportTab('pnl');
+                            else if (item.id.startsWith('gst') || item.id === 'hsn_summary') setReportTab('gst');
+                            else if (item.id.startsWith('stock') || item.id === 'low_stock' || item.id === 'item_sales') setReportTab('inventory');
+                            else if (item.id.startsWith('party') || item.id === 'all_parties') setReportTab('khata');
+                            else if (item.id === 'sale_invoices') setReportTab('sales');
+                          }}
+                          className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] font-semibold transition cursor-pointer ${
+                            active
+                              ? 'bg-[#E6F6F0] text-[#0A6847] font-bold shadow-2xs'
+                              : 'text-[#334155] hover:bg-[#F4F8F6]'
+                          }`}
+                        >
+                          <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#0A6847]' : 'text-[#64748B]'}`} />
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+
+          {/* RIGHT COLUMN: MAIN REPORT VIEWER */}
+          <div className="flex-1 min-w-0 space-y-4">
+            {/* Top Filter Bar: Firm Selector, Period Presets, Date Range & Action Buttons */}
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between rounded-2xl border border-[#DCE9E3] bg-white p-3 shadow-2xs">
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Firm Selector */}
+                <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-2.5 py-1.5 text-[12px] font-bold text-[#1E293B]">
+                  <Building2 className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <select
+                    value={selectedFirm}
+                    onChange={(e) => setSelectedFirm(e.target.value)}
+                    className="bg-transparent font-bold text-[#1E293B] focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="all_firms">All Firms</option>
+                    <option value="current_firm">{storeSettings?.businessName || 'My Business'}</option>
+                  </select>
+                </div>
+
+                {/* Period Selector Pills */}
+                <div className="flex items-center gap-1 rounded-xl border border-[#E4EFEA] bg-white p-1">
+                  {(
+                    [
+                      { id: 'today', label: 'Today' },
+                      { id: 'yesterday', label: 'Yesterday' },
+                      { id: 'this_week', label: 'This Week' },
+                      { id: 'this_month', label: 'This Month' },
+                      { id: 'this_fy', label: 'This FY' },
+                    ] as const
+                  ).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setReportPeriod(p.id)}
+                      className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                        reportPeriod === p.id
+                          ? 'bg-[#0A6847] text-white'
+                          : 'text-[#64748B] hover:bg-[#F4F8F6]'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Date Range String Display */}
+                <div className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[11.5px] font-semibold text-[#475569]">
+                  <Calendar className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <span>{activeDateRangeStr}</span>
+                </div>
+              </div>
+
+              {/* Export Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExcelExport}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
+                  <span>Excel</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadPdfReport}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Download className="h-4 w-4 text-[#0A6847]" />
+                  <span>PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Printer className="h-4 w-4 text-[#64748B]" />
+                  <span>Print</span>
+                </button>
+              </div>
+            </div>
 
         {toast && (
           <div className="flex items-center justify-between rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] px-4 py-2.5 text-[13px] font-medium text-[#065F46]">
@@ -1875,120 +2280,357 @@ export function BosReportsDaybookWorkstation({
           </div>
         )}
 
-        {/* 2. SALES & REVENUE TAB */}
-        {reportTab === 'sales' && (
+        {/* 2. TRANSACTION REPORTS: SALE INVOICES, PURCHASE BILLS, QUOTATIONS, DAY BOOK */}
+        {(reportTab === 'sales' || selectedReportId === 'sale_invoices' || selectedReportId === 'purchase_bills' || selectedReportId === 'quotations' || selectedReportId === 'proforma' || selectedReportId === 'delivery_challan' || selectedReportId === 'day_book') && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-              <div className="bos-card p-4">
-                <p className="text-[12px] font-semibold text-[#64748B]">Total Sales Turnover</p>
-                <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
-                  {formatBosCurrency(reportsData.totalRevenue, currencySymbol)}
-                </p>
-                <p className="text-[11px] text-[#64748B]">From all POS &amp; invoices</p>
-              </div>
-              <div className="bos-card p-4">
-                <p className="text-[12px] font-semibold text-[#64748B]">Tax Collected (GST)</p>
-                <p className="mt-1 text-[22px] font-extrabold text-purple-700">
-                  {formatBosCurrency(reportsData.gstCollected, currencySymbol)}
-                </p>
-                <p className="text-[11px] text-[#64748B]">CGST + SGST + IGST</p>
-              </div>
-              <div className="bos-card p-4">
-                <p className="text-[12px] font-semibold text-[#64748B]">Total Invoices / Bills</p>
-                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
-                  {(orders || []).length}
-                </p>
-                <p className="text-[11px] text-[#0A6847]">100% verified transactions</p>
-              </div>
-              <div className="bos-card p-4">
-                <p className="text-[12px] font-semibold text-[#64748B]">Average Ticket Size</p>
-                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
-                  {formatBosCurrency(reportsData.avgOrderVal, currencySymbol)}
-                </p>
-                <p className="text-[11px] text-[#64748B]">Per bill average</p>
-              </div>
-            </div>
-
-            {/* Search bar and table */}
-            <div className="bos-card p-4 space-y-4">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="relative w-full sm:w-80">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-[#94A3B8]" />
-                  <input
-                    type="text"
-                    value={salesSearchQuery}
-                    onChange={(e) => setSalesSearchQuery(e.target.value)}
-                    placeholder="Search by invoice # or customer..."
-                    className="w-full rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] pl-9 pr-3 py-2 text-[12.5px] text-[#1E293B] focus:border-[#0A6847] focus:outline-none"
-                  />
+            {/* 2A. PURCHASE BILLS HUB */}
+            {selectedReportId === 'purchase_bills' ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="bos-card p-4">
+                    <p className="text-[11.5px] font-medium text-[#64748B]">Total Purchases</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                      {currencySymbol} {purchaseBillsKpis.totalPurchases.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] font-semibold text-[#0A6847]">
+                      {purchaseBills.length} Purchase bills recorded
+                    </p>
+                  </div>
+                  <div className="bos-card p-4">
+                    <p className="text-[11.5px] font-medium text-[#64748B]">Paid Amount</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                      {currencySymbol} {purchaseBillsKpis.paid.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] text-[#64748B]">Paid to suppliers</p>
+                  </div>
+                  <div className="bos-card p-4">
+                    <p className="text-[11.5px] font-medium text-[#64748B]">Balance Due</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-amber-600">
+                      {currencySymbol} {purchaseBillsKpis.balanceDue.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] text-[#64748B]">Payable to suppliers</p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#64748B]">
-                  <span>Showing {filteredSalesOrders.length} transactions</span>
+
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[15px] font-bold text-[#111827]">Supplier Purchase Invoices</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPurchaseModal(true)}
+                    className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12.5px] font-bold shadow-2xs cursor-pointer"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>+ Add Purchase Bill</span>
+                  </button>
+                </div>
+
+                {purchaseBills.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#DCE9E3] bg-white p-12 text-center space-y-4">
+                    <ShoppingCart className="mx-auto h-12 w-12 text-[#94A3B8]" />
+                    <h3 className="text-[16px] font-bold text-[#111827]">No Purchase Bills Found</h3>
+                    <p className="text-xs text-[#64748B]">Record inventory goods and materials purchased from distributors.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPurchaseModal(true)}
+                      className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-bold cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>+ Add Purchase Bill</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[#DCE9E3] bg-white overflow-hidden shadow-2xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Bill #</th>
+                            <th className="py-2.5 px-3">Vendor Name</th>
+                            <th className="py-2.5 px-3">Particulars</th>
+                            <th className="py-2.5 px-3">Payment Mode</th>
+                            <th className="py-2.5 px-3 text-right">Total ({currencySymbol})</th>
+                            <th className="py-2.5 px-3 text-right">Balance Due ({currencySymbol})</th>
+                            <th className="py-2.5 px-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                          {purchaseBills.map((b) => (
+                            <tr key={b.id} className="hover:bg-[#F9FCFA]">
+                              <td className="py-2.5 px-3 text-xs text-[#64748B]">{b.billDate}</td>
+                              <td className="py-2.5 px-3 font-bold text-[#0A6847]">{b.billNumber}</td>
+                              <td className="py-2.5 px-3 font-bold text-[#111827]">{b.vendorName}</td>
+                              <td className="py-2.5 px-3 text-xs text-[#64748B]">{b.particulars}</td>
+                              <td className="py-2.5 px-3">
+                                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
+                                  {b.paymentMode}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-extrabold text-[#111827]">
+                                {formatBosCurrency(b.totalAmount, currencySymbol)}
+                              </td>
+                              <td className="py-2.5 px-3 text-right font-semibold text-amber-600">
+                                {formatBosCurrency(b.balanceDue, currencySymbol)}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span
+                                  className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
+                                    b.status === 'PAID'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : b.status === 'PARTIAL'
+                                        ? 'bg-amber-100 text-amber-800'
+                                        : 'bg-red-100 text-red-800'
+                                  }`}
+                                >
+                                  {b.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : selectedReportId === 'quotations' || selectedReportId === 'proforma' || selectedReportId === 'delivery_challan' ? (
+              /* 2B. COMMERCIAL DOCUMENTS VIEW */
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-[#111827] capitalize">
+                      {selectedReportId.replace('_', ' ')} Register
+                    </h3>
+                    <p className="text-[12px] text-[#64748B]">Commercial documents created in selected date range</p>
+                  </div>
+                  {onNavigateToBilling && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToBilling}
+                      className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-bold cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Create New {selectedReportId === 'quotations' ? 'Quotation' : selectedReportId === 'proforma' ? 'Proforma' : 'Challan'}</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="rounded-2xl border border-dashed border-[#DCE9E3] bg-white p-10 text-center space-y-3">
+                  <FileText className="mx-auto h-12 w-12 text-[#94A3B8]" />
+                  <p className="text-[14px] font-bold text-[#111827]">
+                    Manage and convert {selectedReportId.replace('_', ' ')}s in the Invoices Workstation
+                  </p>
+                  <p className="text-xs text-[#64748B] max-w-sm mx-auto">
+                    Use 1-click quotation-to-tax-invoice conversion, print delivery challans, and share PDF copies with customers on WhatsApp.
+                  </p>
+                  {onNavigateToBilling && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToBilling}
+                      className="bos-btn-primary rounded-xl px-4 py-2 text-xs font-bold cursor-pointer"
+                    >
+                      Open Invoices Workstation
+                    </button>
+                  )}
                 </div>
               </div>
+            ) : selectedReportId === 'day_book' ? (
+              /* 2C. DAY BOOK SUMMARY VIEW */
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+                  <div className="bos-card p-4">
+                    <p className="text-[12px] font-semibold text-[#64748B]">Total Money In (Today)</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                      {currencySymbol} {totalMoneyIn.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="bos-card p-4">
+                    <p className="text-[12px] font-semibold text-[#64748B]">Total Money Out (Today)</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-red-600">
+                      {currencySymbol} {totalMoneyOut.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div className="bos-card p-4">
+                    <p className="text-[12px] font-semibold text-[#64748B]">Closing Cash &amp; Bank Balance</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                      {currencySymbol} {closingBalance.toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
-                      <th className="py-2.5 px-3">Bill / Invoice #</th>
-                      <th className="py-2.5 px-3">Date &amp; Time</th>
-                      <th className="py-2.5 px-3">Customer</th>
-                      <th className="py-2.5 px-3">Channel</th>
-                      <th className="py-2.5 px-3">Payment Mode</th>
-                      <th className="py-2.5 px-3 text-right">Tax ({currencySymbol})</th>
-                      <th className="py-2.5 px-3 text-right">Total ({currencySymbol})</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                    {filteredSalesOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="py-8 text-center text-xs text-[#94A3B8]">
-                          No sales records found for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredSalesOrders.map((o) => (
-                        <tr key={o.id} className="hover:bg-[#F9FCFA]">
-                          <td className="py-2.5 px-3 font-bold text-[#0A6847]">{o.id}</td>
-                          <td className="py-2.5 px-3 text-[#64748B] text-xs">
-                            {o.createdAt || 'Today'}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <p className="font-semibold text-[#111827]">
-                              {o.customerName || 'Walk-in Customer'}
-                            </p>
-                            {o.customerPhone && (
-                              <p className="text-[10.5px] text-[#64748B]">{o.customerPhone}</p>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 uppercase text-[10.5px] font-bold text-[#475569]">
-                            {o.channel || 'POS'}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-bold text-[#0A7B56]">
-                              {o.paymentMode || 'Cash'}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-xs text-[#64748B]">
-                            {formatBosCurrency(o.taxAmount || 0, currencySymbol)}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-extrabold text-[#111827]">
-                            {formatBosCurrency(o.totalAmount || 0, currencySymbol)}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10.5px] font-bold text-emerald-800">
-                              {o.paymentStatus || 'Paid'}
-                            </span>
-                          </td>
+                <div className="bos-card p-4 space-y-3">
+                  <h4 className="text-[14px] font-bold text-[#111827]">Daily Cash &amp; Bank Register</h4>
+                  <p className="text-xs text-[#64748B]">
+                    Full real-time transaction ledger including POS sales, customer khata receipts, operating expenses, and cash withdrawals.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-[12px]">
+                      <thead>
+                        <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] font-semibold text-[#64748B]">
+                          <th className="py-2 px-3">Time</th>
+                          <th className="py-2 px-3">Type</th>
+                          <th className="py-2 px-3">Particulars</th>
+                          <th className="py-2 px-3">Mode</th>
+                          <th className="py-2 px-3 text-right">In</th>
+                          <th className="py-2 px-3 text-right">Out</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="divide-y divide-[#EEF5F1]">
+                        {rows.slice(0, 5).map((r) => (
+                          <tr key={r.id}>
+                            <td className="py-2 px-3 text-[#64748B]">{r.timeText}</td>
+                            <td className="py-2 px-3 font-semibold">{r.typeLabel}</td>
+                            <td className="py-2 px-3">{r.particularsTitle}</td>
+                            <td className="py-2 px-3">{r.method}</td>
+                            <td className="py-2 px-3 text-right font-bold text-emerald-700">
+                              {r.moneyIn > 0 ? `${currencySymbol}${r.moneyIn}` : '—'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-bold text-red-600">
+                              {r.moneyOut > 0 ? `${currencySymbol}${r.moneyOut}` : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* 2D. SALE INVOICES VIEW (Exact Vyapar Parity Matching media_1793082329695.png) */
+              <div className="space-y-4">
+                {/* 3 KPI Cards */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="bos-card p-4">
+                    <p className="text-[11.5px] font-medium text-[#64748B]">Total Sales Amount</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                      {currencySymbol} {saleInvoicesKpis.totalSales.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] font-semibold text-[#0A6847]">
+                      {periodFilteredOrders.length} Invoices in period
+                    </p>
+                  </div>
+                  <div className="bos-card p-4">
+                    <p className="text-[11.5px] font-medium text-[#64748B]">Received</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                      {currencySymbol} {saleInvoicesKpis.received.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] text-[#64748B]">Settled &amp; collected</p>
+                  </div>
+                  <div className="bos-card p-4">
+                    <p className="text-[11.5px] font-medium text-[#64748B]">Balance Due</p>
+                    <p className="mt-1 text-[22px] font-extrabold text-amber-600">
+                      {currencySymbol} {saleInvoicesKpis.balanceDue.toLocaleString('en-IN')}
+                    </p>
+                    <p className="text-[11px] text-[#64748B]">Pending customer udhaar</p>
+                  </div>
+                </div>
+
+                {/* Filter and + Add Sale Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#94A3B8]" />
+                    <input
+                      type="text"
+                      value={salesSearchQuery}
+                      onChange={(e) => setSalesSearchQuery(e.target.value)}
+                      placeholder="Search by invoice #, customer, phone..."
+                      className="h-9 w-full rounded-xl border border-[#DCE9E3] bg-white pl-8 pr-3 text-[12px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:outline-hidden"
+                    />
+                  </div>
+
+                  {onNavigateToBilling && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToBilling}
+                      className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12.5px] font-bold shadow-2xs cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>+ Add Sale</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Zero State vs Invoices Table (media_1793082329695.png) */}
+                {filteredSalesOrders.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#DCE9E3] bg-white p-12 text-center space-y-4 shadow-2xs">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E6F6F0] text-[#0A6847]">
+                      <FileText className="h-8 w-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-[17px] font-extrabold text-[#111827]">No Sale Invoices Found</h3>
+                      <p className="mt-1 text-[13px] text-[#64748B] max-w-md mx-auto">
+                        You haven&apos;t recorded any sales invoices in the selected date range ({activeDateRangeStr}). Create your first sale invoice or adjust the filter.
+                      </p>
+                    </div>
+                    {onNavigateToBilling && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToBilling}
+                        className="bos-btn-primary inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-bold shadow-xs cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>+ Add Sale</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[#DCE9E3] bg-white overflow-hidden shadow-2xs">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                            <th className="py-2.5 px-3">Date</th>
+                            <th className="py-2.5 px-3">Invoice #</th>
+                            <th className="py-2.5 px-3">Party Name</th>
+                            <th className="py-2.5 px-3">Payment Type</th>
+                            <th className="py-2.5 px-3 text-right">Amount ({currencySymbol})</th>
+                            <th className="py-2.5 px-3 text-right">Balance Due ({currencySymbol})</th>
+                            <th className="py-2.5 px-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
+                          {filteredSalesOrders.map((o) => {
+                            const bal = o.balanceDue ?? (o.paymentStatus === 'PAID' || o.paymentStatus === 'paid' ? 0 : o.totalAmount);
+                            return (
+                              <tr key={o.id} className="hover:bg-[#F9FCFA]">
+                                <td className="py-2.5 px-3 text-xs text-[#64748B]">{o.createdAt || 'Today'}</td>
+                                <td className="py-2.5 px-3 font-bold text-[#0A6847]">{o.id}</td>
+                                <td className="py-2.5 px-3">
+                                  <p className="font-semibold text-[#111827]">{o.customerName || 'Walk-in Customer'}</p>
+                                  {o.customerPhone && <p className="text-[10.5px] text-[#64748B]">{o.customerPhone}</p>}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="rounded-md bg-[#E6F6F0] px-2 py-0.5 text-[11px] font-bold text-[#0A7B56]">
+                                    {o.paymentMode || 'Cash'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-extrabold text-[#111827]">
+                                  {formatBosCurrency(o.totalAmount || 0, currencySymbol)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-semibold text-amber-600">
+                                  {formatBosCurrency(bal, currencySymbol)}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span
+                                    className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-bold ${
+                                      bal === 0
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}
+                                  >
+                                    {bal === 0 ? 'PAID' : 'PENDING'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -2398,6 +3040,144 @@ export function BosReportsDaybookWorkstation({
             </div>
           </div>
         )}
+          </div>
+        </div>
+
+        {/* Add Purchase Bill Modal (Phase 5) */}
+        {showAddPurchaseModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+                <h3 className="text-[16px] font-bold text-[#111827]">Record Purchase Bill (Vendor Inward)</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddPurchaseModal(false)}
+                  className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSavePurchaseBill} className="mt-4 space-y-3 text-[12.5px]">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Vendor / Supplier Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={purchaseBillForm.vendorName}
+                      onChange={(e) => setPurchaseBillForm((s) => ({ ...s, vendorName: e.target.value }))}
+                      placeholder="e.g. Metro Cash & Carry"
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Bill / Invoice Number *</label>
+                    <input
+                      type="text"
+                      required
+                      value={purchaseBillForm.billNumber}
+                      onChange={(e) => setPurchaseBillForm((s) => ({ ...s, billNumber: e.target.value }))}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Particulars / Purchased Items</label>
+                  <input
+                    type="text"
+                    value={purchaseBillForm.particulars}
+                    onChange={(e) => setPurchaseBillForm((s) => ({ ...s, particulars: e.target.value }))}
+                    placeholder="e.g. 50 Cartons Cooking Oil & Rice sacks"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Total Bill Amount ({currencySymbol}) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={purchaseBillForm.totalAmount}
+                      onChange={(e) => {
+                        const tot = Number(e.target.value);
+                        setPurchaseBillForm((s) => ({ ...s, totalAmount: tot, paidAmount: tot }));
+                      }}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-bold text-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">GST Rate (%)</label>
+                    <select
+                      value={purchaseBillForm.taxRate}
+                      onChange={(e) => setPurchaseBillForm((s) => ({ ...s, taxRate: Number(e.target.value) }))}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2"
+                    >
+                      <option value={0}>0% (Exempt)</option>
+                      <option value={5}>5%</option>
+                      <option value={12}>12%</option>
+                      <option value={18}>18%</option>
+                      <option value={28}>28%</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Payment Mode</label>
+                    <select
+                      value={purchaseBillForm.paymentMode}
+                      onChange={(e) => setPurchaseBillForm((s) => ({ ...s, paymentMode: e.target.value as any }))}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2"
+                    >
+                      <option value="Bank">Bank Transfer</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Card">Card</option>
+                      <option value="Cheque">Cheque</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Amount Paid ({currencySymbol})</label>
+                    <input
+                      type="number"
+                      value={purchaseBillForm.paidAmount}
+                      onChange={(e) => setPurchaseBillForm((s) => ({ ...s, paidAmount: Number(e.target.value) }))}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-bold text-[#0A6847]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Balance Due ({currencySymbol})</label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={Math.max(0, purchaseBillForm.totalAmount - purchaseBillForm.paidAmount)}
+                      className="w-full rounded-xl border border-[#DCE9E3] bg-slate-50 px-3 py-2 font-bold text-amber-700"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPurchaseModal(false)}
+                    className="rounded-xl border border-[#DCE9E3] px-4 py-2 font-semibold text-[#475569] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bos-btn-primary rounded-xl px-5 py-2 font-bold cursor-pointer"
+                  >
+                    Save Purchase Bill
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -2539,14 +3319,23 @@ export function BosReportsDaybookWorkstation({
 
         {/* 5. Expected Balance */}
         <div className="col-span-2 lg:col-span-1 flex items-center justify-between gap-2 rounded-2xl border border-[#DCE9E3] bg-white p-3.5 shadow-2xs">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F1F5F9] text-[#475569]">
               <Coins className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[11.5px] font-medium text-[#64748B] truncate">
-                Expected Balance
-              </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[11.5px] font-medium text-[#64748B] truncate">
+                  Expected Balance
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAdjustCashModal(true)}
+                  className="rounded bg-amber-50 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700 hover:bg-amber-100 transition cursor-pointer"
+                >
+                  Adjust
+                </button>
+              </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="text-[20px] font-extrabold text-[#111827] leading-tight">
                   {currencySymbol} {expectedBalance.toLocaleString('en-IN')}
@@ -2562,8 +3351,9 @@ export function BosReportsDaybookWorkstation({
 
       {/* Main 12-Column Split Grid: Left Transactions Table (9 cols) + Right Sidebar (3 cols) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
-        {/* LEFT COLUMN: TRANSACTIONS TABLE (9 cols) */}
-        <div className="lg:col-span-8 xl:col-span-9 rounded-2xl border border-[#DCE9E3] bg-white shadow-2xs overflow-hidden">
+        {/* LEFT COLUMN: TRANSACTIONS TABLE + CHEQUES REGISTER (9 cols) */}
+        <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+          <div className="rounded-2xl border border-[#DCE9E3] bg-white shadow-2xs overflow-hidden">
           {/* 7 Underline Sub-Tabs + Filter Button */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EBF2EE] px-4 pt-3 pb-2">
             <div className="flex items-center gap-5 overflow-x-auto">
@@ -2826,6 +3616,135 @@ export function BosReportsDaybookWorkstation({
           </div>
         </div>
 
+        {/* CHEQUES & BANK REGISTER (Phase 5 - Vyapar Parity) */}
+        <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EBF2EE] pb-3">
+            <div>
+              <h3 className="text-[15px] font-bold text-[#111827]">
+                Cheques &amp; Bank Register
+              </h3>
+              <p className="text-[11.5px] text-[#64748B]">
+                Track clearing status of incoming customer cheques and outgoing vendor cheques
+              </p>
+            </div>
+
+            {/* Status Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold">
+              {(['ALL', 'PENDING', 'DEPOSITED', 'CLEARED', 'BOUNCED'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setChequeFilter(st)}
+                  className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
+                    chequeFilter === st
+                      ? 'bg-[#0A6847] text-white'
+                      : 'bg-[#F4F8F6] text-[#475569] hover:bg-[#EBF2EE]'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                  <th className="py-2 px-3">Direction</th>
+                  <th className="py-2 px-3">Party Name</th>
+                  <th className="py-2 px-3">Bank &amp; Cheque #</th>
+                  <th className="py-2 px-3">Due Date</th>
+                  <th className="py-2 px-3 text-right">Amount ({currencySymbol})</th>
+                  <th className="py-2 px-3 text-center">Status</th>
+                  <th className="py-2 px-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#EEF5F1] text-[12px]">
+                {filteredCheques.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-6 text-center text-[#64748B]">
+                      No cheques found in this filter
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCheques.map((c) => (
+                    <tr key={c.id} className="hover:bg-[#F9FCFA]">
+                      <td className="py-2.5 px-3">
+                        <span
+                          className={`rounded-md px-2 py-0.5 text-[10.5px] font-bold ${
+                            c.type === 'RECEIVED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {c.type === 'RECEIVED' ? '↓ Received' : '↑ Issued'}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-[#111827]">{c.partyName}</td>
+                      <td className="py-2.5 px-3 text-[#334155]">
+                        <span>{c.bankName}</span>
+                        <span className="ml-1 text-[11px] text-[#64748B] font-mono">#{c.chequeNumber}</span>
+                      </td>
+                      <td className="py-2.5 px-3 text-[#64748B]">{c.dueDate}</td>
+                      <td className="py-2.5 px-3 text-right font-extrabold text-[#111827]">
+                        {formatBosCurrency(c.amount, currencySymbol)}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
+                            c.status === 'CLEARED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : c.status === 'DEPOSITED'
+                              ? 'bg-blue-100 text-blue-800'
+                              : c.status === 'BOUNCED'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          {c.status === 'PENDING' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateChequeStatus(c.id, 'DEPOSITED')}
+                              className="rounded bg-blue-50 px-2 py-0.5 text-[10.5px] font-bold text-blue-700 hover:bg-blue-100 cursor-pointer"
+                            >
+                              Deposit
+                            </button>
+                          )}
+                          {c.status === 'DEPOSITED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateChequeStatus(c.id, 'CLEARED')}
+                              className="rounded bg-emerald-50 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          {c.status !== 'BOUNCED' && c.status !== 'CLEARED' && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateChequeStatus(c.id, 'BOUNCED')}
+                              className="rounded bg-red-50 px-2 py-0.5 text-[10.5px] font-bold text-red-700 hover:bg-red-100 cursor-pointer"
+                            >
+                              Bounce
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
         {/* RIGHT SIDEBAR (3 cols): Search + Add Entry, Close Day, Payment Method Summary, Quick Actions */}
         <div className="lg:col-span-4 xl:col-span-3 space-y-3.5">
           {/* Top Search + + Add Entry Row */}
@@ -2997,6 +3916,15 @@ export function BosReportsDaybookWorkstation({
                 <Printer className="h-4 w-4 shrink-0 text-[#475569]" />
                 <span>Print Day Book</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAdjustCashModal(true)}
+                className="col-span-2 flex items-center justify-center gap-2 rounded-xl border border-[#FDE68A] bg-amber-50 p-2.5 text-[12px] font-bold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+              >
+                <Coins className="h-4 w-4 shrink-0 text-amber-700" />
+                <span>Adjust Cash / Physical Count Reconciliation</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3133,6 +4061,175 @@ export function BosReportsDaybookWorkstation({
                   className="rounded-xl bg-[#0A6847] px-4 py-2 text-[12px] font-semibold text-white hover:bg-[#085238]"
                 >
                   Save Entry
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {/* Cash In Hand Adjustment Modal (Phase 5) */}
+      {showAdjustCashModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <div>
+                <h3 className="text-[16px] font-bold text-[#111827]">
+                  Adjust Cash in Hand &amp; Reconciliation
+                </h3>
+                <p className="text-[12px] text-[#64748B]">
+                  Add opening cash float, record cash withdrawal, or reconcile drawer count
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAdjustCashModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Type Switcher */}
+            <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-[#F1F5F3] p-1 text-[12px] font-bold">
+              <button
+                type="button"
+                onClick={() => setCashAdjustType('add')}
+                className={`rounded-lg py-1.5 transition ${
+                  cashAdjustType === 'add' ? 'bg-[#0A6847] text-white shadow-2xs' : 'text-[#475569]'
+                }`}
+              >
+                + Add Cash Float
+              </button>
+              <button
+                type="button"
+                onClick={() => setCashAdjustType('reduce')}
+                className={`rounded-lg py-1.5 transition ${
+                  cashAdjustType === 'reduce' ? 'bg-[#E11D48] text-white shadow-2xs' : 'text-[#475569]'
+                }`}
+              >
+                - Withdraw Cash
+              </button>
+              <button
+                type="button"
+                onClick={() => setCashAdjustType('count')}
+                className={`rounded-lg py-1.5 transition ${
+                  cashAdjustType === 'count' ? 'bg-[#0369A1] text-white shadow-2xs' : 'text-[#475569]'
+                }`}
+              >
+                🔢 Drawer Count
+              </button>
+            </div>
+
+            <form onSubmit={handleAdjustCashSubmit} className="space-y-3.5 text-[12.5px]">
+              {cashAdjustType !== 'count' ? (
+                <>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                      Adjustment Amount ({currencySymbol}) *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={cashAdjustAmount}
+                      onChange={(e) => setCashAdjustAmount(e.target.value)}
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 font-bold text-[#111827]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                      Reason / Description
+                    </label>
+                    <input
+                      type="text"
+                      value={cashAdjustReason}
+                      onChange={(e) => setCashAdjustReason(e.target.value)}
+                      placeholder={
+                        cashAdjustType === 'add'
+                          ? 'e.g. Added morning cash float for small change'
+                          : 'e.g. Cash handed over to owner / bank deposit'
+                      }
+                      className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[#111827]"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* Physical Cash Count Reconciliation */
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] p-3 text-[12px]">
+                    <div className="flex justify-between font-semibold text-[#64748B]">
+                      <span>Expected Cash in Drawer:</span>
+                      <span className="font-bold text-[#111827]">
+                        {currencySymbol} {closingBalance.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-bold text-[#0A6847] mt-1">
+                      <span>Total Counted Physical Cash:</span>
+                      <span className="text-[14px]">
+                        {currencySymbol} {physicalCashSum.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-bold mt-1 pt-1 border-t border-[#EBF2EE]">
+                      <span>Reconciliation Difference:</span>
+                      <span className={physicalCashSum >= closingBalance ? 'text-[#0A6847]' : 'text-red-600'}>
+                        {physicalCashSum - closingBalance >= 0 ? '+' : ''}
+                        {currencySymbol} {(physicalCashSum - closingBalance).toLocaleString('en-IN')}
+                        {physicalCashSum === closingBalance ? ' (Matched)' : physicalCashSum > closingBalance ? ' (Surplus)' : ' (Shortage)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11.5px]">
+                    {[500, 200, 100, 50, 20, 10].map((denom) => (
+                      <div key={denom} className="flex items-center justify-between rounded-lg border border-[#EBF2EE] p-2 bg-white">
+                        <span className="font-bold text-[#334155]">₹{denom} ×</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={denominations[denom] || ''}
+                          onChange={(e) => {
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setDenominations((prev) => ({ ...prev, [denom]: val }));
+                          }}
+                          placeholder="0"
+                          className="w-16 rounded border border-[#DCE9E3] px-2 py-0.5 text-right font-bold text-[#111827]"
+                        />
+                        <span className="w-16 text-right text-[11px] font-semibold text-[#64748B]">
+                          = ₹{(denom * (denominations[denom] || 0)).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border border-[#EBF2EE] p-2 bg-white text-[11.5px]">
+                    <span className="font-bold text-[#334155]">Coins Total (₹):</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={denominations[1] || ''}
+                      onChange={(e) => {
+                        const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setDenominations((prev) => ({ ...prev, 1: val }));
+                      }}
+                      placeholder="0"
+                      className="w-24 rounded border border-[#DCE9E3] px-2 py-0.5 text-right font-bold text-[#111827]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
+                <button
+                  type="button"
+                  onClick={() => setShowAdjustCashModal(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 font-semibold text-[#475569] cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bos-btn-primary rounded-xl px-5 py-2 font-bold cursor-pointer"
+                >
+                  {cashAdjustType === 'count' ? 'Reconcile & Save' : 'Save Adjustment'}
                 </button>
               </div>
             </form>

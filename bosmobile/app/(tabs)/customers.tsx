@@ -63,17 +63,35 @@ export default function CustomersScreen() {
   const requestTracker = useRef(new RequestTracker());
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [newPartyType, setNewPartyType] = useState<'customer' | 'supplier'>('customer');
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newGstin, setNewGstin] = useState('');
+  const [newAddress, setNewAddress] = useState('');
+  const [newCreditLimit, setNewCreditLimit] = useState('');
   const [saveError, setSaveError] = useState(false);
   const saveCustomer = async () => {
     if (saving || !newName.trim() || !newPhone.trim()) return;
     setSaving(true); setSaveError(false);
-    const body = { name: newName.trim(), phone: newPhone.trim() };
+    const body = {
+      name: newName.trim(),
+      phone: newPhone.trim(),
+      gstin: newGstin.trim() || undefined,
+      partyType: newPartyType,
+      address: newAddress.trim() || undefined,
+      creditLimit: newCreditLimit.trim() ? Number(newCreditLimit) : undefined,
+    };
     try {
       const response = await apiRequest<{ customer?: { id: string } }>(API_PATHS.commerceCustomers, { method: 'POST', body, headers: { 'Idempotency-Key': requestTracker.current.for(body) } });
       if (!response.customer?.id) throw new Error('SAVE_UNCONFIRMED');
-      requestTracker.current.clear(); setAdding(false); setNewName(''); setNewPhone(''); await fetchCustomers();
+      requestTracker.current.clear();
+      setAdding(false);
+      setNewName('');
+      setNewPhone('');
+      setNewGstin('');
+      setNewAddress('');
+      setNewCreditLimit('');
+      await fetchCustomers();
     } catch { setSaveError(true); } finally { setSaving(false); }
   };
   const [currency, setCurrency] = useState('INR');
@@ -442,12 +460,54 @@ export default function CustomersScreen() {
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={styles.customerModalBody}
             >
-              <Text style={styles.customerInputLabel}>{t('Customer Full Name *', 'ग्राहक का पूरा नाम *')}</Text>
+              {/* Party Type Segmented Control */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 10, padding: 3, marginBottom: 14 }}>
+                <TouchableOpacity
+                  onPress={() => { hapticFeedback.light(); setNewPartyType('customer'); }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: newPartyType === 'customer' ? '#ffffff' : 'transparent',
+                    shadowColor: newPartyType === 'customer' ? '#000' : 'transparent',
+                    shadowOpacity: newPartyType === 'customer' ? 0.05 : 0,
+                    shadowRadius: 3,
+                    elevation: newPartyType === 'customer' ? 1 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: newPartyType === 'customer' ? '800' : '600', color: newPartyType === 'customer' ? '#0f172a' : '#64748b' }}>
+                    👤 {t('Customer', 'ग्राहक')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { hapticFeedback.light(); setNewPartyType('supplier'); }}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    alignItems: 'center',
+                    borderRadius: 8,
+                    backgroundColor: newPartyType === 'supplier' ? '#ffffff' : 'transparent',
+                    shadowColor: newPartyType === 'supplier' ? '#000' : 'transparent',
+                    shadowOpacity: newPartyType === 'supplier' ? 0.05 : 0,
+                    shadowRadius: 3,
+                    elevation: newPartyType === 'supplier' ? 1 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: newPartyType === 'supplier' ? '800' : '600', color: newPartyType === 'supplier' ? '#0f172a' : '#64748b' }}>
+                    🏢 {t('Supplier / Vendor', 'सप्लायर / वेंडर')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.customerInputLabel}>
+                {newPartyType === 'supplier' ? t('Supplier / Business Name *', 'सप्लायर / व्यापार का नाम *') : t('Customer Full Name *', 'ग्राहक का पूरा नाम *')}
+              </Text>
               <View style={styles.customerInputRow}>
                 <MaterialIcons name="person-outline" size={20} color="#64748b" style={{ marginRight: 8 }} />
                 <TextInput
-                  accessibilityLabel={t('Customer name', 'ग्राहक का नाम')}
-                  placeholder={t('e.g. Ramesh Kumar', 'जैसे रमेश कुमार')}
+                  accessibilityLabel={t('Party name', 'पार्टी का नाम')}
+                  placeholder={newPartyType === 'supplier' ? t('e.g. Om Trading Co.', 'जैसे ओम ट्रेडिंग') : t('e.g. Ramesh Kumar', 'जैसे रमेश कुमार')}
                   placeholderTextColor="#94a3b8"
                   value={newName}
                   onChangeText={setNewName}
@@ -473,6 +533,58 @@ export default function CustomersScreen() {
                   onChangeText={setNewPhone}
                   keyboardType="phone-pad"
                   maxLength={24}
+                  editable={!saving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              {/* GSTIN */}
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('GSTIN (Optional)', 'जीएसटीआईएन (वैकल्पिक)')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <MaterialIcons name="badge" size={20} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder="07AAAAA0000A1Z5"
+                  placeholderTextColor="#94a3b8"
+                  value={newGstin}
+                  onChangeText={(val) => setNewGstin(val.toUpperCase())}
+                  autoCapitalize="characters"
+                  maxLength={15}
+                  editable={!saving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              {/* Billing Address */}
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('Billing / Delivery Address', 'पता')}
+              </Text>
+              <View style={[styles.customerInputRow, { height: 60, alignItems: 'flex-start', paddingTop: 8 }]}>
+                <MaterialIcons name="location-on" size={20} color="#64748b" style={{ marginRight: 8, marginTop: 2 }} />
+                <TextInput
+                  placeholder={t('e.g. 123 Green Park, Delhi', 'जैसे 123 ग्रीन पार्क, दिल्ली')}
+                  placeholderTextColor="#94a3b8"
+                  value={newAddress}
+                  onChangeText={setNewAddress}
+                  multiline
+                  editable={!saving}
+                  style={[styles.customerTextInput, { textAlignVertical: 'top' }]}
+                />
+              </View>
+
+              {/* Credit Limit */}
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('Credit Limit (₹)', 'उधार सीमा (₹)')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <MaterialIcons name="credit-card" size={20} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder="e.g. 25000"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="numeric"
+                  value={newCreditLimit}
+                  onChangeText={setNewCreditLimit}
                   editable={!saving}
                   style={styles.customerTextInput}
                 />
