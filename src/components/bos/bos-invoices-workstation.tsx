@@ -27,9 +27,11 @@ import {
   Truck,
   Upload,
   X,
+  PenTool,
 } from 'lucide-react';
 import { BosBrand } from '@/components/bos/brand';
 import { BosProductThumbnail } from '@/components/bos/bos-product-image-resolver';
+import { BosSignaturePadModal } from '@/components/bos/bos-signature-pad-modal';
 import {
   type BosCustomer,
   type BosProductItem,
@@ -190,6 +192,7 @@ export function BosInvoicesWorkstation({
 
   // Branding & Signature Modal
   const [showBrandingModal, setShowBrandingModal] = useState(false);
+  const [showDrawSignatureModal, setShowDrawSignatureModal] = useState(false);
   const [savingBranding, setSavingBranding] = useState(false);
   const logoFileInputRef = useRef<HTMLInputElement>(null);
   const sigFileInputRef = useRef<HTMLInputElement>(null);
@@ -3117,10 +3120,18 @@ export function BosInvoicesWorkstation({
 
                 {/* Authorized Signature Card */}
                 <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2">
-                  <span className="block text-[11.5px] font-bold text-[#1E293B]">
-                    Authorized Signature
-                  </span>
-                  <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-[#C7D2FE] bg-white overflow-hidden p-1">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-[11.5px] font-bold text-[#1E293B]">
+                      Authorized Signature
+                    </span>
+                    {brandingForm.signatureUrl && (
+                      <span className="text-[10px] font-bold text-[#0A6847] bg-[#E6F6F0] px-1.5 py-0.5 rounded">
+                        ✓ Configured
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-[#A7D7C5] bg-white overflow-hidden p-1.5">
                     {brandingForm.signatureUrl ? (
                       <img
                         src={brandingForm.signatureUrl}
@@ -3128,32 +3139,50 @@ export function BosInvoicesWorkstation({
                         className="max-h-full max-w-full object-contain"
                       />
                     ) : (
-                      <span className="text-[11px] text-[#94A3B8] text-center">
-                        No signature uploaded
-                      </span>
+                      <div className="flex flex-col items-center justify-center gap-0.5 text-center">
+                        <PenTool className="h-4 w-4 text-[#94A3B8]" />
+                        <span className="text-[11px] font-medium text-[#94A3B8]">
+                          No signature uploaded
+                        </span>
+                        <span className="text-[9.5px] text-[#CBD5E1]">
+                          Sign on screen or upload image
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <div className="flex gap-1.5">
+
+                  {/* Dual Action Buttons: Sign / Draw + Upload File */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowDrawSignatureModal(true)}
+                      className="inline-flex items-center justify-center gap-1 rounded-lg bg-[#E6F6F0] border border-[#A7D7C5] px-2 py-1.5 text-[11px] font-bold text-[#0A6847] hover:bg-[#D1EFE4] cursor-pointer transition shadow-2xs"
+                    >
+                      <PenTool className="h-3 w-3" />
+                      <span>{brandingForm.signatureUrl ? 'Re-sign' : 'Sign / Draw'}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => sigFileInputRef.current?.click()}
-                      className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-white border border-[#DCE9E3] px-2 py-1.5 text-[11px] font-bold text-[#4338CA] hover:bg-[#EEF2FF] cursor-pointer"
+                      className="inline-flex items-center justify-center gap-1 rounded-lg bg-white border border-[#DCE9E3] px-2 py-1.5 text-[11px] font-bold text-[#4338CA] hover:bg-[#EEF2FF] cursor-pointer transition shadow-2xs"
                     >
                       <Upload className="h-3 w-3" />
-                      <span>{brandingForm.signatureUrl ? 'Change' : 'Upload'}</span>
+                      <span>Upload File</span>
                     </button>
-                    {brandingForm.signatureUrl && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setBrandingForm((prev) => ({ ...prev, signatureUrl: '' }))
-                        }
-                        className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1.5 text-[11px] font-semibold text-[#EF4444] hover:bg-rose-50 cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    )}
                   </div>
+
+                  {brandingForm.signatureUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setBrandingForm((prev) => ({ ...prev, signatureUrl: '' }))
+                      }
+                      className="w-full text-center rounded-lg border border-[#FCA5A5]/60 bg-white py-1 text-[10.5px] font-semibold text-[#DC2626] hover:bg-rose-50 cursor-pointer transition"
+                    >
+                      Remove Signature
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -3200,6 +3229,18 @@ export function BosInvoicesWorkstation({
           </div>
         </div>
       )}
+
+      {/* Signature Drawing Pad Modal */}
+      <BosSignaturePadModal
+        isOpen={showDrawSignatureModal}
+        onClose={() => setShowDrawSignatureModal(false)}
+        onSave={(dataUrl) => {
+          setBrandingForm((prev) => ({ ...prev, signatureUrl: dataUrl }));
+          setStatusBanner('Digital signature drawn and updated successfully!');
+        }}
+        initialSignatureUrl={brandingForm.signatureUrl}
+        businessName={brandingForm.businessName}
+      />
 
       {/* Add New Customer Modal */}
       {showAddCustomerModal && (

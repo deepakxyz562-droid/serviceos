@@ -33,6 +33,7 @@ import {
   generateGstInvoiceHtml,
   GstStoreInfo,
 } from '@/lib/gst-invoice-helper';
+import { SignaturePadModal, SignaturePreview } from '@/components/SignaturePadModal';
 
 interface ItemEntry {
   description: string;
@@ -108,6 +109,7 @@ export default function BillingScreen() {
   const [updatingPayment, setUpdatingPayment] = useState(false);
   const [brandModalOpen, setBrandModalOpen] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
+  const [showSigPad, setShowSigPad] = useState(false);
   const [storeInfo, setStoreInfo] = useState<GstStoreInfo>(() => ({
     businessName: blueprint?.businessName || 'Business Store',
     logoUrl: '',
@@ -2435,10 +2437,9 @@ export default function BillingScreen() {
 
                     <View style={styles.signatureCol}>
                       {storeInfo.signatureUrl ? (
-                        <Image
-                          source={{ uri: storeInfo.signatureUrl }}
+                        <SignaturePreview
+                          uri={storeInfo.signatureUrl}
                           style={styles.sigImage}
-                          resizeMode="contain"
                         />
                       ) : (
                         <View style={styles.sigPlaceholder} />
@@ -2665,16 +2666,53 @@ export default function BillingScreen() {
 
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Authorized Signature</Text>
-                  <TouchableOpacity onPress={handlePickSignature} style={styles.brandPickBtn}>
+                  
+                  {/* Signature Box Preview */}
+                  <View style={styles.brandPickBtn}>
                     {storeInfo.signatureUrl ? (
-                      <Image source={{ uri: storeInfo.signatureUrl }} style={styles.pickedThumb} />
+                      <SignaturePreview
+                        uri={storeInfo.signatureUrl}
+                        style={styles.pickedThumb}
+                      />
                     ) : (
-                      <>
-                        <MaterialIcons name="draw" size={24} color="#4338ca" />
-                        <Text style={styles.brandPickBtnText}>Upload Signature</Text>
-                      </>
+                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name="draw" size={22} color="#94a3b8" />
+                        <Text style={styles.brandPickBtnText}>No signature uploaded</Text>
+                      </View>
                     )}
-                  </TouchableOpacity>
+                  </View>
+
+                  {/* Dual Action Buttons: Sign / Draw + Upload File */}
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => setShowSigPad(true)}
+                      style={[styles.sigActionBtn, { backgroundColor: '#e6f6f0', borderColor: '#a7d7c5' }]}
+                    >
+                      <MaterialIcons name="draw" size={13} color="#059669" />
+                      <Text style={[styles.sigActionBtnText, { color: '#059669' }]}>
+                        {storeInfo.signatureUrl ? 'Re-sign' : 'Sign'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={handlePickSignature}
+                      style={[styles.sigActionBtn, { backgroundColor: '#fff', borderColor: '#cbd5e1' }]}
+                    >
+                      <MaterialIcons name="upload-file" size={13} color="#4338ca" />
+                      <Text style={[styles.sigActionBtnText, { color: '#4338ca' }]}>Upload</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {storeInfo.signatureUrl ? (
+                    <TouchableOpacity
+                      onPress={() => setStoreInfo((p) => ({ ...p, signatureUrl: '' }))}
+                      style={{ marginTop: 4, alignItems: 'center' }}
+                    >
+                      <Text style={{ fontSize: 10, color: '#dc2626', fontWeight: '600' }}>
+                        Remove Signature
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </View>
 
@@ -2702,6 +2740,17 @@ export default function BillingScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Signature Drawing Pad Modal */}
+      <SignaturePadModal
+        visible={showSigPad}
+        onClose={() => setShowSigPad(false)}
+        onSave={(dataUri) => {
+          setStoreInfo((p) => ({ ...p, signatureUrl: dataUri }));
+          Alert.alert('Signature Drawn ✓', 'Authorized digital signature recorded.');
+        }}
+        businessName={storeInfo.businessName}
+      />
     </SafeAreaView>
   );
 }
@@ -3930,6 +3979,20 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'contain',
+  },
+  sigActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  sigActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   sectionHeaderBetween: {
     flexDirection: 'row',

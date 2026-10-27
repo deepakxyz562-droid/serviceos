@@ -62,7 +62,9 @@ import {
   Users,
   Wallet,
   X,
+  PenTool,
 } from 'lucide-react';
+import { BosSignaturePadModal } from '@/components/bos/bos-signature-pad-modal';
 import {
   type BosCoupon,
   type BosCustomer,
@@ -1024,7 +1026,15 @@ export function BosMarketingAiIntegrationsSettings({
   };
 
   const [settingsSignatureUrl, setSettingsSignatureUrl] = useState(() => storeSettings.signatureUrl || '');
+  const [showSettingsSignaturePadModal, setShowSettingsSignaturePadModal] = useState(false);
   const signatureFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSaveDrawnSignature = async (dataUrl: string) => {
+    setSettingsSignatureUrl(dataUrl);
+    await onUpdateStoreSettings({ signatureUrl: dataUrl });
+    setToast('Authorized digital signature drawn and saved successfully!');
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3935,7 +3945,7 @@ export function BosMarketingAiIntegrationsSettings({
                       Authorized Digital Signature
                     </label>
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-xl border border-dashed border-[#C7D2FE] bg-[#F8FAFC] p-1 overflow-hidden">
+                      <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-xl border border-dashed border-[#A7D7C5] bg-[#F8FAFC] p-1 overflow-hidden relative">
                         {settingsSignatureUrl ? (
                           <img
                             src={settingsSignatureUrl}
@@ -3943,29 +3953,41 @@ export function BosMarketingAiIntegrationsSettings({
                             className="max-h-full max-w-full object-contain"
                           />
                         ) : (
-                          <span className="text-[10px] text-[#94A3B8] text-center font-medium">
-                            No signature
-                          </span>
+                          <div className="flex flex-col items-center justify-center gap-0.5 text-center">
+                            <PenTool className="h-3.5 w-3.5 text-[#94A3B8]" />
+                            <span className="text-[10px] text-[#94A3B8] font-medium">
+                              No signature
+                            </span>
+                          </div>
                         )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => setShowSettingsSignaturePadModal(true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#E6F6F0] border border-[#A7D7C5] px-3 py-1.5 text-[12px] font-bold text-[#0A6847] hover:bg-[#D1EFE4] transition cursor-pointer shadow-2xs"
+                        >
+                          <PenTool className="h-3.5 w-3.5" />
+                          <span>{settingsSignatureUrl ? 'Re-sign' : 'Sign / Draw'}</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => signatureFileInputRef.current?.click()}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#EEF2FF] hover:text-[#4338CA] transition cursor-pointer"
                         >
                           <Upload className="h-3.5 w-3.5 text-[#4338CA]" />
-                          <span>{settingsSignatureUrl ? 'Change' : 'Upload Signature'}</span>
+                          <span>Upload File</span>
                         </button>
-                        <button
-                          type="button"
-                          onClick={handleRemoveSignature}
-                          disabled={!settingsSignatureUrl}
-                          className="rounded-lg border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-slate-50 cursor-pointer disabled:opacity-40"
-                        >
-                          Remove
-                        </button>
+                        {settingsSignatureUrl && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveSignature}
+                            className="rounded-lg border border-[#FCA5A5]/60 bg-white px-3 py-1.5 text-[12px] font-semibold text-[#DC2626] hover:bg-rose-50 cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     </div>
                     <p className="text-[11px] text-[#64748B]">
@@ -6236,6 +6258,15 @@ export function BosMarketingAiIntegrationsSettings({
           </div>
         </div>
       </div>
+
+      {/* Signature Drawing Pad Modal */}
+      <BosSignaturePadModal
+        isOpen={showSettingsSignaturePadModal}
+        onClose={() => setShowSettingsSignaturePadModal(false)}
+        onSave={handleSaveDrawnSignature}
+        initialSignatureUrl={settingsSignatureUrl}
+        businessName={settingsBusinessName}
+      />
     </div>
   );
 }
