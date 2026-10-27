@@ -35,7 +35,7 @@ const plans: Plan[] = [
       'Up to 10 users',
       'Unlimited jobs',
       'Email + SMS + Push',
-      'WhatsApp (BYO API)',
+      'WhatsApp & SMS messaging',
       'Omnichannel inbox',
       'AI assistant + quote generator',
       'Workflow & forms builder',

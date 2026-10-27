@@ -141,7 +141,7 @@ export const FALLBACK_PRICING_PLANS: PricingPlan[] = [
       'Up to 10 Users',
       'Unlimited Customers & Jobs',
       'Email + SMS + Push Notifications',
-      'WhatsApp (BYO Meta API)',
+      'WhatsApp & SMS Messaging',
       'Omnichannel Inbox',
       'AI Assistant + AI Quote Generator',
       'AI Job Summary & Suggested Replies',

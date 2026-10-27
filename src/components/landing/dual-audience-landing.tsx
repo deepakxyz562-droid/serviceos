@@ -34,18 +34,7 @@ import { solutionsLinks, ProductMegaMenu, SolutionsMegaMenu, LandingFooter } fro
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { cn } from '@/lib/utils';
 
-// ─── Flow 2026 Modular Sections ───────────────────────────────────────────
-import { FlowHero } from './flow/flow-hero';
-import { FlowProblem } from './flow/flow-problem';
-import { FlowVoiceReceptionist } from './flow/flow-voice-receptionist';
-import { FlowFieldSync } from './flow/flow-field-sync';
-import { FlowCommandCenter } from './flow/flow-command-center';
-import { FlowStackMatrix } from './flow/flow-stack-matrix';
-import { FlowPricing } from './flow/flow-pricing';
-import { FlowGptForm } from './flow/flow-gptform';
-import { FlowProof } from './flow/flow-proof';
-import { FlowFaq } from './flow/flow-faq';
-import { FlowFooterCta } from './flow/flow-footer-cta';
+import { ReferenceHome } from './reference-home';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -141,7 +130,7 @@ function Navbar({
           : 'bg-transparent'
       )}
     >
-      <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="grid h-18 w-full grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6 xl:grid-cols-[1fr_auto_1fr] lg:px-8">
         <a
           href="#top"
           className="flex items-center gap-2.5 group shrink-0"
@@ -157,41 +146,16 @@ function Navbar({
         </a>
 
         {/* ── Desktop Navigation ── */}
-        <nav className="hidden md:flex items-center gap-1.5">
-          <ProductMegaMenu onAnchorClick={scrollToAnchor} />
+        <nav aria-label="Main navigation" className="hidden xl:flex items-center justify-center gap-1">
           <SolutionsMegaMenu />
-          <Link
-            href="/marketplace"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface px-3 py-2 rounded-full transition-colors"
-          >
-            <Store className="h-4 w-4 text-primary" />
-            <span>Marketplace</span>
-            <span className="text-[10px] font-bold bg-accent text-accent-foreground px-2 py-0.5 rounded-full">
-              Pros
-            </span>
-          </Link>
-          <Link
-            href="/requests"
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-navy hover:bg-surface px-3 py-2 rounded-full transition-colors"
-          >
-            <ClipboardList className="h-4 w-4 text-primary" />
-            <span>My Requests</span>
-          </Link>
+          <a href="#industries" className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-emerald-700">Industries</a>
+          <a href="#ai-features" className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-emerald-700">AI Features</a>
+          <a href="#pricing" className="px-3 py-2 text-sm font-medium text-muted-foreground hover:text-emerald-700">Pricing</a>
+          <ProductMegaMenu onAnchorClick={scrollToAnchor} />
         </nav>
 
         {/* ── Right Actions ── */}
-        <div className="hidden sm:flex items-center gap-2.5">
-          <Button
-            asChild
-            size="sm"
-            className="gap-1.5 bg-primary text-primary-foreground hover:bg-brand-deep font-semibold shadow-sm text-xs sm:text-sm h-9 px-4 rounded-full cursor-pointer"
-          >
-            <Link href="/request">
-              <span>Post Request</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-
+        <div className="hidden sm:flex items-center justify-self-end gap-2.5">
           {onSignIn ? (
             <Button
               variant="ghost"
@@ -207,9 +171,9 @@ function Navbar({
               variant="outline"
               size="sm"
               onClick={onGetStarted}
-              className="gap-1.5 border-primary/30 text-primary hover:bg-accent font-semibold text-xs sm:text-sm h-9 px-4 rounded-full cursor-pointer"
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-700 font-semibold text-xs sm:text-sm h-9 px-4 rounded-lg cursor-pointer"
             >
-              Start Trial
+              Start Free — 100 Jobs
             </Button>
           ) : null}
 
@@ -218,8 +182,8 @@ function Navbar({
           <ThemeToggle showDropdown />
         </div>
 
-        <div className="flex items-center gap-1 md:hidden">
-          <ThemeToggle />
+        <div className="col-start-3 flex items-center justify-self-end gap-1 xl:hidden">
+          <div className="sm:hidden"><ThemeToggle /></div>
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             className="text-navy inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mr-2 rounded-lg hover:bg-surface transition-colors"
@@ -233,7 +197,7 @@ function Navbar({
 
       {/* ── Mobile Drawer ── */}
       {mobileOpen ? (
-        <div className="md:hidden border-t border-border bg-background text-foreground max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-4 py-4 space-y-3">
+        <div className="xl:hidden border-t border-border bg-background text-foreground max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] px-4 py-4 space-y-3">
           <Accordion type="single" collapsible className="w-full space-y-2">
             <AccordionItem value="product" className="border border-border/80 rounded-2xl px-3 bg-card">
               <AccordionTrigger className="text-sm font-semibold hover:no-underline py-3 text-navy">
@@ -475,168 +439,11 @@ function Navbar({
 
 // ─── Main Landing Component ──────────────────────────────────────────────────
 
-export function DualAudienceLanding({
-  onGetStarted,
-  onSignIn,
-}: DualAudienceLandingProps) {
+export function DualAudienceLanding({ onGetStarted, onSignIn, onTryDemo }: DualAudienceLandingProps) {
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground selection:bg-primary/20 selection:text-navy">
-      {/* ── Google AI & Structured Schema SEO Foundation ── */}
-      <div className="sr-only" aria-hidden="true">
-        <h2>Fieseros AI Operating System &amp; Field CRM</h2>
-        <p>
-          Fieseros is an all-in-one, AI-powered operating system and CRM built specifically for field service, trade, and local service businesses like HVAC, plumbing, electrical, cleaning, and landscaping.
-        </p>
-        <h3>Core Features</h3>
-        <ul>
-          <li><strong>Operations &amp; CRM:</strong> Combines customer relationship management, lead tracking, mobile-friendly scheduling, and technician dispatching.</li>
-          <li><strong>Billing &amp; Payments:</strong> Features automated invoicing, on-site secure digital payment links via SMS/email, recurring subscription/maintenance billing, with 0% platform transaction fees.</li>
-          <li><strong>Websites &amp; Growth:</strong> Offers custom, mobile-first, SEO-ready website development, verified pro marketplace profile, and 24/7 AI voice phone receptionist.</li>
-          <li><strong>Autonomous AI Automation:</strong> Natural language command interface (⌘K) to book appointments, dispatch techs, calculate quotes, and follow up instantly.</li>
-        </ul>
-      </div>
-
-      {/* ── Top Header Navigation ── */}
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} />
-
-      <main className="flex-1">
-        {/* 01. The 3-Column Interactive AI Command Hero */}
-        <FlowHero onGetStarted={onGetStarted} />
-
-        {/* 02. The Pain Points / Contractor Problem Stat Cards */}
-        <FlowProblem />
-
-        {/* 03. 24/7 AI Voice Receptionist + Waveform Visualizer */}
-        <FlowVoiceReceptionist />
-
-        {/* 04. Office Dispatch Board ↔ Mobile PWA Split Sync */}
-        <FlowFieldSync />
-
-        {/* 05. Ask Fieseros AI Command Center (6 Specialized Agents) */}
-        <FlowCommandCenter />
-
-        {/* 06. 17-Tool Replacement Stack Matrix ($2,347/mo vs $29/mo) */}
-        <FlowStackMatrix />
-
-        {/* 07. Transparent Pricing (5 Tiers + Monthly/Annual Toggle) */}
-        <FlowPricing onGetStarted={onGetStarted} />
-
-        {/* 08. GPTForm™ Conversational Form Engine & AI Chatbot */}
-        <FlowGptForm />
-
-        {/* 09. Contractor Proof & Field Reliability Badges */}
-        <FlowProof />
-
-        {/* 10. Verified Pro Marketplace Discovery Section */}
-        <section id="marketplace-3bid" className="py-24 bg-surface border-y border-border relative overflow-hidden">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="rounded-3xl border border-border bg-background p-8 sm:p-12 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-96 h-96 bg-accent/20 blur-[100px] pointer-events-none" />
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-                <div className="lg:col-span-7 space-y-4">
-                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent text-accent-foreground text-xs font-bold uppercase tracking-[0.14em]">
-                    <Store className="size-3.5" />
-                    <span>BUILT-IN DEMAND &amp; DIRECT BOOKINGS</span>
-                  </div>
-                  <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-navy leading-tight">
-                    Get discovered on the{' '}
-                    <span className="text-gradient-brand">
-                      Fieseros Marketplace
-                    </span>
-                  </h2>
-                  <p className="text-muted-foreground text-sm sm:text-base leading-relaxed">
-                    Unlike legacy software that only manages existing clients, Fieseros gives your business a verified public profile on our local trade directory where property owners search, compare quotes, and book services — with <strong>0% platform commission</strong>.
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-1 shadow-xs">
-                      <p className="text-xs font-bold text-primary">0% Commission</p>
-                      <p className="text-[11px] text-muted-foreground">Keep 100% of every customer booking and payment.</p>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-1 shadow-xs">
-                      <p className="text-xs font-bold text-primary">Verified Badge</p>
-                      <p className="text-[11px] text-muted-foreground">Showcase insurance, licenses, and verified reviews.</p>
-                    </div>
-                    <div className="p-4 rounded-2xl bg-surface border border-border space-y-1 shadow-xs">
-                      <p className="text-xs font-bold text-primary">Direct CRM Sync</p>
-                      <p className="text-[11px] text-muted-foreground">Incoming requests land directly in your live dispatch board.</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-3">
-                    <Link
-                      href="/marketplace"
-                      className="h-11 px-6 rounded-full bg-primary hover:bg-brand-deep text-primary-foreground font-bold text-xs sm:text-sm flex items-center gap-2 shadow-md transition cursor-pointer"
-                    >
-                      Explore Verified Pro Directory <ArrowRight className="size-4" />
-                    </Link>
-                    <Link
-                      href="/request"
-                      className="h-11 px-6 rounded-full bg-surface hover:bg-accent text-navy border border-border text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
-                    >
-                      Post Service Request →
-                    </Link>
-                  </div>
-                </div>
-                <div className="lg:col-span-5">
-                  <div className="p-6 rounded-3xl bg-surface text-foreground border border-border shadow-xl space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-border">
-                      <span className="text-xs font-bold text-navy uppercase tracking-wider">Live Verified Profile</span>
-                      <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-accent text-accent-foreground font-bold border border-primary/20">
-                        ● Active in Directory
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="size-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-black text-base shrink-0 shadow-xs">
-                        PS
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-navy">ProSkill Plumbing &amp; HVAC</h4>
-                        <p className="text-xs text-muted-foreground">Phoenix, AZ · Rated 4.9 ★ (128 Reviews)</p>
-                      </div>
-                    </div>
-                    <div className="p-3.5 rounded-2xl bg-background border border-border text-xs space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Service Coverage:</span>
-                        <span className="text-navy font-medium">25 km radius</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Direct Bookings:</span>
-                        <span className="text-primary font-bold">24/7 AI Receptionist</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Platform Take Rate:</span>
-                        <span className="text-primary font-bold">0% (Keep Everything)</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={onGetStarted}
-                        className="flex-1 py-2.5 rounded-full bg-primary hover:bg-brand-deep text-primary-foreground font-bold text-xs shadow-md cursor-pointer transition"
-                      >
-                        Direct Booking
-                      </button>
-                      <Link
-                        href="/marketplace"
-                        className="flex-1 py-2.5 rounded-full bg-background hover:bg-surface text-navy text-center font-semibold text-xs border border-border cursor-pointer transition"
-                      >
-                        Call Verified Pro
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 11. Contractor Knowledge Base & Search Engine FAQ */}
-        <FlowFaq />
-
-        {/* 12. High-Impact Closing Trial CTA + Floating Sticky Bar */}
-        <FlowFooterCta onGetStarted={onGetStarted} />
-      </main>
-
-      {/* ── Global Comprehensive SEO Footer with 25+ Trades ── */}
+      <ReferenceHome onGetStarted={onGetStarted} onTryDemo={onTryDemo} />
       <LandingFooter />
     </div>
   );

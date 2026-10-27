@@ -23,10 +23,6 @@ const faqs = [
     a: 'GPTForm™ is the built-in form and chatbot builder. Create booking forms, quote requests and lead qualifiers from 20,000+ templates, embed them on your site, and have an AI chat with visitors and book them straight into your calendar.',
   },
   {
-    q: 'Do I need my own Vapi or WhatsApp account?',
-    a: 'The AI receptionist supports bring-your-own Vapi key so you control voice costs, and WhatsApp runs on your own Business API number. Email, SMS, push and in-app messaging are included on every paid plan.',
-  },
-  {
     q: 'How is Fieseros different from Jobber?',
     a: 'Jobber is a strong scheduling and invoicing tool that still expects you to do the clicking. Fieseros adds an autonomous AI layer — voice reception, dispatch, quoting and follow-up run themselves — and includes forms, chatbots and marketing that Jobber sells separately or not at all.',
   },

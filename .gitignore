@@ -180,3 +180,7 @@ next-dev.pid
 !/apps/bgos/public/bgos/*.png
 !/bgosmobile/assets/brand-mark-light.png
 !/bgosmobile/assets/adaptive-icon.png
+
+# Fieseros homepage production images and HD source assets.
+!/public/images/home/*.webp
+!/public/images/home/*-hd.png

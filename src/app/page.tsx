@@ -1,15 +1,5 @@
 import type { Metadata } from 'next';
-import { cookies } from 'next/headers';
 import HomePageClient from '@/components/home/home-page-client';
-
-/**
- * The HTTP-only auth cookie name. Mirrors `TOKEN_NAME` in `src/lib/auth.ts`.
- * Kept as a local constant (not imported) because `auth.ts` is a server-only
- * module that pulls in `next/headers` + the JWT lib — importing it here would
- * needlessly bloat the page's server bundle. We only need the cookie NAME to
- * check presence (we never decode the token on the client shell).
- */
-const AUTH_COOKIE = 'fieseros_session';
 
 const homeFaqs = [
   {
@@ -31,11 +21,6 @@ const homeFaqs = [
     question: 'What is GPTForm™?',
     answer:
       'GPTForm™ is the built-in form and chatbot builder. Create booking forms, quote requests and lead qualifiers from 20,000+ templates, embed them on your site, and have an AI chat with visitors and book them straight into your calendar.',
-  },
-  {
-    question: 'Do I need my own Vapi or WhatsApp account?',
-    answer:
-      'The AI receptionist supports bring-your-own Vapi key so you control voice costs, and WhatsApp runs on your own Business API number. Email, SMS, push and in-app messaging are included on every paid plan.',
   },
   {
     question: 'How is Fieseros different from Jobber?',
@@ -129,9 +114,6 @@ export const metadata: Metadata = {
 };
 
 export default async function HomePage() {
-  const cookieStore = await cookies();
-  const hasAuthCookie = Boolean(cookieStore.get(AUTH_COOKIE)?.value);
-
   const homeSchema = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -185,15 +167,6 @@ export default async function HomePage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeSchema) }}
       />
-      {!hasAuthCookie && (
-        <link
-          rel="preload"
-          as="image"
-          imageSrcSet="/_next/image?url=%2Fimages%2Flanding%2Fhero-dashboard.png&w=640&q=75 640w, /_next/image?url=%2Fimages%2Flanding%2Fhero-dashboard.png&w=1080&q=75 1080w, /_next/image?url=%2Fimages%2Flanding%2Fhero-dashboard.png&w=1200&q=75 1200w"
-          imageSizes="(max-width: 1024px) 100vw, 80vw"
-          fetchPriority="high"
-        />
-      )}
       {/* Interactive client app — auth routing + landing page */}
       <HomePageClient />
     </>

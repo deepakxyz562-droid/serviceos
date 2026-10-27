@@ -266,8 +266,8 @@ const aiReceptionistCapabilities = [
 const aiReceptionistSteps = [
   {
     step: '01',
-    title: 'Connect your Vapi.ai key',
-    description: 'Bring your own Vapi account (BYOK). Paste your API key once in Settings → AI Voice. No Twilio contract, no phone-line setup.',
+    title: 'Activate your AI voice agent',
+    description: 'Get an included business number with AI voice receptionist ready to answer your calls inside Fieseros.',
   },
   {
     step: '02',
@@ -428,8 +428,8 @@ const pricingPlans: PricingPlan[] = [
 
 const faqs = [
   {
-    question: 'How does the AI Receptionist work, and do I need a Twilio account?',
-    answer: 'The AI Receptionist is a voice agent that answers every call to your business number 24/7 — it greets callers, qualifies leads, books appointments into your calendar, takes messages, and transfers urgent calls to your on-call technician. It is powered by Vapi.ai using a bring-your-own-key (BYOK) model: you paste your Vapi API key once in Settings → AI Voice, buy a local number in one click, and forward your line. No separate Twilio account, no phone-line installation. Numbers cost ~$2/month and calls ~$0.05–0.15/min (which already includes speech-to-text, the LLM brain, and text-to-speech), billed directly by Vapi. Available on Growth and Pro plans.',
+    question: 'How does the AI Receptionist work, and do I need a separate phone system?',
+    answer: 'The AI Receptionist is a voice agent that answers every call to your business number 24/7 — it greets callers, qualifies leads, books appointments into your calendar, takes messages, and transfers urgent calls to your on-call technician. Everything is built natively into Fieseros: you choose your number, forward your line, and start taking calls immediately with zero external contracts or complicated phone-line installations. Available on Growth and Pro plans.',
   },
   {
     question: 'What can the AI Receptionist actually do on a call?',
@@ -1267,7 +1267,7 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
               </span>
             </h2>
             <p className="text-slate-300 mt-5 max-w-2xl mx-auto text-lg leading-relaxed">
-              Every missed call is a lost customer. Your AI voice agent picks up on the first ring, books the job, qualifies the lead, and routes emergencies — then logs the whole call to your CRM. Powered by Vapi.ai.
+              Every missed call is a lost customer. Your AI voice agent picks up on the first ring, books the job, qualifies the lead, and routes emergencies — then logs the whole call to your CRM. Built directly into Fieseros.
             </p>
           </motion.div>
 
@@ -1390,9 +1390,9 @@ function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
                 <Wallet className="w-5 h-5 text-emerald-300" />
               </div>
               <div>
-                <div className="text-base font-semibold text-white mb-1">Bring your own Vapi.ai key — pay only for what you use</div>
+                <div className="text-base font-semibold text-white mb-1">Built-in AI Voice Receptionist — ready out of the box</div>
                 <p className="text-sm text-slate-300 leading-relaxed">
-                  Numbers cost ~<span className="text-emerald-300 font-medium">$2/month</span> and calls ~<span className="text-emerald-300 font-medium">$0.05–0.15/min</span> (includes speech-to-text, the LLM brain, and text-to-speech). Billed by Vapi — no separate Twilio account. Available on Growth &amp; Pro plans.
+                  Every call answered 24/7, appointments booked directly to your calendar, and leads logged automatically into your CRM. No separate phone-line contracts or third-party accounts required.
                 </p>
               </div>
             </div>

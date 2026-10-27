@@ -29,7 +29,7 @@ const badges = [
   { icon: UserCheck, label: 'Qualifies leads' },
   { icon: PhoneForwarded, label: 'Warm-transfers emergencies' },
   { icon: Globe, label: '30+ languages' },
-  { icon: KeyRound, label: 'BYO Vapi key' },
+  { icon: Sparkles, label: 'Built into Fieseros' },
 ];
 
 const bars = Array.from({ length: 28 }, (_, i) => i);
@@ -66,7 +66,7 @@ export function FlowVoiceReceptionist() {
             <span className="text-brand-glow">Your AI receptionist answers 24/7.</span>
           </h2>
           <p className="mt-5 max-w-xl text-primary-foreground/70 text-base leading-relaxed">
-            Powered by Vapi voice AI. Every ring is picked up on the first tone, qualified, booked into
+            Built-in voice AI. Every ring is picked up on the first tone, qualified, booked into
             the right technician&apos;s calendar and written straight into your CRM.
           </p>
 
