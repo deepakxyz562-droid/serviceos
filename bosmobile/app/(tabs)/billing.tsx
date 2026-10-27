@@ -503,8 +503,8 @@ export default function BillingScreen() {
         const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '') : '';
         if (cleanPhone && cleanPhone.length >= 10) {
           const invNum = invRes?.invoice?.number || 'INV';
-          const invTotal = String(invRes?.invoice?.total || computedTotal);
-          const businessTitle = storeInfo.name || 'Store';
+          const invTotal = String(invRes?.invoice?.total || formGrandTotal);
+          const businessTitle = storeInfo.businessName || 'Store';
           const targetCustomerName = customerName.trim() || selectedParty?.name || 'Customer';
           const invoiceUrl = `https://bos.fieseros.com/invoice/${invRes?.invoice?.id || ''}`;
 

@@ -745,7 +745,7 @@ export default function CustomersScreen() {
                 <Text style={styles.customerModalTitle}>
                   {t('Edit Customer', 'ग्राहक संपादित करें')}
                 </Text>
-                <Text style={styles.customerModalSubtitle}>
+                <Text style={styles.customerModalSub}>
                   {t('Update profile and contact details', 'प्रोफ़ाइल और संपर्क जानकारी अपडेट करें')}
                 </Text>
               </View>

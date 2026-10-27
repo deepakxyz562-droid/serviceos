@@ -140,13 +140,12 @@ export default function WhatsAppChannelScreen() {
             name: 'WhatsApp',
             provider: 'whatsapp',
             connected: true,
-            status: 'CONNECTED',
+            status: 'active',
             config: nextConfig,
           },
         });
-        setPhoneNumber(clean);
+        setPhone(clean);
         setIsConnected(true);
-        setStatus('CONNECTED');
         setPhoneModalVisible(false);
         Alert.alert('Connected ✓', `WhatsApp Business connected successfully to ${clean}.`);
       } catch (err: any) {
@@ -160,11 +159,11 @@ export default function WhatsAppChannelScreen() {
   );
 
   const openPhoneModal = () => {
-    setPhoneInput(phoneNumber || '');
+    setPhoneInput(phone || '');
     setPhoneModalVisible(true);
   };
   const handleConnectMeta = () => {
-    setPhoneInput(phoneNumber || '');
+    setPhoneInput(phone || '');
     setPhoneModalVisible(true);
   };
 
