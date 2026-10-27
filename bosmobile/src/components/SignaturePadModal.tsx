@@ -1,13 +1,13 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
-  Modal,
   TouchableOpacity,
   StyleSheet,
   PanResponder,
   Image,
   Dimensions,
+  Alert,
 } from 'react-native';
 import Svg, { Path, SvgXml } from 'react-native-svg';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -25,70 +25,133 @@ export function SignaturePadModal({
   onSave,
   businessName,
 }: SignaturePadModalProps) {
-  const [paths, setPaths] = useState<string[]>([]);
-  const [currentPath, setCurrentPath] = useState<string>('');
-  const [penColor, setPenColor] = useState<string>('#1E3A8A'); // Classic Ink Blue
-  const [canvasLayout, setCanvasLayout] = useState({ width: 320, height: 180 });
-
-  // Keep a ref of current path to avoid stale state in panResponder
+  // Use refs as single source of truth for smooth high-frequency touches
+  const pathsRef = useRef<string[]>([]);
   const currentPathRef = useRef<string>('');
-  currentPathRef.current = currentPath;
+  const canvasRef = useRef<View>(null);
+  const originRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  const [penColor, setPenColor] = useState<string>('#1E3A8A'); // Classic Ink Blue
+  const [penWidth, setPenWidth] = useState<number>(3);
+  const [canvasLayout, setCanvasLayout] = useState<{ width: number; height: number }>({
+    width: 330,
+    height: 190,
+  });
+  const [, setTick] = useState<number>(0);
+  const triggerRender = () => setTick((t) => t + 1);
+
+  // Measure canvas absolute position on screen
+  const measureCanvas = () => {
+    if (canvasRef.current) {
+      canvasRef.current.measure((_x, _y, width, height, pageX, pageY) => {
+        if (pageX !== undefined && pageY !== undefined && (pageX > 0 || pageY > 0)) {
+          originRef.current = { x: pageX, y: pageY };
+        }
+        if (width && height) {
+          setCanvasLayout({ width: Math.round(width), height: Math.round(height) });
+        }
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (visible) {
+      const timer = setTimeout(measureCanvas, 60);
+      return () => clearTimeout(timer);
+    } else {
+      pathsRef.current = [];
+      currentPathRef.current = '';
+    }
+  }, [visible]);
+
+  const getCoords = (evt: any) => {
+    const { pageX, pageY, locationX, locationY } = evt.nativeEvent;
+    if (originRef.current.x > 0 || originRef.current.y > 0) {
+      const x = Math.round(pageX - originRef.current.x);
+      const y = Math.round(pageY - originRef.current.y);
+      return {
+        x: Math.max(0, Math.min(canvasLayout.width, x)),
+        y: Math.max(0, Math.min(canvasLayout.height, y)),
+      };
+    }
+    return {
+      x: Math.round(locationX),
+      y: Math.round(locationY),
+    };
+  };
 
   const panResponder = useMemo(
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
         onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false, // Prevent parent ScrollView from canceling drawing
         onPanResponderGrant: (evt) => {
-          const { locationX, locationY } = evt.nativeEvent;
-          const x = Math.round(locationX);
-          const y = Math.round(locationY);
-          const start = `M ${x} ${y} L ${x + 0.5} ${y + 0.5}`;
-          setCurrentPath(start);
+          measureCanvas();
+          const { x, y } = getCoords(evt);
+          currentPathRef.current = `M ${x} ${y} L ${x + 0.1} ${y + 0.1}`;
+          triggerRender();
         },
         onPanResponderMove: (evt) => {
-          const { locationX, locationY } = evt.nativeEvent;
-          const x = Math.round(locationX);
-          const y = Math.round(locationY);
-          setCurrentPath((prev) => `${prev} L ${x} ${y}`);
+          const { x, y } = getCoords(evt);
+          if (currentPathRef.current) {
+            currentPathRef.current += ` L ${x} ${y}`;
+            triggerRender();
+          }
         },
         onPanResponderRelease: () => {
           if (currentPathRef.current) {
-            setPaths((prev) => [...prev, currentPathRef.current]);
-            setCurrentPath('');
+            pathsRef.current.push(currentPathRef.current);
+            currentPathRef.current = '';
+            triggerRender();
+          }
+        },
+        onPanResponderTerminate: () => {
+          if (currentPathRef.current) {
+            pathsRef.current.push(currentPathRef.current);
+            currentPathRef.current = '';
+            triggerRender();
           }
         },
       }),
-    []
+    [canvasLayout.width, canvasLayout.height]
   );
 
   const handleUndo = () => {
-    if (paths.length > 0) {
-      setPaths((prev) => prev.slice(0, -1));
+    if (pathsRef.current.length > 0) {
+      pathsRef.current.pop();
+      triggerRender();
     }
   };
 
   const handleClear = () => {
-    setPaths([]);
-    setCurrentPath('');
+    pathsRef.current = [];
+    currentPathRef.current = '';
+    triggerRender();
   };
 
   const handleSave = () => {
-    if (paths.length === 0 && !currentPath) {
-      alert('Please draw your signature before saving.');
+    const allPaths = [...pathsRef.current];
+    if (currentPathRef.current) {
+      allPaths.push(currentPathRef.current);
+    }
+
+    if (allPaths.length === 0) {
+      Alert.alert('Empty Signature', 'Please draw your signature inside the box before saving.');
       return;
     }
 
-    const allPaths = currentPath ? [...paths, currentPath] : paths;
-    const w = canvasLayout.width || 320;
-    const h = canvasLayout.height || 180;
+    const w = canvasLayout.width || 330;
+    const h = canvasLayout.height || 190;
 
-    // Generate crisp vector SVG markup
-    const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">
+    // Vector SVG with scalable responsive viewBox
+    const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
   ${allPaths
     .map(
       (d) =>
-        `<path d="${d}" stroke="${penColor}" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
+        `<path d="${d}" stroke="${penColor}" stroke-width="${penWidth}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`
     )
     .join('\n  ')}
 </svg>`;
@@ -99,131 +162,129 @@ export function SignaturePadModal({
     onClose();
   };
 
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.modalCard}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
-              <View style={styles.iconCircle}>
-                <MaterialIcons name="draw" size={20} color="#059669" />
-              </View>
-              <View>
-                <Text style={styles.title}>Draw Authorized Signature</Text>
-                <Text style={styles.subtitle}>Sign inside the box using your finger or stylus</Text>
-              </View>
+    <View style={styles.backdrop}>
+      <View style={styles.modalCard}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerTitleRow}>
+            <View style={styles.iconCircle}>
+              <MaterialIcons name="draw" size={20} color="#059669" />
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <MaterialIcons name="close" size={20} color="#64748B" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Drawing Canvas Area */}
-          <View style={styles.canvasContainer}>
-            <View
-              style={styles.canvasBox}
-              onLayout={(e) => {
-                const { width, height } = e.nativeEvent.layout;
-                setCanvasLayout({ width: Math.round(width), height: Math.round(height) });
-              }}
-              {...panResponder.panHandlers}
-            >
-              {/* SVG Layer for Drawing Strokes */}
-              <Svg style={StyleSheet.absoluteFill}>
-                {paths.map((d, index) => (
-                  <Path
-                    key={index}
-                    d={d}
-                    stroke={penColor}
-                    strokeWidth={3}
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                ))}
-                {currentPath ? (
-                  <Path
-                    d={currentPath}
-                    stroke={penColor}
-                    strokeWidth={3}
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                ) : null}
-              </Svg>
-
-              {/* Signatory Baseline Guide */}
-              <View style={styles.guidelineRow} pointerEvents="none">
-                <Text style={styles.guidelineX}>✕</Text>
-                <Text style={styles.guidelineText}>
-                  Sign above this line {businessName ? `• ${businessName}` : ''}
-                </Text>
-              </View>
-
-              {paths.length === 0 && !currentPath && (
-                <View style={styles.placeholderBox} pointerEvents="none">
-                  <Text style={styles.placeholderText}>Draw your signature here...</Text>
-                </View>
-              )}
+            <View>
+              <Text style={styles.title}>Draw Authorized Signature</Text>
+              <Text style={styles.subtitle}>Sign inside the box using your finger or stylus</Text>
             </View>
           </View>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <MaterialIcons name="close" size={22} color="#64748B" />
+          </TouchableOpacity>
+        </View>
 
-          {/* Pen Color & Tool Controls */}
-          <View style={styles.toolbar}>
-            <View style={styles.colorRow}>
-              <Text style={styles.toolbarLabel}>Ink:</Text>
-              {[
-                { color: '#1E3A8A', label: 'Ink Blue' },
-                { color: '#111827', label: 'Jet Black' },
-                { color: '#059669', label: 'Emerald' },
-              ].map((c) => (
-                <TouchableOpacity
-                  key={c.color}
-                  onPress={() => setPenColor(c.color)}
-                  style={[
-                    styles.colorDot,
-                    { backgroundColor: c.color },
-                    penColor === c.color && styles.colorDotActive,
-                  ]}
-                >
-                  {penColor === c.color && <MaterialIcons name="check" size={12} color="#fff" />}
-                </TouchableOpacity>
+        {/* Drawing Canvas Area */}
+        <View style={styles.canvasContainer}>
+          <View
+            ref={canvasRef}
+            style={styles.canvasBox}
+            onLayout={measureCanvas}
+            {...panResponder.panHandlers}
+          >
+            {/* SVG Layer for Drawing Strokes - pointerEvents none ensures children never intercept touches */}
+            <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+              {pathsRef.current.map((d, index) => (
+                <Path
+                  key={index}
+                  d={d}
+                  stroke={penColor}
+                  strokeWidth={penWidth}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               ))}
+              {currentPathRef.current ? (
+                <Path
+                  d={currentPathRef.current}
+                  stroke={penColor}
+                  strokeWidth={penWidth}
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ) : null}
+            </Svg>
+
+            {/* Signatory Baseline Guide */}
+            <View style={styles.guidelineRow} pointerEvents="none">
+              <Text style={styles.guidelineX}>✕</Text>
+              <Text style={styles.guidelineText}>
+                Sign above this line {businessName ? `• ${businessName}` : ''}
+              </Text>
             </View>
 
-            <View style={styles.toolRow}>
+            {pathsRef.current.length === 0 && !currentPathRef.current && (
+              <View style={styles.placeholderBox} pointerEvents="none">
+                <Text style={styles.placeholderText}>Draw your signature here...</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Pen Color & Tool Controls */}
+        <View style={styles.toolbar}>
+          <View style={styles.colorRow}>
+            <Text style={styles.toolbarLabel}>Ink:</Text>
+            {[
+              { color: '#1E3A8A', label: 'Ink Blue' },
+              { color: '#111827', label: 'Jet Black' },
+              { color: '#059669', label: 'Emerald' },
+            ].map((c) => (
               <TouchableOpacity
-                onPress={handleUndo}
-                disabled={paths.length === 0}
-                style={[styles.toolBtn, paths.length === 0 && { opacity: 0.4 }]}
+                key={c.color}
+                onPress={() => setPenColor(c.color)}
+                style={[
+                  styles.colorDot,
+                  { backgroundColor: c.color },
+                  penColor === c.color && styles.colorDotActive,
+                ]}
               >
-                <MaterialIcons name="undo" size={16} color="#475569" />
-                <Text style={styles.toolBtnText}>Undo</Text>
+                {penColor === c.color && <MaterialIcons name="check" size={12} color="#fff" />}
               </TouchableOpacity>
-
-              <TouchableOpacity onPress={handleClear} style={[styles.toolBtn, styles.clearBtn]}>
-                <MaterialIcons name="delete-outline" size={16} color="#dc2626" />
-                <Text style={[styles.toolBtnText, { color: '#dc2626' }]}>Clear</Text>
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
 
-          {/* Footer Actions */}
-          <View style={styles.footer}>
-            <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+          <View style={styles.toolRow}>
+            <TouchableOpacity
+              onPress={handleUndo}
+              disabled={pathsRef.current.length === 0}
+              style={[styles.toolBtn, pathsRef.current.length === 0 && { opacity: 0.4 }]}
+            >
+              <MaterialIcons name="undo" size={16} color="#475569" />
+              <Text style={styles.toolBtnText}>Undo</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
-              <MaterialIcons name="check" size={18} color="#fff" />
-              <Text style={styles.saveBtnText}>Save Signature</Text>
+            <TouchableOpacity onPress={handleClear} style={[styles.toolBtn, styles.clearBtn]}>
+              <MaterialIcons name="delete-outline" size={16} color="#dc2626" />
+              <Text style={[styles.toolBtnText, { color: '#dc2626' }]}>Clear</Text>
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Footer Actions */}
+        <View style={styles.footer}>
+          <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+            <Text style={styles.cancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleSave} style={styles.saveBtn}>
+            <MaterialIcons name="check" size={18} color="#fff" />
+            <Text style={styles.saveBtnText}>Save Signature</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -255,13 +316,10 @@ export function SignaturePreview({
     }
 
     if (xml) {
-      return (
-        <SvgXml
-          xml={xml}
-          width={style?.width || '100%'}
-          height={style?.height || '100%'}
-        />
-      );
+      const flatStyle = StyleSheet.flatten(style) || {};
+      const width = flatStyle.width || '100%';
+      const height = flatStyle.height || '100%';
+      return <SvgXml xml={xml} width={width} height={height} />;
     }
   }
 
@@ -270,11 +328,17 @@ export function SignaturePreview({
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    zIndex: 99999,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    elevation: 99,
   },
   modalCard: {
     width: '100%',
@@ -302,6 +366,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   iconCircle: {
     width: 34,
@@ -322,7 +387,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   closeBtn: {
-    padding: 4,
+    padding: 6,
     borderRadius: 8,
   },
   canvasContainer: {

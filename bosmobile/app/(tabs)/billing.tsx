@@ -2435,14 +2435,22 @@ export default function BillingScreen() {
                       ) : null}
                     </View>
 
-                    <View style={styles.signatureCol}>
+                    <TouchableOpacity
+                      onPress={() => setShowSigPad(true)}
+                      activeOpacity={0.7}
+                      style={styles.signatureCol}
+                    >
                       {storeInfo.signatureUrl ? (
                         <SignaturePreview
                           uri={storeInfo.signatureUrl}
                           style={styles.sigImage}
                         />
                       ) : (
-                        <View style={styles.sigPlaceholder} />
+                        <View style={[styles.sigPlaceholder, { justifyContent: 'center', alignItems: 'center' }]}>
+                          <Text style={{ fontSize: 7.5, color: '#059669', fontWeight: '700' }}>
+                            ✍️ Tap to Sign
+                          </Text>
+                        </View>
                       )}
                       <View style={styles.signatureLine}>
                         <Text style={styles.sigCompanyText}>
@@ -2450,7 +2458,7 @@ export default function BillingScreen() {
                         </Text>
                         <Text style={styles.sigRoleText}>Authorized Signatory</Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -2667,8 +2675,12 @@ export default function BillingScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Authorized Signature</Text>
                   
-                  {/* Signature Box Preview */}
-                  <View style={styles.brandPickBtn}>
+                  {/* Signature Box Preview - Tappable to open pad */}
+                  <TouchableOpacity
+                    onPress={() => setShowSigPad(true)}
+                    activeOpacity={0.8}
+                    style={styles.brandPickBtn}
+                  >
                     {storeInfo.signatureUrl ? (
                       <SignaturePreview
                         uri={storeInfo.signatureUrl}
@@ -2680,7 +2692,7 @@ export default function BillingScreen() {
                         <Text style={styles.brandPickBtnText}>No signature uploaded</Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
 
                   {/* Dual Action Buttons: Sign / Draw + Upload File */}
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
@@ -2739,18 +2751,45 @@ export default function BillingScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
+
+        {/* Signature Drawing Pad Overlay - INSIDE Brand Modal for iOS/Android visibility */}
+        {showSigPad && (
+          <SignaturePadModal
+            visible={showSigPad}
+            onClose={() => setShowSigPad(false)}
+            onSave={(dataUri) => {
+              const updated = { ...storeInfo, signatureUrl: dataUri };
+              setStoreInfo(updated);
+              void storageSetItem('bos_store_branding', JSON.stringify(updated));
+              void apiRequest(API_PATHS.commerceConfig, {
+                method: 'PATCH',
+                body: { signatureUrl: dataUri },
+              }).catch(() => {});
+              Alert.alert('Signature Saved ✓', 'Authorized digital signature recorded.');
+            }}
+            businessName={storeInfo.businessName}
+          />
+        )}
       </Modal>
 
-      {/* Signature Drawing Pad Modal */}
-      <SignaturePadModal
-        visible={showSigPad}
-        onClose={() => setShowSigPad(false)}
-        onSave={(dataUri) => {
-          setStoreInfo((p) => ({ ...p, signatureUrl: dataUri }));
-          Alert.alert('Signature Drawn ✓', 'Authorized digital signature recorded.');
-        }}
-        businessName={storeInfo.businessName}
-      />
+      {/* Signature Drawing Pad Overlay - Outside Brand Modal fallback */}
+      {!brandModalOpen && showSigPad && (
+        <SignaturePadModal
+          visible={showSigPad}
+          onClose={() => setShowSigPad(false)}
+          onSave={(dataUri) => {
+            const updated = { ...storeInfo, signatureUrl: dataUri };
+            setStoreInfo(updated);
+            void storageSetItem('bos_store_branding', JSON.stringify(updated));
+            void apiRequest(API_PATHS.commerceConfig, {
+              method: 'PATCH',
+              body: { signatureUrl: dataUri },
+            }).catch(() => {});
+            Alert.alert('Signature Saved ✓', 'Authorized digital signature recorded.');
+          }}
+          businessName={storeInfo.businessName}
+        />
+      )}
     </SafeAreaView>
   );
 }
