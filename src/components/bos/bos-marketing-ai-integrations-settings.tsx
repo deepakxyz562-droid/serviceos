@@ -176,15 +176,23 @@ export function BosMarketingAiIntegrationsSettings({
   const [previewChannel, setPreviewChannel] = useState<'WhatsApp' | 'SMS' | 'Email'>('WhatsApp');
   const [createCampaignModalOpen, setCreateCampaignModalOpen] = useState(false);
   const [createCouponModalOpen, setCreateCouponModalOpen] = useState(false);
-  const [campaignTitle, setCampaignTitle] = useState('Weekend Fresh Deals');
+  const [campaignTitle, setCampaignTitle] = useState(() =>
+    demoMode ? 'Weekend Fresh Deals' : `${storeSettings.businessName || 'Special'} Weekend Deals`
+  );
   const [campaignDiscountText, setCampaignDiscountText] = useState('Up to 30% OFF');
-  const [campaignValidTill, setCampaignValidTill] = useState('15 Oct 2024');
+  const [campaignValidTill, setCampaignValidTill] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  });
   const [campaignAudience, setCampaignAudience] = useState('All Customers');
   const [campaignType, setCampaignType] = useState<'WhatsApp' | 'Discount' | 'Loyalty' | 'Coupon'>(
     'WhatsApp',
   );
-  const [campaignText, setCampaignText] = useState(
-    'Fresh fruits, vegetables and daily essentials at special prices this weekend!',
+  const [campaignText, setCampaignText] = useState(() =>
+    demoMode
+      ? 'Fresh fruits, vegetables and daily essentials at special prices this weekend!'
+      : `Explore special discounts and seasonal offers at ${storeSettings.businessName || 'our store'} this week!`
   );
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponValue, setNewCouponValue] = useState(20);
@@ -1871,21 +1879,51 @@ export function BosMarketingAiIntegrationsSettings({
                   {/* Promotional Graphic Banner (Matches Screenshot 1:1) */}
                   <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#FDE047] via-[#FACC15] to-[#F59E0B] p-2.5">
                     <div className="flex items-center justify-between gap-1.5">
-                      {/* Left Fresh Produce Basket Visual */}
+                      {/* Left Visual Icon / Produce */}
                       <div className="flex h-14 w-16 shrink-0 items-center justify-center rounded-xl bg-white/85 text-[24px] shadow-2xs">
-                        🥦🍎🥕
+                        {storeSettings.businessType === 'grocery'
+                          ? '🥦🍎🥕'
+                          : storeSettings.businessType === 'restaurant'
+                            ? '🍲🥘🍛'
+                            : '🏷️🎁✨'}
                       </div>
 
-                      {/* Center Green Circular Badge: FRESH & HEALTHY */}
+                      {/* Center Circular Badge */}
                       <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-full border-2 border-white bg-[#15803D] text-center text-[7px] font-black leading-tight uppercase text-white shadow-xs">
-                        <span>FRESH &amp;</span>
-                        <span>HEALTHY</span>
+                        {storeSettings.businessType === 'restaurant' ? (
+                          <>
+                            <span>HOT &amp;</span>
+                            <span>FRESH</span>
+                          </>
+                        ) : storeSettings.businessType === 'grocery' ? (
+                          <>
+                            <span>FRESH &amp;</span>
+                            <span>HEALTHY</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>SPECIAL</span>
+                            <span>OFFER</span>
+                          </>
+                        )}
                       </div>
 
-                      {/* Right Tag: FRESH & GROCERY */}
+                      {/* Right Tag */}
                       <div className="rounded-md bg-white/95 px-1.5 py-1 text-center text-[7px] font-extrabold leading-tight uppercase text-[#92400E] shadow-2xs">
-                        <div>FRESH &amp;</div>
-                        <div>GROCERY</div>
+                        <div>
+                          {storeSettings.businessType === 'grocery'
+                            ? 'FRESH &'
+                            : storeSettings.businessType === 'restaurant'
+                              ? 'TOP'
+                              : 'BEST'}
+                        </div>
+                        <div>
+                          {storeSettings.businessType === 'grocery'
+                            ? 'GROCERY'
+                            : storeSettings.businessType === 'restaurant'
+                              ? 'TASTE'
+                              : 'DEALS'}
+                        </div>
                       </div>
                     </div>
 
@@ -3109,6 +3147,13 @@ export function BosMarketingAiIntegrationsSettings({
         meta: `Connected: ${storeSettings.whatsappNumber}`,
       },
       {
+        id: 'instagram',
+        name: 'Instagram Direct Automation',
+        category: 'WhatsApp & Marketing',
+        desc: 'AI auto-replies to customer DMs, captures customer inquiries, and shares storefront booking links 24/7.',
+        meta: 'Meta Graph API Ready',
+      },
+      {
         id: 'tally',
         name: 'Tally Prime / GST Sync',
         category: 'Accounting & GST',
@@ -3287,11 +3332,13 @@ export function BosMarketingAiIntegrationsSettings({
                 <label className="mb-1 block font-semibold text-[#334155]">
                   {selectedIntegration.id === 'whatsapp'
                     ? 'Meta Phone Number ID'
-                    : selectedIntegration.id === 'tally'
-                      ? 'Tally Server Host / IP'
-                      : selectedIntegration.id === 'printer'
-                        ? 'Connection Mode'
-                        : 'Merchant / Key ID'}
+                    : selectedIntegration.id === 'instagram'
+                      ? 'Instagram Page ID / Account ID'
+                      : selectedIntegration.id === 'tally'
+                        ? 'Tally Server Host / IP'
+                        : selectedIntegration.id === 'printer'
+                          ? 'Connection Mode'
+                          : 'Merchant / Key ID'}
                 </label>
                 <input
                   type="text"
@@ -3310,11 +3357,13 @@ export function BosMarketingAiIntegrationsSettings({
                   placeholder={
                     selectedIntegration.id === 'whatsapp'
                       ? 'e.g. 1048291049281'
-                      : selectedIntegration.id === 'tally'
-                        ? 'e.g. localhost or 192.168.1.100'
-                        : selectedIntegration.id === 'printer'
-                          ? 'e.g. USB001 or Bluetooth'
-                          : 'e.g. rzp_live_xxxxxxxx'
+                      : selectedIntegration.id === 'instagram'
+                        ? 'e.g. 178414000000000'
+                        : selectedIntegration.id === 'tally'
+                          ? 'e.g. localhost or 192.168.1.100'
+                          : selectedIntegration.id === 'printer'
+                            ? 'e.g. USB001 or Bluetooth'
+                            : 'e.g. rzp_live_xxxxxxxx'
                   }
                   className="w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-2 font-mono text-[12px] text-[#111827] focus:bg-white focus:outline-hidden"
                 />
@@ -3323,8 +3372,8 @@ export function BosMarketingAiIntegrationsSettings({
               {selectedIntegration.id !== 'printer' && (
                 <div>
                   <label className="mb-1 block font-semibold text-[#334155]">
-                    {selectedIntegration.id === 'whatsapp'
-                      ? 'System User Access Token'
+                    {selectedIntegration.id === 'whatsapp' || selectedIntegration.id === 'instagram'
+                      ? 'System User / Meta Access Token'
                       : selectedIntegration.id === 'tally'
                         ? 'Tally Port'
                         : 'API Secret / Auth Token'}
@@ -3356,11 +3405,13 @@ export function BosMarketingAiIntegrationsSettings({
                     ? 'Merchant UPI VPA (QR Target)'
                     : selectedIntegration.id === 'whatsapp'
                       ? 'WhatsApp Sender Phone'
-                      : selectedIntegration.id === 'tally'
-                        ? 'Company Name in Tally'
-                        : selectedIntegration.id === 'printer'
-                          ? 'Printer Model'
-                          : 'Pickup Hub Address'}
+                      : selectedIntegration.id === 'instagram'
+                        ? 'Instagram Handle (@username)'
+                        : selectedIntegration.id === 'tally'
+                          ? 'Company Name in Tally'
+                          : selectedIntegration.id === 'printer'
+                            ? 'Printer Model'
+                            : 'Pickup Hub Address'}
                 </label>
                 <input
                   type="text"
@@ -3498,7 +3549,7 @@ export function BosMarketingAiIntegrationsSettings({
     },
     {
       id: 'vyaparUtilities' as const,
-      title: 'Vyapar Utilities & FY Close',
+      title: 'Accounting Utilities & FY Close',
       sub: 'Tally XML export, Close FY, Negative stock & Zoom',
       icon: Settings,
     },

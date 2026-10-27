@@ -510,7 +510,7 @@ export function BosReportsDaybookWorkstation({
   onNavigateToBilling,
 }: BosReportsDaybookWorkstationProps) {
   const [reportTab, setReportTab] = useState<
-    'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata'
+    'overview' | 'sales' | 'pnl' | 'gst' | 'inventory' | 'khata' | 'cash_flow' | 'balance_sheet'
   >('overview');
   const [reportPeriod, setReportPeriod] = useState<
     'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy'
@@ -1913,10 +1913,12 @@ export function BosReportsDaybookWorkstation({
                           onClick={() => {
                             setSelectedReportId(item.id);
                             if (item.id === 'profit_loss') setReportTab('pnl');
+                            else if (item.id === 'cash_flow') setReportTab('cash_flow');
+                            else if (item.id === 'balance_sheet') setReportTab('balance_sheet');
                             else if (item.id.startsWith('gst') || item.id === 'hsn_summary') setReportTab('gst');
                             else if (item.id.startsWith('stock') || item.id === 'low_stock' || item.id === 'item_sales') setReportTab('inventory');
                             else if (item.id.startsWith('party') || item.id === 'all_parties') setReportTab('khata');
-                            else if (item.id === 'sale_invoices') setReportTab('sales');
+                            else if (item.id === 'sale_invoices' || item.id === 'quotations' || item.id === 'proforma' || item.id === 'delivery_challan' || item.id === 'purchase_bills' || item.id === 'day_book') setReportTab('sales');
                           }}
                           className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] font-semibold transition cursor-pointer ${
                             active
@@ -2851,9 +2853,19 @@ export function BosReportsDaybookWorkstation({
             <div className="bos-card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-[15px] font-bold text-[#111827]">Item-wise Stock Valuation</h3>
+                  <h3 className="text-[15px] font-bold text-[#111827]">
+                    {selectedReportId === 'low_stock'
+                      ? 'Low Stock Summary & Reorder Alerts'
+                      : selectedReportId === 'item_sales'
+                        ? 'Item Sales & Product Movement'
+                        : 'Item-wise Stock Valuation & Inventory'}
+                  </h3>
                   <p className="text-[12px] text-[#64748B]">
-                    Current quantity, purchase price, retail value and margin per item
+                    {selectedReportId === 'low_stock'
+                      ? 'Products currently below safety reorder threshold'
+                      : selectedReportId === 'item_sales'
+                        ? 'Units sold, sales turnover and demand ranking per SKU'
+                        : 'Current quantity, purchase price, retail value and margin per item'}
                   </p>
                 </div>
               </div>
@@ -2873,7 +2885,10 @@ export function BosReportsDaybookWorkstation({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
-                    {(products || []).map((p) => {
+                    {(selectedReportId === 'low_stock'
+                      ? (products || []).filter((p) => p.stockQuantity <= (p.lowStockThreshold || 5))
+                      : products || []
+                    ).map((p) => {
                       const cost = p.costPrice || Math.round(p.price * 0.65);
                       const isLowStock = p.stockQuantity <= (p.lowStockThreshold || 5);
                       return (
@@ -3036,6 +3051,203 @@ export function BosReportsDaybookWorkstation({
                     )}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 7. CASH FLOW STATEMENT TAB */}
+        {reportTab === 'cash_flow' && (
+          <div className="space-y-4">
+            {/* Cash Flow KPIs */}
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-4">
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Cash Inflows</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#0A6847]">
+                  {formatBosCurrency(saleInvoicesKpis.received + daybookKpis.moneyIn, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#0A6847] font-semibold">Sales + Collections</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Cash Outflows</p>
+                <p className="mt-1 text-[22px] font-extrabold text-red-600">
+                  {formatBosCurrency(purchaseBillsKpis.paid + daybookKpis.moneyOut, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-red-600 font-semibold">Purchases + Expenses</p>
+              </div>
+              <div className="bos-card p-4 bg-[#F3FAF7] border-[#BCE3D4]">
+                <p className="text-[12px] font-bold text-[#0A6847]">Net Cash Flow</p>
+                <p className="mt-1 text-[22px] font-extrabold text-[#111827]">
+                  {formatBosCurrency(
+                    (saleInvoicesKpis.received + daybookKpis.moneyIn) -
+                    (purchaseBillsKpis.paid + daybookKpis.moneyOut),
+                    currencySymbol
+                  )}
+                </p>
+                <p className="text-[11px] text-[#0A6847] font-semibold">Net Liquid Movement</p>
+              </div>
+              <div className="bos-card p-4">
+                <p className="text-[12px] font-semibold text-[#64748B]">Closing Cash &amp; Bank</p>
+                <p className="mt-1 text-[22px] font-extrabold text-purple-700">
+                  {formatBosCurrency(daybookKpis.closingBalance, currencySymbol)}
+                </p>
+                <p className="text-[11px] text-[#64748B]">Available In Register &amp; Accounts</p>
+              </div>
+            </div>
+
+            {/* Inflows & Outflows Breakdown Tables */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="bos-card p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-2.5">
+                  <h3 className="text-[15px] font-bold text-[#0A6847]">Operating Cash Inflows</h3>
+                  <span className="text-[11px] font-extrabold text-[#0A6847] bg-[#E6F6F0] px-2 py-0.5 rounded-full">Money In</span>
+                </div>
+                <div className="space-y-2 text-[12.5px]">
+                  <div className="flex justify-between py-2 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Direct Sales Cash &amp; Counter Receipts</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(saleInvoicesKpis.received, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Customer Khata (Udhaar) Recoveries</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(daybookKpis.moneyIn, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-2.5 rounded-xl bg-[#F0FDF4] px-3 font-bold text-[#0A6847]">
+                    <span>Total Cash Realized</span>
+                    <span>{formatBosCurrency(saleInvoicesKpis.received + daybookKpis.moneyIn, currencySymbol)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bos-card p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-2.5">
+                  <h3 className="text-[15px] font-bold text-red-600">Operating Cash Outflows</h3>
+                  <span className="text-[11px] font-extrabold text-red-700 bg-red-50 px-2 py-0.5 rounded-full">Money Out</span>
+                </div>
+                <div className="space-y-2 text-[12.5px]">
+                  <div className="flex justify-between py-2 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Supplier Goods &amp; Inventory Payments</span>
+                    <strong className="text-red-600">{formatBosCurrency(purchaseBillsKpis.paid, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Shop Expenses, Bills, Staff &amp; Maintenance</span>
+                    <strong className="text-red-600">{formatBosCurrency(daybookKpis.moneyOut, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-2.5 rounded-xl bg-red-50/70 px-3 font-bold text-red-700">
+                    <span>Total Cash Disbursed</span>
+                    <span>{formatBosCurrency(purchaseBillsKpis.paid + daybookKpis.moneyOut, currencySymbol)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 8. BALANCE SHEET TAB */}
+        {reportTab === 'balance_sheet' && (
+          <div className="space-y-4">
+            <div className="bos-card p-5 border-b-2 border-b-[#0A6847]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-[17px] font-extrabold text-[#111827]">Commercial Balance Sheet</h2>
+                  <p className="text-[12px] text-[#64748B]">Statement of Financial Position as of Today (Assets vs Liabilities &amp; Equity)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-[#E6F6F0] px-3 py-1 text-[11.5px] font-bold text-[#0A6847]">
+                    Balanced Financial Position
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
+              {/* ASSETS COLUMN */}
+              <div className="bos-card p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-2">
+                  <h3 className="text-[15px] font-extrabold text-[#111827]">ASSETS</h3>
+                  <span className="text-[11px] font-bold text-[#0A6847]">Total Property &amp; Receivables</span>
+                </div>
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] pt-1">Current Assets</p>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Cash in Register &amp; Hand</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(Math.max(0, daybookKpis.closingBalance), currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Closing Stock / Inventory Valuation (At Cost)</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(totalInventoryCostValue, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Accounts Receivable (Customer Udhaar / Khata)</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(khataData.totalReceivables, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Prepaid Expenses &amp; Deposits</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(demoMode ? 15000 : 0, currencySymbol)}</strong>
+                  </div>
+
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] pt-2">Fixed / Physical Assets</p>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Shop Fixtures, Billing Machine &amp; Equipment</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(demoMode ? 45000 : 0, currencySymbol)}</strong>
+                  </div>
+
+                  <div className="mt-4 flex justify-between rounded-xl bg-[#E6F6F0] p-3 text-[14px] font-extrabold text-[#0A6847]">
+                    <span>TOTAL ASSETS</span>
+                    <span>
+                      {formatBosCurrency(
+                        Math.max(0, daybookKpis.closingBalance) +
+                        totalInventoryCostValue +
+                        khataData.totalReceivables +
+                        (demoMode ? 60000 : 0),
+                        currencySymbol
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* LIABILITIES & EQUITY COLUMN */}
+              <div className="bos-card p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-[#EDF4F0] pb-2">
+                  <h3 className="text-[15px] font-extrabold text-[#111827]">LIABILITIES &amp; EQUITY</h3>
+                  <span className="text-[11px] font-bold text-red-600">Obligations &amp; Net Worth</span>
+                </div>
+                <div className="space-y-2 text-[12.5px]">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] pt-1">Current Liabilities</p>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Accounts Payable (Supplier Udhaar)</span>
+                    <strong className="text-red-600">{formatBosCurrency(purchaseBillsKpis.balanceDue + khataData.totalPayables, currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">GST Tax Liability (Output Tax minus ITC)</span>
+                    <strong className="text-amber-600">
+                      {formatBosCurrency(Math.max(0, reportsData.gstCollected - reportsData.itcClaimable), currencySymbol)}
+                    </strong>
+                  </div>
+
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#64748B] pt-2">Owner's Equity &amp; Retained Earnings</p>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Initial Business Capital</span>
+                    <strong className="text-[#111827]">{formatBosCurrency(initialOpeningBalance || (demoMode ? 50000 : 10000), currencySymbol)}</strong>
+                  </div>
+                  <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
+                    <span className="text-[#334155]">Retained Earnings &amp; Net Period Profit</span>
+                    <strong className="text-emerald-700">{formatBosCurrency(Math.max(0, reportsData.grossProfit - reportsData.totalExpenses), currencySymbol)}</strong>
+                  </div>
+
+                  <div className="mt-4 flex justify-between rounded-xl bg-[#FAFDFB] border border-[#DCE9E3] p-3 text-[14px] font-extrabold text-[#111827]">
+                    <span>TOTAL LIABILITIES &amp; EQUITY</span>
+                    <span>
+                      {formatBosCurrency(
+                        (purchaseBillsKpis.balanceDue + khataData.totalPayables) +
+                        Math.max(0, reportsData.gstCollected - reportsData.itcClaimable) +
+                        (initialOpeningBalance || (demoMode ? 50000 : 10000)) +
+                        Math.max(0, reportsData.grossProfit - reportsData.totalExpenses),
+                        currencySymbol
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

@@ -239,7 +239,8 @@ export async function PATCH(request: NextRequest) {
         },
       });
 
-      const starterItems = businessType ? INDUSTRY_STARTER_CATALOGS[businessType] : undefined;
+      const shouldSeed = Boolean(body.seedDemoCatalog);
+      const starterItems = shouldSeed && businessType ? INDUSTRY_STARTER_CATALOGS[businessType] : undefined;
 
       if (commerceConfigs.length > 0) {
         for (const cfg of commerceConfigs) {

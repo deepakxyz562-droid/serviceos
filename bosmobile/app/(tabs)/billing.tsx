@@ -151,8 +151,23 @@ export default function BillingScreen() {
   const [dueDateDays, setDueDateDays] = useState<number>(15);
   const [taxType, setTaxType] = useState<'INTRA' | 'INTER'>('INTRA');
 
-  const fetchBillingData = useCallback(async () => {
+  const fetchBillingData = useCallback(async (isInitial = false) => {
     try {
+      if (isInitial) {
+        // Hydrate invoices & quotes from cache immediately so screen never blocks or shows error
+        const cached = await storageGetItem('bos_invoices_cache');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed.invoices)) setInvoices(parsed.invoices);
+            if (parsed.invOverview) setInvoiceOverview(parsed.invOverview);
+            if (Array.isArray(parsed.quotes)) setQuotes(parsed.quotes);
+            if (parsed.quoteOverview) setQuoteOverview(parsed.quoteOverview);
+            setLoading(false);
+          } catch {}
+        }
+      }
+
       const [invRes, quoteRes] = await Promise.all([
         apiRequest<{ invoices: InvoiceRecord[]; overview: any }>(API_PATHS.commerceInvoices),
         apiRequest<{ quotes: QuoteRecord[]; overview: any }>(API_PATHS.commerceQuotes),
@@ -165,16 +180,24 @@ export default function BillingScreen() {
       if (quoteRes.overview) setQuoteOverview(quoteRes.overview);
 
       setError(null);
+      void storageSetItem('bos_invoices_cache', JSON.stringify({
+        invoices: invRes.invoices || [],
+        invOverview: invRes.overview,
+        quotes: quoteRes.quotes || [],
+        quoteOverview: quoteRes.overview,
+      })).catch(() => {});
     } catch (err: any) {
-      setError(err?.message || 'Unable to load billing data.');
+      if (invoices.length === 0 && quotes.length === 0) {
+        setError(err?.message || 'Unable to load billing data.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [invoices.length, quotes.length]);
 
   useEffect(() => {
-    fetchBillingData();
+    fetchBillingData(true);
     // Load store config for GST branding (offline-first)
     (async () => {
       try {
@@ -188,26 +211,28 @@ export default function BillingScreen() {
           } catch {}
         }
 
-        const res = await apiRequest<{ config?: any }>(API_PATHS.commerceConfig);
-        if (res?.config) {
-          const c = res.config;
+        const res = await apiRequest<{ config?: any; business?: any }>(API_PATHS.commerceConfig);
+        if (res) {
+          const c = res.config || {};
+          const b = res.business || {};
           setStoreInfo((prev) => {
             const nextInfo = {
               ...prev,
               businessName:
+                b.name ||
                 c.storeName ||
                 c.businessName ||
                 prev.businessName ||
                 blueprint?.businessName ||
                 'Business Store',
-              gstin: c.gstin || prev.gstin,
-              phone: c.phone || prev.phone,
-              email: c.email || prev.email,
-              address: c.address || prev.address,
-              upiId: c.upiId || prev.upiId,
-              logoUrl: c.logoUrl || prev.logoUrl,
-              signatureUrl: c.signatureUrl || prev.signatureUrl,
-              billFooter: c.billFooter || prev.billFooter,
+              gstin: c.gstin || c.billing?.gstin || b.gstin || prev.gstin,
+              phone: b.phone || c.phone || prev.phone,
+              email: b.email || c.email || prev.email,
+              address: b.address || c.address || prev.address,
+              upiId: c.upiId || b.upiId || prev.upiId,
+              logoUrl: b.logoUrl || c.logoUrl || prev.logoUrl,
+              signatureUrl: b.signatureUrl || c.signatureUrl || prev.signatureUrl,
+              billFooter: b.billFooter || c.billFooter || prev.billFooter,
             };
             void storageSetItem('bos_store_branding', JSON.stringify(nextInfo)).catch(() => {});
             return nextInfo;
@@ -241,7 +266,7 @@ export default function BillingScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     await hapticFeedback.light();
-    await fetchBillingData();
+    await fetchBillingData(false);
   };
 
   const handleSelectParty = (c: any) => {
@@ -452,7 +477,7 @@ export default function BillingScreen() {
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + (dueDateDays || 0));
 
-        await apiRequest(API_PATHS.commerceInvoices, {
+        const invRes = await apiRequest<{ invoice: InvoiceRecord }>(API_PATHS.commerceInvoices, {
           method: 'POST',
           body: {
             customerId: selectedParty?.id,
@@ -472,7 +497,37 @@ export default function BillingScreen() {
             paymentMethod: selectedPaymentMode,
           },
         });
-        Alert.alert('Invoice Created ✓', `Vyapar-grade GST Tax Invoice generated successfully.`);
+
+        // Auto-dispatch WhatsApp Tax Invoice to customer if valid mobile number exists
+        const rawPhone = customerPhone.trim() || selectedParty?.phone || invRes?.invoice?.customer?.phone;
+        const cleanPhone = rawPhone ? rawPhone.replace(/\D/g, '') : '';
+        if (cleanPhone && cleanPhone.length >= 10) {
+          const invNum = invRes?.invoice?.number || 'INV';
+          const invTotal = String(invRes?.invoice?.total || computedTotal);
+          const businessTitle = storeInfo.name || 'Store';
+          const targetCustomerName = customerName.trim() || selectedParty?.name || 'Customer';
+          const invoiceUrl = `https://bos.fieseros.com/invoice/${invRes?.invoice?.id || ''}`;
+
+          void apiRequest(API_PATHS.commerceWhatsAppSend, {
+            method: 'POST',
+            body: {
+              phone: cleanPhone,
+              templateType: 'bos_tax_invoice',
+              templateData: {
+                customerName: targetCustomerName,
+                invoiceNumber: invNum,
+                businessName: businessTitle,
+                total: invTotal,
+                invoiceUrl,
+              },
+            },
+          }).catch((err) => {
+            console.warn('Auto WhatsApp invoice send non-fatal error:', err);
+          });
+          Alert.alert('Invoice Created ✓', `BOS GST Tax Invoice generated and sent to customer on WhatsApp.`);
+        } else {
+          Alert.alert('Invoice Created ✓', `BOS GST Tax Invoice generated successfully.`);
+        }
       } else {
         await apiRequest(API_PATHS.commerceQuotes, {
           method: 'POST',
@@ -1439,7 +1494,7 @@ export default function BillingScreen() {
                   {formType === 'INVOICE' ? 'Create New GST Invoice' : 'Create Quotation / Estimate'}
                 </Text>
                 <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                  {formType === 'INVOICE' ? 'BOS Vyapar Tax Invoice with digital QR & WhatsApp delivery' : 'Formal price quotation with line items & GST'}
+                  {formType === 'INVOICE' ? 'BOS Professional Tax Invoice with digital QR & WhatsApp delivery' : 'Formal price quotation with line items & GST'}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1884,7 +1939,7 @@ export default function BillingScreen() {
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <Text style={styles.modalSubmitText}>
-                    {formType === 'INVOICE' ? 'Generate Vyapar GST Invoice' : 'Save & Share Quotation'}
+                    {formType === 'INVOICE' ? 'Generate GST Tax Invoice' : 'Save & Share Quotation'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -2140,7 +2195,7 @@ export default function BillingScreen() {
 
                 <View style={{ flex: 1, marginLeft: 8 }}>
                   <Text style={styles.previewBarTitle}>Tax Invoice #{inv.number}</Text>
-                  <Text style={styles.previewBarSub}>Vyapar-grade GST format</Text>
+                  <Text style={styles.previewBarSub}>Professional GST format</Text>
                 </View>
 
                 {/* Quick actions in top bar */}

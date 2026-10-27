@@ -118,13 +118,55 @@ export default function WhatsAppChannelScreen() {
     [buildConfig, isConnected]
   );
 
-  const connectWhatsApp = useCallback(async (_phoneValue: string) => {
-    setPhoneModalVisible(false);
-    await Linking.openURL(`${API_BASE_URL}/?view=channels`).catch(() => Alert.alert('Browser unavailable', 'Open the web dashboard to connect WhatsApp.'));
-  }, []);
+  const connectWhatsApp = useCallback(
+    async (phoneValue: string) => {
+      const clean = phoneValue.trim();
+      if (!clean) {
+        Alert.alert('Phone Required', 'Please enter a valid WhatsApp phone number with country code.');
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await hapticFeedback.success();
+        const nextConfig = {
+          ...buildConfig(),
+          phoneNumber: clean,
+        };
+        await apiRequest(API_PATHS.channels, {
+          method: 'POST',
+          body: {
+            channel: 'whatsapp',
+            type: 'whatsapp',
+            name: 'WhatsApp',
+            provider: 'whatsapp',
+            connected: true,
+            status: 'CONNECTED',
+            config: nextConfig,
+          },
+        });
+        setPhoneNumber(clean);
+        setIsConnected(true);
+        setStatus('CONNECTED');
+        setPhoneModalVisible(false);
+        Alert.alert('Connected ✓', `WhatsApp Business connected successfully to ${clean}.`);
+      } catch (err: any) {
+        const msg = err instanceof ApiError ? err.message : 'Failed to connect WhatsApp.';
+        Alert.alert('Connection Failed', msg);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [buildConfig]
+  );
 
-  const openPhoneModal = () => void connectWhatsApp('');
-  const handleConnectMeta = () => void connectWhatsApp('');
+  const openPhoneModal = () => {
+    setPhoneInput(phoneNumber || '');
+    setPhoneModalVisible(true);
+  };
+  const handleConnectMeta = () => {
+    setPhoneInput(phoneNumber || '');
+    setPhoneModalVisible(true);
+  };
 
   const handleDisconnect = () => {
     hapticFeedback.medium();

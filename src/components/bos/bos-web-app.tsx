@@ -1986,6 +1986,26 @@ function BosWebAppInner({
         printerConfig,
       );
     }
+
+    // 6. Auto-dispatch WhatsApp notification upon order completion
+    if (cleanCustomerPhone && cleanCustomerPhone.replace(/\D/g, '').length >= 10) {
+      void authFetch('/api/commerce/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: cleanCustomerPhone.replace(/\D/g, ''),
+          templateType: 'bos_order_confirmed',
+          templateData: {
+            customerName: payload.customerName,
+            orderNumber: verifiedOrderId,
+            total: `${storeSettings.currencySymbol} ${verifiedTotalAmount}`,
+            businessName: storeSettings.businessName,
+          },
+        }),
+      }).catch((err) => {
+        console.warn('Auto WhatsApp dispatch non-fatal failure:', err);
+      });
+    }
   };
 
   const handleSaveProduct = async (product: BosProductItem, isNew: boolean) => {
@@ -2054,6 +2074,23 @@ function BosWebAppInner({
     }
 
     setProducts(nextProducts);
+  };
+
+  const handleClearAllProducts = async () => {
+    const configRes = await authFetch('/api/commerce/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ catalogJson: [] }),
+    });
+
+    if (!configRes.ok) {
+      const cfgErr = await configRes.json().catch(() => null);
+      toast.error(cfgErr?.error || 'Failed to clear catalog');
+      throw new Error(cfgErr?.error || `Failed to clear catalog (HTTP ${configRes.status})`);
+    }
+
+    setProducts([]);
+    toast.success('Catalog cleared. You can now add your own products.');
   };
 
   const handleAdjustStock = async (productId: string, delta: number) => {
@@ -2199,6 +2236,30 @@ function BosWebAppInner({
     };
     setCustomers((prev) => [created, ...prev]);
     return created;
+  };
+
+  const handleUpdateCustomer = async (customer: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string;
+    address?: string;
+    gstin?: string;
+  }) => {
+    const res = await authFetch(`/api/commerce/customers/${encodeURIComponent(customer.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customer),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `Failed to update customer (HTTP ${res.status})`);
+    }
+    const data = await res.json().catch(() => null);
+    setCustomers((prev) =>
+      prev.map((c) => (c.id === customer.id ? { ...c, ...customer } : c))
+    );
+    return data?.customer;
   };
 
   const handleRecordKhataEntry = async (entry: {
@@ -2460,6 +2521,10 @@ function BosWebAppInner({
         ...(patch.taxRate !== undefined ? { taxRate: patch.taxRate } : {}),
         ...(patch.taxType !== undefined ? { taxType: patch.taxType } : {}),
       };
+      if (patch.gstin !== undefined) configPatch.gstin = patch.gstin;
+      if (patch.enableGst !== undefined) configPatch.enableGst = patch.enableGst;
+      if (patch.taxRate !== undefined) configPatch.taxRate = patch.taxRate;
+      if (patch.taxType !== undefined) configPatch.taxType = patch.taxType;
     }
     if (patch.phone !== undefined) configPatch.phone = patch.phone;
     if (patch.whatsappNumber !== undefined) configPatch.whatsappNumber = patch.whatsappNumber;
@@ -2470,7 +2535,11 @@ function BosWebAppInner({
     if (patch.pincode !== undefined) configPatch.pincode = patch.pincode;
     if (patch.logoUrl !== undefined) configPatch.logoUrl = patch.logoUrl;
     if (patch.signatureUrl !== undefined) configPatch.signatureUrl = patch.signatureUrl;
-    if (patch.businessName !== undefined) configPatch.businessName = patch.businessName;
+    if (patch.billFooter !== undefined) configPatch.billFooter = patch.billFooter;
+    if (patch.businessName !== undefined) {
+      configPatch.businessName = patch.businessName;
+      configPatch.storeName = patch.businessName;
+    }
     if (patch.businessHours !== undefined) configPatch.businessHours = patch.businessHours;
     if (patch.minOrderAmount !== undefined) configPatch.minOrderAmount = patch.minOrderAmount;
     if (patch.deliveryCharge !== undefined) configPatch.deliveryCharge = patch.deliveryCharge;
@@ -3492,6 +3561,7 @@ function BosWebAppInner({
                 onSaveProduct={handleSaveProduct}
                 onDeleteProduct={handleDeleteProduct}
                 onAdjustStock={handleAdjustStock}
+                onClearAllProducts={handleClearAllProducts}
               />
             )}
 
@@ -3518,6 +3588,7 @@ function BosWebAppInner({
                 khataTransactions={khataTransactions}
                 initialOpenAddCustomer={navContext?.action === 'add-customer'}
                 onAddCustomer={handleAddCustomer}
+                onUpdateCustomer={handleUpdateCustomer}
                 onRecordKhataEntry={handleRecordKhataEntry}
               />
             )}

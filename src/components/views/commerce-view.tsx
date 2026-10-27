@@ -2159,7 +2159,7 @@ export function CommerceView() {
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-stone-900">Commerce &amp; Store Hub</h1>
               <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">
-                Take.app &amp; Vyapar Suite
+                BOS Commerce &amp; Billing Suite
               </Badge>
             </div>
             <p className="text-xs text-stone-500">
@@ -6871,7 +6871,7 @@ export function CommerceView() {
                       Tax Invoice #{inv.number}
                     </h3>
                     <p className="text-[10px] text-stone-500">
-                      Vyapar-grade GST Compliant Format • Original for Recipient
+                      BOS Professional GST Compliant Format • Original for Recipient
                     </p>
                   </div>
                 </div>

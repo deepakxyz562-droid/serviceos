@@ -11,6 +11,9 @@ import {
   Linking,
   TextInput,
   ActivityIndicator,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
@@ -39,6 +42,8 @@ export default function InstagramChannelScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [persistingConfig, setPersistingConfig] = useState(false);
+  const [connectModalVisible, setConnectModalVisible] = useState(false);
+  const [handleInput, setHandleInput] = useState('');
 
   // Mirror of server-side config. The UI edits a subset (handle + 2 toggles +
   // keyword input) but we round-trip the rest so the web dashboard's settings
@@ -108,8 +113,46 @@ export default function InstagramChannelScreen() {
     [buildConfig, isConnected]
   );
 
+  const submitConnectInstagram = async (inputVal: string) => {
+    const clean = inputVal.trim().replace(/^@/, '');
+    if (!clean) {
+      Alert.alert('Handle Required', 'Please enter your Instagram Professional username/handle.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await hapticFeedback.success();
+      const nextConfig = {
+        ...buildConfig(),
+        handle: clean,
+      };
+      await apiRequest(API_PATHS.channels, {
+        method: 'POST',
+        body: {
+          channel: 'instagram',
+          type: 'instagram',
+          name: 'Instagram',
+          provider: 'meta',
+          connected: true,
+          status: 'active',
+          config: nextConfig,
+        },
+      });
+      setIsConnected(true);
+      setHandle(clean);
+      setConnectModalVisible(false);
+      Alert.alert('Connected ✓', `Instagram Professional linked to @${clean}.`);
+    } catch (err: any) {
+      const msg = err instanceof ApiError ? err.message : 'Failed to connect Instagram.';
+      Alert.alert('Connection Failed', msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleConnectInstagram = () => {
-    Linking.openURL(`${API_BASE_URL}/?view=channels`).catch(() => Alert.alert('Browser unavailable', 'Open the web dashboard to connect your account.'));
+    setHandleInput(handle || '');
+    setConnectModalVisible(true);
   };
 
   const handleToggleAutoResponder = (val: boolean) => {
@@ -326,6 +369,58 @@ export default function InstagramChannelScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Connect Instagram Modal */}
+      <Modal
+        visible={connectModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConnectModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Connect Instagram Professional</Text>
+            <Text style={styles.modalSubtitle}>
+              Enter your Instagram handle or username (e.g. @your_store). Your AI agent will automatically respond to customer DMs.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={handleInput}
+              onChangeText={setHandleInput}
+              placeholder="@mystore_official"
+              placeholderTextColor="#94A3B8"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+            />
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setConnectModalVisible(false)}
+                disabled={submitting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConnectBtn, submitting && { opacity: 0.6 }]}
+                onPress={() => submitConnectInstagram(handleInput)}
+                disabled={submitting}
+                activeOpacity={0.8}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConnectText}>Connect</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -559,5 +654,80 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 18,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    color: '#64748B',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modalConnectBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#E1306C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConnectText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

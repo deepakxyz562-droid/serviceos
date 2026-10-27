@@ -850,7 +850,37 @@ export function BosInvoicesWorkstation({
         setTimeout(() => win.print(), 300);
       }
 
-      showToast(`Invoice ${verifiedInvoiceNumber} created & sent to printer`);
+      // Auto-dispatch WhatsApp Tax Invoice to customer if valid mobile number exists
+      const cleanPhone = selectedCustomerPhone.replace(/\D/g, '');
+      if (cleanPhone && cleanPhone.length >= 10) {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'https://bos.fieseros.com';
+        const payLink = `${origin}/pay/${encodeURIComponent(verifiedInvoiceNumber)}`;
+        const businessTitle = storeSettings.businessName || 'BOS Store';
+        const msg = `Hello *${cleanCustomerName}*,\nHere is your Tax Invoice *${verifiedInvoiceNumber}* from *${businessTitle}*.\n• *Total Amount:* ${currencySymbol} ${formatTwoDecimals(roundedTotal)}\n👉 *View Online:* ${payLink}`;
+
+        void authFetch('/api/commerce/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: cleanPhone,
+            message: msg,
+            templateType: 'bos_tax_invoice',
+            templateData: {
+              customerName: cleanCustomerName,
+              invoiceNumber: verifiedInvoiceNumber,
+              amount: `${currencySymbol} ${formatTwoDecimals(roundedTotal)}`,
+              pdfUrl: payLink,
+              businessName: businessTitle,
+            },
+          }),
+        }).catch((err) => {
+          console.warn('Auto WhatsApp invoice send non-fatal error:', err);
+        });
+
+        showToast(`Invoice ${verifiedInvoiceNumber} created, printed & sent via WhatsApp ✓`);
+      } else {
+        showToast(`Invoice ${verifiedInvoiceNumber} created & sent to printer`);
+      }
     } catch (err: any) {
       showToast(err?.message || 'Network error saving invoice.');
     }

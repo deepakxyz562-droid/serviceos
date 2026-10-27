@@ -46,6 +46,14 @@ type BosCustomersKhataWorkstationProps = {
   initialOpenAddCustomer?: boolean;
   demoMode?: boolean;
   onAddCustomer: (customer: Omit<BosCustomer, 'id'>) => Promise<unknown> | void;
+  onUpdateCustomer?: (customer: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string;
+    address?: string;
+    gstin?: string;
+  }) => Promise<unknown> | void;
   onRecordKhataEntry: (entry: {
     customerId: string;
     customerName: string;
@@ -438,6 +446,7 @@ export function BosCustomersKhataWorkstation({
   initialOpenAddCustomer = false,
   demoMode = false,
   onAddCustomer,
+  onUpdateCustomer,
   onRecordKhataEntry,
 }: BosCustomersKhataWorkstationProps) {
   const { t, language } = useBosTranslation();
@@ -473,6 +482,15 @@ export function BosCustomersKhataWorkstation({
   const [adjustAmountInput, setAdjustAmountInput] = useState('500');
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(initialOpenAddCustomer);
   const [partyModalTab, setPartyModalTab] = useState<'general' | 'address' | 'credit'>('general');
+  const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
+  const [editCustomerSaving, setEditCustomerSaving] = useState(false);
+  const [editCustomerForm, setEditCustomerForm] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    address: '',
+    gstin: '',
+  });
   const [newCustomerForm, setNewCustomerForm] = useState({
     partyType: 'customer' as 'customer' | 'supplier',
     name: '',
@@ -878,6 +896,54 @@ export function BosCustomersKhataWorkstation({
         openingKhata: 0,
         openingBalanceType: 'receive',
       });
+    }
+  };
+
+  const handleOpenEditCustomer = () => {
+    if (!selectedCustomer) return;
+    const realCustomer = customers.find((c) => c.id === selectedCustomer.id);
+    const existingGstin = realCustomer?.gstin || (selectedCustomer as any).gstin || '';
+    setEditCustomerForm({
+      name: selectedCustomer.name || '',
+      phone: selectedCustomer.phone || '',
+      email: selectedCustomer.email || '',
+      address: selectedCustomer.address || '',
+      gstin: existingGstin,
+    });
+    setShowEditCustomerModal(true);
+  };
+
+  const handleSaveEditCustomer = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedCustomer || !editCustomerForm.name.trim()) return;
+    setEditCustomerSaving(true);
+    try {
+      if (onUpdateCustomer) {
+        await onUpdateCustomer({
+          id: selectedCustomer.id,
+          name: editCustomerForm.name.trim(),
+          phone: editCustomerForm.phone.trim(),
+          email: editCustomerForm.email.trim() || undefined,
+          address: editCustomerForm.address.trim() || undefined,
+          gstin: editCustomerForm.gstin.trim() || undefined,
+        });
+      } else {
+        const res = await authFetch(`/api/commerce/customers/${encodeURIComponent(selectedCustomer.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editCustomerForm),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || 'Failed to update customer');
+        }
+      }
+      showToastMsg(`Customer "${editCustomerForm.name.trim()}" updated successfully.`);
+      setShowEditCustomerModal(false);
+    } catch (err: any) {
+      showToastMsg(err?.message || 'Failed to update customer.');
+    } finally {
+      setEditCustomerSaving(false);
     }
   };
 
@@ -1538,9 +1604,7 @@ export function BosCustomersKhataWorkstation({
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() =>
-                    showToastMsg(`Editing profile for ${selectedCustomer.name}`)
-                  }
+                  onClick={handleOpenEditCustomer}
                   className="inline-flex items-center gap-1 rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
                 >
                   <Edit3 className="h-3.5 w-3.5 text-[#0A7B56]" />
@@ -2224,6 +2288,130 @@ export function BosCustomersKhataWorkstation({
                   className="rounded-xl bg-[#0A6847] px-5 py-2 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs"
                 >
                   Save Party
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Customer Dialog */}
+      {showEditCustomerModal && selectedCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <div>
+                <h3 className="text-[16px] font-extrabold text-[#111827]">
+                  Edit Customer Profile
+                </h3>
+                <p className="text-[12px] text-[#64748B]">
+                  Update contact information, GSTIN, and address.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditCustomerModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[#F1F5F9] text-[#64748B]"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditCustomer} className="mt-4 space-y-3.5">
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                  Customer / Business Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editCustomerForm.name}
+                  onChange={(e) =>
+                    setEditCustomerForm((s) => ({ ...s, name: e.target.value }))
+                  }
+                  placeholder="e.g. Ramesh Enterprises"
+                  className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={editCustomerForm.phone}
+                    onChange={(e) =>
+                      setEditCustomerForm((s) => ({ ...s, phone: e.target.value }))
+                    }
+                    placeholder="10-digit mobile"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={editCustomerForm.email}
+                    onChange={(e) =>
+                      setEditCustomerForm((s) => ({ ...s, email: e.target.value }))
+                    }
+                    placeholder="name@company.com"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                  GSTIN (Optional)
+                </label>
+                <input
+                  type="text"
+                  maxLength={15}
+                  value={editCustomerForm.gstin}
+                  onChange={(e) =>
+                    setEditCustomerForm((s) => ({ ...s, gstin: e.target.value.toUpperCase() }))
+                  }
+                  placeholder="22AAAAA0000A1Z5"
+                  className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono tracking-wider uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                  Address
+                </label>
+                <textarea
+                  rows={2}
+                  value={editCustomerForm.address}
+                  onChange={(e) =>
+                    setEditCustomerForm((s) => ({ ...s, address: e.target.value }))
+                  }
+                  placeholder="Street, City, Pincode"
+                  className="w-full rounded-xl border border-[#DCE9E3] p-2.5 text-[12.5px]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#EBF2EE]">
+                <button
+                  type="button"
+                  disabled={editCustomerSaving}
+                  onClick={() => setShowEditCustomerModal(false)}
+                  className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F8FAFC]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editCustomerSaving}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-5 py-2 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs disabled:opacity-50"
+                >
+                  {editCustomerSaving ? 'Saving...' : 'Update Customer'}
                 </button>
               </div>
             </form>

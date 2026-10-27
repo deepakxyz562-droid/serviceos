@@ -52,6 +52,7 @@ type BosInventoryWorkstationProps = {
   onSaveProduct: (product: BosProductItem, isNew: boolean) => Promise<void>;
   onDeleteProduct: (productId: string) => Promise<void>;
   onAdjustStock: (productId: string, delta: number, reason: string) => Promise<void>;
+  onClearAllProducts?: () => Promise<void>;
 };
 
 type InventoryRowMeta = {
@@ -320,6 +321,7 @@ export function BosInventoryWorkstation({
   onSaveProduct,
   onDeleteProduct,
   onAdjustStock,
+  onClearAllProducts,
 }: BosInventoryWorkstationProps) {
   const { t, language } = useBosTranslation();
 
@@ -1141,6 +1143,22 @@ export function BosInventoryWorkstation({
                 <span>Print Barcodes</span>
               </button>
             </>
+          )}
+
+          {products.length > 0 && onClearAllProducts && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.confirm('Are you sure you want to clear demo products and reset the catalog? This will remove existing starter items so you can enter your own.')) {
+                  await onClearAllProducts();
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-red-50/60 px-3 py-2 text-[12.5px] font-semibold text-red-700 hover:bg-red-100 transition cursor-pointer"
+              title="Reset catalog and remove demo products"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-red-600" />
+              <span>Reset Catalog</span>
+            </button>
           )}
 
           <button

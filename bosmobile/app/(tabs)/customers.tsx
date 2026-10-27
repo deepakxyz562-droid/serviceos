@@ -22,6 +22,7 @@ import { apiRequest } from '@/lib/api';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 import { RequestTracker } from '../../../shared/money';
 import { API_PATHS } from '@/lib/constants';
+import { storageGetItem, storageSetItem } from '@/lib/storage';
 
 interface FavoriteItem {
   name: string;
@@ -70,6 +71,71 @@ export default function CustomersScreen() {
   const [newAddress, setNewAddress] = useState('');
   const [newCreditLimit, setNewCreditLimit] = useState('');
   const [saveError, setSaveError] = useState(false);
+
+  // Edit Customer State
+  const [editingCustomer, setEditingCustomer] = useState<CustomerRecord | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editGstin, setEditGstin] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+
+  const handleOpenEdit = (c: CustomerRecord) => {
+    hapticFeedback.light();
+    setEditingCustomer(c);
+    setEditName(c.name || '');
+    setEditPhone(c.phone || '');
+    setEditAddress(c.deliveryAddress || '');
+    setEditGstin('');
+    setEditEmail('');
+    setEditError(null);
+    setEditModalVisible(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (editSaving || !editingCustomer || !editName.trim() || !editPhone.trim()) return;
+    setEditSaving(true);
+    setEditError(null);
+    const targetId = editingCustomer.id || `phone:${editingCustomer.phone}`;
+    const body = {
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      address: editAddress.trim() || undefined,
+      gstin: editGstin.trim() || undefined,
+      email: editEmail.trim() || undefined,
+    };
+    try {
+      await apiRequest(`${API_PATHS.commerceCustomers}/${encodeURIComponent(targetId)}`, {
+        method: 'PATCH',
+        body,
+      });
+      // Update local state immediately
+      setCustomers((prev) =>
+        prev.map((c) => {
+          if ((c.id && c.id === editingCustomer.id) || c.phone === editingCustomer.phone) {
+            return {
+              ...c,
+              name: editName.trim(),
+              phone: editPhone.trim(),
+              deliveryAddress: editAddress.trim() || null,
+            };
+          }
+          return c;
+        })
+      );
+      setEditModalVisible(false);
+      setEditingCustomer(null);
+      void fetchCustomers();
+    } catch (err: any) {
+      setEditError(err?.message || 'Failed to update customer');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const saveCustomer = async () => {
     if (saving || !newName.trim() || !newPhone.trim()) return;
     setSaving(true); setSaveError(false);
@@ -110,8 +176,23 @@ export default function CustomersScreen() {
   const [selectedTag, setSelectedTag] = useState<'ALL' | 'VIP' | 'REGULAR' | 'NEW'>('ALL');
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCustomers = useCallback(async () => {
+  const fetchCustomers = useCallback(async (isInitial = false) => {
     try {
+      if (isInitial) {
+        // Hydrate from cache immediately for instant render without blocking
+        const cached = await storageGetItem('bos_customers_cache');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed.customers) && parsed.customers.length > 0) {
+              setCustomers(parsed.customers);
+              if (parsed.summary) setSummary(parsed.summary);
+              if (parsed.currency) setCurrency(parsed.currency);
+              setLoading(false);
+            }
+          } catch {}
+        }
+      }
       const url = API_PATHS.commerceCustomers;
       const data = await apiRequest<CustomersResponse>(url);
       setCustomers(data.customers || []);
@@ -120,22 +201,25 @@ export default function CustomersScreen() {
         setSummary(data.summary);
       }
       setError(null);
+      void storageSetItem('bos_customers_cache', JSON.stringify(data)).catch(() => {});
     } catch (err: any) {
-      setError(err?.message || 'Unable to load customer directory.');
+      if (customers.length === 0) {
+        setError(err?.message || 'Unable to load customer directory.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [customers.length]);
 
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(true);
   }, [fetchCustomers]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await hapticFeedback.light();
-    await fetchCustomers();
+    await fetchCustomers(false);
   };
 
   const handleWhatsApp = (customer: CustomerRecord) => {
@@ -400,6 +484,15 @@ export default function CustomersScreen() {
                   {/* Action Buttons */}
                   <View style={styles.actionRow}>
                     <TouchableOpacity
+                      onPress={() => handleOpenEdit(c)}
+                      style={styles.editBtn}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="edit" size={14} color="#059669" />
+                      <Text style={styles.editBtnText}>{t('Edit', 'संपादित करें')}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       disabled={!c.phone}
                       onPress={() => handleWhatsApp(c)}
                       style={styles.waBtn}
@@ -624,6 +717,167 @@ export default function CustomersScreen() {
                     <>
                       <MaterialIcons name="check" size={18} color="white" />
                       <Text style={styles.customerModalSaveText}>{t('Save Customer', 'ग्राहक सेव करें')}</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Edit Customer Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          if (!editSaving) setEditModalVisible(false);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.customerModalOverlay}
+        >
+          <View style={styles.customerModalSheet}>
+            <View style={styles.customerModalHeader}>
+              <View>
+                <Text style={styles.customerModalTitle}>
+                  {t('Edit Customer', 'ग्राहक संपादित करें')}
+                </Text>
+                <Text style={styles.customerModalSubtitle}>
+                  {t('Update profile and contact details', 'प्रोफ़ाइल और संपर्क जानकारी अपडेट करें')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setEditModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="close" size={24} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            >
+              <Text style={styles.customerInputLabel}>
+                {t('Customer / Business Name *', 'ग्राहक / व्यापार का नाम *')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <MaterialIcons name="person-outline" size={20} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder={t('e.g. Ramesh Kumar', 'जैसे रमेश कुमार')}
+                  placeholderTextColor="#94a3b8"
+                  value={editName}
+                  onChangeText={setEditName}
+                  maxLength={200}
+                  editable={!editSaving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('WhatsApp / Mobile Phone *', 'WhatsApp / मोबाइल फ़ोन *')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <View style={styles.countryCodeBadge}>
+                  <Text style={styles.countryCodeText}>{countryPack?.phone?.countryCode || '+91'}</Text>
+                </View>
+                <TextInput
+                  placeholder={t('10-digit mobile number', '10 अंकों का मोबाइल नंबर')}
+                  placeholderTextColor="#94a3b8"
+                  value={editPhone}
+                  onChangeText={setEditPhone}
+                  keyboardType="phone-pad"
+                  maxLength={24}
+                  editable={!editSaving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('Email Address (Optional)', 'ईमेल आईडी (वैकल्पिक)')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <MaterialIcons name="mail-outline" size={20} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder="name@company.com"
+                  placeholderTextColor="#94a3b8"
+                  value={editEmail}
+                  onChangeText={setEditEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  editable={!editSaving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('GSTIN (Optional)', 'जीएसटीआईएन (वैकल्पिक)')}
+              </Text>
+              <View style={styles.customerInputRow}>
+                <MaterialIcons name="badge" size={20} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  placeholder="07AAAAA0000A1Z5"
+                  placeholderTextColor="#94a3b8"
+                  value={editGstin}
+                  onChangeText={(val) => setEditGstin(val.toUpperCase())}
+                  autoCapitalize="characters"
+                  maxLength={15}
+                  editable={!editSaving}
+                  style={styles.customerTextInput}
+                />
+              </View>
+
+              <Text style={[styles.customerInputLabel, { marginTop: 14 }]}>
+                {t('Billing & Delivery Address', 'पता')}
+              </Text>
+              <View style={[styles.customerInputRow, { alignItems: 'flex-start', paddingVertical: 10 }]}>
+                <MaterialIcons name="location-on" size={20} color="#64748b" style={{ marginRight: 8, marginTop: 2 }} />
+                <TextInput
+                  placeholder={t('Street, City, Pincode', 'गली, शहर, पिनकोड')}
+                  placeholderTextColor="#94a3b8"
+                  value={editAddress}
+                  onChangeText={setEditAddress}
+                  multiline
+                  numberOfLines={2}
+                  maxLength={400}
+                  editable={!editSaving}
+                  style={[styles.customerTextInput, { height: 50, textAlignVertical: 'top' }]}
+                />
+              </View>
+
+              {editError && (
+                <View style={styles.customerErrorBanner}>
+                  <MaterialIcons name="error-outline" size={18} color="#b91c1c" />
+                  <Text style={styles.customerErrorText}>{editError}</Text>
+                </View>
+              )}
+
+              <View style={styles.customerModalActionRow}>
+                <TouchableOpacity
+                  disabled={editSaving}
+                  onPress={() => setEditModalVisible(false)}
+                  style={styles.customerModalCancelBtn}
+                >
+                  <Text style={styles.customerModalCancelText}>{t('Cancel', 'रद्द करें')}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  disabled={editSaving || !editName.trim() || !editPhone.trim()}
+                  onPress={() => void handleSaveEdit()}
+                  style={[
+                    styles.customerModalSaveBtn,
+                    (!editName.trim() || !editPhone.trim()) && styles.customerModalSaveBtnDisabled,
+                  ]}
+                >
+                  {editSaving ? (
+                    <ActivityIndicator color="white" size="small" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="check" size={18} color="white" />
+                      <Text style={styles.customerModalSaveText}>{t('Update Customer', 'अपडेट करें')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -926,6 +1180,23 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
+  },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  editBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
   },
   waBtn: {
     flex: 1,

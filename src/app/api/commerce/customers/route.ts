@@ -225,3 +225,118 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Could not save customer.' }, { status: message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 503 });
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { business } = await requireQuoteFlowBusiness(req);
+    const body = await req.json().catch(() => ({}));
+    const { searchParams } = new URL(req.url);
+    const id = body.id || searchParams.get('id');
+
+    if (!id && !body.phone) {
+      return NextResponse.json({ error: 'Customer ID or phone number is required.' }, { status: 400 });
+    }
+
+    const cleanPhone = (id && typeof id === 'string' && id.startsWith('phone:'))
+      ? id.replace('phone:', '').replace(/\D/g, '')
+      : (body.phone ? String(body.phone).replace(/\D/g, '') : null);
+
+    let existing = await db.aiCustomer.findFirst({
+      where: {
+        businessId: business.id,
+        OR: [
+          ...(id ? [{ id: String(id) }] : []),
+          ...(cleanPhone ? [{ phone: cleanPhone }] : []),
+        ],
+      },
+    });
+
+    let updatedPhone = existing?.phone;
+    if (body.phone) {
+      try {
+        updatedPhone = counterCustomerPhone(body.phone);
+      } catch {
+        updatedPhone = String(body.phone).replace(/\D/g, '');
+      }
+    }
+
+    const updatedName = typeof body.name === 'string' && body.name.trim() ? body.name.trim() : existing?.name || 'Customer';
+    const updatedAddress = body.address !== undefined ? (typeof body.address === 'string' && body.address.trim() ? body.address.trim() : null) : existing?.address;
+    const updatedEmail = body.email !== undefined ? (typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null) : existing?.email;
+
+    let updatedNotes = existing?.notes || null;
+    if (body.gstin !== undefined) {
+      const gstinVal = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim() : null;
+      if (gstinVal) {
+        const cleanNotes = (existing?.notes || '').replace(/GSTIN:\s*[^|,\n]+/gi, '').replace(/^\|\s*|\s*\|$/g, '').trim();
+        updatedNotes = cleanNotes ? `${cleanNotes} | GSTIN: ${gstinVal}` : `GSTIN: ${gstinVal}`;
+      } else {
+        updatedNotes = (existing?.notes || '').replace(/GSTIN:\s*[^|,\n]+/gi, '').replace(/^\|\s*|\s*\|$/g, '').trim() || null;
+      }
+    } else if (body.notes !== undefined) {
+      updatedNotes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
+    }
+
+    let customer;
+    if (existing) {
+      customer = await db.aiCustomer.update({
+        where: { id: existing.id },
+        data: {
+          name: updatedName,
+          phone: updatedPhone,
+          address: updatedAddress,
+          email: updatedEmail,
+          notes: updatedNotes,
+        },
+      });
+    } else {
+      const targetId = id || `contact_${createHash('sha256').update(JSON.stringify([business.id, body.phone, Date.now()])).digest('hex')}`;
+      customer = await db.aiCustomer.create({
+        data: {
+          id: targetId,
+          businessId: business.id,
+          name: updatedName,
+          phone: updatedPhone || cleanPhone,
+          address: updatedAddress,
+          email: updatedEmail,
+          notes: updatedNotes,
+        },
+      });
+    }
+
+    if (customer.phone) {
+      try {
+        await db.gptformCommerceOrder.updateMany({
+          where: {
+            businessId: business.id,
+            customerPhone: customer.phone,
+          },
+          data: {
+            customerName: customer.name,
+            ...(customer.address ? { deliveryAddress: customer.address } : {}),
+          },
+        });
+      } catch (err) {
+        console.warn('Non-fatal order update failure:', err);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        address: customer.address,
+        notes: customer.notes,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    return NextResponse.json(
+      { error: 'Could not update customer.' },
+      { status: message === 'UNAUTHORIZED' ? 401 : message === 'FORBIDDEN' ? 403 : 500 }
+    );
+  }
+}
