@@ -273,7 +273,8 @@ export function ReviewsView({
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   // GBP Connection state
-  const [isGbpConnected, setIsGbpConnected] = useState(true);
+  const [isGbpConnected, setIsGbpConnected] = useState(Boolean(isDemo || initialReviews === INITIAL_REVIEWS));
+  const [gbpAccount, setGbpAccount] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Create a Post state
@@ -336,6 +337,7 @@ export function ReviewsView({
     sms: true,
     commentToDm: true,
   });
+  const [autoGbpPosting, setAutoGbpPosting] = useState(true);
 
   // Reviews State
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>(
@@ -404,9 +406,44 @@ export function ReviewsView({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!mounted || !data) return;
-        if (Array.isArray(data.accounts)) {
-          const activeGbp = data.accounts.some((a: any) => a.isActive !== false);
-          setIsGbpConnected(activeGbp || true);
+        const list = Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data.accounts)
+          ? data.accounts
+          : [];
+        const activeGbp = list.find((a: any) => a.platform === 'googlebusiness' && a.isActive !== false);
+        if (activeGbp) {
+          setIsGbpConnected(true);
+          setGbpAccount(activeGbp);
+        } else if (!isDemo && !initialReviews) {
+          setIsGbpConnected(false);
+          setGbpAccount(null);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, [isDemo, initialReviews]);
+
+  // Load Omnichannel Auto-Reply and Auto GBP Posting preferences
+  useEffect(() => {
+    let mounted = true;
+    authFetch('/api/omnichannel/auto-reply')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        setOmnichannelConfig((prev) => ({
+          ...prev,
+          whatsapp: data.whatsapp?.enabled ?? prev.whatsapp,
+          instagram: data.instagram?.enabled ?? prev.instagram,
+          facebook: data.facebook?.enabled ?? prev.facebook,
+          sms: data.sms?.enabled ?? prev.sms,
+          commentToDm: data.instagram?.commentToDmEnabled ?? prev.commentToDm,
+        }));
+        if (typeof data.autoGbpPosting === 'boolean') {
+          setAutoGbpPosting(data.autoGbpPosting);
         }
       })
       .catch(() => {});
@@ -803,6 +840,22 @@ export function ReviewsView({
     }
   };
 
+  const handleToggleAutoGbpPosting = async (enabled: boolean) => {
+    setAutoGbpPosting(enabled);
+    try {
+      const res = await authFetch('/api/omnichannel/auto-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoGbpPosting: enabled }),
+      });
+      if (res.ok) {
+        toast.success(enabled ? 'Auto GBP posting active (1-2 posts/week)!' : 'Auto GBP posting paused.');
+      }
+    } catch {
+      // Local fallback
+    }
+  };
+
   // Filtered reviews for Triage Workstation
   const filteredReviews = reviewsList.filter((r) => {
     if (filterRating === 'replied' && !r.replied) return false;
@@ -1013,6 +1066,44 @@ export function ReviewsView({
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'overview' && (
         <div className="space-y-5">
+          {/* ─── 0. Google Business Connection Notice ─── */}
+          {!isGbpConnected && !isDemo && !initialReviews && (
+            <div className="p-4 sm:p-5 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="size-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <MapPin className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                      Google Business Profile Not Connected
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[11px] font-semibold">
+                      Action Required
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-xl">
+                    Connect your verified Google Business Profile to sync your live customer reviews, publish 1-click AI replies, and optimize your Local 3-Pack Maps ranking.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={() => {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const token = getAuthToken();
+                    const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+                    window.location.href = `/api/oauth/googlebusiness?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
+                  }}
+                  className="h-9 gap-1.5 bg-[#009F50] hover:bg-[#008A45] text-white font-semibold text-xs shadow-xs rounded-xl px-4"
+                >
+                  <MapPin className="size-3.5" />
+                  <span>1-Click Connect Google Business</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* ─── AI GBP 100% Completeness & Local SEO Audit Card ─── */}
           <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-900 border border-emerald-500/30 rounded-2xl p-5 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="space-y-1.5">
@@ -1478,7 +1569,7 @@ export function ReviewsView({
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                         {profileTitle || businessName}
                       </h4>
-                      {profileTitle !== 'BGOS Home Cleaning' && (
+                      {(isDemo || initialReviews === INITIAL_REVIEWS) && (
                         <span className="text-xs text-slate-400 font-medium truncate">
                           BGOS Home Cleaning
                         </span>
@@ -2918,6 +3009,26 @@ export function ReviewsView({
                 <input
                   type="checkbox"
                   defaultChecked
+                  className="size-4 rounded accent-[#009F50]"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold">Auto GBP Posting (1-2x Weekly)</p>
+                    <Badge className="bg-[#009F50] text-white text-[10px] px-2 py-0.5 border-0">
+                      SEO Growth
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    AI automatically crafts and publishes 1-2 localized SEO posts weekly to keep Google Maps active.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={autoGbpPosting}
+                  onChange={(e) => handleToggleAutoGbpPosting(e.target.checked)}
                   className="size-4 rounded accent-[#009F50]"
                 />
               </div>

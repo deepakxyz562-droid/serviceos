@@ -63,6 +63,7 @@ type OmnichannelResult = {
   instagram: { enabled: boolean; commentToDmEnabled: boolean };
   facebook: { enabled: boolean };
   sms: { enabled: boolean };
+  autoGbpPosting?: boolean;
 };
 
 function parseReplyText(review: Review): string | null {
@@ -81,6 +82,11 @@ export default function GrowthScreen() {
   const audit = useResource<AuditResult>('/api/gbp/audit');
   const analytics = useResource<AnalyticsResult>('/api/gbp/analytics');
   const omnichannel = useResource<OmnichannelResult>('/api/omnichannel/auto-reply');
+  const socialAccounts = useResource<{ data: any[] }>('/api/social/accounts');
+
+  const isGbpConnected = Boolean(socialAccounts.data?.data?.some((a) => a.platform === 'googlebusiness' && a.isActive !== false));
+  const isFbConnected = Boolean(socialAccounts.data?.data?.some((a) => a.platform === 'facebook' && a.isActive !== false));
+  const isIgConnected = Boolean(socialAccounts.data?.data?.some((a) => a.platform === 'instagram' && a.isActive !== false));
 
   const [activeTab, setActiveTab] = useState<'google' | 'reviews' | 'autoreply'>('google');
   const [reviewFilter, setReviewFilter] = useState<'all' | 'pending' | 'replied'>('all');
@@ -89,6 +95,8 @@ export default function GrowthScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoDripMode, setPhotoDripMode] = useState<'staggered' | 'daily' | 'instant'>('staggered');
+  const [customPhotoUrl, setCustomPhotoUrl] = useState('');
+  const [showComparison, setShowComparison] = useState(false);
 
   const reviewList = reviews.data?.reviews || [];
   const pendingCount = reviewList.filter((r) => !parseReplyText(r)).length;
@@ -185,19 +193,45 @@ export default function GrowthScreen() {
         'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&auto=format&fit=crop&q=80',
         'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80',
       ];
+      const photosToUpload = customPhotoUrl.trim()
+        ? [customPhotoUrl.trim(), ...samplePhotos]
+        : samplePhotos;
       const res = await apiRequest<{ success: boolean; message: string }>('/api/social/photos', {
         method: 'POST',
         body: {
-          photos: samplePhotos,
+          photos: photosToUpload,
           scheduleMode: photoDripMode,
           category: 'ADDITIONAL',
         },
       });
       if (res.success) {
+        setCustomPhotoUrl('');
         Alert.alert('AI Photo Drip Active! 📸', res.message);
       }
     } catch (e: any) {
       setError(e.message || 'Could not schedule photo drip.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Toggle Auto GBP Weekly Posting (1-2x per week)
+  async function toggleAutoGbpPosting(enabled: boolean) {
+    setBusy(true);
+    try {
+      await apiRequest('/api/omnichannel/auto-reply', {
+        method: 'POST',
+        body: { autoGbpPosting: enabled },
+      });
+      await omnichannel.refresh();
+      Alert.alert(
+        enabled ? 'Auto GBP Posting Active! 🚀' : 'Auto GBP Posting Paused',
+        enabled
+          ? 'AI will automatically craft and publish 1-2 localized SEO posts weekly to your Google Business Profile.'
+          : 'Weekly automated GBP posts have been paused.'
+      );
+    } catch (e: any) {
+      setError(e.message || 'Failed to update auto GBP posting.');
     } finally {
       setBusy(false);
     }
@@ -269,6 +303,27 @@ export default function GrowthScreen() {
       {/* TAB 1: GOOGLE & SEO */}
       {activeTab === 'google' && (
         <View style={{ gap: 14 }}>
+          {/* Google Business Connect Card if Not Connected */}
+          {!isGbpConnected && (
+            <Card style={{ gap: 10, backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }}>
+              <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                <Badge label="Action Required" accent />
+                <Text style={{ color: '#D97706', fontSize: 11, fontWeight: '700' }}>Google Business</Text>
+              </View>
+              <Text style={[ui.heading, { fontSize: 15, color: '#92400E' }]}>
+                Connect Your Google Profile
+              </Text>
+              <Text style={[ui.body, { fontSize: 12, color: '#B45309' }]}>
+                Link your official Google Business Profile to view real customer reviews, sync live Search/Maps metrics, and publish AI replies.
+              </Text>
+              <Action
+                label="1-Click Connect Google"
+                icon="store"
+                onPress={() => Linking.openURL(`${WEB_URL}/api/oauth/googlebusiness?product=bgos&returnView=socialMedia`)}
+              />
+            </Card>
+          )}
+
           {/* AI GBP 100% Optimization Card */}
           <Card style={{ gap: 10, backgroundColor: '#070B2D' }}>
             <View style={[ui.row, { justifyContent: 'space-between' }]}>
@@ -322,6 +377,32 @@ export default function GrowthScreen() {
             </Text>
           </Card>
 
+          {/* AI Auto GBP Posting (1-2x Weekly) Card */}
+          <Card style={{ gap: 10 }}>
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <View style={[ui.row, { gap: 8 }]}>
+                <MaterialIcons name="auto-awesome" size={20} color="#168557" />
+                <Text style={ui.heading}>Auto GBP Posting (1-2x Weekly)</Text>
+              </View>
+              <Switch
+                value={omnichannel.data?.autoGbpPosting ?? true}
+                disabled={busy}
+                onValueChange={toggleAutoGbpPosting}
+              />
+            </View>
+            <Text style={ui.body}>
+              AI autonomously crafts and publishes 1-2 localized SEO-rich posts weekly to your Google Business Profile to keep your listing active on Google Maps.
+            </Text>
+            <View style={[ui.row, { gap: 6 }]}>
+              <Badge
+                label={omnichannel.data?.autoGbpPosting !== false ? 'Active • 1-2 Posts/Week' : 'Paused'}
+                success={omnichannel.data?.autoGbpPosting !== false}
+                accent={omnichannel.data?.autoGbpPosting === false}
+              />
+              <Badge label="Local SEO Engine" />
+            </View>
+          </Card>
+
           {/* AI Bulk Photo Upload & Drip Scheduler */}
           <Card style={{ gap: 10 }}>
             <View style={[ui.row, { justifyContent: 'space-between' }]}>
@@ -331,6 +412,12 @@ export default function GrowthScreen() {
             <Text style={ui.body}>
               Upload photos in bulk. The AI drips them automatically every 2 days or weekly to signal consistent activity to Google Maps.
             </Text>
+            <Field
+              label="Job Photo URL (Optional)"
+              value={customPhotoUrl}
+              onChangeText={setCustomPhotoUrl}
+              placeholder="https://... (or leave empty for curated photos)"
+            />
             <View style={[ui.row, { gap: 6 }]}>
               {[
                 ['staggered', 'Drip: 2 Days'],
@@ -352,6 +439,55 @@ export default function GrowthScreen() {
               secondary
               onPress={startPhotoDrip}
             />
+          </Card>
+
+          {/* GBP AI Agents vs Marketing Agency Matrix */}
+          <Card style={{ gap: 10, backgroundColor: '#F8FAFC', borderColor: '#E2E8F0' }}>
+            <View style={[ui.row, { justifyContent: 'space-between' }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[ui.heading, { fontSize: 15 }]}>GBP AI Agents vs Marketing Agency</Text>
+                <Text style={[ui.caption, { color: '#64748B' }]}>Same job. Faster, cheaper, smarter.</Text>
+              </View>
+              <Chip
+                label={showComparison ? 'Hide Table' : 'Compare'}
+                selected={showComparison}
+                onPress={() => setShowComparison(!showComparison)}
+              />
+            </View>
+
+            {showComparison && (
+              <View style={{ gap: 6, marginTop: 4 }}>
+                {[
+                  ['SEO keyword research', '1-Click Local SEO Engine', 'Manual, 2-3 wks delay'],
+                  ['GBP content rewriting', 'Instant 750-char SEO Content', '$300+ add-on fee'],
+                  ['Auto GBP posting', '1-2 automated posts/wk', 'Bi-weekly or missed'],
+                  ['Review reply writing', 'Instant 100% response rate', '24-72h delay'],
+                  ['Review generation', 'Auto SMS/WhatsApp invite', 'Manual or none'],
+                  ['24/7 availability', '24/7/365 active co-pilot', 'Mon-Fri 9-5 only'],
+                  ['Affordable monthly cost', 'Included in BGOS', '$500 – $1,500/mo'],
+                ].map(([task, aiVal, agencyVal], idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      padding: 8,
+                      backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F1F5F9',
+                      borderRadius: 8,
+                      gap: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.ink }}>{task}</Text>
+                    <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                      <Text style={{ fontSize: 11, color: '#168557', fontWeight: '600', flex: 1 }}>
+                        ✓ AI: {aiVal}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', flex: 1, textAlign: 'right' }}>
+                        Agency: {agencyVal}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </Card>
 
           <Action
@@ -513,6 +649,14 @@ export default function GrowthScreen() {
             <Text style={ui.caption}>
               When users comment "price", "how much", or "quote" on Reels/Posts, AI automatically DMs the quote &amp; booking link.
             </Text>
+            {!isIgConnected && (
+              <Action
+                label="1-Click Connect Instagram"
+                icon="photo-camera"
+                secondary
+                onPress={() => Linking.openURL(`${WEB_URL}/api/oauth/instagram?product=bgos&returnView=socialMedia`)}
+              />
+            )}
           </Card>
 
           {/* Facebook Messenger & Feed Comments */}
@@ -531,6 +675,14 @@ export default function GrowthScreen() {
             <Text style={ui.caption}>
               Replies to Page messages and sends private links to commenters inquiring about pricing.
             </Text>
+            {!isFbConnected && (
+              <Action
+                label="1-Click Connect Facebook"
+                icon="facebook"
+                secondary
+                onPress={() => Linking.openURL(`${WEB_URL}/api/oauth/facebook?product=bgos&returnView=socialMedia`)}
+              />
+            )}
           </Card>
 
           {/* SMS Auto-Reply */}

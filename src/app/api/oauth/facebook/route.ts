@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { getAuthUser, verifyToken } from '@/lib/auth';
 
 /**
  * GET /api/oauth/facebook
@@ -46,9 +46,45 @@ import { getAuthUser } from '@/lib/auth';
  * each Page as a separate SocialAccount.
  */
 export async function GET(request: NextRequest) {
-  // ── 1. Auth check ──────────────────────────────────────────────────────
-  const authUser = await getAuthUser(request);
+  // ── 0. Resolve originHost early ────────────────────────────────────────
+  const { searchParams } = new URL(request.url);
+  const queryOrigin = searchParams.get('originHost');
+  const referer = request.headers.get('referer');
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const hostHeader = forwardedHost || request.headers.get('host');
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+  const proto = forwardedProto || (hostHeader?.startsWith('localhost') ? 'http' : 'https');
+
+  let originHost = queryOrigin;
+  if (!originHost && referer) {
+    try {
+      originHost = new URL(referer).origin;
+    } catch {}
+  }
+  if (!originHost && hostHeader) {
+    originHost = `${proto}://${hostHeader}`;
+  }
+  if (!originHost) {
+    originHost = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://fieseros.com';
+  }
+
+  // ── 1. Auth check (Cookie -> Header -> Query Param fallback) ───────────
+  let authUser = await getAuthUser(request);
+  const tokenFromQuery = searchParams.get('auth') || searchParams.get('token');
+  if (!authUser && tokenFromQuery) {
+    authUser = verifyToken(tokenFromQuery);
+  }
+
   if (!authUser) {
+    const isBrowserNav =
+      request.headers.get('accept')?.includes('text/html') ||
+      !request.headers.get('accept')?.includes('application/json');
+    if (isBrowserNav && originHost) {
+      const loginUrl = new URL('/', originHost);
+      loginUrl.searchParams.set('login', 'required');
+      loginUrl.searchParams.set('returnUrl', request.nextUrl.pathname + request.nextUrl.search);
+      return NextResponse.redirect(loginUrl.toString());
+    }
     return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   }
   const tenantId = authUser.tenantId;

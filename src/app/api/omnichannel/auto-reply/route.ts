@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
           settings.omnichannelAutoReply?.sms?.scriptedMessage ??
           `Hi! Thanks for reaching out to ${tenant?.name || 'us'}. We got your text and will reply shortly. For urgent needs call ${tenant?.phone || 'our office'}.`,
       },
+      autoGbpPosting: settings.autoGbpPosting ?? true,
       connectedChannels: {
         whatsapp: true, // Internal provider
         instagram: connectedPlatforms.has('instagram'),
@@ -113,6 +114,10 @@ export async function POST(request: NextRequest) {
     };
 
     settings.omnichannelAutoReply = updatedOmnichannel;
+
+    if (typeof body.autoGbpPosting === 'boolean') {
+      settings.autoGbpPosting = body.autoGbpPosting;
+    }
 
     // Keep legacy autoReplyOffline synced with WhatsApp/SMS toggles
     if (body.whatsapp || body.sms) {

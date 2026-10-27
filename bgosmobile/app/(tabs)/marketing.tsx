@@ -145,6 +145,32 @@ export default function MarketingScreen() {
     }
   }
 
+  function handleChannelChipPress(platform: 'googlebusiness' | 'facebook' | 'instagram' | 'whatsapp') {
+    if (platform === 'whatsapp') {
+      Alert.alert('WhatsApp Marketing', 'WhatsApp broadcasts are active for your workspace customers.');
+      return;
+    }
+    const isConn = available.some((a) => a.platform === platform && a.isActive);
+    const label = platform === 'googlebusiness' ? 'Google Business' : platform === 'facebook' ? 'Facebook Page' : 'Instagram Business';
+    if (isConn) {
+      Alert.alert(`${label} Connected ✅`, `Your ${label} is active and ready to publish content.`);
+    } else {
+      Alert.alert(
+        `Connect ${label}`,
+        `Link your ${label} to publish posts and auto-reply directly from BGOS.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: '1-Click Connect',
+            onPress: () => {
+              Linking.openURL(`${WEB_URL}/api/oauth/${platform}?product=bgos&returnView=socialMedia`);
+            },
+          },
+        ]
+      );
+    }
+  }
+
   return (
     <Screen
       title="Marketing Studio"
@@ -181,22 +207,28 @@ export default function MarketingScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <View style={styles.channelChip}>
+          <Pressable onPress={() => handleChannelChipPress('googlebusiness')} style={styles.channelChip}>
             <MaterialIcons name="store" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>Google</Text>
-          </View>
-          <View style={styles.channelChip}>
+            <Text style={styles.channelChipText}>
+              Google {available.some((a) => a.platform === 'googlebusiness' && a.isActive) ? '✓' : '+'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => handleChannelChipPress('facebook')} style={styles.channelChip}>
             <MaterialIcons name="facebook" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>Facebook</Text>
-          </View>
-          <View style={styles.channelChip}>
+            <Text style={styles.channelChipText}>
+              Facebook {available.some((a) => a.platform === 'facebook' && a.isActive) ? '✓' : '+'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => handleChannelChipPress('instagram')} style={styles.channelChip}>
             <MaterialIcons name="camera-alt" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>Instagram</Text>
-          </View>
-          <View style={styles.channelChip}>
+            <Text style={styles.channelChipText}>
+              Instagram {available.some((a) => a.platform === 'instagram' && a.isActive) ? '✓' : '+'}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => handleChannelChipPress('whatsapp')} style={styles.channelChip}>
             <MaterialIcons name="chat" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>WhatsApp</Text>
-          </View>
+            <Text style={styles.channelChipText}>WhatsApp ✓</Text>
+          </Pressable>
         </View>
       </Card>
 

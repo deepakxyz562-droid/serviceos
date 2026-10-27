@@ -218,26 +218,18 @@ export function SocialAccountsView() {
   }, [loadAccounts]);
 
   const handleConnect = (platform: PlatformMeta) => {
-    // Social publishing OAuth routes live at `/api/oauth/{platform}` (no
-    // `/connect` subpath). This is intentionally separate from the
-    // generic `/api/oauth/[provider]/connect` route used by the
-    // omnichannel inbox (messaging) — publishing needs different scopes
-    // and stores tokens in SocialAccount (not CommunicationProvider).
-    //
-    // Platforms with a static route at this path (facebook, instagram,
-    // googlebusiness) initiate OAuth. Platforms without (linkedin,
-    // pinterest, twitter) return 404 → "coming soon" toast.
-    //
-    // We do a HEAD to detect 404 (so we can show a friendly toast instead
-    // of a hard 404 page). For routes that exist, the GET returns a 307
-    // redirect to the provider's OAuth dialog — fetch follows that
-    // redirect cross-origin, which typically fails CORS, so the catch
-    // branch fires and surfaces a "Redirecting…" toast with an "Open"
-    // button (the user clicks to actually navigate).
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const token = getAuthToken();
     const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
     const connectUrl = `/api/oauth/${platform.key}?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
+
+    // 1-Click direct authorization for supported platforms
+    if (['facebook', 'instagram', 'googlebusiness'].includes(platform.key)) {
+      toast.loading(`Redirecting to ${platform.label}...`);
+      window.location.href = connectUrl;
+      return;
+    }
+
     authFetch(connectUrl, { method: 'HEAD' })
       .then((res) => {
         if (res.status === 404) {
