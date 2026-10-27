@@ -1932,7 +1932,9 @@ export function BosMarketingAiIntegrationsSettings({
               </div>
             </div>
           </div>
-        )}
+        </div>
+      </div>
+    )}
 
         {/* FESTIVAL & SUVICHAR GREETINGS STUDIO (Matching Vyapar parity Screenshots 7, 8, 9, 10) */}
         {marketingSubTab === 'greetings_studio' && (
