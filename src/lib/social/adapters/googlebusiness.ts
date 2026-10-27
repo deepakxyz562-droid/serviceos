@@ -562,6 +562,357 @@ function normalizeGbpDate(input: string): string {
   return input.slice(0, 10);
 }
 
+/**
+ * Reply to a customer review on Google Business Profile.
+ *
+ * PUT https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/reviews/{reviewId}/reply
+ * Body: { comment: string }
+ */
+export async function replyToGoogleBusinessReview(
+  account: SocialAccountData,
+  reviewId: string,
+  comment: string,
+): Promise<{ comment: string; updateTime: string }> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
+  const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews/${cleanReviewId}/reply`;
+
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ comment: comment.trim() }),
+  });
+
+  await assertOk(res, 'reply to review');
+  const data = (await res.json().catch(() => ({}))) as { comment?: string; updateTime?: string };
+  return {
+    comment: data.comment || comment.trim(),
+    updateTime: data.updateTime || new Date().toISOString(),
+  };
+}
+
+/**
+ * Delete a review reply from Google Business Profile.
+ *
+ * DELETE https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/reviews/{reviewId}/reply
+ */
+export async function deleteGoogleBusinessReviewReply(
+  account: SocialAccountData,
+  reviewId: string,
+): Promise<boolean> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const cleanReviewId = reviewId.includes('/') ? reviewId.split('/').pop()! : reviewId;
+  const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews/${cleanReviewId}/reply`;
+
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+    },
+  });
+
+  await assertOk(res, 'delete review reply');
+  return true;
+}
+
+/**
+ * Fetch reviews from Google Business Profile for a location.
+ *
+ * GET https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/reviews
+ */
+export async function fetchGoogleBusinessReviews(
+  account: SocialAccountData,
+  options?: { pageSize?: number; pageToken?: string },
+): Promise<{
+  reviews: Array<{
+    reviewId: string;
+    authorName: string;
+    profilePhotoUrl?: string;
+    rating: number;
+    comment: string;
+    createTime: string;
+    reply?: { comment: string; updateTime: string };
+  }>;
+  averageRating: number;
+  totalReviewCount: number;
+  nextPageToken?: string;
+}> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const pageSize = options?.pageSize || 50;
+  let url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/reviews?pageSize=${pageSize}`;
+  if (options?.pageToken) {
+    url += `&pageToken=${encodeURIComponent(options.pageToken)}`;
+  }
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+    },
+  });
+
+  await assertOk(res, 'fetch reviews');
+  const data = (await res.json().catch(() => ({}))) as {
+    reviews?: Array<{
+      reviewId?: string;
+      name?: string;
+      reviewer?: { displayName?: string; profilePhotoUrl?: string };
+      starRating?: string;
+      comment?: string;
+      createTime?: string;
+      reviewReply?: { comment?: string; updateTime?: string };
+    }>;
+    averageRating?: number;
+    totalReviewCount?: number;
+    nextPageToken?: string;
+  };
+
+  const starMap: Record<string, number> = {
+    ONE: 1,
+    TWO: 2,
+    THREE: 3,
+    FOUR: 4,
+    FIVE: 5,
+  };
+
+  const reviews = (data.reviews || []).map((r) => {
+    const rId = r.reviewId || (r.name ? r.name.split('/').pop() : '') || '';
+    const rating = r.starRating ? starMap[r.starRating.toUpperCase()] || 5 : 5;
+    return {
+      reviewId: rId,
+      authorName: r.reviewer?.displayName || 'Google User',
+      profilePhotoUrl: r.reviewer?.profilePhotoUrl,
+      rating,
+      comment: r.comment || '',
+      createTime: r.createTime || new Date().toISOString(),
+      reply: r.reviewReply?.comment
+        ? {
+            comment: r.reviewReply.comment,
+            updateTime: r.reviewReply.updateTime || new Date().toISOString(),
+          }
+        : undefined,
+    };
+  });
+
+  return {
+    reviews,
+    averageRating: data.averageRating || 0,
+    totalReviewCount: data.totalReviewCount || reviews.length,
+    nextPageToken: data.nextPageToken,
+  };
+}
+
+/**
+ * Upload a media photo to Google Business Profile.
+ *
+ * POST https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/media
+ */
+export async function uploadGoogleBusinessMedia(
+  account: SocialAccountData,
+  mediaData: {
+    sourceUrl: string;
+    mediaFormat?: 'PHOTO';
+    category?: 'ADDITIONAL' | 'COVER' | 'PROFILE' | 'EXTERIOR' | 'INTERIOR' | 'PRODUCT';
+    description?: string;
+  },
+): Promise<{
+  name: string;
+  googleUrl: string;
+  thumbnailUrl?: string;
+  createTime: string;
+}> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/media`;
+
+  const payload = {
+    mediaFormat: mediaData.mediaFormat || 'PHOTO',
+    locationAssociation: {
+      category: mediaData.category || 'ADDITIONAL',
+    },
+    sourceUrl: mediaData.sourceUrl,
+    description: mediaData.description,
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  await assertOk(res, 'upload media photo');
+  const data = (await res.json().catch(() => ({}))) as {
+    name?: string;
+    googleUrl?: string;
+    thumbnailUrl?: string;
+    createTime?: string;
+  };
+
+  return {
+    name: data.name || '',
+    googleUrl: data.googleUrl || mediaData.sourceUrl,
+    thumbnailUrl: data.thumbnailUrl,
+    createTime: data.createTime || new Date().toISOString(),
+  };
+}
+
+/**
+ * List media photos from Google Business Profile.
+ *
+ * GET https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/media
+ */
+export async function listGoogleBusinessMedia(
+  account: SocialAccountData,
+  options?: { pageSize?: number; pageToken?: string },
+): Promise<{
+  mediaItems: Array<{
+    name: string;
+    googleUrl: string;
+    thumbnailUrl?: string;
+    createTime: string;
+    category?: string;
+  }>;
+  nextPageToken?: string;
+}> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const normalizedAccount = accountName.startsWith('accounts/') ? accountName : `accounts/${accountName}`;
+  const pageSize = options?.pageSize || 50;
+  let url = `${GBP_V4_BASE}/${normalizedAccount}/locations/${locationId}/media?pageSize=${pageSize}`;
+  if (options?.pageToken) {
+    url += `&pageToken=${encodeURIComponent(options.pageToken)}`;
+  }
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+    },
+  });
+
+  await assertOk(res, 'list media');
+  const data = (await res.json().catch(() => ({}))) as {
+    mediaItems?: Array<{
+      name?: string;
+      googleUrl?: string;
+      thumbnailUrl?: string;
+      createTime?: string;
+      locationAssociation?: { category?: string };
+    }>;
+    nextPageToken?: string;
+  };
+
+  const items = (data.mediaItems || []).map((m) => ({
+    name: m.name || '',
+    googleUrl: m.googleUrl || '',
+    thumbnailUrl: m.thumbnailUrl,
+    createTime: m.createTime || new Date().toISOString(),
+    category: m.locationAssociation?.category || 'ADDITIONAL',
+  }));
+
+  return {
+    mediaItems: items,
+    nextPageToken: data.nextPageToken,
+  };
+}
+
+/**
+ * Fetch Performance Telemetry metrics from Google Business Profile Performance API.
+ *
+ * GET https://businessprofileperformance.googleapis.com/v1/locations/{locationId}:fetchMultiDailyMetricsTimeSeries
+ */
+export async function fetchGoogleBusinessPerformanceMetrics(
+  account: SocialAccountData,
+  startDate?: string,
+  endDate?: string,
+): Promise<{
+  searchImpressions: number;
+  mapsImpressions: number;
+  callClicks: number;
+  directionRequests: number;
+  websiteClicks: number;
+  bookings: number;
+  conversations: number;
+}> {
+  const { locationId } = extractLocationRef(account);
+  const now = new Date();
+  const start = startDate || new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const end = endDate || now.toISOString().slice(0, 10);
+
+  const [sYear, sMonth, sDay] = start.split('-').map(Number);
+  const [eYear, eMonth, eDay] = end.split('-').map(Number);
+
+  const url = `https://businessprofileperformance.googleapis.com/v1/locations/${locationId}:fetchMultiDailyMetricsTimeSeries?dailyMetrics=BUSINESS_IMPRESSIONS_DESKTOP_MAPS&dailyMetrics=BUSINESS_IMPRESSIONS_MOBILE_MAPS&dailyMetrics=BUSINESS_IMPRESSIONS_DESKTOP_SEARCH&dailyMetrics=BUSINESS_IMPRESSIONS_MOBILE_SEARCH&dailyMetrics=CALL_CLICKS&dailyMetrics=BUSINESS_DIRECTION_REQUESTS&dailyMetrics=WEBSITE_CLICKS&dailyMetrics=BUSINESS_BOOKINGS&dailyMetrics=BUSINESS_CONVERSATIONS&dailyRange.startDate.year=${sYear}&dailyRange.startDate.month=${sMonth}&dailyRange.startDate.day=${sDay}&dailyRange.endDate.year=${eYear}&dailyRange.endDate.month=${eMonth}&dailyRange.endDate.day=${eDay}`;
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+    },
+  });
+
+  await assertOk(res, 'fetch performance telemetry');
+  const data = (await res.json().catch(() => ({}))) as {
+    multiDailyMetricTimeSeries?: Array<{
+      dailyMetricTimeSeries?: Array<{
+        dailyMetric?: string;
+        timeSeries?: {
+          datedValues?: Array<{ value?: string }>;
+        };
+      }>;
+    }>;
+  };
+
+  let searchImpressions = 0;
+  let mapsImpressions = 0;
+  let callClicks = 0;
+  let directionRequests = 0;
+  let websiteClicks = 0;
+  let bookings = 0;
+  let conversations = 0;
+
+  const seriesList = data.multiDailyMetricTimeSeries?.[0]?.dailyMetricTimeSeries || [];
+  for (const s of seriesList) {
+    const metric = s.dailyMetric || '';
+    const sum = (s.timeSeries?.datedValues || []).reduce((acc, v) => acc + (parseInt(v.value || '0', 10) || 0), 0);
+
+    if (metric.includes('SEARCH')) {
+      searchImpressions += sum;
+    } else if (metric.includes('MAPS')) {
+      mapsImpressions += sum;
+    } else if (metric === 'CALL_CLICKS') {
+      callClicks += sum;
+    } else if (metric === 'BUSINESS_DIRECTION_REQUESTS') {
+      directionRequests += sum;
+    } else if (metric === 'WEBSITE_CLICKS') {
+      websiteClicks += sum;
+    } else if (metric === 'BUSINESS_BOOKINGS') {
+      bookings += sum;
+    } else if (metric === 'BUSINESS_CONVERSATIONS') {
+      conversations += sum;
+    }
+  }
+
+  return {
+    searchImpressions,
+    mapsImpressions,
+    callClicks,
+    directionRequests,
+    websiteClicks,
+    bookings,
+    conversations,
+  };
+}
+
 // ─── Self-register ─────────────────────────────────────────────────────────
 
 registerAdapter(googleBusinessAdapter);
+

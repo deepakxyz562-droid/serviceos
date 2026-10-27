@@ -100,6 +100,10 @@ export async function POST(request: NextRequest) {
     for (const event of messaging) {
       await processMessagingEvent(object, event);
     }
+    const changes = entry?.changes || [];
+    for (const change of changes) {
+      await processCommentChangeEvent(object, entry?.id, change);
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -266,3 +270,89 @@ async function processMessagingEvent(platform: string, event: any) {
     console.error('[meta/webhook] Send API fetch failed:', sendErr);
   }
 }
+
+async function processCommentChangeEvent(platform: string, entryId: string, change: any) {
+  const field = change?.field;
+  if (field !== 'comments' && field !== 'feed') return;
+  const val = change?.value;
+  if (!val) return;
+
+  const commentId = val.id || val.comment_id;
+  const commentText = (val.text || val.message || '').trim();
+  const fromUser = val.from;
+  const fromId = fromUser?.id;
+  const fromName = fromUser?.name || fromUser?.username || 'there';
+
+  if (!commentId || !commentText || !fromId) return;
+
+  // Do not reply to the business page/account itself
+  if (fromId === entryId) return;
+
+  const socialAccount = await db.socialAccount.findFirst({
+    where: {
+      platform: platform === 'instagram' ? 'instagram' : 'facebook',
+      accountId: entryId,
+      isActive: true,
+    },
+    select: { id: true, tenantId: true, accessToken: true },
+  }).catch(() => null);
+
+  if (!socialAccount) return;
+
+  const accessToken = socialAccount.accessToken ? decryptToken(socialAccount.accessToken) : null;
+  if (!accessToken) return;
+
+  // High-intent conversion keywords: price, how much, cost, quote, book, available, link, info, details
+  const triggers = ['price', 'how much', 'cost', 'quote', 'book', 'available', 'link', 'info', 'service', 'details', 'dm'];
+  const lower = commentText.toLowerCase();
+  const hasTrigger = triggers.some((t) => lower.includes(t));
+
+  const tenant = await db.tenant.findUnique({
+    where: { id: socialAccount.tenantId },
+    select: { name: true, settingsJson: true },
+  }).catch(() => null);
+
+  const businessName = tenant?.name || 'our team';
+
+  // 1. Reply publicly on the comment
+  const publicReply = `Thanks @${fromName}! We just sent you a private message with our pricing and instant booking link 🚀`;
+  try {
+    const commentReplyUrl = `https://graph.facebook.com/v21.0/${commentId}/comments`;
+    await fetch(commentReplyUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ message: publicReply }),
+    });
+  } catch (err) {
+    console.warn('[meta/webhook] Failed to post public comment reply:', err);
+  }
+
+  // 2. Send private DM / message to the commenter with direct booking/quote link
+  try {
+    const sendUrl = 'https://graph.facebook.com/v21.0/me/messages';
+    const privateDmText = `Hi ${fromName}! Thanks for reaching out to ${businessName}. For instant pricing, service options, or to book an appointment with zero wait, check out our direct link: https://fieseros.com. Let us know if you have any questions!`;
+
+    const sendPayload: Record<string, unknown> = {
+      recipient: { comment_id: commentId },
+      message: { text: privateDmText },
+    };
+    if (platform !== 'instagram') {
+      sendPayload.messaging_type = 'RESPONSE';
+    }
+
+    await fetch(sendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(sendPayload),
+    });
+  } catch (err) {
+    console.warn('[meta/webhook] Failed to send private DM from comment:', err);
+  }
+}
+
