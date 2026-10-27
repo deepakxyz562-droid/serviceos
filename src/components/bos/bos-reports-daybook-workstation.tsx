@@ -1279,6 +1279,198 @@ export function BosReportsDaybookWorkstation({
     showToast(`Exported Stock Valuation CSV (${today})`);
   };
 
+  const handleExportOverviewCsv = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const storeName = storeSettings?.businessName || 'Business Store';
+    const header = ['Category / Metric', 'Value', 'Notes'];
+
+    const netProfit = reportsData.grossProfit - reportsData.totalExpenses;
+
+    const rows = [
+      ['Store Name', `"${storeName.replace(/"/g, '""')}"`, 'Active Merchant'],
+      ['Report Period', reportPeriod.toUpperCase(), 'Selected timeframe filter'],
+      ['Export Date', today, 'Timestamp of export'],
+      ['Total Gross Revenue', reportsData.totalRevenue, 'Total billed sales'],
+      ['Gross Profit', reportsData.grossProfit, `Margin: ${reportsData.marginLabel}`],
+      ['Operating Expenses', reportsData.totalExpenses, 'Daybook out transactions'],
+      ['Net Profit', netProfit, 'Bottom line earnings'],
+      ['Total Orders', reportsData.totalOrders, 'Customer bills processed'],
+      ['Average Ticket Size', Math.round(reportsData.avgOrderVal), 'Average spend per order'],
+      ['GST Tax Collected', reportsData.gstCollected, 'CGST + SGST collected'],
+      ['Cash in Drawer Closing', closingBalance, 'Current cash register total'],
+      ['Customer Khata Dues', khataData.totalReceivables, 'Outstanding credit receivables'],
+    ];
+
+    const csvContent = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${storeName.replace(/\s+/g, '_')}_PL_Overview_${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported Overview & P&L Statement CSV (${today})`);
+  };
+
+  const handleExportKhataCsv = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const storeName = storeSettings?.businessName || 'Business Store';
+    const header = [
+      'Customer Name',
+      'Phone',
+      'Total Credit Given',
+      'Pending Dues',
+      'Status',
+    ];
+
+    const rows = (khataData.customers || []).map((c) => [
+      `"${c.name.replace(/"/g, '""')}"`,
+      c.phone || '',
+      c.totalCredit || 0,
+      c.pending || 0,
+      c.status || 'Active',
+    ]);
+
+    const csvContent = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${storeName.replace(/\s+/g, '_')}_Khata_Dues_${today}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported Customer Khata Dues CSV (${today})`);
+  };
+
+  const handleDownloadPdfReport = () => {
+    const today = new Date().toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const storeName = storeSettings?.businessName || 'Business Store';
+    const netProfit = reportsData.grossProfit - reportsData.totalExpenses;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${storeName} - Financial Summary Report</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 24px; font-size: 12px; }
+    .header { border-bottom: 2px solid #0A6847; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .title { font-size: 22px; font-weight: 900; color: #0A6847; margin: 0 0 4px 0; }
+    .subtitle { font-size: 12px; color: #64748b; margin: 0; }
+    .kpi-row { display: flex; gap: 10px; margin-bottom: 18px; }
+    .kpi-card { flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #f8fafc; }
+    .kpi-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+    .kpi-value { font-size: 16px; font-weight: 900; color: #0f172a; }
+    table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 11px; }
+    th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-weight: 800; color: #334155; border-bottom: 2px solid #cbd5e1; }
+    td { padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+    .footer { font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1 class="title">${storeName}</h1>
+      <p class="subtitle">Official Financial Performance &amp; Analytics Summary</p>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 800; font-size: 12px; color: #0A6847; background: #e6f6f0; padding: 4px 10px; border-radius: 6px; display: inline-block;">
+        Period: ${reportPeriod.toUpperCase()}
+      </div>
+      <div style="color: #64748b; font-size: 10px; margin-top: 4px;">Date: ${today}</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Gross Revenue</div>
+      <div class="kpi-value">${currencySymbol}${reportsData.totalRevenue.toLocaleString('en-IN')}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Gross Profit</div>
+      <div class="kpi-value">${currencySymbol}${reportsData.grossProfit.toLocaleString('en-IN')} (${reportsData.marginLabel})</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Operating Expenses</div>
+      <div class="kpi-value" style="color: #dc2626;">${currencySymbol}${reportsData.totalExpenses.toLocaleString('en-IN')}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Net Profit</div>
+      <div class="kpi-value" style="color: #059669;">${currencySymbol}${netProfit.toLocaleString('en-IN')}</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Cash in Register</div>
+      <div class="kpi-value">${currencySymbol}${closingBalance.toLocaleString('en-IN')}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Khata Customer Dues</div>
+      <div class="kpi-value" style="color: #d97706;">${currencySymbol}${khataData.totalReceivables.toLocaleString('en-IN')}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">GST Tax Collected</div>
+      <div class="kpi-value">${currencySymbol}${reportsData.gstCollected.toLocaleString('en-IN')}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Bills / Orders</div>
+      <div class="kpi-value">${reportsData.totalOrders}</div>
+    </div>
+  </div>
+
+  <h3 style="font-size: 13px; font-weight: 800; color: #1e293b; margin: 18px 0 6px 0;">Recent Sales &amp; Orders Summary</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Order / Invoice #</th>
+        <th>Customer</th>
+        <th>Payment Mode</th>
+        <th style="text-align: right;">Total Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${(periodFilteredOrders.length > 0 ? periodFilteredOrders : (orders || []))
+        .slice(0, 15)
+        .map(
+          (o) => `
+          <tr>
+            <td>${o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN') : today}</td>
+            <td><strong>${o.id}</strong></td>
+            <td>${o.customerName || 'Walk-in Customer'}</td>
+            <td>${o.paymentMode || 'Cash'}</td>
+            <td style="text-align: right; font-weight: bold;">${currencySymbol}${(o.totalAmount || 0).toLocaleString('en-IN')}</td>
+          </tr>
+        `
+        )
+        .join('')}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Generated automatically by BOS Reports &amp; Business Operating System • Confidential Record
+  </div>
+</body>
+</html>
+    `;
+
+    const win = window.open('', '_blank', 'width=900,height=800');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 350);
+    }
+  };
+
   /* REPORTS VIEW */
   if (mode === 'reports') {
     const totalInventoryUnits = (products || []).reduce((acc, p) => acc + (p.stockQuantity || 0), 0);
@@ -1387,21 +1579,30 @@ export function BosReportsDaybookWorkstation({
                 <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
                 <span>Stock CSV</span>
               </button>
-            ) : (
+            ) : reportTab === 'khata' ? (
               <button
                 type="button"
-                onClick={handleExportGstrSummaryCsv}
+                onClick={handleExportKhataCsv}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
               >
                 <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
-                <span>Export Report</span>
+                <span>Khata Dues CSV</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleExportOverviewCsv}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-[#0A6847]" />
+                <span>Overview CSV</span>
               </button>
             )}
 
             <button
               type="button"
-              onClick={() => window.print()}
-              className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px]"
+              onClick={handleDownloadPdfReport}
+              className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] cursor-pointer"
             >
               <Download className="h-4 w-4" />
               <span>Download PDF</span>

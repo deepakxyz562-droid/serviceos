@@ -1301,6 +1301,9 @@ function BosWebAppInner({
                 if (biz.address) next.address = formatStoreAddress(biz.address);
                 if (biz.logoUrl) next.logoUrl = biz.logoUrl;
               }
+              if (cfg?.signatureUrl || biz?.signatureUrl) {
+                next.signatureUrl = cfg?.signatureUrl || biz?.signatureUrl;
+              }
               return next;
             });
           }
@@ -2465,6 +2468,7 @@ function BosWebAppInner({
     if (patch.state !== undefined) configPatch.state = patch.state;
     if (patch.pincode !== undefined) configPatch.pincode = patch.pincode;
     if (patch.logoUrl !== undefined) configPatch.logoUrl = patch.logoUrl;
+    if (patch.signatureUrl !== undefined) configPatch.signatureUrl = patch.signatureUrl;
     if (patch.businessName !== undefined) configPatch.businessName = patch.businessName;
     if (patch.businessHours !== undefined) configPatch.businessHours = patch.businessHours;
     if (patch.minOrderAmount !== undefined) configPatch.minOrderAmount = patch.minOrderAmount;
@@ -3528,6 +3532,7 @@ function BosWebAppInner({
                 onInvoiceSaved={handleInvoiceSaved}
                 onMarkInvoicePaid={handleMarkInvoicePaid}
                 onDeleteInvoice={handleDeleteInvoice}
+                onUpdateStoreSettings={handleUpdateStoreSettings}
               />
             )}
 

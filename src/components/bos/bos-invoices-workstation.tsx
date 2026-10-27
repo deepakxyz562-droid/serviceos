@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   Barcode,
   Calendar,
@@ -14,6 +14,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Image as ImageIcon,
   Link2,
   Plus,
   Printer,
@@ -24,6 +25,7 @@ import {
   Share2,
   Trash2,
   Truck,
+  Upload,
   X,
 } from 'lucide-react';
 import { BosBrand } from '@/components/bos/brand';
@@ -91,6 +93,8 @@ type BosInvoicesWorkstationProps = {
   onMarkInvoicePaid?: (invoiceId: string) => Promise<void> | void;
   /** Delete an invoice via DELETE /api/commerce/invoices/[id]. */
   onDeleteInvoice?: (invoiceId: string) => Promise<void> | void;
+  /** Update store branding, logo, signature & invoice settings */
+  onUpdateStoreSettings?: (patch: Partial<BosStoreSettings>) => Promise<void> | void;
 };
 
 const INITIAL_INVOICE_ITEMS: InvoiceLineItem[] = [
@@ -173,9 +177,92 @@ export function BosInvoicesWorkstation({
   onAddCustomer,
   onMarkInvoicePaid,
   onDeleteInvoice,
+  onUpdateStoreSettings,
 }: BosInvoicesWorkstationProps) {
   const { t, language } = useBosTranslation();
   const currencySymbol = storeSettings.currencySymbol || '₹';
+
+  // Branding & Signature Modal
+  const [showBrandingModal, setShowBrandingModal] = useState(false);
+  const [savingBranding, setSavingBranding] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const sigFileInputRef = useRef<HTMLInputElement>(null);
+  const [brandingForm, setBrandingForm] = useState({
+    businessName: storeSettings.businessName || '',
+    gstin: storeSettings.gstin || '',
+    phone: storeSettings.phone || '',
+    email: storeSettings.email || '',
+    address: storeSettings.address || '',
+    city: storeSettings.city || '',
+    state: storeSettings.state || '',
+    pincode: storeSettings.pincode || '',
+    logoUrl: storeSettings.logoUrl || '',
+    signatureUrl: storeSettings.signatureUrl || '',
+    billFooter: storeSettings.billFooter || '',
+  });
+
+  React.useEffect(() => {
+    setBrandingForm({
+      businessName: storeSettings.businessName || '',
+      gstin: storeSettings.gstin || '',
+      phone: storeSettings.phone || '',
+      email: storeSettings.email || '',
+      address: storeSettings.address || '',
+      city: storeSettings.city || '',
+      state: storeSettings.state || '',
+      pincode: storeSettings.pincode || '',
+      logoUrl: storeSettings.logoUrl || '',
+      signatureUrl: storeSettings.signatureUrl || '',
+      billFooter: storeSettings.billFooter || '',
+    });
+  }, [storeSettings]);
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBrandingForm((prev) => ({ ...prev, logoUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSignatureFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setBrandingForm((prev) => ({ ...prev, signatureUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveBranding = async () => {
+    setSavingBranding(true);
+    try {
+      if (onUpdateStoreSettings) {
+        await onUpdateStoreSettings({
+          businessName: brandingForm.businessName.trim(),
+          gstin: brandingForm.gstin.trim(),
+          phone: brandingForm.phone.trim(),
+          email: brandingForm.email.trim(),
+          address: brandingForm.address.trim(),
+          city: brandingForm.city.trim(),
+          state: brandingForm.state.trim(),
+          pincode: brandingForm.pincode.trim(),
+          logoUrl: brandingForm.logoUrl,
+          signatureUrl: brandingForm.signatureUrl,
+          billFooter: brandingForm.billFooter,
+        });
+      }
+      setShowBrandingModal(false);
+      setStatusBanner('Invoice branding & signature saved successfully!');
+    } catch (err: any) {
+      setStatusBanner(err?.message || 'Failed to save branding.');
+    } finally {
+      setSavingBranding(false);
+    }
+  };
 
   // Top & Builder States matching screenshot 1:1 in demoMode, dynamic in production
   const [docType, setDocType] = useState<InvoiceDocType>('gst');
@@ -679,7 +766,9 @@ export function BosInvoicesWorkstation({
         },
         {
           businessName: storeSettings.businessName || 'Business Store',
-          logoUrl: '/bos/logo-mark.png',
+          logoUrl: storeSettings.logoUrl || '/bos/logo-mark.png',
+          signatureUrl: storeSettings.signatureUrl || '',
+          billFooter: storeSettings.billFooter || '',
           gstin: storeSettings.gstin || '',
           address: storeSettings.address || '',
           phone: storeSettings.phone || '',
@@ -892,6 +981,16 @@ export function BosInvoicesWorkstation({
           >
             <Share2 className="h-3.5 w-3.5 text-[#475569]" />
             <span>{language === 'hi' ? 'शेयर करें' : language === 'both' ? 'Share / शेयर' : 'Share'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowBrandingModal(true)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#0A6847]/30 bg-[#F4FAF7] px-3.5 text-[12.5px] font-semibold text-[#0A6847] shadow-2xs hover:bg-[#E6F6F0] transition cursor-pointer"
+            title="Configure business logo, name, signature and invoice terms"
+          >
+            <Settings className="h-3.5 w-3.5 text-[#0A6847]" />
+            <span>{language === 'hi' ? 'लोगो व हस्ताक्षर' : language === 'both' ? 'Branding & Sig / लोगो व हस्ताक्षर' : 'Branding & Signature'}</span>
           </button>
 
           <button
@@ -1733,7 +1832,17 @@ export function BosInvoicesWorkstation({
               >
                 {/* Top Brand + TAX INVOICE Header */}
                 <div className="flex items-start justify-between gap-2 border-b border-[#EBF2EE] pb-3">
-                  <BosBrand variant="light" />
+                  {storeSettings.logoUrl ? (
+                    <div className="flex items-center gap-2">
+                      <img
+                        src={storeSettings.logoUrl}
+                        alt={storeSettings.businessName || 'Business Logo'}
+                        className="h-10 max-w-[140px] object-contain rounded"
+                      />
+                    </div>
+                  ) : (
+                    <BosBrand variant="light" />
+                  )}
                   <div className="text-right">
                     <p className="text-[14px] font-extrabold tracking-tight text-[#111827]">
                       TAX INVOICE
@@ -1748,7 +1857,7 @@ export function BosInvoicesWorkstation({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 text-[11px] border-b border-[#EBF2EE] pb-3">
                   <div className="sm:col-span-6 space-y-0.5 text-[#475569]">
                     <p className="text-[12.5px] font-extrabold text-[#111827]">
-                      {storeSettings.businessName || 'My Store'}
+                      {storeSettings.businessName || 'Business Store'}
                     </p>
                     <p>{storeSettings.address || 'Business Address'}</p>
                     <p>
@@ -1977,9 +2086,15 @@ export function BosInvoicesWorkstation({
                       <p className="font-bold text-[#111827]">
                         Terms &amp; Conditions
                       </p>
-                      <p>1. Goods once sold will not be taken back.</p>
-                      <p>2. Payment to be made within due date.</p>
-                      <p>3. Subject to {storeSettings.city || storeSettings.state || 'Delhi'} jurisdiction.</p>
+                      {storeSettings.billFooter ? (
+                        <p className="whitespace-pre-line">{storeSettings.billFooter}</p>
+                      ) : (
+                        <>
+                          <p>1. Goods once sold will not be taken back.</p>
+                          <p>2. Payment to be made within due date.</p>
+                          <p>3. Subject to {storeSettings.city || storeSettings.state || 'local'} jurisdiction.</p>
+                        </>
+                      )}
                       <p className="pt-0.5 font-extrabold text-[#111827]">
                         {remarks || 'Thank you for your business!'}
                       </p>
@@ -1987,10 +2102,30 @@ export function BosInvoicesWorkstation({
                   </div>
 
                   <div className="text-right text-[10px] text-[#475569] shrink-0">
-                    <div className="mb-1 h-6 w-28 border-b border-dashed border-[#94A3B8] ml-auto" />
-                    <p className="font-semibold text-[#334155]">
-                      Authorized Signatory
-                    </p>
+                    {storeSettings.signatureUrl ? (
+                      <div className="flex flex-col items-end">
+                        <img
+                          src={storeSettings.signatureUrl}
+                          alt="Authorized Signature"
+                          className="h-10 max-w-[120px] object-contain mb-1"
+                        />
+                        <div className="border-t border-dashed border-[#94A3B8] pt-0.5 w-28 text-center">
+                          <p className="text-[10px] font-bold text-[#1E293B]">
+                            For {storeSettings.businessName || 'Business'}
+                          </p>
+                          <p className="font-semibold text-[#64748B]">
+                            Authorized Signatory
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="mb-1 h-6 w-28 border-b border-dashed border-[#94A3B8] ml-auto" />
+                        <p className="font-semibold text-[#334155]">
+                          Authorized Signatory
+                        </p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2576,6 +2711,279 @@ export function BosInvoicesWorkstation({
                   <span>Download JSON</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Branding & Signature Modal */}
+      {showBrandingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <div>
+                <h3 className="text-[16px] font-bold text-[#111827]">
+                  Invoice Branding, Logo & Signature
+                </h3>
+                <p className="text-[11.5px] text-[#64748B]">
+                  Customize your business details, digital signature, and terms printed on tax invoices.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBrandingModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <input
+              type="file"
+              ref={logoFileInputRef}
+              onChange={handleLogoFileChange}
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="hidden"
+            />
+            <input
+              type="file"
+              ref={sigFileInputRef}
+              onChange={handleSignatureFileChange}
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+            />
+
+            <div className="mt-4 space-y-3.5 overflow-y-auto pr-1 flex-1 text-[12px]">
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                  Business / Store Name *
+                </label>
+                <input
+                  type="text"
+                  value={brandingForm.businessName}
+                  onChange={(e) =>
+                    setBrandingForm((prev) => ({ ...prev, businessName: e.target.value }))
+                  }
+                  placeholder="e.g. Singh Fabrication, Mehta General Store"
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] text-[#111827] outline-none focus:border-[#0A6847]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    GSTIN
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingForm.gstin}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, gstin: e.target.value.toUpperCase() }))
+                    }
+                    placeholder="22AAAAA0000A1Z5"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] text-[#111827] outline-none focus:border-[#0A6847]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Contact Phone
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingForm.phone}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, phone: e.target.value }))
+                    }
+                    placeholder="9876543210"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] text-[#111827] outline-none focus:border-[#0A6847]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                  Business Address
+                </label>
+                <input
+                  type="text"
+                  value={brandingForm.address}
+                  onChange={(e) =>
+                    setBrandingForm((prev) => ({ ...prev, address: e.target.value }))
+                  }
+                  placeholder="Plot 42, Industrial Area, Sector 5"
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12.5px] text-[#111827] outline-none focus:border-[#0A6847]"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingForm.city}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, city: e.target.value }))
+                    }
+                    placeholder="New Delhi"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] outline-none focus:border-[#0A6847]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingForm.state}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, state: e.target.value }))
+                    }
+                    placeholder="Delhi"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] outline-none focus:border-[#0A6847]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-[#334155] mb-1">
+                    PIN Code
+                  </label>
+                  <input
+                    type="text"
+                    value={brandingForm.pincode}
+                    onChange={(e) =>
+                      setBrandingForm((prev) => ({ ...prev, pincode: e.target.value }))
+                    }
+                    placeholder="110001"
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] text-[#111827] outline-none focus:border-[#0A6847]"
+                  />
+                </div>
+              </div>
+
+              {/* Logo & Signature Side-by-Side */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* Store Logo Card */}
+                <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2">
+                  <span className="block text-[11.5px] font-bold text-[#1E293B]">
+                    Store / Brand Logo
+                  </span>
+                  <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-[#A7F3D0] bg-white overflow-hidden p-1">
+                    {brandingForm.logoUrl ? (
+                      <img
+                        src={brandingForm.logoUrl}
+                        alt="Store Logo"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-[11px] text-[#94A3B8] text-center">
+                        No logo uploaded
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => logoFileInputRef.current?.click()}
+                      className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-white border border-[#DCE9E3] px-2 py-1.5 text-[11px] font-bold text-[#0A6847] hover:bg-[#E6F6F0] cursor-pointer"
+                    >
+                      <Upload className="h-3 w-3" />
+                      <span>{brandingForm.logoUrl ? 'Change' : 'Upload'}</span>
+                    </button>
+                    {brandingForm.logoUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBrandingForm((prev) => ({ ...prev, logoUrl: '' }))
+                        }
+                        className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1.5 text-[11px] font-semibold text-[#EF4444] hover:bg-rose-50 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Authorized Signature Card */}
+                <div className="rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] p-3 space-y-2">
+                  <span className="block text-[11.5px] font-bold text-[#1E293B]">
+                    Authorized Signature
+                  </span>
+                  <div className="flex items-center justify-center h-20 rounded-lg border border-dashed border-[#C7D2FE] bg-white overflow-hidden p-1">
+                    {brandingForm.signatureUrl ? (
+                      <img
+                        src={brandingForm.signatureUrl}
+                        alt="Authorized Signature"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-[11px] text-[#94A3B8] text-center">
+                        No signature uploaded
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => sigFileInputRef.current?.click()}
+                      className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-white border border-[#DCE9E3] px-2 py-1.5 text-[11px] font-bold text-[#4338CA] hover:bg-[#EEF2FF] cursor-pointer"
+                    >
+                      <Upload className="h-3 w-3" />
+                      <span>{brandingForm.signatureUrl ? 'Change' : 'Upload'}</span>
+                    </button>
+                    {brandingForm.signatureUrl && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setBrandingForm((prev) => ({ ...prev, signatureUrl: '' }))
+                        }
+                        className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1.5 text-[11px] font-semibold text-[#EF4444] hover:bg-rose-50 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                  Terms & Conditions / Bill Footer
+                </label>
+                <textarea
+                  rows={2}
+                  value={brandingForm.billFooter}
+                  onChange={(e) =>
+                    setBrandingForm((prev) => ({ ...prev, billFooter: e.target.value }))
+                  }
+                  placeholder="1. Goods once sold will not be taken back.&#10;2. Interest @18% p.a. charged on overdue payments."
+                  className="w-full rounded-xl border border-[#DCE9E3] bg-white px-3 py-2 text-[12px] text-[#111827] outline-none focus:border-[#0A6847]"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2 border-t border-[#EBF2EE] pt-3">
+              <button
+                type="button"
+                onClick={() => setShowBrandingModal(false)}
+                className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F4F8F6] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBranding}
+                disabled={savingBranding}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                {savingBranding ? (
+                  <span>Saving...</span>
+                ) : (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Save Branding & Signature</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

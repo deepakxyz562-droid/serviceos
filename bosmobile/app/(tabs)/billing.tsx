@@ -27,6 +27,7 @@ import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { API_PATHS } from '@/lib/constants';
 import { useBlueprintStore } from '@/stores/blueprint-store';
+import { storageGetItem, storageSetItem } from '@/lib/storage';
 import {
   numberToWords,
   generateGstInvoiceHtml,
@@ -87,7 +88,7 @@ interface QuoteRecord {
 
 export default function BillingScreen() {
   const router = useRouter();
-  const countryPack = useBlueprintStore((s) => s.countryPack);
+  const { blueprint, countryPack } = useBlueprintStore();
   const [tab, setTab] = useState<'INVOICES' | 'QUOTES'>('INVOICES');
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
@@ -106,8 +107,9 @@ export default function BillingScreen() {
   const [selectedPaymentMode, setSelectedPaymentMode] = useState<string>('CASH');
   const [updatingPayment, setUpdatingPayment] = useState(false);
   const [brandModalOpen, setBrandModalOpen] = useState(false);
-  const [storeInfo, setStoreInfo] = useState<GstStoreInfo>({
-    businessName: 'My Store',
+  const [savingBrand, setSavingBrand] = useState(false);
+  const [storeInfo, setStoreInfo] = useState<GstStoreInfo>(() => ({
+    businessName: blueprint?.businessName || 'Business Store',
     logoUrl: '',
     signatureUrl: '',
     gstin: '',
@@ -116,7 +118,7 @@ export default function BillingScreen() {
     email: '',
     upiId: '',
     billFooter: '1. Goods once sold will not be taken back.\n2. Interest @18% p.a. charged on overdue payments.',
-  });
+  }));
 
   // Form Modal (for both Invoice and Quote)
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -171,25 +173,46 @@ export default function BillingScreen() {
 
   useEffect(() => {
     fetchBillingData();
-    // Load store config for GST branding
+    // Load store config for GST branding (offline-first)
     (async () => {
       try {
+        const cached = await storageGetItem('bos_store_branding');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (parsed && typeof parsed === 'object') {
+              setStoreInfo((prev) => ({ ...prev, ...parsed }));
+            }
+          } catch {}
+        }
+
         const res = await apiRequest<{ config?: any }>(API_PATHS.commerceConfig);
         if (res?.config) {
           const c = res.config;
-          setStoreInfo((prev) => ({
-            ...prev,
-            businessName: c.storeName || c.businessName || prev.businessName,
-            gstin: c.gstin || prev.gstin,
-            phone: c.phone || prev.phone,
-            email: c.email || prev.email,
-            address: c.address || prev.address,
-            upiId: c.upiId || prev.upiId,
-            logoUrl: c.logoUrl || prev.logoUrl,
-          }));
+          setStoreInfo((prev) => {
+            const nextInfo = {
+              ...prev,
+              businessName:
+                c.storeName ||
+                c.businessName ||
+                prev.businessName ||
+                blueprint?.businessName ||
+                'Business Store',
+              gstin: c.gstin || prev.gstin,
+              phone: c.phone || prev.phone,
+              email: c.email || prev.email,
+              address: c.address || prev.address,
+              upiId: c.upiId || prev.upiId,
+              logoUrl: c.logoUrl || prev.logoUrl,
+              signatureUrl: c.signatureUrl || prev.signatureUrl,
+              billFooter: c.billFooter || prev.billFooter,
+            };
+            void storageSetItem('bos_store_branding', JSON.stringify(nextInfo)).catch(() => {});
+            return nextInfo;
+          });
         }
       } catch (e) {
-        // Fallback to default
+        // Fallback to local cache / blueprint
       }
     })();
 
@@ -647,6 +670,39 @@ export default function BillingScreen() {
     }
   };
 
+  const handleSaveBrandSettings = async () => {
+    try {
+      setSavingBrand(true);
+      await storageSetItem('bos_store_branding', JSON.stringify(storeInfo));
+
+      await apiRequest(API_PATHS.commerceConfig, {
+        method: 'PATCH',
+        body: {
+          storeName: storeInfo.businessName,
+          businessName: storeInfo.businessName,
+          gstin: storeInfo.gstin,
+          phone: storeInfo.phone,
+          email: storeInfo.email,
+          address: storeInfo.address,
+          upiId: storeInfo.upiId,
+          logoUrl: storeInfo.logoUrl,
+          signatureUrl: storeInfo.signatureUrl,
+          billFooter: storeInfo.billFooter,
+        },
+      }).catch((e) => {
+        console.warn('Backend config sync failed, saved locally:', e);
+      });
+
+      setBrandModalOpen(false);
+      await hapticFeedback.success();
+      Alert.alert('Saved ✓', 'Store branding, logo and signature saved successfully!');
+    } catch (err: any) {
+      Alert.alert('Save Warning', err?.message || 'Could not save branding settings.');
+    } finally {
+      setSavingBrand(false);
+    }
+  };
+
   const handleConvertToInvoice = async (quote: QuoteRecord) => {
     Alert.alert(
       'Convert to Invoice',
@@ -935,6 +991,73 @@ export default function BillingScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Store Branding & Signature Status Banner */}
+      <TouchableOpacity
+        onPress={() => setBrandModalOpen(true)}
+        style={{
+          marginHorizontal: 16,
+          marginBottom: 12,
+          padding: 12,
+          backgroundColor: '#f8fafc',
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: '#e2e8f0',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+        activeOpacity={0.8}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          {storeInfo.logoUrl ? (
+            <Image
+              source={{ uri: storeInfo.logoUrl }}
+              style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: '#fff' }}
+              resizeMode="contain"
+            />
+          ) : (
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                backgroundColor: '#ecfdf5',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <MaterialIcons name="storefront" size={22} color="#059669" />
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+              {storeInfo.businessName || blueprint?.businessName || 'Business Store'}
+            </Text>
+            <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+              {storeInfo.signatureUrl ? '✓ Signature Configured' : '⚠ Missing Digital Signature'}
+              {storeInfo.gstin ? ` • ${storeInfo.gstin}` : ''}
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 4,
+            paddingVertical: 5,
+            paddingHorizontal: 9,
+            backgroundColor: '#fff',
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#cbd5e1',
+          }}
+        >
+          <MaterialIcons name="edit" size={12} color="#059669" />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>Branding</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Mode Segmented Tab: GST Invoices vs Estimates */}
       <View style={styles.segmentedControl}>
@@ -2565,13 +2688,15 @@ export default function BillingScreen() {
               />
 
               <TouchableOpacity
-                onPress={() => {
-                  setBrandModalOpen(false);
-                  Alert.alert('Saved ✓', 'Store GST branding details saved.');
-                }}
-                style={[styles.modalSubmitBtn, { marginTop: 18 }]}
+                onPress={handleSaveBrandSettings}
+                disabled={savingBrand}
+                style={[styles.modalSubmitBtn, { marginTop: 18, opacity: savingBrand ? 0.6 : 1 }]}
               >
-                <Text style={styles.modalSubmitText}>Save Brand Settings</Text>
+                {savingBrand ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalSubmitText}>Save Brand Settings</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </View>

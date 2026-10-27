@@ -77,7 +77,7 @@ export default function BlueprintSetupScreen() {
 
   const handleSave = async () => {
     await hapticFeedback.medium();
-    const success = await saveBlueprintToServer({
+    await saveBlueprintToServer({
       businessType: selectedType,
       country: selectedCountry,
       capabilities,
@@ -85,14 +85,20 @@ export default function BlueprintSetupScreen() {
       language,
     });
 
-    if (success) {
+    const { isSynced } = useBlueprintStore.getState();
+
+    if (isSynced) {
       Alert.alert(
         'Workspace Configured',
         `BOS is now tailored for ${BUSINESS_TYPE_LABELS[selectedType].label} in ${countryPack.name}.`,
         [{ text: 'OK', onPress: () => router.back() }]
       );
     } else {
-      Alert.alert('Save Failed', 'Could not sync settings to server. Please check your connection.');
+      Alert.alert(
+        'Saved on Device ✓',
+        `BOS is now tailored for ${BUSINESS_TYPE_LABELS[selectedType].label}. Changes were saved locally on your device and will sync with the server when connected.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
     }
   };
 

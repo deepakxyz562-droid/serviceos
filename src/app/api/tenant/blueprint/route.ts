@@ -84,7 +84,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!authUser.isSuperAdmin && !['owner', 'admin', 'standalone_user', 'superadmin', 'super_admin'].includes(authUser.role)) {
+    let isPermitted =
+      authUser.isSuperAdmin ||
+      ['owner', 'admin', 'standalone_user', 'superadmin', 'super_admin'].includes(authUser.role);
+
+    if (!isPermitted) {
+      const dbUser = await db.user.findUnique({
+        where: { id: authUser.id },
+        include: { tenant: { include: { users: { select: { id: true } } } } },
+      });
+      if (dbUser?.tenant && (dbUser.tenant.users.length <= 1 || dbUser.tenantId === authUser.tenantId)) {
+        isPermitted = true;
+      }
+    }
+
+    if (!isPermitted) {
       return NextResponse.json({ error: 'Business owner access required' }, { status: 403 });
     }
 

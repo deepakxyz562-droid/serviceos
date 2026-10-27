@@ -131,6 +131,8 @@ export async function GET(req: NextRequest) {
         email: business.email || '',
         address: business.address || '',
         logoUrl: business.logoUrl || (parsedFieldsData.logoUrl || ''),
+        signatureUrl: parsedFieldsData.signatureUrl || '',
+        billFooter: parsedFieldsData.billFooter || '',
         currency: business.currency || 'INR',
         currencySymbol: business.currencySymbol || '₹',
       },
@@ -193,6 +195,8 @@ export async function PATCH(req: NextRequest) {
             discounts: raw.discounts || DEFAULT_DISCOUNTS,
             deliverySettings: { ...DEFAULT_DELIVERY_SETTINGS, ...(raw.deliverySettings || {}) },
             logoUrl: raw.logoUrl,
+            signatureUrl: raw.signatureUrl,
+            billFooter: raw.billFooter,
             paymentQrUrl: raw.paymentQrUrl,
             enableOnlinePayment: raw.enableOnlinePayment,
             isStoreOpen: raw.isStoreOpen !== undefined ? Boolean(raw.isStoreOpen) : (config?.isActive ?? true),
@@ -217,6 +221,8 @@ export async function PATCH(req: NextRequest) {
     if (body.gstin !== undefined) container.billing = { ...container.billing, gstin: String(body.gstin) };
     if (body.discounts !== undefined) container.discounts = body.discounts;
     if (body.logoUrl !== undefined) container.logoUrl = body.logoUrl;
+    if (body.signatureUrl !== undefined) container.signatureUrl = body.signatureUrl;
+    if (body.billFooter !== undefined) container.billFooter = body.billFooter;
     if (body.paymentQrUrl !== undefined) container.paymentQrUrl = body.paymentQrUrl;
     if (body.enableOnlinePayment !== undefined) container.enableOnlinePayment = Boolean(body.enableOnlinePayment);
     if (body.deliverySettings !== undefined) {

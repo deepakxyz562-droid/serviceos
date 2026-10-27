@@ -9,10 +9,16 @@ import {
   Alert,
   Linking,
   Share,
+  Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import { Paths, File as ExpoFile } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as Print from 'expo-print';
+import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { useBlueprintStore } from '@/stores/blueprint-store';
 
@@ -25,13 +31,13 @@ export default function MobileReportsScreen() {
   const t = (en: string, hi: string) => (language === 'hi' ? hi : en);
   const currencySymbol = countryPack?.currency?.symbol || '₹';
 
-
-
   const [period, setPeriod] = useState<Period>('today');
   const [tab, setTab] = useState<ReportTab>('sales');
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportingType, setExportingType] = useState<'pdf' | 'csv' | null>(null);
 
   const fetchReports = useCallback(async (p: Period) => {
     try {
@@ -90,19 +96,22 @@ export default function MobileReportsScreen() {
     }, [period, fetchReports])
   );
 
+  const getPeriodLabel = () => {
+    return period === 'today'
+      ? t('Today', 'आज')
+      : period === 'yesterday'
+      ? t('Yesterday', 'कल')
+      : period === 'this_week'
+      ? t('This Week', 'इस हफ़्ते')
+      : period === 'this_month'
+      ? t('This Month', 'इस महीने')
+      : t('This Year (FY)', 'इस साल');
+  };
+
   const handleShareReport = async () => {
     if (!data?.summary) return;
     const storeName = blueprint.businessName || 'BOS Store';
-    const periodName =
-      period === 'today'
-        ? t('Today', 'आज')
-        : period === 'yesterday'
-        ? t('Yesterday', 'कल')
-        : period === 'this_week'
-        ? t('This Week', 'इस हफ़्ते')
-        : period === 'this_month'
-        ? t('This Month', 'इस महीने')
-        : t('This Year', 'इस साल');
+    const periodName = getPeriodLabel();
 
     const msg =
       `📊 *${storeName} - ${t('Sales & Business Report', 'बिक्री व व्यापार रिपोर्ट')}*\n` +
@@ -121,6 +130,262 @@ export default function MobileReportsScreen() {
       await Share.share({ message: msg });
     } catch {
       Alert.alert(t('Unable to share report', 'रिपोर्ट शेयर नहीं हो सकी'));
+    }
+  };
+
+  const handleExportPdfReport = async () => {
+    if (!data?.summary) return;
+    try {
+      setExportingType('pdf');
+      const storeName = blueprint.businessName || 'Business Store';
+      const periodLabel = getPeriodLabel();
+      const dateStr = new Date().toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+
+      const topProductsHtml = (data.topProducts || [])
+        .slice(0, 10)
+        .map(
+          (p: any, i: number) => `
+          <tr>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${i + 1}</td>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${p.name || 'Product'}</td>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${p.qty || 0}</td>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 700;">${currencySymbol}${(p.revenue || 0).toLocaleString('en-IN')}</td>
+          </tr>
+        `
+        )
+        .join('');
+
+      const paymentModesHtml = (data.salesByMethod || [])
+        .map(
+          (m: any) => `
+          <tr>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; font-weight: 600;">${m.method || 'Payment'}</td>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: center;">${m.count || 0}</td>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; font-weight: 700;">${currencySymbol}${(m.total || 0).toLocaleString('en-IN')}</td>
+            <td style="padding: 6px 10px; border-bottom: 1px solid #e2e8f0; text-align: right; color: #64748b;">${m.pct || 0}%</td>
+          </tr>
+        `
+        )
+        .join('');
+
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${storeName} - Business Summary Report</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; margin: 0; padding: 20px; font-size: 12px; }
+    .header-box { border-bottom: 2px solid #0A6847; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: flex-start; }
+    .title { font-size: 20px; font-weight: 900; color: #0A6847; margin: 0 0 4px 0; }
+    .subtitle { font-size: 12px; color: #64748b; margin: 0; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+    .kpi-card { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; background: #f8fafc; }
+    .kpi-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+    .kpi-value { font-size: 16px; font-weight: 900; color: #0f172a; }
+    .kpi-sub { font-size: 10px; color: #059669; font-weight: 600; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 11px; }
+    th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-weight: 800; color: #334155; border-bottom: 2px solid #cbd5e1; }
+    .section-title { font-size: 13px; font-weight: 800; color: #1e293b; margin: 14px 0 8px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+    .footer { font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="header-box">
+    <div>
+      <h1 class="title">${storeName}</h1>
+      <p class="subtitle">Executive Business &amp; Financial Summary Report</p>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-weight: 800; font-size: 12px; color: #0A6847; background: #e6f6f0; padding: 4px 10px; border-radius: 6px; display: inline-block;">
+        Period: ${periodLabel}
+      </div>
+      <div style="color: #64748b; font-size: 10px; margin-top: 4px;">Generated on: ${dateStr}</div>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Revenue</div>
+      <div class="kpi-value">${currencySymbol}${data.summary.totalRevenue.toLocaleString('en-IN')}</div>
+      <div class="kpi-sub">${data.summary.totalOrders} total bills</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Gross Profit</div>
+      <div class="kpi-value">${currencySymbol}${data.summary.grossProfit.toLocaleString('en-IN')}</div>
+      <div class="kpi-sub">Margin: ${data.summary.marginPct}%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Expenses</div>
+      <div class="kpi-value" style="color: #dc2626;">${currencySymbol}${data.summary.totalExpenses.toLocaleString('en-IN')}</div>
+      <div class="kpi-sub" style="color: #64748b;">Operating cost</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Net Profit</div>
+      <div class="kpi-value" style="color: #059669;">${currencySymbol}${data.summary.netProfit.toLocaleString('en-IN')}</div>
+      <div class="kpi-sub">Bottom line profit</div>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Cash in Drawer</div>
+      <div class="kpi-value">${currencySymbol}${(data.daybookSummary?.closingBalance || 0).toLocaleString('en-IN')}</div>
+      <div class="kpi-sub" style="color: #64748b;">In: ${currencySymbol}${(data.daybookSummary?.moneyIn || 0).toLocaleString('en-IN')} | Out: ${currencySymbol}${(data.daybookSummary?.moneyOut || 0).toLocaleString('en-IN')}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">GST Tax Collected</div>
+      <div class="kpi-value">${currencySymbol}${data.summary.gstCollected.toLocaleString('en-IN')}</div>
+      <div class="kpi-sub" style="color: #64748b;">CGST + SGST</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Customer Udhaar / Dues</div>
+      <div class="kpi-value" style="color: #d97706;">${currencySymbol}${(data.khataSummary?.totalReceivables || 0).toLocaleString('en-IN')}</div>
+      <div class="kpi-sub" style="color: #64748b;">Khata Receivables</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Average Bill Ticket</div>
+      <div class="kpi-value">${currencySymbol}${Math.round(data.summary.avgOrderValue || 0).toLocaleString('en-IN')}</div>
+      <div class="kpi-sub" style="color: #64748b;">Per customer order</div>
+    </div>
+  </div>
+
+  <div class="section-title">Sales by Payment Mode</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Payment Mode</th>
+        <th style="text-align: center;">Transactions</th>
+        <th style="text-align: right;">Total Amount</th>
+        <th style="text-align: right;">Share %</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${paymentModesHtml || '<tr><td colspan="4" style="text-align:center; padding: 12px; color: #94a3b8;">No payment data recorded</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="section-title">Top Performing Items / Services</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px; text-align: center;">#</th>
+        <th>Product / Service</th>
+        <th style="text-align: center;">Qty Sold</th>
+        <th style="text-align: right;">Revenue</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${topProductsHtml || '<tr><td colspan="4" style="text-align:center; padding: 12px; color: #94a3b8;">No product sales recorded in this period</td></tr>'}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Generated automatically by BOS Billing &amp; Retail Operating System • Confidential Business Record
+  </div>
+</body>
+</html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      setExportModalOpen(false);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `${storeName} Financial Report`,
+          UTI: 'com.adobe.pdf',
+        });
+      } else {
+        Alert.alert('PDF Created', `Report PDF generated at: ${uri}`);
+      }
+    } catch (err: any) {
+      Alert.alert('PDF Export Error', err?.message || 'Could not export PDF report.');
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  const handleExportCsvReport = async () => {
+    if (!data?.summary) return;
+    try {
+      setExportingType('csv');
+      const storeName = blueprint.businessName || 'Business Store';
+      const periodLabel = getPeriodLabel();
+      const today = new Date().toISOString().slice(0, 10);
+
+      const rows: string[] = [
+        `"BOS Business Report - ${storeName}"`,
+        `"Period","${periodLabel}"`,
+        `"Export Date","${today}"`,
+        ``,
+        `"--- KEY FINANCIAL METRICS ---"`,
+        `"Metric","Value"`,
+        `"Total Revenue","${data.summary.totalRevenue || 0}"`,
+        `"Gross Profit","${data.summary.grossProfit || 0}"`,
+        `"Operating Expenses","${data.summary.totalExpenses || 0}"`,
+        `"Net Profit","${data.summary.netProfit || 0}"`,
+        `"Gross Margin Pct","${data.summary.marginPct || 0}%"`,
+        `"Total Orders / Bills","${data.summary.totalOrders || 0}"`,
+        `"Average Order Value","${Math.round(data.summary.avgOrderValue || 0)}"`,
+        `"GST Tax Collected","${data.summary.gstCollected || 0}"`,
+        `"Cash in Drawer Closing","${data.daybookSummary?.closingBalance || 0}"`,
+        `"Khata Receivables (Dues)","${data.khataSummary?.totalReceivables || 0}"`,
+        ``,
+        `"--- SALES BY PAYMENT MODE ---"`,
+        `"Payment Mode","Bills Count","Total Amount","Share Pct"`,
+        ...(data.salesByMethod || []).map(
+          (m: any) => `"${m.method || 'Other'}","${m.count || 0}","${m.total || 0}","${m.pct || 0}%"`
+        ),
+        ``,
+        `"--- TOP SELLING PRODUCTS / SERVICES ---"`,
+        `"Product Name","Qty Sold","Total Revenue"`,
+        ...(data.topProducts || []).map(
+          (p: any) => `"${(p.name || '').replace(/"/g, '""')}","${p.qty || 0}","${p.revenue || 0}"`
+        ),
+      ];
+
+      const csvContent = rows.join('\n');
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${storeName.replace(/\s+/g, '_')}_Report_${today}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setExportModalOpen(false);
+        Alert.alert('Report Exported ✓', 'Business report downloaded as CSV.');
+        return;
+      }
+
+      const filename = `${storeName.replace(/[^a-zA-Z0-9]/g, '_')}_Report_${today}.csv`;
+      const file = new ExpoFile(Paths.cache, filename);
+      file.create();
+      file.write(csvContent);
+      setExportModalOpen(false);
+
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Business Report CSV',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        await Share.share({ message: csvContent, title: 'Business Report' });
+      }
+    } catch (err: any) {
+      Alert.alert('CSV Export Error', err?.message || 'Could not export CSV report.');
+    } finally {
+      setExportingType(null);
     }
   };
 
@@ -153,13 +418,24 @@ export default function MobileReportsScreen() {
             {t('Sales, Tax, P&L and Khata summaries', 'बिक्री, टैक्स और मुनाफ़ा')}
           </Text>
         </View>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={handleShareReport}
-          style={styles.shareBtn}
-        >
-          <MaterialIcons name="share" size={20} color="#0A6847" />
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => setExportModalOpen(true)}
+            style={[styles.shareBtn, { backgroundColor: '#e0e7ff' }]}
+            accessibilityLabel="Export Report"
+          >
+            <MaterialIcons name="download" size={20} color="#4338ca" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={handleShareReport}
+            style={styles.shareBtn}
+            accessibilityLabel="Share Report"
+          >
+            <MaterialIcons name="share" size={20} color="#0A6847" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Period Chips */}
@@ -525,6 +801,110 @@ export default function MobileReportsScreen() {
           )}
         </ScrollView>
       )}
+
+      {/* Export Options Modal */}
+      <Modal
+        visible={exportModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setExportModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {t('Export Business Report', 'व्यापार रिपोर्ट एक्सपोर्ट')}
+                </Text>
+                <Text style={styles.modalSub}>
+                  {t('Download or share executive reports and data', 'पीडीएफ या एक्सेल फॉर्मेट में सेव करें')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setExportModalOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <MaterialIcons name="close" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 10, marginTop: 14 }}>
+              {/* Option 1: PDF */}
+              <TouchableOpacity
+                onPress={handleExportPdfReport}
+                disabled={exportingType !== null}
+                style={styles.exportOptionCard}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: '#fee2e2' }]}>
+                  <MaterialIcons name="picture-as-pdf" size={24} color="#dc2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exportOptionTitle}>
+                    {t('Download PDF Report (A4)', 'पीडीएफ रिपोर्ट डाउनलोड करें (A4)')}
+                  </Text>
+                  <Text style={styles.exportOptionSub}>
+                    {t('Professional print-ready document with business letterhead & graphs', 'लेटरहेड, पी&एल और बिक्री चार्ट के साथ')}
+                  </Text>
+                </View>
+                {exportingType === 'pdf' ? (
+                  <ActivityIndicator size="small" color="#dc2626" />
+                ) : (
+                  <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+                )}
+              </TouchableOpacity>
+
+              {/* Option 2: CSV */}
+              <TouchableOpacity
+                onPress={handleExportCsvReport}
+                disabled={exportingType !== null}
+                style={styles.exportOptionCard}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: '#dcfce7' }]}>
+                  <MaterialIcons name="table-view" size={24} color="#059669" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exportOptionTitle}>
+                    {t('Export CSV / Excel Sheet', 'एक्सेल / सीएसवी डाउनलोड करें')}
+                  </Text>
+                  <Text style={styles.exportOptionSub}>
+                    {t('Raw financial rows, payment modes & item sales data', 'अकाउंटेंट और टैली के लिए संपूर्ण डेटा')}
+                  </Text>
+                </View>
+                {exportingType === 'csv' ? (
+                  <ActivityIndicator size="small" color="#059669" />
+                ) : (
+                  <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+                )}
+              </TouchableOpacity>
+
+              {/* Option 3: WhatsApp Share */}
+              <TouchableOpacity
+                onPress={() => {
+                  setExportModalOpen(false);
+                  void handleShareReport();
+                }}
+                style={styles.exportOptionCard}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.exportOptionIcon, { backgroundColor: '#e0f2fe' }]}>
+                  <MaterialIcons name="send" size={22} color="#0284c7" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.exportOptionTitle}>
+                    {t('Share Quick Summary on WhatsApp', 'व्हाट्सएप पर समरी भेजें')}
+                  </Text>
+                  <Text style={styles.exportOptionSub}>
+                    {t('Send key numbers and profit margin directly to partners', 'पार्टनर या सीए को संदेश भेजें')}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -764,5 +1144,69 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     paddingVertical: 14,
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 36,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+  },
+  exportOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+  },
+  exportOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportOptionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  exportOptionSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    lineHeight: 15,
   },
 });

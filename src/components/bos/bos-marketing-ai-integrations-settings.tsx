@@ -725,6 +725,35 @@ export function BosMarketingAiIntegrationsSettings({
     setTimeout(() => setToast(null), 3000);
   };
 
+  const [settingsSignatureUrl, setSettingsSignatureUrl] = useState(() => storeSettings.signatureUrl || '');
+  const signatureFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSignatureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setToast('Please select a valid image file (PNG, JPG, WebP).');
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      setSettingsSignatureUrl(base64);
+      await onUpdateStoreSettings({ signatureUrl: base64 });
+      setToast('Authorized digital signature uploaded and saved successfully!');
+      setTimeout(() => setToast(null), 3000);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveSignature = async () => {
+    setSettingsSignatureUrl('');
+    await onUpdateStoreSettings({ signatureUrl: '' });
+    setToast('Authorized digital signature removed.');
+    setTimeout(() => setToast(null), 3000);
+  };
+
   const [settingsUpiId, setSettingsUpiId] = useState(() => storeSettings.upiId || '');
   const [settingsPaymentQrUrl, setSettingsPaymentQrUrl] = useState(() => storeSettings.paymentQrUrl || '');
   const [settingsEnableOnlinePayment, setSettingsEnableOnlinePayment] = useState(() => storeSettings.enableOnlinePayment ?? true);
@@ -740,7 +769,10 @@ export function BosMarketingAiIntegrationsSettings({
     if (storeSettings.enableOnlinePayment !== undefined) {
       setSettingsEnableOnlinePayment(storeSettings.enableOnlinePayment);
     }
-  }, [storeSettings.upiId, storeSettings.paymentQrUrl, storeSettings.enableOnlinePayment]);
+    if (storeSettings.signatureUrl !== undefined) {
+      setSettingsSignatureUrl(storeSettings.signatureUrl);
+    }
+  }, [storeSettings.upiId, storeSettings.paymentQrUrl, storeSettings.enableOnlinePayment, storeSettings.signatureUrl]);
 
   const handlePaymentQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2976,6 +3008,15 @@ export function BosMarketingAiIntegrationsSettings({
             className="hidden"
           />
 
+          {/* Hidden File Input for Authorized Signature Upload */}
+          <input
+            type="file"
+            ref={signatureFileInputRef}
+            onChange={handleSignatureUpload}
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+          />
+
           {/* TAB 1: Business Information */}
           {settingsSection === 'businessInfo' && (
             <div className="space-y-4">
@@ -3025,6 +3066,7 @@ export function BosMarketingAiIntegrationsSettings({
                       pincode: settingsPinCode,
                       tagline: settingsDescription,
                       logoUrl: settingsLogoUrl,
+                      signatureUrl: settingsSignatureUrl,
                     });
                     setToast('Business Information saved successfully!');
                     setTimeout(() => setToast(null), 3000);
@@ -3285,6 +3327,52 @@ export function BosMarketingAiIntegrationsSettings({
                         {settingsDescription.length}/300
                       </span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Row 7: Authorized Digital Signature for Invoices */}
+                <div className="grid grid-cols-1 gap-4 pt-3 border-t border-[#EDF4F0] sm:grid-cols-12">
+                  <div className="sm:col-span-5 space-y-2">
+                    <label className="block text-[12px] font-semibold text-[#334155]">
+                      Authorized Digital Signature
+                    </label>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-xl border border-dashed border-[#C7D2FE] bg-[#F8FAFC] p-1 overflow-hidden">
+                        {settingsSignatureUrl ? (
+                          <img
+                            src={settingsSignatureUrl}
+                            alt="Authorized Signature"
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-[#94A3B8] text-center font-medium">
+                            No signature
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => signatureFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#DCE9E3] bg-[#F8FCFA] px-3 py-1.5 text-[12px] font-bold text-[#1E293B] hover:bg-[#EEF2FF] hover:text-[#4338CA] transition cursor-pointer"
+                        >
+                          <Upload className="h-3.5 w-3.5 text-[#4338CA]" />
+                          <span>{settingsSignatureUrl ? 'Change' : 'Upload Signature'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleRemoveSignature}
+                          disabled={!settingsSignatureUrl}
+                          className="rounded-lg border border-[#DCE9E3] bg-white px-3 py-1.5 text-[12px] font-semibold text-[#64748B] hover:bg-slate-50 cursor-pointer disabled:opacity-40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-[#64748B]">
+                      Rendered on Tax Invoices, Quotations, and Receipts
+                    </p>
                   </div>
                 </div>
               </div>

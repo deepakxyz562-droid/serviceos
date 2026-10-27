@@ -166,6 +166,8 @@ export type BosStoreSettings = {
   themeColor: string;
   announcementBanner: string;
   logoUrl?: string;
+  signatureUrl?: string;
+  billFooter?: string;
   businessHours?: Record<string, { open: boolean; start: string; end: string }>;
   estimatedDeliveryTime?: string;
   eInvoiceStatus?: boolean;
