@@ -76,10 +76,16 @@ export async function GET(request: NextRequest) {
     const [reviews, totalReviews] = await Promise.all([
       db.review.findMany({
         where: { tenantId: user.tenantId },
-        select: { rating: true, createdAt: true, responseJson: true },
+        select: { rating: true, createdAt: true, responseJson: true, source: true },
       }),
       db.review.count({ where: { tenantId: user.tenantId } }),
     ]);
+
+    const sourceBreakdown: Record<string, number> = { google: 0, internal: 0, website: 0, sms: 0, qr: 0 };
+    for (const r of reviews) {
+      const s = ((r as any).source || 'google').toLowerCase();
+      sourceBreakdown[s] = (sourceBreakdown[s] || 0) + 1;
+    }
 
     const repliedCount = reviews.filter((r) => {
       try {
@@ -103,10 +109,32 @@ export async function GET(request: NextRequest) {
       'Professional Services';
     const fallbackAddress =
       tenant?.brandProfile?.location || tenant?.city || '';
+    const fallbackPhone = tenant?.phone || '';
+    const fallbackWebsite = tenant?.website || '';
+
+    // Calculate profile completeness dynamically
+    const computeCompleteness = (t: string, c: string, a: string, p: string, w: string) => {
+      let score = 0;
+      const missing: string[] = [];
+      if (t && t !== 'Business Profile') score += 20; else missing.push('Business Name');
+      if (c && c !== 'Professional Services') score += 20; else missing.push('Primary Category');
+      if (a) score += 20; else missing.push('Address / Service Area');
+      if (p) score += 20; else missing.push('Phone Number');
+      if (w) score += 20; else missing.push('Website');
+      return { score: Math.max(score, 20), missing };
+    };
 
     const googleAccount = await prepareGoogleAccount(user.tenantId);
 
     if (!googleAccount) {
+      const { score, missing } = computeCompleteness(
+        fallbackName,
+        fallbackCategory,
+        fallbackAddress,
+        fallbackPhone,
+        fallbackWebsite,
+      );
+
       return NextResponse.json({
         isConnected: false,
         place: null,
@@ -114,8 +142,10 @@ export async function GET(request: NextRequest) {
           name: fallbackName,
           category: fallbackCategory,
           address: fallbackAddress,
-          phone: tenant?.phone || '',
-          website: tenant?.website || '',
+          phone: fallbackPhone,
+          website: fallbackWebsite,
+          completionScore: score,
+          missingFields: missing,
         },
         metrics: {
           totalViews: 0,
@@ -127,6 +157,7 @@ export async function GET(request: NextRequest) {
           totalReviews,
           avgRating,
           responseRate,
+          sourceBreakdown,
         },
       });
     }
@@ -152,19 +183,40 @@ export async function GET(request: NextRequest) {
     }
 
     const totalViews = searchImpressions + mapsImpressions;
+    const resolvedTitle = placeDetails.title || fallbackName;
+    const resolvedCategory = placeDetails.category || fallbackCategory;
+    const resolvedAddress = placeDetails.address || fallbackAddress;
+    const resolvedPhone = placeDetails.phone || fallbackPhone;
+    const resolvedWebsite = placeDetails.website || fallbackWebsite;
+    const resolvedPlaceId = placeDetails.placeId || null;
+
+    const { score, missing } = computeCompleteness(
+      resolvedTitle,
+      resolvedCategory,
+      resolvedAddress,
+      resolvedPhone,
+      resolvedWebsite,
+    );
+
+    const reviewUrl = resolvedPlaceId
+      ? `https://search.google.com/local/writereview?placeid=${resolvedPlaceId}`
+      : placeDetails.mapsUri || null;
 
     return NextResponse.json({
       isConnected: true,
       place: {
         locationId: googleAccount.accountId,
-        title: placeDetails.title || fallbackName,
-        category: placeDetails.category || fallbackCategory,
-        address: placeDetails.address || fallbackAddress,
-        phone: placeDetails.phone || tenant?.phone || '',
-        website: placeDetails.website || tenant?.website || '',
-        placeId: placeDetails.placeId || null,
+        title: resolvedTitle,
+        category: resolvedCategory,
+        address: resolvedAddress,
+        phone: resolvedPhone,
+        website: resolvedWebsite,
+        placeId: resolvedPlaceId,
         mapsUrl: placeDetails.mapsUri,
+        reviewUrl,
         isVerified: true,
+        completionScore: score,
+        missingFields: missing,
       },
       metrics: {
         totalViews,
@@ -174,8 +226,9 @@ export async function GET(request: NextRequest) {
         directionRequests,
         websiteClicks,
         totalReviews,
-        avgRating: avgRating > 0 ? avgRating : 5.0,
+        avgRating,
         responseRate,
+        sourceBreakdown,
       },
     });
   } catch (error: unknown) {

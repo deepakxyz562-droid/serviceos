@@ -94,12 +94,32 @@ export async function POST(request: NextRequest) {
     }
 
     const fetchResult = await fetchGoogleBusinessReviews(googleAccount);
-    const { reviews, averageRating, totalReviewCount } = fetchResult;
+    const allGoogleReviews = [...(fetchResult.reviews || [])];
+    let currentToken = fetchResult.nextPageToken;
+    let pageCount = 1;
+
+    // Paginate through Google reviews up to 5 pages (up to 250 reviews)
+    while (currentToken && pageCount < 5) {
+      try {
+        const nextRes = await fetchGoogleBusinessReviews(googleAccount, { pageToken: currentToken });
+        if (nextRes.reviews && nextRes.reviews.length > 0) {
+          allGoogleReviews.push(...nextRes.reviews);
+        }
+        currentToken = nextRes.nextPageToken;
+        pageCount++;
+      } catch (pageErr) {
+        console.warn('[reviews/sync-google] Pagination ended or rate-limited:', pageErr);
+        break;
+      }
+    }
+
+    const { averageRating, totalReviewCount } = fetchResult;
 
     let newReviewsCount = 0;
+    let updatedReviewsCount = 0;
     let autoRepliesCount = 0;
 
-    for (const gRev of reviews) {
+    for (const gRev of allGoogleReviews) {
       if (!gRev.reviewId) continue;
 
       let existing = await db.review.findFirst({
@@ -108,6 +128,24 @@ export async function POST(request: NextRequest) {
           googleReviewId: gRev.reviewId,
         },
       });
+
+      // Deduplication fallback: match by authorName, comment, rating if googleReviewId is unset
+      if (!existing && gRev.comment) {
+        existing = await db.review.findFirst({
+          where: {
+            tenantId: user.tenantId,
+            authorName: gRev.authorName,
+            comment: gRev.comment,
+            rating: gRev.rating,
+          },
+        });
+        if (existing) {
+          await db.review.update({
+            where: { id: existing.id },
+            data: { googleReviewId: gRev.reviewId, source: 'google' },
+          });
+        }
+      }
 
       if (!existing) {
         let initialResponseJson = '{}';
@@ -133,6 +171,51 @@ export async function POST(request: NextRequest) {
           },
         });
         newReviewsCount++;
+      } else {
+        // Update existing review with latest comment, rating, or owner reply from Google Maps
+        const updateData: Record<string, any> = {};
+        if (gRev.rating && existing.rating !== gRev.rating) updateData.rating = gRev.rating;
+        if (gRev.comment && existing.comment !== gRev.comment) updateData.comment = gRev.comment;
+        if (gRev.reply?.comment) {
+          let parsedExisting: any = {};
+          try {
+            parsedExisting = JSON.parse(existing.responseJson || '{}');
+          } catch {}
+          if (!parsedExisting?.text || parsedExisting.text !== gRev.reply.comment) {
+            updateData.responseJson = JSON.stringify({
+              text: gRev.reply.comment,
+              repliedAt: gRev.reply.updateTime || new Date().toISOString(),
+              publishedToGoogle: true,
+            });
+          }
+        }
+        if (Object.keys(updateData).length > 0) {
+          existing = await db.review.update({
+            where: { id: existing.id },
+            data: updateData,
+          });
+          updatedReviewsCount++;
+        }
+      }
+
+      // Clean up any stray duplicate records with exact same author & comment
+      if (gRev.comment) {
+        try {
+          const duplicates = await db.review.findMany({
+            where: {
+              tenantId: user.tenantId,
+              authorName: gRev.authorName,
+              comment: gRev.comment,
+              id: { not: existing.id },
+            },
+            select: { id: true },
+          });
+          if (duplicates.length > 0) {
+            await db.review.deleteMany({
+              where: { id: { in: duplicates.map((d) => d.id) } },
+            });
+          }
+        } catch {}
       }
 
       // Check if auto-reply should run for unreplied positive review
@@ -179,12 +262,13 @@ Write a warm, authentic, professional reply (1-3 sentences) thanking them by nam
 
     return NextResponse.json({
       success: true,
-      totalFetched: reviews.length,
+      totalFetched: allGoogleReviews.length,
       newReviewsCount,
+      updatedReviewsCount,
       autoRepliesCount,
       averageRating,
-      totalReviewCount,
-      message: `Synced ${reviews.length} reviews from Google Business Profile (${newReviewsCount} new, ${autoRepliesCount} auto-replied).`,
+      totalReviewCount: totalReviewCount || allGoogleReviews.length,
+      message: `Synced ${allGoogleReviews.length} reviews from Google Business Profile (${newReviewsCount} new, ${updatedReviewsCount} updated, ${autoRepliesCount} auto-replied).`,
     });
   } catch (error: unknown) {
     console.error('Error syncing Google reviews:', error);
