@@ -83,8 +83,24 @@ export default function GrowthScreen() {
   const analytics = useResource<AnalyticsResult>('/api/gbp/analytics');
   const omnichannel = useResource<OmnichannelResult>('/api/omnichannel/auto-reply');
   const socialAccounts = useResource<{ data: any[] }>('/api/social/accounts');
+  const gbpPlace = useResource<{
+    isConnected: boolean;
+    place?: {
+      locationId: string;
+      title: string;
+      category: string;
+      address: string;
+      phone?: string;
+      website?: string;
+      placeId?: string;
+      mapsUrl?: string;
+    };
+  }>('/api/gbp/place');
 
-  const isGbpConnected = Boolean(socialAccounts.data?.data?.some((a) => a.platform === 'googlebusiness' && a.isActive !== false));
+  const isGbpConnected = Boolean(
+    gbpPlace.data?.isConnected ??
+    socialAccounts.data?.data?.some((a) => a.platform === 'googlebusiness' && a.isActive !== false)
+  );
   const isFbConnected = Boolean(socialAccounts.data?.data?.some((a) => a.platform === 'facebook' && a.isActive !== false));
   const isIgConnected = Boolean(socialAccounts.data?.data?.some((a) => a.platform === 'instagram' && a.isActive !== false));
 
@@ -320,6 +336,37 @@ export default function GrowthScreen() {
                 label="1-Click Connect Google"
                 icon="store"
                 onPress={() => Linking.openURL(`${WEB_URL}/api/oauth/googlebusiness?product=bgos&returnView=socialMedia`)}
+              />
+            </Card>
+          )}
+
+          {/* Connected Google Place Details Card */}
+          {isGbpConnected && (
+            <Card style={{ gap: 8, backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }}>
+              <View style={[ui.row, { justifyContent: 'space-between' }]}>
+                <Badge label="✓ Verified Google Place" success />
+                <Text style={{ color: '#166534', fontSize: 11, fontWeight: '700' }}>
+                  {gbpPlace.data?.place?.category || 'Professional Services'}
+                </Text>
+              </View>
+              <Text style={[ui.heading, { fontSize: 16, color: '#14532D' }]}>
+                {gbpPlace.data?.place?.title || workspace.data?.name || 'Your Business'}
+              </Text>
+              <Text style={[ui.caption, { color: '#166534' }]}>
+                {gbpPlace.data?.place?.address || 'Address registered on Google Maps'}
+              </Text>
+              <Action
+                label="View on Google Maps"
+                icon="map"
+                secondary
+                onPress={() =>
+                  Linking.openURL(
+                    gbpPlace.data?.place?.mapsUrl ||
+                      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        gbpPlace.data?.place?.title || workspace.data?.name || 'Business'
+                      )}`
+                  )
+                }
               />
             </Card>
           )}

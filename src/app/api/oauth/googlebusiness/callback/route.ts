@@ -456,6 +456,12 @@ export async function GET(request: NextRequest) {
           accountName: account.name, // "accounts/{id}"
           locationName: location.name, // "accounts/{id}/locations/{locId}"
           locationTitle: location.title,
+          category: location.category,
+          placeId: location.placeId,
+          mapsUri: location.mapsUri,
+          address: location.address,
+          phone: location.phone,
+          website: location.website,
           accessToken,
           refreshToken,
           tokenExpiry,
@@ -630,20 +636,66 @@ async function listGbpAccounts(
 async function listGbpLocations(
   accessToken: string,
   accountName: string,
-): Promise<Array<{ name: string; title: string }>> {
+): Promise<
+  Array<{
+    name: string;
+    title: string;
+    category?: string;
+    placeId?: string;
+    mapsUri?: string;
+    address?: string;
+    phone?: string;
+    website?: string;
+  }>
+> {
   const url = new URL(
     `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations`,
   );
-  url.searchParams.set('readMask', 'name,title');
+  url.searchParams.set(
+    'readMask',
+    'name,title,storefrontAddress,categories,metadata,websiteUri,phoneNumbers',
+  );
   return fetchWithRetry(
     url.toString(),
     accessToken,
     `List GBP locations for ${accountName}`,
   ).then(async (res) => {
     const body = (await res.json()) as {
-      locations?: Array<{ name: string; title: string }>;
+      locations?: Array<{
+        name?: string;
+        title?: string;
+        categories?: { primaryCategory?: { displayName?: string } };
+        metadata?: { placeId?: string; mapsUri?: string };
+        storefrontAddress?: {
+          addressLines?: string[];
+          locality?: string;
+          administrativeArea?: string;
+          postalCode?: string;
+          country?: string;
+        };
+        websiteUri?: string;
+        phoneNumbers?: Array<{ phoneNumber?: string }>;
+      }>;
     };
-    return Array.isArray(body.locations) ? body.locations : [];
+    return (body.locations || []).map((l) => {
+      const parts: string[] = [];
+      if (l.storefrontAddress?.addressLines) parts.push(...l.storefrontAddress.addressLines);
+      if (l.storefrontAddress?.locality) parts.push(l.storefrontAddress.locality);
+      if (l.storefrontAddress?.administrativeArea) parts.push(l.storefrontAddress.administrativeArea);
+      if (l.storefrontAddress?.postalCode) parts.push(l.storefrontAddress.postalCode);
+      if (l.storefrontAddress?.country) parts.push(l.storefrontAddress.country);
+
+      return {
+        name: l.name || '',
+        title: l.title || '',
+        category: l.categories?.primaryCategory?.displayName,
+        placeId: l.metadata?.placeId,
+        mapsUri: l.metadata?.mapsUri,
+        address: parts.length > 0 ? parts.join(', ') : undefined,
+        phone: l.phoneNumbers?.[0]?.phoneNumber,
+        website: l.websiteUri,
+      };
+    });
   });
 }
 
@@ -783,6 +835,12 @@ async function upsertLocationAccount(args: {
   accountName: string; // GBP account resource name "accounts/123"
   locationName: string; // GBP location resource name "accounts/123/locations/456"
   locationTitle: string; // human-readable location title
+  category?: string;
+  placeId?: string;
+  mapsUri?: string;
+  address?: string;
+  phone?: string;
+  website?: string;
   accessToken: string;
   refreshToken: string | null;
   tokenExpiry: Date | null;
@@ -793,12 +851,6 @@ async function upsertLocationAccount(args: {
   const locationId = extractLocationId(args.locationName);
 
   // Phase 3: Determine the user's access role from the admin list.
-  // We don't have the user's email here (it's in the auth state), but we
-  // store the full admin list in metadata. The verification service can
-  // later match the user's email against the admin list to determine the role.
-  // For now, we store the "strongest" role found in the admin list as a
-  // hint. The verification service will refine this when the user's email
-  // is available.
   const adminRoles = (args.admins || []).map((a) => a.role);
   let accessRole = 'UNKNOWN';
   if (adminRoles.includes('PRIMARY_OWNER')) accessRole = 'PRIMARY_OWNER';
@@ -811,6 +863,17 @@ async function upsertLocationAccount(args: {
     accountName: args.accountName,
     locationId,
     locationName: args.locationName,
+    locationTitle: args.locationTitle,
+    category: args.category,
+    placeId: args.placeId,
+    mapsUri:
+      args.mapsUri ||
+      (args.placeId
+        ? `https://www.google.com/maps/place/?q=place_id:${args.placeId}`
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(args.locationTitle)}`),
+    address: args.address,
+    phone: args.phone,
+    website: args.website,
     // Phase 3: store the access role + admin list for later verification
     accessRole,
     admins: args.admins || [],

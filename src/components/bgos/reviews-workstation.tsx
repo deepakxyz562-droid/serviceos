@@ -63,6 +63,7 @@ import {
   MessageCircle,
   ShieldCheck,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -262,19 +263,44 @@ export function ReviewsView({
   const [timeRange, setTimeRange] = useState('Last 30 days');
   const [timeRangeOpen, setTimeRangeOpen] = useState(false);
 
-  // Business Profile state (hydrated from /api/brand-profile)
+  // Business Profile state (hydrated from /api/gbp/place & /api/brand-profile)
   const [profileTitle, setProfileTitle] = useState(
-    auth?.tenant?.name || auth?.workspace?.name || 'Sparkle Clean Services'
+    auth?.tenant?.name || auth?.workspace?.name || businessName || 'Business Profile'
   );
-  const [profileCategory, setProfileCategory] = useState('House Cleaning Service');
-  const [profileAddress, setProfileAddress] = useState(
-    auth?.tenant?.city || '123 Green Park, Delhi, India'
+  const [profileCategory, setProfileCategory] = useState<string>(
+    auth?.tenant?.industry ||
+      (isDemo || initialReviews === INITIAL_REVIEWS ? 'House Cleaning Service' : 'Professional Services')
+  );
+  const [profileAddress, setProfileAddress] = useState<string>(
+    auth?.tenant?.city ||
+      (isDemo || initialReviews === INITIAL_REVIEWS ? '123 Green Park, Delhi, India' : '')
   );
   const [editProfileOpen, setEditProfileOpen] = useState(false);
 
-  // GBP Connection state
+  // GBP Connection state & Place metadata
   const [isGbpConnected, setIsGbpConnected] = useState(Boolean(isDemo || initialReviews === INITIAL_REVIEWS));
   const [gbpAccount, setGbpAccount] = useState<any>(null);
+  const [connectedPlace, setConnectedPlace] = useState<{
+    locationId?: string;
+    title: string;
+    category: string;
+    address: string;
+    phone?: string;
+    website?: string;
+    placeId?: string | null;
+    mapsUrl?: string;
+  } | null>(null);
+  const [gbpMetrics, setGbpMetrics] = useState<{
+    totalViews: number;
+    searchImpressions: number;
+    mapsImpressions: number;
+    callClicks: number;
+    directionRequests: number;
+    websiteClicks: number;
+    totalReviews: number;
+    avgRating: number;
+    responseRate: number;
+  } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Create a Post state
@@ -399,9 +425,35 @@ export function ReviewsView({
     };
   }, [auth?.tenant?.name, auth?.tenant?.city, auth?.workspace?.name]);
 
-  // Check connected Google Business account
+  // Check connected Google Business account & Place Details
   useEffect(() => {
     let mounted = true;
+
+    // 1. Fetch live Google Place details if available
+    authFetch('/api/gbp/place')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        if (data.isConnected && data.place) {
+          setIsGbpConnected(true);
+          setConnectedPlace(data.place);
+          if (data.place.title) setProfileTitle(data.place.title);
+          if (data.place.category) setProfileCategory(data.place.category);
+          if (data.place.address) setProfileAddress(data.place.address);
+          if (data.metrics) setGbpMetrics(data.metrics);
+        } else if (data.tenantFallback) {
+          if (!isDemo && !initialReviews) {
+            setIsGbpConnected(false);
+            setConnectedPlace(null);
+            if (data.tenantFallback.name) setProfileTitle(data.tenantFallback.name);
+            if (data.tenantFallback.category) setProfileCategory(data.tenantFallback.category);
+            if (data.tenantFallback.address) setProfileAddress(data.tenantFallback.address);
+          }
+        }
+      })
+      .catch(() => {});
+
+    // 2. Also check social accounts list for backwards compatibility
     authFetch('/api/social/accounts?platform=googlebusiness')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -415,6 +467,8 @@ export function ReviewsView({
         if (activeGbp) {
           setIsGbpConnected(true);
           setGbpAccount(activeGbp);
+          if (activeGbp.metadata?.category) setProfileCategory(activeGbp.metadata.category);
+          if (activeGbp.metadata?.address) setProfileAddress(activeGbp.metadata.address);
         } else if (!isDemo && !initialReviews) {
           setIsGbpConnected(false);
           setGbpAccount(null);
@@ -604,6 +658,22 @@ export function ReviewsView({
           });
           setReviewsList(mapped);
           if (mapped[0]) setSelectedReviewId(mapped[0].id);
+
+          // Refresh live place metadata and telemetry
+          authFetch('/api/gbp/place')
+            .then((pRes) => (pRes.ok ? pRes.json() : null))
+            .then((pData) => {
+              if (pData?.isConnected && pData.place) {
+                setIsGbpConnected(true);
+                setConnectedPlace(pData.place);
+                if (pData.place.title) setProfileTitle(pData.place.title);
+                if (pData.place.category) setProfileCategory(pData.place.category);
+                if (pData.place.address) setProfileAddress(pData.place.address);
+                if (pData.metrics) setGbpMetrics(pData.metrics);
+              }
+            })
+            .catch(() => {});
+
           toast.success(`Synced ${mapped.length} reviews from Google Business Profile${syncSummary}!`);
           return;
         }
@@ -919,13 +989,64 @@ export function ReviewsView({
   const mapsDash = totalReviews > 0 ? Math.round((mapsCount / totalReviews) * 289) : 237;
   const searchDash = totalReviews > 0 ? Math.round((searchCount / totalReviews) * 289) : 35;
 
-  // Dynamic telemetry scaled to real reviews
-  const profileViews = totalReviews > 0 ? `${(totalReviews * 1.5 + 0.4).toFixed(1)}K` : '0';
-  const websiteClicks = totalReviews > 0 ? `${(totalReviews * 0.15 + 0.1).toFixed(1)}K` : '0';
-  const searchViews = totalReviews > 0 ? (totalReviews * 120 + 240).toLocaleString() : '0';
-  const mapViews = totalReviews > 0 ? (totalReviews * 60 + 100).toLocaleString() : '0';
-  const callClicks = totalReviews > 0 ? (totalReviews * 14 + 18).toLocaleString() : '0';
-  const directionRequests = totalReviews > 0 ? (totalReviews * 9 + 12).toLocaleString() : '0';
+  // Dynamic telemetry from Google API or scaled to real reviews
+  const profileViews =
+    !isGbpConnected && !isDemo && totalReviews === 0
+      ? '0'
+      : gbpMetrics?.totalViews
+      ? gbpMetrics.totalViews >= 1000
+        ? `${(gbpMetrics.totalViews / 1000).toFixed(1)}K`
+        : gbpMetrics.totalViews.toString()
+      : totalReviews > 0
+      ? `${(totalReviews * 1.5 + 0.4).toFixed(1)}K`
+      : '0';
+
+  const websiteClicks =
+    !isGbpConnected && !isDemo && totalReviews === 0
+      ? '0'
+      : gbpMetrics?.websiteClicks
+      ? gbpMetrics.websiteClicks >= 1000
+        ? `${(gbpMetrics.websiteClicks / 1000).toFixed(1)}K`
+        : gbpMetrics.websiteClicks.toString()
+      : totalReviews > 0
+      ? `${(totalReviews * 0.15 + 0.1).toFixed(1)}K`
+      : '0';
+
+  const searchViews =
+    !isGbpConnected && !isDemo && totalReviews === 0
+      ? '0'
+      : gbpMetrics?.searchImpressions
+      ? gbpMetrics.searchImpressions.toLocaleString()
+      : totalReviews > 0
+      ? (totalReviews * 120 + 240).toLocaleString()
+      : '0';
+
+  const mapViews =
+    !isGbpConnected && !isDemo && totalReviews === 0
+      ? '0'
+      : gbpMetrics?.mapsImpressions
+      ? gbpMetrics.mapsImpressions.toLocaleString()
+      : totalReviews > 0
+      ? (totalReviews * 60 + 100).toLocaleString()
+      : '0';
+
+  const callClicks =
+    !isGbpConnected && !isDemo && totalReviews === 0
+      ? '0'
+      : gbpMetrics?.callClicks
+      ? gbpMetrics.callClicks.toLocaleString()
+      : totalReviews > 0
+      ? (totalReviews * 14 + 18).toLocaleString()
+      : '0';
+
+  const directionRequests =
+    !isGbpConnected && !isDemo && totalReviews === 0
+      ? '0'
+      : gbpMetrics?.directionRequests
+      ? gbpMetrics.directionRequests.toLocaleString()
+      : totalReviews > 0
+      ? (totalReviews * 9 + 12).toLocaleString()
+      : '0';
 
   // Dynamic Rating Trend Graph Points ending at actual average rating
   const trendMonths = ['May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
@@ -971,10 +1092,17 @@ export function ReviewsView({
               <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
                 Google Business &amp; Reviews
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-[#E8F8EF] dark:bg-emerald-950/60 text-[#009F50] dark:text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-[#ccebd9] dark:border-emerald-800/50">
-                <span className="size-1.5 rounded-full bg-[#009F50] animate-pulse" />
-                {isGbpConnected ? 'Connected' : 'Google Connected'}
-              </span>
+              {isGbpConnected ? (
+                <span className="px-2.5 py-0.5 rounded-full bg-[#E8F8EF] dark:bg-emerald-950/60 text-[#009F50] dark:text-emerald-300 text-xs font-semibold flex items-center gap-1 border border-[#ccebd9] dark:border-emerald-800/50">
+                  <span className="size-1.5 rounded-full bg-[#009F50] animate-pulse" />
+                  {connectedPlace?.title ? `Connected: ${connectedPlace.title}` : 'Connected'}
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 text-xs font-semibold flex items-center gap-1 border border-amber-200 dark:border-amber-800/50">
+                  <span className="size-1.5 rounded-full bg-amber-500" />
+                  Not Connected
+                </span>
+              )}
             </div>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               Manage your Google Business profile, read and respond to reviews, and grow your reputation.
@@ -1000,9 +1128,12 @@ export function ReviewsView({
             size="sm"
             onClick={() =>
               window.open(
-                `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                  profileTitle || businessName
-                )}`,
+                connectedPlace?.mapsUrl ||
+                  (connectedPlace?.placeId
+                    ? `https://www.google.com/maps/place/?q=place_id:${connectedPlace.placeId}`
+                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                        profileTitle || businessName
+                      )}`),
                 '_blank'
               )
             }
@@ -1558,10 +1689,38 @@ export function ReviewsView({
                   </button>
                 </div>
 
+                {!isGbpConnected && !isDemo && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-amber-600 shrink-0" />
+                      <div>
+                        <p className="text-xs text-amber-900 dark:text-amber-200 font-bold">
+                          Google Place Not Connected
+                        </p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Connect to sync verified reviews &amp; Maps listing
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                        const token = getAuthToken();
+                        const authParam = token ? `&auth=${encodeURIComponent(token)}` : '';
+                        window.location.href = `/api/oauth/googlebusiness/connect?originHost=${encodeURIComponent(origin)}&product=bgos&returnView=socialMedia${authParam}`;
+                      }}
+                      className="h-7 text-[11px] bg-[#009F50] hover:bg-[#008A45] text-white rounded-lg px-2.5 shrink-0"
+                    >
+                      Connect Place
+                    </Button>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-4">
                   <img
                     src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=320&auto=format&fit=crop&q=80"
-                    alt={profileTitle || businessName}
+                    alt="Storefront photo"
                     className="w-28 h-24 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
                   />
                   <div className="min-w-0 flex-1 space-y-1">
@@ -1607,11 +1766,16 @@ export function ReviewsView({
                       <span className="text-xs text-slate-500 flex items-center gap-1">
                         Closes 8:00 PM <ChevronDown className="size-3" />
                       </span>
+                      {connectedPlace?.placeId && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          ✓ Verified Place
+                        </span>
+                      )}
                     </div>
 
                     <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-0.5 truncate">
                       <MapPin className="size-3.5 text-[#009F50] shrink-0" />
-                      <span className="truncate">{profileAddress}</span>
+                      <span className="truncate">{profileAddress || 'Address on file'}</span>
                     </p>
                   </div>
                 </div>
@@ -1622,9 +1786,12 @@ export function ReviewsView({
                     size="sm"
                     onClick={() =>
                       window.open(
-                        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                          profileTitle || businessName
-                        )}`,
+                        connectedPlace?.mapsUrl ||
+                          (connectedPlace?.placeId
+                            ? `https://www.google.com/maps/place/?q=place_id:${connectedPlace.placeId}`
+                            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                profileTitle || businessName
+                              )}`),
                         '_blank'
                       )
                     }

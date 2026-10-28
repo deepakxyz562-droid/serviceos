@@ -912,6 +912,97 @@ export async function fetchGoogleBusinessPerformanceMetrics(
   };
 }
 
+/**
+ * Fetch detailed place metadata from Google Business Profile Information API.
+ * Returns title, real Google category (e.g. Steel Fabricator), storefront address,
+ * place ID, and direct Google Maps place link.
+ */
+export async function fetchGoogleBusinessPlaceDetails(
+  account: SocialAccountData,
+): Promise<{
+  title: string;
+  category?: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  placeId?: string;
+  mapsUri?: string;
+}> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const meta = (account.metadata || {}) as Record<string, any>;
+  const locationResourceName =
+    meta.locationName ||
+    (accountName.startsWith('accounts/')
+      ? `${accountName}/locations/${locationId}`
+      : `accounts/${accountName}/locations/${locationId}`);
+
+  let title = account.accountName || meta.locationTitle || '';
+  let category = meta.category || undefined;
+  let address = meta.address || undefined;
+  let phone = meta.phone || undefined;
+  let website = meta.website || undefined;
+  let placeId = meta.placeId || undefined;
+  let mapsUri = meta.mapsUri || undefined;
+
+  try {
+    const detailUrl = new URL(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${locationResourceName}`,
+    );
+    detailUrl.searchParams.set(
+      'readMask',
+      'name,title,phoneNumbers,websiteUri,storefrontAddress,categories,metadata',
+    );
+    const detailRes = await fetch(detailUrl.toString(), {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${account.accessToken}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (detailRes.ok) {
+      const detail = (await detailRes.json()) as any;
+      if (detail.title) title = detail.title;
+      if (detail.categories?.primaryCategory?.displayName) {
+        category = detail.categories.primaryCategory.displayName;
+      }
+      if (detail.metadata?.placeId) {
+        placeId = detail.metadata.placeId;
+      }
+      if (detail.metadata?.mapsUri) {
+        mapsUri = detail.metadata.mapsUri;
+      } else if (placeId) {
+        mapsUri = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+      }
+      if (detail.phoneNumbers?.[0]?.phoneNumber) {
+        phone = detail.phoneNumbers[0].phoneNumber;
+      }
+      if (detail.websiteUri) {
+        website = detail.websiteUri;
+      }
+      if (detail.storefrontAddress) {
+        const parts: string[] = [];
+        if (detail.storefrontAddress.addressLines) parts.push(...detail.storefrontAddress.addressLines);
+        if (detail.storefrontAddress.locality) parts.push(detail.storefrontAddress.locality);
+        if (detail.storefrontAddress.administrativeArea) parts.push(detail.storefrontAddress.administrativeArea);
+        if (detail.storefrontAddress.postalCode) parts.push(detail.storefrontAddress.postalCode);
+        if (detail.storefrontAddress.country) parts.push(detail.storefrontAddress.country);
+        if (parts.length > 0) address = parts.join(', ');
+      }
+    }
+  } catch (err) {
+    console.warn('[googlebusiness] Failed to fetch live place details, falling back to account metadata:', err);
+  }
+
+  if (!mapsUri) {
+    mapsUri = placeId
+      ? `https://www.google.com/maps/place/?q=place_id:${placeId}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(title || 'Google Business')}`;
+  }
+
+  return { title, category, address, phone, website, placeId, mapsUri };
+}
+
 // ─── Self-register ─────────────────────────────────────────────────────────
 
 registerAdapter(googleBusinessAdapter);
