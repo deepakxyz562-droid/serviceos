@@ -232,6 +232,7 @@ export const VIEW_TYPES = [
   'communicationProviders',
   'leadDiscovery',
   'reviews',
+  'gbpAI',
   'journeyAutomation',
   'marketplace',
   'marketplaceDashboard',

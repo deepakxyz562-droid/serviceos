@@ -11,9 +11,10 @@ import {
   Text,
   TextInput,
   View,
+  StatusBar as RNStatusBar,
   type TextInputProps,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export const colors = {
@@ -36,15 +37,24 @@ export const colors = {
   note: '#FFFBEB',
   noteBorder: '#FDE68A',
   noteText: '#B45309',
+  // AI accent (✨ "AI Suggested", AI Actions, planned items) — design spec §Brand
+  aiPurple: '#A855F7',
+  aiPurpleSoft: '#F3E8FF',
 };
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const brandMark = require('../../assets/brand-mark.png');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const brandMarkLight = require('../../assets/brand-mark-light.png');
 
 export function Brand({ large = false, light = false }: { large?: boolean; light?: boolean }) {
   return (
     <View style={[ui.row, { gap: 8 }]}>
       <Image
-        source={light ? require('../../assets/brand-mark-light.png') : require('../../assets/brand-mark.png')}
+        source={light ? brandMarkLight : brandMark}
         style={{ width: large ? 54 : 28, height: large ? 54 : 28, resizeMode: 'contain' }}
         accessibilityIgnoresInvertColors
+        alt="bgos logo"
       />
       <View>
         <Text style={{ fontSize: large ? 32 : 19, fontWeight: '800', color: light ? '#FFFFFF' : colors.ink, letterSpacing: -0.8 }}>
@@ -78,6 +88,7 @@ export function Screen({
   onBack?: () => void;
 }) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [pulling, setPulling] = useState(false);
   const canBack = showBack !== undefined ? showBack : (onBack !== undefined || (router.canGoBack?.() ?? false));
 
@@ -86,15 +97,22 @@ export function Screen({
       onBack();
     } else if (router.canGoBack?.()) {
       router.back();
+    } else {
+      router.replace('/(tabs)');
     }
   }
 
+  // Safe status bar top inset calculation (handles dynamic island, notch, and Android status bar)
+  const androidExtra = Platform.OS === 'android' ? Math.max(0, (RNStatusBar.currentHeight || 24) - insets.top) : 0;
+  // Ensure content never gets hidden behind bottom tabs (62px bar + insets.bottom + clearance)
+  const bottomInset = Math.max(insets.bottom, 16) + 76;
+
   return (
-    <SafeAreaView style={ui.screen} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={[ui.screen, { paddingTop: androidExtra }]} edges={['top', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={ui.content}
+          contentContainerStyle={[ui.content, { paddingBottom: bottomInset }]}
           refreshControl={
             onRefresh ? (
               <RefreshControl
@@ -113,7 +131,7 @@ export function Screen({
           }
         >
           <View style={ui.topbar}>
-            <View style={[ui.row, { gap: 10 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
               {canBack ? (
                 <Pressable
                   accessibilityRole="button"
@@ -121,13 +139,17 @@ export function Screen({
                   onPress={handleBack}
                   style={ui.backBtn}
                 >
-                  <MaterialIcons name="arrow-back" size={22} color={colors.ink} />
+                  <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
                 </Pressable>
               ) : null}
               <Brand />
             </View>
-            {rightAction || (
-              <View style={ui.row}>
+            {rightAction ? (
+              <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
+                {rightAction}
+              </View>
+            ) : (
+              <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
                 <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
                 <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
               </View>
@@ -154,6 +176,7 @@ export function Action({
   disabled,
   secondary = false,
   danger = false,
+  compact = false,
   icon,
 }: {
   label: string;
@@ -161,6 +184,7 @@ export function Action({
   disabled?: boolean;
   secondary?: boolean;
   danger?: boolean;
+  compact?: boolean;
   icon?: React.ComponentProps<typeof MaterialIcons>['name'];
 }) {
   return (
@@ -171,22 +195,24 @@ export function Action({
       onPress={onPress}
       style={({ pressed }) => [
         ui.button,
+        compact && { minHeight: 34, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
         secondary && ui.secondary,
         danger && { backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: '#FFCCD0' },
         { opacity: disabled ? 0.45 : pressed ? 0.8 : 1 },
       ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: compact ? 4 : 6 }}>
         {icon ? (
           <MaterialIcons
             name={icon}
-            size={18}
+            size={compact ? 16 : 18}
             color={danger ? colors.danger : secondary ? colors.brand : '#FFFFFF'}
           />
         ) : null}
         <Text
           style={[
             ui.buttonText,
+            compact && { fontSize: 12, fontWeight: '700' },
             secondary && { color: colors.brand },
             danger && { color: colors.danger },
           ]}
@@ -515,8 +541,8 @@ export function DialpadGrid({
 
 export const ui = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: 18, paddingBottom: 40, maxWidth: 760, width: '100%', alignSelf: 'center' },
-  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  content: { padding: 16, maxWidth: 760, width: '100%', alignSelf: 'center' },
+  topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.brand },
   title: { fontSize: 26, fontWeight: '800', color: colors.ink, letterSpacing: -0.6 },
   subtitle: { fontSize: 13, lineHeight: 19, color: colors.muted, marginTop: 4, marginBottom: 18 },
@@ -628,9 +654,9 @@ export const ui = StyleSheet.create({
     elevation: 3,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.line,

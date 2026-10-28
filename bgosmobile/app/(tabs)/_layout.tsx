@@ -4,12 +4,31 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../src/components/ui';
 
+/**
+ * Bottom navigation (design spec §5): 4 first-class tabs —
+ *   Home / GBP / Photos / Leads.
+ * Every other screen stays reachable from the "More Tools" grid on Home;
+ * their routes are hidden from the tab bar but remain fully functional.
+ */
 const visible = [
   ['index', 'Home', 'home'],
-  ['inbox', 'Inbox', 'chat-bubble-outline'],
-  ['phone', 'Phone', 'phone'],
-  ['leads', 'Leads', 'people-outline'],
+  ['growth', 'GBP', 'storefront'],
+  ['photos', 'Photos', 'photo-library'],
+  ['leads', 'Leads', 'people'],
   ['tools', 'More', 'grid-view'],
+] as const;
+
+const hidden = [
+  'inbox',
+  'marketing',
+  'phone',
+  'outreach',
+  'automations',
+  'appointments',
+  'submissions',
+  'integrations',
+  'settings',
+  'agents',
 ] as const;
 
 export default function TabLayout() {
@@ -45,17 +64,7 @@ export default function TabLayout() {
           }}
         />
       ))}
-      {[
-        'appointments',
-        'growth',
-        'automations',
-        'outreach',
-        'submissions',
-        'agents',
-        'settings',
-        'marketing',
-        'integrations',
-      ].map((name) => (
+      {hidden.map((name) => (
         <Tabs.Screen key={name} name={name} options={{ href: null }} />
       ))}
     </Tabs>

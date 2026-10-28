@@ -200,7 +200,8 @@ export default function MarketingScreen() {
       }}
       rightAction={
         <Action
-          label="＋ Create Post"
+          compact
+          label="＋ Post"
           icon="auto-awesome"
           onPress={() => {
             setError(null);
@@ -317,6 +318,7 @@ export default function MarketingScreen() {
                 source={{ uri: post.mediaUrls[0] }}
                 style={{ width: '100%', height: 190, borderRadius: 12 }}
                 accessibilityLabel="Post image"
+                alt="Post image"
               />
             ) : null}
 
@@ -516,6 +518,7 @@ export default function MarketingScreen() {
                     source={{ uri: mediaUrls[0] }}
                     style={{ width: '100%', height: 210, borderRadius: 12 }}
                     accessibilityLabel="Post preview"
+                    alt="Post preview"
                   />
                 ) : null}
               </View>

@@ -105,6 +105,16 @@
       },
       "timeout": 60,
       "_comment": "Paced SES outreach. Starts paused; enable explicitly in SuperAdmin Outreach after configuring SES events. Database lease prevents concurrent sends; 500 maximum per rolling 24 hours."
+    },
+    {
+      "url": "https://YOUR-DOMAIN.com/api/cron/gbp-weekly-digest",
+      "schedule": "0 8 * * 1",
+      "title": "GBP Weekly Digest (Monday 8am) \u2014 opt-in only"
+    },
+    {
+      "url": "https://YOUR-DOMAIN.com/api/cron/gbp-auto-post",
+      "schedule": "0 */6 * * *",
+      "title": "GBP Auto Post (every 6h, 72h cadence, opt-in only)"
     }
   ],
   "_daily_subcrons_handled_by_master": [

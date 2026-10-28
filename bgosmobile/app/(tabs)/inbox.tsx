@@ -88,7 +88,7 @@ export default function InboxScreen() {
       title="Unified Inbox"
       subtitle="Omnichannel conversations, visitor radar & support tickets."
       onRefresh={inbox.refresh}
-      showBack={false}
+      showBack={true}
       rightAction={
         <Pressable accessibilityRole="button" onPress={shareChatLink} style={styles.shareHeaderBtn}>
           <MaterialIcons name="share" size={18} color={colors.brand} />

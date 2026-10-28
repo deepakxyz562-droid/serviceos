@@ -79,9 +79,8 @@ export default function ToolsScreen() {
 
   return (
     <Screen
-      title="More & Settings"
-      subtitle="Business hub, plans, team & integrations."
-      showBack={true}
+      title="All Tools & Operations"
+      subtitle="Complete business hub, growth suite, communications & settings."
       onRefresh={workspace.refresh}
     >
       <ErrorNotice message={error || workspace.error} retry={workspace.refresh} />
@@ -105,6 +104,34 @@ export default function ToolsScreen() {
           </View>
           <Badge label={data?.plan.code || 'Plan unavailable'} accent />
         </View>
+      </Card>
+
+      {/* GROWTH & MARKETING SUITE */}
+      <Card>
+        <Text style={ui.heading}>Growth & Marketing</Text>
+        <MenuRow title="Google Business & Reviews" detail="SEO ranking, AI auto-replies & review requests" icon="storefront" onPress={() => router.push('/(tabs)/growth')} />
+        <MenuRow title="GBP Photos & Showcase" detail="Upload, schedule & publish business photos" icon="photo-library" onPress={() => router.push('/(tabs)/photos')} />
+        <MenuRow title="Marketing Studio" detail="Multi-channel AI posts, composer & calendar" icon="auto-awesome" onPress={() => router.push('/(tabs)/marketing')} />
+        <MenuRow title="Campaigns & Outreach" detail="WhatsApp & SMS broadcast sequences" icon="send" onPress={() => router.push('/(tabs)/outreach')} />
+      </Card>
+
+      {/* COMMUNICATIONS & SALES */}
+      <Card>
+        <Text style={ui.heading}>Communications & Sales</Text>
+        <MenuRow title="Unified Inbox & Chat" detail="WhatsApp, Instagram & visitor radar" icon="chat" onPress={() => router.push('/(tabs)/inbox')} />
+        <MenuRow title="Business Phone & Keypad" detail="Dialpad, call logs & transcription" icon="phone" onPress={() => router.push('/(tabs)/phone')} />
+        <MenuRow title="Leads & CRM Pipeline" detail="Manage leads, statuses & follow-ups" icon="people-outline" onPress={() => router.push('/(tabs)/leads')} />
+        <MenuRow title="Appointments Calendar" detail="Review agenda & book time slots" icon="event" onPress={() => router.push('/(tabs)/appointments')} />
+        <MenuRow title="Form Inquiries & Surveys" detail="Intake forms & customer submissions" icon="description" onPress={() => router.push('/(tabs)/submissions')} />
+      </Card>
+
+      {/* AI & AUTOMATION */}
+      <Card>
+        <Text style={ui.heading}>AI & Automation</Text>
+        <MenuRow title="AI Assistant Studio" detail="Assistant bots, test lab & knowledge setup" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
+        <MenuRow title="Automated Workflows" detail="Instant trigger actions & follow-ups" icon="alt-route" onPress={() => router.push('/(tabs)/automations')} />
+        <MenuRow title="Channel Integrations" detail="Connected social and messaging accounts" icon="link" onPress={() => router.push('/(tabs)/integrations')} />
+        <MenuRow title="Team Permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(getBgosWebUrl('settings')))} />
       </Card>
 
       {/* MY PLAN & USAGE METERS (Screen 24 in mockups) */}
@@ -137,28 +164,6 @@ export default function ToolsScreen() {
             />
           </View>
         </View>
-      </Card>
-
-      <Card>
-        <Text style={ui.heading}>Team & Assistants</Text>
-        <MenuRow title="Team permissions · Web" detail="Manage workspace members and access" icon="people-outline" onPress={() => run(() => Linking.openURL(getBgosWebUrl('settings')))} />
-        <MenuRow title="AI Assistants" detail="View configured business assistants" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
-      </Card>
-
-      {/* OPERATIONAL NAVIGATION HUB (Side Menu Screen 7 in mockups) */}
-      <Card>
-        <Text style={ui.heading}>Core Operations</Text>
-        <MenuRow title="Unified Inbox & Chat" detail="WhatsApp, Instagram & visitor radar" icon="chat" onPress={() => router.push('/(tabs)/inbox')} />
-        <MenuRow title="Business Phone & Keypad" detail="Dialpad, call logs & transcription" icon="phone" onPress={() => router.push('/(tabs)/phone')} />
-        <MenuRow title="Leads & CRM Pipeline" detail="Manage leads, statuses & follow-ups" icon="people-outline" onPress={() => router.push('/(tabs)/leads')} />
-        <MenuRow title="Appointments Calendar" detail="Review agenda & book time slots" icon="event" onPress={() => router.push('/(tabs)/appointments')} />
-        <MenuRow title="Marketing Studio" detail="AI caption generator & post calendar" icon="auto-awesome" onPress={() => router.push('/(tabs)/marketing')} />
-        <MenuRow title="Campaigns & Outreach" detail="WhatsApp & SMS broadcast sequences" icon="send" onPress={() => router.push('/(tabs)/outreach')} />
-        <MenuRow title="Google Business & Reviews" detail="Customer ratings & review requests" icon="star-outline" onPress={() => router.push('/(tabs)/growth')} />
-        <MenuRow title="AI Assistant Studio" detail="Assistant chat & knowledge configuration" icon="smart-toy" onPress={() => router.push('/(tabs)/agents')} />
-        <MenuRow title="Form Inquiries & Surveys" detail="Intake forms & customer submissions" icon="description" onPress={() => router.push('/(tabs)/submissions')} />
-        <MenuRow title="Channel Integrations" detail="Connected social and messaging accounts" icon="link" onPress={() => router.push('/(tabs)/integrations')} />
-        <MenuRow title="Automated Workflows" detail="Instant trigger actions & follow-ups" icon="alt-route" onPress={() => router.push('/(tabs)/automations')} />
       </Card>
 
       {/* DIGITAL IDENTITY & SCANNABLE QR */}
@@ -199,6 +204,7 @@ export default function ToolsScreen() {
           {qr && (
             <Image
               accessibilityLabel="QR code for your business"
+              alt="QR code for your business"
               source={{ uri: qr }}
               style={{ width: '100%', aspectRatio: 1, borderRadius: 12 }}
             />

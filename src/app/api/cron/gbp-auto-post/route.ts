@@ -65,14 +65,17 @@ async function handleAutoPost(request: NextRequest) {
       const gbpAccount = tenant.socialAccounts[0];
       if (!gbpAccount) continue;
 
-      // Check if tenant has auto-posting enabled in settings (default true)
+      // Check if tenant has auto-posting enabled in settings
+      // SAFE-BY-DEFAULT: auto-posting to a live Google Business Profile is
+      // strictly opt-in. Tenants must explicitly enable it (GBP AI Agents hub
+      // → automations). Absent/unknown config → NEVER auto-post.
       let settings: Record<string, any> = {};
       try {
         settings = JSON.parse(tenant.settingsJson || '{}');
       } catch {}
 
-      if (settings.autoGbpPosting === false) {
-        continue; // Tenant explicitly paused auto-posting
+      if (settings.autoGbpPosting !== true) {
+        continue; // Not explicitly enabled → skip (safe default)
       }
 
       // Check cadence: only post if no auto-post in the last 72 hours (maintains 1-2 posts/week)

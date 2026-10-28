@@ -18,6 +18,7 @@ export const BGOS_NAVIGATION = [
   {
     title: 'Growth & CRM',
     items: [
+      { view: 'gbpAI', label: 'GBP AI Agents', iconName: 'Sparkles' },
       { view: 'leads', label: 'Leads & CRM', iconName: 'Users' },
       { view: 'socialMedia', label: 'Marketing Studio', iconName: 'Send' },
       { view: 'reviews', label: 'Google Business & Reviews', iconName: 'Store' },
@@ -36,6 +37,7 @@ export const BGOS_NAVIGATION = [
 
 const allowed = new Set<string>([
   ...BGOS_NAVIGATION.flatMap((section) => section.items.map((item) => item.view)),
+  'gbpAI',
   'contacts', 'formSubmissions', 'booking', 'calendar', 'meetingTypes', 'appointmentTypes',
   'creatorProfile', 'creatorOffers', 'canvas', 'notifications', 'activityLogs', 'helpAdmin',
   'socialAccounts', 'postComposer', 'postsList', 'socialAnalytics', 'emailProviders',

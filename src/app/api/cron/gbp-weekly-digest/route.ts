@@ -33,17 +33,17 @@ async function handleDigest(request: NextRequest) {
       }
     }
 
+    // Only email tenants who explicitly opted in via the GBP AI Agents hub
+    // (settingsJson.gbpSummaryConfig.enabled === true — see /api/gbp/summary-settings).
+    // Safe-by-default: no opt-in record → no email (never spam tenants).
     const tenants = await db.tenant.findMany({
       select: {
         id: true,
         name: true,
         email: true,
-        socialAccounts: {
-          where: { platform: 'googlebusiness', isActive: true },
-          select: { accountName: true },
-        },
+        settingsJson: true,
       },
-      take: 100,
+      take: 500,
     });
 
     let sentCount = 0;
@@ -51,7 +51,19 @@ async function handleDigest(request: NextRequest) {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     for (const tenant of tenants) {
-      const recipientEmail = tenant.email;
+      // ── Opt-in gate (read settingsJson.gbpSummaryConfig) ──
+      let summaryConfig: { enabled?: boolean; email?: string } = {};
+      try {
+        const parsed = JSON.parse(tenant.settingsJson || '{}');
+        if (parsed && typeof parsed === 'object' && parsed.gbpSummaryConfig) {
+          summaryConfig = parsed.gbpSummaryConfig as { enabled?: boolean; email?: string };
+        }
+      } catch {
+        summaryConfig = {};
+      }
+      if (summaryConfig.enabled !== true) continue; // not opted in → skip
+      const recipientEmail =
+        (typeof summaryConfig.email === 'string' && summaryConfig.email.trim()) || tenant.email;
       if (!recipientEmail) continue;
 
       const [newReviews, totalReviews, postsThisWeek] = await Promise.all([
@@ -73,10 +85,11 @@ async function handleDigest(request: NextRequest) {
       ]);
 
       const newReviewsCount = newReviews.length;
+      // Honest average — never fabricate a 5.0 when there were no reviews this week.
       const avgNewRating =
         newReviewsCount > 0
-          ? (newReviews.reduce((sum, r) => sum + (r.rating || 5), 0) / newReviewsCount).toFixed(1)
-          : '5.0';
+          ? (newReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / newReviewsCount).toFixed(1)
+          : null;
 
       const repliedCount = newReviews.filter((r) => {
         try {
@@ -89,6 +102,23 @@ async function handleDigest(request: NextRequest) {
 
       const responseRate = newReviewsCount > 0 ? Math.round((repliedCount / newReviewsCount) * 100) : 0;
       const totalReviewsCount = totalReviews as number;
+
+      // Honest activity line — reflects ONLY what actually happened this week.
+      const activityBits: string[] = [];
+      if (newReviewsCount > 0) {
+        activityBits.push(
+          repliedCount > 0
+            ? `${repliedCount} of ${newReviewsCount} new review${newReviewsCount === 1 ? '' : 's'} received a published reply`
+            : `${newReviewsCount} new review${newReviewsCount === 1 ? '' : 's'} received — replies pending`,
+        );
+      }
+      if (postsThisWeek > 0) {
+        activityBits.push(`${postsThisWeek} GBP post${postsThisWeek === 1 ? '' : 's'} published`);
+      }
+      const activityLine =
+        activityBits.length > 0
+          ? `This week: ${activityBits.join(' • ')}.`
+          : 'No new reviews or posts this week — your AI agents keep monitoring your profile 24/7.';
 
       const htmlBody = `
 <!DOCTYPE html>
@@ -130,7 +160,7 @@ async function handleDigest(request: NextRequest) {
         </div>
         <div class="stat-box">
           <div class="stat-value">${newReviewsCount} New</div>
-          <div class="stat-label">Google Reviews (${avgNewRating} ★)</div>
+          <div class="stat-label">Google Reviews${avgNewRating ? ` (${avgNewRating} ★)` : ''}</div>
         </div>
         <div class="stat-box">
           <div class="stat-value">${responseRate}%</div>
@@ -143,7 +173,9 @@ async function handleDigest(request: NextRequest) {
       </div>
 
       <p style="font-size: 13px; line-height: 1.6; color: #475569;">
-        Your BGOS AI Agent kept your profile 100% fresh this week with active review responses and optimized local SEO presence.
+        ${
+          activityLine
+        }
       </p>
 
       <a href="https://bgos.fieseros.com" class="cta-btn">View Live BGOS Dashboard</a>

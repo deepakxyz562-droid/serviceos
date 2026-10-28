@@ -111,7 +111,9 @@ export default function AppointmentsScreen() {
       onRefresh={resource.refresh}
       rightAction={
         <Action
-          label="＋ Book Slot"
+          compact
+          label="＋ Book"
+          icon="add"
           onPress={() => {
             setError(null);
             setBookModal(true);

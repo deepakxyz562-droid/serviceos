@@ -135,11 +135,12 @@ export default function LeadsScreen() {
     <Screen
       title="Leads & CRM"
       subtitle="Pipeline stages, quick follow-up & customer history."
-      showBack={true}
       onRefresh={resource.refresh}
       rightAction={
         <Action
-          label="＋ Add Lead"
+          compact
+          label="＋ Add"
+          icon="add"
           onPress={() => {
             setError(null);
             setOpen(true);

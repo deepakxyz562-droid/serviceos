@@ -73,7 +73,8 @@ export default function AgentsScreen() {
       onRefresh={resource.refresh}
       rightAction={
         <Action
-          label="＋ Create Agent"
+          compact
+          label="＋ Agent"
           icon="smart-toy"
           onPress={() => setBuilderModal(true)}
         />

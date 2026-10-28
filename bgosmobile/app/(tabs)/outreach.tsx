@@ -92,7 +92,9 @@ export default function OutreachScreen() {
       onRefresh={resource.refresh}
       rightAction={
         <Action
-          label="＋ New Campaign"
+          compact
+          label="＋ Campaign"
+          icon="send"
           onPress={() => {
             setError(null);
             setCreateModal(true);

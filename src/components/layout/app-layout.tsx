@@ -38,6 +38,7 @@ const BgosBilling = lazy(() => import('@/components/bgos/billing').then(m => ({ 
 const BgosOutreach = lazy(() => import('@/components/bgos/outreach').then(m => ({ default: m.BgosOutreach })));
 const BgosDashboard = lazy(() => import('@/components/bgos/dashboard').then(m => ({ default: m.BgosDashboard })));
 const BgosReviewsWorkstation = lazy(() => import('@/components/bgos/reviews-workstation').then(m => ({ default: m.BgosReviewsWorkstation })));
+const BgosGbpAiHub = lazy(() => import('@/components/bgos/gbp-ai-hub').then(m => ({ default: m.GbpAiHub })));
 const BgosOmnichannelInbox = lazy(() => import('@/components/bgos/omnichannel-inbox').then(m => ({ default: m.BgosOmnichannelInbox })));
 const BgosHelpdeskWorkstation = lazy(() => import('@/components/bgos/helpdesk-workstation').then(m => ({ default: m.BgosHelpdeskWorkstation })));
 const BgosSocialMarketing = lazy(() => import('@/components/bgos/social-marketing').then(m => ({ default: m.BgosSocialMarketing })));
@@ -661,6 +662,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       if (viewId === 'dashboard') return <BgosDashboard isDemo={isDemo} initialTasks={isDemo ? undefined : []} initialActivities={isDemo ? undefined : []} />;
       if (viewId === 'leads') return <BgosLeadsWorkstation isDemo={isDemo} />;
       if (viewId === 'reviews') return <BgosReviewsWorkstation />;
+      if (viewId === 'gbpAI') return <BgosGbpAiHub />;
       if (viewId === 'omnichannel') return <BgosOmnichannelInbox isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
       if (viewId === 'liveChat') return <BgosOmnichannelInbox initialTab="visitors" isDemo={isDemo} initialConversations={isDemo ? undefined : []} initialVisitors={isDemo ? undefined : []} />;
       if (viewId === 'helpCenter' || viewId === 'helpTicketDetail') return <BgosHelpdeskWorkstation />;

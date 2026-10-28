@@ -9,6 +9,74 @@ import type { BgosConversation, BgosWorkspace } from '../../../shared/bgos-contr
 
 type Booking = { id: string; title?: string; customerName?: string; scheduledAt?: string; status: string };
 
+/**
+ * Destinations kept reachable from Home ("More Tools" grid) after the
+ * bottom bar was reduced to the 4 first-class tabs (Home / GBP / Photos /
+ * Leads). Each entry navigates to the screen's existing route.
+ */
+const MORE_TOOLS: {
+  label: string;
+  route: string;
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+}[] = [
+  { label: 'GBP Hub', route: '/(tabs)/growth', icon: 'storefront' },
+  { label: 'Photos', route: '/(tabs)/photos', icon: 'photo-library' },
+  { label: 'Marketing', route: '/(tabs)/marketing', icon: 'campaign' },
+  { label: 'Inbox', route: '/(tabs)/inbox', icon: 'chat-bubble-outline' },
+  { label: 'Phone', route: '/(tabs)/phone', icon: 'phone-in-talk' },
+  { label: 'Leads', route: '/(tabs)/leads', icon: 'people-outline' },
+  { label: 'Appointments', route: '/(tabs)/appointments', icon: 'event' },
+  { label: 'Outreach', route: '/(tabs)/outreach', icon: 'send' },
+  { label: 'Agents', route: '/(tabs)/agents', icon: 'smart-toy' },
+  { label: 'Automations', route: '/(tabs)/automations', icon: 'bolt' },
+  { label: 'Submissions', route: '/(tabs)/submissions', icon: 'assignment' },
+  { label: 'Integrations', route: '/(tabs)/integrations', icon: 'extension' },
+];
+
+function MoreToolsGrid() {
+  const router = useRouter();
+  return (
+    <Card style={{ gap: 12 }}>
+      <View style={[ui.row, { justifyContent: 'space-between' }]}>
+        <Text style={ui.heading}>All Operations & Tools</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/tools')}>
+          <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>See All →</Text>
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        {MORE_TOOLS.map((tool) => (
+          <Pressable
+            key={tool.label}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${tool.label}`}
+            onPress={() => router.push(tool.route)}
+            style={({ pressed }) => ({
+              width: '30.3%',
+              flexGrow: 1,
+              alignItems: 'center',
+              gap: 6,
+              paddingVertical: 14,
+              paddingHorizontal: 4,
+              borderRadius: 12,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.line,
+              opacity: pressed ? 0.7 : 1,
+            })}
+          >
+            <View style={[ui.iconTile, { width: 38, height: 38, borderRadius: 11 }]}>
+              <MaterialIcons name={tool.icon} size={20} color={colors.brand} />
+            </View>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.ink }} numberOfLines={1}>
+              {tool.label}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </Card>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -52,7 +120,7 @@ export default function HomeScreen() {
       subtitle={`${workspace.data?.name || 'Your Business'} · ${agency ? 'Sales Workspace' : 'Your Day at a Glance'}`}
       onRefresh={refresh}
       rightAction={
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/tools')}>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/settings')}>
           <Avatar name={user?.name || 'BGOS User'} size={38} />
         </Pressable>
       }
@@ -138,7 +206,7 @@ export default function HomeScreen() {
             label="AI Post"
             icon="auto-awesome"
             secondary
-            onPress={() => router.push('/(tabs)/marketing')}
+            onPress={() => router.push('/(tabs)/growth')}
           />
         </View>
         <View style={{ flex: 1, minWidth: '22%' }}>
@@ -232,16 +300,16 @@ export default function HomeScreen() {
       <Card>
         <Text style={ui.heading}>Growth Operations</Text>
         <MenuRow
+          title="Google Business & Reviews"
+          detail={reviewDetail}
+          icon="storefront"
+          onPress={() => router.push('/(tabs)/growth')}
+        />
+        <MenuRow
           title="Marketing Studio"
           detail="Create multi-channel posts with AI"
           icon="auto-awesome"
           onPress={() => router.push('/(tabs)/marketing')}
-        />
-        <MenuRow
-          title="Google Business & Reviews"
-          detail={reviewDetail}
-          icon="star-outline"
-          onPress={() => router.push('/(tabs)/growth')}
         />
         <MenuRow
           title="AI Assistant & Receptionist"
@@ -256,6 +324,9 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/tools')}
         />
       </Card>
+
+      {/* More Tools — everything that left the bottom bar stays one tap away */}
+      <MoreToolsGrid />
     </Screen>
   );
 }
