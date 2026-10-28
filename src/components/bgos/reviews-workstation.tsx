@@ -301,8 +301,7 @@ export function ReviewsView({
     auth?.tenant?.name || auth?.workspace?.name || businessName || 'Business Profile'
   );
   const [profileCategory, setProfileCategory] = useState<string>(
-    auth?.tenant?.industry ||
-      (isDemo || initialReviews === INITIAL_REVIEWS ? 'House Cleaning Service' : 'Professional Services')
+    auth?.tenant?.industry || (isDemo || initialReviews === INITIAL_REVIEWS ? 'House Cleaning Service' : 'Professional Services')
   );
   const [profileAddress, setProfileAddress] = useState<string>(
     auth?.tenant?.city ||

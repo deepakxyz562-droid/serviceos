@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       }
     }).length;
 
-    const responseRate = totalReviews > 0 ? Math.round((repliedCount / totalReviews) * 100) : 100;
+    const responseRate = totalReviews > 0 ? Math.round((repliedCount / totalReviews) * 100) : 0;
     const avgRating =
       totalReviews > 0
         ? Number((reviews.reduce((acc, r) => acc + (r.rating || 5), 0) / totalReviews).toFixed(1))

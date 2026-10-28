@@ -169,7 +169,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as CreatePostBody;
-    if (!body || !body.content || !Array.isArray(body.targets) || body.targets.length === 0) {
+    const isDraft = (body?.status || 'draft') === 'draft';
+    if (!body || !body.content || !Array.isArray(body.targets) || (!isDraft && body.targets.length === 0)) {
       return NextResponse.json(
         { error: 'content and at least one target are required.' },
         { status: 400 },
@@ -202,20 +203,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify the user owns all the target SocialAccounts.
+    // Verify the user owns all the target SocialAccounts (if targets specified).
     const accountIds = body.targets.map((t) => t.socialAccountId);
-    const ownedAccounts = await db.socialAccount.findMany({
-      where: { id: { in: accountIds }, tenantId, isActive: true },
-      select: { id: true, platform: true },
-    });
-    const ownedIds = new Set(ownedAccounts.map((a) => a.id));
-    if (body.targets.some(t => ownedAccounts.find(a => a.id === t.socialAccountId)?.platform !== t.platform)) return NextResponse.json({ error: 'A publishing channel does not match its connected account.' }, { status: 400 });
-    const missing = accountIds.filter((id) => !ownedIds.has(id));
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { error: `Some target accounts are not connected or inactive: ${missing.join(', ')}` },
-        { status: 400 },
-      );
+    if (accountIds.length > 0) {
+      const ownedAccounts = await db.socialAccount.findMany({
+        where: { id: { in: accountIds }, tenantId, isActive: true },
+        select: { id: true, platform: true },
+      });
+      const ownedIds = new Set(ownedAccounts.map((a) => a.id));
+      if (body.targets.some(t => ownedAccounts.find(a => a.id === t.socialAccountId)?.platform !== t.platform)) return NextResponse.json({ error: 'A publishing channel does not match its connected account.' }, { status: 400 });
+      const missing = accountIds.filter((id) => !ownedIds.has(id));
+      if (missing.length > 0) {
+        return NextResponse.json(
+          { error: `Some target accounts are not connected or inactive: ${missing.join(', ')}` },
+          { status: 400 },
+        );
+      }
     }
 
     // Resolve final status + scheduledAt.
