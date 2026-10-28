@@ -21,8 +21,9 @@ import * as Print from 'expo-print';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest } from '@/lib/api';
 import { useBlueprintStore } from '@/stores/blueprint-store';
+import { DateRangeSheet, type DateRange } from '@/components/money/date-range-sheet';
 
-type Period = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy';
+type Period = 'today' | 'yesterday' | 'this_week' | 'this_month' | 'this_fy' | 'custom';
 type ReportTab = 'sales' | 'items' | 'gst' | 'daybook' | 'dues';
 
 export default function MobileReportsScreen() {
@@ -32,6 +33,8 @@ export default function MobileReportsScreen() {
   const currencySymbol = countryPack?.currency?.symbol || '₹';
 
   const [period, setPeriod] = useState<Period>('today');
+  const [customRange, setCustomRange] = useState<DateRange | null>(null);
+  const [rangeSheetOpen, setRangeSheetOpen] = useState(false);
   const [tab, setTab] = useState<ReportTab>('sales');
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -39,11 +42,15 @@ export default function MobileReportsScreen() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportingType, setExportingType] = useState<'pdf' | 'csv' | null>(null);
 
-  const fetchReports = useCallback(async (p: Period) => {
+  const fetchReports = useCallback(async (p: Period, range?: DateRange | null) => {
     try {
       setLoading(true);
       setHasError(false);
-      const res = await apiRequest<any>(`/api/commerce/reports?period=${p}`);
+      const url =
+        p === 'custom' && range
+          ? `/api/commerce/reports?period=custom&customStart=${encodeURIComponent(range.start)}&customEnd=${encodeURIComponent(range.end)}`
+          : `/api/commerce/reports?period=${p}`;
+      const res = await apiRequest<any>(url);
       setData(res);
     } catch {
       // Offline fallback: zeroed data with error state banner
@@ -92,8 +99,8 @@ export default function MobileReportsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      void fetchReports(period);
-    }, [period, fetchReports])
+      void fetchReports(period, customRange);
+    }, [period, customRange, fetchReports])
   );
 
   const getPeriodLabel = () => {
@@ -105,6 +112,8 @@ export default function MobileReportsScreen() {
       ? t('This Week', 'इस हफ़्ते')
       : period === 'this_month'
       ? t('This Month', 'इस महीने')
+      : period === 'custom' && customRange
+      ? customRange.label
       : t('This Year (FY)', 'इस साल');
   };
 
@@ -468,6 +477,22 @@ export default function MobileReportsScreen() {
             </TouchableOpacity>
           );
         })}
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityState={{ selected: period === 'custom' }}
+          onPress={() => setRangeSheetOpen(true)}
+          style={[styles.periodChip, period === 'custom' && styles.periodChipActive]}
+        >
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.periodChipText,
+              period === 'custom' && styles.periodChipTextActive,
+            ]}
+          >
+            {period === 'custom' && customRange ? customRange.label : t('Custom', 'कस्टम')}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -905,6 +930,15 @@ export default function MobileReportsScreen() {
           </View>
         </View>
       </Modal>
+      {/* Custom date range sheet — Vyapar period pattern */}
+      <DateRangeSheet
+        visible={rangeSheetOpen}
+        onClose={() => setRangeSheetOpen(false)}
+        onApply={(range) => {
+          setCustomRange(range);
+          setPeriod('custom');
+        }}
+      />
     </SafeAreaView>
   );
 }

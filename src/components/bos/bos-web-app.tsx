@@ -114,6 +114,48 @@ const NAV_ICON_MAP: Record<BosNavId, React.ComponentType<{ className?: string }>
   settings: Settings,
 };
 
+/**
+ * Sidebar accordion groups (Vyapar-parity). The shared nav list in
+ * shared/bos-navigation.ts stays flat — grouping is a presentation concern.
+ * `countFrom` shows a small live count badge on the group header, sourced ONLY
+ * from data the app already fetches (never extra endpoints, never fake numbers);
+ * groups without a cheap count simply render no badge.
+ */
+type BosNavGroupId = 'overview' | 'sales' | 'billing' | 'parties' | 'money' | 'grow';
+
+const BOS_NAV_GROUPS: Array<{
+  id: BosNavGroupId;
+  label: string;
+  itemIds: BosNavId[];
+  countFrom?: 'orders' | 'invoices' | 'customers';
+  countLabel?: string;
+}> = [
+  { id: 'overview', label: 'Overview', itemIds: ['dashboard'] },
+  {
+    id: 'sales',
+    label: 'Sales',
+    itemIds: ['pos', 'orders', 'onlineStore'],
+    countFrom: 'orders',
+    countLabel: 'orders',
+  },
+  {
+    id: 'billing',
+    label: 'Billing & Credit',
+    itemIds: ['invoices', 'khata'],
+    countFrom: 'invoices',
+    countLabel: 'invoices',
+  },
+  {
+    id: 'parties',
+    label: 'Parties & Catalog',
+    itemIds: ['inventory', 'customers', 'appointments'],
+    countFrom: 'customers',
+    countLabel: 'customers',
+  },
+  { id: 'money', label: 'Money & Reports', itemIds: ['reports', 'daybook'] },
+  { id: 'grow', label: 'Grow & Configure', itemIds: ['marketing', 'aiAssistant', 'integrations', 'settings'] },
+];
+
 const DEFAULT_PRODUCTS: BosProductItem[] = [
   {
     id: 'prod-1',
@@ -1090,6 +1132,54 @@ function BosWebAppInner({
       return item;
     });
   }, [blueprintFilterEnabled, isNavItemEnabledByBlueprint, activeView, storeSettings.blueprintType, demoMode]);
+
+  // ── Accordion sidebar state (Vyapar-parity) ─────────────────────────────
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState<Set<BosNavGroupId>>(new Set());
+  const navCollapseInitRef = useRef(false);
+
+  // Narrow screens start with only the active group expanded; desktop keeps
+  // every group open. Runs once after hydration to avoid SSR mismatches.
+  useEffect(() => {
+    if (navCollapseInitRef.current) return;
+    navCollapseInitRef.current = true;
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth >= 1024) return;
+    const activeGroupId = BOS_NAV_GROUPS.find((g) => g.itemIds.includes(activeView))?.id;
+    setCollapsedNavGroups(
+      new Set(BOS_NAV_GROUPS.map((g) => g.id).filter((id) => id !== activeGroupId)),
+    );
+  }, [activeView]);
+
+  // Navigating always expands the group that owns the destination view.
+  useEffect(() => {
+    const group = BOS_NAV_GROUPS.find((g) => g.itemIds.includes(activeView));
+    if (!group) return;
+    setCollapsedNavGroups((prev) => {
+      if (!prev.has(group.id)) return prev;
+      const next = new Set(prev);
+      next.delete(group.id);
+      return next;
+    });
+  }, [activeView]);
+
+  const toggleNavGroup = useCallback((groupId: BosNavGroupId) => {
+    setCollapsedNavGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }, []);
+
+  // Cheap live counts for group badges — all from already-fetched app state.
+  const navGroupCounts = useMemo(
+    () => ({
+      orders: orders.length,
+      invoices: invoices.length,
+      customers: customers.length,
+    }),
+    [orders.length, invoices.length, customers.length],
+  );
 
   // Gracefully redirect away from views disabled by the merchant's business blueprint
   useEffect(() => {
@@ -2794,39 +2884,75 @@ function BosWebAppInner({
           </button>
         </div>
 
-        {/* Navigation Menu Items */}
+        {/* Navigation Menu Items — collapsible groups with cheap live counts */}
         <nav
           aria-label="BOS Primary Navigation"
-          className="bos-sidebar-scroll flex-1 space-y-0.5 overflow-y-auto px-3 py-3"
+          className="bos-sidebar-scroll flex-1 space-y-1 overflow-y-auto px-3 py-3"
         >
-          {visibleNavItems.map((item) => {
-            const Icon = NAV_ICON_MAP[item.id] || LayoutDashboard;
-            const isActive = activeView === item.id;
-            const displayLabel =
-              item.id === 'marketing'
-                ? t('nav.marketing', 'Marketing & Promotions')
-                : item.id === 'khata' && storeSettings.countryCode && storeSettings.countryCode !== 'IN'
-                  ? `${t('nav.khata', 'Khata / Credit')} (${activeCountryPack.vocabulary.customerCredit})`
-                  : t(`nav.${item.id}`, item.label);
+          {BOS_NAV_GROUPS.map((group) => {
+            const items = visibleNavItems.filter((item) => group.itemIds.includes(item.id));
+            if (items.length === 0) return null;
+            const collapsed = collapsedNavGroups.has(group.id);
+            const count = group.countFrom ? navGroupCounts[group.countFrom] : undefined;
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => handleNavigate(item.id)}
-                className={`bos-nav-item ${isActive ? 'bos-nav-item-active' : ''}`}
-              >
-                <Icon
-                  className={`h-[18px] w-[18px] shrink-0 ${
-                    isActive ? 'text-[#2DD4BF]' : 'text-[#8CC4B0]'
-                  }`}
-                />
-                <span className="truncate">{displayLabel}</span>
-                {item.id === 'aiAssistant' && (
-                  <span className="ml-auto rounded-full bg-[#00B894]/25 px-1.5 py-0.5 text-[9.5px] font-bold text-[#6EE7B7]">
-                    AI
-                  </span>
+              <div key={group.id}>
+                <button
+                  type="button"
+                  onClick={() => toggleNavGroup(group.id)}
+                  aria-expanded={!collapsed}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-[10.5px] font-bold uppercase tracking-wider text-[#8CC4B0]/80 transition hover:bg-white/5 hover:text-[#B8DCD0]"
+                >
+                  <ChevronDown
+                    className={`h-3 w-3 shrink-0 transition-transform duration-200 ${
+                      collapsed ? '-rotate-90' : ''
+                    }`}
+                  />
+                  <span className="truncate">{group.label}</span>
+                  {typeof count === 'number' && count > 0 && (
+                    <span
+                      className="ml-auto shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9.5px] font-bold text-[#B8DCD0]"
+                      title={`${count} ${group.countLabel || 'records'}`}
+                    >
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </button>
+
+                {!collapsed && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {items.map((item) => {
+                      const Icon = NAV_ICON_MAP[item.id] || LayoutDashboard;
+                      const isActive = activeView === item.id;
+                      const displayLabel =
+                        item.id === 'marketing'
+                          ? t('nav.marketing', 'Marketing & Promotions')
+                          : item.id === 'khata' && storeSettings.countryCode && storeSettings.countryCode !== 'IN'
+                            ? `${t('nav.khata', 'Khata / Credit')} (${activeCountryPack.vocabulary.customerCredit})`
+                            : t(`nav.${item.id}`, item.label);
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleNavigate(item.id)}
+                          className={`bos-nav-item ${isActive ? 'bos-nav-item-active' : ''}`}
+                        >
+                          <Icon
+                            className={`h-[18px] w-[18px] shrink-0 ${
+                              isActive ? 'text-[#2DD4BF]' : 'text-[#8CC4B0]'
+                            }`}
+                          />
+                          <span className="truncate">{displayLabel}</span>
+                          {item.id === 'aiAssistant' && (
+                            <span className="ml-auto rounded-full bg-[#00B894]/25 px-1.5 py-0.5 text-[9.5px] font-bold text-[#6EE7B7]">
+                              AI
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </nav>

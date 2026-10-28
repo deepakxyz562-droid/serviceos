@@ -323,6 +323,20 @@ export async function PATCH(
     const body = await request.json()
     const updateData: Record<string, unknown> = {}
 
+    // ── Payment ledger helpers ────────────────────────────────────────
+    // `paid` used to be a bare status flip: partial payments, received-vs-
+    // balance stats and payment history were impossible. Every payment now
+    // lands in the InvoicePayment ledger; status is derived from the sums.
+    const paidSoFar = async (): Promise<number> => {
+      const agg = await db.invoicePayment.aggregate({
+        where: { invoiceId: id },
+        _sum: { amount: true },
+      })
+      return agg._sum.amount || 0
+    }
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    const PAYMENT_METHODS = ['MANUAL', 'CASH', 'CARD', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER']
+
     // Handle quick status actions
     if (body.action === 'mark_sent') {
       updateData.status = 'sent'
@@ -330,8 +344,64 @@ export async function PATCH(
     } else if (body.action === 'mark_paid') {
       updateData.status = 'paid'
       updateData.paidAt = new Date()
-    } else if (body.action === 'mark_overdue') {
-      updateData.status = 'overdue'
+      // Record any remaining outstanding balance as a MANUAL payment so the
+      // ledger matches the status (idempotent — skips when already settled).
+      const outstanding = Number(existing.total) - (await paidSoFar())
+      if (outstanding > 0.009) {
+        await db.invoicePayment.create({
+          data: {
+            invoiceId: id,
+            tenantId: existing.tenantId,
+            amount: round2(outstanding),
+            currency: existing.currency,
+            method: PAYMENT_METHODS.includes(body.method) ? body.method : 'MANUAL',
+            reference: typeof body.reference === 'string' ? body.reference : null,
+            recordedBy: authUser.id,
+          },
+        })
+      }
+    } else if (body.action === 'record_payment') {
+      // Partial payment entry — the mobile app + invoice detail use this.
+      const amount = Number(body.amount)
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return NextResponse.json(
+          { error: 'A positive payment amount is required' },
+          { status: 400 },
+        )
+      }
+      if (body.method !== undefined && !PAYMENT_METHODS.includes(body.method)) {
+        return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 })
+      }
+      const paid = await paidSoFar()
+      const outstanding = Number(existing.total) - paid
+      if (amount > outstanding + 0.009) {
+        return NextResponse.json(
+          {
+            error: `Payment exceeds the outstanding balance`,
+            outstanding: round2(Math.max(0, outstanding)),
+          },
+          { status: 400 },
+        )
+      }
+      await db.invoicePayment.create({
+        data: {
+          invoiceId: id,
+          tenantId: existing.tenantId,
+          amount: round2(amount),
+          currency: existing.currency,
+          method: PAYMENT_METHODS.includes(body.method) ? body.method : 'MANUAL',
+          reference: typeof body.reference === 'string' ? body.reference : null,
+          notes: typeof body.notes === 'string' ? body.notes : null,
+          recordedBy: authUser.id,
+        },
+      })
+      const newPaid = paid + amount
+      if (newPaid >= Number(existing.total) - 0.009) {
+        updateData.status = 'paid'
+        updateData.paidAt = new Date()
+      } else if (existing.status === 'draft') {
+        updateData.status = 'sent' // a paid-towards draft is at least issued
+      }
     } else if (body.action === 'cancel') {
       updateData.status = 'cancelled'
     } else {
@@ -343,10 +413,33 @@ export async function PATCH(
       }
       if (body.notes !== undefined) updateData.notes = body.notes
       if (body.dueDate !== undefined) updateData.dueDate = body.dueDate ? new Date(body.dueDate) : null
-      if (body.total !== undefined) updateData.total = body.total
-      if (body.amount !== undefined) updateData.amount = body.amount
-      if (body.tax !== undefined) updateData.tax = body.tax
-      if (body.discount !== undefined) updateData.discount = body.discount
+
+      // INTEGRITY: money fields are validated as a consistent set — the
+      // client can no longer post arbitrary total/amount/tax/discount combos
+      // (previously accepted verbatim, corrupting the books).
+      const hasMoney = ['total', 'amount', 'tax', 'discount'].some((k) => body[k] !== undefined)
+      if (hasMoney) {
+        const amount = body.amount !== undefined ? Number(body.amount) : Number(existing.amount)
+        const tax = body.tax !== undefined ? Number(body.tax) : Number(existing.tax)
+        const discount = body.discount !== undefined ? Number(body.discount) : Number(existing.discount)
+        const total = body.total !== undefined ? Number(body.total) : Number(existing.total)
+        for (const [name, value] of [['amount', amount], ['tax', tax], ['discount', discount], ['total', total]] as const) {
+          if (!Number.isFinite(value) || value < 0) {
+            return NextResponse.json({ error: `Invalid ${name}: must be a non-negative number` }, { status: 400 })
+          }
+        }
+        const expectedTotal = round2(amount + tax - discount)
+        if (Math.abs(expectedTotal - total) > 0.011) {
+          return NextResponse.json(
+            { error: `Inconsistent amounts: total must equal amount + tax - discount (expected ${expectedTotal}, got ${total})` },
+            { status: 400 },
+          )
+        }
+        updateData.amount = amount
+        updateData.tax = tax
+        updateData.discount = discount
+        updateData.total = total
+      }
     }
 
     // Tenant-scoped update (Security-3 IDOR fix)

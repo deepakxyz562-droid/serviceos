@@ -230,6 +230,12 @@ export function BosOnlineStoreWorkstation({
   });
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // Real share-action tracking for the onboarding checklist: the "Share your
+  // store" step is only marked done after the operator ACTUALLY copies the
+  // store link or shares it on WhatsApp in this session. No fabricated state.
+  const [storeSharedOnce, setStoreSharedOnce] = useState(false);
+  const markStoreShared = () => setStoreSharedOnce(true);
+
   const [serverStoreUrl, setServerStoreUrl] = useState<string | null>(null);
   const [serverStoreSlug, setServerStoreSlug] = useState<string | null>(null);
 
@@ -238,6 +244,11 @@ export function BosOnlineStoreWorkstation({
   const effectiveSlug = serverStoreSlug || storeSettings.businessSlug || 'my-store';
   const storeUrl = serverStoreUrl || `${liveOrigin}/store/${effectiveSlug}`;
   const publicStorePath = `/store/${effectiveSlug}`;
+
+  // Store "created/published" — TRUE only when the server confirms the
+  // commerce config is active (/api/commerce/store-share returns a real
+  // storeUrl) or the store settings flag says the store is live.
+  const storePublished = Boolean(serverStoreUrl) || storeSettings.storeLive === true;
 
   useEffect(() => {
     let active = true;
@@ -410,6 +421,7 @@ export function BosOnlineStoreWorkstation({
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(storeUrl).catch(() => {});
     }
+    markStoreShared();
     showToast(`Copied store link: ${storeUrl}`);
   };
 
@@ -859,6 +871,241 @@ export function BosOnlineStoreWorkstation({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
         {/* LEFT COLUMN (9 cols) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+          {/* HERO BANNER + VALUE PROPS + SETUP CHECKLIST (Vyapar online-store
+              onboarding pattern — every state below comes from REAL data:
+              item count from the live product list, publish state from the
+              store-share API / storeLive flag, share state from actual
+              copy/share actions. No invented social proof. */}
+          {subTab === 'overview' && (
+            <>
+              {/* Hero banner */}
+              <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0A6847] via-[#0D7A54] to-[#064E3B] p-5 text-white shadow-md sm:p-6">
+                <div
+                  className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10"
+                  aria-hidden="true"
+                />
+                <div
+                  className="pointer-events-none absolute -bottom-16 right-20 h-28 w-28 rounded-full bg-white/5"
+                  aria-hidden="true"
+                />
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-[10.5px] font-extrabold uppercase tracking-wide">
+                  <ShoppingBag className="h-3 w-3" />
+                  <span>Online Store</span>
+                </span>
+                <h2 className="mt-2.5 text-[20px] font-extrabold leading-snug tracking-tight sm:text-[22px]">
+                  Take {storeName || 'your store'} online — sell 24×7
+                </h2>
+                <p className="mt-1 max-w-xl text-[12.5px] leading-relaxed text-white/85">
+                  Customers browse your items, place orders and pay directly — from a link and QR
+                  you already own. No app download needed.
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenStore}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white px-4 text-[12.5px] font-bold text-[#0A6847] shadow-2xs hover:bg-[#F0FDF6] transition cursor-pointer"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    <span>View Store</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyStoreLink}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-white/40 px-4 text-[12.5px] font-bold text-white hover:bg-white/10 transition cursor-pointer"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                    <span>Copy Link</span>
+                  </button>
+                </div>
+                {storePublished && (
+                  <p className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-lg bg-black/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">Store live at {storeUrl}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* 3 value-prop cards */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {[
+                  {
+                    icon: ShoppingCart,
+                    title: 'Take orders 24×7',
+                    desc: 'Customers order anytime — even when your counter is closed.',
+                  },
+                  {
+                    icon: QrCode,
+                    title: 'Share in one tap',
+                    desc: 'Your link & QR work on WhatsApp, Instagram and printed posters.',
+                  },
+                  {
+                    icon: Truck,
+                    title: 'Delivery & pickup built-in',
+                    desc: 'Set charges, radius and free-delivery rules in seconds.',
+                  },
+                ].map((vp) => {
+                  const Icon = vp.icon;
+                  return (
+                    <div
+                      key={vp.title}
+                      className="flex items-start gap-3 rounded-2xl border border-[#DCE9E3] bg-white p-3.5 shadow-2xs"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#E6F6F0] text-[#0A6847]">
+                        <Icon className="h-4.5 w-4.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[12.5px] font-extrabold text-[#111827]">{vp.title}</p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-[#64748B]">{vp.desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Setup checklist card — real step states */}
+              {(() => {
+                const itemsReady = catalogRows.length > 0;
+                const steps = [
+                  {
+                    n: 1,
+                    title: 'Add items to inventory',
+                    done: itemsReady,
+                    sub: itemsReady
+                      ? `${catalogRows.length} item${catalogRows.length === 1 ? '' : 's'} ready to sell`
+                      : 'Your store needs at least one item before customers can order.',
+                    actionLabel: itemsReady ? null : 'Add Item',
+                    onAction: () => {
+                      setSubTab('products');
+                      setShowAddProductModal(true);
+                    },
+                    blockedBy: null as string | null,
+                  },
+                  {
+                    n: 2,
+                    title: 'Create your Online Store',
+                    done: storePublished,
+                    sub: storePublished
+                      ? 'Storefront published — customers can order right now.'
+                      : 'Publish your storefront to get a shareable link and QR.',
+                    actionLabel: !storePublished && itemsReady ? 'Set Up Store' : null,
+                    onAction: () => setSubTab('storeSettings'),
+                    blockedBy: !storePublished && !itemsReady ? 'Add items first' : null,
+                  },
+                  {
+                    n: 3,
+                    title: 'Share your store',
+                    done: storeSharedOnce,
+                    sub: storeSharedOnce
+                      ? 'Link shared — invite customers on WhatsApp next!'
+                      : 'Copy your store link and send it to customers.',
+                    actionLabel:
+                      !storeSharedOnce && storePublished && itemsReady ? 'Copy Link' : null,
+                    onAction: handleCopyStoreLink,
+                    blockedBy:
+                      !storeSharedOnce && (!itemsReady || !storePublished)
+                        ? itemsReady
+                          ? 'Publish the store first'
+                          : 'Add items first'
+                        : null,
+                  },
+                ];
+                const completedCount = steps.filter((s) => s.done).length;
+                const primaryStep = steps.find((s) => !s.done && s.actionLabel);
+                return (
+                  <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h2 className="text-[15px] font-extrabold text-[#111827]">
+                          Get your store ready
+                        </h2>
+                        <p className="text-[11.5px] text-[#64748B]">
+                          3 quick steps between you and your first online order.
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-[#E6F6F0] px-2.5 py-1 text-[11px] font-extrabold text-[#0A6847]">
+                        {completedCount} of 3 done
+                      </span>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#EEF5F1]">
+                      <div
+                        className="h-full rounded-full bg-[#0A6847] transition-all duration-300"
+                        style={{ width: `${(completedCount / 3) * 100}%` }}
+                      />
+                    </div>
+
+                    <ol className="space-y-2.5">
+                      {steps.map((step) => (
+                        <li
+                          key={step.n}
+                          className="flex items-center gap-3 rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-3"
+                        >
+                          {step.done ? (
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0A6847] text-white">
+                              <CheckCircle2 className="h-4 w-4" />
+                            </span>
+                          ) : (
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-[#CBD5E1] bg-white text-[11.5px] font-extrabold text-[#94A3B8]">
+                              {step.n}
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className={`text-[12.5px] font-bold ${
+                                step.done ? 'text-[#0A6847]' : 'text-[#111827]'
+                              }`}
+                            >
+                              {step.title}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-[#64748B]">{step.sub}</p>
+                          </div>
+                          {step.actionLabel ? (
+                            <button
+                              type="button"
+                              onClick={step.onAction}
+                              className="shrink-0 rounded-lg bg-[#0A6847] px-3 py-1.5 text-[11.5px] font-bold text-white hover:bg-[#085238] transition cursor-pointer"
+                            >
+                              {step.actionLabel}
+                            </button>
+                          ) : step.blockedBy ? (
+                            <span className="shrink-0 text-[10.5px] font-semibold text-[#94A3B8]">
+                              {step.blockedBy}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+
+                    {/* Blocking CTA — first incomplete, actionable step */}
+                    {primaryStep && (
+                      <button
+                        type="button"
+                        onClick={primaryStep.onAction}
+                        className="w-full rounded-xl bg-[#0A6847] py-2.5 text-[12.5px] font-bold text-white shadow-2xs hover:bg-[#085238] transition cursor-pointer"
+                      >
+                        {primaryStep.actionLabel}
+                      </button>
+                    )}
+
+                    {/* Honest social proof — only REAL metrics, never invented */}
+                    {(catalogRows.length > 0 || onlineOrdersList.length > 0) && (
+                      <p className="text-center text-[11px] font-medium text-[#64748B]">
+                        {catalogRows.length > 0 &&
+                          `${catalogRows.length} item${catalogRows.length === 1 ? '' : 's'} ready to sell`}
+                        {catalogRows.length > 0 &&
+                          onlineOrdersList.length > 0 &&
+                          ' · '}
+                        {onlineOrdersList.length > 0 &&
+                          `${onlineOrdersList.length} online order${onlineOrdersList.length === 1 ? '' : 's'} so far`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
           {/* ROW 1: 4 KPI Cards with Colored Icons & Sparklines */}
           {subTab === 'overview' && (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -2294,6 +2541,7 @@ export function BosOnlineStoreWorkstation({
                   if (typeof navigator !== 'undefined' && navigator.clipboard) {
                     navigator.clipboard.writeText(target).catch(() => {});
                   }
+                  if (qrMode === 'storefront') markStoreShared();
                   showToast(`Copied link: ${target}`);
                   setShowQrModal(false);
                 }}
@@ -2328,6 +2576,7 @@ export function BosOnlineStoreWorkstation({
                   if (typeof window !== 'undefined') {
                     window.open(targetShare, '_blank', 'noopener,noreferrer');
                   }
+                  markStoreShared();
                   showToast('Opened WhatsApp Store Share');
                   setShowQrModal(false);
                 }}

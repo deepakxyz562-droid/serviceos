@@ -38,46 +38,6 @@ interface BookingItem {
   status: 'confirmed' | 'rescheduled' | 'cancelled';
 }
 
-interface EventType {
-  id: string;
-  title: string;
-  duration: string;
-  price: number;
-  description: string;
-  slug: string;
-  iconColor: string;
-}
-
-const EVENT_TYPES: EventType[] = [
-  {
-    id: 'evt-1',
-    title: '15-Min Quick Discovery',
-    duration: '15 min',
-    price: 0,
-    description: 'Initial intake, qualification & scoping call',
-    slug: 'discovery-15m',
-    iconColor: '#10B981',
-  },
-  {
-    id: 'evt-2',
-    title: '30-Min Consultation',
-    duration: '30 min',
-    price: 35,
-    description: 'Detailed project or service evaluation',
-    slug: 'consultation-30m',
-    iconColor: '#3B82F6',
-  },
-  {
-    id: 'evt-3',
-    title: '45-Min Technical Inspection',
-    duration: '45 min',
-    price: 50,
-    description: 'On-site diagnostics and estimator inspection',
-    slug: 'inspection-45m',
-    iconColor: '#8b5cf6',
-  },
-];
-
 export default function BookingsScreen() {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'event_types' | 'settings'>('upcoming');
   const [selectedBooking, setSelectedBooking] = useState<BookingItem | null>(null);
@@ -209,16 +169,6 @@ export default function BookingsScreen() {
     if (filterDate === 'all') return true;
     return b.dateKey === filterDate;
   });
-
-  const handleShareLink = async (slug: string) => {
-    await hapticFeedback.light();
-    try {
-      await Share.share({
-        title: 'Book an appointment',
-        message: `Book a session directly on our calendar: https://fieseros.com/book/${slug}`,
-      });
-    } catch {}
-  };
 
   const handleCall = async (phone: string) => {
     await hapticFeedback.medium();
@@ -414,36 +364,31 @@ export default function BookingsScreen() {
           </ScrollView>
         )}
 
-        {/* Tab 2: Event Types */}
+        {/* Tab 2: Event Types — honest state; bookable event types are
+            configured from the BOS web dashboard and sync to bookings. */}
         {activeTab === 'event_types' && (
           <ScrollView
             style={styles.scroll}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.eventTypeList}>
-              {EVENT_TYPES.map((evt) => (
-                <View key={evt.id} style={styles.eventTypeCard}>
-                  <View style={styles.evtHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.evtTitle}>{evt.title}</Text>
-                      <Text style={styles.evtDuration}>{evt.duration} • {evt.price > 0 ? `$${evt.price}` : 'Free'}</Text>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => handleShareLink(evt.slug)}
-                      style={styles.shareBtn}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons name="share" size={16} color="#3b82f6" style={{ marginRight: 4 }} />
-                      <Text style={styles.shareBtnText}>Share</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.evtDesc}>{evt.description}</Text>
-                  <View style={styles.evtLinkRow}>
-                    <Text style={styles.evtLinkText}>fieseros.com/book/{evt.slug}</Text>
-                  </View>
-                </View>
-              ))}
+            <View style={styles.emptyWrap}>
+              <MaterialIcons name="event-note" size={44} color="#94a3b8" />
+              <Text style={styles.emptyTitle}>Event types are managed on the web dashboard</Text>
+              <Text style={styles.emptySub}>
+                Create bookable event types (duration, price and booking link) from your BOS web dashboard — new bookings made through those links appear here automatically.
+              </Text>
+              <Text style={styles.emptySub}>
+                You have {bookings.length} booking{bookings.length === 1 ? '' : 's'} scheduled so far.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setActiveTab('upcoming')}
+                style={[styles.shareBtn, { alignSelf: 'center', marginTop: 8 }]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="event-available" size={16} color="#3b82f6" style={{ marginRight: 4 }} />
+                <Text style={styles.shareBtnText}>View Bookings</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         )}

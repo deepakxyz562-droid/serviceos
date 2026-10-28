@@ -16,12 +16,18 @@
  *   AIRWALLEX_CLIENT_ID   — platform client id (from Airwallex dashboard)
  *   AIRWALLEX_API_KEY     — platform API key
  *   AIRWALLEX_WEBHOOK_SECRET — webhook signing secret (per webhook endpoint)
- *   AIRWALLEX_ENV         — 'demo' (sandbox) | 'prod' (default: 'demo')
+ *   AIRWALLEX_ENV         — 'demo' (sandbox) | 'prod' (default: 'demo' in dev,
+ *                           'prod' when NODE_ENV=production)
  *
- * Demo mode: when AIRWALLEX_* env vars are unset, the adapter returns MOCK
- * responses (account IDs prefixed `acct_demo_`, payment IDs `int_demo_`, etc.)
- * so the marketplace flow works end-to-end in dev without real credentials.
- * This mirrors the legacy `acct_demo_*` Stripe fallback we're replacing.
+ * Demo mode: in NON-PRODUCTION only, when AIRWALLEX_* env vars are unset (or
+ * AIRWALLEX_ENV=demo), the adapter returns MOCK responses (account IDs
+ * prefixed `acct_demo_`, payment IDs `int_demo_`, etc.) so the marketplace
+ * flow works end-to-end in dev without real credentials.
+ *
+ * FAIL-CLOSED: in production (NODE_ENV=production) mock/demo branches are
+ * hard-disabled. Unconfigured calls throw ProviderNotConfiguredError and
+ * demo account IDs are rejected — a marketplace payment can never silently
+ * "succeed" with fake money in production.
  */
 
 import crypto from 'crypto';
@@ -69,7 +75,8 @@ interface AirwallexConfig {
 }
 
 function getConfig(): AirwallexConfig {
-  const env = process.env.AIRWALLEX_ENV || 'demo';
+  const isProduction = process.env.NODE_ENV === 'production';
+  const env = process.env.AIRWALLEX_ENV || (isProduction ? 'prod' : 'demo');
   const baseUrl = env === 'prod'
     ? 'https://api.airwallex.com'
     : 'https://api.sandbox.airwallex.com';
@@ -132,7 +139,22 @@ async function getAccessToken(): Promise<string> {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function isDemoMode(): boolean {
-  return !getConfig().configured;
+  // Fail closed: mock/demo mode only outside production. In production this
+  // always returns false so unconfigured calls throw instead of mocking.
+  if (process.env.NODE_ENV === 'production') return false;
+  const env = process.env.AIRWALLEX_ENV;
+  if (env === 'prod') return false; // explicitly real, even in dev
+  if (env === 'demo') return true; // explicitly sandbox/mock
+  return !getConfig().configured; // unset → mock only when no real creds (dev)
+}
+
+/**
+ * Whether stale demo artifacts (e.g. `acct_demo_*` ids created before real
+ * credentials were configured) may still be handled leniently. Never true in
+ * production — demo rows there must surface as hard errors, not fake success.
+ */
+function allowMockArtifacts(): boolean {
+  return process.env.NODE_ENV !== 'production' && process.env.AIRWALLEX_ENV !== 'prod';
 }
 
 /** Generate a mock ID for demo mode. */
@@ -316,7 +338,7 @@ export const airwallexProvider: PaymentProvider = {
   },
 
   async getAccountStatus(accountId: string): Promise<AccountStatusResult> {
-    if (isDemoMode() || accountId.startsWith('acct_demo_')) {
+    if (isDemoMode() || (allowMockArtifacts() && accountId.startsWith('acct_demo_'))) {
       return {
         accountId,
         status: 'active',
@@ -359,7 +381,7 @@ export const airwallexProvider: PaymentProvider = {
   },
 
   async getOnboardingUrl(accountId: string, returnUrl: string): Promise<string> {
-    if (isDemoMode() || accountId.startsWith('acct_demo_')) {
+    if (isDemoMode() || (allowMockArtifacts() && accountId.startsWith('acct_demo_'))) {
       // Demo mode: return a fake URL that just redirects back to the app.
       return `${returnUrl}?payments_demo=onboarding`;
     }
@@ -406,9 +428,20 @@ export const airwallexProvider: PaymentProvider = {
   // ── Payments ────────────────────────────────────────────────────────────
 
   async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
-    if (!input.connectedAccountId || input.connectedAccountId.startsWith('acct_demo_')) {
-      // Demo mode OR demo account — return a mock intent so the booking flow
-      // can proceed. The webhook handler will simulate success for these.
+    const hasDemoAccount = !!input.connectedAccountId && input.connectedAccountId.startsWith('acct_demo_');
+    if (!input.connectedAccountId || hasDemoAccount) {
+      // FAIL-CLOSED: in production (or explicit prod env) a missing/demo
+      // connected account is a hard input error — never a mock intent.
+      if (!allowMockArtifacts()) {
+        throw new InvalidPaymentInputError(
+          PROVIDER,
+          'connectedAccountId',
+          hasDemoAccount
+            ? 'demo connected accounts are disabled in production; complete seller onboarding first'
+            : 'connectedAccountId is required to create a payment intent',
+        );
+      }
+      // Dev demo mode — return a mock intent so the booking flow can proceed.
       const mockPaymentId = mockId('int_');
       return {
         paymentId: mockPaymentId,

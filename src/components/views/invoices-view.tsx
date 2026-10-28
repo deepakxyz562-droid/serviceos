@@ -87,6 +87,7 @@ import type {
 } from '@/features/invoices/types';
 import {
   DEFAULT_INVOICE_SETTINGS,
+  DISCLAIMER_SEPARATOR,
   EMPTY_FORM,
   EMPTY_LINE_ITEM,
   EMPTY_RECURRING_FORM,
@@ -96,6 +97,7 @@ import {
   getStatusConfig,
   parseApiInvoice,
   buildInvoiceWhatsAppShareUrl,
+  splitNotesDisclaimer,
 } from '@/features/invoices/utils/invoice-helpers';
 import { renderStatusBadge } from '@/features/invoices/components/invoice-shared';
 import { InvoiceDetailPage } from '@/features/invoices/components/invoice-detail-page';
@@ -107,6 +109,29 @@ import { RecurringSchedulesDialog } from '@/features/invoices/components/recurri
 // ============================================================
 // Component
 // ============================================================
+
+/**
+ * P4: date-range presets for the invoice list filter. `from`/`to` are
+ * YYYY-MM-DD strings in the user's LOCAL timezone (what the backend's
+ * buildCreatedAtRange expects); `all` sends no params.
+ */
+type DateRangeId = 'all' | 'this_month' | 'last_month' | 'this_quarter' | 'custom';
+
+const DATE_RANGE_OPTIONS: { id: DateRangeId; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'this_month', label: 'This Month' },
+  { id: 'last_month', label: 'Last Month' },
+  { id: 'this_quarter', label: 'This Quarter' },
+  { id: 'custom', label: 'Custom' },
+];
+
+/** Local-timezone YYYY-MM-DD (avoids the UTC off-by-one of toISOString()). */
+function toISODateLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 export function InvoicesView() {
   // Cross-view "New Invoice" create signal — when the sidebar's "+ Create"
@@ -140,14 +165,68 @@ export function InvoicesView() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebouncedValue(searchQuery, 250);
 
+  // P4: date-range filter (LIST only — the stats header below stays book-wide
+  // because it reads the server `summary`, which ignores from/to by design).
+  const [dateRange, setDateRange] = useState<DateRangeId>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  // P4: default tax % for NEW invoices, loaded once from /api/invoice-settings
+  // (fallback 0 when unavailable — never a fabricated rate).
+  const [defaultTaxPercent, setDefaultTaxPercent] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    authFetch('/api/invoice-settings')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted || !data) return;
+        const pct = (data as { settings?: { defaultTaxPercent?: number } }).settings?.defaultTaxPercent;
+        if (typeof pct === 'number' && Number.isFinite(pct) && pct >= 0) {
+          setDefaultTaxPercent(pct);
+        }
+      })
+      .catch(() => {
+        /* settings unavailable → keep the honest 0 fallback */
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   // Invoice list is now backed by React Query (useInvoices). The RQ cache
   // is invalidated by all invoice mutations via getInvoiceInvalidations, so
   // the list auto-refreshes without manual setInvoices() calls.
+  // P4: from/to feed the server-side createdAt range filter (list only).
+  const dateRangeFilter = useMemo<{ from?: string; to?: string }>(() => {
+    if (dateRange === 'all') return {};
+    if (dateRange === 'custom') {
+      return { from: customFrom || undefined, to: customTo || undefined };
+    }
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    if (dateRange === 'this_month') {
+      return { from: toISODateLocal(new Date(y, m, 1)), to: toISODateLocal(new Date(y, m + 1, 0)) };
+    }
+    if (dateRange === 'last_month') {
+      return { from: toISODateLocal(new Date(y, m - 1, 1)), to: toISODateLocal(new Date(y, m, 0)) };
+    }
+    // this_quarter — calendar quarter containing today.
+    const qStartMonth = Math.floor(m / 3) * 3;
+    return {
+      from: toISODateLocal(new Date(y, qStartMonth, 1)),
+      to: toISODateLocal(new Date(y, qStartMonth + 3, 0)),
+    };
+  }, [dateRange, customFrom, customTo]);
+
   const { data: invoicesData, isLoading: loadingInvoices, error: invoicesRqError, refetch: refetchInvoices } = useInvoices({
     page: currentPage,
     limit: invoicesPerPage,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     search: debouncedSearch || undefined,
+    from: dateRangeFilter.from,
+    to: dateRangeFilter.to,
     archived: activeTab === 'archived' ? 'true' : 'false',
   });
   const invoices: Invoice[] = invoicesData?.invoices ?? [];
@@ -155,10 +234,10 @@ export function InvoicesView() {
   const totalPages = invoicesData?.pagination?.totalPages ?? 1;
   const invoicesError = invoicesRqError?.message ?? null;
 
-  // Reset to page 1 when filter, search, tab, or page size changes
+  // Reset to page 1 when filter, search, tab, page size, or date range changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, debouncedSearch, activeTab, invoicesPerPage]);
+  }, [statusFilter, debouncedSearch, activeTab, invoicesPerPage, dateRange, customFrom, customTo]);
 
   // Local invoice state for optimistic UI in handleStatusChange ONLY.
   // All other mutations rely on RQ invalidation for list refresh.
@@ -169,6 +248,10 @@ export function InvoicesView() {
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [saving, setSaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  // Currency from hook (declared before the recurring form state below, which
+  // seeds its default currency from the tenant's display currency).
+  const { currency, format, symbol } = useCompanyCurrency();
 
   // Settings state
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -183,7 +266,7 @@ export function InvoicesView() {
   const [showRecurringForm, setShowRecurringForm] = useState(false);
   const [recurringSaving, setRecurringSaving] = useState(false);
   const [recurringActionLoading, setRecurringActionLoading] = useState<Record<string, boolean>>({});
-  const [recurringForm, setRecurringForm] = useState<RecurringScheduleForm>(EMPTY_RECURRING_FORM());
+  const [recurringForm, setRecurringForm] = useState<RecurringScheduleForm>(EMPTY_RECURRING_FORM(currency));
   // When non-null, the recurring form dialog is in "edit" mode and will PUT to /api/recurring-invoices/[id]
   // instead of POSTing a new schedule to /api/recurring-invoices.
   const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
@@ -224,9 +307,6 @@ export function InvoicesView() {
 
   // Form
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
-
-  // Currency from hook
-  const { currency, format, symbol } = useCompanyCurrency();
 
   // ============================================================
   // Fetch data on mount
@@ -299,14 +379,29 @@ export function InvoicesView() {
   // Stats
   // ============================================================
 
+  // P4: the stats header reads the server-computed BOOK-WIDE summary
+  // ({ totalSales, received, outstanding, overdue, count }) so the tiles never
+  // shrink to the currently loaded page or date range (Vyapar behavior).
+  // The client-side computation is kept ONLY as a fallback for responses
+  // where the server's summary block is absent (e.g. legacy deployments).
+  const serverSummary = invoicesData?.summary;
   const stats = useMemo(() => {
+    if (serverSummary) {
+      return {
+        totalRevenue: serverSummary.totalSales ?? 0,
+        paidAmount: serverSummary.received ?? 0,
+        sentAmount: serverSummary.outstanding ?? 0,
+        overdueAmount: serverSummary.overdue ?? 0,
+        draftCount: 0,
+      };
+    }
     const totalRevenue = invoices.reduce((s, i) => s + i.total, 0);
     const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0);
     const sentAmount = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + i.total, 0);
     const overdueAmount = invoices.filter((i) => i.status === 'overdue').reduce((s, i) => s + i.total, 0);
     const draftCount = invoices.filter((i) => i.status === 'draft').length;
     return { totalRevenue, paidAmount, sentAmount, overdueAmount, draftCount };
-  }, [invoices]);
+  }, [serverSummary, invoices]);
 
   // ============================================================
   // Handlers
@@ -314,7 +409,9 @@ export function InvoicesView() {
 
   const openCreateDialog = () => {
     setEditingInvoice(null);
-    setForm(EMPTY_FORM());
+    // P4: seed the tax % from the tenant's saved invoice settings
+    // (defaultTaxPercent) — 0 fallback when settings aren't loaded yet.
+    setForm(EMPTY_FORM(defaultTaxPercent));
     setFormMode('create');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
@@ -364,6 +461,9 @@ export function InvoicesView() {
 
   const openEditDialog = (invoice: Invoice) => {
     setEditingInvoice(invoice);
+    // P4: parse the persisted disclaimer back out of notes (saved invoices
+    // pack it as `notes\n---\ndisclaimer` — see DISCLAIMER_SEPARATOR).
+    const { notes: parsedNotes, disclaimer: parsedDisclaimer } = splitNotesDisclaimer(invoice.notes);
     setForm({
       customer: invoice.customerId || '',
       lineItems:
@@ -378,7 +478,8 @@ export function InvoicesView() {
       taxPercent: invoice.taxPercent || 0,
       discount: invoice.discount || 0,
       dueDate: invoice.dueDate || '',
-      notes: invoice.notes || '',
+      notes: parsedNotes,
+      disclaimer: parsedDisclaimer,
     });
     setShowDetailDialog(false);
     setFormMode('create');
@@ -446,6 +547,12 @@ export function InvoicesView() {
 
     const isEditing = !!editingInvoice;
     setSaving(true);
+    // P4: persist the contract/disclaimer by packing it into notes with an
+    // explicit separator (the schema has no dedicated disclaimer column) so
+    // it round-trips on edit. Empty notes → disclaimer only.
+    const packedNotes = [form.notes.trim(), form.disclaimer.trim()]
+      .filter(Boolean)
+      .join(DISCLAIMER_SEPARATOR);
     try {
       if (isEditing) {
         // ── Edit mode: PUT to /api/invoices/[id] ──
@@ -459,7 +566,7 @@ export function InvoicesView() {
           taxPercent: form.taxPercent || 0,
           discount: form.discount || 0,
           dueDate: form.dueDate,
-          notes: form.notes || '',
+          notes: packedNotes,
         };
         // useUpdateInvoice auto-invalidates: invoices.all + dashboard.all +
         // invoices.detail(id) + customers.detail(customerId). NO manual fetchInvoices() needed.
@@ -482,7 +589,7 @@ export function InvoicesView() {
             rate: li.rate,
           })),
           dueDate: form.dueDate,
-          notes: form.notes || undefined,
+          notes: packedNotes || undefined,
           discount: form.discount || 0,
           taxPercent: form.taxPercent || 0,
           currency,
@@ -868,7 +975,7 @@ export function InvoicesView() {
       }
       const schedule = (data as { schedule: RecurringSchedule }).schedule;
       setRecurringSchedules((prev) => [schedule, ...prev]);
-      setRecurringForm(EMPTY_RECURRING_FORM());
+      setRecurringForm(EMPTY_RECURRING_FORM(currency));
       setShowRecurringForm(false);
       toast.success('Recurring schedule created');
     } catch (e) {
@@ -1011,7 +1118,7 @@ export function InvoicesView() {
   const closeRecurringForm = () => {
     setShowRecurringForm(false);
     setEditingRecurringId(null);
-    setRecurringForm(EMPTY_RECURRING_FORM());
+    setRecurringForm(EMPTY_RECURRING_FORM(currency));
   };
 
   // Toggle the form panel from the "Create Schedule" / "Cancel" header button.
@@ -1022,7 +1129,7 @@ export function InvoicesView() {
       closeRecurringForm();
     } else {
       setEditingRecurringId(null);
-      setRecurringForm(EMPTY_RECURRING_FORM());
+      setRecurringForm(EMPTY_RECURRING_FORM(currency));
       setShowRecurringForm(true);
     }
   };
@@ -1070,7 +1177,7 @@ export function InvoicesView() {
         prev.map((s) => (s.id === editingRecurringId ? { ...s, ...updated } : s))
       );
       setEditingRecurringId(null);
-      setRecurringForm(EMPTY_RECURRING_FORM());
+      setRecurringForm(EMPTY_RECURRING_FORM(currency));
       setShowRecurringForm(false);
       toast.success('Schedule updated');
     } catch (e) {
@@ -1197,16 +1304,23 @@ export function InvoicesView() {
     },
     {
       key: 'subject',
-      header: 'Subject',
+      header: 'Notes',
       className: 'max-w-[220px]',
       render: (inv) => {
-        const subjectText = inv.notes?.trim() || (inv.jobTitle ? `Job: ${inv.jobTitle}` : 'For Services Rendered');
+        // P4: this column shows the invoice's real notes (plus the linked job
+        // title). The old 'For Services Rendered' fake fallback was removed —
+        // empty notes render an honest '—'.
+        const notesText = inv.notes?.trim() || '';
         return (
           <div className="text-sm py-0.5">
-            <span className="text-slate-700 dark:text-slate-300 block truncate font-medium" title={subjectText}>
-              {subjectText}
-            </span>
-            {inv.jobTitle && inv.notes && inv.notes !== inv.jobTitle && (
+            {notesText ? (
+              <span className="text-slate-700 dark:text-slate-300 block truncate font-medium" title={notesText}>
+                {notesText}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
+            {inv.jobTitle && (
               <span className="text-[11px] text-muted-foreground block truncate">
                 Linked: {inv.jobTitle}
               </span>
@@ -1462,6 +1576,16 @@ export function InvoicesView() {
     },
   ];
 
+  // P4: honest per-context empty-state copy for the invoice table.
+  const invoicesEmptyHint = useMemo(() => {
+    if (activeTab === 'archived') return 'Invoices you archive will appear here.';
+    if (statusFilter === 'overdue') return 'No overdue invoices — all caught up.';
+    if (statusFilter === 'pending_approval') return 'No invoices are waiting for approval.';
+    if (dateRange !== 'all') return 'No invoices were created in the selected date range.';
+    if (debouncedSearch) return 'No invoices match your search.';
+    return 'Create your first invoice to start tracking payments.';
+  }, [activeTab, statusFilter, dateRange, debouncedSearch]);
+
   // ============================================================
   // Render
   // ============================================================
@@ -1526,11 +1650,11 @@ export function InvoicesView() {
         </div>
       </div>
 
-      {/* ── Stats ────────────────────────────────────────────────── */}
+      {/* ── Stats (BOOK-WIDE — server summary; ignores the list's date/status filters) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { title: 'Total Revenue', value: format(stats.totalRevenue), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-          { title: 'Pending', value: format(stats.sentAmount), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { title: 'Outstanding', value: format(stats.sentAmount), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
           { title: 'Paid', value: format(stats.paidAmount), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
           { title: 'Overdue', value: format(stats.overdueAmount), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50' },
         ].map((stat) => {
@@ -1588,6 +1712,54 @@ export function InvoicesView() {
         </div>
       </div>
 
+      {/* ── Date Range (list filter only — the stats header stays book-wide) ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-muted-foreground shrink-0">Date range:</span>
+        <div
+          role="group"
+          aria-label="Filter invoices by created date"
+          className="flex items-center gap-1.5 flex-wrap"
+        >
+          {DATE_RANGE_OPTIONS.map((opt) => {
+            const isActive = dateRange === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setDateRange(opt.id)}
+                className={
+                  isActive
+                    ? 'inline-flex items-center h-8 px-3 rounded-full bg-emerald-600 text-white text-xs font-semibold shadow-xs transition-colors'
+                    : 'inline-flex items-center h-8 px-3 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-slate-600 dark:text-slate-300 hover:border-emerald-300 hover:text-emerald-700 transition-colors'
+                }
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+        {dateRange === 'custom' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <Input
+              type="date"
+              aria-label="From date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-8 w-[150px] text-xs"
+            />
+            <span className="text-xs text-muted-foreground">–</span>
+            <Input
+              type="date"
+              aria-label="To date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-8 w-[150px] text-xs"
+            />
+          </div>
+        )}
+      </div>
+
       {/* ── Invoice Table ────────────────────────────────────────── */}
       <Card className="border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
         <CardContent className="p-0">
@@ -1599,7 +1771,17 @@ export function InvoicesView() {
             error={invoicesError}
             onRetry={() => refetchInvoices()}
             emptyMessage="No invoices found"
+            emptyHint={invoicesEmptyHint}
             emptyIcon={FileText}
+            emptyAction={
+              activeTab === 'archived'
+                ? undefined
+                : {
+                    label: 'Create Invoice',
+                    onClick: openCreateDialog,
+                    icon: <Plus className="size-4 mr-1.5" />,
+                  }
+            }
             onRowClick={openInvoiceDetail}
             className="border-0 rounded-none"
           />
@@ -1694,7 +1876,7 @@ export function InvoicesView() {
             // so the next open starts from a clean slate.
             setShowRecurringForm(false);
             setEditingRecurringId(null);
-            setRecurringForm(EMPTY_RECURRING_FORM());
+            setRecurringForm(EMPTY_RECURRING_FORM(currency));
           }
         }}
         recurringSchedules={recurringSchedules}

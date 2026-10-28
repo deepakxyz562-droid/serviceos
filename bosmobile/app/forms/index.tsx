@@ -16,7 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { apiRequest, ApiError } from '@/lib/api';
-import { API_PATHS } from '@/lib/constants';
+import { API_PATHS, WEB_URL } from '@/lib/constants';
 
 interface FormItem {
   id: string;
@@ -68,9 +68,9 @@ function mapApiFormToFormItem(f: any): FormItem {
         ? f.responseCount
         : 0;
   const shareUrl = f?.slug
-    ? `https://gptform.com/f/${f.slug}`
+    ? `${WEB_URL}/f/${f.slug}`
     : f?.id
-      ? `https://gptform.com/f/${f.id}`
+      ? `${WEB_URL}/f/${f.id}`
       : '—';
   return {
     id: f.id,
@@ -160,7 +160,7 @@ export default function FormsListScreen() {
         onPress: () =>
           Alert.alert(
             'GPTForm Studio',
-            'Full drag-and-drop form canvas, conditional logic, and calculations are designed for desktop browsers.\n\nOpen https://gptform.com on your computer to edit form fields.'
+            'Full drag-and-drop form canvas, conditional logic, and calculations are designed for desktop browsers.\n\nOpen the BOS web dashboard on your computer to edit form fields.',
           ),
       },
       { text: 'Cancel', style: 'cancel' },

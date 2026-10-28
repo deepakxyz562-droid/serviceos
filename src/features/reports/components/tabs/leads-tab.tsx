@@ -119,7 +119,11 @@ export function LeadsTab({
             />
             <StatCard
               label="Avg Response"
-              value={whatsapp ? `${whatsapp.avgResponseTimeMin} min` : '—'}
+              value={
+                whatsapp?.avgResponseTimeMin != null
+                  ? `${whatsapp.avgResponseTimeMin} min`
+                  : '—'
+              }
               icon={Clock}
               iconBg="bg-cyan-50"
               color="text-cyan-600"

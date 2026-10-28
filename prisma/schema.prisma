@@ -1072,6 +1072,31 @@ model Invoice {
   @@index([tenantId, createdAt(sort: Desc)], map: "idx_invoice_tenant_createdat_desc")
   @@index([tenantId, status, dueDate])
   @@index([tenantId, customerId])
+
+  payments InvoicePayment[]
+}
+
+// ── InvoicePayment: real partial-payment ledger for FSM invoices ─────────
+// Historically `paid` was a bare status flip (paidAt only), which made
+// partial payments, received-vs-balance reporting and payment history
+// impossible. This ledger records every payment applied to an invoice;
+// `Invoice.paidAt`/`status` are derived (paid when sum(amount) >= total).
+model InvoicePayment {
+  id         String   @id @default(cuid())
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tenantId   String?
+  amount     Float
+  currency   String   @default("USD")
+  method     String   @default("MANUAL") // MANUAL | CASH | CARD | BANK_TRANSFER | UPI | CHEQUE | OTHER
+  reference  String?  // UTR / transaction id / cheque number
+  notes      String?
+  paidAt     DateTime @default(now())
+  recordedBy String?  // user id
+  createdAt  DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([tenantId, paidAt])
 }
 
 // Recurring invoice schedule (AMC / subscriptions / monthly maintenance contracts)
@@ -9077,6 +9102,8 @@ model AiBusiness {
   invoices       AiInvoice[]
   templates      AiTemplate[]
   items          AiItem[]
+  bankAccounts   AiBankAccount[]
+  cheques        AiCheque[]
 
   @@index([ownerId])
   @@index([tenantId])
@@ -9090,6 +9117,7 @@ model AiCustomer {
   email      String?
   phone      String?
   address    String?
+  gstin      String?    // 15-char GST Identification Number (B2B invoicing). NULL → B2C.
   notes      String?
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -9172,6 +9200,7 @@ model AiInvoiceItem {
   qty         Float     @default(1)
   unitPrice   Float     @default(0)
   hsnCode     String?   // HSN/SAC code for India GST (Phase 7)
+  gstRate     Float?    // per-line GST rate snapshot (%) — persisted so line tax survives round-trips and statements recompute exactly
 
   @@index([invoiceId])
 }
@@ -9215,6 +9244,52 @@ model AiItem {
 
   @@index([businessId])
   @@index([category])
+}
+
+// ── Cash & Bank (Vyapar-parity Phase 1) ──────────────────────────────────
+// Real persisted bank/cash/UPI/wallet accounts for the Cash & Bank register.
+// `accountNumber` is stored as entered but MUST be masked (last 4) on read.
+model AiBankAccount {
+  id              String     @id @default(cuid())
+  businessId      String
+  business        AiBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name            String
+  type            String     @default("BANK") // BANK | CASH | UPI | WALLET
+  accountNumber   String?    // masked on read (last 4)
+  ifsc            String?
+  upiId           String?
+  openingBalance  Float      @default(0)
+  currentBalance  Float      @default(0)
+  currency        String     @default("INR")
+  isDefault       Boolean    @default(false)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([businessId])
+}
+
+// Cheque register: INCOMING (received from customers) and OUTGOING (issued to
+// vendors). Clearing an INCOMING cheque credits the business's default deposit
+// account; clearing an OUTGOING cheque debits it. BOUNCED reverses a prior
+// CLEARED transition. CANCELLED is always balance-neutral.
+model AiCheque {
+  id           String     @id @default(cuid())
+  businessId   String
+  business     AiBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  direction    String     @default("INCOMING") // INCOMING (received) | OUTGOING (issued)
+  partyName    String
+  amount       Float
+  chequeNumber String
+  bankName     String?
+  issueDate    DateTime   @default(now())
+  dueDate      DateTime?
+  status       String     @default("PENDING") // PENDING | CLEARED | BOUNCED | CANCELLED
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([businessId, status])
 }
 
 model AiTemplate {

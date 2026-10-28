@@ -34,6 +34,9 @@ import {
   GstStoreInfo,
 } from '@/lib/gst-invoice-helper';
 import { SignaturePadModal, SignaturePreview } from '@/components/SignaturePadModal';
+import { KpiRow } from '@/components/money/kpi-tile';
+import { DateRangeSheet, presetRange, type DateRange } from '@/components/money/date-range-sheet';
+import { formatInr } from '@/lib/money';
 
 interface ItemEntry {
   description: string;
@@ -41,6 +44,7 @@ interface ItemEntry {
   unitPrice: number;
   unit?: string;
   hsnCode?: string;
+  gstRate?: number;
 }
 
 const STANDARD_UNITS = ['Pcs', 'Kg', 'Box', 'Ltr', 'Mtr', 'Bags', 'Nos'];
@@ -150,6 +154,9 @@ export default function BillingScreen() {
   const [amountPaidInput, setAmountPaidInput] = useState('');
   const [dueDateDays, setDueDateDays] = useState<number>(15);
   const [taxType, setTaxType] = useState<'INTRA' | 'INTER'>('INTRA');
+  const [periodKey, setPeriodKey] = useState<'all' | 'today' | 'this_month' | 'custom'>('all');
+  const [customRange, setCustomRange] = useState<DateRange | null>(null);
+  const [rangeSheetOpen, setRangeSheetOpen] = useState(false);
 
   const fetchBillingData = useCallback(async (isInitial = false) => {
     try {
@@ -303,6 +310,7 @@ export default function BillingScreen() {
       unitPrice: Number(prod.price) || 0,
       unit: prod.unit || 'Pcs',
       hsnCode: prod.sku || prod.hsn || '',
+      gstRate: Number(prod.taxRate) > 0 ? Number(prod.taxRate) : taxRate,
     };
     if (catalogTargetIdx !== null && catalogTargetIdx >= 0 && catalogTargetIdx < items.length) {
       const updated = [...items];
@@ -407,7 +415,7 @@ export default function BillingScreen() {
 
   const addItemRow = () => {
     hapticFeedback.light();
-    setItems([...items, { description: '', qty: 1, unitPrice: 0, unit: 'Pcs', hsnCode: '' }]);
+    setItems([...items, { description: '', qty: 1, unitPrice: 0, unit: 'Pcs', hsnCode: '', gstRate: taxRate }]);
   };
 
   const removeItemRow = (index: number) => {
@@ -451,6 +459,7 @@ export default function BillingScreen() {
           unitPrice: Number(i.unitPrice) || 0,
           unit: i.unit || 'Pcs',
           hsnCode: i.hsnCode?.trim() || undefined,
+          gstRate: Number(i.gstRate) > 0 ? Number(i.gstRate) : undefined,
         }));
 
       if (editingInvoice) {
@@ -485,6 +494,7 @@ export default function BillingScreen() {
             customerPhone: customerPhone.trim(),
             customerAddress: customerAddress.trim() || undefined,
             customerGstin: customerGstin.trim() || undefined,
+            placeOfSupply: taxType === 'INTER' ? customerGstin.trim() || selectedParty?.gstin || undefined : undefined,
             taxRate,
             discountValue: discountAmt,
             discountType: 'AMOUNT',
@@ -841,7 +851,21 @@ export default function BillingScreen() {
     }
   };
 
+  // Vyapar-style period filter (All / Today / This Month / Custom range).
+  const periodRange =
+    periodKey === 'all'
+      ? null
+      : periodKey === 'custom'
+        ? customRange
+        : presetRange(periodKey === 'today' ? 'today' : 'this_month');
+
   const filteredInvoices = invoices.filter((i) => {
+    if (periodRange) {
+      const t = new Date(i.createdAt).getTime();
+      const start = new Date(`${periodRange.start}T00:00:00`).getTime();
+      const end = new Date(`${periodRange.end}T23:59:59.999`).getTime();
+      if (!Number.isNaN(start) && !Number.isNaN(end) && (t < start || t > end)) return false;
+    }
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -1160,18 +1184,59 @@ export default function BillingScreen() {
       {/* Summary KPI Strip */}
       <View style={styles.kpiContainer}>
         {tab === 'INVOICES' ? (
-          <View style={styles.kpiRow}>
-            <View style={styles.kpiCardGreen}>
-              <Text style={styles.kpiLabelGreen}>Collected (Paid)</Text>
-              <Text style={styles.kpiValueGreen}>₹{invoiceOverview.paid.toFixed(2)}</Text>
-            </View>
-            <View style={styles.kpiCardAmber}>
-              <Text style={styles.kpiLabelAmber}>Pending Balance</Text>
-              <Text style={styles.kpiValueAmber}>₹{invoiceOverview.unpaid.toFixed(2)}</Text>
-            </View>
-            <View style={styles.kpiCardRed}>
-              <Text style={styles.kpiLabelRed}>Overdue Bills</Text>
-              <Text style={styles.kpiValueRed}>₹{invoiceOverview.overdue.toFixed(2)}</Text>
+          <View style={{ gap: 10 }}>
+            <KpiRow
+              tiles={[
+                {
+                  label: 'Total Sales',
+                  value: formatInr(filteredInvoices.reduce((s, i) => s + (Number(i.total) || 0), 0)),
+                  sub: `${filteredInvoices.length} invoice${filteredInvoices.length === 1 ? '' : 's'} in period`,
+                },
+                {
+                  label: 'Received',
+                  value: formatInr(filteredInvoices.reduce((s, i) => s + (Number(i.paidAmount) || 0), 0)),
+                  tone: 'positive',
+                },
+                {
+                  label: 'Balance',
+                  value: formatInr(filteredInvoices.reduce((s, i) => s + (Number(i.balance) || 0), 0)),
+                  tone: 'warning',
+                  sub: `Overdue ${formatInr(invoiceOverview.overdue)} (all-time)`,
+                },
+              ]}
+            />
+            {/* Period filter chips — Vyapar date-range pattern */}
+            <View style={styles.periodChipsRow}>
+              {([['all', 'All'], ['today', 'Today'], ['this_month', 'This Month']] as const).map(([k, label]) => (
+                <TouchableOpacity
+                  key={k}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: periodKey === k }}
+                  onPress={() => {
+                    hapticFeedback.light();
+                    setPeriodKey(k);
+                  }}
+                  style={[styles.periodChip, periodKey === k && styles.periodChipActive]}
+                >
+                  <Text style={[styles.periodChipText, periodKey === k && styles.periodChipTextActive]}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ selected: periodKey === 'custom' }}
+                onPress={() => {
+                  hapticFeedback.light();
+                  setRangeSheetOpen(true);
+                }}
+                style={[styles.periodChip, styles.periodChipWide, periodKey === 'custom' && styles.periodChipActive]}
+              >
+                <Text
+                  style={[styles.periodChipText, periodKey === 'custom' && styles.periodChipTextActive]}
+                  numberOfLines={1}
+                >
+                  {periodKey === 'custom' && customRange ? customRange.label : 'Custom ▾'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         ) : (
@@ -1275,7 +1340,7 @@ export default function BillingScreen() {
                     key={inv.id}
                     style={styles.docCard}
                     activeOpacity={0.9}
-                    onPress={() => setSelectedInvoice(inv)}
+                    onPress={() => router.push(`/invoice/${inv.id}` as any)}
                   >
                     <View style={styles.docHeader}>
                       <View style={{ flex: 1 }}>
@@ -1746,6 +1811,19 @@ export default function BillingScreen() {
                           value={it.unitPrice ? it.unitPrice.toString() : ''}
                           onChangeText={(val) => updateItem(idx, 'unitPrice', parseFloat(val) || 0)}
                           placeholder="Rate"
+                          placeholderTextColor="#94a3b8"
+                          style={styles.invoiceRateInput}
+                        />
+                      </View>
+
+                      {/* Per-line GST rate — Vyapar "TAX in (%)" column */}
+                      <View style={styles.invoiceRateRow}>
+                        <MaterialIcons name="percent" size={13} color="#64748b" />
+                        <TextInput
+                          keyboardType="numeric"
+                          value={it.gstRate != null ? String(it.gstRate) : ''}
+                          onChangeText={(val) => updateItem(idx, 'gstRate', val === '' ? undefined : parseFloat(val) || 0)}
+                          placeholder="GST %"
                           placeholderTextColor="#94a3b8"
                           style={styles.invoiceRateInput}
                         />
@@ -2845,11 +2923,26 @@ export default function BillingScreen() {
           businessName={storeInfo.businessName}
         />
       )}
+      {/* Custom date range sheet — Vyapar period filter */}
+      <DateRangeSheet
+        visible={rangeSheetOpen}
+        onClose={() => setRangeSheetOpen(false)}
+        onApply={(range) => {
+          setCustomRange(range);
+          setPeriodKey('custom');
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  periodChipsRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  periodChip: { minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  periodChipWide: { maxWidth: 220, paddingHorizontal: 12 },
+  periodChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  periodChipText: { fontSize: 13, fontWeight: '700', color: '#334155' },
+  periodChipTextActive: { color: '#ffffff' },
   safe: {
     flex: 1,
     backgroundColor: '#ffffff',

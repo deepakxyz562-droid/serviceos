@@ -1,3 +1,9 @@
+import { extractGstStateCode } from './money';
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
 export interface GstStoreInfo {
   businessName: string;
   logoUrl?: string;
@@ -65,18 +71,22 @@ export function generateGstInvoiceHtml(
 ): string {
   const taxable = Number(inv.subtotal || inv.total - (inv.tax || 0)) || 0;
   const tax = Number(inv.tax || 0);
-  const cgst = tax / 2;
-  const sgst = tax / 2;
   const discount = Number(inv.discount || 0);
   const total = Number(inv.total || 0);
-  const isPaid = Number(inv.balance || 0) <= 0 || inv.status === 'PAID';
-  const effectiveRate = taxable > 0 ? Math.round((tax / taxable) * 100) : 18;
-  const halfRate = (effectiveRate / 2).toFixed(1).replace('.0', '');
+  const paidAmount = Math.min(Number(inv.paidAmount) || 0, total || Number.POSITIVE_INFINITY);
+  const balanceDue = Math.max(0, round2(total - paidAmount));
+  const isPaid = balanceDue <= 0.01 || inv.status === 'PAID';
+
+  // Inter-state detection: store state vs customer state (GSTIN prefix).
+  // Unknown customer state (B2C) defaults to intra-state (CGST + SGST).
+  const storeState = extractGstStateCode(store.gstin);
+  const clientState = extractGstStateCode(inv.placeOfSupply || inv.customer?.gstin);
+  const interstate = Boolean(clientState) && Boolean(storeState) && storeState !== clientState;
 
   const upiLink = store.upiId
     ? `upi://pay?pa=${encodeURIComponent(store.upiId)}&pn=${encodeURIComponent(
         store.businessName || 'Store'
-      )}&am=${total.toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
+      )}&am=${(isPaid ? total : balanceDue).toFixed(2)}&tn=${encodeURIComponent(`Invoice ${inv.number}`)}&cu=INR`
     : '';
 
   const qrUrl = upiLink
@@ -88,7 +98,30 @@ export function generateGstInvoiceHtml(
       const itemQty = Number(item.qty) || 1;
       const itemRate = Number(item.unitPrice) || 0;
       const itemAmount = itemQty * itemRate;
-      const itemCgst = itemAmount * (effectiveRate / 200);
+      // Per-line GST rate (Vyapar-style); falls back to the invoice-level rate.
+      const lineRate = Number(item.gstRate ?? inv.taxRate ?? 0);
+      const rateLabel = `${Number.isInteger(lineRate) ? lineRate : lineRate.toFixed(1)}%`;
+
+      if (interstate) {
+        const itemIgst = itemAmount * (lineRate / 100);
+        const itemTotal = itemAmount + itemIgst;
+        return `
+        <tr>
+          <td style="text-align: center;">${idx + 1}</td>
+          <td>
+            <strong>${item.description || 'Item'}</strong>
+          </td>
+          <td style="text-align: center;">${item.hsnCode || '—'}</td>
+          <td style="text-align: center;">${itemQty}${item.unit ? ` <span style="font-size: 10px; color: #64748b;">${item.unit}</span>` : ''}</td>
+          <td style="text-align: right;">${currencySymbol}${itemRate.toFixed(2)}</td>
+          <td style="text-align: right;">${currencySymbol}${itemAmount.toFixed(2)}</td>
+          <td style="text-align: right;">${rateLabel} (${currencySymbol}${itemIgst.toFixed(2)})</td>
+          <td style="text-align: right; font-weight: bold;">${currencySymbol}${itemTotal.toFixed(2)}</td>
+        </tr>
+      `;
+      }
+
+      const itemCgst = itemAmount * (lineRate / 200);
       const itemSgst = itemCgst;
       const itemTotal = itemAmount + itemCgst + itemSgst;
 
@@ -102,13 +135,36 @@ export function generateGstInvoiceHtml(
           <td style="text-align: center;">${itemQty}${item.unit ? ` <span style="font-size: 10px; color: #64748b;">${item.unit}</span>` : ''}</td>
           <td style="text-align: right;">${currencySymbol}${itemRate.toFixed(2)}</td>
           <td style="text-align: right;">${currencySymbol}${itemAmount.toFixed(2)}</td>
-          <td style="text-align: right;">${halfRate}% (${currencySymbol}${itemCgst.toFixed(2)})</td>
-          <td style="text-align: right;">${halfRate}% (${currencySymbol}${itemSgst.toFixed(2)})</td>
+          <td style="text-align: right;">${rateLabel} (${currencySymbol}${itemCgst.toFixed(2)})</td>
+          <td style="text-align: right;">${rateLabel} (${currencySymbol}${itemSgst.toFixed(2)})</td>
           <td style="text-align: right; font-weight: bold;">${currencySymbol}${itemTotal.toFixed(2)}</td>
         </tr>
       `;
     })
     .join('');
+
+  const itemsTableHead = interstate
+    ? `
+        <th style="width: 5%;">#</th>
+        <th style="width: 34%;">Item Description</th>
+        <th style="width: 11%;">HSN/SAC</th>
+        <th style="width: 7%;">Qty</th>
+        <th style="width: 11%; text-align: right;">Rate</th>
+        <th style="width: 11%; text-align: right;">Taxable</th>
+        <th style="width: 12%; text-align: right;">IGST</th>
+        <th style="width: 12%; text-align: right;">Total</th>
+      `
+    : `
+        <th style="width: 5%;">#</th>
+        <th style="width: 30%;">Item Description</th>
+        <th style="width: 10%;">HSN/SAC</th>
+        <th style="width: 6%;">Qty</th>
+        <th style="width: 10%; text-align: right;">Rate</th>
+        <th style="width: 10%; text-align: right;">Taxable</th>
+        <th style="width: 11%; text-align: right;">CGST</th>
+        <th style="width: 11%; text-align: right;">SGST</th>
+        <th style="width: 11%; text-align: right;">Total</th>
+      `;
 
   return `
 <!DOCTYPE html>
@@ -326,7 +382,7 @@ export function generateGstInvoiceHtml(
         <div><strong>Invoice #:</strong> ${inv.number}</div>
         <div><strong>Status:</strong> ${inv.status || (isPaid ? 'PAID' : 'UNPAID')}</div>
         ${inv.paymentMethod ? `<div><strong>Payment Mode:</strong> ${inv.paymentMethod}</div>` : ''}
-        <div><strong>State of Supply:</strong> Intra-State (CGST + SGST)</div>
+        <div><strong>State of Supply:</strong> ${interstate ? 'Inter-State (IGST)' : 'Intra-State (CGST + SGST)'}</div>
         <div><strong>Reverse Charge:</strong> No</div>
       </td>
     </tr>
@@ -336,15 +392,7 @@ export function generateGstInvoiceHtml(
   <table class="items-table">
     <thead>
       <tr>
-        <th style="width: 5%;">#</th>
-        <th style="width: 32%;">Item Description</th>
-        <th style="width: 10%;">HSN/SAC</th>
-        <th style="width: 7%;">Qty</th>
-        <th style="width: 11%; text-align: right;">Rate</th>
-        <th style="width: 11%; text-align: right;">Taxable</th>
-        <th style="width: 12%; text-align: right;">CGST</th>
-        <th style="width: 12%; text-align: right;">SGST</th>
-        <th style="width: 12%; text-align: right;">Total</th>
+        ${itemsTableHead}
       </tr>
     </thead>
     <tbody>
@@ -367,14 +415,21 @@ export function generateGstInvoiceHtml(
             </tr>`
           : ''
       }
-      <tr>
-        <td style="color: #64748b;">CGST (${halfRate}%)</td>
-        <td style="text-align: right; font-weight: bold;">${currencySymbol}${cgst.toFixed(2)}</td>
-      </tr>
-      <tr>
-        <td style="color: #64748b;">SGST (${halfRate}%)</td>
-        <td style="text-align: right; font-weight: bold;">${currencySymbol}${sgst.toFixed(2)}</td>
-      </tr>
+      ${
+        interstate
+          ? `<tr>
+              <td style="color: #64748b;">IGST</td>
+              <td style="text-align: right; font-weight: bold;">${currencySymbol}${(tax / 1).toFixed(2)}</td>
+            </tr>`
+          : `<tr>
+              <td style="color: #64748b;">CGST</td>
+              <td style="text-align: right; font-weight: bold;">${currencySymbol}${(tax / 2).toFixed(2)}</td>
+            </tr>
+            <tr>
+              <td style="color: #64748b;">SGST</td>
+              <td style="text-align: right; font-weight: bold;">${currencySymbol}${(tax / 2).toFixed(2)}</td>
+            </tr>`
+      }
       <tr class="grand-total-row">
         <td>Total Invoice Value</td>
         <td style="text-align: right;">${currencySymbol}${total.toFixed(2)}</td>
@@ -382,14 +437,14 @@ export function generateGstInvoiceHtml(
       <tr>
         <td style="color: #64748b;">Amount Paid</td>
         <td style="text-align: right; font-weight: bold; color: ${isPaid ? '#059669' : '#0f172a'};">
-          ${currencySymbol}${isPaid ? total.toFixed(2) : (Number(inv.paidAmount) || 0).toFixed(2)}
+          ${currencySymbol}${paidAmount.toFixed(2)}
         </td>
       </tr>
       ${
         !isPaid
           ? `<tr style="color: #d97706; font-weight: bold;">
               <td>Balance Due</td>
-              <td style="text-align: right;">${currencySymbol}${total.toFixed(2)}</td>
+              <td style="text-align: right;">${currencySymbol}${balanceDue.toFixed(2)}</td>
             </tr>`
           : ''
       }

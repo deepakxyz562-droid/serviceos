@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -33,7 +33,6 @@ import {
   MessageCircle,
   Mic,
   MoreHorizontal,
-  MoreVertical,
   Package,
   Palette,
   Paperclip,
@@ -65,6 +64,12 @@ import {
   PenTool,
 } from 'lucide-react';
 import { BosSignaturePadModal } from '@/components/bos/bos-signature-pad-modal';
+import {
+  BosMarketingGallery,
+  type BosMarketingGalleryItem,
+} from '@/components/bos/bos-marketing-gallery';
+import { BosGoogleProfileCard } from '@/components/bos/bos-google-profile-card';
+import { BosWhatsappConnectCard } from '@/components/bos/bos-whatsapp-connect-card';
 import {
   type BosCoupon,
   type BosCustomer,
@@ -574,7 +579,54 @@ export function BosMarketingAiIntegrationsSettings({
       validTill: '28 Oct 2024',
     },
   ] : []));
-  const [selectedCampaignId, setSelectedCampaignId] = useState<number>(demoMode ? 1 : 0);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(demoMode ? '1' : '');
+
+  /* Real campaigns from GET /api/campaigns (production only — demoMode never
+     hits authenticated endpoints). These feed the Marketing gallery, the KPI
+     row and the WhatsApp preview with honest, server-owned data. */
+  type ApiCampaignRow = {
+    id: string;
+    name: string;
+    status?: string;
+    channel?: string;
+    type?: string;
+    messageContent?: string;
+    mediaUrl?: string | null;
+    totalRecipients?: number;
+    sentCount?: number;
+    deliveredCount?: number;
+    convertedCount?: number;
+    revenueGenerated?: number;
+    scheduledAt?: string | null;
+    createdAt?: string;
+  };
+  const [apiCampaigns, setApiCampaigns] = useState<ApiCampaignRow[]>([]);
+  const [apiCampaignsLoading, setApiCampaignsLoading] = useState(false);
+  const [apiCampaignsError, setApiCampaignsError] = useState<string | null>(null);
+
+  const fetchApiCampaigns = useCallback(async () => {
+    if (demoMode) return;
+    setApiCampaignsLoading(true);
+    setApiCampaignsError(null);
+    try {
+      const res = await authFetch('/api/campaigns?limit=60');
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setApiCampaignsError(err?.error || `Could not load campaigns (HTTP ${res.status}).`);
+        return;
+      }
+      const data = await res.json().catch(() => null);
+      setApiCampaigns(Array.isArray(data?.data) ? (data.data as ApiCampaignRow[]) : []);
+    } catch {
+      setApiCampaignsError('Network error — could not load your campaigns.');
+    } finally {
+      setApiCampaignsLoading(false);
+    }
+  }, [demoMode]);
+
+  useEffect(() => {
+    void fetchApiCampaigns();
+  }, [fetchApiCampaigns]);
 
   /* AI Assistant state (Matches BOS AI Assistant screenshot 1:1) */
   const [aiInput, setAiInput] = useState('');
@@ -595,6 +647,7 @@ export function BosMarketingAiIntegrationsSettings({
       return {
         razorpay: true,
         whatsapp: true,
+        google: true,
         tally: true,
         printer: true,
         phonepe: false,
@@ -606,6 +659,7 @@ export function BosMarketingAiIntegrationsSettings({
     return {
       razorpay: Boolean(storeSettings.upiId),
       whatsapp: Boolean(storeSettings.whatsappNumber),
+      google: false,
       tally: false,
       printer: false,
       phonepe: false,
@@ -614,6 +668,41 @@ export function BosMarketingAiIntegrationsSettings({
       zoho: false,
     };
   });
+
+  // Real Google Business Profile connection (production only) — sourced from
+  // the same social-accounts API the GBP wizard uses, so the Integrations
+  // list reflects the truth instead of a local flag.
+  const [gbpConnectedAccount, setGbpConnectedAccount] = useState<{
+    id: string;
+    accountName: string;
+  } | null>(null);
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/social/accounts?platform=googlebusiness');
+        if (!res.ok || cancelled) return;
+        const data = await res.json().catch(() => null);
+        const rows: Array<{ id: string; accountName?: string; isActive?: boolean }> = Array.isArray(
+          data?.data,
+        )
+          ? data.data
+          : [];
+        const active = rows.find((a) => a.isActive !== false) || rows[0] || null;
+        if (cancelled) return;
+        setGbpConnectedAccount(
+          active ? { id: active.id, accountName: active.accountName || '' } : null,
+        );
+        setConnectedIds((prev) => ({ ...prev, google: Boolean(active) }));
+      } catch {
+        // Non-fatal — the GBP card renders its own error notice.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
   const [integrationCreds, setIntegrationCreds] = useState<
     Record<string, { keyId?: string; secret?: string; metaField?: string }>
   >(() => {
@@ -1298,7 +1387,6 @@ export function BosMarketingAiIntegrationsSettings({
     if (mode === 'aiAssistant' && initialAiPrompt) {
       void handleSendAiMessage(initialAiPrompt);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, initialAiPrompt]);
 
   /* 1. MARKETING MODE — 1:1 Match with Marketing & Promotions Screenshot */
@@ -1317,103 +1405,79 @@ export function BosMarketingAiIntegrationsSettings({
       messageBody: campaignText || 'Check out our latest products and deals!',
       validTill: campaignValidTill || 'End of Month',
     };
-    const activePreviewCampaign =
-      recentCampaigns.find((c) => c.id === selectedCampaignId) || recentCampaigns[0] || defaultEmptyCampaign;
+    const capitalizeType = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : 'Offer');
 
-    const renderCampaignBannerBadge = (
-      theme: 'fresh' | 'diwali' | 'arrivals' | 'loyalty' | 'clearance',
-    ) => {
-      switch (theme) {
-        case 'fresh':
-          return (
-            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-amber-300 bg-gradient-to-br from-[#FEF08A] via-[#FACC15] to-[#16A34A] shadow-2xs">
-              <span className="text-[12px] leading-none">🧺</span>
-              <span className="mt-0.5 rounded-xs bg-white/95 px-1 text-[6px] font-black uppercase text-[#15803D]">
-                30% OFF
-              </span>
-            </div>
-          );
-        case 'diwali':
-          return (
-            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-red-800 bg-gradient-to-br from-[#450A0A] via-[#991B1B] to-[#D97706] shadow-2xs">
-              <span className="text-[11px] leading-none">🪔</span>
-              <span className="mt-0.5 text-[6.5px] font-extrabold tracking-tight text-[#FEF08A]">
-                Diwali
-              </span>
-            </div>
-          );
-        case 'arrivals':
-          return (
-            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-amber-400 bg-gradient-to-b from-[#FDE047] to-[#EA580C] shadow-2xs">
-              <span className="text-[11px] leading-none">🛍️</span>
-              <span className="mt-0.5 rounded-xs bg-[#991B1B] px-1 text-[6px] font-black uppercase text-white">
-                NEW
-              </span>
-            </div>
-          );
-        case 'loyalty':
-          return (
-            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-emerald-700 bg-gradient-to-br from-[#064E3B] via-[#047857] to-[#10B981] shadow-2xs">
-              <span className="text-[10px] leading-none">🎁</span>
-              <span className="mt-0.5 text-[6px] font-extrabold uppercase text-[#A7F3D0]">
-                LOYALTY
-              </span>
-            </div>
-          );
-        case 'clearance':
-          return (
-            <div className="relative flex h-9 w-9 shrink-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-red-600 bg-gradient-to-br from-[#DC2626] via-[#EA580C] to-[#FACC15] shadow-2xs">
-              <span className="rounded-xs bg-[#FEF08A] px-1 text-[6px] font-black uppercase text-[#991B1B]">
-                CLEARANCE
-              </span>
-              <span className="mt-0.5 text-[6.5px] font-black uppercase text-white">
-                50% OFF
-              </span>
-            </div>
-          );
+    // Preview pane campaign: prefers the selected real API row, then the
+    // selected demo row, then the draft being composed.
+    const selectedApiCampaign = apiCampaigns.find((c) => c.id === selectedCampaignId);
+    const selectedLocalCampaign = recentCampaigns.find((c) => String(c.id) === selectedCampaignId);
+    const activePreviewCampaign = (() => {
+      if (selectedApiCampaign) {
+        return {
+          id: selectedApiCampaign.id,
+          name: selectedApiCampaign.name,
+          bannerTheme: 'fresh' as const,
+          discountHeadline: capitalizeType(selectedApiCampaign.type || 'offer'),
+          messageBody: selectedApiCampaign.messageContent || '',
+          validTill: selectedApiCampaign.scheduledAt
+            ? new Date(selectedApiCampaign.scheduledAt).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })
+            : '—',
+        };
       }
-    };
+      return selectedLocalCampaign || recentCampaigns[0] || defaultEmptyCampaign;
+    })();
 
-    const renderCampaignTypeBadge = (type: 'WhatsApp' | 'Discount' | 'Loyalty' | 'Coupon') => {
-      switch (type) {
-        case 'WhatsApp':
-          return (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#16A34A] text-white">
-                <MessageCircle className="h-3 w-3" />
-              </span>
-              <span>WhatsApp</span>
-            </span>
-          );
-        case 'Discount':
-          return (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#FEE2E2] text-[#EF4444]">
-                <Percent className="h-3 w-3" />
-              </span>
-              <span>Discount</span>
-            </span>
-          );
-        case 'Loyalty':
-          return (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FEF3C7] text-[#D97706]">
-                <Gift className="h-3 w-3" />
-              </span>
-              <span>Loyalty</span>
-            </span>
-          );
-        case 'Coupon':
-          return (
-            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#1E293B]">
-              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[#F3E8FF] text-[#9333EA]">
-                <Ticket className="h-3 w-3" />
-              </span>
-              <span>Coupon</span>
-            </span>
-          );
-      }
-    };
+    /* Unified real-data list feeding the Marketing gallery + KPI row.
+       Production: rows from GET /api/campaigns. Demo mode: the demo fixtures
+       already guarded by demoMode, mapped into the same gallery shape. */
+    const marketingGalleryItems: BosMarketingGalleryItem[] = demoMode
+      ? recentCampaigns.map((c) => ({
+          id: String(c.id),
+          name: c.name,
+          channel:
+            c.type === 'WhatsApp'
+              ? 'whatsapp'
+              : c.type === 'Discount' || c.type === 'Loyalty'
+                ? 'sms'
+                : 'email',
+          status: (c.status || 'draft').toLowerCase(),
+          message: c.messageBody,
+          mediaUrl: null,
+          recipients: parseInt(c.sent.replace(/,/g, ''), 10) || 0,
+          sentCount: 0,
+          deliveredCount: 0,
+          convertedCount: c.orders,
+          revenue: c.revenue,
+          scheduledAt: null,
+          createdAt: '',
+        }))
+      : apiCampaigns.map((c) => ({
+          id: c.id,
+          name: c.name,
+          channel: (c.channel || 'whatsapp').toLowerCase(),
+          status: (c.status || 'draft').toLowerCase(),
+          message: c.messageContent || '',
+          mediaUrl: c.mediaUrl || null,
+          recipients: c.totalRecipients || 0,
+          sentCount: c.sentCount || 0,
+          deliveredCount: c.deliveredCount || 0,
+          convertedCount: c.convertedCount || 0,
+          revenue: Math.round(c.revenueGenerated || 0),
+          scheduledAt: c.scheduledAt || null,
+          createdAt: c.createdAt || '',
+        }));
+
+    /* Honest KPI aggregates: production values are sums over the real
+       campaign rows (honest zeros when nothing has been sent); the demo
+       fixtures keep their illustrative trends behind the demoMode guard. */
+    const kpiCampaignsSentCount = marketingGalleryItems.filter((c) => c.sentCount > 0).length;
+    const kpiReached = marketingGalleryItems.reduce((acc, c) => acc + c.sentCount, 0);
+    const kpiOrders = marketingGalleryItems.reduce((acc, c) => acc + c.convertedCount, 0);
+    const kpiRevenue = marketingGalleryItems.reduce((acc, c) => acc + c.revenue, 0);
 
     return (
       <div className="w-full max-w-none space-y-4 pb-6">
@@ -1479,8 +1543,16 @@ export function BosMarketingAiIntegrationsSettings({
           {[
             {
               label: 'Campaigns Sent',
-              value: demoMode ? String(13 + recentCampaigns.length) : String(recentCampaigns.length),
-              trend: recentCampaigns.length > 0 ? '↑ 28%' : '0%',
+              value: demoMode
+                ? String(13 + recentCampaigns.length)
+                : String(kpiCampaignsSentCount),
+              trend: demoMode
+                ? recentCampaigns.length > 0
+                  ? '↑ 28%'
+                  : '0%'
+                : kpiCampaignsSentCount > 0
+                  ? 'Live'
+                  : '—',
               icon: Megaphone,
               points: '0,28 18,22 36,24 54,14 72,16 90,4',
             },
@@ -1488,10 +1560,14 @@ export function BosMarketingAiIntegrationsSettings({
               label: 'Customers Reached',
               value: demoMode
                 ? '2,450'
-                : recentCampaigns
-                    .reduce((acc, c) => acc + (parseInt(c.sent.replace(/,/g, '')) || 0), 0)
-                    .toLocaleString('en-IN'),
-              trend: recentCampaigns.length > 0 ? '↑ 32%' : '0%',
+                : kpiReached.toLocaleString('en-IN'),
+              trend: demoMode
+                ? recentCampaigns.length > 0
+                  ? '↑ 32%'
+                  : '0%'
+                : kpiReached > 0
+                  ? 'Live'
+                  : '—',
               icon: Users,
               points: '0,28 18,24 36,18 54,20 72,11 90,3',
             },
@@ -1499,8 +1575,14 @@ export function BosMarketingAiIntegrationsSettings({
               label: 'Orders from Campaigns',
               value: demoMode
                 ? '486'
-                : recentCampaigns.reduce((acc, c) => acc + (c.orders || 0), 0).toLocaleString('en-IN'),
-              trend: recentCampaigns.length > 0 ? '↑ 45%' : '0%',
+                : kpiOrders.toLocaleString('en-IN'),
+              trend: demoMode
+                ? recentCampaigns.length > 0
+                  ? '↑ 45%'
+                  : '0%'
+                : kpiOrders > 0
+                  ? 'Live'
+                  : '—',
               icon: ShoppingCart,
               points: '0,29 18,23 36,21 54,13 72,14 90,4',
             },
@@ -1508,8 +1590,14 @@ export function BosMarketingAiIntegrationsSettings({
               label: 'Campaign Revenue',
               value: demoMode
                 ? `${currencySymbol} 34,280`
-                : `${currencySymbol} ${recentCampaigns.reduce((acc, c) => acc + (c.revenue || 0), 0).toLocaleString('en-IN')}`,
-              trend: recentCampaigns.length > 0 ? '↑ 38%' : '0%',
+                : `${currencySymbol} ${kpiRevenue.toLocaleString('en-IN')}`,
+              trend: demoMode
+                ? recentCampaigns.length > 0
+                  ? '↑ 38%'
+                  : '0%'
+                : kpiRevenue > 0
+                  ? 'Live'
+                  : '—',
               icon: IndianRupee,
               points: '0,28 18,24 36,19 54,15 72,12 90,3',
             },
@@ -1626,98 +1714,23 @@ export function BosMarketingAiIntegrationsSettings({
               </div>
             </div>
 
-            {/* Section B: Recent Campaigns Table */}
-            <div className="bos-card p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-[15px] font-extrabold text-[#111827]">Recent Campaigns</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setToast(`Showing all ${recentCampaigns.length} marketing campaigns.`);
-                    setTimeout(() => setToast(null), 2500);
-                  }}
-                  className="text-[12.5px] font-bold text-[#0A6847] hover:underline"
-                >
-                  View All
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-[12.5px]">
-                  <thead>
-                    <tr className="border-b border-[#E4EFEA] bg-[#F8FCFA] text-[11px] font-semibold text-[#64748B]">
-                      <th className="py-2.5 pl-3 pr-2">#</th>
-                      <th className="py-2.5 px-2">Campaign Name</th>
-                      <th className="py-2.5 px-2">Type</th>
-                      <th className="py-2.5 px-2">Audience</th>
-                      <th className="py-2.5 px-2">Sent</th>
-                      <th className="py-2.5 px-2">Orders</th>
-                      <th className="py-2.5 px-2">Revenue</th>
-                      <th className="py-2.5 px-2">Status</th>
-                      <th className="py-2.5 pl-2 pr-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#EDF4F0]">
-                    {recentCampaigns.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="py-8 text-center text-xs text-[#94A3B8]">
-                          No campaigns yet. Create your first campaign to get started.
-                        </td>
-                      </tr>
-                    ) : (
-                      recentCampaigns.map((camp, idx) => {
-                      const isSelected = camp.id === selectedCampaignId;
-                      return (
-                        <tr
-                          key={camp.id}
-                          onClick={() => setSelectedCampaignId(camp.id)}
-                          className={`cursor-pointer transition ${
-                            isSelected ? 'bg-[#F3FAF7]' : 'hover:bg-[#F8FCFA]'
-                          }`}
-                        >
-                          <td className="py-3 pl-3 pr-2 font-semibold text-[#475569]">
-                            {idx + 1}
-                          </td>
-                          <td className="py-3 px-2">
-                            <div className="flex items-center gap-2.5">
-                              {renderCampaignBannerBadge(camp.bannerTheme)}
-                              <span className="font-bold text-[#111827]">{camp.name}</span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-2">{renderCampaignTypeBadge(camp.type)}</td>
-                          <td className="py-3 px-2 text-[#475569] font-medium">{camp.audience}</td>
-                          <td className="py-3 px-2 font-bold text-[#111827]">{camp.sent}</td>
-                          <td className="py-3 px-2 font-bold text-[#111827]">{camp.orders}</td>
-                          <td className="py-3 px-2 font-extrabold text-[#111827]">
-                            {currencySymbol} {camp.revenue.toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className="inline-flex items-center rounded-md bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                              {camp.status}
-                            </span>
-                          </td>
-                          <td className="py-3 pl-2 pr-3 text-right">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedCampaignId(camp.id);
-                                setToast(`Previewing "${camp.name}" on ${previewChannel}`);
-                                setTimeout(() => setToast(null), 2500);
-                              }}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-[#64748B] hover:bg-[#E6F6F0] hover:text-[#0A6847]"
-                              aria-label={`Actions for ${camp.name}`}
-                            >
-                              <MoreVertical className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    }))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            {/* Section B: Marketing Gallery — search + category chips + poster
+                grid over REAL campaign data (GET /api/campaigns in production,
+                demo fixtures behind the demoMode guard). */}
+            <BosMarketingGallery
+              items={marketingGalleryItems}
+              loading={!demoMode && apiCampaignsLoading}
+              error={!demoMode ? apiCampaignsError : null}
+              onCreate={() => setCreateCampaignModalOpen(true)}
+              onRetry={() => void fetchApiCampaigns()}
+              onView={(item) => {
+                setSelectedCampaignId(item.id);
+                setToast(`Previewing "${item.name}" on ${previewChannel}`);
+                setTimeout(() => setToast(null), 2500);
+              }}
+              currencySymbol={currencySymbol}
+              storeName={storeSettings.businessName || 'My Store'}
+            />
 
             {/* Section C: Bottom 4 Feature Cards */}
             <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
@@ -2403,7 +2416,12 @@ export function BosMarketingAiIntegrationsSettings({
                       },
                       ...prev,
                     ]);
-                    setSelectedCampaignId(nextId);
+                    setSelectedCampaignId(String(nextId));
+                    // Production: the draft was persisted server-side — refresh
+                    // the real campaign list so the gallery shows it immediately.
+                    if (launchSuccess && !demoMode) {
+                      void fetchApiCampaigns();
+                    }
                     setCreateCampaignModalOpen(false);
                     setTimeout(() => setToast(null), 3000);
                   }}
@@ -3133,6 +3151,13 @@ export function BosMarketingAiIntegrationsSettings({
   if (mode === 'integrations') {
     const integrationsList = [
       {
+        id: 'google',
+        name: 'Google Business Profile',
+        category: 'WhatsApp & Marketing',
+        desc: 'Make your business visible on Google Search & Maps — hours, phone, location and reviews, free.',
+        meta: 'Free · Official Google sign-in',
+      },
+      {
         id: 'razorpay',
         name: 'Razorpay & Dynamic UPI QR',
         category: 'Payments & UPI',
@@ -3275,6 +3300,12 @@ export function BosMarketingAiIntegrationsSettings({
                             onOpenPrinterModal();
                             return;
                           }
+                          // Google & WhatsApp have REAL connect flows (OAuth /
+                          // Cloud API credentials) rendered in the side panel
+                          // — never fake-toggle a "connected" flag here.
+                          if (item.id === 'google' || item.id === 'whatsapp') {
+                            return;
+                          }
                           if (isConnected) {
                             setConnectedIds((prev) => ({
                               ...prev,
@@ -3303,12 +3334,16 @@ export function BosMarketingAiIntegrationsSettings({
                           }
                         }}
                         className={`rounded-lg px-3 py-1 font-bold cursor-pointer ${
-                          isConnected
+                          isConnected && item.id !== 'google' && item.id !== 'whatsapp'
                             ? 'border border-[#DCE9E3] bg-white text-[#334155]'
                             : 'bg-[#0A6847] text-white'
                         }`}
                       >
-                        {isConnected ? 'Disconnect' : '+ Connect'}
+                        {item.id === 'google' || item.id === 'whatsapp'
+                          ? 'Set up →'
+                          : isConnected
+                            ? 'Disconnect'
+                            : '+ Connect'}
                       </button>
                     </div>
                   </div>
@@ -3327,18 +3362,34 @@ export function BosMarketingAiIntegrationsSettings({
               <p className="text-[12px] text-[#64748B]">{selectedIntegration.desc}</p>
             </div>
 
+            {/* Google Business Profile — benefit-driven connect pattern wired
+                to the REAL /api/oauth/googlebusiness/connect OAuth flow and
+                real connected state from /api/social/accounts. */}
+            {selectedIntegration.id === 'google' ? (
+              <BosGoogleProfileCard
+                demoMode={demoMode}
+                businessName={storeSettings.businessName}
+              />
+            ) : selectedIntegration.id === 'whatsapp' ? (
+              /* WhatsApp — numbered-steps connect pattern matched to the REAL
+                 Meta Cloud API credential flow (no fake QR screen). */
+              <BosWhatsappConnectCard
+                demoMode={demoMode}
+                businessName={storeSettings.businessName}
+                onToast={showToast}
+              />
+            ) : (
+              <>
             <div className="space-y-3 text-[12.5px]">
               <div>
                 <label className="mb-1 block font-semibold text-[#334155]">
-                  {selectedIntegration.id === 'whatsapp'
-                    ? 'Meta Phone Number ID'
-                    : selectedIntegration.id === 'instagram'
-                      ? 'Instagram Page ID / Account ID'
-                      : selectedIntegration.id === 'tally'
-                        ? 'Tally Server Host / IP'
-                        : selectedIntegration.id === 'printer'
-                          ? 'Connection Mode'
-                          : 'Merchant / Key ID'}
+                  {selectedIntegration.id === 'instagram'
+                    ? 'Instagram Page ID / Account ID'
+                    : selectedIntegration.id === 'tally'
+                      ? 'Tally Server Host / IP'
+                      : selectedIntegration.id === 'printer'
+                        ? 'Connection Mode'
+                        : 'Merchant / Key ID'}
                 </label>
                 <input
                   type="text"
@@ -3479,6 +3530,8 @@ export function BosMarketingAiIntegrationsSettings({
             >
               Save Integration Settings
             </button>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -48,6 +48,12 @@ export interface DataTableProps<T> {
   onRetry?: () => void;
   /** Empty state message (shown when data is empty and not loading/error) */
   emptyMessage?: string;
+  /** Optional secondary line under the empty message (e.g. per-filter context like
+   *  "No overdue invoices — all caught up."). Rendered in muted text. */
+  emptyHint?: string;
+  /** Optional primary CTA pill shown under the empty message (e.g. "Create Invoice").
+   *  Rendered only when the table is actually empty — fully backward compatible. */
+  emptyAction?: { label: string; onClick: () => void; icon?: React.ReactNode };
   /** Empty state icon (defaults to Inbox) */
   emptyIcon?: React.ComponentType<{ className?: string }>;
   /** Optional: row click handler */
@@ -113,6 +119,8 @@ export function DataTable<T>({
   error = null,
   onRetry,
   emptyMessage = 'No data found',
+  emptyHint,
+  emptyAction,
   emptyIcon: EmptyIcon = Inbox,
   onRowClick,
   className,
@@ -240,6 +248,20 @@ export function DataTable<T>({
           <EmptyIcon className="size-7 text-muted-foreground/50" />
         </div>
         <p className="text-base font-medium text-foreground">{emptyMessage}</p>
+        {emptyHint && (
+          <p className="mt-1.5 text-sm text-muted-foreground max-w-sm">{emptyHint}</p>
+        )}
+        {emptyAction && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={emptyAction.onClick}
+            className="mt-5 rounded-full h-9 px-5"
+          >
+            {emptyAction.icon}
+            {emptyAction.label}
+          </Button>
+        )}
       </div>
     );
   }

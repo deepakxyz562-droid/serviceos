@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
@@ -50,6 +50,8 @@ import {
   type BosStoreSettings,
   formatBosCurrency,
 } from '@/components/bos/bos-types';
+import { BosEmptyState } from '@/components/bos/bos-empty-state';
+import { authFetch } from '@/lib/client-auth';
 
 type DaybookTabId =
   | 'all'
@@ -114,13 +116,33 @@ export interface PurchaseBillRecord {
 
 export interface ChequeRecord {
   id: string;
+  direction: 'INCOMING' | 'OUTGOING'; // INCOMING = received from customer, OUTGOING = issued to vendor
   partyName: string;
   bankName: string;
   chequeNumber: string;
   amount: number;
   dueDate: string;
-  status: 'PENDING' | 'DEPOSITED' | 'CLEARED' | 'BOUNCED';
-  type: 'RECEIVED' | 'ISSUED';
+  status: 'PENDING' | 'CLEARED' | 'BOUNCED' | 'CANCELLED';
+}
+
+/** Cash & bank account from GET /api/commerce/banks (number pre-masked server-side). */
+export interface BankAccountRecord {
+  id: string;
+  name: string;
+  type: 'BANK' | 'CASH' | 'UPI' | 'WALLET';
+  accountNumberMasked: string | null;
+  ifsc: string | null;
+  upiId: string | null;
+  currentBalance: number;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+export interface BanksSummary {
+  cashInHand: number;
+  bankTotal: number;
+  totalBalance: number;
+  accountCount: number;
 }
 
 const REPORT_SECTIONS: Array<{
@@ -598,40 +620,349 @@ export function BosReportsDaybookWorkstation({
     );
   }, [denominations]);
 
-  // Multi-Bank & Cheques Register State (Phase 5)
-  const [chequeFilter, setChequeFilter] = useState<'ALL' | 'PENDING' | 'DEPOSITED' | 'CLEARED' | 'BOUNCED'>('ALL');
+  // Multi-Bank & Cheques Register State (Phase 5 → now REAL persistence).
+  // Demo fixtures live ONLY behind the demoMode guard; production always
+  // fetches from /api/commerce/cheques and /api/commerce/banks.
+  const [chequeFilter, setChequeFilter] = useState<'ALL' | 'PENDING' | 'CLEARED' | 'BOUNCED' | 'CANCELLED'>('ALL');
   const [cheques, setCheques] = useState<ChequeRecord[]>(() => (demoMode ? [
     {
       id: 'chq-1',
+      direction: 'INCOMING',
       partyName: 'Sharma Traders',
       bankName: 'HDFC Bank',
       chequeNumber: '448102',
       amount: 15000,
       dueDate: '28 Oct 2026',
       status: 'PENDING',
-      type: 'RECEIVED',
     },
     {
       id: 'chq-2',
+      direction: 'INCOMING',
       partyName: 'Priya Verma',
       bankName: 'ICICI Bank',
       chequeNumber: '610293',
       amount: 4500,
       dueDate: '25 Oct 2026',
-      status: 'DEPOSITED',
-      type: 'RECEIVED',
+      status: 'CLEARED',
     },
     {
       id: 'chq-3',
+      direction: 'OUTGOING',
       partyName: 'Metro Distributors',
       bankName: 'State Bank of India',
       chequeNumber: '003912',
       amount: 22000,
       dueDate: '20 Oct 2026',
       status: 'CLEARED',
-      type: 'ISSUED',
     },
   ] : []));
+
+  const [chequesLoading, setChequesLoading] = useState(false);
+  const [chequesError, setChequesError] = useState<string | null>(null);
+  const [cashBankRefreshNonce, setCashBankRefreshNonce] = useState(0);
+  const [showAddChequeModal, setShowAddChequeModal] = useState(false);
+  const [chequeSubmitting, setChequeSubmitting] = useState(false);
+  const [chequeForm, setChequeForm] = useState({
+    direction: 'INCOMING' as 'INCOMING' | 'OUTGOING',
+    partyName: '',
+    chequeNumber: '',
+    bankName: '',
+    amount: '',
+    issueDate: new Date().toISOString().slice(0, 10),
+    dueDate: '',
+  });
+
+  // Bank accounts (Cash & Bank register) — real persisted accounts.
+  const [bankAccounts, setBankAccounts] = useState<BankAccountRecord[]>([]);
+  const [banksSummary, setBanksSummary] = useState<BanksSummary | null>(null);
+  const [banksLoading, setBanksLoading] = useState(false);
+  const [banksError, setBanksError] = useState<string | null>(null);
+  const [banksExpanded, setBanksExpanded] = useState(false);
+  const [showAddBankModal, setShowAddBankModal] = useState(false);
+  const [bankSubmitting, setBankSubmitting] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    name: '',
+    type: 'BANK' as 'BANK' | 'CASH' | 'UPI' | 'WALLET',
+    accountNumber: '',
+    ifsc: '',
+    upiId: '',
+    openingBalance: '',
+  });
+
+  const fetchCheques = useCallback(async () => {
+    if (demoMode) return;
+    setChequesLoading(true);
+    setChequesError(null);
+    try {
+      const res = await authFetch('/api/commerce/cheques', { credentials: 'include' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Failed to load cheques (HTTP ${res.status})`);
+      }
+      const rows = Array.isArray(data?.cheques) ? data.cheques : [];
+      setCheques(rows.map((row: Record<string, unknown>) => ({
+        id: String(row.id || ''),
+        direction: row.direction === 'OUTGOING' ? 'OUTGOING' : 'INCOMING',
+        partyName: String(row.partyName || '—'),
+        bankName: String(row.bankName || ''),
+        chequeNumber: String(row.chequeNumber || ''),
+        amount: Number(row.amount) || 0,
+        dueDate: row.dueDate
+          ? new Date(String(row.dueDate)).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '—',
+        status: (['PENDING', 'CLEARED', 'BOUNCED', 'CANCELLED'].includes(String(row.status))
+          ? String(row.status)
+          : 'PENDING') as ChequeRecord['status'],
+      })));
+    } catch (err: any) {
+      setChequesError(err?.message || 'Failed to load cheques.');
+    } finally {
+      setChequesLoading(false);
+    }
+  }, [demoMode]);
+
+  const fetchBanks = useCallback(async () => {
+    if (demoMode) return;
+    setBanksLoading(true);
+    setBanksError(null);
+    try {
+      const res = await authFetch('/api/commerce/banks', { credentials: 'include' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Failed to load accounts (HTTP ${res.status})`);
+      }
+      const rows = Array.isArray(data?.accounts) ? data.accounts : [];
+      setBankAccounts(rows.map((row: Record<string, unknown>) => ({
+        id: String(row.id || ''),
+        name: String(row.name || 'Account'),
+        type: (['BANK', 'CASH', 'UPI', 'WALLET'].includes(String(row.type))
+          ? String(row.type)
+          : 'BANK') as BankAccountRecord['type'],
+        accountNumberMasked: row.accountNumberMasked ? String(row.accountNumberMasked) : null,
+        ifsc: row.ifsc ? String(row.ifsc) : null,
+        upiId: row.upiId ? String(row.upiId) : null,
+        currentBalance: Number(row.currentBalance) || 0,
+        isDefault: Boolean(row.isDefault),
+        isActive: row.isActive !== false,
+      })));
+      if (data?.summary && typeof data.summary === 'object') {
+        setBanksSummary({
+          cashInHand: Number(data.summary.cashInHand) || 0,
+          bankTotal: Number(data.summary.bankTotal) || 0,
+          totalBalance: Number(data.summary.totalBalance) || 0,
+          accountCount: Number(data.summary.accountCount) || 0,
+        });
+      }
+    } catch (err: any) {
+      setBanksError(err?.message || 'Failed to load accounts.');
+    } finally {
+      setBanksLoading(false);
+    }
+  }, [demoMode]);
+
+  useEffect(() => {
+    void fetchCheques();
+  }, [fetchCheques, cashBankRefreshNonce]);
+
+  useEffect(() => {
+    void fetchBanks();
+  }, [fetchBanks, cashBankRefreshNonce]);
+
+  const handleUpdateChequeStatus = async (id: string, newStatus: ChequeRecord['status']) => {
+    // Demo fixtures stay local-only behind the demoMode guard.
+    if (demoMode) {
+      setCheques((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
+      );
+      showToast(`Cheque ${id} marked as ${newStatus}`);
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/commerce/cheques/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Failed to update cheque (HTTP ${res.status})`);
+      }
+      showToast(
+        data?.accountAdjusted
+          ? `Cheque ${newStatus.toLowerCase()} — ${data.accountAdjusted.name} adjusted by ${currencySymbol} ${Math.abs(Number(data.accountAdjusted.delta) || 0).toLocaleString('en-IN')}`
+          : `Cheque marked as ${newStatus}`,
+      );
+      setCashBankRefreshNonce((n) => n + 1); // refetch cheques + account balances
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update cheque.');
+    }
+  };
+
+  const handleCreateChequeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = Number(chequeForm.amount);
+    if (!chequeForm.partyName.trim() || !chequeForm.chequeNumber.trim() || !Number.isFinite(amount) || amount <= 0) {
+      showToast('Enter party name, cheque number and a valid amount.');
+      return;
+    }
+
+    // Demo fixtures stay local-only behind the demoMode guard.
+    if (demoMode) {
+      const demoCheque: ChequeRecord = {
+        id: `chq-demo-${Date.now()}`,
+        direction: chequeForm.direction,
+        partyName: chequeForm.partyName.trim(),
+        bankName: chequeForm.bankName.trim(),
+        chequeNumber: chequeForm.chequeNumber.trim(),
+        amount,
+        dueDate: chequeForm.dueDate
+          ? new Date(chequeForm.dueDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '—',
+        status: 'PENDING',
+      };
+      setCheques((prev) => [demoCheque, ...prev]);
+      setShowAddChequeModal(false);
+      setChequeForm((s) => ({ ...s, partyName: '', chequeNumber: '', bankName: '', amount: '', dueDate: '' }));
+      showToast(`Cheque ${demoCheque.chequeNumber} recorded — status PENDING`);
+      return;
+    }
+
+    setChequeSubmitting(true);
+    try {
+      const res = await authFetch('/api/commerce/cheques', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          direction: chequeForm.direction,
+          partyName: chequeForm.partyName.trim(),
+          chequeNumber: chequeForm.chequeNumber.trim(),
+          bankName: chequeForm.bankName.trim() || undefined,
+          amount,
+          issueDate: chequeForm.issueDate || undefined,
+          dueDate: chequeForm.dueDate || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Failed to save cheque (HTTP ${res.status})`);
+      }
+      setShowAddChequeModal(false);
+      setChequeForm((s) => ({ ...s, partyName: '', chequeNumber: '', bankName: '', amount: '', dueDate: '' }));
+      showToast(`Cheque ${data?.cheque?.chequeNumber || ''} recorded — status PENDING`);
+      setCashBankRefreshNonce((n) => n + 1);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save cheque.');
+    } finally {
+      setChequeSubmitting(false);
+    }
+  };
+
+  const handleCreateBankSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bankForm.name.trim()) {
+      showToast('Enter an account name.');
+      return;
+    }
+
+    // Demo fixtures stay local-only behind the demoMode guard.
+    if (demoMode) {
+      const opening = Number(bankForm.openingBalance) || 0;
+      setBankAccounts((prev) => [
+        {
+          id: `bank-demo-${Date.now()}`,
+          name: bankForm.name.trim(),
+          type: bankForm.type,
+          accountNumberMasked: bankForm.accountNumber.trim()
+            ? `••••${bankForm.accountNumber.trim().replace(/\s+/g, '').slice(-4)}`
+            : null,
+          ifsc: bankForm.ifsc.trim() || null,
+          upiId: bankForm.upiId.trim() || null,
+          currentBalance: opening,
+          isDefault: prev.length === 0,
+          isActive: true,
+        },
+        ...prev,
+      ]);
+      setBanksSummary((prev) => ({
+        cashInHand: (prev?.cashInHand || 0) + (bankForm.type === 'CASH' ? opening : 0),
+        bankTotal: (prev?.bankTotal || 0) + (bankForm.type === 'BANK' ? opening : 0),
+        totalBalance: (prev?.totalBalance || 0) + opening,
+        accountCount: (prev?.accountCount || 0) + 1,
+      }));
+      setShowAddBankModal(false);
+      setBankForm({ name: '', type: 'BANK', accountNumber: '', ifsc: '', upiId: '', openingBalance: '' });
+      showToast(`Account "${bankForm.name.trim()}" saved`);
+      return;
+    }
+
+    setBankSubmitting(true);
+    try {
+      const res = await authFetch('/api/commerce/banks', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: bankForm.name.trim(),
+          type: bankForm.type,
+          accountNumber: bankForm.accountNumber.trim() || undefined,
+          ifsc: bankForm.ifsc.trim() || undefined,
+          upiId: bankForm.upiId.trim() || undefined,
+          openingBalance: Number(bankForm.openingBalance) || 0,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Failed to save account (HTTP ${res.status})`);
+      }
+      setShowAddBankModal(false);
+      setBankForm({ name: '', type: 'BANK', accountNumber: '', ifsc: '', upiId: '', openingBalance: '' });
+      showToast(`Account "${bankForm.name.trim()}" saved`);
+      setCashBankRefreshNonce((n) => n + 1);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to save account.');
+    } finally {
+      setBankSubmitting(false);
+    }
+  };
+
+  /** Download a server-generated CSV (P&L / GST summary / receivables). */
+  const handleDownloadReportCsv = useCallback(
+    async (report: 'pnl' | 'gst' | 'receivables') => {
+      if (demoMode) {
+        showToast('Connect a live business account to export this report as CSV.');
+        return;
+      }
+      try {
+        const res = await authFetch(
+          `/api/commerce/reports?period=${encodeURIComponent(reportPeriod)}&format=csv&report=${report}`,
+          { credentials: 'include' },
+        );
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(errText || `Failed to export CSV (HTTP ${res.status})`);
+        }
+        const blob = await res.blob();
+        const now = new Date();
+        const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const prefix = report === 'pnl' ? 'pl' : report === 'gst' ? 'gst-summary' : 'receivables';
+        const filename = `${prefix}-${ym}.csv`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Downloaded ${filename}`);
+      } catch (err: any) {
+        showToast(err?.message || 'Failed to download CSV.');
+      }
+    },
+    [demoMode, reportPeriod],
+  );
 
   const periodFilteredOrders = useMemo(() => {
     const { start, end } = getDateRangeForPeriod(reportPeriod);
@@ -699,7 +1030,8 @@ export function BosReportsDaybookWorkstation({
       if (reportPeriod === 'today') {
         return {
           totalRevenue: 16420,
-          grossProfit: 5120,
+          grossProfit: 7220,
+          netProfit: 5120,
           totalOrders: 42,
           totalExpenses: 2100,
           gstCollected: 1240,
@@ -724,7 +1056,8 @@ export function BosReportsDaybookWorkstation({
       if (reportPeriod === 'yesterday') {
         return {
           totalRevenue: 15280,
-          grossProfit: 4680,
+          grossProfit: 6530,
+          netProfit: 4680,
           totalOrders: 39,
           totalExpenses: 1850,
           gstCollected: 1150,
@@ -749,7 +1082,8 @@ export function BosReportsDaybookWorkstation({
       if (reportPeriod === 'this_week') {
         return {
           totalRevenue: 112450,
-          grossProfit: 33400,
+          grossProfit: 48200,
+          netProfit: 33400,
           totalOrders: 298,
           totalExpenses: 14800,
           gstCollected: 8920,
@@ -774,7 +1108,8 @@ export function BosReportsDaybookWorkstation({
       if (reportPeriod === 'this_fy') {
         return {
           totalRevenue: 5791800,
-          grossProfit: 1713600,
+          grossProfit: 2484000,
+          netProfit: 1713600,
           totalOrders: 15408,
           totalExpenses: 770400,
           gstCollected: 461040,
@@ -800,7 +1135,8 @@ export function BosReportsDaybookWorkstation({
       // Default: this_month
       return {
         totalRevenue: 482650,
-        grossProfit: 142800,
+        grossProfit: 207000,
+        netProfit: 142800,
         totalOrders: 1284,
         totalExpenses: 64200,
         gstCollected: 38420,
@@ -835,8 +1171,12 @@ export function BosReportsDaybookWorkstation({
       (sum, o) => sum + computeOrderCogs(o, products),
       0,
     );
-    const grossProfit = Math.max(0, totalRevenue - totalExpenses - cogs);
-    const marginLabel = totalRevenue > 0 ? `${((grossProfit / totalRevenue) * 100).toFixed(1)}% Margin` : '0% Margin';
+    // Honest profit labels: gross profit = revenue − COGS (trading account),
+    // net profit = gross profit − operating expenses. Never clamped to 0 —
+    // losses must show as losses.
+    const grossProfit = totalRevenue - cogs;
+    const netProfit = grossProfit - totalExpenses;
+    const marginLabel = totalRevenue > 0 ? `${((netProfit / totalRevenue) * 100).toFixed(1)}% Net Margin` : '0% Net Margin';
     // Real GST collected: prefer o.taxAmount; else derive from line-item gstRate;
     // else order-level gstRate / taxRate; else 0 (no 5% fabrication).
     const gstCollected = periodFilteredOrders.reduce(
@@ -921,6 +1261,7 @@ export function BosReportsDaybookWorkstation({
     return {
       totalRevenue,
       grossProfit,
+      netProfit,
       totalOrders,
       totalExpenses,
       gstCollected,
@@ -1158,13 +1499,6 @@ export function BosReportsDaybookWorkstation({
     } catch (err: unknown) {
       showToast(`Saved adjustment locally: ${reason}`);
     }
-  };
-
-  const handleUpdateChequeStatus = (id: string, newStatus: ChequeRecord['status']) => {
-    setCheques((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status: newStatus } : c))
-    );
-    showToast(`Cheque ${id} marked as ${newStatus}`);
   };
 
   const filteredCheques = useMemo(() => {
@@ -1556,7 +1890,7 @@ export function BosReportsDaybookWorkstation({
     const storeName = storeSettings?.businessName || 'Business Store';
     const header = ['Category / Metric', 'Value', 'Notes'];
 
-    const netProfit = reportsData.grossProfit - reportsData.totalExpenses;
+    const netProfit = reportsData.netProfit;
 
     const rows = [
       ['Store Name', `"${storeName.replace(/"/g, '""')}"`, 'Active Merchant'],
@@ -1621,7 +1955,7 @@ export function BosReportsDaybookWorkstation({
       year: 'numeric',
     });
     const storeName = storeSettings?.businessName || 'Business Store';
-    const netProfit = reportsData.grossProfit - reportsData.totalExpenses;
+    const netProfit = reportsData.netProfit;
 
     const html = `
 <!DOCTYPE html>
@@ -2050,7 +2384,7 @@ export function BosReportsDaybookWorkstation({
                 <p className="mt-1 text-[21px] font-extrabold text-[#0A6847]">
                   {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
                 </p>
-                <p className="text-[11px] text-[#0A6847]">{reportsData.marginLabel} Net Margin</p>
+                <p className="text-[11px] text-[#0A6847]">{reportsData.marginLabel}</p>
               </div>
 
               <div className="bos-card p-3.5">
@@ -2205,7 +2539,7 @@ export function BosReportsDaybookWorkstation({
                 <div className="flex items-center justify-between">
                   <h3 className="text-[14.5px] font-bold text-[#111827]">Profit &amp; Loss Summary</h3>
                   <span className="rounded-full bg-[#E6F6F0] px-2.5 py-0.5 text-[11px] font-bold text-[#0A6847]">
-                    {reportsData.grossProfit >= 0 ? 'Healthy' : 'Deficit'}
+                    {reportsData.netProfit >= 0 ? 'Healthy' : 'Deficit'}
                   </span>
                 </div>
                 <div className="space-y-2">
@@ -2227,10 +2561,10 @@ export function BosReportsDaybookWorkstation({
                       -{formatBosCurrency(reportsData.totalExpenses, currencySymbol)}
                     </strong>
                   </div>
-                  <div className="flex justify-between rounded-xl bg-[#E6F6F0] p-3 text-[#0A6847]">
-                    <span className="font-bold">Net Profit (Take Home)</span>
+                  <div className={`flex justify-between rounded-xl p-3 ${reportsData.netProfit >= 0 ? 'bg-[#E6F6F0] text-[#0A6847]' : 'bg-[#FEF2F2] text-[#DC2626]'}`}>
+                    <span className="font-bold">{reportsData.netProfit >= 0 ? 'Net Profit (Take Home)' : 'Net Loss'}</span>
                     <span className="text-[16px] font-extrabold">
-                      {formatBosCurrency(reportsData.grossProfit, currencySymbol)}
+                      {formatBosCurrency(reportsData.netProfit, currencySymbol)}
                     </span>
                   </div>
                 </div>
@@ -2327,18 +2661,14 @@ export function BosReportsDaybookWorkstation({
                 </div>
 
                 {purchaseBills.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-[#DCE9E3] bg-white p-12 text-center space-y-4">
-                    <ShoppingCart className="mx-auto h-12 w-12 text-[#94A3B8]" />
-                    <h3 className="text-[16px] font-bold text-[#111827]">No Purchase Bills Found</h3>
-                    <p className="text-xs text-[#64748B]">Record inventory goods and materials purchased from distributors.</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddPurchaseModal(true)}
-                      className="bos-btn-primary inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-bold cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>+ Add Purchase Bill</span>
-                    </button>
+                  <div className="rounded-2xl border border-dashed border-[#DCE9E3] bg-white">
+                    <BosEmptyState
+                      icon={ShoppingCart}
+                      title="No Purchase Bills Found"
+                      description="Record inventory goods and materials purchased from distributors to track payables and stock cost."
+                      ctaLabel="Add Purchase Bill"
+                      onCta={() => setShowAddPurchaseModal(true)}
+                    />
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-[#DCE9E3] bg-white overflow-hidden shadow-2xs">
@@ -2648,9 +2978,19 @@ export function BosReportsDaybookWorkstation({
                   Standard commercial financial statement for {reportPeriod.replace('_', ' ')}
                 </p>
               </div>
-              <span className="rounded-full bg-[#E6F6F0] px-3 py-1 text-[12px] font-bold text-[#0A6847]">
-                Financial Health: {reportsData.grossProfit >= 0 ? 'Profitable' : 'Deficit'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-[#E6F6F0] px-3 py-1 text-[12px] font-bold text-[#0A6847]">
+                  Financial Health: {reportsData.netProfit >= 0 ? 'Profitable' : 'Deficit'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadReportCsv('pnl')}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3 py-1.5 text-[11.5px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <span>Download CSV</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2705,22 +3045,19 @@ export function BosReportsDaybookWorkstation({
               </div>
             </div>
 
-            {/* Bottom Net Profit Summary Box */}
-            <div className="rounded-2xl border-2 border-[#A7F3D0] bg-[#ECFDF5] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Bottom Net Profit Summary Box — honest: losses are shown as losses */}
+            <div className={`rounded-2xl border-2 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${reportsData.netProfit >= 0 ? 'border-[#A7F3D0] bg-[#ECFDF5]' : 'border-[#FECACA] bg-[#FEF2F2]'}`}>
               <div>
-                <p className="text-xs font-bold text-[#065F46] uppercase tracking-wider">
-                  Net Commercial Profit (Take Home)
+                <p className={`text-xs font-bold uppercase tracking-wider ${reportsData.netProfit >= 0 ? 'text-[#065F46]' : 'text-[#991B1B]'}`}>
+                  {reportsData.netProfit >= 0 ? 'Net Commercial Profit (Take Home)' : 'Net Commercial Loss'}
                 </p>
-                <p className="text-[26px] font-black text-[#047857] mt-0.5">
-                  {formatBosCurrency(
-                    Math.max(0, reportsData.grossProfit - reportsData.totalExpenses),
-                    currencySymbol
-                  )}
+                <p className={`text-[26px] font-black mt-0.5 ${reportsData.netProfit >= 0 ? 'text-[#047857]' : 'text-[#B91C1C]'}`}>
+                  {formatBosCurrency(reportsData.netProfit, currencySymbol)}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-[#065F46]">Net Operating Margin</p>
-                <p className="text-[18px] font-extrabold text-[#064E3B]">{reportsData.marginLabel}</p>
+                <p className={`text-xs ${reportsData.netProfit >= 0 ? 'text-[#065F46]' : 'text-[#991B1B]'}`}>Net Operating Margin</p>
+                <p className={`text-[18px] font-extrabold ${reportsData.netProfit >= 0 ? 'text-[#064E3B]' : 'text-[#B91C1C]'}`}>{reportsData.marginLabel}</p>
               </div>
             </div>
           </div>
@@ -2773,6 +3110,14 @@ export function BosReportsDaybookWorkstation({
                   className="bos-btn-primary rounded-xl px-3.5 py-1.5 text-xs font-semibold cursor-pointer"
                 >
                   Download GSTR-1 JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadReportCsv('gst')}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <span>Download CSV</span>
                 </button>
               </div>
 
@@ -2993,9 +3338,19 @@ export function BosReportsDaybookWorkstation({
 
             {/* Party Udhaar Table */}
             <div className="bos-card p-5 space-y-4">
-              <h3 className="text-[15px] font-bold text-[#111827]">
-                Customer Outstanding Balances (Khata Register)
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h3 className="text-[15px] font-bold text-[#111827]">
+                  Customer Outstanding Balances (Khata Register)
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadReportCsv('receivables')}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-1.5 text-xs font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <span>Download CSV</span>
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
@@ -3232,7 +3587,7 @@ export function BosReportsDaybookWorkstation({
                   </div>
                   <div className="flex justify-between py-1.5 border-b border-[#F8FAF9]">
                     <span className="text-[#334155]">Retained Earnings &amp; Net Period Profit</span>
-                    <strong className="text-emerald-700">{formatBosCurrency(Math.max(0, reportsData.grossProfit - reportsData.totalExpenses), currencySymbol)}</strong>
+                    <strong className="text-emerald-700">{formatBosCurrency(reportsData.netProfit, currencySymbol)}</strong>
                   </div>
 
                   <div className="mt-4 flex justify-between rounded-xl bg-[#FAFDFB] border border-[#DCE9E3] p-3 text-[14px] font-extrabold text-[#111827]">
@@ -3242,7 +3597,7 @@ export function BosReportsDaybookWorkstation({
                         (purchaseBillsKpis.balanceDue + khataData.totalPayables) +
                         Math.max(0, reportsData.gstCollected - reportsData.itcClaimable) +
                         (initialOpeningBalance || (demoMode ? 50000 : 10000)) +
-                        Math.max(0, reportsData.grossProfit - reportsData.totalExpenses),
+                        reportsData.netProfit,
                         currencySymbol
                       )}
                     </span>
@@ -3828,7 +4183,7 @@ export function BosReportsDaybookWorkstation({
           </div>
         </div>
 
-        {/* CHEQUES & BANK REGISTER (Phase 5 - Vyapar Parity) */}
+        {/* CHEQUES & BANK REGISTER — real persisted cheques + cash/bank accounts */}
         <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#EBF2EE] pb-3">
             <div>
@@ -3840,24 +4195,162 @@ export function BosReportsDaybookWorkstation({
               </p>
             </div>
 
-            {/* Status Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold">
-              {(['ALL', 'PENDING', 'DEPOSITED', 'CLEARED', 'BOUNCED'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setChequeFilter(st)}
-                  className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
-                    chequeFilter === st
-                      ? 'bg-[#0A6847] text-white'
-                      : 'bg-[#F4F8F6] text-[#475569] hover:bg-[#EBF2EE]'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Status Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto text-[11px] font-bold">
+                {(['ALL', 'PENDING', 'CLEARED', 'BOUNCED', 'CANCELLED'] as const).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setChequeFilter(st)}
+                    className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
+                      chequeFilter === st
+                        ? 'bg-[#0A6847] text-white'
+                        : 'bg-[#F4F8F6] text-[#475569] hover:bg-[#EBF2EE]'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAddChequeModal(true)}
+                className="inline-flex h-8 items-center gap-1 rounded-xl bg-[#0A6847] px-3 text-[11.5px] font-bold text-white shadow-2xs hover:bg-[#085238] cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Record Cheque</span>
+              </button>
             </div>
           </div>
+
+          {/* Cash in Hand + Bank totals — real account balances from /api/commerce/banks */}
+          {(!demoMode || bankAccounts.length > 0) && (
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              <div className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] px-3 py-2.5">
+                <p className="text-[11px] font-medium text-[#64748B]">Cash in Hand</p>
+                {banksSummary ? (
+                  <p className="mt-0.5 text-[18px] font-extrabold text-[#0A7B56]">
+                    {formatBosCurrency(banksSummary.cashInHand, currencySymbol)}
+                  </p>
+                ) : (
+                  <div className="mt-1.5 h-5 w-24 animate-pulse rounded bg-[#E2E8F0]" />
+                )}
+              </div>
+              <div className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] px-3 py-2.5">
+                <p className="text-[11px] font-medium text-[#64748B]">Bank Total</p>
+                {banksSummary ? (
+                  <p className="mt-0.5 text-[18px] font-extrabold text-[#111827]">
+                    {formatBosCurrency(banksSummary.bankTotal, currencySymbol)}
+                  </p>
+                ) : (
+                  <div className="mt-1.5 h-5 w-24 animate-pulse rounded bg-[#E2E8F0]" />
+                )}
+              </div>
+              <div className="col-span-2 rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] px-3 py-2.5 sm:col-span-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-medium text-[#64748B]">
+                    Accounts {banksSummary ? `(${banksSummary.accountCount})` : ''}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setBanksExpanded((v) => !v)}
+                    className="text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    {banksExpanded ? 'Hide' : 'View'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddBankModal(true)}
+                    className="text-[11px] font-bold text-[#0A6847] hover:underline cursor-pointer"
+                  >
+                    + Add
+                  </button>
+                </div>
+                {banksSummary ? (
+                  <p className="mt-0.5 text-[18px] font-extrabold text-[#111827]">
+                    {formatBosCurrency(banksSummary.totalBalance, currencySymbol)}
+                  </p>
+                ) : (
+                  <div className="mt-1.5 h-5 w-24 animate-pulse rounded bg-[#E2E8F0]" />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Bank accounts strip (expandable) */}
+          {(demoMode ? bankAccounts.length > 0 : true) && banksExpanded && (
+            <div className="rounded-xl border border-[#EBF2EE] bg-white">
+              {banksLoading && bankAccounts.length === 0 ? (
+                <div className="space-y-2 p-3">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="h-8 animate-pulse rounded-lg bg-[#F1F5F9]" />
+                  ))}
+                </div>
+              ) : banksError ? (
+                <div className="flex items-center justify-between gap-2 p-3 text-[12px] font-semibold text-[#991B1B]">
+                  <span>{banksError}</span>
+                  <button
+                    type="button"
+                    onClick={() => setCashBankRefreshNonce((n) => n + 1)}
+                    className="text-[11px] font-bold underline cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : bankAccounts.length === 0 ? (
+                <BosEmptyState
+                  icon={Wallet}
+                  compact
+                  title="No bank or cash accounts yet"
+                  description="Add your bank, cash or UPI account so cheque clearing can credit the right balance."
+                  ctaLabel="Add your first account"
+                  onCta={() => setShowAddBankModal(true)}
+                />
+              ) : (
+                <div className="max-h-44 overflow-y-auto divide-y divide-[#F1F6F3]">
+                  {bankAccounts.map((acc) => (
+                    <div key={acc.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1.5 text-[12.5px] font-bold text-[#111827]">
+                          <span className="truncate">{acc.name}</span>
+                          {acc.isDefault && (
+                            <span className="rounded bg-[#E6F6F0] px-1.5 py-0.5 text-[9.5px] font-bold text-[#0A7B56]">
+                              DEFAULT
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10.5px] text-[#64748B]">
+                          {acc.type}
+                          {acc.accountNumberMasked ? ` • ${acc.accountNumberMasked}` : ''}
+                          {acc.upiId ? ` • ${acc.upiId}` : ''}
+                          {acc.ifsc ? ` • ${acc.ifsc}` : ''}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-[13px] font-extrabold text-[#111827]">
+                        {formatBosCurrency(acc.currentBalance, currencySymbol)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Cheques fetch error (honest, never styled as success) */}
+          {!demoMode && chequesError && (
+            <div className="flex items-center justify-between rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[12px] font-semibold text-[#991B1B]">
+              <span>{chequesError}</span>
+              <button
+                type="button"
+                onClick={() => setCashBankRefreshNonce((n) => n + 1)}
+                className="text-xs font-bold underline cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
@@ -3873,10 +4366,27 @@ export function BosReportsDaybookWorkstation({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF5F1] text-[12px]">
-                {filteredCheques.length === 0 ? (
+                {chequesLoading && filteredCheques.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-6 text-center text-[#64748B]">
-                      No cheques found in this filter
+                    <td colSpan={7} className="p-0">
+                      <div className="space-y-2 py-3 px-3">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="h-8 animate-pulse rounded-lg bg-[#F1F5F9]" />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredCheques.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-0">
+                      <BosEmptyState
+                        icon={CreditCard}
+                        compact
+                        title={chequeFilter === 'ALL' ? 'No cheques recorded yet' : `No ${chequeFilter.toLowerCase()} cheques`}
+                        description="Record customer or vendor cheques and mark them cleared, bounced or cancelled — balances update automatically."
+                        ctaLabel="Record your first cheque"
+                        onCta={() => setShowAddChequeModal(true)}
+                      />
                     </td>
                   </tr>
                 ) : (
@@ -3885,12 +4395,12 @@ export function BosReportsDaybookWorkstation({
                       <td className="py-2.5 px-3">
                         <span
                           className={`rounded-md px-2 py-0.5 text-[10.5px] font-bold ${
-                            c.type === 'RECEIVED'
+                            c.direction === 'INCOMING'
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-amber-100 text-amber-800'
                           }`}
                         >
-                          {c.type === 'RECEIVED' ? '↓ Received' : '↑ Issued'}
+                          {c.direction === 'INCOMING' ? '↓ Received' : '↑ Issued'}
                         </span>
                       </td>
                       <td className="py-2.5 px-3 font-bold text-[#111827]">{c.partyName}</td>
@@ -3907,11 +4417,11 @@ export function BosReportsDaybookWorkstation({
                           className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${
                             c.status === 'CLEARED'
                               ? 'bg-emerald-100 text-emerald-800'
-                              : c.status === 'DEPOSITED'
-                              ? 'bg-blue-100 text-blue-800'
                               : c.status === 'BOUNCED'
                               ? 'bg-red-100 text-red-800'
-                              : 'bg-slate-100 text-slate-700'
+                              : c.status === 'CANCELLED'
+                              ? 'bg-slate-100 text-slate-600'
+                              : 'bg-amber-100 text-amber-800'
                           }`}
                         >
                           {c.status}
@@ -3922,28 +4432,37 @@ export function BosReportsDaybookWorkstation({
                           {c.status === 'PENDING' && (
                             <button
                               type="button"
-                              onClick={() => handleUpdateChequeStatus(c.id, 'DEPOSITED')}
-                              className="rounded bg-blue-50 px-2 py-0.5 text-[10.5px] font-bold text-blue-700 hover:bg-blue-100 cursor-pointer"
-                            >
-                              Deposit
-                            </button>
-                          )}
-                          {c.status === 'DEPOSITED' && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateChequeStatus(c.id, 'CLEARED')}
+                              onClick={() => void handleUpdateChequeStatus(c.id, 'CLEARED')}
                               className="rounded bg-emerald-50 px-2 py-0.5 text-[10.5px] font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer"
                             >
                               Clear
                             </button>
                           )}
-                          {c.status !== 'BOUNCED' && c.status !== 'CLEARED' && (
+                          {c.status === 'PENDING' && (
                             <button
                               type="button"
-                              onClick={() => handleUpdateChequeStatus(c.id, 'BOUNCED')}
+                              onClick={() => void handleUpdateChequeStatus(c.id, 'BOUNCED')}
                               className="rounded bg-red-50 px-2 py-0.5 text-[10.5px] font-bold text-red-700 hover:bg-red-100 cursor-pointer"
                             >
                               Bounce
+                            </button>
+                          )}
+                          {(c.status === 'PENDING' || c.status === 'BOUNCED') && (
+                            <button
+                              type="button"
+                              onClick={() => void handleUpdateChequeStatus(c.id, 'CANCELLED')}
+                              className="rounded bg-slate-100 px-2 py-0.5 text-[10.5px] font-bold text-slate-600 hover:bg-slate-200 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          {(c.status === 'CLEARED' || c.status === 'BOUNCED') && (
+                            <button
+                              type="button"
+                              onClick={() => void handleUpdateChequeStatus(c.id, 'PENDING')}
+                              className="rounded bg-blue-50 px-2 py-0.5 text-[10.5px] font-bold text-blue-700 hover:bg-blue-100 cursor-pointer"
+                            >
+                              Reopen
                             </button>
                           )}
                         </div>
@@ -4277,6 +4796,272 @@ export function BosReportsDaybookWorkstation({
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Record Cheque Modal — real POST /api/commerce/cheques */}
+      {showAddChequeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={handleCreateChequeSubmit}
+            className="w-full max-w-md rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <h3 className="text-[16px] font-extrabold text-[#111827]">Record Cheque</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddChequeModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-[12px]">
+              <div>
+                <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Direction</label>
+                <div className="inline-flex rounded-lg border border-[#DCE9E3] bg-[#F8FAFC] p-0.5">
+                  {(['INCOMING', 'OUTGOING'] as const).map((dir) => (
+                    <button
+                      key={dir}
+                      type="button"
+                      onClick={() => setChequeForm((s) => ({ ...s, direction: dir }))}
+                      className={`rounded-md px-3 py-1 text-[11.5px] font-bold transition cursor-pointer ${
+                        chequeForm.direction === dir
+                          ? 'bg-[#0A6847] text-white shadow-2xs'
+                          : 'text-[#475569] hover:text-[#111827]'
+                      }`}
+                    >
+                      {dir === 'INCOMING' ? 'Received (In)' : 'Issued (Out)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Party Name <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={chequeForm.partyName}
+                    onChange={(e) => setChequeForm((s) => ({ ...s, partyName: e.target.value }))}
+                    placeholder="e.g. Sharma Traders"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Cheque Number <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={chequeForm.chequeNumber}
+                    onChange={(e) => setChequeForm((s) => ({ ...s, chequeNumber: e.target.value }))}
+                    placeholder="e.g. 448102"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Amount ({currencySymbol}) <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0.01"
+                    step="0.01"
+                    value={chequeForm.amount}
+                    onChange={(e) => setChequeForm((s) => ({ ...s, amount: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Bank</label>
+                  <input
+                    type="text"
+                    value={chequeForm.bankName}
+                    onChange={(e) => setChequeForm((s) => ({ ...s, bankName: e.target.value }))}
+                    placeholder="e.g. HDFC Bank"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Issue Date</label>
+                  <input
+                    type="date"
+                    value={chequeForm.issueDate}
+                    onChange={(e) => setChequeForm((s) => ({ ...s, issueDate: e.target.value }))}
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={chequeForm.dueDate}
+                    onChange={(e) => setChequeForm((s) => ({ ...s, dueDate: e.target.value }))}
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#64748B]">
+                New cheques start as PENDING. Clearing an INCOMING cheque credits your default account;
+                clearing an OUTGOING cheque debits it.
+              </p>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2 border-t border-[#EBF2EE] pt-3">
+              <button
+                type="button"
+                onClick={() => setShowAddChequeModal(false)}
+                className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F8FAFC] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={chequeSubmitting}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-5 py-2 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs disabled:opacity-50 cursor-pointer"
+              >
+                {chequeSubmitting ? 'Saving...' : 'Save Cheque'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Add Bank / Cash Account Modal — real POST /api/commerce/banks */}
+      {showAddBankModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form
+            onSubmit={handleCreateBankSubmit}
+            className="w-full max-w-md rounded-2xl border border-[#DCE9E3] bg-white p-5 shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] pb-3">
+              <h3 className="text-[16px] font-extrabold text-[#111827]">Add Account</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddBankModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-[12px]">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Account Name <span className="text-[#EF4444]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={bankForm.name}
+                    onChange={(e) => setBankForm((s) => ({ ...s, name: e.target.value }))}
+                    placeholder="e.g. HDFC Current A/c"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Type</label>
+                  <select
+                    value={bankForm.type}
+                    onChange={(e) =>
+                      setBankForm((s) => ({ ...s, type: e.target.value as typeof s.type }))
+                    }
+                    className="w-full rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-2 text-[12.5px] cursor-pointer"
+                  >
+                    <option value="BANK">Bank</option>
+                    <option value="CASH">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="WALLET">Wallet</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">Account Number</label>
+                  <input
+                    type="text"
+                    value={bankForm.accountNumber}
+                    onChange={(e) => setBankForm((s) => ({ ...s, accountNumber: e.target.value }))}
+                    placeholder="Only last 4 digits are shown later"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">IFSC</label>
+                  <input
+                    type="text"
+                    value={bankForm.ifsc}
+                    onChange={(e) => setBankForm((s) => ({ ...s, ifsc: e.target.value.toUpperCase() }))}
+                    placeholder="HDFC0001234"
+                    maxLength={11}
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono uppercase"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">UPI ID</label>
+                  <input
+                    type="text"
+                    value={bankForm.upiId}
+                    onChange={(e) => setBankForm((s) => ({ ...s, upiId: e.target.value }))}
+                    placeholder="yourname@upi"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
+                    Opening Balance ({currencySymbol})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={bankForm.openingBalance}
+                    onChange={(e) => setBankForm((s) => ({ ...s, openingBalance: e.target.value }))}
+                    placeholder="0.00"
+                    className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2 border-t border-[#EBF2EE] pt-3">
+              <button
+                type="button"
+                onClick={() => setShowAddBankModal(false)}
+                className="rounded-xl border border-[#DCE9E3] px-4 py-2 text-[12px] font-semibold text-[#475569] hover:bg-[#F8FAFC] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={bankSubmitting}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-5 py-2 text-[12px] font-bold text-white hover:bg-[#085238] shadow-2xs disabled:opacity-50 cursor-pointer"
+              >
+                {bankSubmitting ? 'Saving...' : 'Save Account'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

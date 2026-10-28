@@ -75,8 +75,10 @@ export interface WhatsAppAnalyticsResponse {
   totalConversations: number;
   activeConversations: number;
   intentDistribution: Record<string, number>;
-  avgResponseTimeMin: number;
-  buttonResponseRate: number;
+  /** Real computed value from the message stream; null when no measurable data. */
+  avgResponseTimeMin: number | null;
+  /** No CTA click tracking exists yet — always null until tracking ships. */
+  buttonResponseRate: number | null;
   conversations: Array<{
     id: string;
     currentStage: string;
@@ -93,7 +95,8 @@ export interface JourneyAnalyticsResponse {
   completionRate: number;
   stageDistribution: Record<string, number>;
   scheduledActionsPending: number;
-  avgJourneyTimeHours: number;
+  /** Real avg lead→terminal span; null when no completed journeys yet. */
+  avgJourneyTimeHours: number | null;
 }
 
 // ============================================================

@@ -140,18 +140,57 @@ export function EMPTY_LINE_ITEM(): LineItem {
   };
 }
 
-export function EMPTY_FORM(): InvoiceFormData {
+/**
+ * Default contract / disclaimer text prefilled on NEW invoices. Persisted as
+ * part of the saved payload (appended to notes with a `\n---\n` separator —
+ * see DISCLAIMER_SEPARATOR) so it round-trips on edit.
+ */
+export const DEFAULT_DISCLAIMER =
+  'Thank you for your business. Please contact us with any questions regarding this invoice.';
+
+/**
+ * Separator used to pack the contract/disclaimer text into the invoice's
+ * `notes` column (the schema has no dedicated disclaimer field). The first
+ * occurrence of this separator splits `notes` from the disclaimer.
+ */
+export const DISCLAIMER_SEPARATOR = '\n---\n';
+
+/**
+ * Split a raw invoice `notes` value back into { notes, disclaimer }.
+ * Invoices saved before the disclaimer became a first-class form field have
+ * no separator — they round-trip with an empty disclaimer and untouched
+ * notes.
+ */
+export function splitNotesDisclaimer(
+  rawNotes?: string | null
+): { notes: string; disclaimer: string } {
+  const raw = (rawNotes || '').trim();
+  if (!raw) return { notes: '', disclaimer: '' };
+  const idx = raw.indexOf(DISCLAIMER_SEPARATOR);
+  if (idx === -1) return { notes: raw, disclaimer: '' };
   return {
-    customer: '',
-    lineItems: [EMPTY_LINE_ITEM()],
-    taxPercent: 18,
-    discount: 0,
-    dueDate: '',
-    notes: '',
+    notes: raw.slice(0, idx).trim(),
+    disclaimer: raw.slice(idx + DISCLAIMER_SEPARATOR.length).trim(),
   };
 }
 
-export function EMPTY_RECURRING_FORM(): RecurringScheduleForm {
+export function EMPTY_FORM(taxPercent: number = 0): InvoiceFormData {
+  return {
+    customer: '',
+    lineItems: [EMPTY_LINE_ITEM()],
+    // P4: tax default comes from /api/invoice-settings (defaultTaxPercent)
+    // via the caller — 0 fallback when settings are unavailable. The old
+    // hardcoded 18 was a fabricated default that mispriced invoices for
+    // non-GST tenants.
+    taxPercent: Number.isFinite(taxPercent) ? taxPercent : 0,
+    discount: 0,
+    dueDate: '',
+    notes: '',
+    disclaimer: DEFAULT_DISCLAIMER,
+  };
+}
+
+export function EMPTY_RECURRING_FORM(currency?: string): RecurringScheduleForm {
   return {
     name: '',
     customerId: '',
@@ -159,7 +198,10 @@ export function EMPTY_RECURRING_FORM(): RecurringScheduleForm {
     dayOfMonth: 1,
     amount: 0,
     taxPercent: 0,
-    currency: 'USD',
+    // P4: prefer the tenant's display currency when the caller has one in
+    // scope (useCompanyCurrency); fall back to 'USD' to preserve legacy
+    // behavior when no source is available.
+    currency: currency || 'USD',
     notes: '',
     timezone: '',
   };

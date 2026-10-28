@@ -37,6 +37,8 @@ export default function MoreScreen() {
         ...(c.calendarBooking ? [{ label: t('Bookings', 'बुकिंग'), icon: 'event' as Icon, path: '/(tabs)/bookings' }] : []),
         ...(c.customers ? [{ label: t('Customers', 'ग्राहक'), icon: 'people-outline' as Icon, path: '/customers' }] : []),
         ...(c.customerCredit ? [{ label: t('Khata', 'खाता'), icon: 'account-balance-wallet' as Icon, path: '/khata' }] : []),
+        { label: t('Cash & Bank', 'कैश और बैंक'), icon: 'account-balance' as Icon, path: '/banks' },
+        { label: t('Cheque register', 'चेक रजिस्टर'), icon: 'receipt' as Icon, path: '/cheques' },
         ...(c.expenses ? [{ label: t('Expenses', 'खर्च'), icon: 'receipt-long' as Icon, path: '/expenses' }] : []),
         ...(c.invoicing ? [{ label: t('Invoices & estimates', 'बिल और अनुमान'), icon: 'description' as Icon, path: '/billing' }] : []),
         { label: t('Reports & analytics', 'व्यापार रिपोर्ट और बिक्री'), icon: 'assessment' as Icon, path: '/reports' },

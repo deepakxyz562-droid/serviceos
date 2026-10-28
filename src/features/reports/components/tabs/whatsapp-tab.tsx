@@ -76,7 +76,11 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
           <>
             <StatCard
               label="Avg Response Time"
-              value={`${whatsapp?.avgResponseTimeMin ?? 0} min`}
+              value={
+                whatsapp?.avgResponseTimeMin != null
+                  ? `${whatsapp.avgResponseTimeMin} min`
+                  : '—'
+              }
               icon={Clock}
               iconBg="bg-emerald-50"
               color="text-emerald-600"
@@ -92,7 +96,11 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
             />
             <StatCard
               label="Button Response"
-              value={`${whatsapp?.buttonResponseRate ?? 0}%`}
+              value={
+                whatsapp?.buttonResponseRate != null
+                  ? `${whatsapp.buttonResponseRate}%`
+                  : '—'
+              }
               icon={Bot}
               iconBg="bg-cyan-50"
               color="text-cyan-600"
@@ -234,7 +242,9 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="p-4 rounded-lg bg-emerald-50/60 border border-emerald-100">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Response Time</p>
-                <p className="text-2xl font-bold text-emerald-700 mt-1">{whatsapp?.avgResponseTimeMin ?? 0} min</p>
+                <p className="text-2xl font-bold text-emerald-700 mt-1">
+                  {whatsapp?.avgResponseTimeMin != null ? `${whatsapp.avgResponseTimeMin} min` : '—'}
+                </p>
                 <div className="flex items-center gap-1 mt-1">
                   <Clock className="size-3 text-emerald-500" />
                   <span className="text-[10px] text-emerald-600 font-medium">Target: &lt; 3 min</span>
@@ -242,7 +252,9 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
               </div>
               <div className="p-4 rounded-lg bg-teal-50/60 border border-teal-100">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Button Response Rate</p>
-                <p className="text-2xl font-bold text-teal-700 mt-1">{whatsapp?.buttonResponseRate ?? 0}%</p>
+                <p className="text-2xl font-bold text-teal-700 mt-1">
+                  {whatsapp?.buttonResponseRate != null ? `${whatsapp.buttonResponseRate}%` : '—'}
+                </p>
                 <div className="flex items-center gap-1 mt-1">
                   <Bot className="size-3 text-teal-500" />
                   <span className="text-[10px] text-teal-600 font-medium">Quick reply engagement</span>
@@ -261,7 +273,7 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
         </CardContent>
       </Card>
 
-      {/* Interactive Button Response Rates — per-button breakdown not exposed by API → summary only */}
+      {/* Interactive Button Response Rates — no click tracking in the data model yet */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Interactive Button Response Rates</CardTitle>
@@ -272,7 +284,7 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
             <ChartSkeleton />
           ) : whatsappQuery.isError ? (
             <ErrorState onRetry={() => whatsappQuery.refetch()} />
-          ) : (
+          ) : whatsapp?.buttonResponseRate != null ? (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="w-32 text-sm font-medium shrink-0">Overall Response</div>
@@ -281,11 +293,11 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
                     <div
                       className="absolute inset-y-0 left-0 rounded-lg flex items-center pl-3 transition-all duration-500"
                       style={{
-                        width: `${whatsapp?.buttonResponseRate ?? 0}%`,
+                        width: `${whatsapp.buttonResponseRate}%`,
                         backgroundColor: '#10b981',
                       }}
                     >
-                      <span className="text-xs font-bold text-white">{whatsapp?.buttonResponseRate ?? 0}%</span>
+                      <span className="text-xs font-bold text-white">{whatsapp.buttonResponseRate}%</span>
                     </div>
                   </div>
                 </div>
@@ -296,6 +308,14 @@ export function WhatsAppTab({ dateRange, whatsappQuery }: WhatsAppTabProps) {
               <p className="text-xs text-muted-foreground">
                 Per-button response breakdowns are not yet exposed by the analytics API. Overall engagement is shown above.
               </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              <Bot className="size-4 shrink-0 opacity-60" />
+              <span>
+                Button click tracking is not enabled for this workspace yet — engagement rates will appear here once
+                interactive-message events start flowing.
+              </span>
             </div>
           )}
         </CardContent>

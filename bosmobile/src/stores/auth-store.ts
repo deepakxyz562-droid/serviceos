@@ -382,17 +382,28 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
       ).catch(() => null);
 
-      // Fallback: derive profile from query params if /me unavailable
+      // Fallback: derive profile from query params ONLY when the backend deep
+      // link actually carried them. Never fabricate user/tenant identities.
+      const qpUserId = parsed.queryParams?.userId as string | undefined;
+      const qpTenantId = parsed.queryParams?.tenantId as string | undefined;
+      if (!profile?.user && !qpUserId) {
+        set({ isLoading: false, error: 'Google sign-in could not be verified. Please try again or use email login.' });
+        return false;
+      }
       const user: SubscriberUser = profile?.user || {
-        id: (parsed.queryParams?.userId as string) || `usr_${Date.now()}`,
+        id: qpUserId as string,
         name: (parsed.queryParams?.name as string) || '',
         email: (parsed.queryParams?.email as string) || '',
         role: ((parsed.queryParams?.role as string) || 'owner') as any,
         phone: null,
         avatar: null,
       };
+      if (!profile?.tenant && !qpTenantId) {
+        set({ isLoading: false, error: 'Google sign-in could not be verified. Please try again or use email login.' });
+        return false;
+      }
       const tenant: SubscriberTenant = profile?.tenant || {
-        id: (parsed.queryParams?.tenantId as string) || `tenant_${Date.now()}`,
+        id: qpTenantId as string,
         name: (parsed.queryParams?.tenantName as string) || `${user.name}'s Workspace`,
         slug: 'workspace',
         industry: 'Services',

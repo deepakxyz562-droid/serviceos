@@ -15,7 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { hapticFeedback } from '@/lib/haptics';
 import { apiRequest, ApiError } from '@/lib/api';
-import { API_PATHS } from '@/lib/constants';
+import { API_PATHS, WEB_URL } from '@/lib/constants';
 
 type EngageFilter = 'browsing' | 'queued' | 'chatting' | 'supervised';
 
@@ -81,7 +81,7 @@ export default function EngageScreen() {
     try {
       await Share.share({
         title: 'Chat with us',
-        message: 'Chat with our AI assistant here: https://fieseros.com/agent/support',
+        message: `Chat with our AI assistant — open ${WEB_URL} and tap the support chat.`,
       });
     } catch {}
   };

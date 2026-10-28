@@ -18,6 +18,7 @@ import {
   MoreVertical,
   Phone,
   Plus,
+  Printer,
   Search,
   Send,
   SlidersHorizontal,
@@ -31,11 +32,23 @@ import {
   type BosCustomer,
   type BosKhataTransaction,
 } from '@/components/bos/bos-types';
+import { BosEmptyState } from '@/components/bos/bos-empty-state';
 import { authFetch } from '@/lib/client-auth';
 import { useBosTranslation } from '@/components/bos/i18n/bos-i18n-context';
 
 type CustomerSubTab = 'all' | 'credit' | 'regular' | 'new';
 type CustomerInspectorTab = 'overview' | 'transactions' | 'orders' | 'notes' | 'settings';
+
+/** One chronological line in the Party Statement (invoices + payments). */
+type PartyStatementLine = {
+  id: string;
+  dateText: string;
+  label: string;
+  method: string;
+  debit: number; // invoice → customer owes more
+  credit: number; // payment → customer owes less
+  balance: number; // running balance
+};
 
 type BosCustomersKhataWorkstationProps = {
   mode: 'customers' | 'khata';
@@ -860,7 +873,11 @@ export function BosCustomersKhataWorkstation({
       lastVisit: 'New',
     });
 
-    showToastMsg(`Saved party "${customerName}" (${newCustomerForm.partyType === 'supplier' ? 'Supplier' : 'Customer'})`);
+    showToastMsg(
+      saveAndNew
+        ? 'Party saved — add another'
+        : `Saved party "${customerName}" (${newCustomerForm.partyType === 'supplier' ? 'Supplier' : 'Customer'})`,
+    );
 
     if (saveAndNew) {
       setNewCustomerForm({
@@ -947,76 +964,6 @@ export function BosCustomersKhataWorkstation({
     }
   };
 
-  const handleDownloadPartyStatement = (customer: ShowcaseCustomerRow) => {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Party Ledger - ${customer.name}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 32px; color: #0f172a; line-height: 1.5; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #059669; padding-bottom: 20px; margin-bottom: 24px; }
-            .brand { font-size: 22px; font-weight: 800; color: #059669; }
-            .badge { display: inline-block; background: #ecfdf5; color: #047857; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
-            .grid { display: flex; gap: 16px; margin-bottom: 24px; }
-            .card { flex: 1; padding: 14px 18px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
-            .card-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
-            .card-val { font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
-            th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; }
-            th { background: #f1f5f9; font-weight: 700; color: #334155; }
-            .in { color: #059669; font-weight: 700; }
-            .out { color: #dc2626; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <div class="brand">${businessName}</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Party Account Statement (Khata Ledger)</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-size: 15px; font-weight: 800;">${customer.name}</div>
-              <div style="font-size: 12px; color: #64748b;">Phone: +91 ${customer.phone}</div>
-              <div style="font-size: 12px; color: #64748b;">Address: ${customer.address || 'Local'}</div>
-              <div class="badge" style="margin-top: 6px;">${customer.status === 'Paid' ? 'Account Settled' : 'Balance Pending'}</div>
-            </div>
-          </div>
-          <div class="grid">
-            <div class="card"><div class="card-title">Total Purchases</div><div class="card-val">${currencySymbol} ${customer.totalPurchases.toLocaleString('en-IN')}</div></div>
-            <div class="card"><div class="card-title">Total Paid</div><div class="card-val" style="color: #059669;">${currencySymbol} ${customer.totalPaid.toLocaleString('en-IN')}</div></div>
-            <div class="card"><div class="card-title">Net Balance Due</div><div class="card-val" style="color: ${customer.balance > 0 ? '#dc2626' : '#059669'};">${currencySymbol} ${customer.balance.toLocaleString('en-IN')}</div></div>
-          </div>
-          <table>
-            <thead>
-              <tr><th>Date / Time</th><th>Voucher / Description</th><th>Type</th><th style="text-align:right;">Debit (+)</th><th style="text-align:right;">Credit (-)</th></tr>
-            </thead>
-            <tbody>
-              ${customer.transactions.map(t => `
-                <tr>
-                  <td>${t.subtitle}</td>
-                  <td style="font-weight: 600;">${t.title}</td>
-                  <td>${t.direction === 'in' ? 'Payment Received' : 'Invoice / Debit'}</td>
-                  <td style="text-align: right;" class="${t.direction === 'out' ? 'out' : ''}">${t.direction === 'out' ? `${currencySymbol} ${t.amount.toLocaleString('en-IN')}` : '—'}</td>
-                  <td style="text-align: right;" class="${t.direction === 'in' ? 'in' : ''}">${t.direction === 'in' ? `${currencySymbol} ${t.amount.toLocaleString('en-IN')}` : '—'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div style="margin-top: 32px; font-size: 11px; color: #94a3b8; text-align: center;">Computer generated ledger statement • Generated via ServiceOS BOS</div>
-        </body>
-      </html>
-    `;
-    const win = window.open('', '_blank');
-    if (win) {
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-      win.focus();
-      setTimeout(() => win.print(), 300);
-    }
-  };
-
   const handleExportCsv = () => {
     const header = [
       'Customer Code',
@@ -1045,6 +992,195 @@ export function BosCustomersKhataWorkstation({
     link.click();
     URL.revokeObjectURL(url);
     showToastMsg('Exported Customers & Khata CSV');
+  };
+
+  // ── Party Statement (chronological invoices + payments, running balance) ──
+  const [showStatementModal, setShowStatementModal] = useState(false);
+  const [statementLoading, setStatementLoading] = useState(false);
+  const [statementError, setStatementError] = useState<string | null>(null);
+  const [statementLines, setStatementLines] = useState<PartyStatementLine[]>([]);
+  const [statementCustomer, setStatementCustomer] = useState<ShowcaseCustomerRow | null>(null);
+
+  const openPartyStatement = async (customer: ShowcaseCustomerRow) => {
+    setStatementCustomer(customer);
+    setShowStatementModal(true);
+    setStatementLines([]);
+
+    // Demo workspace has no real invoices behind it — be honest instead of
+    // hitting an endpoint that would bounce the demo session.
+    if (demoMode) {
+      setStatementLoading(false);
+      setStatementError('Demo workspace — open a live business account to view the real statement.');
+      return;
+    }
+
+    setStatementLoading(true);
+    setStatementError(null);
+
+    try {
+      // GET /api/commerce/invoices includes per-invoice payments; we filter
+      // client-side by the customer's phone (digits) or customer id.
+      const res = await authFetch('/api/commerce/invoices', { credentials: 'include' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error((data && data.error) || `Failed to load invoices (HTTP ${res.status})`);
+      }
+      const apiInvoices = Array.isArray(data?.invoices) ? data.invoices : [];
+      const customerPhoneDigits = customer.phone.replace(/\D/g, '');
+
+      const events: Array<{
+        id: string;
+        at: number;
+        dateText: string;
+        label: string;
+        method: string;
+        debit: number;
+        credit: number;
+      }> = [];
+
+      for (const raw of apiInvoices as Array<Record<string, unknown>>) {
+        const invoicePhone = String(raw.customerPhone || '').replace(/\D/g, '');
+        const invoiceCustomerId = raw.customerId ? String(raw.customerId) : '';
+        // Match by 10-digit phone (most reliable across walk-in merges) or by a
+        // real DB customer id (synthetic `phone:` ids never equal cuid() ids).
+        const phoneMatches =
+          customerPhoneDigits.length >= 7 && invoicePhone === customerPhoneDigits;
+        const idMatches =
+          invoiceCustomerId !== '' &&
+          !customer.id.startsWith('phone:') &&
+          customer.id === invoiceCustomerId;
+        if (!phoneMatches && !idMatches) continue;
+
+        const createdAt = raw.createdAt ? String(raw.createdAt) : '';
+        const at = createdAt ? new Date(createdAt).getTime() : 0;
+        const total = Number(raw.totalAmount ?? 0) || 0;
+        const number = String(raw.invoiceNumber || raw.number || 'INV');
+        events.push({
+          id: `inv-${String(raw.id || number)}`,
+          at,
+          dateText: createdAt
+            ? new Date(createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '—',
+          label: `Invoice ${number}`,
+          method: 'Invoice',
+          debit: total,
+          credit: 0,
+        });
+
+        const payments = Array.isArray(raw.payments) ? (raw.payments as Array<Record<string, unknown>>) : [];
+        for (const p of payments) {
+          const paidAt = String(p.paidAt || '');
+          events.push({
+            id: `pay-${String(p.id || `${raw.id}-${paidAt}`)}`,
+            at: paidAt ? new Date(paidAt).getTime() : at,
+            dateText: paidAt
+              ? new Date(paidAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+              : '—',
+            label: 'Payment Received',
+            method: String(p.method || 'MANUAL'),
+            debit: 0,
+            credit: Number(p.amount) || 0,
+          });
+        }
+      }
+
+      // Chronological order, then compute the running balance.
+      events.sort((a, b) => a.at - b.at);
+      let running = 0;
+      const lines: PartyStatementLine[] = events.map((e, idx) => {
+        running += e.debit - e.credit;
+        return {
+          id: `${e.id}-${idx}`,
+          dateText: e.dateText,
+          label: e.label,
+          method: e.method,
+          debit: e.debit,
+          credit: e.credit,
+          balance: Math.round(running * 100) / 100,
+        };
+      });
+      setStatementLines(lines);
+    } catch (err: any) {
+      setStatementError(err?.message || 'Failed to build the statement.');
+    } finally {
+      setStatementLoading(false);
+    }
+  };
+
+  const handleDownloadStatementCsv = () => {
+    if (!statementCustomer) return;
+    const header = ['Date', 'Particulars', 'Method', `Debit (${currencySymbol})`, `Credit (${currencySymbol})`, `Balance (${currencySymbol})`];
+    const rows = statementLines.map((l) => [
+      l.dateText,
+      `"${l.label.replace(/"/g, '""')}"`,
+      l.method,
+      l.debit || '',
+      l.credit || '',
+      l.balance,
+    ]);
+    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `statement-${statementCustomer.name.replace(/\s+/g, '_')}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToastMsg('Downloaded party statement CSV');
+  };
+
+  /** Print-friendly statement (opens a printable window, same idiom as the ledger export). */
+  const handlePrintStatement = () => {
+    if (!statementCustomer) return;
+    const closing = statementLines.length > 0 ? statementLines[statementLines.length - 1].balance : 0;
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Party Statement - ${statementCustomer.name}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 32px; color: #0f172a; }
+            .brand { font-size: 22px; font-weight: 800; color: #059669; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; }
+            th { background: #f1f5f9; }
+            .num { text-align: right; }
+            .debit { color: #dc2626; font-weight: 700; }
+            .credit { color: #059669; font-weight: 700; }
+            .closing { margin-top: 16px; font-size: 15px; font-weight: 800; }
+          </style>
+        </head>
+        <body>
+          <div class="brand">${businessName}</div>
+          <div style="margin-top: 2px;">Party Statement — ${statementCustomer.name} (+91 ${statementCustomer.phone})</div>
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Particulars</th><th>Method</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>
+            </thead>
+            <tbody>
+              ${statementLines.map((l) => `
+                <tr>
+                  <td>${l.dateText}</td>
+                  <td>${l.label}</td>
+                  <td>${l.method}</td>
+                  <td class="num ${l.debit ? 'debit' : ''}">${l.debit ? `${currencySymbol} ${l.debit.toLocaleString('en-IN')}` : '—'}</td>
+                  <td class="num ${l.credit ? 'credit' : ''}">${l.credit ? `${currencySymbol} ${l.credit.toLocaleString('en-IN')}` : '—'}</td>
+                  <td class="num">${currencySymbol} ${l.balance.toLocaleString('en-IN')}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+          <p class="closing">Closing Balance: ${currencySymbol} ${closing.toLocaleString('en-IN')}</p>
+        </body>
+      </html>
+    `;
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+      setTimeout(() => win.print(), 300);
+    }
   };
 
   return (
@@ -1410,8 +1546,36 @@ export function BosCustomersKhataWorkstation({
               <tbody className="divide-y divide-[#EEF5F1] text-[12.5px]">
                 {visibleRows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-[13px] text-[#64748B]">
-                      No customers found. Click &quot;Add Customer&quot; to register your first customer.
+                    <td colSpan={8} className="p-0">
+                      <BosEmptyState
+                        icon={Users}
+                        compact
+                        title={
+                          searchQuery.trim() || groupFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all'
+                            ? 'No customers match these filters'
+                            : 'No customers yet'
+                        }
+                        description={
+                          searchQuery.trim() || groupFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all'
+                            ? 'Try a different search or clear the filters to see all parties.'
+                            : 'Save parties once — then bill them in one tap and track udhaar automatically.'
+                        }
+                        ctaLabel={
+                          searchQuery.trim() || groupFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all'
+                            ? 'Clear filters'
+                            : 'Add your first party'
+                        }
+                        onCta={() => {
+                          if (searchQuery.trim() || groupFilter !== 'all' || statusFilter !== 'all' || locationFilter !== 'all') {
+                            setSearchQuery('');
+                            setGroupFilter('all');
+                            setStatusFilter('all');
+                            setLocationFilter('all');
+                          } else {
+                            setShowAddCustomerModal(true);
+                          }
+                        }}
+                      />
                     </td>
                   </tr>
                 ) : (
@@ -1602,6 +1766,14 @@ export function BosCustomersKhataWorkstation({
               </div>
 
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => void openPartyStatement(selectedCustomer)}
+                  className="inline-flex items-center gap-1 rounded-xl border border-[#DCE9E3] bg-white px-2.5 py-1.5 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <span>Statement</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleOpenEditCustomer}
@@ -1880,11 +2052,11 @@ export function BosCustomersKhataWorkstation({
 
               <button
                 type="button"
-                onClick={() => handleDownloadPartyStatement(selectedCustomer)}
+                onClick={() => void openPartyStatement(selectedCustomer)}
                 className="col-span-2 mt-1 inline-flex items-center justify-center gap-2 rounded-xl border border-[#DCE9E3] bg-[#FAFDFB] px-3 py-2 text-[12px] font-bold text-[#1E293B] hover:bg-[#F1FAF5] transition cursor-pointer"
               >
                 <Download className="h-3.5 w-3.5 text-[#0A6847]" />
-                <span>Download Party Statement / Ledger</span>
+                <span>Party Statement / Ledger (invoices, payments & balance)</span>
               </button>
             </div>
 
@@ -2083,6 +2255,13 @@ export function BosCustomersKhataWorkstation({
                         maxLength={15}
                         className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12px] font-mono"
                       />
+                      {/* Light GSTIN validation: warn only — never hard-block unusual values. */}
+                      {newCustomerForm.gstin.trim().length > 0 &&
+                        !/^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]{3}$/.test(newCustomerForm.gstin.trim()) && (
+                          <p className="mt-1 text-[10.5px] font-medium text-amber-600">
+                            Doesn&#39;t match the 15-char GSTIN format (e.g. 07AAAAA0000A1Z5) — verify before saving.
+                          </p>
+                        )}
                     </div>
                     <div>
                       <label className="block text-[11.5px] font-semibold text-[#334155] mb-1">
@@ -2380,6 +2559,12 @@ export function BosCustomersKhataWorkstation({
                   placeholder="22AAAAA0000A1Z5"
                   className="w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono tracking-wider uppercase"
                 />
+                {editCustomerForm.gstin.trim().length > 0 &&
+                  !/^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]{3}$/.test(editCustomerForm.gstin.trim()) && (
+                    <p className="mt-1 text-[10.5px] font-medium text-amber-600">
+                      Doesn&#39;t match the 15-char GSTIN format — verify before saving.
+                    </p>
+                  )}
               </div>
 
               <div>
@@ -2415,6 +2600,132 @@ export function BosCustomersKhataWorkstation({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Party Statement Modal — chronological invoices + payments with running balance */}
+      {showStatementModal && statementCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="flex w-full max-w-3xl flex-col rounded-2xl border border-[#DCE9E3] bg-white shadow-2xl max-h-[90vh]">
+            <div className="flex items-center justify-between border-b border-[#EBF2EE] px-5 py-3.5">
+              <div>
+                <h3 className="text-[16px] font-extrabold text-[#111827]">
+                  Party Statement — {statementCustomer.name}
+                </h3>
+                <p className="text-[12px] text-[#64748B]">
+                  Chronological invoices &amp; payments with running balance
+                  {statementCustomer.phone ? ` • +91 ${statementCustomer.phone}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStatementModal(false)}
+                className="rounded-lg p-1 text-[#64748B] hover:bg-[#F1F5F9] cursor-pointer"
+                aria-label="Close statement"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {statementLoading ? (
+                <div className="space-y-2">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="h-9 animate-pulse rounded-lg bg-[#F1F5F9]" />
+                  ))}
+                </div>
+              ) : statementError ? (
+                <div className="flex items-center justify-between rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2.5 text-[12.5px] font-semibold text-[#991B1B]">
+                  <span>{statementError}</span>
+                  <button
+                    type="button"
+                    onClick={() => void openPartyStatement(statementCustomer)}
+                    className="text-xs font-bold underline cursor-pointer"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : statementLines.length === 0 ? (
+                <BosEmptyState
+                  icon={FileText}
+                  compact
+                  title="No invoices or payments found"
+                  description={`Create an invoice for ${statementCustomer.name} and it will appear here with its running balance.`}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-[12px]">
+                    <thead>
+                      <tr className="border-b border-[#EBF2EE] bg-[#FAFDFB] text-[11px] font-semibold text-[#64748B]">
+                        <th className="py-2 px-2">Date</th>
+                        <th className="py-2 px-2">Particulars</th>
+                        <th className="py-2 px-2">Method</th>
+                        <th className="py-2 px-2 text-right">Debit</th>
+                        <th className="py-2 px-2 text-right">Credit</th>
+                        <th className="py-2 px-2 text-right">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#EEF5F1]">
+                      {statementLines.map((line) => (
+                        <tr key={line.id} className="hover:bg-[#F9FCFA]">
+                          <td className="py-2 px-2 whitespace-nowrap text-[#64748B]">{line.dateText}</td>
+                          <td className="py-2 px-2 font-semibold text-[#111827]">{line.label}</td>
+                          <td className="py-2 px-2 text-[#64748B]">{line.method}</td>
+                          <td className="py-2 px-2 text-right font-semibold text-[#DC2626]">
+                            {line.debit ? formatCustAmount(line.debit, currencySymbol) : '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right font-semibold text-[#0A7B56]">
+                            {line.credit ? formatCustAmount(line.credit, currencySymbol) : '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right font-extrabold text-[#111827]">
+                            {formatCustAmount(line.balance, currencySymbol)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#EBF2EE] px-5 py-3.5">
+              <div>
+                <p className="text-[11px] font-medium text-[#64748B]">Closing Balance</p>
+                <p
+                  className={`text-[18px] font-extrabold ${
+                    statementLines.length > 0 && statementLines[statementLines.length - 1].balance > 0
+                      ? 'text-[#DC2626]'
+                      : 'text-[#0A7B56]'
+                  }`}
+                >
+                  {formatCustAmount(
+                    statementLines.length > 0 ? statementLines[statementLines.length - 1].balance : 0,
+                    currencySymbol,
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadStatementCsv}
+                  disabled={statementLines.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#DCE9E3] bg-white px-3.5 py-2 text-[12px] font-semibold text-[#1E293B] hover:bg-[#F4F8F6] disabled:opacity-50 cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5 text-[#0A6847]" />
+                  <span>Download CSV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintStatement}
+                  disabled={statementLines.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#0A6847] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#085238] disabled:opacity-50 cursor-pointer"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  <span>Print</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

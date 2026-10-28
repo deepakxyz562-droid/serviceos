@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image, StyleProp, ViewStyle } from 'react-native';
+import logoMark from '../../../assets/logo-mark.png';
 
 interface BosMarkProps {
   size?: number;
@@ -31,7 +32,7 @@ export function BosMark({
         ]}
       >
         <Image
-          source={require('../../../assets/logo-mark.png')}
+          source={logoMark}
           style={{
             width: size,
             height: size,

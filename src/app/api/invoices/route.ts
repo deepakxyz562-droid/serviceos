@@ -38,6 +38,38 @@ function shouldTryInvoicesRpc(): boolean {
   return true; // 'unknown' — first request, try it
 }
 
+/**
+ * P4: build a Prisma `createdAt` range filter from the optional `from`/`to`
+ * query params. Accepts either a bare YYYY-MM-DD date (interpreted in the
+ * server's local timezone: from → start-of-day, to → end-of-day so the last
+ * day is fully inclusive) or a full ISO timestamp. Returns null when neither
+ * param is present or parseable, so callers can skip the filter entirely.
+ */
+function buildCreatedAtRange(from?: string | null, to?: string | null): Record<string, Date> | null {
+  const range: Record<string, Date> = {};
+  if (from) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(from)) {
+      const [y, m, d] = from.split('-').map(Number);
+      const start = new Date(y, m - 1, d, 0, 0, 0, 0);
+      if (!isNaN(start.getTime())) range.gte = start;
+    } else {
+      const start = new Date(from);
+      if (!isNaN(start.getTime())) range.gte = start;
+    }
+  }
+  if (to) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+      const [y, m, d] = to.split('-').map(Number);
+      const end = new Date(y, m - 1, d, 23, 59, 59, 999);
+      if (!isNaN(end.getTime())) range.lte = end;
+    } else {
+      const end = new Date(to);
+      if (!isNaN(end.getTime())) range.lte = end;
+    }
+  }
+  return Object.keys(range).length > 0 ? range : null;
+}
+
 // resolveTenantId is now imported from @/lib/tenant-resolver (C-2C + cache fix).
 // The old local copy queried db.tenant.findFirst on EVERY request, which
 // timed out at ~10s (Supabase 57014) under load. The shared helper caches
@@ -59,6 +91,43 @@ function shouldTryInvoicesRpc(): boolean {
  * Admin/employee sessions: scoped by tenantId (resolved from auth or first
  * tenant fallback) plus optional customerId filter from the query string.
  */
+/**
+ * Book-wide money summary for the stats header (Vyapar-style: Total Sales /
+ * Received / Outstanding / Overdue). Computed over the WHOLE matching book —
+ * deliberately ignores search/status filters so the header always reflects
+ * the full ledger, never just the current page.
+ *
+ * P4: also deliberately ignores the `from`/`to` date-range params — those
+ * filter the LIST only. The stats header must stay book-wide (matching
+ * Vyapar, where the top tiles never change as you browse a date range).
+ */
+async function computeInvoiceSummary(baseWhere: Record<string, unknown>) {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const moneyWhere: Record<string, unknown> = { ...baseWhere, status: { notIn: ['draft', 'cancelled'] } };
+  const now = new Date();
+  const [salesAgg, paidAgg, overdueAgg, count] = await Promise.all([
+    db.invoice.aggregate({ where: moneyWhere, _sum: { total: true } }),
+    db.invoicePayment.aggregate({
+      where: { invoice: { is: moneyWhere as never } },
+      _sum: { amount: true },
+    }),
+    db.invoice.aggregate({
+      where: { ...moneyWhere, status: { notIn: ['draft', 'cancelled', 'paid'] }, dueDate: { lt: now } },
+      _sum: { total: true },
+    }),
+    db.invoice.count({ where: baseWhere }),
+  ]);
+  const totalSales = salesAgg._sum.total || 0;
+  const received = Math.min(paidAgg._sum.amount || 0, totalSales);
+  return {
+    totalSales: round2(totalSales),
+    received: round2(received),
+    outstanding: round2(Math.max(0, totalSales - received)),
+    overdue: round2(overdueAgg._sum.total || 0),
+    count,
+  };
+}
+
 async function _GET(request: NextRequest) {
   try {
     const crmGuard = await requireCrmTenant(request, { allowStandalone: true });
@@ -74,6 +143,13 @@ async function _GET(request: NextRequest) {
     const status = searchParams.get('status');
     const search = searchParams.get('search');
     const customerIdParam = searchParams.get('customerId');
+    // P4: optional date-range filters (ISO date or YYYY-MM-DD). These filter
+    // the invoice LIST (and its pagination count) on createdAt only — the
+    // `summary` block below continues to compute on the unfiltered
+    // tenant/customer scope so the stats header stays book-wide.
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    const createdAtRange = buildCreatedAtRange(fromParam, toParam);
     // PAGINATION-ARCHIVE-1: archived=true → only soft-deleted invoices.
     // Default (unset or 'false') → only active invoices (deletedAt IS NULL).
     // archived='all' → both active + archived (legacy / dashboard aggregation).
@@ -93,7 +169,13 @@ async function _GET(request: NextRequest) {
     // AVAILABILITY CACHE: the first failed attempt caches "not_found" for
     // 5 minutes (see shouldTryInvoicesRpc above), so subsequent requests
     // skip the failed RPC call and go straight to the fallback path.
-    if (shouldTryInvoicesRpc()) {
+    //
+    // P4: the RPC signature has no from/to params. Rather than change the SQL
+    // function (risky), requests WITH a date range skip the RPC and use the
+    // Prisma fallback below, which supports createdAt filtering. Requests
+    // without a range keep using the fast RPC path, and the availability
+    // cache is unaffected.
+    if (!createdAtRange && shouldTryInvoicesRpc()) {
       try {
         let rpcTenantId: string | null = null;
         let rpcCustomerId: string | null = null;
@@ -126,6 +208,16 @@ async function _GET(request: NextRequest) {
         // Success — cache the availability so future requests skip the check.
         rpcAvailability = 'available';
         rpcAvailabilityCheckedAt = Date.now();
+        // Book-wide stats header (single aggregate round-trip alongside the
+        // list RPC — computed in Prisma so it works with either DB adapter).
+        const summaryWhere: Record<string, unknown> =
+          authUser?.role === 'customer' ? { customerId: authUser.id, deletedAt: null } : { tenantId: rpcTenantId, deletedAt: null };
+        if (customerIdParam && authUser?.role !== 'customer') summaryWhere.customerId = customerIdParam;
+        try {
+          (result as Record<string, unknown>).summary = await computeInvoiceSummary(summaryWhere);
+        } catch (sumErr) {
+          console.warn('[invoices] summary computation failed (non-fatal):', sumErr);
+        }
         return NextResponse.json(result);
       } catch (err) {
         if (err instanceof RpcFunctionNotFoundError) {
@@ -152,6 +244,10 @@ async function _GET(request: NextRequest) {
       const where: Record<string, unknown> = { customerId: authUser.id };
       if (status && status !== 'all') {
         where.status = status;
+      }
+      // P4: date-range filter — LIST only (summary below stays unfiltered).
+      if (createdAtRange) {
+        where.createdAt = createdAtRange;
       }
       // PAGINATION-ARCHIVE-1: filter on deletedAt to support the Active vs
       // Archived tabs on the frontend.
@@ -182,8 +278,17 @@ async function _GET(request: NextRequest) {
         db.invoice.count({ where }),
       ]);
 
+      let summary: Awaited<ReturnType<typeof computeInvoiceSummary>> | undefined;
+      try {
+        const summaryWhere: Record<string, unknown> = { customerId: authUser.id };
+        if (archivedOnly) summaryWhere.deletedAt = { not: null };
+        else if (!includeArchived) summaryWhere.deletedAt = null;
+        summary = await computeInvoiceSummary(summaryWhere);
+      } catch {}
+
       return NextResponse.json({
         invoices,
+        ...(summary ? { summary } : {}),
         pagination: {
           page,
           limit,
@@ -206,6 +311,10 @@ async function _GET(request: NextRequest) {
     }
     if (customerIdParam) {
       where.customerId = customerIdParam;
+    }
+    // P4: date-range filter — LIST only (summary below stays unfiltered).
+    if (createdAtRange) {
+      where.createdAt = createdAtRange;
     }
     // PAGINATION-ARCHIVE-1: filter on deletedAt to support the Active vs
     // Archived tabs on the frontend.
@@ -236,8 +345,19 @@ async function _GET(request: NextRequest) {
       db.invoice.count({ where }),
     ]);
 
+    // Book-wide stats header — computed on the tenant/customer scope (not the
+    // search/status filter) so it always reflects the full book.
+    let summary: Awaited<ReturnType<typeof computeInvoiceSummary>> | undefined;
+    try {
+      const summaryWhere: Record<string, unknown> = customerIdParam ? { tenantId, customerId: customerIdParam } : { tenantId };
+      if (archivedOnly) summaryWhere.deletedAt = { not: null };
+      else if (!includeArchived) summaryWhere.deletedAt = null;
+      summary = await computeInvoiceSummary(summaryWhere);
+    } catch {}
+
     return NextResponse.json({
       invoices,
+      ...(summary ? { summary } : {}),
       pagination: {
         page,
         limit,

@@ -74,6 +74,38 @@ export interface AddressFields {
   country: string;
 }
 
+/** P4: a user-defined custom field (persisted via the brand-profile save flow). */
+export interface CustomField {
+  id: string;
+  name: string;
+  type: string;
+  module: string;
+}
+
+/**
+ * P4: parse a numeric tax percent out of a display string like "18% (GST)".
+ * Returns null when no leading number exists.
+ */
+function parseTaxPercent(rate: string | null | undefined): number | null {
+  const m = /^(\d+(?:\.\d+)?)/.exec((rate || '').trim());
+  return m ? parseFloat(m[1]) : null;
+}
+
+/**
+ * P4: map a stored numeric tax percent back to one of the Default Tax Rate
+ * select's display options (null when the value doesn't match any option).
+ */
+function taxPercentToLabel(pct: number): string | null {
+  const map: Record<number, string> = {
+    10: '10% (GST)',
+    18: '18% (GST)',
+    12: '12% (GST)',
+    5: '5% (GST)',
+    0: '0% (Tax Exempt)',
+  };
+  return map[pct] || null;
+}
+
 export function parseAddress(raw?: string | null): AddressFields {
   if (!raw) return { street: '', city: '', state: '', pincode: '', country: '' };
   const trimmed = raw.trim();
@@ -226,22 +258,23 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
 
   // Service Areas state
   const [serviceAreaMode, setServiceAreaMode] = useState<'all' | 'specific'>('specific');
-  const [cities, setCities] = useState<string[]>(['Delhi', 'Noida', 'Gurgaon', 'Faridabad']);
+  // P4: no fabricated cities — the list starts empty and hydrates from
+  // /api/brand-profile (profile.serviceArea). Add cities with the input below.
+  const [cities, setCities] = useState<string[]>([]);
   const [cityInput, setCityInput] = useState('');
 
   // Tax & Compliance state
-  const [gstNumber, setGstNumber] = useState('07ABCDE1234F1Z5');
+  // P4: empty default — the old '07ABCDE1234F1Z5' placeholder was a fabricated
+  // GSTIN that could leak into documents if saved untouched.
+  const [gstNumber, setGstNumber] = useState('');
   const [invoicePrefix, setInvoicePrefix] = useState('INV');
   const [businessAddress, setBusinessAddress] = useState('');
   const [defaultTaxRate, setDefaultTaxRate] = useState('18% (GST)');
 
-  // Custom Fields state
-  const [customFields, setCustomFields] = useState<Array<{ id: string; name: string; type: string; module: string }>>([
-    { id: 'cf-1', name: 'Lead Referral Source', type: 'Select', module: 'Leads' },
-    { id: 'cf-2', name: 'Property Type / Size', type: 'Text', module: 'Leads' },
-    { id: 'cf-3', name: 'Gate / Security Code', type: 'Text', module: 'Customers' },
-    { id: 'cf-4', name: 'Preferred Service Window', type: 'Select', module: 'Jobs' },
-  ]);
+  // Custom Fields state — P4: no placeholder fields (the old cf-1..cf-4
+  // fixtures looked like saved data but existed only in local state). Fields
+  // persist through the brand-profile PUT's `preferences` passthrough.
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('Text');
   const [newFieldModule, setNewFieldModule] = useState('Leads');
@@ -338,6 +371,28 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           if (data?.preferences) {
             if (data.preferences.timezone) setTimezone(data.preferences.timezone);
             if (data.preferences.currency) setCurrency(data.preferences.currency);
+            // P4: custom fields + the numeric default tax % ride in the
+            // `preferences` passthrough bag — /api/brand-profile whitelists
+            // its top-level keys and silently drops unknown ones, but passes
+            // the whole `preferences` object through into
+            // Tenant.settingsJson (verified before choosing this pattern).
+            if (Array.isArray(data.preferences.customFields)) {
+              const fields = (data.preferences.customFields as unknown[]).filter(
+                (f): f is CustomField =>
+                  !!f &&
+                  typeof f === 'object' &&
+                  typeof (f as { id?: unknown }).id === 'string' &&
+                  typeof (f as { name?: unknown }).name === 'string' &&
+                  typeof (f as { type?: unknown }).type === 'string' &&
+                  typeof (f as { module?: unknown }).module === 'string'
+              );
+              setCustomFields(fields);
+            }
+            if (typeof data.preferences.defaultTaxPercent === 'number') {
+              // Keep the display select in sync with the stored numeric rate.
+              const label = taxPercentToLabel(data.preferences.defaultTaxPercent);
+              if (label) setDefaultTaxRate(label);
+            }
           }
         }
       } catch {
@@ -399,6 +454,12 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
           preferences: {
             timezone,
             currency,
+            // P4: persisted inside the preferences passthrough bag (see the
+            // hydration comment above). defaultTaxPercent is the numeric
+            // counterpart of the "18% (GST)"-style display string — parsed
+            // from the select value on every save for clean downstream use.
+            customFields,
+            defaultTaxPercent: parseTaxPercent(defaultTaxRate) ?? 0,
           },
           skipAiSummary: true,
         }),
@@ -443,6 +504,47 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
 
   const handleRemoveCity = (cityToRemove: string) => {
     setCities((prev) => prev.filter((c) => c !== cityToRemove));
+  };
+
+  // ── P4: REAL data exports (the old buttons only toasted fake success).
+  // Both export a JSON dump of the tenant's actual API data; failures toast
+  // an honest error.
+  const downloadJson = (payload: unknown, filename: string) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportLeads = async () => {
+    try {
+      const res = await authFetch('/api/leads?limit=1000');
+      if (!res.ok) throw new Error(`Leads API returned ${res.status}`);
+      const data = await res.json();
+      const rows = Array.isArray(data?.leads) ? data.leads : [];
+      downloadJson(rows, `leads-export-${new Date().toISOString().split('T')[0]}.json`);
+      toast.success(`Exported ${rows.length} lead${rows.length === 1 ? '' : 's'} as JSON.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to export leads.');
+    }
+  };
+
+  const handleExportCustomers = async () => {
+    try {
+      const res = await authFetch('/api/customers?limit=1000');
+      if (!res.ok) throw new Error(`Customers API returned ${res.status}`);
+      const data = await res.json();
+      const rows = Array.isArray(data?.customers) ? data.customers : [];
+      downloadJson(rows, `customers-export-${new Date().toISOString().split('T')[0]}.json`);
+      toast.success(`Exported ${rows.length} customer${rows.length === 1 ? '' : 's'} as JSON.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to export customers.');
+    }
   };
 
   const topTabs: {
@@ -1045,7 +1147,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                         </p>
                       </div>
 
-                      <div className="mt-4 space-y-3">
+                        <div className="mt-4 space-y-3">
                         {/* Option 1: All Cities / Country */}
                         <label
                           onClick={() => setServiceAreaMode('all')}
@@ -1127,10 +1229,15 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                             value={cityInput}
                             onChange={(e) => setCityInput(e.target.value)}
                             onKeyDown={handleAddCity}
-                            placeholder="Add suburb or zip code..."
+                            placeholder={cities.length === 0 ? 'Add a city and press Enter...' : 'Add suburb or zip code...'}
                             className="min-w-[140px] flex-1 bg-transparent px-1.5 py-1 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden"
                           />
                         </div>
+                        {cities.length === 0 && (
+                          <p className="text-[11px] text-slate-400">
+                            No service areas added yet — type a city above and press Enter, then Save Changes to persist.
+                          </p>
+                        )}
                       </div>
                     </section>
                   )}
@@ -1363,7 +1470,7 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                             ]);
                             setNewFieldName('');
                             setIsAddingField(false);
-                            toast.success(`Custom field "${newFieldName.trim()}" added!`);
+                            toast.success(`Custom field "${newFieldName.trim()}" added — click "Save Changes" to persist it.`);
                           }}
                           className="rounded-xl bg-[#009F50] px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-[#008A45]"
                         >
@@ -1373,32 +1480,38 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                     </div>
                   )}
 
-                  <div className="mt-4 divide-y divide-slate-100">
-                    {customFields.map((field) => (
-                      <div key={field.id} className="flex items-center justify-between py-3">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-slate-900">{field.name}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                            {field.type}
-                          </span>
-                          <span className="rounded-full bg-emerald-50 text-[#009F50] px-2 py-0.5 text-[10px] font-semibold">
-                            {field.module}
-                          </span>
+                  {customFields.length === 0 ? (
+                    <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-6 text-center text-xs text-slate-400">
+                      No custom fields yet — click &quot;Add Custom Field&quot; to create one.
+                    </div>
+                  ) : (
+                    <div className="mt-4 divide-y divide-slate-100">
+                      {customFields.map((field) => (
+                        <div key={field.id} className="flex items-center justify-between py-3">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-bold text-slate-900">{field.name}</span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                              {field.type}
+                            </span>
+                            <span className="rounded-full bg-emerald-50 text-[#009F50] px-2 py-0.5 text-[10px] font-semibold">
+                              {field.module}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCustomFields((prev) => prev.filter((f) => f.id !== field.id));
+                              toast.info(`Field "${field.name}" removed — click "Save Changes" to persist.`);
+                            }}
+                            className="text-slate-400 hover:text-rose-600 transition"
+                            title="Delete field"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCustomFields((prev) => prev.filter((f) => f.id !== field.id));
-                            toast.info(`Field "${field.name}" removed`);
-                          }}
-                          className="text-slate-400 hover:text-rose-600 transition"
-                          title="Delete field"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -1467,28 +1580,24 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                     <div className="rounded-xl border border-slate-200 p-4 bg-slate-50/50">
                       <h4 className="text-xs font-bold text-slate-900">Export Customer &amp; Lead Data</h4>
                       <p className="text-[11px] text-slate-500 mt-1">
-                        Download full CSV records of your leads, contact books, and customer interaction logs.
+                        Download a JSON export of your leads and customer records straight from the database.
                       </p>
-                      <div className="mt-3 flex gap-2">
+                        <div className="mt-3 flex gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            toast.success('Leads CSV export generated and ready for download.');
-                          }}
+                          onClick={handleExportLeads}
                           className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 transition"
                         >
                           <Download className="size-3.5 text-slate-500" />
-                          <span>Export Leads (CSV)</span>
+                          <span>Export Leads (JSON)</span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            toast.success('Customer JSON backup archive downloaded.');
-                          }}
+                          onClick={handleExportCustomers}
                           className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-100 transition"
                         >
                           <Download className="size-3.5 text-slate-500" />
-                          <span>Export JSON</span>
+                          <span>Export Customers (JSON)</span>
                         </button>
                       </div>
                     </div>

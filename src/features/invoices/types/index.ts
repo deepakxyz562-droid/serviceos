@@ -120,6 +120,12 @@ export interface InvoiceFormData {
   discount: number;
   dueDate: string;
   notes: string;
+  /**
+   * P4: contract / disclaimer text. Persisted by appending it to the saved
+   * `notes` with the DISCLAIMER_SEPARATOR from invoice-helpers (the schema
+   * has no dedicated disclaimer column) and parsed back out when editing.
+   */
+  disclaimer: string;
 }
 
 export type InvoiceAction =

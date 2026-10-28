@@ -10,11 +10,11 @@
  *   1. Sticky page header (Back + Cancel / Create Invoice or Save Changes)
  *   2. Two-column layout:
  *      Left column:
- *        - Invoice Details (Subject, Client picker, Invoice #, Issued Date,
- *          Due Date, Payment Terms)
+ *        - Invoice Details (Invoice #, Client picker, Issued Date, Due Date,
+ *          Payment Terms)
  *        - Product / Service (line items editor: description / qty / rate /
  *          total / remove-row)
- *        - Contract / Disclaimer (textarea)
+ *        - Contract / Disclaimer (textarea — persisted with the invoice)
  *        - Notes (textarea)
  *      Right column:
  *        - Summary card (Subtotal, Discount, Tax %, Total, Invoice Balance)
@@ -217,27 +217,22 @@ export function NewInvoicePage({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Subject</Label>
-                  <Input
-                    placeholder="For Services Rendered"
-                    value={
-                      form.notes && form.notes.includes('For Services Rendered')
-                        ? 'For Services Rendered'
-                        : ''
-                    }
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, notes: e.target.value }))
-                    }
-                    className="text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label>Invoice #</Label>
                   <Input
                     placeholder="Auto-generated"
                     disabled
                     className="bg-muted/30 font-mono text-sm"
                     value={editingInvoice ? editingInvoice.number : 'Auto'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Due Date *</Label>
+                  <Input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, dueDate: e.target.value }))
+                    }
                   />
                 </div>
               </div>
@@ -271,7 +266,7 @@ export function NewInvoicePage({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Issued Date</Label>
                   <Input
@@ -283,16 +278,6 @@ export function NewInvoicePage({
                     }
                     disabled
                     className="bg-muted/30 text-sm"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Due Date *</Label>
-                  <Input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, dueDate: e.target.value }))
-                    }
                   />
                 </div>
                 <div className="space-y-2">
@@ -418,13 +403,19 @@ export function NewInvoicePage({
             </div>
           </FormSectionCard>
 
-          {/* Contract / Disclaimer section */}
+          {/* Contract / Disclaimer section — P4: now a controlled field that is
+              persisted with the invoice (appended to notes with a `\n---\n`
+              separator by the parent's save handler and parsed back out when
+              editing — see splitNotesDisclaimer). */}
           <FormSectionCard icon={ScrollText} title="Contract / Disclaimer">
             <Textarea
-              defaultValue="Thank you for your business. Please contact us with any questions regarding this invoice."
               rows={3}
               className="text-sm"
               placeholder="Add contract or disclaimer text..."
+              value={form.disclaimer}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, disclaimer: e.target.value }))
+              }
             />
           </FormSectionCard>
 

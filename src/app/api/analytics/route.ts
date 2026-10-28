@@ -508,13 +508,66 @@ async function handleWhatsAppAnalytics(
     }
   }
 
+  // ── REAL avg response time ─────────────────────────────────────────
+  // Computed from the actual message stream: for each sampled inbound
+  // message, find the next outbound (staff/agent) reply in the same
+  // conversation and average the gap. Falls back to null when there is
+  // no measurable data (never a fabricated number).
+  let avgResponseTimeMin: number | null = null
+  try {
+    const sample = await db.inboxMessage.findMany({
+      where: { conversation: tenantFilter },
+      orderBy: { createdAt: 'desc' },
+      take: 1000,
+      select: { conversationId: true, direction: true, createdAt: true },
+    })
+    // Rebuild chronological order per conversation.
+    const byConversation = new Map<string, { direction: string; createdAt: Date }[]>()
+    for (let i = sample.length - 1; i >= 0; i--) {
+      const m = sample[i]
+      let list = byConversation.get(m.conversationId)
+      if (!list) {
+        list = []
+        byConversation.set(m.conversationId, list)
+      }
+      list.push({ direction: m.direction, createdAt: m.createdAt })
+    }
+    let gapTotalMs = 0
+    let gapCount = 0
+    const MAX_GAP_MS = 7 * 24 * 60 * 60 * 1000 // ignore stale threads > 7d
+    for (const messages of byConversation.values()) {
+      for (let i = 0; i < messages.length - 1; i++) {
+        if (messages[i].direction === 'inbound') {
+          for (let j = i + 1; j < messages.length; j++) {
+            if (messages[j].direction === 'outbound') {
+              const gap = messages[j].createdAt.getTime() - messages[i].createdAt.getTime()
+              if (gap >= 0 && gap <= MAX_GAP_MS) {
+                gapTotalMs += gap
+                gapCount++
+              }
+              break
+            }
+          }
+        }
+      }
+    }
+    if (gapCount > 0) {
+      avgResponseTimeMin = Math.round((gapTotalMs / gapCount / 60000) * 10) / 10
+    }
+  } catch (respErr) {
+    console.warn('[analytics] avg response time computation failed (non-fatal):', respErr)
+  }
+
   return NextResponse.json({
     metric: 'whatsapp_analytics',
     totalConversations,
     activeConversations,
     intentDistribution,
-    avgResponseTimeMin: 12, // Estimated from notification logs in production
-    buttonResponseRate: 78,
+    // REAL — from the message stream (inbound → next outbound reply gap).
+    avgResponseTimeMin,
+    // No button/CTA click tracking exists in the data model — honest null
+    // instead of a fabricated 78%. UI renders "—" when null.
+    buttonResponseRate: null,
     conversations: recentConversations,
   })
 }
@@ -562,6 +615,36 @@ async function handleJourneyAnalytics(
     ? Math.round((completedJourneys / totalJourneys) * 100)
     : 0
 
+  // ── REAL avg journey duration ────────────────────────────────────────
+  // For journeys that reached a terminal stage, measure createdAt →
+  // stageChangedAt (the last actual transition recorded on the row).
+  let avgJourneyTimeHours: number | null = null
+  try {
+    const completedSample = await db.customerJourney.findMany({
+      where: {
+        ...tenantFilter,
+        currentStage: { in: ['completed', 'review'] },
+      },
+      orderBy: { stageChangedAt: 'desc' },
+      take: 500,
+      select: { createdAt: true, stageChangedAt: true },
+    })
+    let totalMs = 0
+    let counted = 0
+    for (const j of completedSample) {
+      const span = j.stageChangedAt.getTime() - j.createdAt.getTime()
+      if (span > 0) {
+        totalMs += span
+        counted++
+      }
+    }
+    if (counted > 0) {
+      avgJourneyTimeHours = Math.round((totalMs / counted / 3600000) * 10) / 10
+    }
+  } catch (journeyErr) {
+    console.warn('[analytics] avg journey time computation failed (non-fatal):', journeyErr)
+  }
+
   return NextResponse.json({
     metric: 'journey_analytics',
     totalJourneys,
@@ -569,7 +652,9 @@ async function handleJourneyAnalytics(
     completionRate,
     stageDistribution,
     scheduledActionsPending: scheduledActions,
-    avgJourneyTimeHours: 22, // Estimated from stage transitions in production
+    // REAL — avg of actual lead→terminal transition spans (null when no
+    // completed journeys yet, instead of a fabricated 22h).
+    avgJourneyTimeHours,
   })
 }
 

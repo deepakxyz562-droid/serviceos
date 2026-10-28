@@ -50,6 +50,24 @@ const createInvoiceSchema = z.object({
 export async function GET(req: Request) {
   try {
     const business = await ownerBusiness(req);
+    const { searchParams } = new URL(req.url);
+
+    // Optional list filters. The `overview` stats below are ALWAYS computed
+    // over the full book (all invoices of the business) so header metrics
+    // never shrink when the merchant filters the list (Vyapar behavior).
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    const statusParam = searchParams.get('status')?.toUpperCase().trim();
+    const qParam = searchParams.get('q')?.toLowerCase().trim();
+
+    const fromMs = fromParam ? new Date(`${fromParam}T00:00:00`).getTime() : null;
+    const toMs = toParam ? new Date(`${toParam}T23:59:59.999`).getTime() : null;
+    const VALID_STATUSES = ['DRAFT', 'SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'UNPAID'] as const;
+    const statusFilter =
+      statusParam && (VALID_STATUSES as readonly string[]).includes(statusParam)
+        ? statusParam
+        : null;
+
     const invoices = await db.aiInvoice.findMany({
       where: { businessId: business.id },
       orderBy: { createdAt: 'desc' },
@@ -109,7 +127,9 @@ export async function GET(req: Request) {
         customerPhone: inv.customer?.phone || '',
         customerGstin: inv.customer?.gstin || '',
         customerAddress: inv.customer?.address || '',
+        customerId: inv.customerId,
         status: inv.status === 'PAID' ? 'Paid' : balance === 0 ? 'Paid' : inv.status === 'DRAFT' ? 'Draft' : 'Unpaid',
+        rawStatus: inv.status,
         totalAmount: totals.total,
         subtotalAmount: totals.subtotal,
         taxAmount: totals.tax,
@@ -123,21 +143,48 @@ export async function GET(req: Request) {
           unitPrice: it.unitPrice,
           rate: it.unitPrice,
           hsnSac: it.hsnCode || '',
+          gstRate: it.gstRate ?? null,
           amount: it.qty * it.unitPrice,
+        })),
+        payments: inv.payments.map((p) => ({
+          id: p.id,
+          amount: p.amount,
+          method: p.method,
+          paidAt: p.paidAt,
+          reference: p.reference || '',
         })),
         createdAt: inv.createdAt,
       };
     });
 
+    // Book-wide overview (never affected by the list filters).
+    const overview = {
+      totalInvoiced: Math.round(totalInvoiced),
+      totalPaid: Math.round(totalPaid),
+      totalUnpaid: Math.round(totalUnpaid),
+      totalOverdue: Math.round(totalOverdue),
+      count: invoices.length,
+    };
+
+    // Apply list filters AFTER the overview is computed.
+    const filtered = enriched.filter((row) => {
+      if (statusFilter && row.rawStatus !== statusFilter) return false;
+
+      const createdMs = new Date(row.createdAt).getTime();
+      if (fromMs !== null && createdMs < fromMs) return false;
+      if (toMs !== null && createdMs > toMs) return false;
+
+      if (qParam) {
+        const haystack = `${row.customerName} ${row.invoiceNumber} ${row.customerPhone}`.toLowerCase();
+        if (!haystack.includes(qParam)) return false;
+      }
+
+      return true;
+    });
+
     return NextResponse.json({
-      invoices: enriched,
-      overview: {
-        totalInvoiced: Math.round(totalInvoiced),
-        totalPaid: Math.round(totalPaid),
-        totalUnpaid: Math.round(totalUnpaid),
-        totalOverdue: Math.round(totalOverdue),
-        count: invoices.length,
-      },
+      invoices: filtered,
+      overview,
     });
   } catch (e: any) {
     if (e.message === 'UNAUTHORIZED' || e.message === 'NO_BUSINESS') {
@@ -229,7 +276,8 @@ export async function POST(req: Request) {
     const storeGstin = configBilling.gstin || '';
     const storeStateCode = extractGstStateCode(storeGstin || business.address || '');
     const clientStateCode = extractGstStateCode(data.placeOfSupply || data.customerGstin || '');
-    const isInterstate = storeStateCode !== clientStateCode;
+    // No client state (B2C without GSTIN) defaults to intra-state supply (CGST+SGST).
+    const isInterstate = Boolean(clientStateCode) && storeStateCode !== clientStateCode;
 
     let subtotal = 0;
     const computedItems = data.items.map((it) => {
@@ -286,6 +334,7 @@ export async function POST(req: Request) {
             qty: it.qty,
             unitPrice: it.unitPrice,
             hsnCode: it.hsnCode,
+            gstRate: it.gstRate, // persist the per-line GST rate snapshot (was silently dropped before)
           })),
         },
       },

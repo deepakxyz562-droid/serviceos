@@ -181,6 +181,12 @@ export interface InvoiceListParams {
   page?: number;
   limit?: number;
   /**
+   * P4: optional date-range filters (YYYY-MM-DD or ISO). Filter the invoice
+   * LIST on createdAt only — the returned `summary` stays book-wide.
+   */
+  from?: string;
+  to?: string;
+  /**
    * PAGINATION-ARCHIVE-1 — archive filter.
    *   undefined | 'false' → only active invoices (deletedAt IS NULL) [default]
    *   'true'               → only archived invoices (deletedAt IS NOT NULL)
@@ -189,8 +195,28 @@ export interface InvoiceListParams {
   archived?: 'true' | 'false' | 'all';
 }
 
+/**
+ * Book-wide money summary computed server-side by GET /api/invoices
+ * (Vyapar-style stats header). Deliberately ignores the list's
+ * status/search/date filters — always reflects the full ledger.
+ */
+export interface InvoiceSummary {
+  totalSales: number;
+  received: number;
+  outstanding: number;
+  overdue: number;
+  count: number;
+}
+
+export interface InvoicesResponse {
+  invoices: Invoice[];
+  pagination: { page: number; limit: number; total: number; totalPages: number } | null;
+  /** Present when the API's summary computation succeeded; absent on failure. */
+  summary?: InvoiceSummary;
+}
+
 export function useInvoices(params: InvoiceListParams = {}) {
-  return useQuery<{ invoices: Invoice[]; pagination: { page: number; limit: number; total: number; totalPages: number } | null }>({
+  return useQuery<InvoicesResponse>({
     queryKey: qk.invoices.list(params),
     queryFn: async () => {
       const searchParams = new URLSearchParams();
@@ -198,6 +224,9 @@ export function useInvoices(params: InvoiceListParams = {}) {
       if (params.search) searchParams.set('search', params.search);
       if (params.page) searchParams.set('page', String(params.page));
       if (params.limit) searchParams.set('limit', String(params.limit));
+      // P4: date-range passthrough (list filter only — summary stays book-wide).
+      if (params.from) searchParams.set('from', params.from);
+      if (params.to) searchParams.set('to', params.to);
       // PAGINATION-ARCHIVE-1: archived filter — defaults to active-only.
       const archivedVal = params.archived ?? 'false';
       searchParams.set('archived', archivedVal);
@@ -211,6 +240,9 @@ export function useInvoices(params: InvoiceListParams = {}) {
       return {
         invoices: rawList.map(parseApiInvoice),
         pagination: data.pagination ?? null,
+        // P4: server-computed book-wide stats (may be absent if the server's
+        // summary query failed — callers must fall back to client-side math).
+        ...(data.summary ? { summary: data.summary as InvoiceSummary } : {}),
       };
     },
     staleTime: 10_000, // 10s — Freshness Contract: CRM invoices

@@ -70,6 +70,16 @@ function getDateRangeForPeriod(period: string, customStart?: string | null, cust
   return { start, end, label };
 }
 
+/** RFC-4180-safe CSV serializer: quotes cells containing commas, quotes or newlines. */
+function toCsvString(rows: Array<Array<string | number | null | undefined>>): string {
+  const escapeCell = (cell: string | number | null | undefined): string => {
+    const raw = cell === null || cell === undefined ? '' : String(cell);
+    if (/[",\n\r]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
+    return raw;
+  };
+  return rows.map((row) => row.map(escapeCell).join(',')).join('\r\n');
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await resolveStaffSessionFromRequest(req);
@@ -122,8 +132,14 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Fetch Operating Expenses in date range
+    // Fetch Operating Expenses in date range.
+    // Link honesty: Expense.tenantId is the established commerce↔expense link
+    // (same scoping used by /api/commerce/expenses) — it stores the AiBusiness
+    // id or the AiBusiness.tenantId. No other link is invented, so if this
+    // query fails we report expensesTracked=false rather than guessing.
     let recordedExpenses = 0;
+    let expensesTracked = false;
+    let expensesByCategory: Array<{ category: string; amount: number }> = [];
     try {
       if (db.expense?.findMany) {
         const expenses = await db.expense.findMany({
@@ -135,10 +151,21 @@ export async function GET(req: NextRequest) {
             expenseDate: { gte: start, lte: end },
           },
         });
+        expensesTracked = true;
         recordedExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const catMap = new Map<string, number>();
+        for (const e of expenses) {
+          const cat = e.category || 'General';
+          catMap.set(cat, (catMap.get(cat) || 0) + (Number(e.amount) || 0));
+        }
+        expensesByCategory = Array.from(catMap.entries())
+          .map(([category, amount]) => ({ category, amount: Math.round(amount * 100) / 100 }))
+          .sort((a, b) => b.amount - a.amount);
       }
     } catch {
+      expensesTracked = false;
       recordedExpenses = 0;
+      expensesByCategory = [];
     }
 
     // Ledger snapshot for receivables/payables/daybook
@@ -352,13 +379,21 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 10);
 
-    // COGS: 0 unless tracked per-item costs are recorded (no fabricated percentages)
+    // COGS: 0 unless tracked per-item costs are recorded (no fabricated percentages).
+    // The commerce item models (AiInvoiceItem / AiItem / catalogJson) carry no
+    // cost-price column, so there is no dependable per-item cost link yet —
+    // we therefore report cogsTracked=false instead of estimating margins.
     const cogs = 0;
     const cogsTracked = false;
     const grossProfit = totalRevenue - cogs;
 
-    // Operating Expenses from db or money snapshot
+    // Operating Expenses from the expense ledger (when linked) else money snapshot.
     const totalExpenses = recordedExpenses > 0 ? recordedExpenses : (moneySnapshot?.moneyOut || 0);
+    const expensesSource = recordedExpenses > 0
+      ? 'expense_ledger'
+      : (moneySnapshot?.moneyOut || 0) > 0
+        ? 'daybook_money'
+        : 'none';
     const netProfit = grossProfit - totalExpenses;
     const marginPct = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
 
@@ -389,6 +424,86 @@ export async function GET(req: NextRequest) {
           overdue: 0,
         }
       : { current: 0, dueSoon: 0, overdue: 0 };
+
+    // ── CSV export (format=csv&report=pnl|gst|receivables) ────────────────
+    const formatParam = searchParams.get('format')?.toLowerCase().trim();
+    if (formatParam === 'csv') {
+      const reportKind = (searchParams.get('report') || 'pnl').toLowerCase().trim();
+      const today = new Date().toISOString().slice(0, 10);
+      let filename = `report-${today}.csv`;
+      let rows: Array<Array<string | number | null | undefined>> = [];
+
+      if (reportKind === 'gst') {
+        filename = `gst-summary-${today}.csv`;
+        rows = [
+          ['GST Summary', periodLabel, `Generated ${today}`],
+          [],
+          ['Metric', `Amount (${currencySymbol})`],
+          ['Taxable Sales', Math.round(taxableSales)],
+          ['Output GST Collected', Math.round(totalGstCollected)],
+          ['CGST', Math.round(totalCgst)],
+          ['SGST', Math.round(totalSgst)],
+          ['IGST', Math.round(totalIgst)],
+          ['B2B Invoices', b2bCount],
+          ['B2C Invoices', b2cCount],
+          [],
+          ['Rate Slab', 'Taxable Turnover', 'Tax Amount', 'Line Count'],
+          ...Object.entries(rateBuckets).map(([rate, data]) => [
+            rate,
+            Math.round(data.taxable),
+            Math.round(data.tax),
+            data.count,
+          ]),
+        ];
+      } else if (reportKind === 'receivables') {
+        filename = `receivables-${today}.csv`;
+        rows = [
+          ['Receivables & Payables', periodLabel, `Generated ${today}`],
+          [],
+          ['Metric', `Amount (${currencySymbol})`],
+          ['Total Receivables (Khata + Invoice Dues)', Math.round(totalReceivables)],
+          ['Supplier Payables', Math.round(totalPayables)],
+          ['Net Pending Dues', Math.round(totalReceivables - totalPayables)],
+          [],
+          ['Invoice Aging Bucket', `Amount (${currencySymbol})`],
+          ['0-15 Days (Current)', Math.round(aging.current)],
+          ['16-30 Days (Due Soon)', Math.round(aging.dueSoon)],
+          ['30+ Days (Overdue)', Math.round(aging.overdue)],
+        ];
+      } else {
+        // Default: Profit & Loss statement
+        filename = `pl-${today}.csv`;
+        rows = [
+          ['Profit & Loss Statement', periodLabel, `Generated ${today}`],
+          [],
+          ['Section', 'Line Item', `Amount (${currencySymbol})`],
+          ['REVENUE', 'Gross Sales Revenue', Math.round(totalRevenue)],
+          ['COGS', `Cost of Goods Sold (tracked: ${cogsTracked ? 'Yes' : 'No'})`, Math.round(cogs)],
+          ['GROSS PROFIT', 'Gross Profit', Math.round(grossProfit)],
+        ];
+        if (expensesByCategory.length > 0) {
+          for (const exp of expensesByCategory) {
+            rows.push(['OPERATING EXPENSES', exp.category, Math.round(exp.amount)]);
+          }
+        } else {
+          rows.push(['OPERATING EXPENSES', `Total (source: ${expensesSource})`, Math.round(totalExpenses)]);
+        }
+        rows.push(
+          ['TOTAL OPERATING EXPENSES', `Tracked: ${expensesTracked ? 'Yes' : 'No'}`, Math.round(totalExpenses)],
+          ['NET', netProfit >= 0 ? 'Net Profit' : 'Net Loss', Math.round(netProfit)],
+          ['MARGIN', 'Net Margin %', `${marginPct}%`],
+        );
+      }
+
+      return new NextResponse(toCsvString(rows), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Cache-Control': 'private, no-store',
+        },
+      });
+    }
 
     return NextResponse.json({
       period,
@@ -441,9 +556,15 @@ export async function GET(req: NextRequest) {
       pnl: {
         grossSales: totalRevenue,
         cogs,
+        cogsTracked,
         grossProfit,
         operatingExpenses: totalExpenses,
+        expensesTracked,
+        expensesSource,
+        expensesByCategory,
         netProfit,
+        marginPct,
+        netProfitLabel: netProfit >= 0 ? 'Net Profit' : 'Net Loss',
       },
       khataSummary: {
         totalReceivables,

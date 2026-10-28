@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       totalSpent: number;
       firstVisit: Date | null;
       lastVisit: Date | null;
+      gstin?: string | null;
       itemFrequency: Record<string, number>;
       recentOrders: Array<{ id: string; total: number; date: Date; status: string }>;
     }
@@ -57,10 +58,12 @@ export async function GET(req: NextRequest) {
       const phone = (customer.phone || '').replace(/\D/g, '');
       // Preserve contacts without a phone by ID; never combine unrelated walk-in customers.
       const key = phone || `customer:${customer.id}`;
+      // gstin: column first; fall back to the legacy "GSTIN: …" notes encoding.
+      const legacyNotesGstin = customer.notes ? (customer.notes.match(/GSTIN:\s*([A-Z0-9]{15})/i)?.[1] ?? null) : null;
       if (!customerMap.has(key)) customerMap.set(key, {
         id: customer.id, phone, name: customer.name || 'Customer', deliveryAddress: customer.address,
         ordersCount: 0, totalSpent: 0, firstVisit: null, lastVisit: null,
-        itemFrequency: {}, recentOrders: [],
+        itemFrequency: {}, recentOrders: [], gstin: customer.gstin || legacyNotesGstin,
       });
     }
     for (const ord of orders) {
@@ -80,6 +83,7 @@ export async function GET(req: NextRequest) {
           lastVisit: ord.createdAt,
           itemFrequency: {},
           recentOrders: [],
+          gstin: aiC ? (aiC.gstin || (aiC.notes ? (aiC.notes.match(/GSTIN:\s*([A-Z0-9]{15})/i)?.[1] ?? null) : null)) : null,
         };
         customerMap.set(cleanPhone, existing);
       }
@@ -142,6 +146,7 @@ export async function GET(req: NextRequest) {
         name: c.name,
         deliveryAddress: c.deliveryAddress,
         address: c.deliveryAddress,
+        gstin: c.gstin ?? null,
         ordersCount: c.ordersCount,
         totalSpent: Number(c.totalSpent.toFixed(2)),
         avgOrderValue: c.ordersCount ? Number((c.totalSpent / c.ordersCount).toFixed(2)) : 0,
@@ -206,9 +211,10 @@ export async function POST(req: NextRequest) {
     const id = `contact_${createHash('sha256').update(JSON.stringify([business.id, key])).digest('hex')}`;
     const address = typeof body.address === 'string' && body.address.trim() ? body.address.trim() : null;
     const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;
-    const gstin = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim() : null;
-    const notes = gstin ? `GSTIN: ${gstin}` : (typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null);
-    const data: any = { businessId: business.id, name: body.name.trim(), phone, address, email, notes };
+    const gstin = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim().toUpperCase() : null;
+    // GSTIN now lives in its own column (legacy encodings in `notes` are no longer written).
+    const notes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
+    const data: any = { businessId: business.id, name: body.name.trim(), phone, address, email, notes, gstin };
     const replay = (customer: { businessId: string; name: string; phone: string | null }) => customer.businessId === data.businessId && customer.name === data.name && customer.phone === data.phone;
     const existing = await db.aiCustomer.findUnique({ where: { id } });
     if (existing) return replay(existing) ? NextResponse.json({ customer: existing, replayed: true }) : NextResponse.json({ error: 'This request was used for different customer details.' }, { status: 409 });
@@ -265,14 +271,12 @@ export async function PATCH(req: NextRequest) {
     const updatedEmail = body.email !== undefined ? (typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null) : existing?.email;
 
     let updatedNotes = existing?.notes || null;
+    let updatedGstin: string | null | undefined = existing?.gstin ?? null;
     if (body.gstin !== undefined) {
-      const gstinVal = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim() : null;
-      if (gstinVal) {
-        const cleanNotes = (existing?.notes || '').replace(/GSTIN:\s*[^|,\n]+/gi, '').replace(/^\|\s*|\s*\|$/g, '').trim();
-        updatedNotes = cleanNotes ? `${cleanNotes} | GSTIN: ${gstinVal}` : `GSTIN: ${gstinVal}`;
-      } else {
-        updatedNotes = (existing?.notes || '').replace(/GSTIN:\s*[^|,\n]+/gi, '').replace(/^\|\s*|\s*\|$/g, '').trim() || null;
-      }
+      // Single source of truth: the gstin column. Legacy "GSTIN: …" text in
+      // notes is stripped so the two can never disagree.
+      updatedGstin = typeof body.gstin === 'string' && body.gstin.trim() ? body.gstin.trim().toUpperCase() : null;
+      updatedNotes = (existing?.notes || '').replace(/GSTIN:\s*[^|,\n]+/gi, '').replace(/^\|\s*|\s*\|$/g, '').trim() || null;
     } else if (body.notes !== undefined) {
       updatedNotes = typeof body.notes === 'string' && body.notes.trim() ? body.notes.trim() : null;
     }
@@ -287,6 +291,7 @@ export async function PATCH(req: NextRequest) {
           address: updatedAddress,
           email: updatedEmail,
           notes: updatedNotes,
+          ...(body.gstin !== undefined ? { gstin: updatedGstin } : {}),
         },
       });
     } else {
@@ -300,6 +305,7 @@ export async function PATCH(req: NextRequest) {
           address: updatedAddress,
           email: updatedEmail,
           notes: updatedNotes,
+          gstin: updatedGstin ?? null,
         },
       });
     }

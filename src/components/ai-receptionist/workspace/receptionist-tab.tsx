@@ -39,6 +39,7 @@ import {
   Trash2,
   RefreshCw,
   Zap,
+  Copy,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

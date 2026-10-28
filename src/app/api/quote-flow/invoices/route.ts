@@ -169,6 +169,7 @@ export async function POST(req: Request) {
             qty: Number(it.qty) || 1,
             unitPrice: Number(it.unitPrice) || 0,
             hsnCode: it.hsnCode || null,
+            gstRate: Number(it.gstRate) > 0 ? Number(it.gstRate) : null,
           },
         });
       }

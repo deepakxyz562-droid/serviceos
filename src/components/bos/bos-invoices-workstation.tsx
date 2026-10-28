@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import {
   Barcode,
   Calendar,
@@ -15,6 +15,7 @@ import {
   ExternalLink,
   FileText,
   Image as ImageIcon,
+  Inbox,
   Link2,
   Plus,
   Printer,
@@ -32,6 +33,7 @@ import {
 import { BosBrand } from '@/components/bos/brand';
 import { BosProductThumbnail } from '@/components/bos/bos-product-image-resolver';
 import { BosSignaturePadModal } from '@/components/bos/bos-signature-pad-modal';
+import { BosEmptyState } from '@/components/bos/bos-empty-state';
 import {
   type BosCustomer,
   type BosProductItem,
@@ -85,7 +87,89 @@ export type SavedBosInvoice = {
   receivedAmount?: number;
   balanceDue?: number;
   paymentMode?: 'cash' | 'upi' | 'card' | 'bank' | 'cheque';
+  /** ISO createdAt from the API — used for date-range filtering & statements. */
+  createdAtIso?: string;
+  dueDateIso?: string;
+  /** Raw DB status (DRAFT | SENT | PARTIALLY_PAID | PAID | OVERDUE). */
+  rawStatus?: string;
+  customerId?: string;
+  customerPhone?: string;
+  /** Per-invoice payment records from GET /api/commerce/invoices (statements). */
+  payments?: Array<{ id: string; amount: number; method: string; paidAt: string; reference?: string }>;
 };
+
+/** Book-wide invoice stats from GET /api/commerce/invoices `overview`. */
+export type BosInvoiceOverview = {
+  totalInvoiced: number;
+  totalPaid: number;
+  totalUnpaid: number;
+  totalOverdue: number;
+  count: number;
+};
+
+type InvoiceDateRangeKey = 'all' | 'today' | 'week' | 'month' | 'custom';
+type InvoiceStatusFilterKey = 'ALL' | 'DRAFT' | 'SENT' | 'PARTIALLY_PAID' | 'PAID' | 'OVERDUE';
+
+/** YYYY-MM-DD in local time for `from`/`to` query params. */
+function toIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Map a GET /api/commerce/invoices row to the SavedBosInvoice display shape. */
+function mapApiInvoiceToSaved(inv: Record<string, unknown>): SavedBosInvoice {
+  const rawStatus = String(inv.rawStatus || 'DRAFT').toUpperCase();
+  const statusMap: Record<string, SavedBosInvoice['status']> = {
+    DRAFT: 'Draft',
+    SENT: 'Unpaid',
+    PARTIALLY_PAID: 'Partial',
+    PAID: 'Paid',
+    OVERDUE: 'Unpaid',
+    UNPAID: 'Unpaid',
+  };
+  const total = Number(inv.totalAmount ?? 0) || 0;
+  const balance = Number(inv.balance ?? 0) || 0;
+  const status: SavedBosInvoice['status'] =
+    total > 0 && balance <= 0 ? 'Paid' : statusMap[rawStatus] || 'Unpaid';
+  const payments = Array.isArray(inv.payments)
+    ? (inv.payments as Array<Record<string, unknown>>).map((p) => ({
+        id: String(p.id || ''),
+        amount: Number(p.amount) || 0,
+        method: String(p.method || 'MANUAL'),
+        paidAt: String(p.paidAt || ''),
+        reference: p.reference ? String(p.reference) : undefined,
+      }))
+    : undefined;
+  const fmt = (iso: unknown) =>
+    iso
+      ? new Date(String(iso)).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+      : '';
+  return {
+    id: String(inv.id || ''),
+    invoiceNumber: String(inv.invoiceNumber || inv.number || 'INV'),
+    docType: 'gst',
+    customerName: String(inv.customerName || 'Customer'),
+    customerGstin: String(inv.customerGstin || ''),
+    date: fmt(inv.createdAt),
+    dueDate: fmt(inv.dueDate),
+    totalAmount: total,
+    paidAmount: Number(inv.paidAmount ?? 0) || 0,
+    status,
+    balanceDue: balance,
+    createdAtIso: inv.createdAt ? String(inv.createdAt) : undefined,
+    dueDateIso: inv.dueDate ? String(inv.dueDate) : undefined,
+    rawStatus,
+    customerId: inv.customerId ? String(inv.customerId) : undefined,
+    customerPhone: String(inv.customerPhone || ''),
+    payments,
+  };
+}
 
 type BosInvoicesWorkstationProps = {
   storeSettings: BosStoreSettings;
@@ -189,6 +273,105 @@ export function BosInvoicesWorkstation({
 }: BosInvoicesWorkstationProps) {
   const { t, language } = useBosTranslation();
   const currencySymbol = storeSettings.currencySymbol || '₹';
+
+  // ── Invoice list: server-side filters + book-wide stats ─────────────────
+  // The stats header always reads from the API's `overview` (computed over the
+  // FULL invoice book), so filtering the list never shrinks the header numbers.
+  const [dateRange, setDateRange] = useState<InvoiceDateRangeKey>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilterKey>('ALL');
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [overview, setOverview] = useState<BosInvoiceOverview | null>(null);
+  const [remoteInvoices, setRemoteInvoices] = useState<SavedBosInvoice[] | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [listRefreshNonce, setListRefreshNonce] = useState(0);
+  const builderTopRef = useRef<HTMLDivElement>(null);
+
+  // 300ms debounce for the search box before it hits the API.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const fetchInvoiceList = useCallback(async () => {
+    if (demoMode) return;
+    setListLoading(true);
+    setListError(null);
+    try {
+      const params = new URLSearchParams();
+      const todayIso = toIsoDate(new Date());
+      if (dateRange === 'today') {
+        params.set('from', todayIso);
+        params.set('to', todayIso);
+      } else if (dateRange === 'week') {
+        const weekStart = new Date();
+        const day = weekStart.getDay();
+        weekStart.setDate(weekStart.getDate() - (day === 0 ? 6 : day - 1)); // Monday
+        params.set('from', toIsoDate(weekStart));
+        params.set('to', todayIso);
+      } else if (dateRange === 'month') {
+        const monthStart = new Date();
+        monthStart.setDate(1);
+        params.set('from', toIsoDate(monthStart));
+        params.set('to', todayIso);
+      } else if (dateRange === 'custom' && customFrom) {
+        params.set('from', customFrom);
+        if (customTo) params.set('to', customTo);
+      }
+      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (debouncedSearch.trim()) params.set('q', debouncedSearch.trim());
+
+      const qs = params.toString();
+      const res = await authFetch(`/api/commerce/invoices${qs ? `?${qs}` : ''}`, {
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(
+          (data && data.error) || `Failed to load invoices (HTTP ${res.status})`,
+        );
+      }
+      const rows = Array.isArray(data?.invoices) ? data.invoices : [];
+      setRemoteInvoices(rows.map((row: Record<string, unknown>) => mapApiInvoiceToSaved(row)));
+      if (data?.overview && typeof data.overview === 'object') {
+        setOverview({
+          totalInvoiced: Number(data.overview.totalInvoiced) || 0,
+          totalPaid: Number(data.overview.totalPaid) || 0,
+          totalUnpaid: Number(data.overview.totalUnpaid) || 0,
+          totalOverdue: Number(data.overview.totalOverdue) || 0,
+          count: Number(data.overview.count) || 0,
+        });
+      }
+    } catch (err: any) {
+      setListError(err?.message || 'Failed to load invoices.');
+    } finally {
+      setListLoading(false);
+    }
+  }, [demoMode, dateRange, customFrom, customTo, statusFilter, debouncedSearch]);
+
+  // Refetch whenever filters change or an action (save / mark-paid / delete) bumps the nonce.
+  useEffect(() => {
+    void fetchInvoiceList();
+  }, [fetchInvoiceList, listRefreshNonce]);
+
+  /** Wrap an invoice action and refresh list + book-wide stats afterwards. */
+  const runAndRefreshList = async (action: () => unknown | Promise<unknown>) => {
+    await action();
+    setListRefreshNonce((n) => n + 1);
+  };
+
+  const handleSavedInvoiceAndRefresh = (invoice: SavedBosInvoice) => {
+    void runAndRefreshList(() => onInvoiceSaved?.(invoice));
+  };
+
+  const filtersActive =
+    dateRange !== 'all' || statusFilter !== 'ALL' || debouncedSearch.trim() !== '';
+
+  // Production uses server-filtered data once loaded; demoMode keeps local props.
+  const displayInvoices = demoMode ? invoices : remoteInvoices ?? invoices;
 
   // Branding & Signature Modal
   const [showBrandingModal, setShowBrandingModal] = useState(false);
@@ -839,7 +1022,7 @@ export function BosInvoicesWorkstation({
         balanceDue,
         paymentMode,
       };
-      onInvoiceSaved?.(saved);
+      if (onInvoiceSaved) handleSavedInvoiceAndRefresh(saved);
 
       const win = window.open('', '_blank', 'width=900,height=800');
       if (win) {
@@ -1085,7 +1268,7 @@ export function BosInvoicesWorkstation({
       </div>
 
       {/* Main 12-Column Grid: Left Builder (7 cols) + Right Live Preview (5 cols) */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
+      <div ref={builderTopRef} className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start">
         {/* LEFT COLUMN: INVOICE BUILDER (7 cols) */}
         <div className="lg:col-span-7 space-y-3.5">
           {/* CARD 1: INVOICE DETAILS */}
@@ -3329,6 +3512,13 @@ export function BosInvoicesWorkstation({
                     maxLength={15}
                     className="mt-1 w-full rounded-xl border border-[#DCE9E3] px-3 py-2 text-[12.5px] font-mono uppercase focus:outline-none focus:border-[#0A6847]"
                   />
+                  {/* Light validation: warn only, never hard-block unusual values. */}
+                  {newCustomerForm.gstin.trim().length > 0 &&
+                    !/^[0-9]{2}[A-Z0-9]{10}[0-9A-Z]{3}$/.test(newCustomerForm.gstin.trim()) && (
+                      <p className="mt-1 text-[10.5px] font-medium text-amber-600">
+                        This doesn&#39;t look like a standard 15-character GSTIN — double-check before saving.
+                      </p>
+                    )}
                 </div>
                 <div>
                   <label className="block text-[11.5px] font-semibold text-[#334155]">
@@ -3393,21 +3583,176 @@ export function BosInvoicesWorkstation({
         </div>
       )}
 
-      {/* Recent Invoices — hydrated from /api/quote-flow/invoices (GET) in the parent.
-          Saving an invoice above calls onInvoiceSaved, which prepends it to this list
-          and persists across reloads. Mark-Paid / Delete trigger PATCH and DELETE on
-          the same quote-flow contract. */}
-      {invoices.length > 0 && (
-        <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[15.5px] font-extrabold text-[#111827]">
-              Recent Invoices
-            </h2>
-            <span className="text-[11.5px] font-semibold text-[#64748B]">
-              {invoices.length} saved
-            </span>
+      {/* Recent Invoices — server-filtered list from /api/commerce/invoices (GET).
+          The stats header reads the book-wide `overview` so metrics never shrink
+          with filters. Saving / Mark-Paid / Delete refresh the list + stats. */}
+      <div className="rounded-2xl border border-[#DCE9E3] bg-white p-4 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15.5px] font-extrabold text-[#111827]">
+            Recent Invoices
+          </h2>
+          <span className="text-[11.5px] font-semibold text-[#64748B]">
+            {filtersActive && overview
+              ? `${displayInvoices.length} of ${overview.count} shown`
+              : `${overview ? overview.count : displayInvoices.length} saved`}
+          </span>
+        </div>
+
+        {/* Book-wide stats header — Total Invoiced / Paid / Unpaid / Overdue */}
+        {!demoMode && (
+          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+            {(
+              [
+                { label: 'Total Invoiced', value: overview?.totalInvoiced, cls: 'text-[#111827]' },
+                { label: 'Paid', value: overview?.totalPaid, cls: 'text-[#0A7B56]' },
+                { label: 'Unpaid', value: overview?.totalUnpaid, cls: 'text-amber-600' },
+                { label: 'Overdue', value: overview?.totalOverdue, cls: 'text-[#DC2626]' },
+              ] as const
+            ).map((card) => (
+              <div
+                key={card.label}
+                className="rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] px-3 py-2.5"
+              >
+                <p className="text-[11px] font-medium text-[#64748B]">{card.label}</p>
+                {overview ? (
+                  <p className={`mt-0.5 text-[18px] font-extrabold leading-tight ${card.cls}`}>
+                    {currencySymbol} {formatTwoDecimals(card.value ?? 0)}
+                  </p>
+                ) : (
+                  <div className="mt-1.5 h-5 w-20 animate-pulse rounded bg-[#E2E8F0]" />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Filter row: date-range chips + status dropdown + debounced search */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            {(
+              [
+                { id: 'all', label: 'All' },
+                { id: 'today', label: 'Today' },
+                { id: 'week', label: 'This Week' },
+                { id: 'month', label: 'This Month' },
+                { id: 'custom', label: 'Custom' },
+              ] as const
+            ).map((chip) => {
+              const active = dateRange === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setDateRange(chip.id)}
+                  className={`rounded-lg px-2.5 py-1 text-[11.5px] font-bold transition cursor-pointer ${
+                    active
+                      ? 'bg-[#0A6847] text-white shadow-2xs'
+                      : 'border border-[#E2E8F0] bg-[#F8FAFC] text-[#334155] hover:bg-[#F1F5F9]'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
           </div>
 
+          <select
+            aria-label="Filter invoices by status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as InvoiceStatusFilterKey)}
+            className="h-8 rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[11.5px] font-semibold text-[#1E293B] focus:border-[#0A6847] focus:outline-hidden cursor-pointer"
+          >
+            <option value="ALL">All Status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="SENT">Sent</option>
+            <option value="PARTIALLY_PAID">Partially Paid</option>
+            <option value="PAID">Paid</option>
+            <option value="OVERDUE">Overdue</option>
+          </select>
+
+          <div className="relative min-w-[180px] flex-1">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#64748B]" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search customer or invoice #..."
+              className="h-8 w-full rounded-xl border border-[#DCE9E3] bg-[#F8FCFA] pl-8 pr-3 text-[12px] text-[#111827] placeholder:text-[#94A3B8] focus:border-[#0A6847] focus:bg-white focus:outline-hidden"
+            />
+          </div>
+        </div>
+
+        {/* Custom date range reveals two date inputs */}
+        {dateRange === 'custom' && (
+          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-[#EBF2EE] bg-[#FAFDFB] p-2.5">
+            <div>
+              <label className="block text-[11px] font-semibold text-[#334155] mb-1">From</label>
+              <input
+                type="date"
+                value={customFrom}
+                max={customTo || undefined}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-8 rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+              />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-[#334155] mb-1">To</label>
+              <input
+                type="date"
+                value={customTo}
+                min={customFrom || undefined}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-8 rounded-xl border border-[#DCE9E3] bg-white px-2.5 text-[12px] text-[#111827] focus:border-[#0A6847] focus:outline-hidden"
+              />
+            </div>
+            {customFrom && customTo && customFrom > customTo && (
+              <p className="text-[11px] font-semibold text-[#DC2626]">From date is after To date.</p>
+            )}
+          </div>
+        )}
+
+        {/* Honest fetch error (never styled as success) */}
+        {listError && (
+          <div className="flex items-center justify-between rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-[12px] font-semibold text-[#991B1B]">
+            <span>{listError}</span>
+            <button
+              type="button"
+              onClick={() => setListRefreshNonce((n) => n + 1)}
+              className="text-xs font-bold underline cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {listLoading && displayInvoices.length === 0 ? (
+          <div className="space-y-2 py-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-9 animate-pulse rounded-lg bg-[#F1F5F9]" />
+            ))}
+          </div>
+        ) : displayInvoices.length === 0 ? (
+          <BosEmptyState
+            icon={Inbox}
+            compact
+            title={filtersActive ? 'No invoices match these filters' : 'No invoices yet'}
+            description={
+              filtersActive
+                ? 'Try a different date range, status or search — your existing invoices are safe.'
+                : 'Create GST-compliant bills in seconds and get paid faster via UPI links.'
+            }
+            ctaLabel={filtersActive ? 'Clear filters' : 'Create your first invoice'}
+            onCta={() => {
+              if (filtersActive) {
+                setDateRange('all');
+                setStatusFilter('ALL');
+                setSearchInput('');
+              } else {
+                builderTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+          />
+        ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-[12px]">
               <thead>
@@ -3421,7 +3766,7 @@ export function BosInvoicesWorkstation({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EEF5F1]">
-                {invoices.map((inv) => {
+                {displayInvoices.map((inv) => {
                   const isPaid = inv.status === 'Paid';
                   const isUnpaid =
                     inv.status === 'Unpaid' ||
@@ -3499,7 +3844,7 @@ export function BosInvoicesWorkstation({
                           {isUnpaid && onMarkInvoicePaid && (
                             <button
                               type="button"
-                              onClick={() => onMarkInvoicePaid(inv.id)}
+                              onClick={() => void runAndRefreshList(() => onMarkInvoicePaid(inv.id))}
                               className="rounded-lg border border-[#DCE9E3] bg-white px-2 py-1 text-[10.5px] font-bold text-[#0A6847] hover:bg-[#F4F8F6] cursor-pointer"
                             >
                               Mark Paid
@@ -3508,7 +3853,7 @@ export function BosInvoicesWorkstation({
                           {onDeleteInvoice && (
                             <button
                               type="button"
-                              onClick={() => onDeleteInvoice(inv.id)}
+                              onClick={() => void runAndRefreshList(() => onDeleteInvoice(inv.id))}
                               disabled={isPaid}
                               title={
                                 isPaid
@@ -3528,8 +3873,8 @@ export function BosInvoicesWorkstation({
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
