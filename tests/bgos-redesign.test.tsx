@@ -263,15 +263,15 @@ it('renders Tickets & Support Helpdesk workstation with status pills, 8-ticket q
   ).toBeDefined();
 });
 
-it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview canvas, and campaign velocity', async () => {
+it('renders Marketing Studio with real KPI cards, honest tabs, and AI Content studio', async () => {
   const { BgosSocialMarketing: SocialMediaView } = await import('@/components/bgos/social-marketing');
 
   render(<SocialMediaView isDemo={true} />);
 
-  // 1. Header & Primary Actions (Matches Screenshot)
+  // 1. Header & Primary Actions
   expect(screen.getByRole('heading', { level: 1, name: /Marketing Studio/i })).toBeDefined();
   expect(
-    screen.getByText('Create, publish and manage your marketing content across email, SMS, WhatsApp and social media.')
+    screen.getByText('Create, publish and manage your marketing content across social, email, SMS and WhatsApp.')
   ).toBeDefined();
   expect(screen.getByText(/AI Enabled/i)).toBeDefined();
   expect(screen.getByRole('button', { name: /\+ Create Content/i })).toBeDefined();
@@ -279,47 +279,58 @@ it('renders Marketing Studio with 5 KPI cards, AI Post Generator, live preview c
   expect(screen.getByRole('button', { name: /Create Post/i })).toBeDefined();
   expect(screen.getByRole('button', { name: /View Analytics/i })).toBeDefined();
 
-  // 1b. Screenshot Overview Dashboard (4 Top KPIs, Create with AI, Preview, Connected Channels, Recent Content, Upcoming Schedule)
-  expect(screen.getByText('Published Posts')).toBeDefined();
-  expect(screen.getByText('Scheduled Posts')).toBeDefined();
-  expect(screen.getByText('Total Reach')).toBeDefined();
-  expect(screen.getByText('Engagement Rate')).toBeDefined();
+  // 1b. Overview: real KPIs, Connected Channels, Campaigns, Recent Content, Upcoming Schedule
+  expect(screen.getByText('Total Posts')).toBeDefined();
+  expect(screen.getByText('Scheduled')).toBeDefined();
+  expect(screen.getByText('Published')).toBeDefined();
+  // "Connected Channels" appears as both a KPI card label and the card heading
+  expect(screen.getAllByText('Connected Channels').length).toBeGreaterThanOrEqual(1);
+  expect(screen.getByText('Email (SES)')).toBeDefined();
+  expect(screen.getByText('SMS (Twilio)')).toBeDefined();
+  expect(screen.getByText('Active Campaigns')).toBeDefined();
+  expect(screen.getByText('Spring Cleaning 2025')).toBeDefined();
+  expect(screen.getByText('Recent Content')).toBeDefined();
+  expect(screen.getByText('Upcoming Schedule')).toBeDefined();
+
+  // Fabricated rows/KPIs must NOT render
+  expect(screen.queryByText('✨ Diwali Special! ✨')).toBeNull();
+  expect(screen.queryByText('Diwali Cleaning Offer')).toBeNull();
+  expect(screen.queryByText('Festive Offer Reminder')).toBeNull();
+  expect(screen.queryByText('Total Reach')).toBeNull();
+  expect(screen.queryByText('Engagement Rate')).toBeNull();
+
+  // 2. Sub-Navigation Tabs — honest tab set with live counts
+  expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^AI Content$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Composer$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Posts \(\d+\)$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Meta Templates$/i })).toBeDefined();
+  expect(screen.getByRole('button', { name: /^Accounts \(\d+\)$/i })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /^Calendar$/i })).toBeNull();
+  expect(screen.queryByRole('button', { name: /AI Post Generator/i })).toBeNull();
+  expect(screen.queryByRole('button', { name: /Posts Feed/i })).toBeNull();
+
+  // 3. Interactivity: AI Content tab renders generator + neutral preview
+  fireEvent.click(screen.getByRole('button', { name: /^AI Content$/i }));
   expect(screen.getByText('Create with AI')).toBeDefined();
-  expect(screen.getByText('AI Powered')).toBeDefined();
+  expect(screen.getByText('Quick start templates')).toBeDefined();
   expect(screen.getByText('Choose channels (optional)')).toBeDefined();
   expect(screen.getByRole('button', { name: /Generate Content/i })).toBeDefined();
   expect(screen.getByText('Preview')).toBeDefined();
-  expect(screen.getAllByText('Your Business').length).toBeGreaterThanOrEqual(1);
-  expect(screen.getByText('✨ Diwali Special! ✨')).toBeDefined();
-  expect(screen.getByText('Connected Channels')).toBeDefined();
-  expect(screen.getByText('Email (SES)')).toBeDefined();
-  expect(screen.getByText('SMS (Twilio)')).toBeDefined();
-  expect(screen.getByText('Recent Content')).toBeDefined();
-  expect(screen.getByText('Diwali Cleaning Offer')).toBeDefined();
-  expect(screen.getByText('Holiday Service Announcement')).toBeDefined();
-  expect(screen.getByText('Upcoming Schedule')).toBeDefined();
-  expect(screen.getByText('Festive Offer Reminder')).toBeDefined();
-  expect(screen.getByText('End of Month Offer')).toBeDefined();
+  expect(screen.getByText(/Write a prompt and click Generate/i)).toBeDefined();
+  expect(screen.queryByText('✨ Diwali Special! ✨')).toBeNull();
 
-  // 2. Sub-Navigation Tabs
-  expect(screen.getByRole('button', { name: /^Overview$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Content$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Calendar$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^(Meta )?Templates$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /AI Post Generator/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Social Media Accounts/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Posts Feed/i })).toBeDefined();
-  expect(screen.getByRole('button', { name: /Post Composer/i })).toBeDefined();
-
-  // 3. Interactivity: Typing concept updates counter
-  const promptInput = screen.getByPlaceholderText(/Example: Create a Diwali offer/i);
+  const promptInput = screen.getByPlaceholderText(/Announce a 20% discount week/i) as HTMLTextAreaElement;
   fireEvent.change(promptInput, { target: { value: 'Diwali special home deep cleaning offer' } });
   expect(screen.getByText('39/500')).toBeDefined();
 
+  // 3b. Quick start templates fill the prompt with the workspace name
+  fireEvent.click(screen.getByRole('button', { name: 'Seasonal Offer' }));
+  expect(promptInput.value).toContain('Your Business');
+
   // 4. Interactivity: Launch Campaign Dialog
-  const launchBtn = screen.getByRole('button', { name: /\+ Create Campaign/i });
-  fireEvent.click(launchBtn);
+  fireEvent.click(screen.getByRole('button', { name: /\+ Create Campaign/i }));
   expect(screen.getByText('Create Marketing Campaign')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: /^Cancel$/i }));
 });

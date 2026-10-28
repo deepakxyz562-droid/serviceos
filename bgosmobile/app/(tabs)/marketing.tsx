@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import React, { useState, useRef } from 'react';
 import { Alert, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
   Screen,
@@ -18,12 +19,14 @@ import {
 } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
+import { getToken } from '../../src/lib/auth';
 import { WEB_URL } from '../../src/lib/constants';
 import { validateSocialPost } from '../../src/lib/social-validation';
 import { futureLocalTime } from '../../src/lib/dates';
 import type { BgosWorkspace } from '../../../shared/bgos-contracts';
 
 type Account = { id: string; platform: string; accountName: string; isActive: boolean };
+type WhatsAppConfig = { isConfigured: boolean; mode: string };
 type Post = {
   id: string;
   content: string;
@@ -35,6 +38,7 @@ type Post = {
 };
 
 export default function MarketingScreen() {
+  const router = useRouter();
   const pendingRequest = useRef<{ body: string; key: string } | null>(null);
   const saving = useRef(false);
   const workspace = useResource<BgosWorkspace>('/api/bgos/workspace');
@@ -45,6 +49,8 @@ export default function MarketingScreen() {
     15000
   );
   const accounts = useResource<{ data: Account[] }>('/api/social/accounts');
+  const waConfig = useResource<WhatsAppConfig>('/api/whatsapp/config');
+  const whatsappConfigured = Boolean(waConfig.data?.isConfigured);
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -75,12 +81,11 @@ export default function MarketingScreen() {
         },
       });
       setContent(data.caption);
-    } catch {
-      const bizName = workspace.data?.name || 'Our Business';
-      setContent(
-        topic.trim()
-          ? `Exciting updates from ${bizName}! ${topic}. Contact our team today or book online.`
-          : `Looking for top-tier service? ${bizName} is ready to help you achieve the best results. Contact us today or visit our website!`
+    } catch (e) {
+      // Never fabricate a caption when the AI service fails — surface the real
+      // error so the user can retry or write the caption manually.
+      setError(
+        `${(e as Error).message || 'AI caption generation failed.'} You can retry, or write the caption below manually.`
       );
     } finally {
       setBusy(false);
@@ -145,9 +150,23 @@ export default function MarketingScreen() {
     }
   }
 
+  // Opens the web OAuth connect flow with the app's access token so the
+  // browser session is authenticated — without it the flow bounces to login.
+  async function openOAuth(platform: 'googlebusiness' | 'facebook' | 'instagram') {
+    try {
+      const token = await getToken();
+      const authPart = token ? `&auth=${encodeURIComponent(token)}` : '';
+      await Linking.openURL(`${WEB_URL}/api/oauth/${platform}?product=bgos&returnView=socialMedia${authPart}`);
+    } catch {
+      setError('Could not open the browser to connect. Try again or connect from BGOS web.');
+    }
+  }
+
   function handleChannelChipPress(platform: 'googlebusiness' | 'facebook' | 'instagram' | 'whatsapp') {
+    // WhatsApp status is real configuration (Meta Cloud API credentials) —
+    // the Integrations screen shows the actual state, no canned claims here.
     if (platform === 'whatsapp') {
-      Alert.alert('WhatsApp Marketing', 'WhatsApp broadcasts are active for your workspace customers.');
+      router.push('/(tabs)/integrations');
       return;
     }
     const isConn = available.some((a) => a.platform === platform && a.isActive);
@@ -163,7 +182,7 @@ export default function MarketingScreen() {
           {
             text: '1-Click Connect',
             onPress: () => {
-              Linking.openURL(`${WEB_URL}/api/oauth/${platform}?product=bgos&returnView=socialMedia`);
+              void openOAuth(platform);
             },
           },
         ]
@@ -225,9 +244,16 @@ export default function MarketingScreen() {
               Instagram {available.some((a) => a.platform === 'instagram' && a.isActive) ? '✓' : '+'}
             </Text>
           </Pressable>
-          <Pressable onPress={() => handleChannelChipPress('whatsapp')} style={styles.channelChip}>
+          <Pressable
+            onPress={() => handleChannelChipPress('whatsapp')}
+            style={[styles.channelChip, !whatsappConfigured && { opacity: 0.55 }]}
+            accessibilityRole="button"
+            accessibilityLabel={whatsappConfigured ? 'WhatsApp connected' : 'Connect WhatsApp'}
+          >
             <MaterialIcons name="chat" size={14} color="#FFFFFF" />
-            <Text style={styles.channelChipText}>WhatsApp ✓</Text>
+            <Text style={styles.channelChipText}>
+              {whatsappConfigured ? 'WhatsApp ✓' : 'Connect WhatsApp'}
+            </Text>
           </Pressable>
         </View>
       </Card>
@@ -389,7 +415,8 @@ export default function MarketingScreen() {
                 label="Media URL (Image)"
                 value={media}
                 onChangeText={setMedia}
-                placeholder="https://images.unsplash.com/…"
+                placeholder="https://your-cdn.com/photo.jpg"
+                autoCapitalize="none"
               />
 
               <Action

@@ -2,6 +2,107 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { callAI } from '@/lib/ai-client';
+import { decryptToken } from '@/lib/social/crypto';
+import { refreshExpiredToken } from '@/lib/social/token-refresh';
+import { updateGoogleBusinessProfile } from '@/lib/social/adapters/googlebusiness';
+import type { SocialAccountData } from '@/lib/social/types';
+
+/**
+ * PUT /api/gbp/keywords
+ * Apply an SEO description: always persists to the workspace BrandProfile, and
+ * when pushToGoogle=true AND a Google Business Profile is connected, writes the
+ * description to the LIVE Google location (Business Information API, profile.description).
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const description: string | undefined =
+      typeof body.description === 'string' && body.description.trim()
+        ? body.description.trim().slice(0, 750)
+        : undefined;
+
+    if (!description) {
+      return NextResponse.json({ error: 'description is required' }, { status: 400 });
+    }
+
+    // 1) Always persist to the workspace brand profile
+    const tenant = await db.tenant.findUnique({
+      where: { id: user.tenantId },
+      include: { brandProfile: true },
+    });
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
+    if (tenant.brandProfile) {
+      await db.brandProfile.update({
+        where: { tenantId: user.tenantId },
+        data: { aiGeneratedSummary: description },
+      });
+    } else {
+      await db.brandProfile.create({
+        data: {
+          tenantId: user.tenantId,
+          businessName: tenant.name,
+          industry: tenant.brandProfile?.industry || 'Local Services',
+          location: tenant.brandProfile?.location || '',
+          aiGeneratedSummary: description,
+        },
+      });
+    }
+
+    // 2) Push to the live Google profile when requested + connected
+    let pushedToGoogle = false;
+    let googleError: string | null = null;
+    if (body.pushToGoogle === true) {
+      const account = await db.socialAccount.findFirst({
+        where: { tenantId: user.tenantId, platform: 'googlebusiness', isActive: true },
+      });
+      if (account) {
+        try {
+          const accountData: SocialAccountData = {
+            id: account.id,
+            platform: 'googlebusiness',
+            accountId: account.accountId,
+            accountName: account.accountName,
+            accessToken: decryptToken(account.accessToken),
+            refreshToken: account.refreshToken ? decryptToken(account.refreshToken) : undefined,
+            tokenExpiry: account.tokenExpiry || undefined,
+            metadata:
+              typeof account.metadata === 'string'
+                ? JSON.parse(account.metadata || '{}')
+                : (account.metadata as Record<string, unknown>) || {},
+          };
+          const refreshed = await refreshExpiredToken(accountData);
+          await updateGoogleBusinessProfile(refreshed, { description });
+          pushedToGoogle = true;
+        } catch (err: unknown) {
+          googleError = err instanceof Error ? err.message : 'Google profile update failed';
+          console.warn('[gbp/keywords] Google push failed:', googleError);
+        }
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      pushedToGoogle,
+      ...(googleError ? { googleError } : {}),
+      message: pushedToGoogle
+        ? 'SEO description applied to your live Google Business Profile.'
+        : 'SEO description saved to your BGOS brand profile.',
+    });
+  } catch (error: unknown) {
+    console.error('Error applying GBP SEO description:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to apply SEO description' },
+      { status: 500 },
+    );
+  }
+}
 
 /**
  * POST /api/gbp/keywords

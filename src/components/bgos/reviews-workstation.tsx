@@ -17,7 +17,7 @@
  *   - Photos: Storefront & customer photo gallery management.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Star,
   MessageSquare,
@@ -318,12 +318,11 @@ export function ReviewsView({
   // Create a Post state
   const [postType, setPostType] = useState<'Update' | 'Offer' | 'Event' | 'Product'>('Update');
   const [postContent, setPostContent] = useState('');
-  const [postPhotos, setPostPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=300&auto=format&fit=crop&q=80',
-  ]);
-  const [publishedPosts, setPublishedPosts] = useState<
-    Array<{ id: string; type: string; content: string; date: string; status: string; views: string }>
-  >([
+  const [postPhotos, setPostPhotos] = useState<string[]>([]);
+  const postPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [isPublishingPost, setIsPublishingPost] = useState(false);
+  // Real Google Business posts hydrated from /api/social/posts (fixtures only in demo mode)
+  const fixturePosts: Array<{ id: string; type: string; content: string; date: string; status: string; views: string }> = [
     {
       id: 'gp-1',
       type: 'Offer',
@@ -340,18 +339,45 @@ export function ReviewsView({
       status: 'Published on Google',
       views: '890',
     },
-  ]);
+  ];
+  const [publishedPosts, setPublishedPosts] = useState<
+    Array<{ id: string; type: string; content: string; date: string; status: string; views: string }>
+  >(isDemo || initialReviews === INITIAL_REVIEWS ? fixturePosts : []);
+  const [postsLoading, setPostsLoading] = useState(false);
 
-  // Customer Photos state
-  const [customerPhotos, setCustomerPhotos] = useState<string[]>(CUSTOMER_PHOTOS_INITIAL);
+  // Insights tab: live GBP telemetry from /api/gbp/analytics
+  const [insightsData, setInsightsData] = useState<null | {
+    metrics: {
+      totalViews: number; searchImpressions: number; mapsImpressions: number;
+      callClicks: number; directionRequests: number; websiteClicks: number;
+      totalReviews: number; avgRating: number; responseRate: number; postsPublished: number;
+    };
+    weeklyTrends?: Record<string, string> | null;
+    isLiveGoogleApi: boolean;
+  }>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
-  // Automate Review Requests state
-  const [automateEnabled, setAutomateEnabled] = useState(true);
+  // Customer Photos state — real Google media hydrated from /api/social/photos
+  const [customerPhotos, setCustomerPhotos] = useState<string[]>(
+    isDemo || initialReviews === INITIAL_REVIEWS ? CUSTOMER_PHOTOS_INITIAL : []
+  );
+  const [photosList, setPhotosList] = useState<
+    Array<{ id: string; url: string; source: 'google' | 'queue'; scheduledAt?: string; status?: string }>
+  >([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const overviewPhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // Automate Review Requests state (persisted in tenant settingsJson.reviewAutomation)
+  const [automateEnabled, setAutomateEnabled] = useState(false);
   const [sendAfterCompletion, setSendAfterCompletion] = useState(true);
   const [completionDelay, setCompletionDelay] = useState('1 day');
   const [sendReminder, setSendReminder] = useState(true);
   const [reminderDelay, setReminderDelay] = useState('3 days');
   const [includeDirectLink, setIncludeDirectLink] = useState(true);
+  const [isSavingAutomation, setIsSavingAutomation] = useState(false);
+  const [autoReplyFiveStar, setAutoReplyFiveStar] = useState(true);
+  const [isSendingRequests, setIsSendingRequests] = useState(false);
 
   // AI GBP 100% Completeness & SEO state
   const [isOptimizingSeo, setIsOptimizingSeo] = useState(false);
@@ -376,6 +402,12 @@ export function ReviewsView({
     commentToDm: true,
   });
   const [autoGbpPosting, setAutoGbpPosting] = useState(true);
+
+  // Q&A local state (Google Q&A API is deprecated; FAQs are stored as workspace content)
+  const [qnaItems, setQnaItems] = useState<Array<{ q: string; a: string }>>([]);
+  const [qnaModalOpen, setQnaModalOpen] = useState(false);
+  const [qnaQuestion, setQnaQuestion] = useState('');
+  const [qnaAnswer, setQnaAnswer] = useState('');
 
   // Reviews State
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>(
@@ -507,6 +539,17 @@ export function ReviewsView({
         if (typeof data.autoGbpPosting === 'boolean') {
           setAutoGbpPosting(data.autoGbpPosting);
         }
+        // Hydrate review automation prefs (persisted via settingsJson.reviewAutomation)
+        const ra = data.reviewAutomation;
+        if (ra && typeof ra === 'object') {
+          if (typeof ra.enabled === 'boolean') setAutomateEnabled(ra.enabled);
+          if (typeof ra.autoReplyFiveStar === 'boolean') setAutoReplyFiveStar(ra.autoReplyFiveStar);
+          if (typeof ra.sendAfterCompletion === 'boolean') setSendAfterCompletion(ra.sendAfterCompletion);
+          if (typeof ra.completionDelay === 'string') setCompletionDelay(ra.completionDelay);
+          if (typeof ra.sendReminder === 'boolean') setSendReminder(ra.sendReminder);
+          if (typeof ra.reminderDelay === 'string') setReminderDelay(ra.reminderDelay);
+          if (typeof ra.includeDirectLink === 'boolean') setIncludeDirectLink(ra.includeDirectLink);
+        }
       })
       .catch(() => {});
 
@@ -514,6 +557,92 @@ export function ReviewsView({
       mounted = false;
     };
   }, []);
+
+  // Load real Google Business posts when the Posts tab is opened
+  useEffect(() => {
+    if (activeSubTab !== 'posts' || isDemo || initialReviews === INITIAL_REVIEWS) return;
+    let mounted = true;
+    setPostsLoading(true);
+    authFetch('/api/social/posts?platform=googlebusiness&limit=12')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted) return;
+        const items = Array.isArray(data?.data) ? data.data : [];
+        setPublishedPosts(
+          items.map((p: any) => ({
+            id: p.id,
+            type: p.gbpPostType || 'Update',
+            content: p.content,
+            date: p.publishedAt
+              ? new Date(p.publishedAt).toLocaleDateString()
+              : p.scheduledAt
+              ? `Scheduled ${new Date(p.scheduledAt).toLocaleDateString()}`
+              : new Date(p.createdAt).toLocaleDateString(),
+            status:
+              p.status === 'published'
+                ? 'Published on Google'
+                : p.status === 'failed'
+                ? `Failed${p.failureReason ? `: ${String(p.failureReason).slice(0, 60)}` : ''}`
+                : p.status === 'scheduled'
+                ? 'Scheduled'
+                : p.status === 'draft'
+                ? 'Draft'
+                : p.status,
+            views: p.status === 'published' ? 'Live on Google' : '—',
+          }))
+        );
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setPostsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeSubTab, isDemo, initialReviews]);
+
+  // Load live GBP insights when the Insights tab is opened
+  useEffect(() => {
+    if (activeSubTab !== 'insights') return;
+    let mounted = true;
+    setInsightsLoading(true);
+    authFetch('/api/gbp/analytics')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!mounted || !data?.metrics) return;
+        setInsightsData({
+          metrics: data.metrics,
+          weeklyTrends: data.trendsAvailable ? data.weeklyTrends : null,
+          isLiveGoogleApi: Boolean(data.isLiveGoogleApi),
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setInsightsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [activeSubTab]);
+
+  // Load real Google media + drip queue when the Photos tab is opened
+  const loadPhotos = useCallback(() => {
+    if (isDemo || initialReviews === INITIAL_REVIEWS) return;
+    setPhotosLoading(true);
+    authFetch('/api/social/photos')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!Array.isArray(data?.photos)) return;
+        setPhotosList(data.photos);
+        setCustomerPhotos(data.photos.map((p: any) => p.url));
+      })
+      .catch(() => {})
+      .finally(() => setPhotosLoading(false));
+  }, [isDemo, initialReviews]);
+
+  useEffect(() => {
+    if (activeSubTab === 'photos') loadPhotos();
+  }, [activeSubTab, loadPhotos]);
 
   // Fetch real reviews from backend API on mount
   useEffect(() => {
@@ -720,55 +849,145 @@ export function ReviewsView({
     setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  // Publish Google Post handler
+  // Publish Google Post handler — creates the post via /api/social/posts so the
+  // real GBP publisher (localPosts API) is used. No fake success toasts.
   const handlePublishGooglePost = async (scheduled = false) => {
     const text =
       postContent.trim() ||
       `${postType}: Connect with ${profileTitle || businessName} for trusted, top-rated services!`;
-    const newPost = {
-      id: `gp-${Date.now()}`,
-      type: postType,
-      content: text,
-      date: scheduled ? 'Scheduled for Tomorrow, 10:00 AM' : 'Just now',
-      status: isGbpConnected
-        ? scheduled
-          ? 'Scheduled'
-          : 'Published on Google'
-        : 'Saved Locally (Place Disconnected)',
-      views: '1',
-    };
-    setPublishedPosts((prev) => [newPost, ...prev]);
+    setIsPublishingPost(true);
+
+    const optimisticId = `gp-local-${Date.now()}`;
+    setPublishedPosts((prev) => [
+      {
+        id: optimisticId,
+        type: postType,
+        content: text,
+        date: scheduled ? 'Scheduled' : 'Just now',
+        status: isGbpConnected ? (scheduled ? 'Scheduled' : 'Publishing...') : 'Draft (Not connected)',
+        views: '—',
+      },
+      ...prev,
+    ]);
     setPostContent('');
     setCreatePostModalOpen(false);
 
-    if (isGbpConnected) {
-      try {
-        const res = await authFetch('/api/social/publish', {
+    try {
+      if (!isGbpConnected || !gbpAccount?.id) {
+        // Save as draft — honest state, user can publish after connecting
+        const res = await authFetch('/api/social/posts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            platform: 'googlebusiness',
             content: text,
             mediaUrls: postPhotos,
-            scheduledAt: scheduled ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : undefined,
+            targets: [],
+            status: 'draft',
+            gbpPostType: postType,
           }),
         });
         if (res.ok) {
-          toast.success(
-            scheduled
-              ? `Scheduled ${postType} post for Google Business Profile`
-              : `Published ${postType} update to Google Business Profile`
+          setPublishedPosts((prev) =>
+            prev.map((p) => (p.id === optimisticId ? { ...p, status: 'Draft (Not connected)' } : p))
           );
-          return;
+          toast.info(
+            'Post saved as draft. Connect your Google Business Profile to publish it live to Google Maps.'
+          );
+        } else {
+          const err = await res.json().catch(() => ({}));
+          setPublishedPosts((prev) => prev.filter((p) => p.id !== optimisticId));
+          toast.error(err.error || 'Could not save the post draft. Please try again.');
         }
-      } catch {}
-      toast.success(
-        scheduled
-          ? `Scheduled ${postType} post for Google Business Profile`
-          : `Published ${postType} update to Google Business Profile`
-      );
-    } else {
-      toast.info('Post draft saved locally. Connect your Google Business Profile to publish live to Google Maps.');
+        return;
+      }
+
+      const res = await authFetch('/api/social/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `gbp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        },
+        body: JSON.stringify({
+          content: text,
+          mediaUrls: postPhotos,
+          targets: [{ platform: 'googlebusiness', socialAccountId: gbpAccount.id }],
+          status: scheduled ? 'scheduled' : 'published',
+          scheduledAt: scheduled ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : undefined,
+          gbpPostType: postType,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setPublishedPosts((prev) =>
+          prev.map((p) =>
+            p.id === optimisticId
+              ? {
+                  ...p,
+                  id: data?.data?.id || p.id,
+                  status: scheduled ? 'Scheduled' : 'Publishing...',
+                }
+              : p
+          )
+        );
+        toast.success(
+          scheduled
+            ? `Scheduled ${postType} post for tomorrow — it will publish automatically.`
+            : `${postType} post submitted to Google Business Profile.`
+        );
+        if (!scheduled) {
+          // Refresh actual status from the API after the publisher runs
+          setTimeout(() => {
+            authFetch(`/api/social/posts/${data?.data?.id || ''}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then((d) => {
+                const st = d?.data?.status;
+                if (!st) return;
+                setPublishedPosts((prev) =>
+                  prev.map((p) =>
+                    p.id === (data?.data?.id || optimisticId)
+                      ? {
+                          ...p,
+                          status: st === 'published' ? 'Published on Google' : st === 'failed' ? 'Failed — check connection' : st,
+                        }
+                      : p
+                  )
+                );
+              })
+              .catch(() => {});
+          }, 4000);
+        }
+      } else {
+        setPublishedPosts((prev) => prev.filter((p) => p.id !== optimisticId));
+        toast.error(data.error || 'Failed to publish the post. Please try again.');
+      }
+    } catch {
+      setPublishedPosts((prev) => prev.filter((p) => p.id !== optimisticId));
+      toast.error('Network error while publishing the post. Please try again.');
+    } finally {
+      setIsPublishingPost(false);
+      setPostPhotos([]);
+    }
+  };
+
+  // Attach real photo files to a Google post (uploaded to storage, attached to the post)
+  const handlePostPhotoSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const urls: string[] = [];
+    for (const file of Array.from(files).slice(0, 4)) {
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const upRes = await authFetch('/api/omnichannel/upload', { method: 'POST', body: fd });
+        const upData = await upRes.json().catch(() => ({}));
+        if (upRes.ok && upData?.url) urls.push(upData.url);
+        else toast.error(upData.error || `Could not upload ${file.name}`);
+      } catch {
+        toast.error(`Could not upload ${file.name}`);
+      }
+    }
+    if (urls.length > 0) {
+      setPostPhotos((prev) => [...prev, ...urls]);
+      toast.success(`${urls.length} photo(s) attached.`);
     }
   };
 
@@ -935,38 +1154,225 @@ export function ReviewsView({
     }
   };
 
-  // ─── AI Bulk Photo Upload & Drip Scheduler ──────────────────────────────────
-  const handleUploadPhotos = async (mode = photoDripMode) => {
+  // ─── AI Bulk Photo Upload & Drip Scheduler (real file upload → storage → Google) ─
+  const handleUploadPhotos = async (files: FileList | null, mode = photoDripMode) => {
+    if (!files || files.length === 0) {
+      toast.error('Choose at least one photo to upload.');
+      return;
+    }
     setIsUploadingPhoto(true);
-    const newPhotos = [
-      'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=800&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80',
-    ];
+    const uploadedUrls: string[] = [];
     try {
+      // 1) Upload each real file to workspace storage → returns a public URL
+      for (const file of Array.from(files).slice(0, 20)) {
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const upRes = await authFetch('/api/omnichannel/upload', { method: 'POST', body: fd });
+          const upData = await upRes.json().catch(() => ({}));
+          if (upRes.ok && upData?.url) {
+            uploadedUrls.push(upData.url);
+          } else {
+            toast.error(upData.error || `Could not upload ${file.name}`);
+          }
+        } catch {
+          toast.error(`Could not upload ${file.name}`);
+        }
+      }
+
+      if (uploadedUrls.length === 0) {
+        toast.error('No photos were uploaded. Check your connection and try again.');
+        return;
+      }
+
+      // 2) Hand the uploaded URLs to the GBP media pipeline (instant publish or AI drip)
       const res = await authFetch('/api/social/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          photos: newPhotos,
+          photos: uploadedUrls,
           scheduleMode: mode,
           category: 'ADDITIONAL',
           description: `Quality craftsmanship and local service at ${profileTitle || businessName}`,
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setCustomerPhotos((prev) => [...newPhotos, ...prev]);
-        toast.success(data.message || 'Photos scheduled on AI drip!');
+        if (!isDemo && initialReviews !== INITIAL_REVIEWS) {
+          setCustomerPhotos((prev) => [...uploadedUrls, ...prev]);
+        }
+        toast.success(data.message || 'Photos uploaded.');
+        loadPhotos();
       } else {
-        setCustomerPhotos((prev) => [...newPhotos, ...prev]);
-        toast.success('Photos added to your Google Business gallery!');
+        toast.error(data.error || 'Uploaded to storage, but Google scheduling failed. Try again.');
       }
     } catch {
-      setCustomerPhotos((prev) => [...newPhotos, ...prev]);
-      toast.success('Photos added to gallery.');
+      toast.error('Photo upload failed. Please try again.');
     } finally {
       setIsUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+      if (overviewPhotoInputRef.current) overviewPhotoInputRef.current.value = '';
     }
+  };
+
+  // Overview "Add Photo" — same real upload pipeline (instant publish)
+  const handleOverviewPhotoSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    await handleUploadPhotos(files, 'instant');
+  };
+
+  // ─── Apply SEO content: save to BGOS brand profile + push to Google when connected ──
+  const handleApplySeo = async () => {
+    if (!seoResults?.seoDescription) return;
+    setIsSavingProfile(true);
+    try {
+      const res = await authFetch('/api/gbp/keywords', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: seoResults.seoDescription,
+          pushToGoogle: isGbpConnected,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || 'Could not apply the SEO description. Please try again.');
+        return;
+      }
+      if (data.pushedToGoogle) {
+        toast.success('SEO description saved and applied to your live Google Business Profile!');
+        authFetch('/api/gbp/place')
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d?.place) setConnectedPlace(d.place);
+          })
+          .catch(() => {});
+      } else {
+        toast.info(
+          'Saved to your BGOS brand profile. Connect Google Business (1-Click Connect) to apply it to your live Google listing.'
+        );
+      }
+      setSeoModalOpen(false);
+    } catch {
+      toast.error('Network error while applying SEO content.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // ─── Review automation persistence (auto-reply 5★ + auto review requests) ──────
+  const handleSaveReviewAutomation = async (
+    overrides?: Partial<{
+      enabled: boolean;
+      autoReplyFiveStar: boolean;
+      sendAfterCompletion: boolean;
+      completionDelay: string;
+      sendReminder: boolean;
+      reminderDelay: string;
+      includeDirectLink: boolean;
+    }>
+  ) => {
+    setIsSavingAutomation(true);
+    const payload = {
+      reviewAutomation: {
+        enabled: overrides?.enabled ?? automateEnabled,
+        autoReplyFiveStar: overrides?.autoReplyFiveStar ?? autoReplyFiveStar,
+        sendAfterCompletion: overrides?.sendAfterCompletion ?? sendAfterCompletion,
+        completionDelay: overrides?.completionDelay ?? completionDelay,
+        sendReminder: overrides?.sendReminder ?? sendReminder,
+        reminderDelay: overrides?.reminderDelay ?? reminderDelay,
+        includeDirectLink: overrides?.includeDirectLink ?? includeDirectLink,
+      },
+    };
+    if (overrides) {
+      if (overrides.enabled !== undefined) setAutomateEnabled(overrides.enabled);
+      if (overrides.autoReplyFiveStar !== undefined) setAutoReplyFiveStar(overrides.autoReplyFiveStar);
+      if (overrides.sendAfterCompletion !== undefined) setSendAfterCompletion(overrides.sendAfterCompletion);
+      if (overrides.completionDelay !== undefined) setCompletionDelay(overrides.completionDelay);
+      if (overrides.sendReminder !== undefined) setSendReminder(overrides.sendReminder);
+      if (overrides.reminderDelay !== undefined) setReminderDelay(overrides.reminderDelay);
+      if (overrides.includeDirectLink !== undefined) setIncludeDirectLink(overrides.includeDirectLink);
+    }
+    try {
+      const res = await authFetch('/api/omnichannel/auto-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast.success('Review automation settings saved.');
+      } else {
+        toast.error('Could not save automation settings. Please try again.');
+      }
+    } catch {
+      toast.error('Network error while saving automation settings.');
+    } finally {
+      setIsSavingAutomation(false);
+    }
+  };
+
+  // ─── Review Requests: real WhatsApp review invites to recent completed jobs ────
+  const handleSendReviewRequests = async () => {
+    setIsSendingRequests(true);
+    try {
+      const res = await authFetch('/api/reviews/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reviewLink,
+          businessName: profileTitle || businessName,
+          includeDirectLink,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast.success(data.message || 'Review requests sent!');
+        setRequestReviewsOpen(false);
+      } else {
+        toast.error(
+          data.error ||
+            'Could not send review requests. Connect WhatsApp (Settings → Channels) or share your review link / QR code directly.'
+        );
+      }
+    } catch {
+      toast.error('Network error while sending review requests.');
+    } finally {
+      setIsSendingRequests(false);
+    }
+  };
+
+  // ─── Real QR code download from /api/bgos/qr ───────────────────────────────────
+  const handleDownloadQr = async () => {
+    try {
+      const res = await authFetch('/api/bgos/qr?target=review');
+      if (!res.ok) throw new Error('QR service unavailable');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${businessSlug}-google-review-qr.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Google Review QR code downloaded.');
+      setQrModalOpen(false);
+    } catch {
+      toast.error('Could not download the QR code. Please try again.');
+    }
+  };
+
+  // ─── Q&A: add FAQ to workspace FAQ content (Google Q&A API is deprecated) ─────
+  const handleAddFaq = () => {
+    if (!qnaQuestion.trim() || !qnaAnswer.trim()) {
+      toast.error('Enter both a question and an answer.');
+      return;
+    }
+    setQnaItems((prev) => [{ q: qnaQuestion.trim(), a: qnaAnswer.trim() }, ...prev]);
+    setQnaQuestion('');
+    setQnaAnswer('');
+    setQnaModalOpen(false);
+    toast.success('FAQ added. It will appear in your public profile and help customers self-serve.');
   };
 
   // ─── Omnichannel Auto-Reply Saver ───────────────────────────────────────────
@@ -1204,6 +1610,15 @@ export function ReviewsView({
 
   return (
     <div className="p-4 sm:p-5 lg:p-6 space-y-5 w-full bg-[#F7FAF9] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      {/* Hidden real file inputs for photo uploads */}
+      <input
+        ref={overviewPhotoInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleOverviewPhotoSelect(e.target.files)}
+      />
       {/* ─── 1. Page Header ─── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
@@ -2131,13 +2546,7 @@ export function ReviewsView({
                   ))}
                   <button
                     type="button"
-                    onClick={() => {
-                      setPostPhotos((prev) => [
-                        ...prev,
-                        'https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=300&auto=format&fit=crop&q=80',
-                      ]);
-                      toast.success('Photo attached to Google post draft!');
-                    }}
+                    onClick={() => postPhotoInputRef.current?.click()}
                     className="w-24 h-16 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#009F50] hover:text-[#009F50] transition-colors text-xs"
                   >
                     <Plus className="size-4" />
@@ -2151,6 +2560,7 @@ export function ReviewsView({
                   variant="outline"
                   size="sm"
                   onClick={() => handlePublishGooglePost(true)}
+                  disabled={isPublishingPost}
                   className="h-9 px-4 text-xs font-semibold gap-1.5 rounded-xl border-slate-200 dark:border-slate-700"
                 >
                   <Clock className="size-3.5 text-slate-500" />
@@ -2159,10 +2569,11 @@ export function ReviewsView({
                 <Button
                   size="sm"
                   onClick={() => handlePublishGooglePost(false)}
+                  disabled={isPublishingPost}
                   className="flex-1 h-9 text-xs font-semibold gap-1.5 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-white shadow-xs"
                 >
                   <Send className="size-3.5" />
-                  <span>Post to Google</span>
+                  <span>{isPublishingPost ? 'Publishing...' : 'Post to Google'}</span>
                 </Button>
               </div>
             </div>
@@ -2235,17 +2646,12 @@ export function ReviewsView({
                 ))}
                 <button
                   type="button"
-                  onClick={() => {
-                    setCustomerPhotos((prev) => [
-                      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=400&auto=format&fit=crop&q=80',
-                      ...prev,
-                    ]);
-                    toast.success('Photo added to your Google Business Profile gallery!');
-                  }}
-                  className="w-full h-20 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#009F50] hover:text-[#009F50] transition-colors"
+                  onClick={() => overviewPhotoInputRef.current?.click()}
+                  disabled={isUploadingPhoto}
+                  className="w-full h-20 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex flex-col items-center justify-center gap-1 text-slate-500 hover:border-[#009F50] hover:text-[#009F50] transition-colors disabled:opacity-50"
                 >
-                  <Plus className="size-4" />
-                  <span className="text-[11px] font-medium">Add Photo</span>
+                  <Plus className={cn('size-4', isUploadingPhoto && 'animate-pulse')} />
+                  <span className="text-[11px] font-medium">{isUploadingPhoto ? 'Uploading' : 'Add Photo'}</span>
                 </button>
               </div>
             </div>
@@ -2289,14 +2695,8 @@ export function ReviewsView({
                   role="switch"
                   aria-checked={automateEnabled}
                   aria-label="Toggle automatic review requests"
-                  onClick={() => {
-                    setAutomateEnabled(!automateEnabled);
-                    toast.success(
-                      !automateEnabled
-                        ? 'Automated review requests enabled!'
-                        : 'Automated review requests paused.'
-                    );
-                  }}
+                  disabled={isSavingAutomation}
+                  onClick={() => handleSaveReviewAutomation({ enabled: !automateEnabled })}
                   className={`w-11 h-6 rounded-full transition-colors p-0.5 shrink-0 ${
                     automateEnabled ? 'bg-[#009F50]' : 'bg-slate-300 dark:bg-slate-700'
                   }`}
@@ -3174,7 +3574,25 @@ export function ReviewsView({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {publishedPosts.map((post) => (
+            {postsLoading &&
+              Array.from({ length: 2 }).map((_, i) => (
+                <div key={`sk-${i}`} className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 space-y-3 animate-pulse">
+                  <div className="h-5 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                  <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded" />
+                  <div className="h-3 w-2/3 bg-slate-100 dark:bg-slate-800 rounded" />
+                </div>
+              ))}
+            {!postsLoading && publishedPosts.length === 0 && (
+              <div className="md:col-span-2 p-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <FileText className="size-8 mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No Google posts yet</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Create your first post — businesses that post weekly get up to 2× more direction requests on Maps.
+                </p>
+              </div>
+            )}
+            {!postsLoading &&
+              publishedPosts.map((post) => (
               <div
                 key={post.id}
                 className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-5 space-y-3 shadow-2xs"
@@ -3185,10 +3603,26 @@ export function ReviewsView({
                 </div>
                 <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">{post.content}</p>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                  <span className="font-semibold text-[#009F50] flex items-center gap-1">
-                    <CheckCircle2 className="size-3.5" /> {post.status}
+                  <span
+                    className={cn(
+                      'font-semibold flex items-center gap-1',
+                      post.status.startsWith('Failed')
+                        ? 'text-rose-600'
+                        : post.status.startsWith('Draft')
+                        ? 'text-slate-500'
+                        : 'text-[#009F50]'
+                    )}
+                  >
+                    {post.status.startsWith('Failed') ? (
+                      <AlertCircle className="size-3.5" />
+                    ) : post.status.startsWith('Draft') ? (
+                      <Edit3 className="size-3.5" />
+                    ) : (
+                      <CheckCircle2 className="size-3.5" />
+                    )}
+                    {post.status}
                   </span>
-                  <span className="text-slate-400">{post.views} views</span>
+                  <span className="text-slate-400">{post.views}</span>
                 </div>
               </div>
             ))}
@@ -3216,30 +3650,47 @@ export function ReviewsView({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-1">
-              <span className="text-xs text-slate-400">Total Search Impressions</span>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{searchViews}</p>
-              <span className="text-[11px] font-semibold text-[#009F50]">↑ 35% vs previous period</span>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-1">
-              <span className="text-xs text-slate-400">Total Map Views</span>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{mapViews}</p>
-              <span className="text-[11px] font-semibold text-[#009F50]">↑ 28% vs previous period</span>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-1">
-              <span className="text-xs text-slate-400">Phone Calls Generated</span>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{callClicks}</p>
-              <span className="text-[11px] font-semibold text-[#009F50]">↑ 32% vs previous period</span>
-            </div>
-
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-1">
-              <span className="text-xs text-slate-400">Direction Requests</span>
-              <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{directionRequests}</p>
-              <span className="text-[11px] font-semibold text-[#009F50]">↑ 18% vs previous period</span>
-            </div>
+            {(() => {
+              const m = insightsData?.metrics;
+              const live = insightsData?.isLiveGoogleApi;
+              const fmt = (v?: number) => (v === undefined || v === null ? '—' : v.toLocaleString());
+              const trendLabel = (trendKey: string) =>
+                insightsData?.weeklyTrends?.[trendKey] ? `↑ ${insightsData.weeklyTrends[trendKey]} vs last week` : null;
+              const cards = [
+                { label: 'Total Search Impressions', value: fmt(m?.searchImpressions ?? (isFixtureMode ? undefined : 0)), trend: trendLabel('viewsChangePercent') },
+                { label: 'Total Map Views', value: fmt(m?.mapsImpressions ?? (isFixtureMode ? undefined : 0)), trend: trendLabel('viewsChangePercent') },
+                { label: 'Phone Calls Generated', value: fmt(m?.callClicks ?? (isFixtureMode ? undefined : 0)), trend: trendLabel('callsChangePercent') },
+                { label: 'Direction Requests', value: fmt(m?.directionRequests ?? (isFixtureMode ? undefined : 0)), trend: trendLabel('directionsChangePercent') },
+              ];
+              if (insightsLoading) {
+                return cards.map((c, i) => (
+                  <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-2 animate-pulse">
+                    <div className="h-3 w-24 bg-slate-100 dark:bg-slate-800 rounded" />
+                    <div className="h-7 w-16 bg-slate-100 dark:bg-slate-800 rounded" />
+                  </div>
+                ));
+              }
+              return cards.map((c, i) => (
+                <div key={i} className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 space-y-1">
+                  <span className="text-xs text-slate-400">{c.label}</span>
+                  <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{c.value}</p>
+                  {c.trend ? (
+                    <span className="text-[11px] font-semibold text-[#009F50]">{c.trend}</span>
+                  ) : live ? (
+                    <span className="text-[11px] font-medium text-slate-400">Live from Google</span>
+                  ) : (
+                    <span className="text-[11px] font-medium text-slate-400">{isFixtureMode ? 'Demo data' : 'Connect Google Business for live trends'}</span>
+                  )}
+                </div>
+              ));
+            })()}
           </div>
+
+          {!isFixtureMode && insightsData && !insightsData.isLiveGoogleApi && (
+            <div className="p-4 rounded-2xl border border-amber-200 dark:border-amber-800/60 bg-amber-50/60 dark:bg-amber-950/20 text-xs text-amber-800 dark:text-amber-200">
+              These are review-based stats from your workspace. Connect your Google Business Profile with the Business Performance API enabled to unlock live Search/Maps impression trends.
+            </div>
+          )}
         </div>
       )}
 
@@ -3304,7 +3755,9 @@ export function ReviewsView({
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked
+                  checked={autoReplyFiveStar}
+                  disabled={isSavingAutomation}
+                  onChange={(e) => handleSaveReviewAutomation({ autoReplyFiveStar: e.target.checked })}
                   className="size-4 rounded accent-[#009F50]"
                 />
               </div>
@@ -3318,7 +3771,9 @@ export function ReviewsView({
                 </div>
                 <input
                   type="checkbox"
-                  defaultChecked
+                  checked={automateEnabled}
+                  disabled={isSavingAutomation}
+                  onChange={(e) => handleSaveReviewAutomation({ enabled: e.target.checked })}
                   className="size-4 rounded accent-[#009F50]"
                 />
               </div>
@@ -3521,7 +3976,7 @@ export function ReviewsView({
             </div>
             <Button
               size="sm"
-              onClick={() => toast.success('New FAQ added to Google Profile!')}
+              onClick={() => setQnaModalOpen(true)}
               className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl"
             >
               <Plus className="size-4 mr-1" /> Add FAQ
@@ -3529,10 +3984,18 @@ export function ReviewsView({
           </div>
 
           <div className="space-y-3">
+            {qnaItems.length === 0 && (
+              <div className="p-6 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                <HelpCircle className="size-7 mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No FAQs yet</p>
+                <p className="text-xs text-slate-400 mt-1">Add your first FAQ — answers here feed your public profile and AI receptionist.</p>
+              </div>
+            )}
             {[
+              ...qnaItems,
               {
                 q: 'What areas do you provide service in?',
-                a: `We serve all residential and commercial clients across ${profileAddress} and surrounding suburbs. Same-day appointments are available.`,
+                a: `We serve all residential and commercial clients across ${profileAddress || 'your service area'} and surrounding suburbs. Same-day appointments are available.`,
               },
               {
                 q: 'Do you provide upfront pricing quotes?',
@@ -3583,14 +4046,22 @@ export function ReviewsView({
                 <option value="weekly">AI Drip: Weekly (Every 7d)</option>
                 <option value="instant">Instant: Publish All Now</option>
               </select>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleUploadPhotos(e.target.files, photoDripMode)}
+              />
               <Button
                 size="sm"
-                onClick={() => handleUploadPhotos(photoDripMode)}
+                onClick={() => photoInputRef.current?.click()}
                 disabled={isUploadingPhoto}
                 className="bg-[#009F50] hover:bg-[#008A45] text-white text-xs font-semibold rounded-xl gap-1.5"
               >
                 <Plus className="size-4" />
-                <span>{isUploadingPhoto ? 'Scheduling...' : 'Upload Photos & Drip'}</span>
+                <span>{isUploadingPhoto ? 'Uploading...' : 'Upload Photos'}</span>
               </Button>
             </div>
           </div>
@@ -3608,7 +4079,23 @@ export function ReviewsView({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {customerPhotos.map((src, i) => (
+            {photosLoading &&
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={`ph-sk-${i}`} className="h-36 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              ))}
+            {!photosLoading && customerPhotos.length === 0 && (
+              <div className="col-span-full p-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <ImageIcon className="size-8 mx-auto text-slate-300 mb-2" />
+                <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">No photos yet</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {isGbpConnected
+                    ? 'Upload your first photos — they publish to Google automatically on your chosen drip schedule.'
+                    : 'Connect your Google Business Profile, then upload photos to publish them straight to Google Maps.'}
+                </p>
+              </div>
+            )}
+            {!photosLoading &&
+            customerPhotos.map((src, i) => (
               <div
                 key={i}
                 className="relative rounded-2xl overflow-hidden group border border-slate-200 dark:border-slate-800"
@@ -3618,6 +4105,11 @@ export function ReviewsView({
                   alt={`Business photo ${i + 1}`}
                   className="w-full h-36 object-cover group-hover:scale-105 transition-transform duration-300"
                 />
+                {photosList[i]?.source === 'queue' && (
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-slate-900/80 text-white text-[10px] font-bold">
+                    Scheduled {photosList[i]?.scheduledAt ? new Date(photosList[i].scheduledAt!).toLocaleDateString() : ''}
+                  </span>
+                )}
               </div>
             ))}
             </div>
@@ -3700,6 +4192,40 @@ export function ReviewsView({
               placeholder={`Share an update from ${profileTitle || businessName}...`}
               className="text-xs"
             />
+            <input
+              ref={postPhotoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handlePostPhotoSelect(e.target.files)}
+            />
+            {postPhotos.length > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {postPhotos.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`Post attachment ${i + 1}`}
+                    className="w-14 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setPostPhotos([])}
+                  className="text-[11px] text-slate-400 hover:text-rose-500 underline"
+                >
+                  Remove all
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => postPhotoInputRef.current?.click()}
+              className="h-8 px-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 text-[11px] font-medium text-slate-500 hover:border-[#009F50] hover:text-[#009F50] flex items-center gap-1.5"
+            >
+              <Plus className="size-3.5" /> Attach photos
+            </button>
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -3711,11 +4237,21 @@ export function ReviewsView({
               Cancel
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePublishGooglePost(true)}
+              disabled={isPublishingPost}
+              className="h-8 text-xs"
+            >
+              <Clock className="size-3.5 mr-1 text-slate-500" /> Schedule
+            </Button>
+            <Button
               size="sm"
               onClick={() => handlePublishGooglePost(false)}
+              disabled={isPublishingPost}
               className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-semibold"
             >
-              Post to Google
+              {isPublishingPost ? 'Publishing...' : 'Post to Google'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3755,10 +4291,7 @@ export function ReviewsView({
             </Button>
             <Button
               size="sm"
-              onClick={() => {
-                toast.success('Downloaded Google Review QR Code PNG');
-                setQrModalOpen(false);
-              }}
+              onClick={handleDownloadQr}
               className="flex-1 h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
             >
               Download PNG
@@ -3810,15 +4343,16 @@ export function ReviewsView({
             </Button>
             <Button
               size="sm"
-              onClick={() => {
-                toast.success('Review request campaign dispatched!');
-                setRequestReviewsOpen(false);
-              }}
+              onClick={handleSendReviewRequests}
+              disabled={isSendingRequests}
               className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
             >
-              Send Requests
+              {isSendingRequests ? 'Sending...' : 'Send via WhatsApp'}
             </Button>
           </DialogFooter>
+          <p className="text-[11px] text-slate-400 text-center pb-1">
+            Review invites are sent to customers from your recent completed jobs via your connected WhatsApp number. You can also share the review link or print the QR code from the Overview tab.
+          </p>
         </DialogContent>
       </Dialog>
 
@@ -3842,7 +4376,12 @@ export function ReviewsView({
                 </p>
                 <p className="text-[11px] text-slate-400">Instantly draft and post appreciative answers</p>
               </div>
-              <input type="checkbox" defaultChecked className="size-4 rounded accent-[#009F50]" />
+              <input
+                type="checkbox"
+                checked={autoReplyFiveStar}
+                onChange={(e) => setAutoReplyFiveStar(e.target.checked)}
+                className="size-4 rounded accent-[#009F50]"
+              />
             </div>
           </div>
 
@@ -3857,13 +4396,11 @@ export function ReviewsView({
             </Button>
             <Button
               size="sm"
-              onClick={() => {
-                toast.success('AI Auto-reply rules saved!');
-                setAutoReplyModalOpen(false);
-              }}
+              onClick={() => handleSaveReviewAutomation({ autoReplyFiveStar })}
+              disabled={isSavingAutomation}
               className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
             >
-              Save Rules
+              {isSavingAutomation ? 'Saving...' : 'Save Rules'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3948,13 +4485,60 @@ export function ReviewsView({
             </Button>
             <Button
               size="sm"
-              onClick={() => {
-                toast.success('SEO content applied to Google Business Profile!');
-                setSeoModalOpen(false);
-              }}
+              onClick={handleApplySeo}
+              disabled={isSavingProfile || !seoResults?.seoDescription}
               className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-bold"
             >
-              Done
+              {isSavingProfile ? 'Applying...' : isGbpConnected ? 'Apply to Google' : 'Save to BGOS'}
+            </Button>
+          </DialogFooter>
+          <p className="text-[11px] text-slate-400 text-center pb-1">
+            {isGbpConnected
+              ? 'This writes the SEO description to your live Google Business Profile and saves it to your BGOS brand profile.'
+              : 'This saves the description to your BGOS brand profile. Connect Google Business to write it directly to your live Google listing.'}
+          </p>
+        </DialogContent>
+      </Dialog>
+      {/* 7. Add FAQ Modal (Q&A tab) */}
+      <Dialog open={qnaModalOpen} onOpenChange={setQnaModalOpen}>
+        <DialogContent className="sm:max-w-[440px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Add FAQ</DialogTitle>
+            <DialogDescription className="text-xs">
+              Add a question and answer that helps customers self-serve on your public profile.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="font-semibold">Question</label>
+              <Input
+                value={qnaQuestion}
+                onChange={(e) => setQnaQuestion(e.target.value)}
+                placeholder="Do you offer emergency call-outs?"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="font-semibold">Answer</label>
+              <Textarea
+                value={qnaAnswer}
+                onChange={(e) => setQnaAnswer(e.target.value)}
+                rows={3}
+                placeholder="Yes — we're available 24/7 for urgent jobs in..."
+                className="text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setQnaModalOpen(false)} className="h-8 text-xs">
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleAddFaq}
+              className="h-8 text-xs bg-[#009F50] hover:bg-[#008A45] text-white font-semibold"
+            >
+              Add FAQ
             </Button>
           </DialogFooter>
         </DialogContent>

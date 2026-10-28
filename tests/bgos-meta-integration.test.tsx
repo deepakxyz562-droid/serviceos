@@ -32,7 +32,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
       expect(META_ACCOUNT_CONFIG.wabaId).toBe('1507850957401022');
       expect(META_ACCOUNT_CONFIG.phoneNumberId).toBe('1350627684805898');
       expect(META_ACCOUNT_CONFIG.displayPhoneNumber).toBe('+91 61279 67087');
-      expect(META_ACCOUNT_CONFIG.verifiedName).toBe('FieserOS');
+      expect(META_ACCOUNT_CONFIG.verifiedName).toBe('BGOS');
       expect(META_ACCOUNT_CONFIG.qualityRating).toBe('GREEN');
       expect(META_ACCOUNT_CONFIG.verifyToken).toBe('flowforge_verify_token');
       expect(META_ACCOUNT_CONFIG.platformType).toBe('CLOUD_API');
@@ -112,7 +112,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
       // Default interpolation
       const defaultFormatted = formatBgosMetaTemplateBody(template);
       expect(defaultFormatted).toContain('Hello Priya Sharma');
-      expect(defaultFormatted).toContain('FieserOS Services');
+      expect(defaultFormatted).toContain('BGOS Services');
       expect(defaultFormatted).toContain('AC Deep Cleaning');
 
       // Custom interpolation
@@ -171,14 +171,17 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
   });
 
   describe('Meta Templates Workstation UI (Marketing Studio)', () => {
-    it('renders the live Meta Cloud API verified header and WABA status', () => {
+    it('renders the Meta Cloud API header with data-driven template status counts', () => {
       render(<BgosMetaTemplatesWorkstation />);
 
       expect(screen.getByText('Meta WhatsApp Business Cloud API')).toBeDefined();
-      expect(screen.getAllByText('FieserOS').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('BGOS').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('+91 61279 67087').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('1507850957401022').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('GREEN').length).toBeGreaterThanOrEqual(1);
+      // WABA quality is no longer fabricated — counts come from the template data
+      expect(screen.getByText(/\d+ Approved · \d+ Pending/i)).toBeDefined();
+      expect(screen.queryByText('Verified & Active')).toBeNull();
+      expect(screen.queryByText('Optimal')).toBeNull();
     });
 
     it('renders template catalog, category filters, and interactive smartphone preview', () => {
@@ -195,7 +198,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
 
       // Smartphone preview phone frame
       expect(screen.getByText('Live Meta WhatsApp Preview')).toBeDefined();
-      expect(screen.getAllByText('FieserOS').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('BGOS').length).toBeGreaterThanOrEqual(1);
 
       // Quick test send button
       expect(screen.getByRole('button', { name: /Test Send This Template via Meta/i })).toBeDefined();
@@ -232,7 +235,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
       fireEvent.click(metaTabBtn);
 
       expect(screen.getByText('Meta WhatsApp Business Cloud API')).toBeDefined();
-      expect(screen.getAllByText('FieserOS').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('BGOS').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('+91 61279 67087').length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -287,7 +290,7 @@ describe('BGOS Meta Cloud API & Template Engine Integration', () => {
 
       // Meta Cloud API Card
       expect(screen.getAllByText('Meta WhatsApp Business Cloud API').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('FieserOS').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('BGOS').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('+91 61279 67087').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('Quality Rating').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('GREEN').length).toBeGreaterThanOrEqual(1);

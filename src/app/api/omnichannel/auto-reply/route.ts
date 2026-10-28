@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
           `Hi! Thanks for reaching out to ${tenant?.name || 'us'}. We got your text and will reply shortly. For urgent needs call ${tenant?.phone || 'our office'}.`,
       },
       autoGbpPosting: settings.autoGbpPosting ?? true,
+      reviewAutomation: settings.reviewAutomation ?? null,
       connectedChannels: {
         whatsapp: true, // Internal provider
         instagram: connectedPlatforms.has('instagram'),
@@ -119,6 +120,29 @@ export async function POST(request: NextRequest) {
       settings.autoGbpPosting = body.autoGbpPosting;
     }
 
+    // Review automation (auto-reply 5★ reviews + automatic review request invites)
+    if (body.reviewAutomation && typeof body.reviewAutomation === 'object') {
+      const ra = body.reviewAutomation as Record<string, unknown>;
+      settings.reviewAutomation = {
+        ...(settings.reviewAutomation || {}),
+        ...(typeof ra.enabled === 'boolean' ? { enabled: ra.enabled } : {}),
+        ...(typeof ra.autoReplyFiveStar === 'boolean' ? { autoReplyFiveStar: ra.autoReplyFiveStar } : {}),
+        ...(typeof ra.sendAfterCompletion === 'boolean' ? { sendAfterCompletion: ra.sendAfterCompletion } : {}),
+        ...(typeof ra.completionDelay === 'string' ? { completionDelay: ra.completionDelay } : {}),
+        ...(typeof ra.sendReminder === 'boolean' ? { sendReminder: ra.sendReminder } : {}),
+        ...(typeof ra.reminderDelay === 'string' ? { reminderDelay: ra.reminderDelay } : {}),
+        ...(typeof ra.includeDirectLink === 'boolean' ? { includeDirectLink: ra.includeDirectLink } : {}),
+      };
+      // Keep the Google review auto-reply behavior (read by /api/reviews/sync-google) in sync
+      if (typeof ra.autoReplyFiveStar === 'boolean') {
+        settings.autoReplyReviews = {
+          ...(settings.autoReplyReviews || {}),
+          enabled: ra.autoReplyFiveStar,
+          minRating: 5,
+        };
+      }
+    }
+
     // Keep legacy autoReplyOffline synced with WhatsApp/SMS toggles
     if (body.whatsapp || body.sms) {
       settings.autoReplyOffline = {
@@ -139,7 +163,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       omnichannelAutoReply: updatedOmnichannel,
-      message: 'Omnichannel auto-reply settings updated successfully.',
+      reviewAutomation: settings.reviewAutomation || null,
+      autoGbpPosting: settings.autoGbpPosting ?? null,
+      message: 'Settings updated successfully.',
     });
   } catch (error: unknown) {
     console.error('Error saving omnichannel auto-reply config:', error);

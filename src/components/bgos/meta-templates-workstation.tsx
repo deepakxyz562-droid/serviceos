@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   MessageSquare,
   Sparkles,
@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/api';
 import {
   BGOS_CANONICAL_META_TEMPLATES,
   META_ACCOUNT_CONFIG,
@@ -63,6 +64,10 @@ export function BgosMetaTemplatesWorkstation() {
   // Live variable tester state
   const [previewValues, setPreviewValues] = useState<Record<string, string>>({});
 
+  // Data-driven status counts (rendered in filter pills + header pill)
+  const approvedCount = useMemo(() => templates.filter((t) => t.status === 'APPROVED').length, [templates]);
+  const pendingCount = useMemo(() => templates.filter((t) => t.status === 'PENDING').length, [templates]);
+
   // Test send dialog state
   const [testSendOpen, setTestSendOpen] = useState(false);
   const [testRecipientPhone, setTestRecipientPhone] = useState('+91');
@@ -74,7 +79,7 @@ export function BgosMetaTemplatesWorkstation() {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [newCategory, setNewCategory] = useState<'UTILITY' | 'MARKETING'>('UTILITY');
   const [newBodyText, setNewBodyText] = useState('');
-  const [newFooterText, setNewFooterText] = useState('FieserOS');
+  const [newFooterText, setNewFooterText] = useState('BGOS');
   const [creatingTemplate, setCreatingTemplate] = useState(false);
 
   // Reset variable test values whenever selected template changes
@@ -87,44 +92,100 @@ export function BgosMetaTemplatesWorkstation() {
     setPreviewValues(initial);
   }, [selectedTemplate]);
 
-  // Sync templates with Meta Cloud API endpoint
-  const handleSyncFromMeta = async () => {
-    setSyncing(true);
-    try {
-      const res = await fetch('/api/whatsapp/templates');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data?.templates) && data.templates.length > 0) {
-          const remoteTemplates: BgosMetaTemplate[] = data.templates.map((t: any) => ({
-            name: t.name,
-            displayName: t.displayName || t.name.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
-            category: (t.category?.toUpperCase() || 'UTILITY') as any,
-            language: t.language || 'en_US',
-            status: (t.status?.toUpperCase() || 'APPROVED') as any,
-            bodyText: t.bodyText || t.components?.find((c: any) => c.type === 'BODY')?.text || '',
-            footerText: t.footerText || t.components?.find((c: any) => c.type === 'FOOTER')?.text,
-            variableDescriptions: t.variableDescriptions || [],
-            defaultExampleValues: t.defaultExampleValues || [],
-            serviceTouchpoint: t.serviceTouchpoint || 'marketing',
-          }));
-          setTemplates(remoteTemplates);
-          if (remoteTemplates.length > 0 && !remoteTemplates.find((r) => r.name === selectedTemplate?.name)) {
-            setSelectedTemplate(remoteTemplates[0]);
-          }
-          toast.success(`Synced ${remoteTemplates.length} templates from Meta Cloud API`);
-        } else {
-          toast.success('Templates synchronized with Meta Cloud API');
+  // Load REAL template statuses from the tenant's WhatsApp template store
+  // (GET /api/whatsapp/templates → CampaignTemplate rows with live approval state).
+  // Rows are merged onto the BGOS canonical catalog (matched by name) so the
+  // workstation always shows data-driven statuses — never hardcoded ones. When
+  // the API returns nothing, the canonical catalog stays as the fallback.
+  const loadTemplateStatus = useCallback(
+    async (manual: boolean) => {
+      if (manual) setSyncing(true);
+      try {
+        const res = await authFetch('/api/whatsapp/templates');
+        if (res.status === 401) {
+          toast.error('Session expired — please sign in again.');
+          return;
         }
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err?.error || 'Failed to sync templates from Meta Cloud API');
+        if (!res.ok) {
+          if (manual) {
+            const err = await res.json().catch(() => ({}));
+            toast.error(err?.error || 'Could not load template approval status from the server.');
+          }
+          return;
+        }
+        const data = await res.json();
+        const rows: any[] = Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.templates)
+          ? data.templates
+          : [];
+
+        if (rows.length === 0) {
+          if (manual) {
+            toast.info(
+              'No templates in your library yet — showing the BGOS canonical catalog. Import templates from the web to sync live approval status.'
+            );
+          }
+          return;
+        }
+
+        const mapped: BgosMetaTemplate[] = rows.map((t: any) => {
+          const canonical = BGOS_CANONICAL_META_TEMPLATES.find((c) => c.name === t.name);
+          const rawStatus = String(t.status || '').toUpperCase();
+          const resolvedStatus: BgosMetaTemplate['status'] =
+            rawStatus === 'APPROVED' || t.isApproved === true
+              ? 'APPROVED'
+              : rawStatus === 'REJECTED'
+              ? 'REJECTED'
+              : rawStatus === 'DRAFT'
+              ? 'DRAFT'
+              : 'PENDING';
+          const rawCategory = String(t.category || '').toUpperCase();
+          return {
+            ...(canonical || {}),
+            name: t.name,
+            displayName:
+              canonical?.displayName ||
+              String(t.name || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+            category: (['UTILITY', 'MARKETING', 'AUTHENTICATION'].includes(rawCategory)
+              ? rawCategory
+              : canonical?.category || 'UTILITY') as BgosMetaTemplate['category'],
+            language: t.language || canonical?.language || 'en_US',
+            status: resolvedStatus,
+            bodyText: t.content || t.bodyText || canonical?.bodyText || '',
+            footerText: t.footerText || canonical?.footerText,
+            variableDescriptions: canonical?.variableDescriptions || [],
+            defaultExampleValues: canonical?.defaultExampleValues || [],
+            serviceTouchpoint: canonical?.serviceTouchpoint || 'marketing',
+          };
+        });
+
+        setTemplates(mapped);
+        setSelectedTemplate(
+          (prev) => mapped.find((m) => m.name === prev?.name) || mapped[0]
+        );
+        if (manual) {
+          const liveApproved = mapped.filter((m) => m.status === 'APPROVED').length;
+          toast.success(
+            `Synced ${mapped.length} templates — ${liveApproved} approved, ${mapped.length - liveApproved} awaiting approval`
+          );
+        }
+      } catch {
+        if (manual) toast.error('Unable to reach the template service. Check network connectivity.');
+      } finally {
+        if (manual) setSyncing(false);
       }
-    } catch {
-      toast.error('Unable to reach Meta Cloud API. Check network connectivity.');
-    } finally {
-      setSyncing(false);
-    }
-  };
+    },
+    []
+  );
+
+  // Load live approval status on mount (silent) so counts are real, not catalog assumptions.
+  useEffect(() => {
+    void loadTemplateStatus(false);
+  }, [loadTemplateStatus]);
+
+  // Manual refresh button
+  const handleSyncFromMeta = () => loadTemplateStatus(true);
 
   // Filter templates
   const filteredTemplates = templates.filter((tpl) => {
@@ -170,7 +231,7 @@ export function BgosMetaTemplatesWorkstation() {
         },
       ] : undefined;
 
-      const res = await fetch('/api/whatsapp/send', {
+      const res = await authFetch('/api/whatsapp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -233,7 +294,7 @@ export function BgosMetaTemplatesWorkstation() {
       setNewBodyText('');
       toast.success(`Template "${cleanName}" submitted to Meta for approval`);
 
-      await fetch('/api/whatsapp/templates', {
+      await authFetch('/api/whatsapp/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -255,7 +316,7 @@ export function BgosMetaTemplatesWorkstation() {
       <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xs">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3.5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-[#E8F8EF] dark:bg-emerald-950/60 text-[#009F50]">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-(--primary-soft) text-primary">
               <MessageSquare className="size-5.5" />
             </div>
             <div>
@@ -263,12 +324,11 @@ export function BgosMetaTemplatesWorkstation() {
                 <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                   Meta WhatsApp Business Cloud API
                 </h3>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
-                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Verified &amp; Active
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                  Cloud API
                 </span>
-                <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Tier: Standard Cloud API
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+                  {approvedCount} Approved · {pendingCount} Pending
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
@@ -282,10 +342,6 @@ export function BgosMetaTemplatesWorkstation() {
                 <span>•</span>
                 <span>
                   WABA ID: <code className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:text-slate-300">{META_ACCOUNT_CONFIG.wabaId}</code>
-                </span>
-                <span>•</span>
-                <span>
-                  Quality: <strong className="text-emerald-600 font-bold">{META_ACCOUNT_CONFIG.qualityRating}</strong>
                 </span>
               </div>
             </div>
@@ -305,7 +361,7 @@ export function BgosMetaTemplatesWorkstation() {
             <Button
               size="sm"
               onClick={() => setCreateModalOpen(true)}
-              className="h-9 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-xs font-semibold gap-1.5 text-white shadow-2xs"
+              className="h-9 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold gap-1.5 text-primary-foreground shadow-2xs"
             >
               <Plus className="size-3.5 stroke-[2.5]" />
               <span>Create Meta Template</span>
@@ -327,7 +383,7 @@ export function BgosMetaTemplatesWorkstation() {
                 onClick={() => setCategoryFilter(cat)}
                 className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                   active
-                    ? 'bg-[#009F50] text-white shadow-2xs'
+                    ? 'bg-primary text-primary-foreground shadow-2xs'
                     : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
                 }`}
               >
@@ -352,7 +408,11 @@ export function BgosMetaTemplatesWorkstation() {
                     : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
                 }`}
               >
-                {st === 'ALL' ? 'All Status' : st === 'APPROVED' ? 'Approved (9)' : 'Pending (5)'}
+                {st === 'ALL'
+                  ? `All Status (${templates.length})`
+                  : st === 'APPROVED'
+                  ? `Approved (${approvedCount})`
+                  : `Pending (${pendingCount})`}
               </button>
             );
           })}
@@ -396,7 +456,7 @@ export function BgosMetaTemplatesWorkstation() {
                   }}
                   className={`cursor-pointer rounded-2xl border p-4 transition text-left ${
                     isSelected
-                      ? 'border-[#009F50] bg-[#E8F8EF]/30 dark:bg-emerald-950/20 shadow-2xs ring-1 ring-[#009F50]'
+                      ? 'border-primary bg-(--primary-soft)/30 shadow-2xs ring-1 ring-primary'
                       : 'border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
                 >
@@ -448,6 +508,16 @@ export function BgosMetaTemplatesWorkstation() {
                           <CheckCircle2 className="size-3" />
                           <span>Approved</span>
                         </span>
+                      ) : template.status === 'REJECTED' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 px-2.5 py-0.5 text-[11px] font-bold">
+                          <XCircle className="size-3" />
+                          <span>Rejected</span>
+                        </span>
+                      ) : template.status === 'DRAFT' ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 px-2.5 py-0.5 text-[11px] font-bold">
+                          <Layers className="size-3" />
+                          <span>Draft</span>
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 px-2.5 py-0.5 text-[11px] font-bold">
                           <Clock className="size-3" />
@@ -481,7 +551,7 @@ export function BgosMetaTemplatesWorkstation() {
           <div className="rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
-                <Smartphone className="size-4 text-[#009F50]" />
+                <Smartphone className="size-4 text-primary" />
                 <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
                   Live Meta WhatsApp Preview
                 </h4>
@@ -540,7 +610,7 @@ export function BgosMetaTemplatesWorkstation() {
                   {selectedTemplate.buttons.map((btn, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white py-2 px-3 text-xs font-semibold text-[#009F50] shadow-2xs hover:bg-slate-50 transition cursor-pointer dark:bg-slate-800"
+                      className="flex items-center justify-center gap-1.5 rounded-xl bg-white py-2 px-3 text-xs font-semibold text-primary shadow-2xs hover:bg-slate-50 transition cursor-pointer dark:bg-slate-800"
                     >
                       {btn.type === 'URL' && <ExternalLink className="size-3.5" />}
                       {btn.type === 'CALL' && <Phone className="size-3.5" />}
@@ -591,7 +661,7 @@ export function BgosMetaTemplatesWorkstation() {
             <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
               <Button
                 onClick={() => setTestSendOpen(true)}
-                className="w-full h-9 rounded-xl bg-[#009F50] hover:bg-[#008A45] text-xs font-semibold text-white gap-2 shadow-2xs"
+                className="w-full h-9 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground gap-2 shadow-2xs"
               >
                 <Send className="size-3.5" />
                 <span>Test Send This Template via Meta</span>
@@ -649,7 +719,7 @@ export function BgosMetaTemplatesWorkstation() {
               size="sm"
               onClick={handleSendTestMessage}
               disabled={sendingTest}
-              className="rounded-xl bg-[#009F50] hover:bg-[#008A45] text-xs font-semibold text-white gap-1.5"
+              className="rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground gap-1.5"
             >
               <Send className="size-3.5" />
               <span>{sendingTest ? 'Sending via Meta...' : 'Send Live Test'}</span>
@@ -723,7 +793,7 @@ export function BgosMetaTemplatesWorkstation() {
               <Input
                 value={newFooterText}
                 onChange={(e) => setNewFooterText(e.target.value)}
-                placeholder="FieserOS"
+                placeholder="BGOS"
                 className="mt-1 h-9 rounded-xl text-xs"
               />
             </div>
@@ -742,7 +812,7 @@ export function BgosMetaTemplatesWorkstation() {
               size="sm"
               onClick={handleCreateTemplate}
               disabled={creatingTemplate}
-              className="rounded-xl bg-[#009F50] hover:bg-[#008A45] text-xs font-semibold text-white gap-1.5"
+              className="rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground gap-1.5"
             >
               <CheckCircle2 className="size-3.5" />
               <span>{creatingTemplate ? 'Submitting to Meta...' : 'Submit to Meta'}</span>

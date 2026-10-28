@@ -188,7 +188,7 @@ export default function AgentsScreen() {
                       style={{
                         fontSize: 11,
                         fontWeight: '700',
-                        color: m.role === 'user' ? '#CCFBF1' : colors.brand,
+                        color: m.role === 'user' ? colors.brandSoft : colors.brand,
                         marginBottom: 2,
                       }}
                     >

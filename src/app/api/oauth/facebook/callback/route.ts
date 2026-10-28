@@ -185,6 +185,41 @@ export async function GET(request: NextRequest) {
       return renderErrorPage('Facebook did not return an access token.');
     }
     userAccessToken = tokenBody.access_token;
+
+    // ── 5b. Upgrade the short-lived user token to a LONG-LIVED one (~60 days).
+    // /me/accounts called with a long-lived user token returns long-lived PAGE
+    // tokens, which never expire on their own — this removes the ~1h reconnect
+    // loop the v1 flow suffered from. Best-effort: fall back to the short-lived
+    // token if the exchange fails.
+    try {
+      const llUrl = new URL('https://graph.facebook.com/v18.0/oauth/access_token');
+      llUrl.searchParams.set('grant_type', 'fb_exchange_token');
+      llUrl.searchParams.set('client_id', clientId);
+      llUrl.searchParams.set('client_secret', clientSecret);
+      llUrl.searchParams.set('fb_exchange_token', userAccessToken);
+      const llReq = await fetch(llUrl.toString(), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (llReq.ok) {
+        const llBody = (await llReq.json()) as { access_token?: string; expires_in?: number };
+        if (llBody.access_token) {
+          userAccessToken = llBody.access_token;
+          console.log(
+            '[oauth/facebook/callback] Upgraded user token to long-lived' +
+              (llBody.expires_in ? ` (expires in ~${Math.round(llBody.expires_in / 86400)} days)` : ''),
+          );
+        }
+      } else {
+        console.warn(
+          '[oauth/facebook/callback] Long-lived exchange failed (HTTP',
+          llReq.status,
+          ') — continuing with short-lived token',
+        );
+      }
+    } catch (llErr) {
+      console.warn('[oauth/facebook/callback] Long-lived exchange error — continuing:', llErr);
+    }
   } catch (err) {
     console.error('[oauth/facebook/callback] Token exchange error:', err);
     return renderErrorPage('Network error while exchanging the authorization code.');

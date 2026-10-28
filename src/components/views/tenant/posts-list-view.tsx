@@ -143,7 +143,7 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
-export function PostsListView() {
+export function PostsListView({ embedded = false }: { embedded?: boolean } = {}) {
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -248,19 +248,28 @@ export function PostsListView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Posts</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            All your social posts — drafts, scheduled, published, and failed.
-          </p>
+      {/* Header — hidden when embedded inside Marketing Studio (parent owns the h1) */}
+      {embedded ? (
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={loadPosts} disabled={isLoading}>
+            <RefreshCw className={cn('size-4', isLoading && 'animate-spin')} />
+            Refresh
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={loadPosts} disabled={isLoading}>
-          <RefreshCw className={cn('size-4', isLoading && 'animate-spin')} />
-          Refresh
-        </Button>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Posts</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              All your social posts — drafts, scheduled, published, and failed.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadPosts} disabled={isLoading}>
+            <RefreshCw className={cn('size-4', isLoading && 'animate-spin')} />
+            Refresh
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
       <Card>

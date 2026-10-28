@@ -35,6 +35,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/api';
 import { TeamSettings } from '@/components/settings/sections/team-settings';
 import { GoogleBusinessProfileSettings } from '@/components/settings/sections/google-business-profile-settings';
 import { SecuritySettings } from '@/components/settings/sections/security-settings';
@@ -164,6 +165,35 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
   const [activeSubSection, setActiveSubSection] = useState<BusinessSubSection>('all');
   const [savedToast, setSavedToast] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPingingWhatsApp, setIsPingingWhatsApp] = useState(false);
+
+  // REAL WhatsApp Cloud API connectivity check — reads the live config status
+  // endpoint instead of toasting a hardcoded success.
+  const handleWhatsAppPing = async () => {
+    setIsPingingWhatsApp(true);
+    try {
+      const res = await authFetch('/api/whatsapp/config');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err?.error || 'WhatsApp Cloud API check failed.');
+        return;
+      }
+      const cfg = await res.json();
+      if (cfg?.isConfigured) {
+        toast.success(
+          `WhatsApp Cloud API reachable — mode: ${cfg.mode || 'live'}${cfg.source ? `, source: ${cfg.source}` : ''}`
+        );
+      } else {
+        toast.warning(
+          'WhatsApp Cloud API is not configured yet. Add credentials under Communication Providers.'
+        );
+      }
+    } catch {
+      toast.error('Network error while checking WhatsApp Cloud API.');
+    } finally {
+      setIsPingingWhatsApp(false);
+    }
+  };
 
   // Business Profile state
   const [businessName, setBusinessName] = useState('BGOS');
@@ -1546,12 +1576,11 @@ export function BgosSettings({ initialTab }: { initialTab?: string } = {}) {
                 <div className="flex flex-row sm:flex-col gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      toast.success('Meta Cloud API test ping successful: Quality GREEN (FieserOS)');
-                    }}
-                    className="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-2xs transition"
+                    onClick={handleWhatsAppPing}
+                    disabled={isPingingWhatsApp}
+                    className="rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-2xs transition disabled:opacity-60"
                   >
-                    Test Ping
+                    {isPingingWhatsApp ? 'Checking…' : 'Test Ping'}
                   </button>
                   <button
                     type="button"

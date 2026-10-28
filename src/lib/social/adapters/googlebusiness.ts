@@ -1003,6 +1003,54 @@ export async function fetchGoogleBusinessPlaceDetails(
   return { title, category, address, phone, website, placeId, mapsUri };
 }
 
+/**
+ * Update the business profile description (and optionally primary category) on the
+ * live Google Business Profile location via the Business Information API.
+ *
+ * Used by the "AI GBP Optimisation" flow: the AI-generated 750-char SEO description
+ * is written straight to the connected location with updateMask=profile, so the
+ * change is REAL (visible on Google Maps/Search) — not just saved locally.
+ *
+ * Returns the updated fields. Throws structured errors with actionable messages.
+ */
+export async function updateGoogleBusinessProfile(
+  account: SocialAccountData,
+  updates: {
+    description?: string; // max 750 chars per Google policy
+  },
+): Promise<{ descriptionApplied: boolean }> {
+  const { accountName, locationId } = extractLocationRef(account);
+  const locationResourceName = accountName.startsWith('accounts/')
+    ? `${accountName}/locations/${locationId}`
+    : `accounts/${accountName}/locations/${locationId}`;
+
+  const body: Record<string, unknown> = {};
+  const updateMasks: string[] = [];
+
+  if (updates.description !== undefined) {
+    const desc = updates.description.slice(0, 750);
+    body.profile = { description: desc };
+    updateMasks.push('profile.description');
+  }
+
+  if (updateMasks.length === 0) {
+    return { descriptionApplied: false };
+  }
+
+  const res = await fetch(`${GBP_API_BASE}/${locationResourceName}?updateMask=${updateMasks.join(',')}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${account.accessToken}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  await assertOk(res, 'update Google Business Profile description');
+  return { descriptionApplied: true };
+}
+
 // ─── Self-register ─────────────────────────────────────────────────────────
 
 registerAdapter(googleBusinessAdapter);

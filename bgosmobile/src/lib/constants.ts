@@ -1,9 +1,9 @@
 export const BRAND = {
   name: 'BGOS',
   tagline: 'Business Growth Operating System',
-  primaryColor: '#007F73', // BGOS Teal
-  accentColor: '#00BFAE',  // Cyan glow
-  heroColor: '#003E43',    // Deep Teal
+  primaryColor: '#009F50', // BGOS Emerald
+  accentColor: '#34D399',  // Emerald glow
+  heroColor: '#043B26',    // Deep Emerald
   inkColor: '#070B2D',     // Ink Navy
 };
 

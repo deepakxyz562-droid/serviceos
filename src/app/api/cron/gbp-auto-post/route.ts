@@ -121,14 +121,33 @@ Requirements:
         postContent = `Reliable ${industry} in ${location}. Contact ${businessName} today to book your service appointment! #LocalUpdate`;
       }
 
-      // 3. Persist post record in database
+      // 3. Persist post record in database (text-only GBP update — photos are only
+      // attached when the tenant has real uploaded media in the photo drip queue)
+      const queuedPhotoPost = await db.socialPost.findFirst({
+        where: {
+          tenantId: tenant.id,
+          status: 'scheduled',
+          mediaUrls: { not: null },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, mediaUrls: true },
+      });
+
+      let mediaUrls: string[] = [];
+      if (queuedPhotoPost?.mediaUrls) {
+        try {
+          const queued = JSON.parse(queuedPhotoPost.mediaUrls);
+          if (Array.isArray(queued) && typeof queued[0] === 'string' && queued[0].startsWith('http')) {
+            mediaUrls = [queued[0]];
+          }
+        } catch {}
+      }
+
       const postRecord = await db.socialPost.create({
         data: {
           tenantId: tenant.id,
           content: postContent.trim(),
-          mediaUrls: JSON.stringify([
-            'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80',
-          ]),
+          mediaUrls: JSON.stringify(mediaUrls),
           status: 'publishing',
         },
       });
@@ -137,9 +156,7 @@ Requirements:
       try {
         await googleBusinessAdapter.publish(gbpAccount, {
           content: postContent.trim(),
-          mediaUrls: [
-            'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80',
-          ],
+          mediaUrls,
           gbpPostType: 'whats_new',
         });
 

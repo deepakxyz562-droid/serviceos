@@ -87,7 +87,8 @@ async function handleDigest(request: NextRequest) {
         }
       }).length;
 
-      const responseRate = newReviewsCount > 0 ? Math.round((repliedCount / newReviewsCount) * 100) : 100;
+      const responseRate = newReviewsCount > 0 ? Math.round((repliedCount / newReviewsCount) * 100) : 0;
+      const totalReviewsCount = totalReviews as number;
 
       const htmlBody = `
 <!DOCTYPE html>
@@ -119,13 +120,13 @@ async function handleDigest(request: NextRequest) {
     </div>
     <div class="content">
       <div style="text-align: center; margin-bottom: 20px;">
-        <span class="badge">100% Reputation Response Rate</span>
+        <span class="badge">${responseRate}% Review Response Rate</span>
       </div>
 
       <div class="stats-grid">
         <div class="stat-box">
-          <div class="stat-value">+18.4%</div>
-          <div class="stat-label">Search & Maps Views</div>
+          <div class="stat-value">${totalReviewsCount}</div>
+          <div class="stat-label">Total Google Reviews</div>
         </div>
         <div class="stat-box">
           <div class="stat-value">${newReviewsCount} New</div>

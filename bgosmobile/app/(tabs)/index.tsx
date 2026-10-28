@@ -89,15 +89,15 @@ export default function HomeScreen() {
         <View style={{ gap: 6, marginTop: 10 }}>
           <View style={[ui.row, { gap: 8 }]}>
             <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Configure customer chat channels</Text>
+            <Text style={{ color: '#E8F8EF', fontSize: 13 }}>Configure customer chat channels</Text>
           </View>
           <View style={[ui.row, { gap: 8 }]}>
             <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Manage phone routing and booking actions</Text>
+            <Text style={{ color: '#E8F8EF', fontSize: 13 }}>Manage phone routing and booking actions</Text>
           </View>
           <View style={[ui.row, { gap: 8 }]}>
             <MaterialIcons name="check-circle" size={16} color={colors.accent} />
-            <Text style={{ color: '#E6F5F3', fontSize: 13 }}>Review captured leads in CRM</Text>
+            <Text style={{ color: '#E8F8EF', fontSize: 13 }}>Review captured leads in CRM</Text>
           </View>
         </View>
       </Card>

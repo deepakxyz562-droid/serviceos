@@ -360,6 +360,7 @@ export async function GET(request: NextRequest) {
   let accounts: Array<{ name: string; accountName: string }> = [];
   const createdAccounts: Array<{ accountName: string; locationName: string }> = [];
   let firstError: string | null = null;
+  let quotaPendingApproval = false;
   const allFoundLocationNames: string[] = [];
 
   try {
@@ -373,6 +374,11 @@ export async function GET(request: NextRequest) {
       // Google Cloud projects start with 0 QPM for GBP until manual Google form approval.
       // Since the user has genuinely authenticated with Google OAuth and granted business.manage scope,
       // save the verified Google connection for the tenant so they are not blocked by Google's API queue.
+      //
+      // IMPORTANT (honesty): this is a PENDING connection, not a working one — Google
+      // hasn't listed the real accounts/locations yet, so publishes/reviews/insights
+      // will fail until the API access request is approved. We mark the account with
+      // pendingApiApproval so the UI can label it truthfully.
       try {
         const tenant = await db.tenant.findUnique({
           where: { id: state.tenantId },
@@ -389,11 +395,13 @@ export async function GET(request: NextRequest) {
           refreshToken,
           tokenExpiry,
           scopes,
+          pendingApiApproval: true,
         });
         createdAccounts.push({
           accountName: 'accounts/primary',
           locationName: businessTitle,
         });
+        quotaPendingApproval = true;
       } catch (saveErr) {
         console.error('[oauth/googlebusiness/callback] Fallback account upsert failed:', saveErr);
         firstError = saveErr instanceof Error ? saveErr.message : String(saveErr);
@@ -536,18 +544,29 @@ export async function GET(request: NextRequest) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/"/g, '&quot;');
+  const successHeadline = quotaPendingApproval
+    ? '✓ Google connected — pending Google API approval'
+    : '✓ Google Business Profile connected!';
+  const successDetail = quotaPendingApproval
+    ? 'Google granted access, but listing your locations is queued behind Google\'s API access approval (0 QPM quota). Publishing/reviews stay paused until approval — you\'ll see honest empty states until then.'
+    : 'Redirecting';
   const res = new NextResponse(
     `<!html>
 <html><head><title>Redirecting...</title>
 <meta http-equiv="refresh" content="0; url=${safeUrl}">
-<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4}</style>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:${quotaPendingApproval ? '#fffbeb' : '#f0fdf4'}}</style>
 </head>
 <body>
-<div style="text-align:center">
-<p style="color:#16a34a;font-size:18px;font-weight:600">✓ Google Business Profile connected!</p>
-<p style="color:#6b7280;font-size:14px">Redirecting to ${originBase.includes('bgos') ? 'BGOS' : 'dashboard'}...</p>
+<div style="text-align:center;max-width:520px;padding:24px">
+<p style="color:${quotaPendingApproval ? '#b45309' : '#16a34a'};font-size:18px;font-weight:600">${successHeadline}</p>
+<p style="color:#6b7280;font-size:13px">${successDetail}</p>
 </div>
-<script>window.location.replace("${redirectUrl.toString()}");</script>
+<script>window.location.replace("${(() => {
+      if (!quotaPendingApproval) return redirectUrl.toString();
+      const u = new URL(redirectUrl.toString());
+      u.searchParams.set('gbpPending', '1');
+      return u.toString();
+    })()}");</script>
 </body></html>`,
     {
       headers: {
@@ -847,6 +866,9 @@ async function upsertLocationAccount(args: {
   scopes: string;
   // Phase 3: admin list for this account (to capture the user's access role)
   admins?: Array<{ adminName: string; role: string }>;
+  // Truthfulness flag: when Google's GBP API has 0 QPM (pending Google approval),
+  // the stored location is a placeholder until Google approves API access.
+  pendingApiApproval?: boolean;
 }): Promise<void> {
   const locationId = extractLocationId(args.locationName);
 
@@ -877,6 +899,10 @@ async function upsertLocationAccount(args: {
     // Phase 3: store the access role + admin list for later verification
     accessRole,
     admins: args.admins || [],
+    // Honesty: pending connections have a placeholder location until Google approves
+    // the Business Profile API access request for this OAuth client.
+    pendingApiApproval: Boolean(args.pendingApiApproval),
+    pendingApiApprovalAt: args.pendingApiApproval ? new Date().toISOString() : undefined,
   });
   const encryptedAccess = encryptToken(args.accessToken);
   // If Google returned a new refresh_token (prompt=consent forced it),

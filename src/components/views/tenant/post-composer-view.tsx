@@ -99,7 +99,7 @@ interface SocialAccount {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
-export function PostComposerView() {
+export function PostComposerView({ embedded = false }: { embedded?: boolean } = {}) {
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
 
@@ -393,13 +393,15 @@ export function PostComposerView() {
 
   return (
     <div className="space-y-6 w-full">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Create Post</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Compose once, publish to multiple platforms simultaneously.
-        </p>
-      </div>
+      {/* Header — hidden when embedded inside Marketing Studio (parent owns the h1) */}
+      {!embedded && (
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Create Post</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Compose once, publish to multiple platforms simultaneously.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main composer (2 cols) */}

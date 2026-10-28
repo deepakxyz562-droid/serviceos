@@ -2,17 +2,32 @@ import React, { useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 import { Screen, Card, Action, Badge, Empty, ErrorNotice, Loading, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
-import { WEB_URL } from '../../src/lib/constants';
-import { getBgosWebUrl } from '../../src/lib/bgos-urls';
+import { getBgosChannelsWebUrl } from '../../src/lib/bgos-urls';
 type Account = { id: string; platform: string; accountName: string; isActive: boolean; tokenExpiry?: string };
+type WhatsAppTemplateSetup = {
+  setupStatus?: {
+    metaConnected: boolean;
+    templatesApproved: number;
+    templatesImported: number;
+    totalTemplates: number;
+  };
+};
 export default function IntegrationsScreen() {
   const resource = useResource<{ data: Account[] }>('/api/social/accounts?includeInactive=true');
   const waConfig = useResource<{ isConfigured: boolean; mode: string; phoneNumberId: string }>('/api/whatsapp/config');
+  const waTemplates = useResource<WhatsAppTemplateSetup>('/api/whatsapp/templates?setup=true');
   const [error, setError] = useState<string | null>(null);
 
   const refreshAll = async () => {
-    await Promise.all([resource.refresh(), waConfig.refresh()]);
+    await Promise.all([resource.refresh(), waConfig.refresh(), waTemplates.refresh()]);
   };
+
+  // Real template counts — only shown when the API actually reports them.
+  const setupStatus = waTemplates.data?.setupStatus;
+  const approvedCount =
+    setupStatus && typeof setupStatus.templatesApproved === 'number' && setupStatus.metaConnected
+      ? setupStatus.templatesApproved
+      : null;
 
   return (
     <Screen
@@ -31,10 +46,12 @@ export default function IntegrationsScreen() {
             <Badge label={waConfig.data.mode === 'live' ? 'Live · Active' : 'Configured'} success />
           </View>
           <Text style={[ui.body, { color: '#15803D' }]}>
-            Official Business API connected. 14 approved Meta templates active for customer bookings and alerts.
+            {approvedCount != null
+              ? `${approvedCount} Meta-approved template${approvedCount === 1 ? '' : 's'} available for customer bookings and alerts.`
+              : 'Official Business API connected. Template approval status is available in the web Marketing Studio.'}
           </Text>
           <Text style={[ui.caption, { color: '#166534' }]}>
-            Phone ID: {waConfig.data.phoneNumberId || 'Registered'} · Quality: Optimal Tier
+            Phone ID: {waConfig.data.phoneNumberId || 'Registered'}
           </Text>
         </Card>
       )}
@@ -76,7 +93,7 @@ export default function IntegrationsScreen() {
       <Action
         label="Manage channels · Web"
         onPress={() =>
-          Linking.openURL(getBgosWebUrl('integrations')).catch(() =>
+          Linking.openURL(getBgosChannelsWebUrl()).catch(() =>
             setError('Could not open the browser.')
           )
         }

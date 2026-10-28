@@ -203,7 +203,7 @@ function KpiCard({ label, value, icon: Icon, hint }: KpiProps) {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
-export function SocialAnalyticsView() {
+export function SocialAnalyticsView({ embedded = false }: { embedded?: boolean } = {}) {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dateRange, setDateRange] = useState<'7d' | '30d' | '90d'>('30d');
@@ -244,15 +244,9 @@ export function SocialAnalyticsView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Social Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Unified engagement metrics across all your social platforms.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      {/* Header — hidden when embedded inside Marketing Studio (parent owns the h1) */}
+      {embedded ? (
+        <div className="flex items-center justify-end gap-2">
           <Select value={dateRange} onValueChange={(v) => setDateRange(v as '7d' | '30d' | '90d')}>
             <SelectTrigger className="w-32">
               <SelectValue />
@@ -282,7 +276,46 @@ export function SocialAnalyticsView() {
             <span className="sr-only">Refresh</span>
           </Button>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Social Analytics</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Unified engagement metrics across all your social platforms.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={dateRange} onValueChange={(v) => setDateRange(v as '7d' | '30d' | '90d')}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={platformFilter} onValueChange={setPlatformFilter}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Platform" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All platforms</SelectItem>
+                <SelectItem value="facebook">Facebook</SelectItem>
+                <SelectItem value="instagram">Instagram</SelectItem>
+                <SelectItem value="googlebusiness">Google Business</SelectItem>
+                <SelectItem value="linkedin">LinkedIn</SelectItem>
+                <SelectItem value="pinterest">Pinterest</SelectItem>
+                <SelectItem value="twitter">X</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
+              <RefreshCw className={cn('size-4', isLoading && 'animate-spin')} />
+              <span className="sr-only">Refresh</span>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* KPI cards */}
       {isLoading ? (

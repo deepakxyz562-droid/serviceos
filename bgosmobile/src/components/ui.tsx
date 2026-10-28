@@ -17,16 +17,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export const colors = {
-  background: '#F4FAF9',
+  background: '#F7FAF9',
   surface: '#FFFFFF',
   ink: '#070B2D',
   muted: '#60758A',
   line: '#E2E8F0',
-  brand: '#007F73',
-  accent: '#00BFAE',
-  hero: '#003E43',
-  soft: '#E6F5F3',
-  softHover: '#D5EFEA',
+  brand: '#009F50',
+  brandDark: '#008A45',
+  brandSoft: '#E8F8EF',
+  accent: '#34D399',
+  hero: '#043B26',
+  soft: '#E8F8EF',
+  softHover: '#D1F0DE',
   success: '#168557',
   successSoft: '#E6F9EF',
   danger: '#BA3547',
@@ -257,14 +259,14 @@ export function Badge({
     : success
     ? colors.successSoft
     : accent
-    ? '#CCFBF1'
+    ? colors.brandSoft
     : colors.soft;
   const textColor = danger
     ? colors.danger
     : success
     ? colors.success
     : accent
-    ? '#0F766E'
+    ? colors.brandDark
     : colors.brand;
 
   return (

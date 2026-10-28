@@ -438,7 +438,7 @@ function Thread({ conversation, close }: { conversation: BgosConversation; close
                   ]}
                 >
                   <View style={[ui.row, { justifyContent: 'space-between', marginBottom: 4 }]}>
-                    <Text style={[styles.bubbleAuthor, { color: isCustomer ? colors.brand : '#CCFBF1' }]}>
+                    <Text style={[styles.bubbleAuthor, { color: isCustomer ? colors.brand : colors.brandSoft }]}>
                       {isCustomer ? conversation.customerName : m.sender === 'system' ? '🤖 AI Assistant' : 'Your Team'}
                     </Text>
                   </View>

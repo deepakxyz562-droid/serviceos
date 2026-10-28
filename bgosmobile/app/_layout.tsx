@@ -32,7 +32,7 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F7F6FE' } }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#F7FAF9' } }}>
         <Stack.Screen name="index" />
         <Stack.Protected guard={!isLoading && !isAuthenticated}>
           <Stack.Screen name="login" />

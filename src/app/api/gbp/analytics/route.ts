@@ -82,17 +82,20 @@ export async function GET(request: NextRequest) {
       }
     }).length;
 
-    const responseRate = totalReviews > 0 ? Math.round((repliedCount / totalReviews) * 100) : 100;
+    const responseRate = totalReviews > 0 ? Math.round((repliedCount / totalReviews) * 100) : 0;
     const avgRating =
       totalReviews > 0
         ? Number((reviews.reduce((acc, r) => acc + (r.rating || 5), 0) / totalReviews).toFixed(1))
-        : 5.0;
+        : 0;
 
-    let searchImpressions = 1420;
-    let mapsImpressions = 3280;
-    let callClicks = 64;
-    let directionRequests = 98;
-    let websiteClicks = 145;
+    // Zero-safe telemetry: real numbers only. When the Google Performance API is
+    // unavailable we return honest zeros — the UI shows "Connect Google Business
+    // for live trends" instead of fabricated numbers.
+    let searchImpressions = 0;
+    let mapsImpressions = 0;
+    let callClicks = 0;
+    let directionRequests = 0;
+    let websiteClicks = 0;
     let isLiveGoogleApi = false;
 
     const googleAccount = await prepareGoogleAccount(user.tenantId);
@@ -108,11 +111,21 @@ export async function GET(request: NextRequest) {
           isLiveGoogleApi = true;
         }
       } catch (err: unknown) {
-        console.warn('[gbp/analytics] Google Performance API warning (falling back to local telemetry):', err instanceof Error ? err.message : err);
+        console.warn('[gbp/analytics] Google Performance API warning (returning zeroed telemetry):', err instanceof Error ? err.message : err);
       }
     }
 
     const totalViews = searchImpressions + mapsImpressions;
+
+    // Weekly trends are only computed when live Google data exists — never fabricated.
+    const weeklyTrends = isLiveGoogleApi
+      ? {
+          viewsChangePercent: 'tracked in Google Business Profile',
+          callsChangePercent: 'tracked in Google Business Profile',
+          directionsChangePercent: 'tracked in Google Business Profile',
+          reviewsChangePercent: 'tracked in Google Business Profile',
+        }
+      : null;
 
     return NextResponse.json({
       isConnected: Boolean(googleAccount),
@@ -129,12 +142,8 @@ export async function GET(request: NextRequest) {
         responseRate,
         postsPublished: posts.filter((p) => p.status === 'published').length,
       },
-      weeklyTrends: {
-        viewsChangePercent: '+18.4%',
-        callsChangePercent: '+12.5%',
-        directionsChangePercent: '+9.1%',
-        reviewsChangePercent: '+25.0%',
-      },
+      weeklyTrends,
+      trendsAvailable: isLiveGoogleApi,
       lastUpdated: new Date().toISOString(),
     });
   } catch (error: unknown) {

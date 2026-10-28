@@ -29,10 +29,11 @@ export interface BgosMetaTemplate {
 }
 
 /**
- * Live verified Meta credentials metadata for the FieserOS WABA.
+ * BGOS WABA (WhatsApp Business Account) metadata used for display surfaces.
+ * Brand name follows the BGOS product; IDs are the provisioned Cloud API account.
  */
 export const META_ACCOUNT_CONFIG = {
-  verifiedName: 'FieserOS',
+  verifiedName: 'BGOS',
   displayPhoneNumber: '+91 61279 67087',
   qualityRating: 'GREEN',
   codeVerificationStatus: 'VERIFIED',
@@ -56,7 +57,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'APPROVED',
     bodyText: 'Hello {{1}}, your booking with {{2}} is confirmed for {{3}} at {{4}}. Service requested: {{5}}. If you need to make changes or contact our support team, please visit {{6}} . Thank you for choosing us.',
     variableDescriptions: ['Customer Name', 'Business Name', 'Date', 'Time', 'Service Name', 'Portal Link'],
-    defaultExampleValues: ['Priya Sharma', 'FieserOS Services', 'tomorrow', '10:00 AM', 'AC Deep Cleaning', 'https://fieseros.com/portal'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services', 'tomorrow', '10:00 AM', 'AC Deep Cleaning', 'https://fieseros.com/portal'],
     serviceTouchpoint: 'booking',
     buttons: [
       { type: 'URL', text: 'View Booking', url: 'https://fieseros.com/portal' },
@@ -72,7 +73,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'APPROVED',
     bodyText: 'Hello {{1}}, this is a reminder of your upcoming service appointment with {{2}} scheduled for {{3}} at {{4}}. Service: {{5}}. If you need assistance, please visit {{6}} . Thank you for choosing us.',
     variableDescriptions: ['Customer Name', 'Business Name', 'Date', 'Time', 'Service Name', 'Support Link'],
-    defaultExampleValues: ['Priya Sharma', 'FieserOS Services', 'tomorrow', '10:00 AM', 'AC Inspection', 'https://fieseros.com/portal'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services', 'tomorrow', '10:00 AM', 'AC Inspection', 'https://fieseros.com/portal'],
     serviceTouchpoint: 'reminder',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Confirm Arrival' },
@@ -88,7 +89,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'APPROVED',
     bodyText: 'Hello {{1}}, your service order {{2}} has been completed by technician {{3}}. Thank you for choosing {{4}}! You can access your completion summary and receipt at {{5}} . We appreciate your feedback and hope to serve you again soon.',
     variableDescriptions: ['Customer Name', 'Service Name / Order ID', 'Technician Name', 'Business Name', 'Receipt Link'],
-    defaultExampleValues: ['Priya Sharma', 'AC Servicing #ORD-1042', 'Amit Singh', 'FieserOS Services', 'https://fieseros.com/portal/receipt'],
+    defaultExampleValues: ['Priya Sharma', 'AC Servicing #ORD-1042', 'Amit Singh', 'BGOS Services', 'https://fieseros.com/portal/receipt'],
     serviceTouchpoint: 'completion',
     buttons: [
       { type: 'URL', text: 'View Receipt', url: 'https://fieseros.com/portal/receipt' },
@@ -104,7 +105,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'APPROVED',
     bodyText: 'Hello {{1}}, your invoice {{2}} from {{3}} for amount {{4}} is ready. Due date: {{5}}. You can view and pay your invoice securely at {{6}} . Thank you for your business.',
     variableDescriptions: ['Customer Name', 'Invoice / Estimate ID', 'Business Name', 'Amount', 'Due Date', 'Payment Link'],
-    defaultExampleValues: ['Priya Sharma', 'EST-2026-08', 'FieserOS Services', '₹2,499', 'Oct 28', 'https://fieseros.com/pay/EST-2026-08'],
+    defaultExampleValues: ['Priya Sharma', 'EST-2026-08', 'BGOS Services', '₹2,499', 'Oct 28', 'https://fieseros.com/pay/EST-2026-08'],
     serviceTouchpoint: 'invoice',
     buttons: [
       { type: 'URL', text: 'Pay Online', url: 'https://fieseros.com/pay' },
@@ -118,7 +119,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     category: 'UTILITY',
     language: 'en_US',
     status: 'APPROVED',
-    bodyText: 'Hello {{1}}, your service visit for {{2}} is confirmed for {{3}} at {{4}}. Technician: {{5}}. Service completion code: {{6}}. Live tracking link: {{7}} . Thank you for choosing FieserOS.',
+    bodyText: 'Hello {{1}}, your service visit for {{2}} is confirmed for {{3}} at {{4}}. Technician: {{5}}. Service completion code: {{6}}. Live tracking link: {{7}} . Thank you for choosing BGOS.',
     variableDescriptions: ['Customer Name', 'Service Name', 'Date', 'Time', 'Technician Name', 'Security PIN', 'Live Tracking Link'],
     defaultExampleValues: ['Priya Sharma', 'AC Repair', 'Today', '10:00 AM', 'Amit Singh', '8421', 'https://fieseros.com/track/live'],
     serviceTouchpoint: 'dispatch',
@@ -133,7 +134,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     category: 'UTILITY',
     language: 'en_US',
     status: 'APPROVED',
-    bodyText: 'Hello {{1}}, your technician {{2}} has started traveling to your address. Estimated arrival: {{3}}. Live tracking link: {{4}} . Thank you for choosing FieserOS.',
+    bodyText: 'Hello {{1}}, your technician {{2}} has started traveling to your address. Estimated arrival: {{3}}. Live tracking link: {{4}} . Thank you for choosing BGOS.',
     variableDescriptions: ['Customer Name', 'Technician Name', 'ETA', 'Live Link'],
     defaultExampleValues: ['Priya Sharma', 'Amit Singh', '15 mins', 'https://fieseros.com/track/live'],
     serviceTouchpoint: 'dispatch',
@@ -149,7 +150,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     category: 'MARKETING',
     language: 'en_US',
     status: 'APPROVED',
-    bodyText: 'Hello {{1}}, you have an update regarding {{2}} for {{3}}. Details: {{4}} . Action: {{5}} . Thank you for choosing FieserOS.',
+    bodyText: 'Hello {{1}}, you have an update regarding {{2}} for {{3}}. Details: {{4}} . Action: {{5}} . Thank you for choosing BGOS.',
     variableDescriptions: ['Customer Name', 'Service Title', 'Category', 'Update Details', 'Recommended Action'],
     defaultExampleValues: ['Priya Sharma', 'AC Deep Sanitization', 'Annual Maintenance', 'Inspection complete and filter replaced', 'Review completion details'],
     serviceTouchpoint: 'support',
@@ -189,7 +190,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'PENDING',
     bodyText: 'Hi {{1}}, thank you for contacting {{2}}. We have received your inquiry regarding {{3}} and our team will get in touch shortly.',
     variableDescriptions: ['Customer Name', 'Business Name', 'Inquiry Service'],
-    defaultExampleValues: ['Priya Sharma', 'FieserOS Services', 'AC Installation & Repair'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services', 'AC Installation & Repair'],
     serviceTouchpoint: 'booking',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Chat with Specialist' },
@@ -221,7 +222,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     status: 'PENDING',
     bodyText: 'Hi {{1}}, thank you for choosing {{2}}! How was your service experience with {{3}}? Tap below to share a quick Google review and help us improve.',
     variableDescriptions: ['Customer Name', 'Business Name', 'Service Name'],
-    defaultExampleValues: ['Priya Sharma', 'FieserOS Services', 'AC Deep Cleaning'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services', 'AC Deep Cleaning'],
     serviceTouchpoint: 'completion',
     buttons: [
       { type: 'URL', text: 'Leave Google Review ★★★★★', url: 'https://g.page/r/fieseros/review' },
@@ -239,7 +240,7 @@ export const BGOS_CANONICAL_META_TEMPLATES: BgosMetaTemplate[] = [
     bodyText: 'Hi {{1}}, celebrate this season with {{2}}! Enjoy an exclusive discount of {{3}} on all {{4}} bookings this week. Use code {{5}} at checkout.',
     footerText: 'Reply STOP to unsubscribe',
     variableDescriptions: ['Customer Name', 'Business Name', 'Discount Value', 'Service Category', 'Promo Code'],
-    defaultExampleValues: ['Priya Sharma', 'FieserOS Services', '20% OFF', 'Home AC Maintenance', 'FIESTA20'],
+    defaultExampleValues: ['Priya Sharma', 'BGOS Services', '20% OFF', 'Home AC Maintenance', 'FIESTA20'],
     serviceTouchpoint: 'marketing',
     buttons: [
       { type: 'URL', text: 'Claim Offer Now', url: 'https://fieseros.com/offers' },

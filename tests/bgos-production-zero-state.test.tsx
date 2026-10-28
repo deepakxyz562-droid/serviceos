@@ -115,6 +115,6 @@ describe('BGOS Production Zero-State Verification', () => {
     expect(screen.queryByText(/Transform Your Weekend with a Fresh Space/i)).toBeNull();
 
     // Clean empty campaign and schedule state
-    expect(screen.getByText(/No active campaigns/i)).toBeDefined();
+    expect(screen.getByText(/No campaigns yet/i)).toBeDefined();
   });
 });

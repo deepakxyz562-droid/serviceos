@@ -147,7 +147,7 @@ interface SocialAccount {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
-export function SocialAccountsView() {
+export function SocialAccountsView({ embedded = false }: { embedded?: boolean } = {}) {
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [manageAccount, setManageAccount] = useState<SocialAccount | null>(null);
@@ -168,14 +168,18 @@ export function SocialAccountsView() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          platform: 'facebook', // Meta app covers both facebook and instagram
+          platform: setupPlatform?.key === 'googlebusiness' ? 'googlebusiness' : 'facebook', // Meta app covers both facebook and instagram
           clientId: appIdInput.trim(),
           clientSecret: appSecretInput.trim(),
           enabled: true,
         }),
       });
       if (res.ok) {
-        toast.success('Meta credentials saved! Starting authorization...');
+        toast.success(
+          setupPlatform?.key === 'googlebusiness'
+            ? 'Google Business credentials saved! Starting authorization...'
+            : 'Meta credentials saved! Starting authorization...',
+        );
         const targetKey = setupPlatform?.key || 'facebook';
         setSetupPlatform(null);
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -274,15 +278,9 @@ export function SocialAccountsView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Social Accounts</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Connect your social media accounts to publish posts across platforms.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+      {/* Header — hidden when embedded inside Marketing Studio (parent owns the h1) */}
+      {embedded ? (
+        <div className="flex items-center justify-end gap-2">
           <label className="text-sm text-muted-foreground flex items-center gap-2">
             <Switch checked={includeInactive} onCheckedChange={setIncludeInactive} />
             Show disconnected
@@ -292,9 +290,40 @@ export function SocialAccountsView() {
             Refresh
           </Button>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Social Accounts</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Connect your social media accounts to publish posts across platforms.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-muted-foreground flex items-center gap-2">
+              <Switch checked={includeInactive} onCheckedChange={setIncludeInactive} />
+              Show disconnected
+            </label>
+            <Button variant="outline" size="sm" onClick={loadAccounts} disabled={isLoading}>
+              <RefreshCw className={cn('size-4', isLoading && 'animate-spin')} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Platform grid */}
+      {(() => {
+        const pendingGbp = accounts.find(
+          (a) => a.platform === 'googlebusiness' && a.isActive && (a.metadata as any)?.pendingApiApproval
+        );
+        if (!pendingGbp) return null;
+        return (
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-950/20 p-3.5 text-xs text-amber-900 dark:text-amber-200">
+            <span className="font-bold">Google Business connected — pending Google API approval.</span>{' '}
+            Google grants 0 requests/min for the Business Profile API until your API access request is approved, so syncing, reviews and publishing stay paused. Everything else keeps working, and this connection activates automatically once Google approves.
+          </div>
+        );
+      })()}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -485,16 +514,22 @@ export function SocialAccountsView() {
         </DialogContent>
       </Dialog>
 
-      {/* Meta Configuration Dialog */}
+      {/* Platform Setup Dialog (Meta + Google Business) */}
       <Dialog open={!!setupPlatform} onOpenChange={(o) => !o && setSetupPlatform(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Facebook className="size-5 text-blue-600" />
+              {setupPlatform?.key === 'googlebusiness' ? (
+                <span className="flex items-center justify-center size-5 rounded-full border-2 border-red-500 text-[11px] font-black text-red-500">G</span>
+              ) : (
+                <Facebook className="size-5 text-blue-600" />
+              )}
               Connect {setupPlatform?.label}
             </DialogTitle>
             <DialogDescription>
-              To publish to Facebook Pages and Instagram Business accounts, Meta requires an authorized Meta App ID and Secret.
+              {setupPlatform?.key === 'googlebusiness'
+                ? 'To publish to your Google Business Profile, BGOS needs a Google Cloud OAuth client with the Business Profile API enabled.'
+                : 'To publish to Facebook Pages and Instagram Business accounts, Meta requires an authorized Meta App ID and Secret.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -503,7 +538,9 @@ export function SocialAccountsView() {
               <div className="font-semibold">OAuth Redirect URI:</div>
               <div className="flex items-center gap-2 mt-1">
                 <code className="flex-1 bg-white dark:bg-zinc-900 px-2 py-1 rounded border text-[11px] truncate">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/api/oauth/facebook/callback` : 'https://bgos.fieseros.com/api/oauth/facebook/callback'}
+                  {typeof window !== 'undefined'
+                    ? `${window.location.origin}/api/oauth/${setupPlatform?.key === 'googlebusiness' ? 'googlebusiness' : 'facebook'}/callback`
+                    : 'https://bgos.fieseros.com/api/oauth/facebook/callback'}
                 </code>
                 <Button
                   type="button"
@@ -511,7 +548,7 @@ export function SocialAccountsView() {
                   size="sm"
                   className="h-7 px-2 text-xs"
                   onClick={() => {
-                    const uri = `${window.location.origin}/api/oauth/facebook/callback`;
+                    const uri = `${window.location.origin}/api/oauth/${setupPlatform?.key === 'googlebusiness' ? 'googlebusiness' : 'facebook'}/callback`;
                     navigator.clipboard.writeText(uri);
                     toast.success('Redirect URI copied to clipboard');
                   }}
@@ -521,23 +558,35 @@ export function SocialAccountsView() {
                 </Button>
               </div>
               <div className="text-[11px] text-muted-foreground pt-1">
-                Add this URI to <strong>Meta Developer Console &rarr; Facebook Login &rarr; Valid OAuth Redirect URIs</strong>.
+                {setupPlatform?.key === 'googlebusiness' ? (
+                  <>
+                    Add this URI in <strong>Google Cloud Console &rarr; APIs &amp; Services &rarr; Credentials &rarr; your OAuth client &rarr; Authorized redirect URIs</strong>, and make sure the <strong>Google Business Profile API</strong> is enabled for the project.
+                  </>
+                ) : (
+                  <>
+                    Add this URI to <strong>Meta Developer Console &rarr; Facebook Login &rarr; Valid OAuth Redirect URIs</strong>.
+                  </>
+                )}
               </div>
             </div>
 
             <div className="space-y-3">
               <div className="space-y-1">
-                <Label htmlFor="metaAppId">Meta App ID</Label>
+                <Label htmlFor="metaAppId">
+                  {setupPlatform?.key === 'googlebusiness' ? 'Google Client ID' : 'Meta App ID'}
+                </Label>
                 <Input
                   id="metaAppId"
-                  placeholder="e.g. 1234567890123456"
+                  placeholder={setupPlatform?.key === 'googlebusiness' ? 'e.g. 123456789-abcdefg.apps.googleusercontent.com' : 'e.g. 1234567890123456'}
                   value={appIdInput}
                   onChange={(e) => setAppIdInput(e.target.value)}
                 />
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="metaAppSecret">Meta App Secret</Label>
+                <Label htmlFor="metaAppSecret">
+                  {setupPlatform?.key === 'googlebusiness' ? 'Google Client Secret' : 'Meta App Secret'}
+                </Label>
                 <Input
                   id="metaAppSecret"
                   type="password"
@@ -548,7 +597,9 @@ export function SocialAccountsView() {
               </div>
 
               <p className="text-[11px] text-muted-foreground">
-                Alternatively, an administrator can set <code className="bg-muted px-1 rounded">META_APP_ID</code> and <code className="bg-muted px-1 rounded">META_APP_SECRET</code> in the Coolify environment variables.
+                {setupPlatform?.key === 'googlebusiness'
+                  ? 'Alternatively, an administrator can set GOOGLE_BUSINESS_CLIENT_ID and GOOGLE_BUSINESS_CLIENT_SECRET in the server environment.'
+                  : 'Alternatively, an administrator can set META_APP_ID and META_APP_SECRET in the Coolify environment variables.'}
               </p>
             </div>
           </div>

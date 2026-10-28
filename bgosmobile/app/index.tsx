@@ -81,7 +81,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.hero, // #003E43 Deep Teal
+    backgroundColor: colors.hero, // #043B26 Deep Emerald
     padding: 24,
     justifyContent: 'space-between',
   },
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 191, 174, 0.3)',
+    borderColor: 'rgba(52, 211, 153, 0.3)',
   },
   icon: {
     width: 90,
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.accent, // #00BFAE Cyan Glow
+    color: colors.accent, // #34D399 Emerald Glow
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginTop: 2,
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   badgeText: {
-    color: '#E6F5F3',
+    color: '#E8F8EF',
     fontSize: 12,
     fontWeight: '600',
   },
