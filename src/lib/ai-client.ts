@@ -861,18 +861,20 @@ export interface CallAIResult {
  * every provider — OpenRouter/OpenAI will recognize it, others will 404 and
  * fall back to their own defaults.
  */
-export async function callAI(options: {
-  messages: ChatMessage[]
-  temperature?: number
-  maxTokens?: number
-  json?: boolean
-  preferredModel?: string
-  /** When set, the successful call is written to the UsageLedger (TEXT_LLM row
-   *  with tokens + estimated cost) and the tenant counter is incremented.
-   *  Pass this instead of manually calling trackAiUsage to avoid double counting. */
-  usageContext?: { tenantId: string; feature: string }
-}): Promise<CallAIResult> {
-  const { messages, temperature, maxTokens, json, preferredModel, usageContext } = options
+export async function callAI(
+  options:
+    | {
+        messages: ChatMessage[]
+        temperature?: number
+        maxTokens?: number
+        json?: boolean
+        preferredModel?: string
+        usageContext?: { tenantId: string; feature: string }
+      }
+    | ChatMessage[],
+): Promise<CallAIResult> {
+  const opts = Array.isArray(options) ? { messages: options } : options
+  const { messages, temperature, maxTokens, json, preferredModel, usageContext } = opts
 
   const chain = await loadAiKeyChain()
   let lastErrorMsg = ''

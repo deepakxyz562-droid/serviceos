@@ -348,6 +348,19 @@ export async function GET(request: NextRequest) {
     : null;
   const scopes = tokenResponse.scope || cred?.scopes || meta.scopes;
 
+  // ── 4.5. Read Google userinfo (email, name, picture) ───────────────────
+  let googleUser: { email?: string; name?: string; picture?: string; sub?: string } = {};
+  try {
+    const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (userinfoRes.ok) {
+      googleUser = await userinfoRes.json();
+    }
+  } catch (uErr) {
+    console.warn('[oauth/googlebusiness/callback] userinfo fetch error:', uErr);
+  }
+
   // ── 5. List GBP accounts ───────────────────────────────────────────────
   // Account Management API returns the GBP "accounts" the user has access
   // to (one per business group / chain / individual business).
@@ -384,7 +397,11 @@ export async function GET(request: NextRequest) {
           where: { id: state.tenantId },
           select: { id: true, name: true },
         });
-        const businessTitle = tenant?.name || 'Google Business Profile';
+        const googleEmail = googleUser.email || '';
+        const googleName = googleUser.name || '';
+        const businessTitle = googleName
+          ? `${googleName}${googleEmail ? ` (${googleEmail})` : ''}`
+          : (googleEmail || tenant?.name || 'Google Business Profile');
         await upsertLocationAccount({
           tenantId: state.tenantId,
           userId: state.userId,
@@ -396,6 +413,9 @@ export async function GET(request: NextRequest) {
           tokenExpiry,
           scopes,
           pendingApiApproval: true,
+          googleEmail,
+          googleName,
+          googlePicture: googleUser.picture,
         });
         createdAccounts.push({
           accountName: 'accounts/primary',
@@ -474,6 +494,9 @@ export async function GET(request: NextRequest) {
           refreshToken,
           tokenExpiry,
           scopes,
+          googleEmail: googleUser.email,
+          googleName: googleUser.name,
+          googlePicture: googleUser.picture,
         });
         createdAccounts.push({
           accountName: account.name,
@@ -869,6 +892,9 @@ async function upsertLocationAccount(args: {
   // Truthfulness flag: when Google's GBP API has 0 QPM (pending Google approval),
   // the stored location is a placeholder until Google approves API access.
   pendingApiApproval?: boolean;
+  googleEmail?: string;
+  googleName?: string;
+  googlePicture?: string;
 }): Promise<void> {
   const locationId = extractLocationId(args.locationName);
 
@@ -899,6 +925,9 @@ async function upsertLocationAccount(args: {
     // Phase 3: store the access role + admin list for later verification
     accessRole,
     admins: args.admins || [],
+    googleEmail: args.googleEmail,
+    googleName: args.googleName,
+    googlePicture: args.googlePicture,
     // Honesty: pending connections have a placeholder location until Google approves
     // the Business Profile API access request for this OAuth client.
     pendingApiApproval: Boolean(args.pendingApiApproval),

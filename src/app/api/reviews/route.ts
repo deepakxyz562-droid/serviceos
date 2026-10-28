@@ -59,7 +59,13 @@ export async function GET(request: NextRequest) {
         where.status = { in: statuses };
       }
     }
-    if (source) where.source = source;
+    if (source) {
+      if (source === 'google') {
+        where.OR = [{ source: 'google' }, { googleReviewId: { not: null } }];
+      } else {
+        where.source = source;
+      }
+    }
     if (employeeId) where.employeeId = employeeId;
     if (minRating) where.rating = { gte: parseInt(minRating) };
 

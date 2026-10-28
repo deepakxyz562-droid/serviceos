@@ -311,6 +311,7 @@ export function ReviewsView({
 
   // GBP Connection state & Place metadata
   const [isGbpConnected, setIsGbpConnected] = useState(Boolean(isDemo || initialReviews === INITIAL_REVIEWS));
+  const [isPendingApproval, setIsPendingApproval] = useState(false);
   const [gbpAccount, setGbpAccount] = useState<any>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -320,6 +321,7 @@ export function ReviewsView({
   const [postPhotos, setPostPhotos] = useState<string[]>([]);
   const postPhotoInputRef = useRef<HTMLInputElement>(null);
   const [isPublishingPost, setIsPublishingPost] = useState(false);
+  const [isGeneratingAiPost, setIsGeneratingAiPost] = useState(false);
   // Real Google Business posts hydrated from /api/social/posts (fixtures only in demo mode)
   const fixturePosts: Array<{ id: string; type: string; content: string; date: string; status: string; views: string }> = [
     {
@@ -478,6 +480,7 @@ export function ReviewsView({
         if (!mounted || !data) return;
         if (data.isConnected && data.place) {
           setIsGbpConnected(true);
+          setIsPendingApproval(Boolean(data.isPendingApproval || data.place.isPendingApproval));
           setConnectedPlace(data.place);
           if (data.place.title) setProfileTitle(data.place.title);
           if (data.place.category) setProfileCategory(data.place.category);
@@ -648,7 +651,7 @@ export function ReviewsView({
     let mounted = true;
     setIsLoading(true);
     setFetchError(null);
-    authFetch('/api/reviews?limit=50')
+    authFetch('/api/reviews?limit=50&source=google')
       .then(async (res) => {
         if (!res.ok) {
           throw new Error('Failed to load reviews from server.');
@@ -748,7 +751,7 @@ export function ReviewsView({
         syncError = err?.message || 'Google Business sync request failed';
       }
 
-      const res = await authFetch('/api/reviews?limit=50');
+      const res = await authFetch('/api/reviews?limit=50&source=google');
       if (res.ok) {
         const data = await res.json();
         if (data?.reviews && Array.isArray(data.reviews)) {
@@ -987,6 +990,35 @@ export function ReviewsView({
     if (urls.length > 0) {
       setPostPhotos((prev) => [...prev, ...urls]);
       toast.success(`${urls.length} photo(s) attached.`);
+    }
+  };
+
+  // AI Post & Viral Poster Generator (calls /api/gbp/ai-post powered by Gemini)
+  const handleGenerateAiPost = async (topicOverride?: string) => {
+    const topicToUse = topicOverride || postContent.trim() || 'Exciting local service update';
+    setIsGeneratingAiPost(true);
+    try {
+      const res = await authFetch('/api/gbp/ai-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: topicToUse,
+          postType: postType.toLowerCase(),
+        }),
+      });
+      if (!res.ok) throw new Error('AI Post generation failed');
+      const data = await res.json();
+      if (data?.post) {
+        setPostContent(`${data.post.headline}\n\n${data.post.content}`);
+        if (data.post.visualImageUrl && !postPhotos.includes(data.post.visualImageUrl)) {
+          setPostPhotos([data.post.visualImageUrl]);
+        }
+        toast.success('AI Post & Poster generated with Gemini!');
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Could not generate AI post');
+    } finally {
+      setIsGeneratingAiPost(false);
     }
   };
 
@@ -2274,12 +2306,34 @@ export function ReviewsView({
                   </div>
                 )}
 
+                {isPendingApproval && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="size-4 text-amber-600 shrink-0" />
+                      <div>
+                        <p className="text-xs text-amber-900 dark:text-amber-200 font-bold">
+                          Pending Google API Access Approval
+                        </p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Connected Google Account: {connectedPlace?.googleEmail || profileTitle}. Profile details and reviews will sync once approved by Google (0 QPM API quota).
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-start gap-4">
-                  <img
-                    src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=320&auto=format&fit=crop&q=80"
-                    alt="Storefront photo"
-                    className="w-28 h-24 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
-                  />
+                  {connectedPlace?.googlePicture ? (
+                    <img
+                      src={connectedPlace.googlePicture}
+                      alt="Google account avatar"
+                      className="w-20 h-20 rounded-xl object-cover border border-slate-200 dark:border-slate-800 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 flex items-center justify-center shrink-0">
+                      <MapPin className="size-8 text-[#009F50]" />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate">
@@ -2316,19 +2370,25 @@ export function ReviewsView({
                       {profileCategory}
                     </p>
 
-                    <div className="flex items-center gap-2 pt-0.5">
-                      <span className="px-2 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
-                        Open
-                      </span>
-                      <span className="text-xs text-slate-500 flex items-center gap-1">
-                        Closes 8:00 PM <ChevronDown className="size-3" />
-                      </span>
-                      {connectedPlace?.placeId && (
+                    {!isPendingApproval && connectedPlace?.placeId ? (
+                      <div className="flex items-center gap-2 pt-0.5">
+                        <span className="px-2 py-0.5 rounded-md bg-[#E8F8EF] text-[#009F50] text-[11px] font-bold">
+                          Open
+                        </span>
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          Closes 8:00 PM <ChevronDown className="size-3" />
+                        </span>
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           ✓ Verified Place
                         </span>
-                      )}
-                    </div>
+                      </div>
+                    ) : isPendingApproval ? (
+                      <div className="pt-0.5">
+                        <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 text-[11px] font-bold">
+                          🟡 Pending Google API Approval
+                        </span>
+                      </div>
+                    ) : null}
 
                     <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 pt-0.5 truncate">
                       <MapPin className="size-3.5 text-[#009F50] shrink-0" />
@@ -2526,6 +2586,27 @@ export function ReviewsView({
                   })}
                 </div>
 
+                {/* 1-Tap Topic Chips */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-2">
+                  {[
+                    '✨ Festival Offer',
+                    '🔥 Best Seller Deal',
+                    '⚡ Weekend Special',
+                    '⭐ Review Spotlight',
+                    '🛠️ Behind the Scenes',
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => handleGenerateAiPost(chip)}
+                      disabled={isGeneratingAiPost}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 whitespace-nowrap hover:bg-indigo-100 transition-colors"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+
                 <Textarea
                   value={postContent}
                   onChange={(e) => setPostContent(e.target.value)}
@@ -2533,6 +2614,20 @@ export function ReviewsView({
                   placeholder={`Share an update from ${profileTitle || businessName}...`}
                   className="text-xs bg-slate-50/70 dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 resize-none rounded-xl"
                 />
+
+                <div className="flex items-center justify-between mt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleGenerateAiPost()}
+                    disabled={isGeneratingAiPost}
+                    className="h-7 text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200 gap-1 rounded-lg"
+                  >
+                    <Sparkles className={cn('size-3', isGeneratingAiPost && 'animate-spin')} />
+                    <span>{isGeneratingAiPost ? 'Generating...' : '✨ Generate with Gemini AI'}</span>
+                  </Button>
+                </div>
 
                 <div className="flex items-center gap-3 mt-3">
                   {postPhotos.map((src, idx) => (

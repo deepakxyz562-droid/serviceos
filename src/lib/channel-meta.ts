@@ -285,7 +285,7 @@ export const OAUTH_PROVIDERS: Record<
   googlebusiness: {
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: 'https://www.googleapis.com/auth/business.manage',
+    scopes: 'https://www.googleapis.com/auth/business.manage email profile openid',
     displayName: 'Google Business Profile',
     docsUrl: 'https://developers.google.com/my-business/content/chat-and-messages',
   },

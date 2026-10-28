@@ -75,10 +75,18 @@ export async function GET(request: NextRequest) {
 
     const [reviews, totalReviews] = await Promise.all([
       db.review.findMany({
-        where: { tenantId: user.tenantId },
+        where: {
+          tenantId: user.tenantId,
+          OR: [{ source: 'google' }, { googleReviewId: { not: null } }],
+        },
         select: { rating: true, createdAt: true, responseJson: true, source: true },
       }),
-      db.review.count({ where: { tenantId: user.tenantId } }),
+      db.review.count({
+        where: {
+          tenantId: user.tenantId,
+          OR: [{ source: 'google' }, { googleReviewId: { not: null } }],
+        },
+      }),
     ]);
 
     const sourceBreakdown: Record<string, number> = { google: 0, internal: 0, website: 0, sms: 0, qr: 0 };
@@ -182,8 +190,18 @@ export async function GET(request: NextRequest) {
       // Telemetry might be pending Google Cloud form approval
     }
 
+    const meta = (googleAccount.metadata || {}) as Record<string, any>;
+    const isPendingApproval = Boolean(meta.pendingApiApproval);
+    const googleEmail = (meta.googleEmail as string) || '';
+    const googleName = (meta.googleName as string) || '';
+    const googlePicture = (meta.googlePicture as string) || '';
+
     const totalViews = searchImpressions + mapsImpressions;
-    const resolvedTitle = placeDetails.title || fallbackName;
+    const resolvedTitle = isPendingApproval
+      ? (placeDetails.title && placeDetails.title !== fallbackName
+          ? placeDetails.title
+          : (googleName ? `${googleName}${googleEmail ? ` (${googleEmail})` : ''}` : (googleEmail || placeDetails.title || fallbackName)))
+      : (placeDetails.title || fallbackName);
     const resolvedCategory = placeDetails.category || fallbackCategory;
     const resolvedAddress = placeDetails.address || fallbackAddress;
     const resolvedPhone = placeDetails.phone || fallbackPhone;
@@ -204,6 +222,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       isConnected: true,
+      isPendingApproval,
+      googleEmail,
+      googleName,
+      googlePicture,
       place: {
         locationId: googleAccount.accountId,
         title: resolvedTitle,
@@ -214,7 +236,15 @@ export async function GET(request: NextRequest) {
         placeId: resolvedPlaceId,
         mapsUrl: placeDetails.mapsUri,
         reviewUrl,
-        isVerified: true,
+        isVerified: !isPendingApproval,
+        isPendingApproval,
+        googleEmail,
+        googleName,
+        googlePicture,
+        status: isPendingApproval ? 'PENDING_APPROVAL' : 'ACTIVE',
+        statusMessage: isPendingApproval
+          ? 'Google Account connected. Listing locations pending Google API access approval (0 QPM quota).'
+          : 'Google Business Profile connected and active.',
         completionScore: score,
         missingFields: missing,
       },

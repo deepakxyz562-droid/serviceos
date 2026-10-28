@@ -81,6 +81,12 @@ async function resolveGoogleClientCredentials(): Promise<{
   clientId: string;
   clientSecret: string;
 }> {
+  const envClientId = process.env.GOOGLE_BUSINESS_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+  const envClientSecret = process.env.GOOGLE_BUSINESS_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+  if (envClientId && envClientSecret) {
+    return { clientId: envClientId, clientSecret: envClientSecret };
+  }
+
   const { db } = await import('@/lib/db');
   const cred = await db.integrationCredential.findFirst({
     where: { provider: 'googlebusiness', status: 'active' },
@@ -88,8 +94,8 @@ async function resolveGoogleClientCredentials(): Promise<{
   });
   if (!cred || !cred.clientId || !cred.clientSecret) {
     throw new Error(
-      'Google Business Profile OAuth credentials not found in IntegrationCredential table ' +
-        '(provider=googlebusiness, status=active). A superadmin must register them first.',
+      'Google Business Profile OAuth credentials not found in environment or IntegrationCredential table ' +
+        '(provider=googlebusiness, status=active).',
     );
   }
   return { clientId: cred.clientId, clientSecret: cred.clientSecret };
@@ -359,17 +365,12 @@ export const googleBusinessAdapter: PlatformAdapter = {
 
     await assertOk(res, 'token refresh');
 
-    let body: {
+    const body = (await res.json().catch(() => ({}))) as {
       access_token?: string;
       expires_in?: number;
       refresh_token?: string;
       token_type?: string;
-    } | null = null;
-    try {
-      body = (await res.json()) as typeof body;
-    } catch {
-      // fall through to the access_token check below
-    }
+    };
     if (!body?.access_token) {
       throw new Error('GBP token refresh returned 2xx but no access_token field.');
     }
