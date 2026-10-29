@@ -196,16 +196,21 @@ export function PhotosBoard({
     [queued],
   );
 
-  type TabOption = { key: TabKey; label: string; count: number };
+  type TabOption = {
+    key: TabKey;
+    label: string;
+    count: number;
+    icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  };
   const tabOptions: TabOption[] = dhanda
     ? [
-        { key: 'soon', label: 'Scheduled 📅', count: scheduledQueue.length },
-        { key: 'published', label: 'Uploaded ☁', count: publishedCount },
-        { key: 'unposted', label: 'Not Posted ℹ', count: unpostedQueue.length },
+        { key: 'soon', label: 'Scheduled', count: scheduledQueue.length, icon: 'calendar-today' },
+        { key: 'published', label: 'Uploaded', count: publishedCount, icon: 'cloud-upload' },
+        { key: 'unposted', label: 'Not Posted', count: unpostedQueue.length, icon: 'info-outline' },
       ]
     : [
-        { key: 'soon', label: 'Publishing Soon', count: soonCount },
-        { key: 'published', label: 'Published', count: publishedCount },
+        { key: 'soon', label: 'Publishing Soon', count: soonCount, icon: 'schedule' },
+        { key: 'published', label: 'Published', count: publishedCount, icon: 'cloud-done' },
       ];
 
   async function pickPhotos() {
@@ -280,6 +285,74 @@ export function PhotosBoard({
   }
 
   function SegmentedPills() {
+    if (dhanda) {
+      return (
+        <View style={{ gap: 6 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              backgroundColor: '#F3F5FA',
+              borderRadius: 24,
+              padding: 4,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+            }}
+          >
+            {tabOptions.map((opt) => {
+              const active = opt.key === tab;
+              return (
+                <Pressable
+                  key={opt.key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => setTab(opt.key)}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 10,
+                    paddingHorizontal: 8,
+                    borderRadius: 20,
+                    backgroundColor: active ? '#0F172A' : 'transparent',
+                    opacity: pressed && !active ? 0.7 : 1,
+                    ...(active
+                      ? {
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.12,
+                          shadowRadius: 3,
+                          elevation: 2,
+                        }
+                      : {}),
+                  })}
+                >
+                  <MaterialIcons
+                    name={opt.icon}
+                    size={15}
+                    color={active ? '#FFFFFF' : '#64748B'}
+                  />
+                  <Text
+                    style={{
+                      color: active ? '#FFFFFF' : '#64748B',
+                      fontSize: 12.5,
+                      fontWeight: active ? '700' : '600',
+                    }}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.ink, paddingHorizontal: 4 }}>
+            {activeList.length} Media {tab === 'soon' ? 'scheduled' : tab === 'published' ? 'uploaded' : 'not posted'}
+          </Text>
+        </View>
+      );
+    }
+
     return (
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {tabOptions.map((opt) => {
@@ -465,32 +538,88 @@ export function PhotosBoard({
       {loading ? (
         <Loading />
       ) : activeList.length === 0 ? (
-        <Empty
-          title={
-            dhanda
-              ? tab === 'published'
-                ? 'No uploaded photos yet'
-                : tab === 'unposted'
-                ? 'Nothing waiting to post'
-                : 'Nothing scheduled'
-              : tab === 'soon'
-              ? 'Nothing scheduled'
-              : 'No photos published'
-          }
-          detail={
-            dhanda
-              ? tab === 'published'
-                ? 'Photos uploaded to your Google Business Profile appear here.'
-                : tab === 'unposted'
-                ? 'Photos saved locally but not scheduled yet. Add a drip schedule to post them.'
-                : 'Photos queued on the AI drip will publish to Google automatically.'
-              : tab === 'soon'
-              ? 'Upload photos and let AI publish them to your Google Business Profile on a daily or weekly drip.'
-              : 'Published photos from your Google Business Profile appear here.'
-          }
-          actionLabel="Add Photos"
-          onAction={pickPhotos}
-        />
+        dhanda ? (
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 36, gap: 14 }}>
+            <View
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 24,
+                backgroundColor: '#EFF6FF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#DBEAFE',
+              }}
+            >
+              <MaterialIcons name="event-available" size={54} color="#3B82F6" />
+            </View>
+            <View style={{ alignItems: 'center', gap: 4 }}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A' }}>
+                {tab === 'soon'
+                  ? 'No Media Scheduled'
+                  : tab === 'published'
+                  ? 'No Media Uploaded'
+                  : 'No Media in Drafts'}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center' }}>
+                Upload now to attract more customers
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={pickPhotos}
+              style={({ pressed }) => ({
+                width: '100%',
+                maxWidth: 340,
+                height: 48,
+                borderRadius: 14,
+                overflow: 'hidden',
+                marginTop: 10,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  flexDirection: 'row',
+                }}
+              >
+                <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
+                <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }}>
+                  Upload Media
+                </Text>
+                <MaterialIcons name="cloud-upload" size={18} color="#FFFFFF" />
+              </View>
+            </Pressable>
+          </View>
+        ) : (
+          <Empty
+            title={tab === 'soon' ? 'Nothing scheduled' : 'No photos published'}
+            detail={
+              tab === 'soon'
+                ? 'Upload photos and let AI publish them to your Google Business Profile on a daily or weekly drip.'
+                : 'Published photos from your Google Business Profile appear here.'
+            }
+            actionLabel="Add Photos"
+            onAction={pickPhotos}
+          />
+        )
       ) : (
         <Grid
           photos={activeList}

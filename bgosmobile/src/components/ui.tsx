@@ -69,7 +69,7 @@ export function Brand({ large = false, light = false }: { large?: boolean; light
 import { useRouter } from 'expo-router';
 
 export function Screen({
-  title,
+  title = '',
   subtitle,
   children,
   refreshing = false,
@@ -77,8 +77,9 @@ export function Screen({
   rightAction,
   showBack,
   onBack,
+  customHeader,
 }: {
-  title: string;
+  title?: string;
   subtitle?: string;
   children: React.ReactNode;
   refreshing?: boolean;
@@ -86,6 +87,7 @@ export function Screen({
   rightAction?: React.ReactNode;
   showBack?: boolean;
   onBack?: () => void;
+  customHeader?: React.ReactNode;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -130,35 +132,43 @@ export function Screen({
             ) : undefined
           }
         >
-          <View style={ui.topbar}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
-              {canBack ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Go back"
-                  onPress={handleBack}
-                  style={ui.backBtn}
-                >
-                  <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
-                </Pressable>
+          {customHeader ? (
+            customHeader
+          ) : (
+            <>
+              <View style={ui.topbar}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8, flexWrap: 'nowrap' }}>
+                  {canBack ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Go back"
+                      onPress={handleBack}
+                      style={ui.backBtn}
+                    >
+                      <MaterialIcons name="arrow-back" size={20} color={colors.ink} />
+                    </Pressable>
+                  ) : null}
+                  <Brand />
+                </View>
+                {rightAction ? (
+                  <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
+                    {rightAction}
+                  </View>
+                ) : (
+                  <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
+                    <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
+                  </View>
+                )}
+              </View>
+              {title ? (
+                <Text accessibilityRole="header" style={ui.title}>
+                  {title}
+                </Text>
               ) : null}
-              <Brand />
-            </View>
-            {rightAction ? (
-              <View style={{ flexShrink: 0, alignItems: 'flex-end', maxWidth: '65%' }}>
-                {rightAction}
-              </View>
-            ) : (
-              <View style={[ui.row, { flexShrink: 0, gap: 6, flexWrap: 'nowrap' }]}>
-                <View style={[ui.statusDot, { backgroundColor: colors.accent }]} />
-                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.muted }}>Online</Text>
-              </View>
-            )}
-          </View>
-          <Text accessibilityRole="header" style={ui.title}>
-            {title}
-          </Text>
-          {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
+              {subtitle ? <Text style={ui.subtitle}>{subtitle}</Text> : <View style={{ height: 14 }} />}
+            </>
+          )}
           <View style={ui.stack}>{children}</View>
         </ScrollView>
       </KeyboardAvoidingView>

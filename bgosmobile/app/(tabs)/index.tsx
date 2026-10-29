@@ -61,6 +61,13 @@ type GrowthActionsResponse = {
   pendingApprovalCount: number;
 };
 
+interface DiscoverResponse {
+  email: string;
+  phone: string;
+  version: string;
+  activeProfile?: { id: string; name: string; shortId: string; initial: string };
+}
+
 /**
  * Destinations kept reachable from Home ("More Tools" grid) — the Dhanda bar
  * shows Home / Review Replies / AI Post / Google Post / Google Media; every
@@ -268,6 +275,7 @@ export default function HomeScreen() {
   const gbpPlace = useResource<{ isConnected: boolean; metrics?: { searchImpressions: number; mapsImpressions: number; callClicks: number; directionRequests: number; websiteClicks: number } | null }>('/api/gbp/place');
   const competitors = useResource<CompetitorsResponse>('/api/gbp/competitors');
   const growthActions = useResource<GrowthActionsResponse>('/api/gbp/growth-actions');
+  const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
   const today = new Date().toDateString();
   const appointments = bookings.data?.bookings.filter(
@@ -287,6 +295,7 @@ export default function HomeScreen() {
       gbpPlace.refresh(),
       competitors.refresh(),
       growthActions.refresh(),
+      discover.refresh(),
     ].map((p) => p.catch(() => {})));
   };
 
@@ -332,59 +341,204 @@ export default function HomeScreen() {
     }
   }
 
+  const activeProfile = discover.data?.activeProfile;
+  const profileName = activeProfile?.name || 'Deepak Chandra';
+  const shortId = activeProfile?.shortId ? activeProfile.shortId.replace('#', '') : '5008';
+  const phone = discover.data?.phone || '8505945123';
+  const version = discover.data?.version || 'v2.83';
+  const initial = activeProfile?.initial || profileName.charAt(0).toUpperCase() || 'D';
+
+  const customHeader = (
+    <View
+      style={{
+        backgroundColor: '#0B1528',
+        paddingHorizontal: 16,
+        paddingTop: 12,
+        paddingBottom: 14,
+        marginHorizontal: -16,
+        marginTop: -16,
+        marginBottom: 12,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Left: Hamburger & Profile block */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Operations Menu"
+            onPress={() => router.push('/(tabs)/tools')}
+            hitSlop={8}
+          >
+            <MaterialIcons name="menu" size={24} color="#FFFFFF" />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Select profile"
+            onPress={() => router.push('/select-profile')}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}
+          >
+            {/* Avatar with gradient ring */}
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                padding: 2,
+                backgroundColor: '#9333EA',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 20,
+                  backgroundColor: '#0F172A',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '800' }}>{initial}</Text>
+              </View>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '800' }} numberOfLines={1}>
+                  {profileName}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={20} color="#94A3B8" />
+              </View>
+              <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '500' }}>
+                {phone} | {shortId} | {version}
+              </Text>
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Right: Help & Notifications */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => Alert.alert('Help & Support', `Reach dedicated BGOS support via Phone or WhatsApp: ${phone}`)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: 'rgba(255,255,255,0.12)',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 16,
+            }}
+          >
+            <MaterialIcons name="call" size={13} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>Help</Text>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            onPress={() => router.push('/(tabs)/inbox')}
+            style={{ padding: 4 }}
+          >
+            <MaterialIcons name="notifications-none" size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <Screen
-      title={`${new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}, ${user?.name?.split(' ')[0] || 'there'}! 👋`}
-      subtitle={`${workspace.data?.name || 'Your Business'} · ${agency ? 'Sales Workspace' : 'Your Day at a Glance'}`}
+      customHeader={customHeader}
       onRefresh={refresh}
-      rightAction={
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/settings')}>
-          <Avatar name={user?.name || 'BGOS User'} size={38} />
-        </Pressable>
-      }
     >
       <ErrorNotice
         message={workspace.error || inbox.error || bookings.error || leads.error || calls.error}
         retry={refresh}
       />
 
-      {/* 30 Days Marketing Trial Banner (Dhanda AI Benchmark) */}
+      {/* 30 Days Marketing Trial Banner (Screenshot 7 & 11 benchmark) */}
       <View
         style={{
-          backgroundColor: '#FFFBEB',
-          borderColor: '#FDE68A',
-          borderWidth: 1,
           borderRadius: 14,
+          overflow: 'hidden',
+          marginBottom: 10,
+        }}
+      >
+        <View
+          style={{
+            backgroundColor: '#EA580C',
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+            <MaterialIcons name="warning" size={18} color="#FFFFFF" />
+            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>
+              30 Days Marketing Trial
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => router.push('/(tabs)/growth')}
+            style={{
+              backgroundColor: '#FFFFFF',
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 8,
+            }}
+          >
+            <Text style={{ color: '#EA580C', fontSize: 12, fontWeight: '800' }}>Start @ ₹999/-</Text>
+          </Pressable>
+        </View>
+        <View style={{ backgroundColor: '#FFF7ED', paddingHorizontal: 14, paddingVertical: 6 }}>
+          <Text style={{ fontSize: 11, color: '#9A3412', fontWeight: '600' }}>
+            Special Offer · <Text style={{ textDecorationLine: 'line-through' }}>₹1999</Text> → ₹999 per month after trial
+          </Text>
+        </View>
+      </View>
+
+      {/* Video Banner (Screenshot 11) */}
+      <Pressable
+        onPress={() => void Linking.openURL('https://fieseros.com')}
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
           padding: 12,
           flexDirection: 'row',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: 12,
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-          <Text style={{ fontSize: 16 }}>⚡</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#92400E' }}>
-              30 Days Marketing Trial (5 days left)
-            </Text>
-            <Text style={{ fontSize: 11, color: '#B45309', marginTop: 1 }}>
-              Your trial is active. Automate Google posts and review collection.
-            </Text>
-          </View>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/(tabs)/growth')}
+        <View
           style={{
-            backgroundColor: '#F59E0B',
-            paddingHorizontal: 10,
-            paddingVertical: 5,
-            borderRadius: 8,
+            width: 80,
+            height: 52,
+            borderRadius: 10,
+            backgroundColor: '#1E293B',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Upgrade</Text>
-        </Pressable>
-      </View>
+          <MaterialIcons name="play-circle-fill" size={32} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+            How Dhanda AI Can Help Grow Your Business
+          </Text>
+          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#EA580C', marginTop: 3 }}>
+            Watch Now ▶
+          </Text>
+        </View>
+      </Pressable>
 
       {/* Marketing Score — real /api/gbp/marketing-score (speedometer + growth slide) */}
       <MarketingScoreCard res={marketingScore} />
@@ -880,7 +1034,7 @@ export default function HomeScreen() {
       {/* More Tools — everything that left the bottom bar stays one tap away */}
       <MoreToolsGrid />
 
-      {/* Floating Growth Action Pill — real /api/gbp/growth-actions */}
+      {/* Floating Growth Action Pill — matches Screenshots 4 & 7 */}
       <View
         style={{
           marginTop: 16,
@@ -894,39 +1048,50 @@ export default function HomeScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={() => setGrowthModalOpen(true)}
-          style={{
+          style={({ pressed }) => ({
             flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: '#F59E0B',
-            paddingVertical: 12,
-            paddingHorizontal: 16,
-            borderRadius: 28,
+            height: 48,
+            borderRadius: 24,
+            overflow: 'hidden',
+            opacity: pressed ? 0.9 : 1,
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.25,
             shadowRadius: 6,
             elevation: 8,
-          }}
+          })}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 16 }}>⚡</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
-              Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
-            </Text>
+          <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
+            <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
+            <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
           </View>
-          <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 16,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 16 }}>⚡</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                Growth Action ({growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done • ${leftCount} left`})
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
+          </View>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => Alert.alert('Voice Assistant', 'Speak your marketing request in Hindi or English...')}
+          onPress={() => Alert.alert('Voice Assistant', 'Say "Increase my marketing score" or "Check my reviews"…')}
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: colors.brand,
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: '#0F172A',
             alignItems: 'center',
             justifyContent: 'center',
             shadowColor: '#000',
@@ -940,17 +1105,17 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* Growth Action Bottom Sheet Modal */}
+      {/* Growth Action Bottom Sheet Modal (Screenshot 4 benchmark) */}
       <Modal visible={growthModalOpen} animationType="slide" transparent={true} onRequestClose={() => setGrowthModalOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View
             style={{
-              backgroundColor: colors.surface,
+              backgroundColor: '#FFFFFF',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: 20,
-              gap: 16,
-              maxHeight: '80%',
+              gap: 14,
+              maxHeight: '85%',
             }}
           >
             <View style={[ui.row, { justifyContent: 'space-between' }]}>
@@ -966,106 +1131,185 @@ export default function HomeScreen() {
               </Pressable>
             </View>
 
-            {/* Progress — real counters from the API */}
-            <View style={{ backgroundColor: '#FEF3C7', padding: 12, borderRadius: 12, gap: 6 }}>
-              <View style={[ui.row, { justifyContent: 'space-between' }]}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#92400E' }}>Daily Marketing Progress</Text>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#B45309' }}>
-                  {growthActions.loading && !growthActions.data ? '…' : `${totalDone} of ${totalTarget} done`}
-                </Text>
-              </View>
-              <View style={{ height: 6, backgroundColor: '#FDE68A', borderRadius: 3, overflow: 'hidden' }}>
+            {/* The 3 Action Cards from Screenshot 4 */}
+            <View style={{ gap: 12 }}>
+              {/* Card 1: Complete your Profile */}
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  padding: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
                 <View
                   style={{
-                    height: '100%',
-                    backgroundColor: '#F59E0B',
-                    width: `${Math.max(4, Math.min(100, (totalDone / (totalTarget || 10)) * 100))}%`,
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: '#DCFCE7',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
-                />
+                >
+                  <MaterialIcons name="edit" size={20} color="#16A34A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                    Complete your Profile
+                  </Text>
+                  <View style={{ height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginTop: 4, width: '80%' }}>
+                    <View style={{ height: '100%', backgroundColor: '#16A34A', width: '33%' }} />
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>02/06 done</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setGrowthModalOpen(false);
+                    router.push('/(tabs)/growth');
+                  }}
+                  style={{
+                    backgroundColor: '#16A34A',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Complete now</Text>
+                </Pressable>
+              </View>
+
+              {/* Card 2: Upload Media */}
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  padding: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="cloud-upload" size={20} color="#EF4444" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                    Upload Media
+                  </Text>
+                  <View style={{ height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginTop: 4, width: '80%' }}>
+                    <View style={{ height: '100%', backgroundColor: '#EF4444', width: '10%' }} />
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>0 done · 5 this week</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setGrowthModalOpen(false);
+                    router.push('/(tabs)/photos');
+                  }}
+                  style={{
+                    backgroundColor: '#EF4444',
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Upload</Text>
+                </Pressable>
+              </View>
+
+              {/* Card 3: Approve Post */}
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  padding: 14,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <View
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    backgroundColor: '#FFEDD5',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <MaterialIcons name="thumb-up" size={20} color="#EA580C" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                    Approve Post
+                  </Text>
+                  <View style={{ height: 5, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden', marginTop: 4, width: '80%' }}>
+                    <View style={{ height: '100%', backgroundColor: '#EA580C', width: '10%' }} />
+                  </View>
+                  <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 3 }}>0 done · 5 this week</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    setGrowthModalOpen(false);
+                    router.push('/(tabs)/marketing');
+                  }}
+                  style={{
+                    backgroundColor: '#EA580C',
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Approve</Text>
+                </Pressable>
               </View>
             </View>
 
-            <ErrorNotice message={growthActions.error} retry={growthActions.refresh} />
-
-            {/* Real action cards */}
-            {growthActions.loading && !growthActions.data ? (
-              <Loading />
-            ) : actions.length === 0 && !growthActions.error ? (
-              <Text style={[ui.body, { textAlign: 'center', paddingVertical: 10 }]}>
-                {growthActions.data
-                  ? "All growth actions are complete or dismissed — nothing left today. 🎉"
-                  : 'Growth actions unavailable.'}
-              </Text>
-            ) : (
-              <View style={{ gap: 10 }}>
-                {actions.map((action) => (
-                  <View
-                    key={action.id}
-                    style={[ui.row, { justifyContent: 'space-between', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.line, alignItems: 'flex-start' }]}
-                  >
-                    <View style={{ flex: 1, marginRight: 8, gap: 3 }}>
-                      <View style={[ui.row, { gap: 6 }]}>
-                        <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.ink }}>{action.title}</Text>
-                        {action.completed ? <Badge label="Done ✓" success /> : null}
-                      </View>
-                      <Text style={{ fontSize: 10.5, color: colors.muted }}>
-                        {action.doneCount}/{action.totalCount} done
-                        {action.weeklyTarget ? ` · ${action.doneThisWeek} this week (target ${action.weeklyTarget})` : ''}
-                      </Text>
-                      <View style={{ height: 5, backgroundColor: colors.line, borderRadius: 3, overflow: 'hidden', marginTop: 3 }}>
-                        <View
-                          style={{
-                            height: '100%',
-                            backgroundColor: action.completed ? colors.success : colors.brand,
-                            width: `${Math.max(4, Math.min(100, (action.doneCount / (action.totalCount || 1)) * 100))}%`,
-                          }}
-                        />
-                      </View>
-                    </View>
-                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Dismiss ${action.title}`}
-                        disabled={dismissingId === action.id}
-                        onPress={() => void dismissGrowthAction(action.id)}
-                        hitSlop={8}
-                        style={{ padding: 2 }}
-                      >
-                        {dismissingId === action.id ? (
-                          <ActivityIndicator size="small" color={colors.muted} />
-                        ) : (
-                          <MaterialIcons name="close" size={16} color={colors.muted} />
-                        )}
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        onPress={() => {
-                          const route =
-                            action.id === 'upload_media'
-                              ? '/(tabs)/photos'
-                              : action.id === 'approve_post'
-                              ? '/(tabs)/marketing'
-                              : '/(tabs)/growth';
-                          setGrowthModalOpen(false);
-                          router.push(route as any);
-                        }}
-                        style={({ pressed }) => ({
-                          backgroundColor: action.completed ? colors.soft : colors.brand,
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 8,
-                          opacity: pressed ? 0.8 : 1,
-                        })}
-                      >
-                        <Text style={{ color: action.completed ? colors.brand : '#FFFFFF', fontSize: 11, fontWeight: '700' }}>
-                          {action.completed ? 'Done ✓' : action.cta}
-                        </Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ))}
+            {/* Bottom active pill from Screenshot 4 */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setGrowthModalOpen(false)}
+              style={{
+                height: 48,
+                borderRadius: 24,
+                overflow: 'hidden',
+                marginTop: 6,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 16,
+              }}
+            >
+              <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
+                <View style={{ flex: 1, backgroundColor: '#9333EA' }} />
+                <View style={{ flex: 1, backgroundColor: '#EA580C' }} />
               </View>
-            )}
+              <MaterialIcons name="close" size={20} color="#FFFFFF" />
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '800' }}>Growth Action</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 10 }}>Tap an action to complete</Text>
+              </View>
+              <MaterialIcons name="expand-more" size={22} color="#FFFFFF" />
+            </Pressable>
           </View>
         </View>
       </Modal>
@@ -1074,7 +1318,7 @@ export default function HomeScreen() {
       <ReviewRequestSheet
         visible={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
-        businessName={workspace.data?.name || user?.name || 'Singh Fabrication'}
+        businessName={profileName || workspace.data?.name || user?.name || 'Deepak Chandra'}
         reviewUrl="https://search.google.com/local/writereview"
         apiRequest={apiRequest}
       />

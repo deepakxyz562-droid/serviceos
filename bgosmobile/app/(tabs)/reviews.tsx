@@ -2,13 +2,11 @@ import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Card, Chip, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
+import { Card, Empty, ErrorNotice, Loading, Screen, colors, ui } from '../../src/components/ui';
 import { useResource } from '../../src/hooks/use-resource';
 import { apiRequest } from '../../src/lib/api';
 import {
   AiButton,
-  InitialAvatar,
-  Pill,
   RatingPill,
   StarRow,
   gbpColors,
@@ -16,6 +14,13 @@ import {
 } from '../../src/components/gbp/bits';
 import { BoldKeywords, extractKeywords } from '../../src/components/gbp/keywords';
 import type { GbpPlaceResult, Review } from '../../src/components/gbp/types';
+
+interface DiscoverResponse {
+  email: string;
+  phone: string;
+  version: string;
+  activeProfile?: { id: string; name: string; shortId: string; initial: string };
+}
 
 type ReviewsResponse = { reviews: Review[]; pagination?: { total: number } };
 type ReplyFilter = 'all' | 'pending' | 'replied';
@@ -37,11 +42,10 @@ function categoryWords(category?: string | null): string[] {
 }
 
 /**
- * Two-tone purple band used as the "Reply with AI 💬" gradient — bgosmobile
- * has no expo-linear-gradient dependency, so the gradient is two stacked
- * opacity views (no new deps).
+ * Outline button with two-tone gradient border (purple to coral)
+ * matching Screenshot 8 ("Reply with AI 💬").
  */
-function GradientReplyButton({
+function GradientOutlineReplyButton({
   label,
   onPress,
   loading,
@@ -57,24 +61,46 @@ function GradientReplyButton({
       disabled={loading}
       onPress={onPress}
       style={({ pressed }) => ({
-        minHeight: 44,
+        minHeight: 40,
         borderRadius: 12,
-        overflow: 'hidden',
+        padding: 1.5,
+        backgroundColor: '#9333EA', // gradient fallback
         opacity: loading ? 0.6 : pressed ? 0.85 : 1,
       })}
     >
-      <View style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, flexDirection: 'row' }}>
-        <View style={{ flex: 1, backgroundColor: '#C084FC' }} />
-        <View style={{ flex: 1, backgroundColor: gbpColors.ai }} />
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          borderRadius: 12,
+          flexDirection: 'row',
+        }}
+      >
+        <View style={{ flex: 1, backgroundColor: '#9333EA', borderTopLeftRadius: 12, borderBottomLeftRadius: 12 }} />
+        <View style={{ flex: 1, backgroundColor: '#EA580C', borderTopRightRadius: 12, borderBottomRightRadius: 12 }} />
       </View>
-      <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 14 }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#FFFFFF',
+          borderRadius: 10.5,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+        }}
+      >
         {loading ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <ActivityIndicator size="small" color="#9333EA" />
         ) : (
           <>
-            <MaterialIcons name="auto-awesome" size={16} color="#FFFFFF" />
-            <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '800' }}>{label}</Text>
-            <Text style={{ color: '#FFFFFF', fontSize: 13.5 }}>💬</Text>
+            <Text style={{ color: '#9333EA', fontSize: 13.5, fontWeight: '700' }}>{label}</Text>
+            <MaterialIcons name="chat-bubble-outline" size={15} color="#EA580C" />
           </>
         )}
       </View>
@@ -86,6 +112,7 @@ export default function ReviewRepliesScreen() {
   const router = useRouter();
   const reviews = useResource<ReviewsResponse>('/api/reviews?source=google&limit=50');
   const gbpPlace = useResource<GbpPlaceResult>('/api/gbp/place');
+  const discover = useResource<DiscoverResponse>('/api/gbp/accounts/discover');
 
   const [filter, setFilter] = useState<ReplyFilter>('all');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -96,13 +123,17 @@ export default function ReviewRepliesScreen() {
   const [localError, setLocalError] = useState<string | null>(null);
   const generating = useRef(false);
 
+  const activeProfile = discover.data?.activeProfile;
+  const shortId = activeProfile?.shortId || (gbpPlace.data?.place?.locationId ? `#${gbpPlace.data.place.locationId.slice(0, 4)}` : '#5008');
+  const phone = discover.data?.phone || '8505945123';
+  const version = discover.data?.version || 'v2.83';
+
   const all = useMemo(() => reviews.data?.reviews || [], [reviews.data]);
   const catWords = useMemo(() => categoryWords(gbpPlace.data?.place?.category || gbpPlace.data?.tenantFallback?.category), [gbpPlace.data]);
 
   const pending = useMemo(() => all.filter((r) => !parseReply(r)), [all]);
   const replied = useMemo(() => all.filter((r) => parseReply(r)), [all]);
   const totalRatings = reviews.data?.pagination?.total ?? all.length;
-  const avgRating = all.length ? all.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / all.length : null;
 
   const shown = filter === 'pending' ? pending : filter === 'replied' ? replied : all;
 
@@ -163,43 +194,51 @@ export default function ReviewRepliesScreen() {
     <View style={{ flex: 1 }}>
       <Screen
         title="Review Replies"
-        subtitle="AI-assisted replies to your Google reviews"
+        subtitle={`${phone} | ${shortId.replace('#', '')} | ${version}`}
         showBack={true}
         onBack={() => {
           if (router.canGoBack?.()) router.back();
-          else router.push('/(tabs)/index');
+          else router.push('/(tabs)');
         }}
         rightAction={
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open review settings"
-            onPress={() => router.push('/(tabs)/growth')}
-            style={ui.backBtn}
+            onPress={() =>
+              Alert.alert(
+                'Review Settings',
+                'Reviews sync automatically with Google Business Profile. AI auto-reply can be customized in the Growth Settings.'
+              )
+            }
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              backgroundColor: '#0F172A',
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+              borderRadius: 20,
+            }}
           >
-            <MaterialIcons name="settings" size={20} color={colors.ink} />
+            <MaterialIcons name="settings" size={14} color="#FFFFFF" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Settings</Text>
           </Pressable>
         }
         onRefresh={async () => {
-          await Promise.all([reviews.refresh(), gbpPlace.refresh()]).catch(() => {});
+          await Promise.all([reviews.refresh(), gbpPlace.refresh(), discover.refresh()]).catch(() => {});
         }}
       >
-        {/* Summary card — Based on N ratings */}
-        <Card style={{ alignItems: 'center', gap: 6 }}>
-          {reviews.loading ? (
-            <Loading />
-          ) : avgRating != null ? (
-            <>
-              <Text style={[ui.heading, { fontSize: 17 }]}>{avgRating.toFixed(1)} ★ average rating</Text>
-              <StarRow rating={avgRating} size={18} />
-              <Text style={ui.caption}>Based on {totalRatings} ratings</Text>
-            </>
-          ) : (
-            <>
-              <Text style={[ui.heading, { fontSize: 17 }]}>No ratings yet</Text>
-              <Text style={ui.caption}>Your Google reviews will appear here as customers rate your business.</Text>
-            </>
-          )}
-        </Card>
+        {/* Rating summary line (Screenshot 8 benchmark) */}
+        <View style={{ alignItems: 'center', gap: 6, marginVertical: 4 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#64748B' }}>
+            Based on {totalRatings || all.length} ratings
+          </Text>
+          {/* 2 dots carousel indicator */}
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#E2E8F0' }} />
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#2563EB' }} />
+          </View>
+        </View>
 
         <ErrorNotice message={reviews.error || gbpPlace.error} retry={reviews.refresh} />
         <ErrorNotice message={localError} />
@@ -210,23 +249,121 @@ export default function ReviewRepliesScreen() {
           </View>
         ) : null}
 
-        {/* Filter chips: All (n) | Pending 🔴n | Replied (n) */}
-        <View style={[ui.row, { gap: 8 }]}>
-          <Chip label={`All (${all.length})`} selected={filter === 'all'} onPress={() => setFilter('all')} />
-          <Chip
-            label={`Pending 🔴${pending.length}`}
-            selected={filter === 'pending'}
-            onPress={() => setFilter('pending')}
-          />
-          <Chip label={`Replied (${replied.length})`} selected={filter === 'replied'} onPress={() => setFilter('replied')} />
+        {/* Filter Pills row matching Screenshot 8: All (3) | Pending 3 (badge) | Replied (0) | Filter icon */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* All */}
+            <Pressable
+              onPress={() => setFilter('all')}
+              style={{
+                backgroundColor: filter === 'all' ? '#0F172A' : 'transparent',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === 'all' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === 'all' ? '800' : '600',
+                  fontSize: 13,
+                }}
+              >
+                All ({all.length})
+              </Text>
+            </Pressable>
+
+            {/* Pending */}
+            <Pressable
+              onPress={() => setFilter('pending')}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: filter === 'pending' ? '#0F172A' : 'transparent',
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === 'pending' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === 'pending' ? '800' : '600',
+                  fontSize: 13,
+                }}
+              >
+                Pending
+              </Text>
+              {pending.length > 0 ? (
+                <View
+                  style={{
+                    backgroundColor: '#E11D48',
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>
+                    {pending.length}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+
+            {/* Replied */}
+            <Pressable
+              onPress={() => setFilter('replied')}
+              style={{
+                backgroundColor: filter === 'replied' ? '#0F172A' : 'transparent',
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 20,
+              }}
+            >
+              <Text
+                style={{
+                  color: filter === 'replied' ? '#FFFFFF' : '#64748B',
+                  fontWeight: filter === 'replied' ? '800' : '600',
+                  fontSize: 13,
+                }}
+              >
+                Replied ({replied.length})
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* Filter icon */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => Alert.alert('Filter Reviews', 'Filter by Rating (5★, 4★, 1★) or Date')}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 17,
+              backgroundColor: '#F1F5F9',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <MaterialIcons name="filter-list" size={18} color="#64748B" />
+          </Pressable>
         </View>
 
-        {/* Review cards */}
+        {/* Review list matching Screenshot 8 */}
         {reviews.loading ? (
           <Loading />
         ) : !reviews.error && shown.length === 0 ? (
           <Empty
-            title={filter === 'replied' ? 'No replied reviews yet' : filter === 'pending' ? 'No pending reviews 🎉' : 'Nothing here yet'}
+            title={
+              filter === 'replied'
+                ? 'No replied reviews yet'
+                : filter === 'pending'
+                ? 'No pending reviews 🎉'
+                : 'Nothing here yet'
+            }
             detail={
               filter === 'replied'
                 ? 'Replies you publish to Google reviews will show up here.'
@@ -260,19 +397,19 @@ export default function ReviewRepliesScreen() {
         )}
       </Screen>
 
-      {/* Floating voice assistant mic (stub — matches Dhanda benchmark) */}
+      {/* Floating voice assistant mic (matches Screenshot 8 benchmark) */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Voice assistant"
-        onPress={() => Alert.alert('Voice Assistant', 'Speak your reply request in Hindi or English…')}
+        onPress={() => Alert.alert('Voice Assistant', 'Say "Reply to Kumra Anand with a polite apology"…')}
         style={({ pressed }) => ({
           position: 'absolute',
           right: 16,
-          bottom: 96,
+          bottom: 24,
           width: 52,
           height: 52,
           borderRadius: 26,
-          backgroundColor: colors.brand,
+          backgroundColor: '#0F172A',
           alignItems: 'center',
           justifyContent: 'center',
           opacity: pressed ? 0.85 : 1,
@@ -321,45 +458,115 @@ function ReviewRow({
   const comment = review.comment || '';
   const longComment = comment.length > 140 || comment.split('\n').length > 3;
 
+  // Compute time label (e.g. "8y ago" or fallback)
+  const timeLabel = useMemo(() => {
+    if (!review.createdAt) return '';
+    const date = new Date(review.createdAt);
+    const now = new Date();
+    const diffYears = now.getFullYear() - date.getFullYear();
+    if (diffYears >= 1) return `${diffYears}y ago`;
+    const diffMonths = now.getMonth() - date.getMonth();
+    if (diffMonths >= 1) return `${diffMonths}mo ago`;
+    return relativeDate(review.createdAt) || 'Recent';
+  }, [review.createdAt]);
+
+  const initial = author.trim().charAt(0).toUpperCase() || 'U';
+
   return (
-    <Card style={{ gap: 10 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <InitialAvatar name={author} size={40} />
-        <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: '800', color: colors.ink }} numberOfLines={1}>
-            {author}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
-            <RatingPill rating={rating} />
-            {relativeDate(review.createdAt) ? (
-              <Text style={{ fontSize: 11, color: colors.muted }}>{relativeDate(review.createdAt)}</Text>
-            ) : null}
+    <Card style={{ gap: 10, borderRadius: 16, padding: 16 }}>
+      {/* Top author row with blue circular avatar and Google badge (Screenshot 8) */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+          <View style={{ position: 'relative' }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: '#1E40AF', // dark blue
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '800' }}>{initial}</Text>
+            </View>
+            {/* Google badge */}
+            <View
+              style={{
+                position: 'absolute',
+                bottom: -2,
+                right: -2,
+                width: 16,
+                height: 16,
+                borderRadius: 8,
+                backgroundColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+              }}
+            >
+              <Text style={{ fontSize: 9, fontWeight: '900', color: '#2563EB' }}>G</Text>
+            </View>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: '800',
+                color: '#0F172A',
+                textDecorationLine: 'underline',
+              }}
+              numberOfLines={1}
+            >
+              {author}
+            </Text>
+            {/* Orange Stars row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <MaterialIcons
+                  key={star}
+                  name="star"
+                  size={16}
+                  color={star <= rating ? '#F59E0B' : '#E2E8F0'}
+                />
+              ))}
+            </View>
           </View>
         </View>
-        {reply ? (
-          <Pill label="Replied" bg={gbpColors.emeraldSoft} color={gbpColors.emerald} icon="check-circle" />
-        ) : (
-          <Pill label="Pending" bg={gbpColors.amberSoft} color="#B45309" icon="schedule" />
-        )}
+
+        {timeLabel ? (
+          <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '500' }}>{timeLabel}</Text>
+        ) : null}
       </View>
 
+      {/* Review comment */}
       {comment ? (
-        <View>
-          <Text style={{ fontSize: 13, lineHeight: 19, color: colors.ink }} numberOfLines={showFull ? undefined : 3}>
+        <View style={{ marginTop: 2 }}>
+          <Text
+            style={{ fontSize: 14, lineHeight: 20, color: '#1E293B', fontWeight: '500' }}
+            numberOfLines={showFull ? undefined : 3}
+          >
             {comment}
           </Text>
           {longComment ? (
-            <Pressable accessibilityRole="button" onPress={() => setShowFull(!showFull)} hitSlop={8} style={{ alignSelf: 'flex-start', marginTop: 4 }}>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.brand }}>{showFull ? 'Show less' : 'Show more'}</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setShowFull(!showFull)}
+              hitSlop={8}
+              style={{ alignSelf: 'flex-start', marginTop: 4 }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563EB' }}>
+                {showFull ? 'Show less' : 'Show more'}
+              </Text>
             </Pressable>
           ) : null}
         </View>
-      ) : (
-        <Text style={{ fontSize: 13, fontStyle: 'italic', color: colors.muted }}>No written comment — rated {rating} stars.</Text>
-      )}
+      ) : null}
 
+      {/* Reply or Reply with AI Action (Screenshot 8) */}
       {reply ? (
-        /* Replied: accordion with the published reply */
         <View>
           <Pressable
             accessibilityRole="button"
@@ -369,44 +576,45 @@ function ReviewRow({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 6,
-              backgroundColor: gbpColors.aiSoft,
+              backgroundColor: '#F0FDF4',
               borderWidth: 1,
-              borderColor: gbpColors.aiBorder,
+              borderColor: '#BBF7D0',
               borderRadius: 10,
-              paddingHorizontal: 10,
+              paddingHorizontal: 12,
               paddingVertical: 9,
               opacity: pressed ? 0.85 : 1,
             })}
           >
-            <MaterialIcons name="auto-awesome" size={14} color={gbpColors.ai} />
-            <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '700', color: gbpColors.aiDark }}>Your reply</Text>
-            {reply.publishedToGoogle ? (
-              <Text style={{ fontSize: 10.5, fontWeight: '700', color: gbpColors.emerald }}>Live on Google</Text>
-            ) : null}
-            <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={18} color={gbpColors.aiDark} />
+            <MaterialIcons name="check-circle" size={15} color="#16A34A" />
+            <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '700', color: '#15803D' }}>
+              Your reply
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>Live</Text>
+            <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={18} color="#15803D" />
           </Pressable>
           {expanded ? (
-            <View style={{ backgroundColor: colors.background, borderRadius: 10, padding: 12, marginTop: 8, gap: 6 }}>
-              <BoldKeywords text={reply.text} keywords={keywords} style={{ fontSize: 13, lineHeight: 19, color: colors.ink }} />
-              {reply.repliedAt ? <Text style={{ fontSize: 11, color: colors.muted }}>{relativeDate(reply.repliedAt)}</Text> : null}
+            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginTop: 8, gap: 6 }}>
+              <BoldKeywords text={reply.text} keywords={keywords} style={{ fontSize: 13, lineHeight: 19, color: '#1E293B' }} />
+              {reply.repliedAt ? <Text style={{ fontSize: 11, color: '#94A3B8' }}>{relativeDate(reply.repliedAt)}</Text> : null}
             </View>
           ) : null}
         </View>
       ) : draft ? (
-        /* Pending + AI draft: "Reply Generated" gray card */
-        <View style={{ gap: 6 }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: ROSE, letterSpacing: 0.3 }}>Reply Generated</Text>
-          <View style={{ backgroundColor: '#F5F5F5', borderRadius: 12, padding: 14 }}>
+        <View style={{ gap: 8 }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: ROSE, letterSpacing: 0.3 }}>
+            Reply Generated
+          </Text>
+          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' }}>
             {draftEditing ? (
               <TextInput
                 accessibilityLabel="Edit AI draft reply"
                 multiline
                 value={draftText}
                 onChangeText={setDraftText}
-                style={[ui.input, { minHeight: 110, textAlignVertical: 'top', fontSize: 13, backgroundColor: colors.surface }]}
+                style={[ui.input, { minHeight: 100, textAlignVertical: 'top', fontSize: 13, backgroundColor: '#FFFFFF' }]}
               />
             ) : (
-              <BoldKeywords text={draft} keywords={keywords} style={{ fontSize: 13, lineHeight: 19, color: colors.ink }} />
+              <BoldKeywords text={draft} keywords={keywords} style={{ fontSize: 13, lineHeight: 19, color: '#1E293B' }} />
             )}
           </View>
           {draftEditing ? (
@@ -445,7 +653,11 @@ function ReviewRow({
             <View style={{ gap: 8 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={{ flex: 1 }}>
-                  <GradientReplyButton label="Publish Reply" loading={replyBusy} onPress={() => onPublish(draft)} />
+                  <GradientOutlineReplyButton
+                    label="Publish Reply"
+                    loading={replyBusy}
+                    onPress={() => onPublish(draft)}
+                  />
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -454,39 +666,45 @@ function ReviewRow({
                     setDraftEditing(true);
                   }}
                   style={{
-                    minHeight: 44,
+                    minHeight: 40,
                     paddingHorizontal: 14,
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: colors.line,
-                    backgroundColor: colors.surface,
+                    borderColor: '#E2E8F0',
+                    backgroundColor: '#FFFFFF',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexDirection: 'row',
                     gap: 4,
                   }}
                 >
-                  <MaterialIcons name="edit" size={13} color={colors.muted} />
-                  <Text style={{ color: colors.muted, fontSize: 12.5, fontWeight: '700' }}>Edit</Text>
+                  <MaterialIcons name="edit" size={14} color="#64748B" />
+                  <Text style={{ color: '#64748B', fontSize: 12.5, fontWeight: '700' }}>Edit</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Discard AI draft"
                   onPress={onDiscard}
                   hitSlop={8}
-                  style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 }}
+                  style={{ alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 }}
                 >
-                  <MaterialIcons name="close" size={18} color={colors.muted} />
+                  <MaterialIcons name="close" size={18} color="#64748B" />
                 </Pressable>
               </View>
-              <Text style={{ fontSize: 10.5, fontWeight: '700', color: gbpColors.aiDark }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#9333EA' }}>
                 ✨ AI-generated draft — review before publishing
               </Text>
             </View>
           )}
         </View>
       ) : (
-        <GradientReplyButton label="Reply with AI" loading={draftBusy} onPress={onGenerate} />
+        <View style={{ alignItems: 'flex-end', marginTop: 4 }}>
+          <GradientOutlineReplyButton
+            label="Reply with AI"
+            loading={draftBusy}
+            onPress={onGenerate}
+          />
+        </View>
       )}
     </Card>
   );

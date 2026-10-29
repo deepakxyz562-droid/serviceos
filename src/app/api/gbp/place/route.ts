@@ -197,11 +197,15 @@ export async function GET(request: NextRequest) {
     const googlePicture = (meta.googlePicture as string) || '';
 
     const totalViews = searchImpressions + mapsImpressions;
-    const resolvedTitle = isPendingApproval
-      ? (placeDetails.title && placeDetails.title !== fallbackName
-          ? placeDetails.title
-          : (googleName ? `${googleName}${googleEmail ? ` (${googleEmail})` : ''}` : (googleEmail || placeDetails.title || fallbackName)))
-      : (placeDetails.title || fallbackName);
+    const resolvedTitle =
+      googleAccount.accountName && googleAccount.accountName !== 'accounts/primary'
+        ? googleAccount.accountName
+        : meta.locationTitle ||
+          (isPendingApproval
+            ? (placeDetails.title && placeDetails.title !== fallbackName
+                ? placeDetails.title
+                : (googleName ? `${googleName}${googleEmail ? ` (${googleEmail})` : ''}` : (googleEmail || placeDetails.title || fallbackName)))
+            : (placeDetails.title || fallbackName));
     const resolvedCategory = placeDetails.category || fallbackCategory;
     const resolvedAddress = placeDetails.address || fallbackAddress;
     const resolvedPhone = placeDetails.phone || fallbackPhone;

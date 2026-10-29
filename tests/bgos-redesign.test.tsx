@@ -406,7 +406,7 @@ it('renders Marketing Studio with Dhanda tabs, real API wiring, gauge, competito
     expect(screen.getByText(/^Advanced$/i)).toBeDefined();
     expect(screen.getByRole('button', { name: /^Composer$/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /^Analytics$/i })).toBeDefined();
-    expect(screen.getByRole('button', { name: /^Meta Templates$/i })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /^Meta Templates$/i })).toBeNull();
     expect(screen.getByRole('button', { name: /^Accounts \(\d+\)$/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /^Posts \(\d+\)$/i })).toBeDefined();
     // The old combined tab bar is gone

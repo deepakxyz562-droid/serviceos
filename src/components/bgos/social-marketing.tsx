@@ -2268,7 +2268,6 @@ export function SocialMediaView({
     { id: 'composer', label: 'Composer', Icon: PenSquare },
     { id: 'posts', label: 'Posts', Icon: FileText, count: postsTotal },
     { id: 'analytics', label: 'Analytics', Icon: BarChart3 },
-    { id: 'templates', label: 'Meta Templates', Icon: FileText },
     { id: 'accounts', label: 'Accounts', Icon: Share2, count: connectedCount },
   ];
 
