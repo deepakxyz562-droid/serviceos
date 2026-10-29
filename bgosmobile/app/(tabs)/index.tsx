@@ -417,11 +417,32 @@ export default function HomeScreen() {
         ) : null}
       </Card>
 
-      {/* Competitor Analysis — real /api/gbp/competitors */}
+      {/* Competitor Analysis — real /api/gbp/competitors from Google Places (New) */}
       <Card style={{ gap: 10 }}>
         <View style={[ui.row, { justifyContent: 'space-between' }]}>
           <Text style={ui.heading}>🎯 Competitor Analysis</Text>
-          <Badge label="Local Maps" />
+          <View style={[ui.row, { gap: 6, alignItems: 'center' }]}>
+            <Badge label="Local Maps" />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Refresh competitors from Google Maps"
+              onPress={async () => {
+                try {
+                  const updated = await apiRequest<CompetitorsResponse>('/api/gbp/competitors?refresh=1');
+                  competitors.setData(updated);
+                } catch {
+                  await competitors.refresh();
+                }
+              }}
+              style={({ pressed }) => ({
+                padding: 4,
+                borderRadius: 6,
+                backgroundColor: pressed ? colors.line : 'transparent',
+              })}
+            >
+              <MaterialIcons name="refresh" size={18} color={colors.muted} />
+            </Pressable>
+          </View>
         </View>
         <Text style={[ui.caption, { marginTop: -4, fontWeight: '700', letterSpacing: 0.4 }]}>
           LOCAL COMPETITORS • WITHIN 5 KM
